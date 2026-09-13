@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"sort"
 
@@ -129,4 +130,37 @@ func (p *ExecutionPolicy) EventRef(tenantID int) (executionscope.Ref, error) {
 		return executionscope.Ref{}, executionscope.ErrDenied
 	}
 	return executionscope.Ref{DeploymentID: p.deploymentID, TenantID: tenantID}, nil
+}
+
+// RequireEntToolInvocation checks structural origin in the caller's transaction.
+// It is not approval or actor authorization and never enrolls an existing source.
+func (p *ExecutionPolicy) RequireEntToolInvocation(ctx context.Context, tx *ent.Tx, tenantID, invocationID int) error {
+	if ctx == nil || tx == nil || invocationID <= 0 {
+		return executionscope.ErrDenied
+	}
+	ref, scoped, err := p.scopeFor(tenantID)
+	if err != nil {
+		return err
+	}
+	if !scoped {
+		return nil
+	}
+	if err := validateExecutionContext(ctx, ref); err != nil {
+		return err
+	}
+	var id int
+	err = scanExecutionRow(ctx, tx.Client(), &id, `SELECT m.invocation_id FROM public.execution_tool_invocations m
+ JOIN public.tool_invocations i ON i.id=m.invocation_id AND i.tenant_id=m.tenant_id
+ JOIN public.execution_scopes s ON s.id=m.scope_id AND s.tenant_id=m.tenant_id
+ JOIN public.execution_runtime_bindings b ON b.deployment_id=s.deployment_id
+ WHERE b.runtime_role=session_user AND b.mode='candidate' AND s.status='active'
+ AND s.id=$1 AND s.deployment_id=$2 AND s.tenant_id=$3 AND m.invocation_id=$4
+ AND current_setting('app.execution_scope_id',true)=$1::text`, ref.ScopeID, ref.DeploymentID, ref.TenantID, invocationID)
+	if err == sql.ErrNoRows {
+		return executionscope.ErrDenied
+	}
+	if err != nil {
+		return fmt.Errorf("verify tool invocation origin: %w", err)
+	}
+	return nil
 }

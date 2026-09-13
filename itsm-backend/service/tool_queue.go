@@ -10,6 +10,7 @@ import (
 	"io"
 	"itsm-backend/authorization"
 	"itsm-backend/common/tenantctx"
+	"itsm-backend/database"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/toolinvocation"
@@ -39,6 +40,7 @@ const (
 )
 
 type ToolQueue struct {
+	execution  *database.ExecutionPolicy
 	mu         sync.Mutex
 	cond       *sync.Cond
 	jobs       []ToolJob
@@ -58,11 +60,11 @@ type ToolQueue struct {
 	stopParent func() bool
 }
 
-func NewToolQueue(client *ent.Client, tools *ToolRegistry, app creation.Application, tickets *TicketService, capacity int, logger *zap.SugaredLogger) *ToolQueue {
-	if client == nil || app == nil {
+func NewToolQueue(client *ent.Client, tools *ToolRegistry, app creation.Application, tickets *TicketService, capacity int, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) *ToolQueue {
+	if client == nil || app == nil || execution == nil {
 		panic("tool queue requires the shared creation application and tenant client")
 	}
-	q := &ToolQueue{client: client, tools: tools, creation: app, tickets: tickets}
+	q := &ToolQueue{execution: execution, client: client, tools: tools, creation: app, tickets: tickets}
 	q.initialize(capacity, logger, q.ProcessJob)
 	return q
 }
@@ -179,7 +181,29 @@ func (q *ToolQueue) ProcessJob(ctx context.Context, job ToolJob) error {
 	if job.TenantID <= 0 || job.InvocationID <= 0 {
 		return creation.NewInvalidCommand("tool invocation identity is required", creation.FieldError{}, nil)
 	}
+	if ctx == nil || tenantctx.IsSystemBypass(ctx) {
+		return fmt.Errorf("explicit tool execution context required")
+	}
+	if tenantID, ok := tenantctx.TenantID(ctx); ok && tenantID != job.TenantID {
+		return fmt.Errorf("tool execution tenant mismatch")
+	}
 	ctx = tenantctx.WithTenantID(ctx, job.TenantID)
+	if q.execution == nil {
+		return fmt.Errorf("tool execution policy required")
+	}
+	scopeTx, scopeErr := q.client.Tx(ctx)
+	if scopeErr != nil {
+		return scopeErr
+	}
+	scopeErr = q.execution.BindEnt(ctx, scopeTx, job.TenantID)
+	if scopeErr == nil {
+		scopeErr = q.execution.RequireEntToolInvocation(ctx, scopeTx, job.TenantID, job.InvocationID)
+	}
+	closeErr := scopeTx.Rollback()
+	if scopeErr != nil || closeErr != nil {
+		return errors.Join(scopeErr, closeErr)
+	}
+
 	inv, err := q.client.ToolInvocation.Query().Where(toolinvocation.IDEQ(job.InvocationID), toolinvocation.TenantIDEQ(job.TenantID)).Only(ctx)
 	if err != nil {
 		return err

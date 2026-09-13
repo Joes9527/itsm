@@ -999,3 +999,14 @@ S5不可处理消息的完整处置、进程重启及其它异步入口继续未
 `s5-tool-enrollment-migration.log` migration全包PASS，新增合法040账本仅待041及缺037/039/040的非法041账本拒绝，既有退休账本升级测试仍通过。独立review_execution_scope_s1最终只读复核无新增迁移前置阻断。`s5-tool-enrollment-full-private.log` 完整私有回归实际FAIL，仅历史工具执行子测试及其父测试失败，其余具名子项通过，无skip/race；不能称完整GREEN。新增登记不阻止ProcessJob读取旧approval，故该RED按预期保留。全后端 `s5-tool-enrollment-build.log` exit0，git diff --check通过。
 
 下一步必须贯通运行时新表只读权限准入（runtime_clients及execution admission）、AI首次INSERT/审批原事务、队列及业务首次写入来源复核、结果条件写回；尚未接入的新调用路径会因未绑定范围而拒绝，不能单独迁移后启动应用。此项只完成数据库前置，不以它关闭S5/B2/B3/T3/T4/G2/G3。CandidateSHA与未启动状态不变，未改B配置/共享数据库、未企业外呼、未push/main合并。
+
+
+### B2 S5 ToolQueue 持久来源预检（2026-09-13）
+
+在 `762bd4f61` 后给ToolQueue构造器显式注入冻结ExecutionPolicy，bootstrap和既有标准fixture同步。ProcessJob在读取审批或任何调用写入前，拒绝nil/异tenant/SystemBypass上下文，在独立原连接事务BindEnt并RequireEntToolInvocation：查询041结构关联、真实invocation、tenant、active scope和session_user绑定，缺来源返回ErrDenied，不登记或改写历史。标准模式保持既有审批、actor及工具业务合同；来源helper不是业务授权，预检结束后仍需在首次业务写事务复核。
+
+`s5-tool-origin-green.log` 把此前历史调用返回nil/改旧行/新增WorkItem/member的RED转为来源拒绝保全。独立P2指出初版把所有SQL错误都转换ErrDenied，可能以缺表/权限假GREEN；现仅sql.ErrNoRows分类拒绝，其余保留原cause。历史独立子测试明确准备041及SELECT权限，正向测试在原事务未提交登记时通过，历史无登记ErrorIs(ErrDenied)。`s5-tool-origin-controls.log` 实际REVOKE SELECT产生非ErrDenied且可提取pq.Error 42501，恢复权限后新登记approved调用ProcessJob两次只新增一个WorkItem/member，旧调用整行不变，race PASS。新调用审批由测试准备，不声称验证HTTP提议/审批链。
+
+`s5-tool-origin-regression.log` database/service/bootstrap及既有工具集成的具名定向race通过；不是四个包全部测试。独立review_execution_scope_s1最终复核P2关闭，无新增预检阻断。`s5-tool-origin-full-private.log` 完整私有PG/Redis/MinIO候选边界、两模式Webhook/审计恢复、Stream消费及进程终止恢复race PASS，无skip/race；`s5-tool-origin-build.log` 全后端build exit0，git diff --check通过。
+
+该检查点只关闭已复现的历史调用直接执行入口；enqueue、AI创建及审批原事务、业务首次写事务再次校验、完成/失败回写条件以及新表运行时权限审计仍未完成。独立预检不能关闭其后的撤权竞争，不用它宣称S5或真实候选业务准入。CandidateSHA及候选未启动状态不变，无共享环境改动、企业外呼、push/main合并。

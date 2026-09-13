@@ -18,7 +18,7 @@ import (
 func TestIntakeApprovedToolCreationRecoversAcknowledgement(t *testing.T) {
 	f := newUnifiedIntakeFixture(t)
 	ctx := context.Background()
-	q := service.NewToolQueue(f.client, nil, f.app, nil, 1, zap.NewNop().Sugar())
+	q := service.NewToolQueue(f.client, nil, f.app, nil, 1, zap.NewNop().Sugar(), executionfixture.Standard())
 	defer q.Close()
 	inv := f.client.ToolInvocation.Create().SetTenantID(f.identity.TenantID).SetUserID(f.identity.ActorID).SetToolName("create_ticket").SetArguments(`{"title":"Approved AI request","description":"Verified requested work","priority":"high"}`).SetNeedsApproval(true).SetApprovalState("approved").SetApprovedBy(f.identity.ActorID).SetApprovedAt(time.Now()).SetStatus("pending").SaveX(ctx)
 	failed := false
@@ -64,7 +64,7 @@ func TestIntakeToolCreationRequiresApprovedTenantInvocation(t *testing.T) {
 		t.Run(state, func(t *testing.T) {
 			f := newUnifiedIntakeFixture(t)
 			ctx := context.Background()
-			q := service.NewToolQueue(f.client, nil, f.app, nil, 1, zap.NewNop().Sugar())
+			q := service.NewToolQueue(f.client, nil, f.app, nil, 1, zap.NewNop().Sugar(), executionfixture.Standard())
 			defer q.Close()
 			builder := f.client.ToolInvocation.Create().SetTenantID(f.identity.TenantID).SetToolName("create_ticket").SetArguments(`{"title":"Approved AI request","description":"Request","priority":"high"}`).SetNeedsApproval(true).SetApprovalState("approved").SetApprovedBy(f.identity.ActorID).SetApprovedAt(time.Now()).SetStatus("pending")
 			if state != "missing_actor" {
@@ -96,7 +96,7 @@ func TestIntakeToolCreationRejectsAdvertisedContractViolations(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := newUnifiedIntakeFixture(t)
 			ctx := context.Background()
-			q := service.NewToolQueue(f.client, nil, f.app, nil, 1, zap.NewNop().Sugar())
+			q := service.NewToolQueue(f.client, nil, f.app, nil, 1, zap.NewNop().Sugar(), executionfixture.Standard())
 			defer q.Close()
 			inv := f.client.ToolInvocation.Create().
 				SetTenantID(f.identity.TenantID).
@@ -130,7 +130,7 @@ func TestIntakeToolCreationNormalizesAcceptedAliases(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := newUnifiedIntakeFixture(t)
 			ctx := context.Background()
-			q := service.NewToolQueue(f.client, nil, f.app, nil, 1, zap.NewNop().Sugar())
+			q := service.NewToolQueue(f.client, nil, f.app, nil, 1, zap.NewNop().Sugar(), executionfixture.Standard())
 			defer q.Close()
 			inv := f.client.ToolInvocation.Create().
 				SetTenantID(f.identity.TenantID).
@@ -160,7 +160,7 @@ func TestApprovedToolEditRejectsMalformedArguments(t *testing.T) {
 			ctx := context.Background()
 			item := f.client.Ticket.Create().SetTenantID(f.identity.TenantID).SetRequesterID(f.identity.ActorID).SetTicketNumber("EDIT-TOOL").SetTitle("Approved edit").SetRecordClass("generic").SetStatus("open").SaveX(ctx)
 			svc := service.NewTicketService(&service.TicketServiceConfig{Client: f.client, Repository: ticketrepo.NewEntRepository(f.client, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: executionfixture.Standard()})
-			q := service.NewToolQueue(f.client, nil, f.app, svc, 1, zap.NewNop().Sugar())
+			q := service.NewToolQueue(f.client, nil, f.app, svc, 1, zap.NewNop().Sugar(), executionfixture.Standard())
 			defer q.Close()
 			raw := fmt.Sprintf(`{"ticket_id":%d,"expectedVersion":%d,"assignee_id":%d`, item.ID, item.Version, f.identity.ActorID) + suffix
 			inv := f.client.ToolInvocation.Create().SetTenantID(f.identity.TenantID).SetUserID(f.identity.ActorID).SetToolName("update_ticket").SetArguments(raw).SetNeedsApproval(true).SetApprovalState("approved").SetApprovedBy(f.identity.ActorID).SetApprovedAt(time.Now()).SetStatus("pending").SaveX(ctx)
@@ -179,7 +179,7 @@ func TestApprovedToolEditRecoversAcknowledgement(t *testing.T) {
 	ctx := context.Background()
 	item := f.client.Ticket.Create().SetTenantID(f.identity.TenantID).SetRequesterID(f.identity.ActorID).SetTicketNumber("EDIT-RECOVERY").SetTitle("Approved edit").SetRecordClass("generic").SetStatus("open").SaveX(ctx)
 	svc := service.NewTicketService(&service.TicketServiceConfig{Client: f.client, Repository: ticketrepo.NewEntRepository(f.client, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: executionfixture.Standard()})
-	q := service.NewToolQueue(f.client, nil, f.app, svc, 1, zap.NewNop().Sugar())
+	q := service.NewToolQueue(f.client, nil, f.app, svc, 1, zap.NewNop().Sugar(), executionfixture.Standard())
 	defer q.Close()
 	raw := fmt.Sprintf(`{"ticket_id":%d,"expectedVersion":%d,"assignee_id":%d}`, item.ID, item.Version, f.identity.ActorID)
 	inv := f.client.ToolInvocation.Create().SetTenantID(f.identity.TenantID).SetUserID(f.identity.ActorID).SetToolName("update_ticket").SetArguments(raw).SetNeedsApproval(true).SetApprovalState("approved").SetApprovedBy(f.identity.ActorID).SetApprovedAt(time.Now()).SetStatus("pending").SaveX(ctx)

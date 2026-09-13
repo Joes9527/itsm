@@ -690,7 +690,7 @@ func NewApplication() *Application {
 			h.SetCreationApplication(intakeApplication, clients.System)
 		}
 	}
-	toolQueue := service.NewToolQueue(client, toolRegistry, intakeApplication, ticketService, 100, sugar)
+	toolQueue := service.NewToolQueue(client, toolRegistry, intakeApplication, ticketService, 100, sugar, executionPolicy)
 	feishuSyncService := service.NewFeishuSyncService(client, sugar, intakeApplication)
 	outboxRegistry, err := newOutboxRegistry(cfg.Execution,
 		[]service.OutboxDeliveryHandler{service.NewFeishuUpdateDeliveryHandler(client, executionPolicy, clients.IntakeDirectorySnapshot(), func(tenantID int) (service.FeishuTaskUpdater, bool) {

@@ -380,6 +380,8 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.NoError(t, rows.Scan(&enrolled))
 		require.NoError(t, rows.Close())
 		require.Equal(t, scopeID, enrolled)
+		require.NoError(t, policy.RequireEntToolInvocation(ctx, tx, tenant.ID, added.ID))
+		require.ErrorIs(t, policy.RequireEntToolInvocation(ctx, tx, tenant.ID, historicalTool.ID), executionscope.ErrDenied)
 		require.NoError(t, tx.Rollback())
 		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM tool_invocations WHERE id=$1`, added.ID).Scan(&count))
 		require.Zero(t, count)
@@ -394,6 +396,24 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.NoError(t, tx.Commit())
 		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM execution_tool_invocations WHERE invocation_id=$1 AND scope_id=$2`, added.ID, scopeID).Scan(&count))
 		require.Equal(t, 1, count)
+		t.Run("SQL permission fault is not a scope denial", func(t *testing.T) {
+			_, err := ownerDB.ExecContext(ctx, "REVOKE SELECT ON execution_tool_invocations FROM "+runtimeRole)
+			require.NoError(t, err)
+			defer func() {
+				_, err := ownerDB.ExecContext(ctx, "GRANT SELECT ON execution_tool_invocations TO "+runtimeRole)
+				require.NoError(t, err)
+			}()
+			check, err := runtime.Tx(ctx)
+			require.NoError(t, err)
+			defer check.Rollback()
+			require.NoError(t, policy.BindEnt(ctx, check, tenant.ID))
+			err = policy.RequireEntToolInvocation(ctx, check, tenant.ID, added.ID)
+			require.Error(t, err)
+			require.False(t, errors.Is(err, executionscope.ErrDenied))
+			var pgError *pq.Error
+			require.ErrorAs(t, err, &pgError)
+			require.Equal(t, "42501", string(pgError.Code))
+		})
 		foreignTenant := owner.Tenant.Create().SetName("Tool scope foreign").SetCode("tool-scope-foreign").SaveX(ctx)
 		for _, kind := range []string{"foreign tenant", "closed scope", "revoked binding"} {
 			t.Run(kind, func(t *testing.T) {
@@ -443,6 +463,15 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.JSONEq(t, before, after)
 	})
 	t.Run("historical approved tool cannot authorize candidate execution", func(t *testing.T) {
+		var installed bool
+		require.NoError(t, ownerDB.QueryRow(`SELECT to_regclass('public.execution_tool_invocations') IS NOT NULL`).Scan(&installed))
+		if !installed {
+			_, err := ownerDB.ExecContext(ctx, migration.GetMigrationSQL(migration.ToolInvocationExecutionScopeVersion))
+			require.NoError(t, err)
+		}
+		_, err := ownerDB.ExecContext(ctx, "GRANT SELECT ON execution_tool_invocations TO "+runtimeRole)
+		require.NoError(t, err)
+
 		snapshot := func() string {
 			var raw string
 			require.NoError(t, ownerDB.QueryRowContext(ctx, `SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, historicalTool.ID).Scan(&raw))
@@ -451,13 +480,27 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		before := snapshot()
 		beforeItems := owner.Ticket.Query().CountX(ctx)
 		beforeMembers := memberCount()
-		queue := service.NewToolQueue(runtime, nil, app, nil, 1, zap.NewNop().Sugar())
+		queue := service.NewToolQueue(runtime, nil, app, nil, 1, zap.NewNop().Sugar(), policy)
 		defer queue.Close()
-		err := queue.ProcessJob(ctx, service.ToolJob{InvocationID: historicalTool.ID, TenantID: tenant.ID})
-		assert.Error(t, err, "copied approval must not authorize new candidate work")
+		err = queue.ProcessJob(ctx, service.ToolJob{InvocationID: historicalTool.ID, TenantID: tenant.ID})
+		assert.ErrorIs(t, err, executionscope.ErrDenied, "copied approval must not authorize new candidate work")
 		assert.JSONEq(t, before, snapshot(), "historical invocation must remain unchanged")
 		assert.Equal(t, beforeItems, owner.Ticket.Query().CountX(ctx), "historical approval must not create a WorkItem")
 		assert.Equal(t, beforeMembers, memberCount(), "historical approval must not enroll a candidate member")
+		tx, err := runtime.Tx(ctx)
+		require.NoError(t, err)
+		defer tx.Rollback()
+		require.NoError(t, policy.BindEnt(ctx, tx, tenant.ID))
+		fresh, err := tx.ToolInvocation.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetToolName("create_ticket").SetArguments(`{"title":"Fresh scoped tool"}`).SetNeedsApproval(true).SetApprovalState("approved").SetApprovedBy(actor.ID).SetApprovedAt(time.Now()).SetStatus("pending").Save(ctx)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit())
+		freshJob := service.ToolJob{InvocationID: fresh.ID, TenantID: tenant.ID}
+		require.NoError(t, queue.ProcessJob(ctx, freshJob))
+		require.NoError(t, queue.ProcessJob(ctx, freshJob))
+		require.Equal(t, beforeItems+1, owner.Ticket.Query().CountX(ctx))
+		require.Equal(t, beforeMembers+1, memberCount())
+		require.JSONEq(t, before, snapshot())
+
 	})
 	t.Run("new base extension and member commit together", func(t *testing.T) {
 		created, err := app.Create(ctx, identity, command("new", "incident"))
