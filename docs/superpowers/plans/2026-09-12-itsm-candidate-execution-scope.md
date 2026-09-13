@@ -123,6 +123,8 @@ EXISTS (
 
 SLA violation 增量 `73cc9a3e1` 已修复历史违规 RED：冻结清单/原事务成员扫描、单工单 deadline/cycle/duplicate 重读与 version CAS；两违规、原事务通知意图和结构化 sla.breached outbox 原子提交。既有通用worker注册契约校验handler，不确定发布阻断重发。bootstrap统一周期入口按冻结候选清单或standard受限发现逐租户执行，补齐依赖启动检查并移除无调用旧watcher。`s4-sla-atomic-final-pg.log` 完整candidate intake边界PASS，含历史保全、新成员、重复、通知/第二条outbox写后故障回滚、closed scope、两并发最终无重复；race、定向回归、构建和限定复审通过。并发不证明确定性SQL竞态；SQLite标准发现/本地假bus不替代PG角色或真实事件投递。SLAAlertService/warning/critical transport及escalation仍未完成，候选配置未隔离alert分支时显式拒绝；S4保持未勾选，CandidateSHA和停止状态不变。详细证据见实现分支T1最新交接。
 
+SLA alert 直接入口增量 `f579a866d`：CheckAndTriggerAlerts/TriggerSLAWarning 原事务 tenant/member/deleted、deadline/cycle/rules/duplicate/cooldown 与首次 version CAS；history/通知意图原子提交，规则渠道与用户偏好取交集，空渠道零通知，有渠道缺notifier拒绝。critical同步邮件与虚报NotificationSent=true已移除。s4-sla-alert-verified-pg.log完整candidate边界PASS，含两历史入口保全、新成员、写后故障（history及两通知表）回滚、渠道交集、owner设置的reopen/pause计算；回归/build/标签编译及限定复审通过。完整发送关联/状态投影尚未完成，候选monitor的alert拒绝仍保留，bootstrap尚不启用告警周期。下一步独立040 ordinary migration：TicketNotification nullable immutable history结构关联与history nullable tracking version，旧行不回填，复合tenant/ticket FK和不可改指约束；worker继续只维护通知权威状态，history查询按结构关联投影，不解析DeliveryKey授权，不改变038退休依赖。S4仍未完成，CandidateSHA及停止状态不变。
+
 ## S5：Stream 与请求异步边界
 
 **Files:** `pkg/eventbus/{eventbus.go,eventbus_test.go}`、`service/{tool_queue.go,ticket_service.go}`、`controller/connector_controller.go`、bootstrap；事件发布者由 `rg -n 'Publish\('` 生成调用清单逐项接入。
