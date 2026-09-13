@@ -203,6 +203,10 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+通知目标结构检查点 `083d7d1c6`（2026-09-14）：注册044_notification_connector_target，四可空不可变字段与数据库全有/全无、版本/摘要/渠道约束，禁止NULL补绑定及绑定后目标/业务身份修改；无历史DML，R历史依赖不变。Ent生成完成，不公开目标JSON。真实私有PG从缺列状态执行DDL，旧字段JSON保全、新字段NULL、合法sms旧行绑定被不可变trigger 23514拒绝、非法目标23514、状态更新正向与继承EXECUTE剥离均PASS。migration包、全后端build与独立审阅通过；完整私有race仍仅原4项通知权限RED，无新增FAIL/SKIP/RACE。详见T1最新具名段。
+
+此检查点只完成结构准备，不勾选下方端到端协议；producer/worker尚未写/消费这些字段。后续用真实偏好支持的sms+本地探针生成合法意图，再替换Manager；不能为复用旧webhook fixture新增产品渠道。盘点SendNotification直接外发路径，与EnqueueCreationTx/EnqueueNotificationTx一起接入原owner合同。实际B迁移清单需加入044，当前未执行WSL/共享迁移；CandidateSHA不变、候选未启动，S5/S6/T3/T4/G3仍未完成。
+
 通知/飞书目标持久协议后续合同（2026-09-14，通知RED提交657692fe3，现有S5内依赖，待实现）：实际通知worker调用Manager.Send→Get，仅有channel；`ent/schema/ticket_notification.go`没有provider/目的地身份。飞书bootstrap注入`func(tenant)`同样只取同名实例，虽有专业Destination仍缺精确实例与generation。只检查当前目标有资格不能证明持久意图在重试/重启后仍发往原目标。以下工作复用原队列、原专业owner与唯一Manager，不新增路由服务、通知引擎或同渠道多目标产品能力。
 
 - [ ] **通知协议与迁移。** 修改`ent/schema/ticket_notification.go`，在原行加入可空且不可变的connector name/provider、目的地摘要与目标协议版本；仅连接器传输使用该组完整身份，in_app/email/push保留原专业传输路径并单独核验它们的准入。由`migration/migrations.go`实际注册序列选择下一未占用版本，新迁移与测试放原migration目录；不能修改历史SQL/checksum或已有迁移文件。旧行NULL保全，不回填、不默认当前实例。受保护历史行仍不领取；标准旧外发意图若缺目标身份须明确失败/待核对，不能静默适配到新实例。新身份必须全有或全无，未知协议拒绝；DB约束/不可变触发器以及Ent生成通过仓库既有流程实现，真实私有PG验证历史行原始摘要与字段篡改拒绝。不得以Ent overlay代替迁移。
