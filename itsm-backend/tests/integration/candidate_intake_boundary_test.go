@@ -796,10 +796,64 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			return err == nil && row.Status == "done"
 		}, 3*time.Second, 20*time.Millisecond)
 
+		var completedBefore, completedAfter string
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, fresh.ID).Scan(&completedBefore))
 		require.NoError(t, queue.ProcessJob(ctx, freshJob))
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, fresh.ID).Scan(&completedAfter))
+		require.JSONEq(t, completedBefore, completedAfter, "completed tool receipt must be immutable on replay")
 		require.Equal(t, beforeItems+1, owner.Ticket.Query().CountX(ctx))
 		require.Equal(t, beforeMembers+1, memberCount())
 		require.JSONEq(t, before, snapshot())
+
+		for _, toolName := range []string{"create_ticket", "missing-tool"} {
+			t.Run("outcome rollback and retry "+toolName, func(t *testing.T) {
+				tx, err := runtime.Tx(ctx)
+				require.NoError(t, err)
+				require.NoError(t, policy.BindEnt(ctx, tx, tenant.ID))
+				call, err := tx.ToolInvocation.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetToolName(toolName).SetArguments(`{"title":"Receipt recovery"}`).SetNeedsApproval(true).SetApprovalState("approved").SetApprovedBy(actor.ID).SetApprovedAt(time.Now()).SetStatus("pending").Save(ctx)
+				require.NoError(t, err)
+				require.NoError(t, tx.Commit())
+				var before, after string
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, call.ID).Scan(&before))
+				items := owner.Ticket.Query().CountX(ctx)
+				var armed atomic.Bool
+				armed.Store(true)
+				injected := errors.New("private outcome post-update failure")
+				runtime.ToolInvocation.Use(func(next ent.Mutator) ent.Mutator {
+					return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
+						value, err := next.Mutate(c, m)
+						if err == nil && m.Op().Is(ent.OpUpdate|ent.OpUpdateOne) && armed.CompareAndSwap(true, false) {
+							return nil, injected
+						}
+						return value, err
+					})
+				})
+				job := service.ToolJob{InvocationID: call.ID, TenantID: tenant.ID}
+				err = queue.ProcessJob(ctx, job)
+				require.ErrorIs(t, err, injected)
+				require.False(t, armed.Load())
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, call.ID).Scan(&after))
+				require.JSONEq(t, before, after)
+				if toolName == "create_ticket" {
+					require.Equal(t, items+1, owner.Ticket.Query().CountX(ctx))
+				} else {
+					require.Equal(t, items, owner.Ticket.Query().CountX(ctx))
+				}
+				err = queue.ProcessJob(ctx, job)
+				row := owner.ToolInvocation.GetX(ctx, call.ID)
+				if toolName == "create_ticket" {
+					require.NoError(t, err)
+					require.Equal(t, "done", row.Status)
+					require.Equal(t, items+1, owner.Ticket.Query().CountX(ctx))
+				} else {
+					require.Error(t, err)
+					require.Equal(t, "failed", row.Status)
+					require.NotNil(t, row.Error)
+					require.Equal(t, "tool execution failed", *row.Error)
+					require.Equal(t, items, owner.Ticket.Query().CountX(ctx))
+				}
+			})
+		}
 
 	})
 	t.Run("new base extension and member commit together", func(t *testing.T) {

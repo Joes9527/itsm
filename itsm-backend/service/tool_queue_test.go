@@ -177,6 +177,9 @@ func TestToolQueueEnqueueCompetesWithCloseAtSharedStartBarrier(t *testing.T) {
 	logCore, observed := observer.New(zapcore.WarnLevel)
 	active := make(chan struct{})
 	releaseActive := make(chan struct{})
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(releaseActive) }) }
+	defer release()
 	processed := make(chan int, 1)
 	q := newLifecycleTestQueue(t, 2, func(_ context.Context, job ToolJob) error {
 		processed <- job.InvocationID
@@ -219,7 +222,7 @@ func TestToolQueueEnqueueCompetesWithCloseAtSharedStartBarrier(t *testing.T) {
 	require.Equal(t, "approved", recorded.ApprovalState)
 	require.Equal(t, "pending", recorded.Status)
 
-	close(releaseActive)
+	release()
 	<-closeResults
 	<-closeResults
 	require.Equal(t, activeInvocation.ID, <-processed)

@@ -1059,3 +1059,15 @@ S5不可处理消息的完整处置、进程重启及其它异步入口继续未
 构造保全fixture在快照前安装041，保持业务身份SELECT及运输身份原最小权限。它不是完整迁移目录顺序验收。`s5-tool-role-full-private.log` 包含ScopeRegistration、完整Intake、构造保全及Stream/Webhook/审计恢复race PASS，无skip/race；`s5-tool-role-packages.log` database/bootstrap全包race PASS，`s5-tool-role-build.log` 全后端build exit0。独立review_execution_scope_s1复核无阻断，git diff --check通过。
 
 本检查点完成代码侧041业务角色准入，缺对象/授权会启动失败；B仍须在目标PG17按完整迁移链和显式只读授权执行准入。本机PG16合成fixture不替代T3环境交接。业务首次写原事务来源复核及完成/失败条件写回仍待完成，S5/T3/T4/G2/G3未放行。固定CandidateSHA与候选未启动状态不变，无共享数据库、B配置、企业外呼、push/main合并。
+
+### B2 S5 工具完成记录保全与事务写回（2026-09-13）
+
+`s5-tool-receipt-replay-red.log` 真实PG证明重复ProcessJob覆盖首次完成结果，replayed从false改为true。最初筛选tool_queue未命中目标子测试，不算RED/GREEN证据。现done在当前来源/审批/身份预检后直接返回；完成与失败写回使用自有事务的共同approvedToolInTx，再按调用tenant/actor/工具/参数/审批者/审批时间/approved且非done条件更新，防止覆盖首次完成记录，失败文本固定。没有将查询预检视为业务首次写许可或并发撤权栅栏。
+
+新增实际UPDATE后故障两分支：创建业务先提交，但调用整行回滚；重试恢复done且仍仅一张工单。失败分支由nil registry触发registry unavailable（不是实际未知工具查找），调用整行回滚，重试failed固定文本且无新业务。首轮可空Error字段断言类型错误已修正，未改变生产逻辑来迎合断言。首次完成整行快照重放保全通过。
+
+补充服务回归暴露关闭竞态：admission返回取消错误时跳过关闭状态分类，既有并发测试断言失败后清理又等待未释放的processor。保留SIGQUIT栈于s5-tool-receipt-regression.log；本次异常终止不算通过。现admission返回后锁内统一判断关闭，errors.Join保留ErrToolQueueClosed及原cause；测试defer+sync.Once保证失败也释放processor。s5-tool-receipt-regression-final.log具名Tool/CreateTicketTool race连续3次PASS（不是service全包），独立review_execution_scope_s1最终复核无阻断。
+
+剩余：成功/失败并发写回及执行中审批/参数变更竞争尚待真实验证，scope撤权竞争栅栏与业务首次写原事务仍未完成。目标PG17/T3环境准入、真实业务/主题T4及G3未通过；固定CandidateSHA不变、候选未启动，无共享环境修改、企业外呼、push/main合并。
+
+最终验证：s5-tool-receipt-final-private.log完整私有PG16/Redis/MinIO的ScopeRegistration、Intake、构造保全及Stream/Webhook/审计恢复race PASS，无skip/race；s5-tool-receipt-build.log全后端build exit0，git diff --check通过。上述均不替代目标环境或完整业务并发验收。

@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -147,13 +148,14 @@ func (q *ToolQueue) Enqueue(job ToolJob) error {
 	defer q.admissions.Done()
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
-	if err := q.admit(ctx, job); err != nil {
-		return err
-	}
+	admissionErr := q.admit(ctx, job)
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if q.state != toolQueueAccepting {
-		return fmt.Errorf("%w; approved invocation remains pending", ErrToolQueueClosed)
+		return errors.Join(fmt.Errorf("%w; approved invocation remains pending", ErrToolQueueClosed), admissionErr)
+	}
+	if admissionErr != nil {
+		return admissionErr
 	}
 	if len(q.jobs) >= q.capacity {
 		return fmt.Errorf("tool queue is full; approved invocation remains pending")
@@ -222,6 +224,10 @@ func (q *ToolQueue) loadApprovedTool(ctx context.Context, job ToolJob) (inv *ent
 			err = errors.Join(err, closeErr)
 		}
 	}()
+	return q.approvedToolInTx(ctx, tx, job)
+}
+
+func (q *ToolQueue) approvedToolInTx(ctx context.Context, tx *ent.Tx, job ToolJob) (inv *ent.ToolInvocation, actor *ent.User, err error) {
 	if err = q.execution.BindEnt(ctx, tx, job.TenantID); err != nil {
 		return nil, nil, err
 	}
@@ -253,6 +259,9 @@ func (q *ToolQueue) ProcessJob(ctx context.Context, job ToolJob) error {
 	inv, actor, err := q.loadApprovedTool(ctx, job)
 	if err != nil {
 		return err
+	}
+	if inv.Status == "done" {
+		return nil
 	}
 	ctx = tenantctx.WithTenantID(ctx, job.TenantID)
 	var result any
@@ -289,26 +298,59 @@ func (q *ToolQueue) ProcessJob(ctx context.Context, job ToolJob) error {
 		}
 	}
 	if err != nil {
-		if inv.Status != "done" {
-			message := "tool execution failed"
-			var typed *creation.IntakeError
-			if errors.As(err, &typed) {
-				message = typed.Message
-			}
-			_, writeErr := q.client.ToolInvocation.UpdateOneID(inv.ID).SetStatus("failed").SetError(message).Save(ctx)
-			if writeErr != nil {
-				return errors.Join(err, writeErr)
-			}
-		}
-		return err
+		return errors.Join(err, q.persistToolOutcome(ctx, job, inv, "failed", ""))
 	}
 	encoded, err := json.Marshal(result)
 	if err != nil {
 		return err
 	}
-	_, err = q.client.ToolInvocation.UpdateOneID(inv.ID).SetStatus("done").ClearError().SetResult(string(encoded)).Save(ctx)
-	return err
+	return q.persistToolOutcome(ctx, job, inv, "done", string(encoded))
 }
+
+// Persist against current authority and never replace the first completed receipt.
+func (q *ToolQueue) persistToolOutcome(ctx context.Context, job ToolJob, expected *ent.ToolInvocation, status, result string) (err error) {
+	tx, err := q.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if e := tx.Rollback(); e != nil && !errors.Is(e, sql.ErrTxDone) {
+			err = errors.Join(err, e)
+		}
+	}()
+	current, _, err := q.approvedToolInTx(ctx, tx, job)
+	if err != nil {
+		return err
+	}
+	if current.ToolName != expected.ToolName || current.Arguments != expected.Arguments || current.UserID != expected.UserID || current.ApprovedBy != expected.ApprovedBy || !current.ApprovedAt.Equal(expected.ApprovedAt) {
+		return creation.NewPermissionDenied("tool approval changed during execution", nil)
+	}
+	if current.Status == "done" {
+		return nil
+	}
+	update := tx.ToolInvocation.Update().Where(
+		toolinvocation.IDEQ(job.InvocationID), toolinvocation.TenantIDEQ(job.TenantID),
+		toolinvocation.StatusNEQ("done"), toolinvocation.ApprovalStateEQ("approved"),
+		toolinvocation.NeedsApprovalEQ(true), toolinvocation.DryRunEQ(false),
+		toolinvocation.UserIDEQ(expected.UserID), toolinvocation.ToolNameEQ(expected.ToolName),
+		toolinvocation.ArgumentsEQ(expected.Arguments), toolinvocation.ApprovedByEQ(expected.ApprovedBy),
+		toolinvocation.ApprovedAtEQ(expected.ApprovedAt),
+	).SetStatus(status)
+	if status == "done" {
+		update.ClearError().SetResult(result)
+	} else {
+		update.SetError("tool execution failed")
+	}
+	changed, err := update.Save(ctx)
+	if err != nil {
+		return err
+	}
+	if changed != 1 {
+		return fmt.Errorf("tool outcome changed concurrently")
+	}
+	return tx.Commit()
+}
+
 func positiveToolInteger(raw any) (int, error) {
 	number, ok := raw.(json.Number)
 	if !ok {
