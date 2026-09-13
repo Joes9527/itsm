@@ -352,15 +352,17 @@ func NewApplication() *Application {
 	ticketNotificationService.SetDeliveryQueueClient(systemClient)
 	// 邮件通知（Graph sendMail 为主，SMTP fallback）
 	emailService := service.NewEmailService(service.EmailConfig{
-		Host:     cfg.SMTP.Host,
-		Port:     cfg.SMTP.Port,
-		Username: cfg.SMTP.Username,
-		Password: cfg.SMTP.Password,
-		From:     cfg.SMTP.FromEmail,
-		FromName: cfg.SMTP.FromName,
+		DeliveryTransport: cfg.EmailDelivery.EffectiveTransport(),
+		Host:              cfg.SMTP.Host,
+		Port:              cfg.SMTP.Port,
+		Username:          cfg.SMTP.Username,
+		Password:          cfg.SMTP.Password,
+		From:              cfg.SMTP.FromEmail,
+		FromName:          cfg.SMTP.FromName,
 	}, sugar)
 	// 延迟绑定 Graph 发信：发信时只查询当前租户的 msgraph 连接器。
 	emailService.SetGraphProvider(newTenantGraphProvider(connectorManager))
+	emailService.SetDeliveryTargetDependencies(connectorManager, executionPolicy)
 	ticketNotificationService.SetEmailService(emailService)
 	ticketSLAService := service.NewTicketSLAService(client, sugar)
 	ticketAutomationRuleService := service.NewTicketAutomationRuleService(client, sugar)

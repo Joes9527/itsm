@@ -17,20 +17,21 @@ import (
 )
 
 type Config struct {
-	Execution      ExecutionConfig  `mapstructure:"execution"`
-	Database       DatabaseConfig   `mapstructure:"database"`
-	Server         ServerConfig     `mapstructure:"server"`
-	JWT            JWTConfig        `mapstructure:"jwt"`
-	Log            LogConfig        `mapstructure:"log"`
-	LLM            LLMConfig        `mapstructure:"llm"`
-	SMS            SMSConfig        `mapstructure:"sms"`
-	SMTP           SMTPConfig       `mapstructure:"smtp"`
-	MinIO          MinIOConfig      `mapstructure:"minio"`
-	Ticket         TicketConfig     `mapstructure:"ticket"`
-	Redis          RedisConfig      `mapstructure:"redis"`
-	Security       SecurityConfig   `mapstructure:"security"`
-	Deployment     DeploymentConfig `mapstructure:"deployment"`
-	RLS            RLSConfig        `mapstructure:"rls"`
+	Execution      ExecutionConfig     `mapstructure:"execution"`
+	Database       DatabaseConfig      `mapstructure:"database"`
+	Server         ServerConfig        `mapstructure:"server"`
+	JWT            JWTConfig           `mapstructure:"jwt"`
+	Log            LogConfig           `mapstructure:"log"`
+	LLM            LLMConfig           `mapstructure:"llm"`
+	SMS            SMSConfig           `mapstructure:"sms"`
+	SMTP           SMTPConfig          `mapstructure:"smtp"`
+	EmailDelivery  EmailDeliveryConfig `mapstructure:"email_delivery"`
+	MinIO          MinIOConfig         `mapstructure:"minio"`
+	Ticket         TicketConfig        `mapstructure:"ticket"`
+	Redis          RedisConfig         `mapstructure:"redis"`
+	Security       SecurityConfig      `mapstructure:"security"`
+	Deployment     DeploymentConfig    `mapstructure:"deployment"`
+	RLS            RLSConfig           `mapstructure:"rls"`
 	KAFOutbox      KAFOutboxConfig
 	OutboxDelivery OutboxDeliveryConfig
 	IntakeIdentity IntakeIdentityConfig
@@ -286,6 +287,7 @@ func LoadConfig() (*Config, error) {
 	viper.Set("llm", rawConfig["llm"])
 	viper.Set("sms", rawConfig["sms"])
 	viper.Set("smtp", rawConfig["smtp"])
+	viper.Set("email_delivery", rawConfig["email_delivery"])
 	viper.Set("redis", rawConfig["redis"])
 	viper.Set("ticket", rawConfig["ticket"])
 	viper.Set("embedding", rawConfig["embedding"])
@@ -398,6 +400,10 @@ func LoadConfig() (*Config, error) {
 	config.SMTP.Password = getEnvWithDefault("SMTP_PASSWORD", config.SMTP.Password)
 	config.SMTP.FromEmail = getEnvWithDefault("SMTP_FROM_EMAIL", config.SMTP.FromEmail)
 	config.SMTP.FromName = getEnvWithDefault("SMTP_FROM_NAME", config.SMTP.FromName)
+	config.EmailDelivery.Transport = getEnvWithDefault("ITSM_EMAIL_DELIVERY_TRANSPORT", config.EmailDelivery.Transport)
+	if err := config.EmailDelivery.Validate(); err != nil {
+		return nil, err
+	}
 
 	// MinIO 环境变量支持
 	config.MinIO.Endpoint = getEnvWithDefault("MINIO_ENDPOINT", config.MinIO.Endpoint)

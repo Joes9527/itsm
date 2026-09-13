@@ -1513,3 +1513,17 @@ SQLite真实事务内未提交配置可被描述，原事务回滚后记录0；�
 邮件生产者/worker与Incident outbox尚未调用这些描述入口，typed EmailTarget/045和原目标重绑RED仍未关闭。下一步将两种可信来源汇入原EmailService目标结构与原持久协议，不以接口存在宣称邮件已绑定。固定CandidateSHA与候选停止状态不变，无WSL/共享数据库操作、企业外发、push/main合并，S5/S6/T3/T4/G3未完成。
 
 最终验证：s5-persisted-description-final.log database/connector/.../bootstrap全包race PASS，无FAIL/SKIP/DATA RACE；s5-persisted-description-build.log全后端build exit0。独立最终只读审阅无新增阻断，git diff --check通过，本轮Go进程已退出。
+
+### B2 S5 EmailService统一目标描述与显式传输选择（2026-09-14）
+
+s5-email-typed-target-red.log先复现EmailService缺typed描述入口；新增secret-free EmailTarget v2（transport、connectorName/provider、digest）和DescribeDeliveryTarget(ctx,*ent.Tx,tenant,owner)。入口共用冻结RequireDeliveryIdentity，仅核验身份不启用能力；standard Graph强制沿tx.Client()读取，candidate Graph只读声明，均不调用live GraphProvider。bootstrap构造期注入原Manager/ExecutionPolicy，尚无producer/worker调用。
+
+独立审阅发现仅凭GraphProvider=nil选择SMTP在bootstrap永远不可达，已修正为可信email_delivery.transport / ITSM_EMAIL_DELIVERY_TRANSPORT，空默认graph，仅graph/smtp有效且配置加载校验，bootstrap复制选择到EmailConfig。选择不依赖live provider可用性，Graph描述失败即使SMTP配置完整也拒绝。该新配置当前只作用于描述，不声称SendForTenant或实际队列发送已切换。
+
+s5-email-smtp-target-red.log复现原描述入口拒绝显式SMTP，随后沿原EmailService SMTP配置生成无connector身份的摘要。覆盖精确Host/Port/Username/From及实际TCP机会式STARTTLS、TLS1.2证书验证、PlainAuth；排除Password，空/轮换密码不改变目的地。身份/端口/邮箱非法拒绝；没有另接builtin/email，也没把SMTP_CONFIG的Encryption/SkipVerify等未被原sender使用的值冒称实际策略。Host保留实际配置文本作保守身份，不声称已归一化所有等价地址。
+
+测试包括候选/标准禁用通知下Graph完整描述、原事务配置、无实例/live查询、nil tx/错tenant拒绝；显式SMTP即使GraphProvider存在也不查询Graph、host/port/user/from分别变化摘要不同、密码变化相同、非法transport/字段拒绝。独立最终只读审阅无新增阻断。原邮件重绑RED仍未关闭，v2目前只是描述结构，无045/持久字段/worker或Incident接入；下步必须共享该结构写入原意图并按固定transport/身份发送，不扩大为新队列。
+
+CandidateSHA不变、候选停止，无WSL/共享数据库操作、企业外发、push/main合并；S5/S6/T3/T4/G3未完成。
+
+最终证据：s5-email-typed-target-final.log四包具名race PASS（非service全量），s5-email-typed-target-regression.log config/database/bootstrap全包race PASS；s5-email-typed-target-full-private.log既定私有PG16/Redis/MinIO suite race PASS，均无FAIL/SKIP/DATA RACE；s5-email-typed-target-build.log全后端build exit0。git diff --check通过，本轮Go进程已退出。

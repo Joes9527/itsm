@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"itsm-backend/connector"
+	"itsm-backend/database"
 	"net"
 	"net/mail"
 	"net/smtp"
@@ -21,12 +23,13 @@ import (
 
 // EmailConfig 邮件配置
 type EmailConfig struct {
-	Host     string // SMTP服务器地址
-	Port     int    // SMTP端口
-	Username string // 用户名
-	Password string // 密码
-	From     string // 发件人地址
-	FromName string // 发件人名称
+	DeliveryTransport string // trusted route for new durable intents
+	Host              string // SMTP服务器地址
+	Port              int    // SMTP端口
+	Username          string // 用户名
+	Password          string // 密码
+	From              string // 发件人地址
+	FromName          string // 发件人名称
 }
 
 // GraphMailSender Graph sendMail 发信后端（Exchange Online）。由 msgraph
@@ -117,6 +120,8 @@ type EmailService struct {
 	// graphProvider 延迟绑定 Graph 发信后端：返回 sender + 发件邮箱 + 是否可用。
 	// connector 运行时 provision，不能启动时注入，故发信时动态查询。
 	graphProvider GraphProvider
+	targetManager *connector.Manager
+	targetPolicy  *database.ExecutionPolicy
 }
 
 // EmailMessage 邮件消息

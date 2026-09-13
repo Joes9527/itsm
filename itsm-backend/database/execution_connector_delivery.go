@@ -10,7 +10,7 @@ import (
 // transport capability. Persistent source/claim/actor authorization stays with
 // the delivery owner, in its existing transaction.
 func (p *ExecutionPolicy) RequireConnectorDelivery(ctx context.Context, ref executionscope.Ref, capability string) error {
-	if err := p.requireConnectorIdentity(ctx, ref, capability); err != nil {
+	if err := p.RequireDeliveryIdentity(ctx, ref, capability); err != nil {
 		return err
 	}
 	return p.RequireCapability(ctx, ref.TenantID, capability)
@@ -20,7 +20,7 @@ func (p *ExecutionPolicy) RequireConnectorDelivery(ctx context.Context, ref exec
 // reads only. Candidate descriptions must use their frozen declarations.
 // This checks source identity, not execution enablement or business authority.
 func (p *ExecutionPolicy) RequirePersistedConnectorDescription(ctx context.Context, ref executionscope.Ref, capability string) error {
-	if err := p.requireConnectorIdentity(ctx, ref, capability); err != nil {
+	if err := p.RequireDeliveryIdentity(ctx, ref, capability); err != nil {
 		return err
 	}
 	if p.mode != "standard" {
@@ -29,7 +29,9 @@ func (p *ExecutionPolicy) RequirePersistedConnectorDescription(ctx context.Conte
 	return nil
 }
 
-func (p *ExecutionPolicy) requireConnectorIdentity(ctx context.Context, ref executionscope.Ref, capability string) error {
+// RequireDeliveryIdentity verifies an owner's frozen deployment/tenant identity.
+// It permits pure description while execution is disabled, not a business effect.
+func (p *ExecutionPolicy) RequireDeliveryIdentity(ctx context.Context, ref executionscope.Ref, capability string) error {
 	if p == nil || ctx == nil || tenantctx.IsSystemBypass(ctx) {
 		return executionscope.ErrDenied
 	}

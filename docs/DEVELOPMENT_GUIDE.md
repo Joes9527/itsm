@@ -403,3 +403,5 @@ Registry.DescribeDeliveryDestination 对注册的纯描述器执行精确 name/p
 候选生产者可通过 Manager.DescribeDeclaredDeliveryTarget 按精确Ref、owner、name/provider读取冻结声明并核对纯描述摘要；返回只含摘要，不返回凭据，不实例化连接器。策略校验租户上下文、部署/作用域和声明owner，拒绝system bypass；禁用能力只允许描述，实际投递仍走RequireConnectorDelivery。此入口拒绝standard模式；standard仍需沿持久ConnectorConfig配置owner接入，邮件队列持久身份也尚未完成。
 
 标准生产者可调用 Manager.DescribePersistedDeliveryTarget，必须传业务原事务的 tx.Client()；接口本身仍接受普通 *ent.Client，不能据此证明调用者必然在事务内。该入口仅standard模式，精确tenant/name读取唯一enabled ConnectorConfig并核对provider；禁用notification不妨碍读取已启用连接器配置。重复/缺失/禁用配置及JSON语法或类型错误拒绝；Graph字符串身份由纯描述器验证，不宣称通用JSON重复key或数值无损解析已解决。candidate必须使用冻结声明入口。两入口均未接入邮件持久目标协议。
+
+EmailService.DescribeDeliveryTarget现统一生成v2 EmailTarget（transport、精确Graph连接器身份、digest），参数要求原*ent.Tx，standard Graph沿tx.Client()读取，candidate Graph沿冻结声明；不查询live GraphProvider。可信email_delivery.transport（环境ITSM_EMAIL_DELIVERY_TRANSPORT）只允许graph/smtp，空默认graph，经bootstrap复制到服务；选择smtp不依赖GraphProvider是否存在，Graph描述失败不回退。SMTP摘要使用实际Host/Port/Username/From与tcp机会式STARTTLS/TLS1.2证书验证/PlainAuth，不含Password、不假装SMTP是connector。当前仅接入描述，新配置尚不改变SendForTenant或队列实际路由；045/生产者/worker/Incident持久协议仍待完成，不能据此启用企业发送。

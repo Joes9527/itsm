@@ -56,7 +56,7 @@ func (p *ExecutionPolicy) ConnectorActivationTargets(ctx context.Context) ([]con
 // tenant. It does not require execution to be enabled and does not authorize a
 // business action. Never expose the returned protected configuration over HTTP.
 func (p *ExecutionPolicy) DeclaredConnectorTarget(ctx context.Context, ref executionscope.Ref, capability, name, provider string) (config.ConnectorTargetConfig, error) {
-	if err := p.requireConnectorIdentity(ctx, ref, capability); err != nil {
+	if err := p.RequireDeliveryIdentity(ctx, ref, capability); err != nil {
 		return config.ConnectorTargetConfig{}, err
 	}
 	if p.mode != "candidate" {
