@@ -203,6 +203,10 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+Webhook精确目标检查点 `3e4e0e257`（2026-09-14）：producer与Worker已按下方合同接入唯一Manager.ResolveDeliveryTarget/冻结ExecutionPolicy，原8项声明归属RED关闭；保留原source/member/claim/lease/receipt与同对象/generation规则。standard重绑及ACK恢复改完整standard链，私有临时角色有BYPASSRLS，仅为组件夹具，非目标standard角色准入，数据库触发器未放宽。审阅P2发送前cause丢失由真实PG Deliver三例RED复现后修复，非ErrDenied原cause保留，发送后仍delivery_unknown；测试MarkBlocked是直接claim清理，不是worker重试结果证据。
+
+s5-webhook-target-full-green.log完整私有PG16/Redis/MinIO所选race suite PASS，无FAIL/SKIP/DATA RACE；三包具名unit race与全后端build PASS，独立最终复核无新增阻断。精确目标能力单测另证明全局notification启用不允许使用webhook-only目标。日志、夹具限制及变更证据见实现T1最新段。下方9343ac41f是修复前历史RED，不再表示当前失败。裸Get/Send/GetInstance、通知/飞书owner等仍待迁移，S5/S6/T3/T4/G3未完成，CandidateSHA与候选停止状态不变，无共享环境操作、企业/云外呼或push/main合并。
+
 Webhook声明不匹配RED `9343ac41f`（2026-09-14）：真实producer和OutboxWorker分别复现错scope、错deployment、notification-only/outbox-only声明被忽略。producer写入intent/消费receipt；worker使用先前合法intent、仅替换运行Manager后仍实际loopback发送、published并记录delivered。完整私有suite仅这8场景失败，无skip/race，其余PASS；最终补验source整行保全及终态重轮询，错误交付receipt仍触发RED。独立复核有效，尚无生产修复；另一scope仅Manager声明，不是另一个已建立active DB scope。完整日志及限制见T1；下方合同为下一实施步骤，当前G2仍未放行，CandidateSHA与停止状态不变。
 
 
