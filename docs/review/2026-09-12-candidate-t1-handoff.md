@@ -1347,3 +1347,20 @@ s5-notification-target-ent-generate.log生成exit0，最终差异仅通知相关
 完整s5-notification-target-structure-full-private.log仅原四项通知权限RED及其父用例失败，其余所选PASS，无SKIP/DATA RACE；整套仍FAIL。下一producer正向应使用真实偏好支持的sms渠道及本地sms探针，不为复用webhook队列fixture新增产品渠道；现有SendNotification中的直接外发路径也必须随原事务入口盘点，不因EnqueueNotificationTx通过而遗漏。
 
 最终s5-notification-target-structure-build.log全后端build exit0，git diff --check通过。无进行中的Go进程；本轮结构准备具备上述独立审阅与验证证据，投递权限修复仍待执行。
+
+
+### B2 S5 通知原事务目标绑定与Worker精确解析（2026-09-14）
+
+EnqueueNotificationTx/EnqueueCreationTx通过同一notification target helper，在新意图的原事务内要求显式notification能力、真实Ref、同渠道唯一启用provider，并经Manager.ResolveDeliveryTarget冻结044四字段。重放检查原协议完整性与业务内容，复用原渠道/目标，不重新读取目标；未知渠道仅in_app/email/push之外一律不能当作合法无目标行。Worker按行中精确目标解析并发送捕获对象，返回后检查摘要/generation；原scope/member/lease/回执链保留。
+
+s5-notification-producer-frozen-red.log在正确注入偏好服务后实际生产sms队列，复现目标版本NULL；初次fixture遗漏偏好服务导致多渠道OnlyX panic不作协议RED。生产者必须显式notification=scoped，原fixture未声明能力被正确拒绝（s5-notification-producer-green.log），现仅对应通知夹具声明能力，未放宽全局策略。s5-notification-producer-worker-private.log原4项拒绝和合法本地接收PASS：先真实SMS producer生成全部字段、再只替换错误Manager，不以缺字段假绿；另有原事务rollback零队列。SMS为既有偏好渠道，本地探针无网络/企业外呼。
+
+独立审阅P2发现未知渠道与发送前cause问题。s5-notification-unknown-red.log、s5-notification-resolver-red.log分别真实复现，现仅明确非连接器渠道允许无目标；dispatch返回安全分类与cause，ProcessPendingDeliveries以errors.Join保留。s5-notification-writeback-red.log进一步实际注入pending/failed/sent写回错误，复现内部包装丢失cause，现三处%w保留；creation目标拒绝映射typed PermissionDenied，其余InfrastructureUnavailable。发送后不确定状态仍沿用原delivery_unknown，并未统一所有Ticket/User/email/provider错误路径。
+
+s5-notification-target-protocol-full-private.log完整私有PG16/Redis/MinIO race PASS，无FAIL/SKIP/DATA RACE（在最后写回包装补丁之前）；s5-notification-protocol-final-private.log最后增量具名PG race PASS，覆盖3个resolver cause、3个实际worker写回故障、无Manager重放原行保全、内容冲突、双provider拒绝零新意图、未知旧行replay拒绝与四项错声明。写回失败保持processing且SentAt为空；测试随后标failed是私有清理，不代表恢复完成。独立复核P2关闭。
+
+扩大相关单测后s5-notification-protocol-unit.log仍有7项FAIL：WorkerKeepsUnavailableConnectorRetryable、WorkerFencesUnknownSendWithStableDeliveryKey、BPMNCCFanoutUsesDistinctStableConnectorDeliveryKeys、WorkerFencesExpiredLeaseAfterSentStatusWriteFailure、WorkerCASPreventsCompetingLiveLeaseDispatch、WorkerRunsImmediateSweepAndStopsOnCancellation、ReadStateDoesNotChangeDurableDeliveryState（共同TestTicketNotification前缀按日志全名）。实际所有写入者复查发现TicketWorkflowService.createCCNotifications与bpmn.CCTaskHandler.createCCNotifications仍直接写无目标外发队列，相关合法正向不能用手填四字段修饰。下一步必须将唯一binder注入这两个原owner及bootstrap，保持原CC事务/幂等协议，真实标准配置显式开启notification并由owner生产目标；同步SendNotification直接外发也仍未迁移。generic_handler站内路径单独核查，不因此扩展新产品渠道。
+
+当前不是通知完整交付通过：上述7项回归、剩余producer、目标变化/重启完整矩阵、飞书及裸Get/Send仍待处理。S5/S6/T3/T4/G3与总目标未完成，CandidateSHA不变、候选未启动，无共享环境/WSL变更、企业外呼、push/main合并。最终构建结果下方补记。
+
+最终s5-notification-protocol-build.log全后端build exit0，git diff --check通过。相关单测仍为上述7项回归，构建成功不替代业务验收；后续继续沿原入口修复。

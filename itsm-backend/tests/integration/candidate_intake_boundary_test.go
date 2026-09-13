@@ -61,6 +61,7 @@ import (
 	"itsm-backend/ent/servicerequestaccesssnapshot"
 	"itsm-backend/ent/tenantinstallation"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/ent/ticketnotification"
 	"itsm-backend/handlers/common/accessgrant"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/intake"
@@ -3237,7 +3238,78 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		}
 	})
 
+	t.Run("notification producer freezes connector target", func(t *testing.T) {
+		policy, e := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: scopeID}}, Capabilities: map[string]string{"notification": "scoped"}})
+		require.NoError(t, e)
+		fresh, e := app.Create(ctx, identity, command("notification-target-producer", "generic"))
+		require.NoError(t, e)
+		pref := owner.NotificationPreference.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetEventType("target_freeze_test").SetSmsEnabled(true).SetInAppEnabled(false).SetEmailEnabled(false).SetPushEnabled(false).SaveX(ctx)
+		defer owner.NotificationPreference.DeleteOne(pref).Exec(ctx)
+		probe := &candidateSMSConnector{}
+		reg := connector.NewRegistry()
+		reg.Register(func() connector.Connector { return probe })
+		manager := candidateDeclaredManager(t, ctx, tenant.ID, scopeID, reg, config.ConnectorTargetConfig{Name: "sms", Provider: "local", DestinationDigest: probe.DeliveryDestinationIdentity(), Capabilities: []string{"notification"}})
+		svc := service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)
+		svc.SetConnectorManager(manager)
+		svc.SetNotificationPreferenceService(service.NewNotificationPreferenceService(runtime, zap.NewNop().Sugar()))
+		req := dto.SendTicketNotificationRequest{UserIDs: []int{actor.ID}, EventType: "target_freeze_test", Content: "frozen target", DeliveryKey: "target-freeze"}
+		tx, e := runtime.Tx(ctx)
+		require.NoError(t, e)
+		defer tx.Rollback()
+		require.NoError(t, svc.EnqueueNotificationTx(ctx, tx, fresh.WorkItemID, tenant.ID, &req))
+		row := tx.TicketNotification.Query().Where(ticketnotification.TicketIDEQ(fresh.WorkItemID), ticketnotification.DeliveryKeyEQ(req.DeliveryKey)).OnlyX(ctx)
+		require.NotNil(t, row.TargetProtocolVersion)
+		require.Equal(t, 1, *row.TargetProtocolVersion)
+		require.NotNil(t, row.TargetConnectorName)
+		require.Equal(t, "sms", *row.TargetConnectorName)
+		require.NotNil(t, row.TargetConnectorProvider)
+		require.Equal(t, "local", *row.TargetConnectorProvider)
+		require.NotNil(t, row.TargetDestinationDigest)
+		require.Equal(t, probe.DeliveryDestinationIdentity(), *row.TargetDestinationDigest)
+		require.Empty(t, probe.ids, "producer must not send")
+		require.NoError(t, tx.Rollback())
+		require.Zero(t, owner.TicketNotification.Query().Where(ticketnotification.TicketIDEQ(fresh.WorkItemID)).CountX(ctx))
+		run := func(request dto.SendTicketNotificationRequest) error {
+			tx, e := runtime.Tx(ctx)
+			if e != nil {
+				return e
+			}
+			defer tx.Rollback()
+			if e = svc.EnqueueNotificationTx(ctx, tx, fresh.WorkItemID, tenant.ID, &request); e != nil {
+				return e
+			}
+			return tx.Commit()
+		}
+		require.NoError(t, run(req))
+		stored := owner.TicketNotification.Query().Where(ticketnotification.TicketIDEQ(fresh.WorkItemID), ticketnotification.DeliveryKeyEQ(req.DeliveryKey)).OnlyX(ctx)
+		defer func() { require.NoError(t, owner.TicketNotification.DeleteOneID(stored.ID).Exec(ctx)) }()
+		var before, after string
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(n)::text FROM ticket_notifications n WHERE id=$1`, stored.ID).Scan(&before))
+		svc.SetConnectorManager(nil)
+		require.NoError(t, run(req), "replay must use original target rather than current discovery")
+		conflict := req
+		conflict.Content = "changed"
+		require.Error(t, run(conflict))
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(n)::text FROM ticket_notifications n WHERE id=$1`, stored.ID).Scan(&after))
+		require.JSONEq(t, before, after)
+		ambiguous := candidateDeclaredManager(t, ctx, tenant.ID, scopeID, reg,
+			config.ConnectorTargetConfig{Name: "sms", Provider: "first", DestinationDigest: probe.DeliveryDestinationIdentity(), Capabilities: []string{"notification"}},
+			config.ConnectorTargetConfig{Name: "sms", Provider: "second", DestinationDigest: probe.DeliveryDestinationIdentity(), Capabilities: []string{"notification"}})
+		svc.SetConnectorManager(ambiguous)
+		req.DeliveryKey = "target-ambiguous"
+		require.ErrorIs(t, run(req), executionscope.ErrDenied)
+		require.Zero(t, owner.TicketNotification.Query().Where(ticketnotification.TicketIDEQ(fresh.WorkItemID), ticketnotification.DeliveryKeyEQ(req.DeliveryKey)).CountX(ctx))
+		unknown := owner.TicketNotification.Create().SetTenantID(tenant.ID).SetTicketID(fresh.WorkItemID).SetUserID(actor.ID).SetType(req.EventType).SetChannel("unknown").SetContent(req.Content).SetDeliveryKey("target-unknown").SaveX(ctx)
+		defer func() { require.NoError(t, owner.TicketNotification.DeleteOne(unknown).Exec(ctx)) }()
+		req.DeliveryKey = "target-unknown"
+		require.ErrorIs(t, run(req), executionscope.ErrDenied)
+		require.Empty(t, probe.ids)
+
+	})
+
 	t.Run("real notification worker preserves historical rows", func(t *testing.T) {
+		policy, e := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: scopeID}}, Capabilities: map[string]string{"notification": "scoped"}})
+		require.NoError(t, e)
 		snapshot := func(id int) string {
 			var raw string
 			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(n)::text FROM ticket_notifications n WHERE id=$1`, id).Scan(&raw))
@@ -3262,13 +3334,35 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.Equal(t, "failed", actual.Status)
 		require.Equal(t, 1, actual.AttemptCount)
 		require.Equal(t, "delivery_target_invalid", actual.LastErrorClass)
-		receiver := &candidateNotificationConnector{}
+		receiver := &candidateSMSConnector{}
 		registry := connector.NewRegistry()
 		registry.Register(func() connector.Connector { return receiver })
-		manager := candidateDeclaredManager(t, ctx, tenant.ID, scopeID, registry, config.ConnectorTargetConfig{Name: "webhook", Provider: "local-candidate-test", DestinationDigest: receiver.DeliveryDestinationIdentity(), Capabilities: []string{"notification"}})
+		manager := candidateDeclaredManager(t, ctx, tenant.ID, scopeID, registry, config.ConnectorTargetConfig{Name: "sms", Provider: "local-candidate-test", DestinationDigest: receiver.DeliveryDestinationIdentity(), Capabilities: []string{"notification"}})
 		notifications.SetConnectorManager(manager)
+		owner.User.UpdateOneID(actor.ID).SetPhone("private-local-recipient").SaveX(ctx)
+		defer owner.User.UpdateOneID(actor.ID).SetPhone(actor.Phone).Exec(ctx)
+		pref := owner.NotificationPreference.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetEventType("notification_worker_target").SetSmsEnabled(true).SetInAppEnabled(false).SetEmailEnabled(false).SetPushEnabled(false).SaveX(ctx)
+		defer owner.NotificationPreference.DeleteOne(pref).Exec(ctx)
+		producer := service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)
+		producer.SetConnectorManager(manager)
+		producer.SetNotificationPreferenceService(service.NewNotificationPreferenceService(runtime, zap.NewNop().Sugar()))
 		makeDelivery := func(key string) *ent.TicketNotification {
-			return owner.TicketNotification.Create().SetTenantID(tenant.ID).SetTicketID(fresh.WorkItemID).SetUserID(actor.ID).SetType("created").SetChannel("webhook").SetContent("Local notification").SetDeliveryKey(key).SetNextAttemptAt(time.Now().Add(-time.Minute)).SaveX(ctx)
+			tx, e := runtime.Tx(ctx)
+			require.NoError(t, e)
+			defer tx.Rollback()
+			req := dto.SendTicketNotificationRequest{UserIDs: []int{actor.ID}, EventType: "notification_worker_target", Content: "Local notification", DeliveryKey: key}
+			require.NoError(t, producer.EnqueueNotificationTx(ctx, tx, fresh.WorkItemID, tenant.ID, &req))
+			require.NoError(t, tx.Commit())
+			row := owner.TicketNotification.Query().Where(ticketnotification.TicketIDEQ(fresh.WorkItemID), ticketnotification.DeliveryKeyEQ(key)).OnlyX(ctx)
+			require.NotNil(t, row.TargetProtocolVersion)
+			require.Equal(t, 1, *row.TargetProtocolVersion)
+			require.NotNil(t, row.TargetConnectorName)
+			require.Equal(t, "sms", *row.TargetConnectorName)
+			require.NotNil(t, row.TargetConnectorProvider)
+			require.Equal(t, "local-candidate-test", *row.TargetConnectorProvider)
+			require.NotNil(t, row.TargetDestinationDigest)
+			require.Equal(t, receiver.DeliveryDestinationIdentity(), *row.TargetDestinationDigest)
+			return row
 		}
 		success := makeDelivery("candidate-notification-success")
 		baseline := snapshot(success.ID)
@@ -3316,7 +3410,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 
 		for _, scenario := range []string{"scope", "deployment", "webhook-only", "outbox-only"} {
 			t.Run("target_authority_"+scenario, func(t *testing.T) {
-				probe := &candidateNotificationConnector{}
+				probe := &candidateSMSConnector{}
 				reg := connector.NewRegistry()
 				reg.Register(func() connector.Connector { return probe })
 				targetScope, deployment, capability := scopeID, "intake-test", "notification"
@@ -3330,7 +3424,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				case "outbox-only":
 					capability = "outbox"
 				}
-				wrongPolicy, e := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: deployment, Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: targetScope}}, Capabilities: map[string]string{capability: "scoped"}, ConnectorTargets: []config.ConnectorTargetConfig{{TenantID: tenant.ID, ScopeID: targetScope, Name: "webhook", Provider: "local-candidate-test", DestinationDigest: probe.DeliveryDestinationIdentity(), Capabilities: []string{capability}}}})
+				wrongPolicy, e := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: deployment, Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: targetScope}}, Capabilities: map[string]string{capability: "scoped"}, ConnectorTargets: []config.ConnectorTargetConfig{{TenantID: tenant.ID, ScopeID: targetScope, Name: "sms", Provider: "local-candidate-test", DestinationDigest: probe.DeliveryDestinationIdentity(), Capabilities: []string{capability}}}})
 				require.NoError(t, e)
 				wrongManager := connector.NewManager(reg, zap.NewNop().Sugar(), wrongPolicy)
 				defer wrongManager.CloseAll()
@@ -3344,6 +3438,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				assert.Empty(t, probe.ids, "local transport must not receive an unauthorized notification")
 				stored := owner.TicketNotification.GetX(ctx, row.ID)
 				assert.Equal(t, "failed", stored.Status)
+				assert.Equal(t, "delivery_target_invalid", stored.LastErrorClass)
 				assert.True(t, stored.SentAt.IsZero(), "rejection must not record successful delivery")
 				assert.Equal(t, 1, stored.AttemptCount)
 				sentBeforeReplay := append([]string(nil), probe.ids...)
@@ -3352,6 +3447,78 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				for _, historical := range historicalNotifications {
 					assert.JSONEq(t, before[historical.ID], snapshot(historical.ID))
 				}
+			})
+		}
+
+		for _, cause := range []error{errors.New("temporary notification resolver failure"), context.Canceled, context.DeadlineExceeded} {
+			t.Run("resolver_"+cause.Error(), func(t *testing.T) {
+				probe := &candidateSMSConnector{}
+				reg := connector.NewRegistry()
+				reg.Register(func() connector.Connector { return probe })
+				p, e := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: scopeID}}, Capabilities: map[string]string{"notification": "scoped"}, ConnectorTargets: []config.ConnectorTargetConfig{{TenantID: tenant.ID, ScopeID: scopeID, Name: "sms", Provider: "local-candidate-test", DestinationDigest: probe.DeliveryDestinationIdentity(), Capabilities: []string{"notification"}}}})
+				require.NoError(t, e)
+				managerWithFailure := connector.NewManager(reg, zap.NewNop().Sugar(), &webhookResolverFailureGate{ExecutionPolicy: p, err: cause})
+				defer managerWithFailure.CloseAll()
+				require.NoError(t, managerWithFailure.ActivateStartupTargets(tenantctx.SystemContext(ctx, "test:notification-cause", "activate local target before resolver failure")))
+				row := makeDelivery("notification-resolver-" + cause.Error())
+				notifications.SetConnectorManager(managerWithFailure)
+				defer notifications.SetConnectorManager(manager)
+				n, e := notifications.ProcessPendingDeliveries(context.Background(), "notification-resolver", 1000)
+				assert.ErrorIs(t, e, cause)
+				assert.Zero(t, n)
+				assert.Empty(t, probe.ids)
+				stored := owner.TicketNotification.GetX(ctx, row.ID)
+				assert.True(t, stored.SentAt.IsZero())
+				assert.Equal(t, "pending", stored.Status)
+				assert.Equal(t, "connector_unavailable", stored.LastErrorClass)
+				// Test cleanup only, after assertions on the actual worker retry state.
+				owner.TicketNotification.UpdateOneID(row.ID).SetStatus("failed").SaveX(ctx)
+			})
+		}
+
+		for _, state := range []string{"pending", "failed", "sent"} {
+			t.Run("writeback_"+state, func(t *testing.T) {
+				row := makeDelivery("notification-writeback-" + state)
+				if state != "sent" {
+					cause := errors.New("resolver unavailable")
+					if state == "failed" {
+						cause = executionscope.ErrDenied
+					}
+					failedManager := connector.NewManager(registry, zap.NewNop().Sugar(), &webhookResolverFailureGate{ExecutionPolicy: policy, err: cause})
+					defer failedManager.CloseAll()
+					notifications.SetConnectorManager(failedManager)
+				} else {
+					notifications.SetConnectorManager(manager)
+				}
+				defer notifications.SetConnectorManager(manager)
+				injected := errors.New("injected notification " + state + " write failure")
+				active := true
+				defer func() { active = false }()
+				clients.System.TicketNotification.Use(func(next ent.Mutator) ent.Mutator {
+					return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
+						if typed, ok := m.(*ent.TicketNotificationMutation); ok && active {
+							status, _ := typed.Status()
+							if status == state {
+								return nil, injected
+							}
+						}
+						return next.Mutate(c, m)
+					})
+				})
+				beforeSend := len(receiver.ids)
+				n, e := notifications.ProcessPendingDeliveries(context.Background(), "notification-writeback", 1000)
+				active = false
+				assert.ErrorIs(t, e, injected)
+				assert.Zero(t, n)
+				if state == "sent" {
+					assert.Equal(t, beforeSend+1, len(receiver.ids))
+				} else {
+					assert.Equal(t, beforeSend, len(receiver.ids))
+				}
+				stored := owner.TicketNotification.GetX(ctx, row.ID)
+				require.Equal(t, "processing", stored.Status)
+				require.True(t, stored.SentAt.IsZero())
+				owner.TicketNotification.UpdateOneID(row.ID).SetStatus("failed").SaveX(ctx)
 			})
 		}
 
@@ -6512,4 +6679,13 @@ type webhookResolverFailureGate struct {
 
 func (g *webhookResolverFailureGate) RequireConnectorDelivery(context.Context, executionscope.Ref, string) error {
 	return g.err
+}
+
+// Actual configured notification channel, without adding a product preference.
+type candidateSMSConnector struct{ candidateNotificationConnector }
+
+func (*candidateSMSConnector) Manifest() connector.Manifest {
+	m := (&candidateNotificationConnector{}).Manifest()
+	m.Name = "sms"
+	return m
 }

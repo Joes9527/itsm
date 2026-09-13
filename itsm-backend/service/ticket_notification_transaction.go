@@ -62,6 +62,9 @@ func (s *TicketNotificationService) enqueueNotificationTx(ctx context.Context, t
 			return fmt.Errorf("notification intent replay lookup: %w", err)
 		}
 		for _, row := range persisted {
+			if err := validateNotificationConnectorTarget(row); err != nil {
+				return err
+			}
 			if row.Type != req.EventType || row.Content != req.Content || (row.SLAAlertHistoryID == nil) != (req.SLAAlertHistoryID == nil) || (row.SLAAlertHistoryID != nil && req.SLAAlertHistoryID != nil && *row.SLAAlertHistoryID != *req.SLAAlertHistoryID) {
 				return fmt.Errorf("notification delivery identity conflicts with persisted intent")
 			}
@@ -91,7 +94,11 @@ func (s *TicketNotificationService) enqueueNotificationTx(ctx context.Context, t
 				}
 				continue
 			}
-			if _, err := tx.TicketNotification.Create().SetNillableSLAAlertHistoryID(req.SLAAlertHistoryID).SetTenantID(tenantID).SetTicketID(ticketID).SetUserID(userID).SetType(req.EventType).SetChannel(channel.name).SetContent(req.Content).SetDeliveryKey(req.DeliveryKey).SetStatus(ticketNotificationStatusPending).SetNextAttemptAt(s.clock()).Save(ctx); err != nil {
+			create := tx.TicketNotification.Create().SetNillableSLAAlertHistoryID(req.SLAAlertHistoryID).SetTenantID(tenantID).SetTicketID(ticketID).SetUserID(userID).SetType(req.EventType).SetChannel(channel.name).SetContent(req.Content).SetDeliveryKey(req.DeliveryKey).SetStatus(ticketNotificationStatusPending).SetNextAttemptAt(s.clock())
+			if err := s.bindNotificationConnectorTarget(ctx, tenantID, channel.name, create); err != nil {
+				return err
+			}
+			if _, err := create.Save(ctx); err != nil {
 				return fmt.Errorf("notification intent write: %w", err)
 			}
 		}

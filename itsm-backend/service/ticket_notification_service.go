@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common/executionscope"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/connector"
 	"itsm-backend/database"
@@ -124,10 +125,12 @@ func (s *TicketNotificationService) ProcessPendingDeliveries(ctx context.Context
 	}
 	completed := 0
 	failed := false
+	var causes []error
 	for _, row := range candidates {
 		if row.Status == ticketNotificationStatusProcessing {
 			changed, err := s.recoverExpiredDelivery(ctx, row, now)
 			if err != nil || changed > 0 {
+				causes = append(causes, err)
 				failed = true
 			}
 			continue
@@ -135,6 +138,7 @@ func (s *TicketNotificationService) ProcessPendingDeliveries(ctx context.Context
 		rowCtx := tenantctx.WithTenantID(ctx, row.TenantID)
 		claimed, claimErr := s.claimDelivery(ctx, workerID, row)
 		if claimErr != nil {
+			causes = append(causes, claimErr)
 			failed = true
 			continue
 		}
@@ -147,25 +151,27 @@ func (s *TicketNotificationService) ProcessPendingDeliveries(ctx context.Context
 		claimedRow.AttemptCount++
 		claimedRow.LeaseOwner = workerID
 		claimedRow.LeaseExpiresAt = s.clock().Add(ticketNotificationLeaseDuration)
-		errorClass := s.dispatchClaimedDelivery(rowCtx, &claimedRow)
+		errorClass, dispatchErr := s.dispatchClaimedDelivery(rowCtx, &claimedRow)
+		causes = append(causes, dispatchErr)
 		if errorClass != "" {
 			failed = true
 			if isTicketNotificationPermanentErrorClass(errorClass) {
-				_ = s.failDelivery(ctx, workerID, &claimedRow, errorClass)
+				causes = append(causes, s.failDelivery(ctx, workerID, &claimedRow, errorClass))
 			} else {
-				_ = s.retryDelivery(ctx, workerID, &claimedRow, errorClass)
+				causes = append(causes, s.retryDelivery(ctx, workerID, &claimedRow, errorClass))
 			}
 			continue
 		}
 		completedRow, completeErr := s.completeDelivery(ctx, workerID, &claimedRow)
 		if completeErr != nil || !completedRow {
+			causes = append(causes, completeErr)
 			failed = true
 			continue
 		}
 		completed++
 	}
 	if failed {
-		return completed, fmt.Errorf("one or more ticket notifications were not completed")
+		return completed, errors.Join(fmt.Errorf("one or more ticket notifications were not completed"), errors.Join(causes...))
 	}
 	return completed, nil
 }
@@ -259,7 +265,7 @@ func (s *TicketNotificationService) completeDelivery(ctx context.Context, worker
 		ClearLastErrorClass().
 		Save(ctx)
 	if err != nil {
-		return false, fmt.Errorf("ticket notification completion failed")
+		return false, fmt.Errorf("ticket notification completion failed: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return false, err
@@ -294,7 +300,7 @@ func (s *TicketNotificationService) retryDelivery(ctx context.Context, workerID 
 		ClearLeaseExpiresAt().
 		Save(ctx)
 	if err != nil {
-		return fmt.Errorf("ticket notification retry scheduling failed")
+		return fmt.Errorf("ticket notification retry scheduling failed: %w", err)
 	}
 	if affected != 1 {
 		return fmt.Errorf("ticket notification lease lost")
@@ -328,7 +334,7 @@ func (s *TicketNotificationService) failDelivery(ctx context.Context, workerID s
 		ClearLeaseExpiresAt().
 		Save(ctx)
 	if err != nil {
-		return fmt.Errorf("ticket notification terminal failure update failed")
+		return fmt.Errorf("ticket notification terminal failure update failed: %w", err)
 	}
 	if affected != 1 {
 		return fmt.Errorf("ticket notification lease lost")
@@ -336,55 +342,62 @@ func (s *TicketNotificationService) failDelivery(ctx context.Context, workerID s
 	return tx.Commit()
 }
 
-func (s *TicketNotificationService) dispatchClaimedDelivery(ctx context.Context, row *ent.TicketNotification) string {
+func (s *TicketNotificationService) dispatchClaimedDelivery(ctx context.Context, row *ent.TicketNotification) (string, error) {
 	ticketEntity, err := s.client.Ticket.Query().Where(ticket.ID(row.TicketID), ticket.TenantID(row.TenantID)).Only(ctx)
 	if err != nil {
-		return "delivery_target_invalid"
+		return "delivery_target_invalid", nil
 	}
 	userEntity, err := s.client.User.Query().Where(user.ID(row.UserID), user.TenantID(row.TenantID), user.Active(true)).Only(ctx)
 	if err != nil {
-		return "delivery_target_invalid"
+		return "delivery_target_invalid", nil
 	}
 	deliveryKey := ""
 	if row.DeliveryKey != nil {
 		deliveryKey = strings.TrimSpace(*row.DeliveryKey)
 	}
 	if deliveryKey == "" {
-		return "delivery_target_invalid"
+		return "delivery_target_invalid", nil
 	}
 	if row.Channel == "email" {
 		if s.emailService == nil || strings.TrimSpace(userEntity.Email) == "" {
-			return "delivery_target_invalid"
+			return "delivery_target_invalid", nil
 		}
 		if _, err := mail.ParseAddress(userEntity.Email); err != nil {
-			return "delivery_target_invalid"
+			return "delivery_target_invalid", nil
 		}
 		// Content and recipient identity are durable queue facts. Resolve only
 		// the current address of that same active recipient at delivery time.
 		message := &EmailMessage{To: []string{userEntity.Email}, Subject: fmt.Sprintf("[ITSM] 工单 %s - %s", ticketEntity.TicketNumber, row.Type), BodyText: row.Content, DeliveryID: deliveryKey, DisableProviderFallback: true}
 		if err := s.emailService.SendForTenant(ctx, row.TenantID, message); err != nil {
 			if emailTransportOutcomeOf(err) == emailAcceptanceUnknown {
-				return "delivery_unknown"
+				return "delivery_unknown", nil
 			}
-			return "connector_send"
+			return "connector_send", nil
 		}
-		return ""
+		return "", nil
 	}
 	if row.Channel == "push" {
 		if s.wsService == nil {
-			return "connector_unavailable"
+			return "connector_unavailable", nil
 		}
 		s.wsService.GetHub().SendToUser(row.UserID, WebSocketMessage{Type: row.Type, Payload: map[string]interface{}{"ticket_id": row.TicketID, "content": row.Content}})
-		return ""
+		return "", nil
 	}
 	if s.connectorManager == nil {
-		return "connector_unavailable"
+		return "connector_unavailable", nil
 	}
 	target := ticketNotificationTarget(row.Channel, userEntity)
 	if target == "" {
-		return "delivery_target_invalid"
+		return "delivery_target_invalid", nil
 	}
-	if err := s.connectorManager.Send(ctx, row.TenantID, row.Channel, &connector.Message{
+	bound, generation, err := s.resolveNotificationConnectorTarget(ctx, row)
+	if err != nil {
+		if errors.Is(err, executionscope.ErrDenied) {
+			return "delivery_target_invalid", err
+		}
+		return "connector_unavailable", err
+	}
+	if err := bound.Send(ctx, &connector.Message{
 		ID:      deliveryKey,
 		Channel: target,
 		Type:    "text",
@@ -399,11 +412,15 @@ func (s *TicketNotificationService) dispatchClaimedDelivery(ctx context.Context,
 		},
 	}); err != nil {
 		if emailTransportOutcomeOf(err) == emailNotAccepted {
-			return "connector_send"
+			return "connector_send", nil
 		}
-		return "delivery_unknown"
+		return "delivery_unknown", nil
 	}
-	return ""
+	_, currentGeneration, err := s.resolveNotificationConnectorTarget(ctx, row)
+	if err != nil || currentGeneration != generation {
+		return "delivery_unknown", nil
+	}
+	return "", nil
 }
 
 func ticketNotificationTarget(channel string, recipient *ent.User) string {
