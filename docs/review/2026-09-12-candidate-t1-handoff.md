@@ -642,3 +642,19 @@ Standard/super_admin测试不替代普通角色授权和候选真实路径；候
 此检查点只有失败回归，生产实现尚未修复，当前候选边界测试不全绿，不沿用前轮PASS。独立只读设计审阅确认：引擎传播当前callback id/tenant/execution key/lease owner/attempt可信身份，独立workflow command在原事务锁定重读持久callback及instance/完成task，核验结构WorkItem/actor/current权限/接收人/范围与version；输入取持久动作参数，原事务CAS/审计receipt/站内通知意图共同提交，重复仅凭合法receipt。领域提交后的引擎推进失败靠receipt重放，仍明确是两个事务。scope撤销、租约丢失、通知/审计写后回滚及推进失败后重放均须实际验证。
 
 目标仍为设计规定的完整候选交付；S3/S4/S5/S6/B3/T3/T4/G2/G3未完成，CandidateSHA保持原值，候选未启动，无共享环境/WSL变更、企业实发、推送或main合并。
+
+
+### B2 S3 BPMN升级工作流事务接入（2026-09-13）
+
+在 `7b437d7ab` RED后新增独立TicketService.ApplyTicketWorkflowEscalation，bootstrap注入Ticket handler；移除handler直接通知和Ticket写入。引擎传播原领取的id/tenant/key/worker/attempt，业务事务锁定并匹配processing/未过期租约及CallbackPredicate，锁instance/Ticket，核验结构WorkItem、generic class、service-task initiator/current activity或user-task持久completion actor/已完成task。参数取持久callback，严格优先级/整数接收人/正整数version，actor权限在Replay前；无receipt才核验接收人资格和expectedVersion，新写CAS、站内通知及immutable audit一起提交。保留流程escalate_to/high默认/escalated语义，不能直接调用HTTP手动升级。缺version旧回调显式失败，不补历史payload。
+
+Callback contract新增version及generic typed lifecycle result，沿既有流程输出/回执验证推进。原输出规范化将generic误当subtype，已对canonical class直接识别，同时保持既有change别名测试行为，无扩大别名范围。领域事务和引擎推进分段，后者失败时凭receipt恢复；不以现有字段相等作为幂等证明。
+
+证据位于candidate-delivery/b2：
+
+- `s3-bpmn-escalation-green.log` 原领取后关闭scope的RED变GREEN，正常流程也成功。`s3-bpmn-escalation-full-pg.log` 最终完整TestCandidateIntakeCreationBoundary PASS，无skip，私有PG16 enforce角色。实际ProcessPendingCallbacks处理独立正向critical/default high、新member撤销scope/更换lease owner拒绝、专业Incident/Problem/Change目标拒绝。
+- 同一最终PG：Notification/AuditLog实际写后注入故障使Ticket整行及通知/审计数量保全，解除后原callback成功一次；ProcessInstance推进实际写后失败，领域已提交，禁用独立通知接收人后重试仍完成，版本仅+1、审计/通知各一条。独立审阅发现Replay前接收人资格阻塞恢复，已移至首次写前，并通过上述用例复验。
+- `s3-bpmn-escalation-regression.log` service/bpmn/bootstrap的BPMN/Callback/生命周期/升级/Outbox定向PASS；build.json全后端exit0；compile.log仅integration_postgres标签编译PASS。原handler测试保留文件/函数名，直接调用无owner明确拒绝；专业业务断言转由真实PG所有者验证。旧extension失败测试的hook原来永久激活导致后续Incident创建失败，现限定该原用例期间，原实际写后回滚断言保留。
+- 初轮typed result未声明及generic输出识别问题导致正常流程推进失败，已修正并真实推进成功；没有把其中编译/夹具失败算成业务RED。只读review_execution_scope_s1复审本轮事务主线及修复，无新增阻断。
+
+边界：process/instance/callback为owner前置夹具，运行的是实际领取、领域命令、流程推进，不是完整流程创建/启动链。user-task completion分支、普通actor撤权、租约过期/同worker旧attempt、参数恶意篡改及跨worker同时运行专项仍待覆盖；本轮不是所有BPMN写入口接入，assign/update_status等仍需按S3逐项核验。S3/S4/S5/S6/B3/T3/T4/G2/G3仍未完成，固定CandidateSHA不变、候选未启动，无WSL/共享环境、企业实发、共享迁移、推送或main合并。

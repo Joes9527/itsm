@@ -9,6 +9,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/handlers/shared/workitemmutation"
 
 	"go.uber.org/zap"
 )
@@ -26,7 +27,16 @@ type TicketStatusServiceInterface interface {
 }
 
 // TicketServiceTaskHandler 工单服务任务处理器
+type TicketWorkflowEscalationService interface {
+	ApplyTicketWorkflowEscalation(context.Context) (workitemmutation.Result, error)
+}
+
+func (h *TicketServiceTaskHandler) SetEscalationService(svc TicketWorkflowEscalationService) {
+	h.escalationService = svc
+}
+
 type TicketServiceTaskHandler struct {
+	escalationService TicketWorkflowEscalationService
 	HandlerBase
 	client              *ent.Client
 	logger              *zap.SugaredLogger
@@ -285,66 +295,18 @@ func (h *TicketServiceTaskHandler) notifyHandler(ctx context.Context, ticketID i
 
 // escalateTicket 升级工单
 func (h *TicketServiceTaskHandler) escalateTicket(ctx context.Context, ticketID int, variables map[string]interface{}) (*CallbackEffect, error) {
-	// 获取升级优先级
-	escalateTo, _ := variables["escalate_to"].(string)
-	if escalateTo == "" {
-		escalateTo = "high"
+	if h.escalationService == nil {
+		return nil, fmt.Errorf("workflow escalation service unavailable")
 	}
-	escalationReason, _ := variables["escalation_reason"].(string)
-
-	// 获取工单信息
-	tenantID, err := h.getTenantID(ctx, variables)
+	result, err := h.escalationService.ApplyTicketWorkflowEscalation(ctx)
 	if err != nil {
 		return nil, err
 	}
-	ticketEntity, err := h.getTicket(ctx, ticketID, tenantID)
-	if err != nil {
-		return nil, fmt.Errorf("工单不存在: %w", err)
+	effect := &CallbackEffect{Status: CallbackEffectApplied, Message: "workflow escalation applied", LifecycleResult: &result}
+	if result.Replayed {
+		effect.Status = CallbackEffectIdempotent
 	}
-	if err := rejectProfessionalTicketTaskMutation(ticketEntity.RecordClass); err != nil {
-		return nil, err
-	}
-
-	if ticketEntity.Priority == escalateTo && ticketEntity.Status == "escalated" {
-		return IdempotentEffect(fmt.Sprintf("工单 %d 已升级为 %s", ticketID, escalateTo), nil), nil
-	}
-
-	// 通知管理员或升级处理人
-	adminIDs := GetIntSliceFromVars(variables, "notify_admin_ids")
-	if len(adminIDs) > 0 {
-		content := fmt.Sprintf("工单 %s (#%s) 已升级，原因：%s", ticketEntity.Title, ticketEntity.TicketNumber, escalationReason)
-		for _, adminID := range adminIDs {
-			effect, err := h.sendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-				UserIDs:   []int{adminID},
-				EventType: "ticket_updated",
-				Content:   content,
-			}, ticketEntity.TenantID)
-			if err != nil {
-				h.logger.Warnw("failed to send escalation notification", "error_class", "notification_delivery", "ticket_id", ticketID, "admin_id", adminID)
-				return nil, fmt.Errorf("升级通知失败")
-			}
-			if effect.Status == CallbackEffectBlocked {
-				return effect, nil
-			}
-		}
-	}
-
-	// Notify first. A stable delivery key deduplicates a retry if the state write
-	// fails after notification persistence.
-	_, err = h.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).Where(ticket.TenantID(tenantID)).
-		SetPriority(escalateTo).
-		SetStatus("escalated").
-		SetUpdatedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("升级工单失败: %w", err)
-	}
-
-	h.logger.Infow("Ticket escalated via BPMN", "ticket_id", ticketID, "escalated_to", escalateTo, "reason", escalationReason)
-
-	return &CallbackEffect{Status: CallbackEffectApplied,
-		Message: fmt.Sprintf("工单 %d 已升级为 %s", ticketID, escalateTo),
-	}, nil
+	return effect, nil
 }
 
 // assignTicket 分配工单

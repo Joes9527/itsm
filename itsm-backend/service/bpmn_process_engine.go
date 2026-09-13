@@ -32,6 +32,7 @@ import (
 	"itsm-backend/ent/rolepermission"
 	"itsm-backend/ent/ticketassignmentrule"
 	"itsm-backend/ent/user"
+	"itsm-backend/handlers/shared/workflowcallback"
 	"itsm-backend/metrics"
 	"itsm-backend/service/approver"
 	"itsm-backend/service/bpmn"
@@ -1380,6 +1381,7 @@ func (e *CustomProcessEngine) executeClaimedCallback(ctx context.Context, worker
 	}
 	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, claimedRow.TenantID)
 	ctx = bpmn.WithBPMNCallbackExecutionKey(ctx, claimedRow.ExecutionKey)
+	ctx = workflowcallback.WithClaim(ctx, workflowcallback.Claim{ID: row.ID, TenantID: row.TenantID, ExecutionKey: row.ExecutionKey, LeaseOwner: workerID, AttemptCount: row.AttemptCount})
 	claimedRow.Variables, err = filterPersistedBPMNCallbackPayload(handler, claimedRow.Action, claimedRow.Variables)
 	if err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackHandlerError(err)

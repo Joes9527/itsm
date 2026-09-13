@@ -28,7 +28,15 @@
 
 当前仅generic手动命令使用此路径，专业类型由专业所有者处理。优先级最高critical保持不变，未知优先级拒绝；升级保留现有assignee，不猜用户ID。现行授权后允许历史已提交回执只读重放；首次写入必须通过原事务执行范围，并原子提交版本、审计和通知意图。
 
-已配置Feishu时，手动命令在原事务新增 `feishu.task.update.requested`，冻结目标、映射、操作身份和发送快照，审计回执绑定其摘要。必须已有非空且TaskID=GUID的映射；缺失或不一致会回滚整条命令，不自动创建远端任务。既有Worker按目标顺序发送，投递前和结果写回核验持久claim/attempt、范围、当前权限和操作回执；完成事务锁住事件行。远端GUID不一致、调用后错误或回执失败均转入delivery_unknown并阻挡后序，不自动重试。该协议只覆盖新的手动更新事件；TicketLifecycleService/EscalationService重复手动方法已移除，生产HTTP手动升级只有TicketService所有者。BPMN升级及其他Feishu直发入口仍待接入，候选尚未放行。
+已配置Feishu时，手动命令在原事务新增 `feishu.task.update.requested`，冻结目标、映射、操作身份和发送快照，审计回执绑定其摘要。必须已有非空且TaskID=GUID的映射；缺失或不一致会回滚整条命令，不自动创建远端任务。既有Worker按目标顺序发送，投递前和结果写回核验持久claim/attempt、范围、当前权限和操作回执；完成事务锁住事件行。远端GUID不一致、调用后错误或回执失败均转入delivery_unknown并阻挡后序，不自动重试。该协议只覆盖新的手动更新事件；TicketLifecycleService/EscalationService重复手动方法已移除，生产HTTP手动升级只有TicketService所有者。BPMN升级已接入独立工作流事务（见下），其他Feishu直发入口仍待接入，候选尚未放行。
+
+### BPMN 工单升级事务
+
+`ticket_task/escalate` 由 TicketService 的独立工作流命令处理。持久回调必须携带正整数 `version`；保留 `escalate_to`（省略/空值默认high）、`escalation_reason`、`notify_admin_ids` 及 `escalated` 状态语义。旧缺version回调不会被自动补值，必须核对其流程配置与原操作意图。仅generic可用，专业类型走所属领域命令。
+
+引擎通过内部context传递callback id/tenant/executionKey/lease owner/attempt；这些字段必须在业务原事务与当前processing/未过期租约匹配，context值本身不是授权。事务锁定回调、流程实例和工单，读取持久动作参数、权威实例目标及actor，核验当前权限和范围。首次执行以version CAS更新、写immutable审计回执和站内通知；重放仍核验actor/claim和输入摘要，但不重新检查已完成通知接收人的当前资格。不得通过variables自报actor、目标或租约替代这条边界。
+
+业务提交与引擎推进仍是两个事务。推进失败后使用同一回调操作回执恢复，不再次升级或通知。Typed lifecycle result沿现有回执验证更新流程version/status；此路径不启用企业通知渠道。当前验证使用私有PG及构造的流程/回调前置数据，不替代真实流程启动、用户任务完成及企业环境验收。
 
 ### Outbox 按目标串行投递
 

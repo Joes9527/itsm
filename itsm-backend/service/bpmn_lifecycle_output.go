@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"itsm-backend/common"
+	"itsm-backend/common/workitemidentity"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/processinstance"
@@ -35,6 +36,9 @@ func callbackContinuationOutputs(handler bpmn.ServiceTaskHandlerInterface, row *
 		return nil, nil
 	}
 	class, subtype := common.WorkItemIdentityFilter(instance.BusinessType)
+	if workitemidentity.IsRecordClass(instance.BusinessType) {
+		class, subtype = instance.BusinessType, ""
+	}
 	result := effect.LifecycleResult
 	if result == nil || effect.CreationResult != nil || len(effect.OutputVars) > 0 || len(effect.UpdatedData) > 0 || subtype != "" || class != contract.LifecycleRecordClass || result.WorkItemID != instance.BusinessID || result.WorkItemID <= 0 || result.Version != bpmn.GetIntFromVars(row.Variables, "version")+1 || result.Status == "" {
 		return nil, fmt.Errorf("invalid typed lifecycle result")

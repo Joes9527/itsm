@@ -36,7 +36,11 @@ func TestTicketBPMNAssignmentRejectsProfessionalClasses(t *testing.T) {
 				} else {
 					_, err = handler.escalateTicket(ctx, item.ID, map[string]interface{}{"escalate_to": "high", "notify_admin_ids": []int{actor.ID}})
 				}
-				require.ErrorContains(t, err, "owning domain command")
+				if action == "escalate" {
+					require.ErrorContains(t, err, "workflow escalation service unavailable")
+				} else {
+					require.ErrorContains(t, err, "owning domain command")
+				}
 				after := client.Ticket.GetX(ctx, item.ID)
 				require.Equal(t, item.AssigneeID, after.AssigneeID)
 				require.Equal(t, item.Status, after.Status)

@@ -1341,11 +1341,13 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 	t.Run("extension failure rolls back base receipt and membership", func(t *testing.T) {
 		tickets, receipts, members := owner.Ticket.Query().CountX(ctx), owner.IntakeRequest.Query().CountX(ctx), memberCount()
 		injected := errors.New("injected extension persistence failure")
+		activeExtensionFault := true
+		defer func() { activeExtensionFault = false }()
 		runtime.Incident.Use(func(next ent.Mutator) ent.Mutator {
 			return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-				_, err := next.Mutate(ctx, m)
-				if err != nil {
-					return nil, err
+				value, err := next.Mutate(ctx, m)
+				if err != nil || !activeExtensionFault {
+					return value, err
 				}
 				return nil, injected
 			})
@@ -2532,15 +2534,20 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 	})
 
 	t.Run("BPMN escalation rechecks scope at mutation", func(t *testing.T) {
-		for _, closeBeforeWrite := range []bool{false, true} {
-			key := fmt.Sprintf("bpmn-escalation-scope-%t", closeBeforeWrite)
-			fresh, err := app.Create(ctx, identity, command(key, "generic"))
+		for _, fault := range []string{"normal", "default", "scope", "lease", "notification", "audit", "advance", "incident", "problem", "change_request"} {
+			closeBeforeWrite := fault == "scope"
+			key := "bpmn-escalation-" + fault
+			targetClass := "generic"
+			if fault == "incident" || fault == "problem" || fault == "change_request" {
+				targetClass = fault
+			}
+			fresh, err := app.Create(ctx, identity, command(key, targetClass))
 			require.NoError(t, err)
 			dep := owner.ProcessDeployment.Create().SetDeploymentID(key).SetDeploymentName(key).SetTenantID(tenant.ID).SaveX(ctx)
 			xml := `<?xml version="1.0" encoding="UTF-8"?><bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="https://example.invalid"><bpmn:process id="escalation" isExecutable="true"><bpmn:startEvent id="Start"/><bpmn:serviceTask id="Current"/><bpmn:endEvent id="End"/><bpmn:sequenceFlow id="S1" sourceRef="Start" targetRef="Current"/><bpmn:sequenceFlow id="S2" sourceRef="Current" targetRef="End"/></bpmn:process></bpmn:definitions>`
 			def := owner.ProcessDefinition.Create().SetKey(key).SetName(key).SetVersion("1").SetIsLatest(true).SetBpmnXML([]byte(xml)).SetDeploymentID(dep.ID).SetTenantID(tenant.ID).SaveX(ctx)
 			instance := owner.ProcessInstance.Create().SetProcessInstanceID(key).SetProcessDefinitionKey(def.Key).SetProcessDefinitionID(def.ID).SetBusinessKey(fmt.Sprintf("generic:%d", fresh.WorkItemID)).SetBusinessType("generic").SetBusinessID(fresh.WorkItemID).SetExecutionWorkItemID(fresh.WorkItemID).SetInitiator(fmt.Sprint(actor.ID)).SetStatus("running").SetCurrentActivityID("Current").SetTenantID(tenant.ID).SaveX(ctx)
-			callback := owner.ProcessCallbackOutbox.Create().SetExecutionKey(key).SetTenantID(tenant.ID).SetProcessInstanceID(instance.ID).SetCallbackKind("service_task").SetHandlerID("ticket_service_handler").SetTaskType("ticket_task").SetAction("escalate").SetElementID("Current").SetVariables(map[string]interface{}{"escalate_to": "critical", "escalation_reason": "candidate workflow"}).SetNextAttemptAt(time.Now().Add(-time.Hour)).SaveX(ctx)
+			callback := owner.ProcessCallbackOutbox.Create().SetExecutionKey(key).SetTenantID(tenant.ID).SetProcessInstanceID(instance.ID).SetCallbackKind("service_task").SetHandlerID("ticket_service_handler").SetTaskType("ticket_task").SetAction("escalate").SetElementID("Current").SetVariables(map[string]interface{}{"escalate_to": "critical", "escalation_reason": "candidate workflow", "version": owner.Ticket.GetX(ctx, fresh.WorkItemID).Version}).SetNextAttemptAt(time.Now().Add(-time.Hour)).SaveX(ctx)
 			t.Cleanup(func() {
 				_, e := ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='active' WHERE id=$1", scopeID)
 				assert.NoError(t, e)
@@ -2548,31 +2555,99 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				_, e = ownerDB.ExecContext(ctx, "UPDATE process_callback_outboxes SET status='blocked' WHERE id=$1 AND status<>'completed'", callback.ID)
 				assert.NoError(t, e)
 			})
+			if fault == "default" {
+				vars := callback.Variables
+				delete(vars, "escalate_to")
+				callback = owner.ProcessCallbackOutbox.UpdateOneID(callback.ID).SetVariables(vars).SaveX(ctx)
+			}
+			var notificationRecipientID int
+			if fault == "notification" || fault == "audit" || fault == "advance" {
+				vars := callback.Variables
+				recipient := owner.User.Create().SetTenantID(tenant.ID).SetUsername(key + "-recipient").SetName("Workflow recipient").SetEmail(key + "@example.invalid").SetPasswordHash("local-only").SetRole("requester").SetActive(true).SaveX(ctx)
+				notificationRecipientID = recipient.ID
+				vars["notify_admin_ids"] = []int{recipient.ID}
+				callback = owner.ProcessCallbackOutbox.UpdateOneID(callback.ID).SetVariables(vars).SaveX(ctx)
+			}
+			beforeNotifications := owner.Notification.Query().CountX(ctx)
+			beforeAudits := owner.AuditLog.Query().CountX(ctx)
+			activeFault := false
+			writes := 0
+			if fault == "notification" || fault == "audit" || fault == "advance" {
+				activeFault = true
+				hook := func(next ent.Mutator) ent.Mutator {
+					return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+						v, err := next.Mutate(ctx, m)
+						if activeFault && err == nil {
+							writes++
+							return nil, errors.New("local workflow " + fault + " write failure")
+						}
+						return v, err
+					})
+				}
+				if fault == "notification" {
+					runtime.Notification.Use(hook)
+				} else if fault == "audit" {
+					runtime.AuditLog.Use(hook)
+				} else {
+					runtime.ProcessInstance.Use(hook)
+				}
+			}
 			var before, after string
 			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, fresh.WorkItemID).Scan(&before))
 			handler := &candidateEscalationHandler{TicketServiceTaskHandler: bpmn.NewTicketServiceTaskHandler(runtime, zap.NewNop().Sugar())}
+			handler.SetEscalationService(service.NewTicketService(&service.TicketServiceConfig{Client: runtime, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: policy, NotificationService: service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)}))
 			if closeBeforeWrite {
 				handler.before = func() {
 					_, e := ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='closed' WHERE id=$1", scopeID)
 					require.NoError(t, e)
 				}
 			}
+			if fault == "lease" {
+				handler.before = func() {
+					owner.ProcessCallbackOutbox.UpdateOneID(callback.ID).SetLeaseOwner("different-worker").SaveX(ctx)
+				}
+			}
 			engine := service.NewCustomProcessEngine(runtime, zap.NewNop().Sugar(), policy).(*service.CustomProcessEngine)
 			engine.SetCallbackCandidateClient(clients.System)
 			engine.CallbackRegistry().RegisterHandler(handler)
 			_, sweepErr := engine.ProcessPendingCallbacks(context.Background(), key, 1)
+			activeFault = false
+			t.Logf("handler error=%v callback=%s", handler.lastError, owner.ProcessCallbackOutbox.GetX(ctx, callback.ID).LastErrorClass)
 			_, restoreErr := ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='active' WHERE id=$1", scopeID)
 			require.NoError(t, restoreErr)
 			require.Equal(t, 1, handler.calls, "real engine must reach the owning handler after claim")
 			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, fresh.WorkItemID).Scan(&after))
-			if closeBeforeWrite {
+			if fault != "normal" && fault != "default" {
 				require.Error(t, sweepErr)
-				require.JSONEq(t, before, after, "claim-time admission does not authorize a later closed-scope write")
+				if fault != "advance" {
+					require.JSONEq(t, before, after, "failed workflow command must not mutate the target")
+					require.Equal(t, beforeNotifications, owner.Notification.Query().CountX(ctx))
+					require.Equal(t, beforeAudits, owner.AuditLog.Query().CountX(ctx))
+				}
+				if fault == "notification" || fault == "audit" || fault == "advance" {
+					require.Equal(t, 1, writes)
+					if fault == "advance" {
+						owner.User.UpdateOneID(notificationRecipientID).SetActive(false).SaveX(ctx)
+					}
+					owner.ProcessCallbackOutbox.UpdateOneID(callback.ID).SetNextAttemptAt(time.Now().Add(-time.Hour)).SaveX(ctx)
+					_, err := engine.ProcessPendingCallbacks(context.Background(), key+"-retry", 1)
+					require.NoError(t, err)
+					require.Equal(t, 2, owner.Ticket.GetX(ctx, fresh.WorkItemID).Version)
+					require.Equal(t, beforeAudits+1, owner.AuditLog.Query().CountX(ctx))
+					require.Equal(t, beforeNotifications+1, owner.Notification.Query().CountX(ctx))
+					require.Equal(t, "completed", owner.ProcessCallbackOutbox.GetX(ctx, callback.ID).Status)
+				}
 			} else {
 				require.NoError(t, sweepErr)
-				require.Equal(t, "critical", owner.Ticket.GetX(ctx, fresh.WorkItemID).Priority)
+				priority := "critical"
+				if fault == "default" {
+					priority = "high"
+				}
+				require.Equal(t, priority, owner.Ticket.GetX(ctx, fresh.WorkItemID).Priority)
 				require.Equal(t, "escalated", owner.Ticket.GetX(ctx, fresh.WorkItemID).Status)
+				require.Equal(t, 2, owner.Ticket.GetX(ctx, fresh.WorkItemID).Version)
 			}
+
 		}
 	})
 
@@ -2989,6 +3064,7 @@ func (r *candidateFeishuUpdater) UpdateTask(_ context.Context, guid string, task
 
 // Delegates to the real handler after a deterministic post-claim invalidation.
 type candidateEscalationHandler struct {
+	lastError error
 	*bpmn.TicketServiceTaskHandler
 	before func()
 	calls  int
@@ -2999,5 +3075,7 @@ func (h *candidateEscalationHandler) Execute(ctx context.Context, task *ent.Proc
 	if h.before != nil {
 		h.before()
 	}
-	return h.TicketServiceTaskHandler.Execute(ctx, task, variables)
+	effect, err := h.TicketServiceTaskHandler.Execute(ctx, task, variables)
+	h.lastError = err
+	return effect, err
 }

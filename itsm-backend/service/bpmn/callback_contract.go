@@ -85,11 +85,15 @@ func (h *TicketServiceTaskHandler) CallbackContract(action string) (CallbackActi
 		"update_status":    {"new_status"},
 		"notify_requester": {"notification_type", "content"},
 		"notify_handler":   {"notification_type", "content"},
-		"escalate":         {"escalate_to", "escalation_reason", "notify_admin_ids"},
+		"escalate":         {"escalate_to", "escalation_reason", "notify_admin_ids", "version"},
 		"assign":           {"assignee_id", "notify_content"},
 	}
 	fields, ok := payload[action]
 	contract := callbackActionContract(fields, nil)
+	if action == "escalate" {
+		contract.LifecycleRecordClass = "generic"
+		contract.PositiveIntegerFields = []string{"version"}
+	}
 	if action == "assign" {
 		contract.PositiveIntegerFields = []string{"assignee_id"}
 	}

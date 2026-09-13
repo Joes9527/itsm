@@ -196,7 +196,7 @@ func TestTicketServiceTaskHandler_EscalateTicket(t *testing.T) {
 				"escalation_reason": "需要更快处理",
 			},
 			expectedPriority: "high",
-			expectedError:    false,
+			expectedError:    true,
 		},
 		{
 			name:     "升级工单到 critical",
@@ -208,7 +208,7 @@ func TestTicketServiceTaskHandler_EscalateTicket(t *testing.T) {
 				"escalation_reason": "紧急问题",
 			},
 			expectedPriority: "critical",
-			expectedError:    false,
+			expectedError:    true,
 		},
 		{
 			name:     "使用默认升级优先级",
@@ -218,7 +218,7 @@ func TestTicketServiceTaskHandler_EscalateTicket(t *testing.T) {
 				"action":      "escalate",
 			},
 			expectedPriority: "high",
-			expectedError:    false,
+			expectedError:    true,
 		},
 	}
 
@@ -438,7 +438,7 @@ func TestTicketServiceTaskHandler_Execute(t *testing.T) {
 				"escalate_to":       "high",
 				"escalation_reason": "测试升级",
 			},
-			expectedError: false,
+			expectedError: true,
 			checkResult: func(t *testing.T, result *CallbackEffect) {
 				assert.True(t, result.Status == CallbackEffectApplied)
 			},
