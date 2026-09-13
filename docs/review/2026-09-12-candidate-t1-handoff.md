@@ -1125,3 +1125,13 @@ s5-tool-edit-source-full-private.log完整私有PG16/Redis/MinIO候选ScopeRegis
 清理保留cancel→等已启动revoker→恢复fixture原值顺序，删除绑定以upsert恢复，覆盖撤销已完成和取消后尚未删除两种清理情况。独立review_execution_scope_s1确认锁证据、实际事务PID读取与清理无新增阻断。首次测试表初始化笔误导致编译失败，修正后s5-tool-binding-revocation-green.log定向race PASS；不将编译失败称为业务RED。最终s5-tool-binding-revocation-full-private.log完整私有PG16/Redis/MinIO候选边界及恢复race PASS，无skip/race，git diff --check通过。本轮仅增加测试与文档，未修改生产代码，故不重复此前已通过的全后端build。
 
 该项关闭本机候选结果事务的binding撤销专项证据缺口；审批/身份并发改变及结果竞争仍待完成，目标PG17、T3交接和真实T4/G3未验收。CandidateSHA与候选未启动状态不变，无共享环境操作、企业外呼、push/main合并。
+
+### B2 S5 工具首次写入身份撤销窗口RED（2026-09-13）
+
+s5-tool-actor-revocation-red.log真实PG证明：已登记approved工具经intake原事务检查后、Ticket实际INSERT前，独立owner连接成功提交users.active=false，app.Create仍返回nil并新增一条工单及一条IntakeRequest。测试使用实际服务/数据库，Ticket hook只安排提交顺序，不替换业务执行；撤权有5秒上限和实际提交标记，结束恢复私有fixture身份。当前actor、approver、requester为同一fixture用户，不能把此用例说成三类不同身份分别验证。
+
+042函数当前只锁binding、scope及结构登记，原工具行及用户/权限授权记录仍是无锁读取；RepeatableRead和在原事务内再查询不等于撤权同步。后续需要在可信权限边界保护原调用、actor/approver及相关当前RBAC，维持至业务提交/回滚，锁后核验授权并统一与审批更新、结果写回及现有binding→scope→登记锁序。不得通过任意扩大业务身份对用户/角色配置写权限来获得锁；保留SQL故障原因与已有事务冲突重试语义。
+
+修复验证须区分撤权先提交拒绝、业务事务先锁定则撤权等待其提交/回滚，两种顺序都需真实数据库证据。新锁引入后不能沿用同步hook等待自身锁或把超时当撤权成功。审批参数变更、不同actor/approver/requester、RBAC关系撤回仍须分别验证。本轮仅增加真实RED与记录，无生产修复；当前具名及包含本项的完整套件不能报告通过，之前GREEN只代表之前验证范围。未重复不相关构建，git diff --check通过。CandidateSHA和候选未启动状态不变，全部后续交付门禁未放行，无共享环境操作、企业外呼、push/main合并。
+
+独立review_execution_scope_s1确认RED有效：后续用户锁须去重并按ID排序，保护真实role（含super_admin分支），Role/RolePermission/Permission应按现有授权查询依赖锁定；如路径实际支持委派，还需保护会话/分配记录，不扩大现行不支持路径。数据库边界只负责锁定与来源一致性，权限匹配继续复用领域授权代码，避免第二套规则。

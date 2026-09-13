@@ -1052,6 +1052,47 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			}
 
 		}
+		t.Run("actor revocation before tool business insert blocks creation", func(t *testing.T) {
+			tx, err := runtime.Tx(ctx)
+			require.NoError(t, err)
+			require.NoError(t, policy.BindEnt(ctx, tx, tenant.ID))
+			call, err := tx.ToolInvocation.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetToolName("create_ticket").SetArguments(`{"title":"Actor revocation"}`).SetNeedsApproval(true).SetApprovalState("approved").SetApprovedBy(actor.ID).SetApprovedAt(time.Now()).SetStatus("pending").Save(ctx)
+			require.NoError(t, err)
+			require.NoError(t, tx.Commit())
+			input := creation.CreateWorkItemCommand{RecordClass: "generic", IntakeKind: "generic", Confirmation: "confirmed", Title: "Actor revocation", IdempotencyKey: fmt.Sprintf("tool-invocation:%d", call.ID), Generic: &creation.GenericInput{Source: "ai"}, SourceReference: &creation.SourceReference{Provider: "tool_queue", EventID: fmt.Sprint(call.ID)}}
+			who := identity
+			who.Channel, who.Provider = "ai_tool", "tool_queue"
+			items, requests := owner.Ticket.Query().CountX(ctx), owner.IntakeRequest.Query().CountX(ctx)
+			var armed, revoked atomic.Bool
+			armed.Store(true)
+			defer func() {
+				armed.Store(false)
+				restoreCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				_, err := ownerDB.ExecContext(restoreCtx, `UPDATE users SET active=true WHERE id=$1`, actor.ID)
+				require.NoError(t, err)
+			}()
+			runtime.Ticket.Use(func(next ent.Mutator) ent.Mutator {
+				return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
+					if m.Op() == ent.OpCreate && armed.CompareAndSwap(true, false) {
+						revokeCtx, cancel := context.WithTimeout(c, 5*time.Second)
+						defer cancel()
+						_, err := ownerDB.ExecContext(revokeCtx, `UPDATE users SET active=false WHERE id=$1`, actor.ID)
+						if err != nil {
+							return nil, err
+						}
+						revoked.Store(true)
+					}
+					return next.Mutate(c, m)
+				})
+			})
+			_, err = app.Create(ctx, who, input)
+			require.True(t, revoked.Load(), "actor revocation must commit before actual business INSERT")
+			assert.Error(t, err, "revoked actor must not create new tool work")
+			assert.Equal(t, items, owner.Ticket.Query().CountX(ctx))
+			assert.Equal(t, requests, owner.IntakeRequest.Query().CountX(ctx))
+		})
+
 	})
 	t.Run("new base extension and member commit together", func(t *testing.T) {
 		created, err := app.Create(ctx, identity, command("new", "incident"))
