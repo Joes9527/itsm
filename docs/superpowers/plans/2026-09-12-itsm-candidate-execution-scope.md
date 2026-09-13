@@ -107,6 +107,9 @@ S3 阶段记录（2026-09-13；基础提交 `6261941b4`，统一创建接入 `04
 
 手动Feishu更新增量 `98de8076b415139d15a13021decc6f92e6d5b248` 已解除上述临时门禁：原事务冻结existing mapping/destination/actor/operation/version/task，审计绑定事件和摘要；既有Worker注册独立有序update handler，前后校验claim/attempt/当前权限/member/操作回执及mapping，完成事务锁定Outbox行，调用后不确定性blocked且后序不越过。TaskID=GUID前置条件只约束新协议参与映射，无映射拒绝而不自动创建。s3-feishu-update-final-pg.log完整候选边界PASS，无skip：双命令快照顺序/重放、未领取拒绝、目的地/映射/actor/payload变化、provider与实际mapping写后故障、producer事件/审计写后回滚恢复。审阅发现claim检查后恢复间隙，双连接有效RED后加行锁，竞争写锁超时且完成成功；只证明锁互斥，不声称整个worker恢复E2E。定向回归/build/标签编译及独立复审通过，详情见T1最新交接。旧Feishu直发/在途、两个手动平行方法/BPMN、全HTTP/SSO与多生产者专项仍待处理，所以全链复合验收项继续未勾选。S3/S4及后续门禁未完成，CandidateSHA/停止状态不变，无共享环境变更或企业实发。
 
+
+唯一手动所有者增量 `5ff8d1dcf`：移除TicketLifecycleService/EscalationService无生产调用的重复手动方法、interface及独用helper；不保留包装或伪SLA history。旧测试保留原文件/函数名，改为真实TicketService命令并强化priority/version/assignee/audit/no-SLA-history断言；纯priority unknown按当前契约显式拒绝。s3-manual-owner-final-regression.log三包定向、s3-manual-owner-pg.log完整候选边界无skip、全后端build均PASS，独立复审无阻断。测试Standard/super_admin不替代真实普通角色权限。上面“唯一所有者+BPMN”复合项仍不勾选，剩余BPMN独立escalate及旧Feishu直发/GET副作用继续执行。固定CandidateSHA及停止状态不变。
+
 ## S4：队列原子领取、恢复及周期执行
 
 历史 claim RED（`s4-kaf-historical-claim-red.log`）已由 `de22553c2` 修复：两条冻结 policy 构造链贯通，claim INSERT/独立 lease CAS、finalize/non-completing、completion receipt/callback recovery 原事务准入；异步恢复复用首次完成变量校验，修复误要求同步合同。真实 PG 验证历史0写、新成员claim/重复冲突、closed scope过期lease拒绝、completion及恢复保全与active恢复，最终定向回归/构建/独立审阅通过。CreateDelegatedTask 两条入口现已补齐原事务准入，joined入口改显式*ent.Tx；真实 PG 历史拒绝、新成员生成/引用、joined主动回滚及两入口outbox写后故障回滚通过，构建/回归/限定独立复审通过，见T1最新检查点。仍是分段测试，不代表完整ExecuteAction或真实BPMN节点推进；通用worker、历史applied回放及全部finalize分支等专项未完成。详见T1最新交接，S4继续未勾选。
