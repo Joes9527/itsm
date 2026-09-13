@@ -110,6 +110,20 @@ S3 阶段记录（2026-09-13；基础提交 `6261941b4`，统一创建接入 `04
 
 唯一手动所有者增量 `5ff8d1dcf`：移除TicketLifecycleService/EscalationService无生产调用的重复手动方法、interface及独用helper；不保留包装或伪SLA history。旧测试保留原文件/函数名，改为真实TicketService命令并强化priority/version/assignee/audit/no-SLA-history断言；纯priority unknown按当前契约显式拒绝。s3-manual-owner-final-regression.log三包定向、s3-manual-owner-pg.log完整候选边界无skip、全后端build均PASS，独立复审无阻断。测试Standard/super_admin不替代真实普通角色权限。上面“唯一所有者+BPMN”复合项仍不勾选，剩余BPMN独立escalate及旧Feishu直发/GET副作用继续执行。固定CandidateSHA及停止状态不变。
 
+
+### S3 BPMN升级接入检查点
+
+真实引擎领取后由原Ticket handler另行通知/写Ticket，随后才推进流程。`s3-bpmn-escalation-scope-red.log`真实私有PG先验证正向，再在原handler调用前确定性关闭scope：sweep error但Ticket priority/status/updated_at已修改，整行保全FAIL；当前测试集不全绿。owner仅构造process/instance/callback前置夹具，不等于启动/入队全链。独立审阅确认RED有效；原测试cleanup恢复scope并隔离故意失败callback，未操作共享环境。
+
+- [ ] 引擎将当前callback id/tenant/executionKey/lease owner/attempt放入可信调用上下文；只读execution key不可作为写授权。
+- [ ] TicketService新增独立workflow升级所有者，由handler注入接口调用。保持escalate_to、notify_admin_ids和escalated流程语义，不复用HTTP升级语义；移除handler直接写。
+- [ ] 原事务锁定processing callback并核验当前owner/attempt/未过期lease/handler/action/kind及CallbackPredicate，重读instance结构WorkItem引用/业务类型/当前activity；user-task另核验completed task与持久completion actor，service-task使用initiator。
+- [ ] 参数只从持久callback读取，严格解析优先级与整数接收人，核验当前actor权限、接收人tenant/active、generic/未删除、scope/member及Ticket version CAS；操作摘要覆盖目标/动作/接收人，合法receipt重放仍重新授权。
+- [ ] 状态/priority/version、immutable audit receipt及EnqueueNotificationTx在同事务提交，保持原durable callback站内通知语义，不扩展企业渠道。领域提交后的流程推进沿既有引擎，推进失败重试以receipt幂等，不以字段相等判定已执行。
+- [ ] 真实PG验证scope撤销、lease丢失、伪造目标/actor、通知/审计写后回滚及领域提交后流程推进失败重放；回归/构建及独立复审。领域事务与流程推进仍为分段事务，不声明全链原子。
+
+S3/S4/S5/S6及候选完整交付仍未完成，CandidateSHA不变、候选停止。
+
 ## S4：队列原子领取、恢复及周期执行
 
 历史 claim RED（`s4-kaf-historical-claim-red.log`）已由 `de22553c2` 修复：两条冻结 policy 构造链贯通，claim INSERT/独立 lease CAS、finalize/non-completing、completion receipt/callback recovery 原事务准入；异步恢复复用首次完成变量校验，修复误要求同步合同。真实 PG 验证历史0写、新成员claim/重复冲突、closed scope过期lease拒绝、completion及恢复保全与active恢复，最终定向回归/构建/独立审阅通过。CreateDelegatedTask 两条入口现已补齐原事务准入，joined入口改显式*ent.Tx；真实 PG 历史拒绝、新成员生成/引用、joined主动回滚及两入口outbox写后故障回滚通过，构建/回归/限定独立复审通过，见T1最新检查点。仍是分段测试，不代表完整ExecuteAction或真实BPMN节点推进；通用worker、历史applied回放及全部finalize分支等专项未完成。详见T1最新交接，S4继续未勾选。
