@@ -475,3 +475,14 @@ Outbox 并发/回滚测试提交 `56879f7c9`；独立 reviewer 确认限定结�
 - `s4-notification-worker-regression.log`：service/controller/router/bootstrap四包Notification/Workflow/Callback/Outbox/Execution定向回归PASS，container编译(no test files)。`s4-notification-worker-build.json`：后端全量构建exit0；`s4-notification-worker-integration-compile.log`：integration标签service/tests/integration编译PASS，仅编译。
 
 独立reviewer review_execution_scope_s1两次只读复核无新增阻断，确认同SQL范围和本地交付限定。剩余candidate专项：binding撤销、并发领取、retry/fail/complete数据库故障回滚；生产者及mark-read等共享写入口仍属S3未完成。原worker仍只汇总retry/fail错误，不能据此区分scope与数据库故障。SLA/escalation及callback剩余专项、S5/S6/B3和完整G2/G3未完成，S4不勾选。固定CandidateSHA保持d7470a32dbb87acc9b5e4d9a895a146410723561，候选未启动，无WSL/共享数据库操作、企业实发、推送或main合并。
+
+
+### B2 S4 SLA Monitor 历史违规写入 RED（2026-09-13）
+
+在 `e479b8d3d` 后建立真实CheckSLAViolations测试。039前设有效SLADefinition与历史过期响应/解决deadline；测试中新成员也有有效定义及过期deadline。`s4-sla-monitor-confirmed-red.log` **FAIL，尚未修复**：旧历史sla_violations集合从[]新增response_time、resolution_time两条；非致命历史JSON断言后，新成员精确2条违规独立断言通过。其它既有candidate子测试PASS。
+
+首轮 `s4-sla-monitor-historical-red.log` 因fixture definitionID=0导致创建失败，NewViolations=0，不作为隔离RED证据；有效定义后的valid-fixture-red首次确认历史写，最终confirmed-red同时证明新成员真实写路径。独立reviewer review_execution_scope_s1确认该限定RED有效。
+
+已核对原写链：monitor CheckSLAViolations预加载/分页查询全部租户记录，createViolation独立INSERT后直接调用NotifySLABreached及eventbus.Publish；SLAAlertService的CheckAndTriggerAlerts/TriggerSLAWarning独立入口、checkAndCreateAlert的重复/cooldown读取、history INSERT与NotificationSent UPDATE均需原事务成员核验。critical分支还有直接email SendTicketNotification。不能仅过滤扫描或把client替换txClient就宣称外部效果可回滚。
+
+下一接入须按单WorkItem原事务重读deadline/cycle、成员及重复条件，通知意图进入既有投递边界，事件使用可靠提交后机制；不新增candidate专用引擎。monitor当前创建失败只日志、warning只bool、alert Exist错误忽略/创建失败continue、通知失败仍NotificationSent=true，需明确错误传播，避免范围拒绝/数据库失败被当成功。当前RED只覆盖violation，不证明warning/critical/notification/eventbus；上述路径及升级扫描、其它专项/S5/S6/B3/G2/G3未完成。固定CandidateSHA不变、候选保持停止，无WSL/共享库操作或实发、推送/main合并。

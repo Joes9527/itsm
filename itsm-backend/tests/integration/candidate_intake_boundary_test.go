@@ -195,6 +195,9 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 		historicalOutbox = append(historicalOutbox, create.SaveX(ctx))
 	}
 
+	legacySLADefinition := owner.SLADefinition.Create().SetName("Candidate scope SLA").SetResponseTime(60).SetResolutionTime(240).SetTenantID(tenant.ID).SaveX(ctx)
+	// Historical SLA deadlines are restored facts, established before scope migration.
+	owner.Ticket.UpdateOneID(historical.WorkItemID).SetSLADefinitionID(legacySLADefinition.ID).SetSLAResponseDeadline(time.Now().Add(-time.Hour)).SetSLAResolutionDeadline(time.Now().Add(-time.Hour)).SaveX(ctx)
 	var historicalNotifications []*ent.TicketNotification
 	for _, state := range []string{"pending", "processing"} {
 		create := owner.TicketNotification.Create().SetTenantID(tenant.ID).SetTicketID(historical.WorkItemID).SetUserID(actor.ID).SetType("created").SetChannel("email").SetContent("Historical notification").SetDeliveryKey("legacy-notify-" + state).SetStatus(state).SetNextAttemptAt(time.Now().Add(-time.Minute))
@@ -1777,6 +1780,25 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			require.JSONEq(t, before[row.ID], snapshot(row.ID))
 		}
 
+	})
+
+	t.Run("real SLA scan preserves historical violations", func(t *testing.T) {
+		fresh, err := app.Create(ctx, identity, command("sla-scan-member", "generic"))
+		require.NoError(t, err)
+		owner.Ticket.UpdateOneID(fresh.WorkItemID).SetSLADefinitionID(legacySLADefinition.ID).SetSLAResponseDeadline(time.Now().Add(-time.Hour)).SetSLAResolutionDeadline(time.Now().Add(-time.Hour)).SaveX(ctx)
+		var before string
+		require.NoError(t, ownerDB.QueryRow(`SELECT COALESCE(json_agg(v ORDER BY id)::text,'[]') FROM sla_violations v WHERE ticket_id=$1`, historical.WorkItemID).Scan(&before))
+		monitor := service.NewSLAMonitorService(runtime, zap.NewNop().Sugar())
+		stats, err := monitor.CheckSLAViolations(ctx, tenant.ID)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, stats.NewViolations, 2, "new member must still be monitored")
+		var after string
+		require.NoError(t, ownerDB.QueryRow(`SELECT COALESCE(json_agg(v ORDER BY id)::text,'[]') FROM sla_violations v WHERE ticket_id=$1`, historical.WorkItemID).Scan(&after))
+		assert.JSONEq(t, before, after, "SLA scan created violations for historical work")
+		var created int
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM sla_violations WHERE ticket_id=$1`, fresh.WorkItemID).Scan(&created))
+		require.Equal(t, 2, created)
+		t.Logf("new member violations=%d; historical preservation checked independently", created)
 	})
 	require.Equal(t, oldRow.Title, owner.Ticket.GetX(ctx, historical.WorkItemID).Title)
 }
