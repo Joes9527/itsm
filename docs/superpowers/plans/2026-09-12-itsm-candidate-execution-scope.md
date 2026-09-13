@@ -203,6 +203,9 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+云发现门禁检查点 `664251d94`（2026-09-14）：真实PG空账号扫描复现候选DiscoverAll/RunAll返回nil的RED；两个构造器现必需冻结ExecutionPolicy，DiscoverAll/DiscoverAccount/RunAll在I/O前要求cloud_discovery显式启用。candidate保持disabled，standard也不默认启用，能力配置复制防运行中对象修改授权。独立审阅提出缺租户上下文P2，经RED后改为必须匹配tenant context；nil策略/取消/bypass/未知能力/单账号绕过负测通过。standard owner空账号扫描正向不代表provider可靠性。最终完整私有PG16/Redis/MinIO race、database/cloud包race、全后端build及独立复核通过，无skip/race，见T1。连接器、embedding、导入导出直接入口和剩余S5/S6、鉴权及目标T3/T4/G3仍未完成；CandidateSHA、停止状态和共享环境边界不变。
+
+
 工具结果竞争检查点 `7acbcaba0`：真实失败业务INSERT后回滚与成功业务提交后，两个ProcessJob结果写回事务竞争同一调用；done先/failed先均验证实际锁等待、后到40001保留cause及整次重试。最终一工单一创建回执，done首次完成整行不被覆盖，failed可恢复正确done；结果WorkItemID/编号/recordClass及Error=nil与真实创建记录匹配，工单整行（状态/版本在内）不变。业务两次尝试有意先后完成，不宣称同时INSERT竞争。完整私有PG16/Redis/MinIO race与独立审阅通过，无skip/race；本轮仅测试/文档，未重复生产构建，证据见T1。工具复合项和S5/S6、鉴权、目标T3/T4/G3保持未完成；固定CandidateSHA及候选停止状态不变。
 
 
