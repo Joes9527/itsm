@@ -203,6 +203,8 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+工具来源预检 `677fdd6b2`：ToolQueue显式冻结policy，ProcessJob先拒绝上下文冲突/bypass，并在任何invocation写入前独立事务核验041关联、真实调用、tenant、active scope/角色绑定。历史调用直接执行RED已转GREEN，旧行/工单/成员保全；新登记approved调用两次只建一工单并重放。独立P2“SQL故障伪装ErrDenied”已关闭，只有无记录分类拒绝，实际撤销SELECT保留pq42501且非ErrDenied；原事务未提交登记正向和历史负向均验证。定向工具/生命周期回归、完整私有环境race、build及独立复核通过，无skip/race，详见T1。此项仅为预检，未完成首次业务原事务授权、审批/enqueue/结果回写及运行角色新表准入，不关闭S5与全部交付门禁。CandidateSHA及候选未启动状态不变。
+
 工具来源数据库前置 `762bd4f61`：新增041唯一注册迁移，039→040→041依赖及037准备、038旧退休契约保留；新invocation INSERT触发器在原事务登记结构scope/tenant关联，复合FK、绑定/active/tenant校验、固定search_path及触发位置，历史不回填，运行角色只能显式只读。真实私有PG注册缺失RED→历史整行保全/新登记同提交同回滚/未绑定拒绝/直接补登记删除拒绝GREEN，默认角色表和函数ACL剥离、外租户/closed/撤销binding无残留负测race PASS。migration全包及build通过，独立复核无迁移前置阻断。完整私有回归仍FAIL于历史ProcessJob子测试，其余具名项通过，无skip/race，不能报告全通过。角色准入名单与AI/队列/业务事务尚未接入，041不能单独用于启动应用；后续必须关闭来源RED并保留新工具旅程。T1记录全部证据，CandidateSHA及未启动状态不变。
 
 工具来源RED检查点 `674fc9885`：真实私有PG测试确认候选ToolQueue.ProcessJob可执行scope建立前的approved create_ticket。使用受限tenant client与真实candidate intake，返回nil、历史invocation pending→done并写result、WorkItem与member各新增1，四项保全断言FAIL；独立审阅确认缺陷。当前新增测试未GREEN，不能引用此前full PASS称当前范围通过。生产调用链为handlers/ai.Service.ExecuteTool→EntRepository.CreateToolInvocation、ApproveTool→UpdateToolInvocation→Enqueue、ToolQueue.ProcessJob→intake/edit/registry→完成/失败写回；均需贯通来源范围，不能仅靠Start开关。T1保留完整RED证据，CandidateSHA及未启动状态不变。
