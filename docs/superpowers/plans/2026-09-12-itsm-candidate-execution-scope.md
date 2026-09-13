@@ -409,3 +409,9 @@ Webhook前置检查点 `1d391a42b`：真实loopback HTTP复现多实例按名称
 实现分支 f4b8947c5：Graph 纯配置目标描述与 Init 共用解析，摘要覆盖实际身份/邮箱/端点且排除 secret；拒绝自动重定向和非2xx成功。三包全量 race、全后端 build、既定私有PG16/Redis/MinIO suite通过。旧迁移fixture保留保全断言，standard worker对无目标历史通知零发送并标 delivery_target_invalid；integration标签仅编译未跑DB。独立只读审阅无新增阻断，详细RED/GREEN日志见实现分支T1交接记录。
 
 此项仅为邮件目标协议前置，不勾选S5完成：Manager可信配置描述入口、045/typed EmailTarget/Incident outbox、原邮件重绑RED仍待实施；Graph没有local_only声明，nextLink/绝对URL未取得完整目标约束证明。CandidateSHA不变，候选停止，无WSL/共享环境变更、企业外发或push/main合并。
+
+### S5 Registry 描述入口检查点（2026-09-14）
+
+实现5b8a5d468：原Registry从注册prototype捕获纯并发安全描述器，精确name/provider与小写摘要校验，无新增factory/Init或执行授权。connector/...、bootstrap全包race及全后端build通过；真实Graph经Registry并发描述零HTTP，独立审阅无阻断。详见实现T1交接记录。
+
+下一依赖已由源码确认：validateConnectorTargets拒绝未启用capability的声明，与已接受disabled notification仍可完整绑定后queued合同冲突。必须同时分离配置描述资格和ActivateStartupTargets的实际激活资格，保留禁用目标零初始化/零外发验证；禁止单独放松校验导致禁用目标被激活。standard读取仍沿ConnectorConfig权威来源，不能以已激活实例充当配置。此项与可信配置owner、045/EmailTarget/Incident及邮件重绑RED未关闭，不勾选S5完成，不改变CandidateSHA或环境授权。
