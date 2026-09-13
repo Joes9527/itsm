@@ -97,15 +97,15 @@ S3 阶段记录（2026-09-13；基础提交 `6261941b4`，统一创建接入 `04
 
 - [x] 核验真实路由/唯一候选所有者、保留有效历史generic与新member正向，建立范围/处理人/审计/最高优先级RED。
 - [ ] TicketService为唯一HTTP手动升级所有者；移除仅测试调用的TicketLifecycleService/EscalationService平行手动方法，迁移有效行为测试。BPMN独立升级保持专业流程语义并另行原事务接入。
-- [ ] 手动请求沿已有workitemmutation Meta/receipt传递稳定operationId与expectedVersion，可信actor/source来自边界；当前权限/状态/专业class校验后scope/member准入，重放必须再次授权。最高priority不降级，未知值显式拒绝；移除硬编码用户1/2/3，无真实分配策略则保留原assignee。
-- [ ] 在既有Feishu/Outbox边界新增update intent与具名handler：原事务冻结existing mapping ID/GUID、destination、actor/真实操作回执、WorkItem version/payload及ExecutionWorkItemID，不冒用creation。无mapping不得自动创建或假成功；注册到现有worker。
+- [x] 手动请求沿已有workitemmutation Meta/receipt传递稳定operationId与expectedVersion，可信actor/source来自边界；当前权限/状态/专业class校验后scope/member准入，重放必须再次授权。最高priority不降级，未知值显式拒绝；移除硬编码用户1/2/3，无真实分配策略则保留原assignee。
+- [x] 在既有Feishu/Outbox边界新增update intent与具名handler：原事务冻结existing mapping ID/GUID、destination、actor/真实操作回执、WorkItem version/payload及ExecutionWorkItemID，不冒用creation。无mapping不得自动创建或假成功；注册到现有worker。
 - [ ] 投递前及结果写回重新核验tenant/member/当前权限、mapping/目标身份；成功GUID不匹配、调用后错误及成功后落盘失败标记delivery_unknown，不声明ReplaySafe。同一mapping需跨worker串行和持久顺序/不确定性约束，测试不得以进程内锁或仅发送前version检查替代；其余旧Feishu入口另列缺口。
-- [ ] 手动原事务包含version CAS、actor/reason审计、通知意图和Feishu更新意图，移除事务外goroutine直接发送；保留已配置同步能力，不通过删除副作用或静默忽略声明完成。
+- [x] 手动原事务包含version CAS、actor/reason审计、通知意图和Feishu更新意图，移除事务外goroutine直接发送；保留已配置同步能力，不通过删除副作用或静默忽略声明完成。
 - [ ] 真实PG验证历史整行/关联无变化、新member、同操作重放、权限/版本/scope撤销、通知/审计/outbox实际写后回滚、并发及多版本更新顺序；本地声明provider验证映射/目标变化及不确定投递。核验HTTP当前权限/DTO契约、构建/回归/独立审阅，全部证据具名记录后才将本检查点计为完成。
 
 手动事务核心 `a5a9d4f92`：真实TicketService/HTTP/前端改typed命令reason/version/operationId，构造显式policy；原事务现行actor/权限→immutable Replay→首次写前scope/member/version/status→CAS/审计/通知共同提交。generic专属，critical不降级且保留assignee。s3-manual-command-full-pg.log完整边界PASS，包括新实现以Standard在039前生成receipt再迁移后只读重放、历史generic保全、新member正向/重复/conflict、actor失效/closed scope拒绝、通知/审计写后回滚恢复；定向回归/build、前端API55项、独立复审通过。历史fixture不证明旧发布版本已有receipt，未有JWT/浏览器全HTTP验收；并发恢复专项待补。
 
-配置Feishu时命令暂在写入前明确拒绝，原goroutine已移除但update intent/handler/串行与不确定性仍未实现，因此手动升级全链不勾选。下一步必须完成飞书更新并解除此临时门禁，不能把禁用同步当最终实现；旧两个手动平行方法/BPMN也待接入。S3/S4及后续门禁未完成，CandidateSHA/停止状态不变。详见实现分支T1最新交接和开发指南新接口契约。
+手动Feishu更新增量 `98de8076b415139d15a13021decc6f92e6d5b248` 已解除上述临时门禁：原事务冻结existing mapping/destination/actor/operation/version/task，审计绑定事件和摘要；既有Worker注册独立有序update handler，前后校验claim/attempt/当前权限/member/操作回执及mapping，完成事务锁定Outbox行，调用后不确定性blocked且后序不越过。TaskID=GUID前置条件只约束新协议参与映射，无映射拒绝而不自动创建。s3-feishu-update-final-pg.log完整候选边界PASS，无skip：双命令快照顺序/重放、未领取拒绝、目的地/映射/actor/payload变化、provider与实际mapping写后故障、producer事件/审计写后回滚恢复。审阅发现claim检查后恢复间隙，双连接有效RED后加行锁，竞争写锁超时且完成成功；只证明锁互斥，不声称整个worker恢复E2E。定向回归/build/标签编译及独立复审通过，详情见T1最新交接。旧Feishu直发/在途、两个手动平行方法/BPMN、全HTTP/SSO与多生产者专项仍待处理，所以全链复合验收项继续未勾选。S3/S4及后续门禁未完成，CandidateSHA/停止状态不变，无共享环境变更或企业实发。
 
 ## S4：队列原子领取、恢复及周期执行
 
@@ -145,7 +145,7 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 自动升级增量 `0266df8b0`：matrix/long_pending/unassigned 原扫描与单项事务接入frozen policy/成员；Ticket version及history level CAS、审计和durable通知共同提交，managed history复用040引用。旧周期告警不推进；非规则提醒复用每WorkItem/cycle/type操作回执，不再创建无效SLA history。bootstrap复用已配置实例，冻结租户发现及逐租户上下文/依赖检查。s4-escalation-final-pg.log完整候选边界PASS：历史alert/提醒WorkItem原始JSON保全、新成员matrix+pending、周期回执重放、long_pending通知/审计写后故障回滚恢复；定向回归、build、独立复审通过。owner设置周期不等于重开E2E，unassigned单独故障、matrix多级回滚及确定性并发仍未验证。真实手动升级和旧零AlertRuleID方法尚未接入，下一步核对真实HTTP所有者并统一原事务；S3/S4/S5/S6及后续门禁仍未完成。CandidateSHA不变、候选未启动、无共享环境变更。完整证据与限制见实现分支T1最新交接。
 
-有序Outbox前置 `d200b864f`：handler声明按aggregate串行、registry冻结、原query及claim CAS检查同tenant/type/aggregate较小ID前序均published；历史NULL-ref、blocked/dead_letter/unknown/future-due前序不跳过，外层scope保持。s4-outbox-ordering-red.log两个真实worker确定性复现同目标越序；final-pg.log完整候选边界PASS，覆盖并行独立目标、历史前序原始行保全、未决前序阻挡、已尝试过期unknown、接收端成功后published写后故障回滚及后序零调用。回归/build/标签编译、冻结声明测试及独立复审通过。该能力不证明生产者commit顺序或Feishu投递；生产者必须同目标先CAS/锁再enqueue，所有更新共用稳定目标键。Feishu producer/handler尚未接入，临时门禁保留，S3/S4及其余门禁仍未完成。无新表/迁移或共享环境操作，固定CandidateSHA不变。
+有序Outbox前置 `d200b864f`：handler声明按aggregate串行、registry冻结、原query及claim CAS检查同tenant/type/aggregate较小ID前序均published；历史NULL-ref、blocked/dead_letter/unknown/future-due前序不跳过，外层scope保持。s4-outbox-ordering-red.log两个真实worker确定性复现同目标越序；final-pg.log完整候选边界PASS，覆盖并行独立目标、历史前序原始行保全、未决前序阻挡、已尝试过期unknown、接收端成功后published写后故障回滚及后序零调用。回归/build/标签编译、冻结声明测试及独立复审通过。该能力不证明生产者commit顺序或Feishu投递；生产者必须同目标先CAS/锁再enqueue，所有更新共用稳定目标键。该前置提交时Feishu producer/handler尚未接入；后续 `98de8076b` 完成新手动协议接入，见S3检查点，S3/S4及其余门禁仍未完成。无新表/迁移或共享环境操作，固定CandidateSHA不变。
 
 ## S5：Stream 与请求异步边界
 
