@@ -203,6 +203,10 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+通知事务/Worker接入检查点 `4aecebdf8`（2026-09-14）：EnqueueNotificationTx/EnqueueCreationTx共用精确目标binder，Worker消费持久字段并前后核验同对象/generation；真实SMS producer先生成完整意图后四项错声明拒绝及合法接收PASS。补未知渠道、resolver cause与pending/failed/sent写回cause的RED→GREEN；真实事务rollback、原目标重放、冲突和多provider拒绝PASS。完整私有suite在最后cause包装前PASS，随后具名PG增量PASS，全后端build与独立复核通过，详情见T1。
+
+更广相关单测仍有7项回归（s5-notification-protocol-unit.log）。实际TicketWorkflowService.createCCNotifications与bpmn.CCTaskHandler.createCCNotifications尚直接写无目标外发队列，下一步注入唯一binder并接入原事务/bootstrap，保留真实CC和BPMN测试，不手填协议字段消除失败。同步SendNotification直接外发同样待迁移。不能勾选通知整段：标准恢复、目标变化/重启矩阵与其余owner尚未完成，S5/S6/T3/T4/G3与固定CandidateSHA/停止状态不变，无共享环境操作。
+
 通知目标结构检查点 `083d7d1c6`（2026-09-14）：注册044_notification_connector_target，四可空不可变字段与数据库全有/全无、版本/摘要/渠道约束，禁止NULL补绑定及绑定后目标/业务身份修改；无历史DML，R历史依赖不变。Ent生成完成，不公开目标JSON。真实私有PG从缺列状态执行DDL，旧字段JSON保全、新字段NULL、合法sms旧行绑定被不可变trigger 23514拒绝、非法目标23514、状态更新正向与继承EXECUTE剥离均PASS。migration包、全后端build与独立审阅通过；完整私有race仍仅原4项通知权限RED，无新增FAIL/SKIP/RACE。详见T1最新具名段。
 
 此检查点只完成结构准备，不勾选下方端到端协议；producer/worker尚未写/消费这些字段。后续用真实偏好支持的sms+本地探针生成合法意图，再替换Manager；不能为复用旧webhook fixture新增产品渠道。盘点SendNotification直接外发路径，与EnqueueCreationTx/EnqueueNotificationTx一起接入原owner合同。实际B迁移清单需加入044，当前未执行WSL/共享迁移；CandidateSHA不变、候选未启动，S5/S6/T3/T4/G3仍未完成。
