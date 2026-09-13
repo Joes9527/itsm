@@ -10,6 +10,7 @@ import (
 
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/connector"
+	"itsm-backend/database"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
@@ -33,6 +34,7 @@ func ticketNotificationStringPtr(s string) *string {
 
 type TicketNotificationService struct {
 	queueClient      *ent.Client
+	execution        *database.ExecutionPolicy
 	client           *ent.Client
 	logger           *zap.SugaredLogger
 	connectorManager *connector.Manager
@@ -44,11 +46,12 @@ type TicketNotificationService struct {
 }
 
 // NewTicketNotificationService 创建通知服务
-func NewTicketNotificationService(client *ent.Client, logger *zap.SugaredLogger) *TicketNotificationService {
+func NewTicketNotificationService(client *ent.Client, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) *TicketNotificationService {
 	return &TicketNotificationService{
-		client: client,
-		logger: logger,
-		now:    time.Now,
+		execution: execution,
+		client:    client,
+		logger:    logger,
+		now:       time.Now,
 	}
 }
 
@@ -83,8 +86,18 @@ func (s *TicketNotificationService) ProcessPendingDeliveries(ctx context.Context
 		return 0, nil
 	}
 
+	ctx = tenantctx.SystemContext(ctx, "notification:poll", "claim and acknowledge scoped ticket notifications")
 	now := s.clock()
-	candidates, err := s.queueClient.TicketNotification.Query().
+	scanTx, err := s.queueClient.Tx(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer scanTx.Rollback()
+	scope, err := s.execution.WorkerPredicate(ctx, scanTx, ticketnotification.FieldTenantID, ticketnotification.FieldTicketID)
+	if err != nil {
+		return 0, err
+	}
+	candidates, err := scanTx.TicketNotification.Query().Where(scope).
 		Where(
 			ticketnotification.DeliveryKeyNotNil(),
 			ticketnotification.ChannelNEQ("in_app"),
@@ -106,11 +119,14 @@ func (s *TicketNotificationService) ProcessPendingDeliveries(ctx context.Context
 		return 0, fmt.Errorf("ticket notification candidate scan failed")
 	}
 
+	if err := scanTx.Rollback(); err != nil {
+		return 0, err
+	}
 	completed := 0
 	failed := false
 	for _, row := range candidates {
 		if row.Status == ticketNotificationStatusProcessing {
-			changed, err := s.queueClient.TicketNotification.Update().Where(ticketnotification.IDEQ(row.ID), ticketnotification.TenantIDEQ(row.TenantID), ticketnotification.StatusEQ(ticketNotificationStatusProcessing), ticketnotification.LeaseExpiresAtLT(now)).SetStatus(ticketNotificationStatusFailed).SetLastErrorClass("delivery_unknown").ClearLeaseOwner().ClearLeaseExpiresAt().Save(ctx)
+			changed, err := s.recoverExpiredDelivery(ctx, row, now)
 			if err != nil || changed > 0 {
 				failed = true
 			}
@@ -189,7 +205,16 @@ func (s *TicketNotificationService) claimDelivery(ctx context.Context, workerID 
 		return false, fmt.Errorf("ticket notification row is missing tenant")
 	}
 	now := s.clock()
-	affected, err := s.queueClient.TicketNotification.Update().
+	tx, err := s.queueClient.Tx(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	scope, err := s.execution.WorkerPredicate(ctx, tx, ticketnotification.FieldTenantID, ticketnotification.FieldTicketID)
+	if err != nil {
+		return false, err
+	}
+	affected, err := tx.TicketNotification.Update().Where(scope).
 		Where(
 			ticketnotification.ID(row.ID),
 			ticketnotification.TenantID(row.TenantID),
@@ -204,11 +229,23 @@ func (s *TicketNotificationService) claimDelivery(ctx context.Context, workerID 
 	if err != nil {
 		return false, fmt.Errorf("ticket notification claim failed")
 	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
 	return affected == 1, nil
 }
 
 func (s *TicketNotificationService) completeDelivery(ctx context.Context, workerID string, row *ent.TicketNotification) (bool, error) {
-	affected, err := s.queueClient.TicketNotification.Update().
+	tx, err := s.queueClient.Tx(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	scope, err := s.execution.WorkerPredicate(ctx, tx, ticketnotification.FieldTenantID, ticketnotification.FieldTicketID)
+	if err != nil {
+		return false, err
+	}
+	affected, err := tx.TicketNotification.Update().Where(scope).
 		Where(
 			ticketnotification.ID(row.ID),
 			ticketnotification.TenantID(row.TenantID),
@@ -224,6 +261,9 @@ func (s *TicketNotificationService) completeDelivery(ctx context.Context, worker
 	if err != nil {
 		return false, fmt.Errorf("ticket notification completion failed")
 	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
 	return affected == 1, nil
 }
 
@@ -231,7 +271,16 @@ func (s *TicketNotificationService) retryDelivery(ctx context.Context, workerID 
 	if !isTicketNotificationErrorClass(errorClass) {
 		errorClass = "unknown_error"
 	}
-	affected, err := s.queueClient.TicketNotification.Update().
+	tx, err := s.queueClient.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	scope, err := s.execution.WorkerPredicate(ctx, tx, ticketnotification.FieldTenantID, ticketnotification.FieldTicketID)
+	if err != nil {
+		return err
+	}
+	affected, err := tx.TicketNotification.Update().Where(scope).
 		Where(
 			ticketnotification.ID(row.ID),
 			ticketnotification.TenantID(row.TenantID),
@@ -250,14 +299,23 @@ func (s *TicketNotificationService) retryDelivery(ctx context.Context, workerID 
 	if affected != 1 {
 		return fmt.Errorf("ticket notification lease lost")
 	}
-	return nil
+	return tx.Commit()
 }
 
 func (s *TicketNotificationService) failDelivery(ctx context.Context, workerID string, row *ent.TicketNotification, errorClass string) error {
 	if !isTicketNotificationPermanentErrorClass(errorClass) {
 		errorClass = "unknown_error"
 	}
-	affected, err := s.queueClient.TicketNotification.Update().
+	tx, err := s.queueClient.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	scope, err := s.execution.WorkerPredicate(ctx, tx, ticketnotification.FieldTenantID, ticketnotification.FieldTicketID)
+	if err != nil {
+		return err
+	}
+	affected, err := tx.TicketNotification.Update().Where(scope).
 		Where(
 			ticketnotification.ID(row.ID),
 			ticketnotification.TenantID(row.TenantID),
@@ -275,7 +333,7 @@ func (s *TicketNotificationService) failDelivery(ctx context.Context, workerID s
 	if affected != 1 {
 		return fmt.Errorf("ticket notification lease lost")
 	}
-	return nil
+	return tx.Commit()
 }
 
 func (s *TicketNotificationService) dispatchClaimedDelivery(ctx context.Context, row *ent.TicketNotification) string {
@@ -1195,4 +1253,24 @@ func (s *TicketNotificationService) resolveTenantID(ctx context.Context, ticketI
 		return 0
 	}
 	return ticketEntity.TenantID
+}
+
+func (s *TicketNotificationService) recoverExpiredDelivery(ctx context.Context, row *ent.TicketNotification, now time.Time) (int, error) {
+	tx, err := s.queueClient.Tx(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	scope, err := s.execution.WorkerPredicate(ctx, tx, ticketnotification.FieldTenantID, ticketnotification.FieldTicketID)
+	if err != nil {
+		return 0, err
+	}
+	changed, err := tx.TicketNotification.Update().Where(scope).Where(ticketnotification.IDEQ(row.ID), ticketnotification.TenantIDEQ(row.TenantID), ticketnotification.StatusEQ(ticketNotificationStatusProcessing), ticketnotification.LeaseExpiresAtLT(now)).SetStatus(ticketNotificationStatusFailed).SetLastErrorClass("delivery_unknown").ClearLeaseOwner().ClearLeaseExpiresAt().Save(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return changed, nil
 }

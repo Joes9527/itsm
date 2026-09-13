@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/smtp"
 	"strconv"
 	"strings"
@@ -313,7 +314,7 @@ func TestCCTicketDoesNotDispatchConnectorBeforeTransactionCommit(t *testing.T) {
 	require.NoError(t, err)
 	tk, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
 	require.NoError(t, err)
-	notificationService := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar())
+	notificationService := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	fake := &durableNotificationConnector{}
 	configureDurableNotificationConnector(t, notificationService, tenant.ID, fake)
 	client.Use(func(next ent.Mutator) ent.Mutator {
@@ -350,7 +351,7 @@ func TestCCTicketPersistsExternalDeliveryWithoutDispatch(t *testing.T) {
 	require.NoError(t, err)
 	tk, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
 	require.NoError(t, err)
-	notificationService := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar())
+	notificationService := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	fake := &durableNotificationConnector{}
 	configureDurableNotificationConnector(t, notificationService, tenant.ID, fake)
 
@@ -447,7 +448,7 @@ func TestEmailAndCCLogsContainOnlyFixedErrorClasses(t *testing.T) {
 	require.NoError(t, err)
 	ticketEntity, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
 	require.NoError(t, err)
-	notificationService := NewTicketNotificationService(client, logger)
+	notificationService := NewTicketNotificationService(client, logger, executionfixture.Standard())
 	notificationService.SetEmailService(emailService)
 	smtpErr = errors.New(smtpErrSentinel)
 	result, err := notificationService.SendNotification(ctx, ticketEntity.ID, &dto.SendTicketNotificationRequest{

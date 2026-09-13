@@ -344,7 +344,7 @@ func NewApplication() *Application {
 	}
 
 	// 通知 / 审批 / SLA / 自动化 / 序列服务（V2 子服务）
-	ticketNotificationService := service.NewTicketNotificationService(client, sugar)
+	ticketNotificationService := service.NewTicketNotificationService(client, sugar, executionPolicy)
 	ticketNotificationService.SetConnectorManager(connectorManager)
 	ticketNotificationService.SetDeliveryQueueClient(systemClient)
 	// 邮件通知（Graph sendMail 为主，SMTP fallback）

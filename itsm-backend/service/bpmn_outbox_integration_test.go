@@ -378,9 +378,9 @@ func TestTicketNotificationWorkerPostgresCASAndExpiredLeaseRecovery(t *testing.T
 
 	_, workerClientOne := openPostgresEntClientInSchema(t, dsn, schemaName, false)
 	_, workerClientTwo := openPostgresEntClientInSchema(t, dsn, schemaName, false)
-	workerOne := NewTicketNotificationService(workerClientOne, zap.NewNop().Sugar())
+	workerOne := NewTicketNotificationService(workerClientOne, zap.NewNop().Sugar(), executionfixture.Standard())
 	workerOne.SetDeliveryQueueClient(workerClientOne)
-	workerTwo := NewTicketNotificationService(workerClientTwo, zap.NewNop().Sugar())
+	workerTwo := NewTicketNotificationService(workerClientTwo, zap.NewNop().Sugar(), executionfixture.Standard())
 	workerTwo.SetDeliveryQueueClient(workerClientTwo)
 	release := make(chan struct{})
 	fake := &durableNotificationConnector{entered: make(chan struct{}, 1), release: release}

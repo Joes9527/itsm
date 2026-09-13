@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"database/sql"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"strings"
 	"testing"
@@ -334,7 +335,7 @@ func assertMigratedTicketNotificationsArePickedUp(
 			Enabled:  true,
 		}))
 	}
-	notifications := service.NewTicketNotificationService(client, zap.NewNop().Sugar())
+	notifications := service.NewTicketNotificationService(client, zap.NewNop().Sugar(), executionfixture.Standard())
 	notifications.SetConnectorManager(manager)
 	notifications.SetDeliveryQueueClient(client)
 	completed, err := notifications.ProcessPendingDeliveries(ctx, "migration-test-worker", 10)

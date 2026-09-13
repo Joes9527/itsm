@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -138,7 +139,7 @@ func newDurableNotificationFixture(t *testing.T, suffix string) *durableNotifica
 	require.NoError(t, err)
 	tk, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
 	require.NoError(t, err)
-	notifications := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar())
+	notifications := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	notifications.SetDeliveryQueueClient(client)
 	return &durableNotificationFixture{
 		workflow:      workflow,
@@ -468,7 +469,7 @@ func TestTicketNotificationWorkerCASPreventsCompetingLiveLeaseDispatch(t *testin
 	release := make(chan struct{})
 	fake := &durableNotificationConnector{entered: make(chan struct{}, 1), release: release}
 	configureDurableNotificationConnector(t, fixture.notifications, fixture.tenant.ID, fake)
-	otherWorker := NewTicketNotificationService(fixture.client, zaptest.NewLogger(t).Sugar())
+	otherWorker := NewTicketNotificationService(fixture.client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	otherWorker.SetDeliveryQueueClient(fixture.client)
 	configureDurableNotificationConnector(t, otherWorker, fixture.tenant.ID, fake)
 	now := time.Now().Add(time.Hour)

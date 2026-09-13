@@ -85,7 +85,7 @@ func (c *Container) initCoreServices(policy *database.ExecutionPolicy) {
 	c.incidentService = service.NewIncidentService(c.client, c.logger, policy)
 
 	// Ticket Notification Service
-	c.ticketNotificationService = service.NewTicketNotificationService(c.client, c.logger)
+	c.ticketNotificationService = service.NewTicketNotificationService(c.client, c.logger, policy)
 
 	// Ticket SLA Service
 	c.ticketSLAService = service.NewTicketSLAService(c.client, c.logger)

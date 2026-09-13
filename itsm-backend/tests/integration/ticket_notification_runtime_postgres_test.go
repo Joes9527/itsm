@@ -5,6 +5,7 @@ package integration
 import (
 	"context"
 	"errors"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 
@@ -42,7 +43,7 @@ func TestPostgresTicketNotificationRuntimeUsesQueueAndTenantCapabilities(t *test
 		require.Equal(t, f.tenant.ID, tenantID)
 		return graph, "support@example.test", true
 	})
-	owner := service.NewTicketNotificationService(runtime.Tenant, zap.NewNop().Sugar())
+	owner := service.NewTicketNotificationService(runtime.Tenant, zap.NewNop().Sugar(), executionfixture.Standard())
 	owner.SetDeliveryQueueClient(runtime.System)
 	owner.SetEmailService(email)
 	enqueue := func(key string) *ent.TicketNotification {

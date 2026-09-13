@@ -26,7 +26,7 @@ func newRuntimeRelationDeliveryWorker(t *testing.T, f *relationFixture) *service
 	_, grantErr := f.db.ExecContext(f.ctx, "GRANT SELECT ON notification_preferences TO "+f.runtimeRole)
 	require.NoError(t, grantErr)
 	logger := zap.NewNop().Sugar()
-	notifier := service.NewTicketNotificationService(f.runtime.Tenant, logger)
+	notifier := service.NewTicketNotificationService(f.runtime.Tenant, logger, executionfixture.Standard())
 	notifier.SetNotificationPreferenceService(service.NewNotificationPreferenceService(f.runtime.Tenant, logger))
 	registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{
 		service.NewWorkItemRelationCreatedDeliveryHandler(f.runtime.Tenant, f.runtime.IntakeDirectorySnapshot(), notifier, logger),
@@ -207,7 +207,7 @@ func TestWorkItemDeliveryRuntimeOutcomes(t *testing.T) {
 				logger := zap.NewNop().Sugar()
 				_, err = f.db.ExecContext(f.ctx, "GRANT SELECT ON notification_preferences TO "+f.runtimeRole)
 				require.NoError(t, err)
-				sender := service.NewTicketNotificationService(f.runtime.Tenant, logger)
+				sender := service.NewTicketNotificationService(f.runtime.Tenant, logger, executionfixture.Standard())
 				sender.SetNotificationPreferenceService(service.NewNotificationPreferenceService(f.runtime.Tenant, logger))
 				var handler service.OutboxDeliveryHandler
 				var mutationID, targetID int

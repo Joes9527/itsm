@@ -24,6 +24,7 @@ import (
 	"itsm-backend/common/executionscope"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/config"
+	"itsm-backend/connector"
 	"itsm-backend/database"
 	changedomain "itsm-backend/handlers/change"
 	srdomain "itsm-backend/handlers/service_request"
@@ -194,6 +195,14 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 		historicalOutbox = append(historicalOutbox, create.SaveX(ctx))
 	}
 
+	var historicalNotifications []*ent.TicketNotification
+	for _, state := range []string{"pending", "processing"} {
+		create := owner.TicketNotification.Create().SetTenantID(tenant.ID).SetTicketID(historical.WorkItemID).SetUserID(actor.ID).SetType("created").SetChannel("email").SetContent("Historical notification").SetDeliveryKey("legacy-notify-" + state).SetStatus(state).SetNextAttemptAt(time.Now().Add(-time.Minute))
+		if state == "processing" {
+			create.SetLeaseOwner("legacy-notification-worker").SetLeaseExpiresAt(time.Now().Add(-time.Minute)).SetAttemptCount(2)
+		}
+		historicalNotifications = append(historicalNotifications, create.SaveX(ctx))
+	}
 	legacyDeployment := owner.ProcessDeployment.Create().SetDeploymentID("legacy-callback").SetDeploymentName("Legacy callback").SetTenantID(tenant.ID).SaveX(ctx)
 	legacyDefinition := owner.ProcessDefinition.Create().SetKey("legacy-callback").SetName("Legacy callback").SetVersion("1").SetIsLatest(true).SetBpmnXML([]byte(`<definitions/>`)).SetDeploymentID(legacyDeployment.ID).SetTenantID(tenant.ID).SaveX(ctx)
 	legacyInstance := owner.ProcessInstance.Create().SetProcessInstanceID("legacy-callback").SetProcessDefinitionKey("legacy-callback").SetProcessDefinitionID(legacyDefinition.ID).SetBusinessKey(fmt.Sprintf("incident:%d", historical.WorkItemID)).SetBusinessType("incident").SetBusinessID(historical.WorkItemID).SetStatus("running").SetTenantID(tenant.ID).SaveX(ctx)
@@ -1688,6 +1697,87 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			assert.JSONEq(t, string(before[row.ID]), string(after), "historical callback %s changed", row.ExecutionKey)
 		}
 	})
+
+	t.Run("real notification worker preserves historical rows", func(t *testing.T) {
+		snapshot := func(id int) string {
+			var raw string
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(n)::text FROM ticket_notifications n WHERE id=$1`, id).Scan(&raw))
+			return raw
+		}
+		before := map[int]string{}
+		for _, row := range historicalNotifications {
+			before[row.ID] = snapshot(row.ID)
+		}
+		fresh, err := app.Create(ctx, identity, command("notification-member", "generic"))
+		require.NoError(t, err)
+		current := owner.TicketNotification.Create().SetTenantID(tenant.ID).SetTicketID(fresh.WorkItemID).SetUserID(actor.ID).SetType("created").SetChannel("email").SetContent("Candidate notification without external transport").SetDeliveryKey("candidate-notification").SetNextAttemptAt(time.Now().Add(-time.Minute)).SaveX(ctx)
+		notifications := service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)
+		notifications.SetDeliveryQueueClient(clients.System)
+		n, err := notifications.ProcessPendingDeliveries(context.Background(), "candidate-notify-worker", 1000)
+		require.Error(t, err, "missing transport must remain a visible failure")
+		require.Zero(t, n)
+		for _, row := range historicalNotifications {
+			assert.JSONEq(t, before[row.ID], snapshot(row.ID), "historical notification changed")
+		}
+		actual := owner.TicketNotification.GetX(ctx, current.ID)
+		require.Equal(t, "failed", actual.Status)
+		require.Equal(t, 1, actual.AttemptCount)
+		require.Equal(t, "delivery_target_invalid", actual.LastErrorClass)
+		receiver := &candidateNotificationConnector{}
+		registry := connector.NewRegistry()
+		registry.Register(func() connector.Connector { return receiver })
+		manager := connector.NewManager(registry, zap.NewNop().Sugar())
+		defer manager.CloseAll()
+		require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Type: connector.TypeEmail, Provider: "local-candidate-test", Enabled: true}))
+		notifications.SetConnectorManager(manager)
+		makeDelivery := func(key string) *ent.TicketNotification {
+			return owner.TicketNotification.Create().SetTenantID(tenant.ID).SetTicketID(fresh.WorkItemID).SetUserID(actor.ID).SetType("created").SetChannel("webhook").SetContent("Local notification").SetDeliveryKey(key).SetNextAttemptAt(time.Now().Add(-time.Minute)).SaveX(ctx)
+		}
+		success := makeDelivery("candidate-notification-success")
+		baseline := snapshot(success.ID)
+		_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='closed' WHERE id=$1", scopeID)
+		require.NoError(t, err)
+		n, rejected := notifications.ProcessPendingDeliveries(context.Background(), "notification-closed", 1000)
+		_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='active' WHERE id=$1", scopeID)
+		require.NoError(t, err)
+		require.ErrorIs(t, rejected, executionscope.ErrDenied)
+		require.Zero(t, n)
+		require.Empty(t, receiver.ids)
+		require.JSONEq(t, baseline, snapshot(success.ID))
+		n, err = notifications.ProcessPendingDeliveries(context.Background(), "notification-success", 1000)
+		require.NoError(t, err)
+		require.Equal(t, 1, n)
+		require.Equal(t, []string{"candidate-notification-success"}, receiver.ids)
+		require.Equal(t, "sent", owner.TicketNotification.GetX(ctx, success.ID).Status)
+		inFlight := makeDelivery("candidate-notification-inflight")
+		receiver.afterSend = func() {
+			_, e := ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='closed' WHERE id=$1", scopeID)
+			require.NoError(t, e)
+		}
+		n, rejected = notifications.ProcessPendingDeliveries(context.Background(), "notification-inflight", 1000)
+		receiver.afterSend = nil
+		_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='active' WHERE id=$1", scopeID)
+		require.NoError(t, err)
+		require.Error(t, rejected)
+		require.Zero(t, n)
+		inflightState := owner.TicketNotification.GetX(ctx, inFlight.ID)
+		require.Equal(t, "processing", inflightState.Status)
+		require.True(t, inflightState.SentAt.IsZero())
+		require.Equal(t, 1, inflightState.AttemptCount)
+		require.Equal(t, []string{"candidate-notification-success", "candidate-notification-inflight"}, receiver.ids)
+		owner.TicketNotification.UpdateOneID(inFlight.ID).SetLeaseExpiresAt(time.Now().Add(-time.Minute)).SaveX(ctx)
+		n, err = notifications.ProcessPendingDeliveries(context.Background(), "notification-recovery", 1000)
+		require.Error(t, err)
+		require.Zero(t, n)
+		recovered := owner.TicketNotification.GetX(ctx, inFlight.ID)
+		require.Equal(t, "failed", recovered.Status)
+		require.Equal(t, "delivery_unknown", recovered.LastErrorClass)
+		require.Len(t, receiver.ids, 2)
+		for _, row := range historicalNotifications {
+			require.JSONEq(t, before[row.ID], snapshot(row.ID))
+		}
+
+	})
 	require.Equal(t, oldRow.Title, owner.Ticket.GetX(ctx, historical.WorkItemID).Title)
 }
 
@@ -1713,3 +1803,25 @@ func (h *candidateCallbackHandler) Execute(context.Context, *ent.ProcessTask, ma
 	h.calls++
 	return bpmn.AppliedEffect("local candidate callback", nil), nil
 }
+
+// Registered, task-local transport: records deliveries without network effects.
+type candidateNotificationConnector struct {
+	ids       []string
+	afterSend func()
+}
+
+func (*candidateNotificationConnector) Manifest() connector.Manifest {
+	return connector.Manifest{Name: "webhook", Version: "1.0.0", Title: "Candidate local receiver", Type: connector.TypeEmail, Capabilities: []connector.Capability{connector.CapSendMessage}, RequiredPermissions: []string{"connector:write"}}
+}
+func (*candidateNotificationConnector) Init(context.Context, connector.Config) error { return nil }
+func (c *candidateNotificationConnector) Send(_ context.Context, m *connector.Message) error {
+	c.ids = append(c.ids, m.ID)
+	if c.afterSend != nil {
+		c.afterSend()
+	}
+	return nil
+}
+func (*candidateNotificationConnector) HealthCheck(context.Context) connector.HealthStatus {
+	return connector.HealthStatus{OK: true}
+}
+func (*candidateNotificationConnector) Close() error { return nil }

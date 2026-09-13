@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 
@@ -118,7 +119,7 @@ func TestTicketNotificationMarkReadReturnsOwnershipNotFoundSentinel(t *testing.T
 func TestTicketNotificationReadStorageFailuresAreSanitized(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:ticket_notification_read_storage?mode=memory&cache=shared&_fk=1")
 	core, logs := observer.New(zap.ErrorLevel)
-	notifications := NewTicketNotificationService(client, zap.New(core).Sugar())
+	notifications := NewTicketNotificationService(client, zap.New(core).Sugar(), executionfixture.Standard())
 	require.NoError(t, client.Close())
 
 	for _, operation := range []struct {

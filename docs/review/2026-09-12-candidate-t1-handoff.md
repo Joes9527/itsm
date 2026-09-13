@@ -461,3 +461,17 @@ Outbox 并发/回滚测试提交 `56879f7c9`；独立 reviewer 确认限定结�
 - `s4-callback-worker-final-build.json`：后端全量构建exit0。`s4-callback-worker-integration-compile.log`：integration标签service与tests/integration编译PASS，仅编译不代表目标环境运行。
 
 独立 reviewer review_execution_scope_s1 分两次只读复审无明确阻断，核对原事务、结构引用、精确身份列读取及blocked UPDATE补强。仍有明确验证缺口：candidate按executionKeys内联入口、入队正负与故障回滚、user-task callback、claim后撤销、retry/blocked/optional audit及推进故障；标准回归不替代这些candidate PG专项。既有handler执行与token推进是分段边界，不声称整条外部效果与callback状态单事务；scope错误经既有sanitized advance error后不可按cause细分。通知/SLA/escalation、S5/S6/B3与完整G2/G3未完成，S4不勾选。固定CandidateSHA不变，无候选启动、WSL/共享变更、推送/main合并。
+
+
+### B2 S4 通知 Worker 历史保全与发送后拒绝写回（2026-09-13）
+
+在 `a0a1ddc4d` 后处理 TicketNotificationService 后台投递。构造必选冻结policy，bootstrap/container和tests显式传递，无默认standard。ProcessPendingDeliveries以SystemContext在原扫描事务使用WorkerPredicate(tenant_id,ticket_id)，处理前结束扫描事务；claim/complete/retry/fail和过期processing的delivery_unknown更新均在明确事务附带同SQL成员条件，原status/lease条件保留。无新增系统角色权限。
+
+本机 candidate-delivery/b2 证据：
+
+- `s4-notification-worker-red.log`：039前旧pending→failed且attempt0→1，旧expired processing→failed/delivery_unknown且lease清除，真实RED。快照使用PostgreSQL row_to_json原始完整行，包含Ent JSON隐藏的attempt/lease/error字段。
+- `s4-notification-worker-delivery-pg.log`：最终完整TestCandidateIntakeCreationBoundary PASS，无skip。所有历史完整字段保全；新成员缺少email transport显式failed/attempt1/delivery_target_invalid，不伪报成功。本地声明connector经原Manager与worker收到恰一条ID并标记sent；scope关闭时扫描ErrDenied、发送0次、完整行不变。
+- 另一条本地connector.Send记录ID后关闭scope，发送已发生但完成写回拒绝，通知保持processing/attempt1且无sent_at。重新active并模拟lease过期，原恢复入口转failed/delivery_unknown且接收计数不增；不声称能取消已发生发送或完成真实provider验收。
+- `s4-notification-worker-regression.log`：service/controller/router/bootstrap四包Notification/Workflow/Callback/Outbox/Execution定向回归PASS，container编译(no test files)。`s4-notification-worker-build.json`：后端全量构建exit0；`s4-notification-worker-integration-compile.log`：integration标签service/tests/integration编译PASS，仅编译。
+
+独立reviewer review_execution_scope_s1两次只读复核无新增阻断，确认同SQL范围和本地交付限定。剩余candidate专项：binding撤销、并发领取、retry/fail/complete数据库故障回滚；生产者及mark-read等共享写入口仍属S3未完成。原worker仍只汇总retry/fail错误，不能据此区分scope与数据库故障。SLA/escalation及callback剩余专项、S5/S6/B3和完整G2/G3未完成，S4不勾选。固定CandidateSHA保持d7470a32dbb87acc9b5e4d9a895a146410723561，候选未启动，无WSL/共享数据库操作、企业实发、推送或main合并。

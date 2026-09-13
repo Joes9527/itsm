@@ -59,7 +59,7 @@ func newChangeOutcomeDeliveryWorker(t *testing.T, f *changeLifecycleFixture) *se
 	clients, cfg := runtimeClients(t, f.incidentEffectsFixture)
 	_, grantErr := f.db.ExecContext(f.ctx, "GRANT SELECT ON work_item_relations,notification_preferences TO "+cfg.User)
 	require.NoError(t, grantErr)
-	notifier := service.NewTicketNotificationService(clients.Tenant, logger)
+	notifier := service.NewTicketNotificationService(clients.Tenant, logger, executionfixture.Standard())
 	notifier.SetNotificationPreferenceService(service.NewNotificationPreferenceService(clients.Tenant, logger))
 	registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{
 		service.NewChangeOutcomeDeliveryHandler(clients.Tenant, clients.IntakeDirectorySnapshot(), notifier, logger),
@@ -228,7 +228,7 @@ func newProblemResolvedDeliveryWorker(t *testing.T, f *problemLifecycleFixture) 
 	clients, cfg := runtimeClients(t, f.incidentEffectsFixture)
 	_, grantErr := f.db.ExecContext(f.ctx, "GRANT SELECT ON work_item_relations,notification_preferences TO "+cfg.User)
 	require.NoError(t, grantErr)
-	notifier := service.NewTicketNotificationService(clients.Tenant, logger)
+	notifier := service.NewTicketNotificationService(clients.Tenant, logger, executionfixture.Standard())
 	notifier.SetNotificationPreferenceService(service.NewNotificationPreferenceService(clients.Tenant, logger))
 	registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{
 		service.NewProblemResolvedDeliveryHandler(clients.Tenant, clients.IntakeDirectorySnapshot(), notifier, logger),

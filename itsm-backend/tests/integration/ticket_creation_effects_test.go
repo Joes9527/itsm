@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"testing"
 
@@ -20,7 +21,7 @@ func configuredCreationTicketOwner(client *ent.Client, logger *zap.SugaredLogger
 	return configuredCreationTicketOwnerWithConnector(client, logger, nil)
 }
 func configuredCreationTicketOwnerWithConnector(client *ent.Client, logger *zap.SugaredLogger, manager *connector.Manager) *service.TicketService {
-	notifications := service.NewTicketNotificationService(client, logger)
+	notifications := service.NewTicketNotificationService(client, logger, executionfixture.Standard())
 	notifications.SetEmailService(service.NewEmailService(service.EmailConfig{}, logger))
 	assignment := service.NewTicketAssignmentService(client, logger)
 	rules := service.NewTicketAutomationRuleService(client, logger)

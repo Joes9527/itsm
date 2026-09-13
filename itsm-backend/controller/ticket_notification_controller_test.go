@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -27,7 +28,7 @@ func setupTicketNotificationController(t *testing.T) (*gin.Engine, *ent.Client, 
 	tenantID, userID := seedTenantUser(t, client)
 	core, logs := observer.New(zap.DebugLevel)
 	logger := zap.New(core).Sugar()
-	notificationService := service.NewTicketNotificationService(client, logger)
+	notificationService := service.NewTicketNotificationService(client, logger, executionfixture.Standard())
 	notificationService.SetNotificationPreferenceService(service.NewNotificationPreferenceService(client, logger))
 	controller := NewTicketNotificationController(notificationService, logger)
 

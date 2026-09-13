@@ -70,7 +70,7 @@ func TestWorkflowStartFrozenNumericAssignmentCallback(t *testing.T) {
 	ctx := context.Background()
 	assigneeID := f.outsider.ID
 	handler := f.engine.CallbackRegistry().GetHandler("ticket_service_handler").(*bpmn.TicketServiceTaskHandler)
-	handler.SetNotificationService(NewTicketNotificationService(f.client, zap.NewNop().Sugar()))
+	handler.SetNotificationService(NewTicketNotificationService(f.client, zap.NewNop().Sugar(), executionfixture.Standard()))
 	event = withFrozenStartVariables(t, event, map[string]any{"assignee_id": json.Number(fmt.Sprint(assigneeID))})
 	deliver := NewWorkflowStartOutboxHandler(f.client, f.engine, f.client)
 	require.NoError(t, deliver.Deliver(ctx, event))

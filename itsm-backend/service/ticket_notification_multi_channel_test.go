@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -29,7 +30,7 @@ func (g *graphSenderSpy) SendMail(_ context.Context, _ string, to, _, _, _ strin
 func setupTicketNotificationTest(t *testing.T) (*ent.Client, *TicketNotificationService, context.Context) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	logger := zaptest.NewLogger(t).Sugar()
-	svc := NewTicketNotificationService(client, logger)
+	svc := NewTicketNotificationService(client, logger, executionfixture.Standard())
 	return client, svc, context.Background()
 }
 
