@@ -203,6 +203,8 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+邮件不可用回退检查点 `2ba6189ea`（2026-09-14）：DisableProviderFallback此前漏掉Graph解析不可用/nil sender，进程内SMTP探针两例RED后修复为route_unavailable/not_accepted，不改用SMTP。无GraphProvider的显式SMTP正向保留。邮件/通知与IncidentAlert具名race、完整私有PG16/Redis/MinIO race、全后端build及独立审阅通过，详见T1交接。该项不替代持久目标绑定：bootstrap仍用Manager.Get解析Graph，push原Hub按用户发送但无送达结果。继续沿专业owner核验目标/结果合同；S5/S6和候选运行门禁仍未完成，CandidateSHA不变，无共享环境操作。
+
 同步通知外发收敛合同（2026-09-14，RED提交dced3d585，S5既有入口，已实现0dac5b1fa）：原SendNotification直接外发且错误返回applied的问题已关闭。必须复用原通知队列和enqueue实现，不新增通知服务或平行队列。
 
 - [x] `service/ticket_notification_transaction.go`唯一enqueue实现同时产生准确的新建/重放、站内/外部计数，原只需error的业务调用方仍共用同一写入实现；禁止SendNotification再算一套偏好/目标/业务规则。保留已有InAppOnly限制（当前email/sms/push均有!req.InAppOnly），站内双表及全部外部意图和结果依据在同一事务；任何绑定/写入/提交错误不返回成功。
