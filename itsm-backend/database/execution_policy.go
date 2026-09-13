@@ -192,3 +192,19 @@ func (p *ExecutionPolicy) RequireCapability(ctx context.Context, tenantID int, n
 	}
 	return nil
 }
+
+// RequireStartupCapability permits explicitly enabled standard-mode runtime
+// startup only. The internal context marker does not authenticate a DB role;
+// bootstrap must retain runtime role admission and the restricted system client.
+func (p *ExecutionPolicy) RequireStartupCapability(ctx context.Context, name string) error {
+	if p == nil || ctx == nil || p.mode != "standard" || !tenantctx.IsSystemBypass(ctx) {
+		return executionscope.ErrDenied
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !p.capabilities[name] {
+		return fmt.Errorf("%w: startup capability %s is disabled", executionscope.ErrDenied, name)
+	}
+	return nil
+}

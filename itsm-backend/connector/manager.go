@@ -15,6 +15,7 @@ import (
 // 多个租户、每个租户可挂多个同名连接器实例（例如：飞书A区机器人 + 飞书B区机器人）
 type CapabilityGate interface {
 	RequireCapability(context.Context, int, string) error
+	RequireStartupCapability(context.Context, string) error
 }
 
 type Manager struct {
@@ -227,4 +228,13 @@ func (m *Manager) CloseAll() {
 		_ = inst.conn.Close()
 		delete(m.instances, k)
 	}
+}
+
+// RequireRestore guards the legacy all-tenant restore-and-poll lifecycle. It does
+// not authorize candidate delivery targets or ordinary request provisioning.
+func (m *Manager) RequireRestore(ctx context.Context) error {
+	if m == nil || m.gate == nil {
+		return executionscope.ErrDenied
+	}
+	return m.gate.RequireStartupCapability(ctx, "connector_poll")
 }

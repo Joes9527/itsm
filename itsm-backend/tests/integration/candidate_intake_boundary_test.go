@@ -366,6 +366,42 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.NoError(t, err)
 		require.ErrorIs(t, service.NewCloudDiscoveryService(nil, zap.NewNop().Sugar(), disabled).DiscoverAll(ctx, tenant.ID), executionscope.ErrDenied)
 	})
+
+	t.Run("candidate connector restore rejects persisted activation", func(t *testing.T) {
+		saved := owner.ConnectorConfig.Create().SetTenantID(tenant.ID).SetName("webhook").SetProvider("local-restore-probe").SetEnabled(true).SetSettings(`{}`).SaveX(ctx)
+		defer owner.ConnectorConfig.DeleteOneID(saved.ID).ExecX(ctx)
+		var inits atomic.Int32
+		reg := connector.NewRegistry()
+		reg.Register(func() connector.Connector { return &candidateRestoreProbe{inits: &inits} })
+		manager := connector.NewManager(reg, zap.NewNop().Sugar(), policy)
+		defer manager.CloseAll()
+		ctrl := controller.NewConnectorController(manager, reg, marketplace.New(), zap.NewNop().Sugar(), runtime, clients.System)
+		var before, after string
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(c)::text FROM connector_configs c WHERE id=$1`, saved.ID).Scan(&before))
+		err := ctrl.LoadAll(tenantctx.SystemContext(ctx, "test:candidate-restore", "verify frozen restore boundary"))
+		assert.ErrorIs(t, err, executionscope.ErrDenied)
+		assert.Zero(t, inits.Load(), "candidate restore must not initialize persisted connectors")
+		assert.Empty(t, manager.ListByTenant(tenant.ID))
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(c)::text FROM connector_configs c WHERE id=$1`, saved.ID).Scan(&after))
+		require.JSONEq(t, before, after)
+		standard, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "restore-test", Capabilities: map[string]string{"connector_poll": "enabled"}})
+		require.NoError(t, err)
+		allowed := connector.NewManager(reg, zap.NewNop().Sugar(), standard)
+		defer allowed.CloseAll()
+		standardController := controller.NewConnectorController(allowed, reg, nil, zap.NewNop().Sugar(), runtime, clients.System)
+		require.ErrorIs(t, standardController.LoadAll(ctx), executionscope.ErrDenied, "ordinary tenant context is not runtime startup authority")
+		require.Zero(t, inits.Load())
+		require.NoError(t, standardController.LoadAll(tenantctx.SystemContext(ctx, "test:standard-restore", "verify explicit startup permission")))
+		require.EqualValues(t, 1, inits.Load())
+		require.Len(t, allowed.ListByTenant(tenant.ID), 1)
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(c)::text FROM connector_configs c WHERE id=$1`, saved.ID).Scan(&after))
+		require.JSONEq(t, before, after)
+		absent := controller.NewConnectorController(connector.NewManager(reg, nil, nil), reg, nil, zap.NewNop().Sugar(), nil, nil)
+		require.ErrorIs(t, absent.LoadAll(tenantctx.SystemContext(ctx, "test:absent-restore", "reject before query")), executionscope.ErrDenied)
+		noClient := controller.NewConnectorController(manager, reg, nil, zap.NewNop().Sugar(), nil, nil)
+		require.ErrorIs(t, noClient.LoadAll(tenantctx.SystemContext(ctx, "test:candidate-no-client", "reject before query")), executionscope.ErrDenied)
+
+	})
 	t.Run("candidate connector read routes do not probe unscoped instances", func(t *testing.T) {
 		var calls, foreignCalls atomic.Int32
 		receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -5896,4 +5932,14 @@ func (p *candidateHealthProbe) HealthCheck(ctx context.Context) connector.Health
 	}
 	response.Body.Close()
 	return connector.HealthStatus{OK: response.StatusCode == http.StatusNoContent}
+}
+
+type candidateRestoreProbe struct {
+	candidateNotificationConnector
+	inits *atomic.Int32
+}
+
+func (p *candidateRestoreProbe) Init(context.Context, connector.Config) error {
+	p.inits.Add(1)
+	return nil
 }

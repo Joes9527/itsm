@@ -526,6 +526,9 @@ func (c *ConnectorController) deleteConfig(ctx context.Context, tenantID int, na
 // LoadAll 从数据库加载所有已启用的连接器配置并自动 provision。
 // 供 bootstrap 在启动时调用，恢复因进程重启而丢失的连接器实例。
 func (c *ConnectorController) LoadAll(ctx context.Context) error {
+	if err := c.manager.RequireRestore(ctx); err != nil {
+		return err
+	}
 	if c.restoreClient == nil {
 		return fmt.Errorf("connector restore database capability is required")
 	}

@@ -37,3 +37,29 @@ func TestExecutionCapabilityRequiresFrozenExplicitPermission(t *testing.T) {
 	cancel()
 	require.ErrorIs(t, enabled.RequireCapability(canceled, 1, "cloud_discovery"), context.Canceled)
 }
+
+func TestStartupCapabilityRequiresExplicitStandardSystemContext(t *testing.T) {
+	ctx := tenantctx.SystemContext(context.Background(), "test:startup", "test frozen capability")
+	cfg := config.ExecutionConfig{Mode: "standard", DeploymentID: "startup-test", Capabilities: map[string]string{"connector_poll": "enabled"}}
+	enabled, err := NewExecutionPolicy(cfg)
+	require.NoError(t, err)
+	cfg.Capabilities["connector_poll"] = "disabled"
+	disabled, err := NewExecutionPolicy(cfg)
+	require.NoError(t, err)
+	cfg.Capabilities["connector_poll"] = "enabled"
+	require.NoError(t, enabled.RequireStartupCapability(ctx, "connector_poll"))
+	require.ErrorIs(t, disabled.RequireStartupCapability(ctx, "connector_poll"), executionscope.ErrDenied)
+	require.ErrorIs(t, enabled.RequireStartupCapability(context.Background(), "connector_poll"), executionscope.ErrDenied)
+	require.ErrorIs(t, enabled.RequireStartupCapability(tenantctx.WithTenantID(ctx, 1), "connector_poll"), executionscope.ErrDenied)
+	require.ErrorIs(t, enabled.RequireStartupCapability(nil, "connector_poll"), executionscope.ErrDenied)
+	require.ErrorIs(t, enabled.RequireStartupCapability(ctx, "unknown"), executionscope.ErrDenied)
+	require.ErrorIs(t, enabled.RequireStartupCapability(ctx, "embedding"), executionscope.ErrDenied)
+	var absent *ExecutionPolicy
+	require.ErrorIs(t, absent.RequireStartupCapability(ctx, "connector_poll"), executionscope.ErrDenied)
+	candidate, err := NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: "startup-test", Scopes: []config.ExecutionScopeConfig{{TenantID: 1, ScopeID: "149ff1af-a27c-47c7-827f-103271130bb9"}}, Capabilities: map[string]string{"connector_poll": "disabled"}})
+	require.NoError(t, err)
+	require.ErrorIs(t, candidate.RequireStartupCapability(ctx, "connector_poll"), executionscope.ErrDenied)
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	require.ErrorIs(t, enabled.RequireStartupCapability(canceled, "connector_poll"), context.Canceled)
+}

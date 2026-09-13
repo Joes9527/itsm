@@ -1198,3 +1198,14 @@ s5-connector-health-unit.log具名connector/config/controller race PASS；s5-con
 本轮只关闭读取外调与主动诊断边界。Provision/LoadAll的实例激活来源、Send/Get/GetInstance裸Connector旁路及受控scope目标声明仍需继续实现；既有通知/Webhook私有测试通过不等于生产可信目标启动准入。CandidateSHA与停止状态不变，S5/S6/鉴权及目标T3/T4/G3未完成，无共享操作、企业外呼、push/main合并。
 
 最终s5-connector-health-regression.log具名bootstrap/service Webhook/Notification/Connector/Graph/Callback race PASS（非两包全测试）；s5-connector-health-build.log全后端build exit0；完整私有suite无skip/race，git diff --check通过。新POST沿真实auth组已有CSRF中间件，健康路径不在其跳过清单；这是代码核查，非浏览器认证验收。
+
+
+### B2 S5 历史连接器恢复入口准入（2026-09-14）
+
+s5-connector-restore-red.log真实PG复现直接LoadAll在候选策略下返回nil，读取持久配置并Init一次、Manager出现实例；配置行未变化。现CapabilityGate扩充RequireStartupCapability，ExecutionPolicy只允许standard+冻结显式enabled+未取消内部SystemBypass上下文；Manager.RequireRestore固定检查connector_poll，LoadAll在恢复客户端检查/查询/解析/factory之前调用。nil gate不降级，普通tenant context不能进行跨租户恢复，candidate即使标记SystemContext仍拒绝；未放宽请求级RequireCapability。
+
+新真实PG测试candidate同条持久配置零Init/无实例且配置整行不变；standard enabled普通tenant context拒绝，之后以既有clients.System与SystemContext实际Init一次并保全配置。nil恢复客户端负测证明gate先于I/O。SystemBypass仅内部标记，不能当成数据库角色认证；既有受限system角色与启动角色准入保留。原integration_postgres恢复fixture改为显式standard connector_poll enabled，其执行状态单独列明，不混同candidate_scope套件。
+
+s5-connector-restore-unit.log四包具名Capability/Health/Connector/Runtime/API race PASS；独立review_execution_scope_s1复核无新增阻断。实际poll/provider、受控scope新目标激活、直接Provision/Send/Get路径仍未完成，本轮仅历史恢复准入。CandidateSHA、候选停止及共享环境边界不变，S5/S6、鉴权及目标T3/T4/G3继续待验收。未执行共享数据库操作、真实企业/云调用或push/main合并。
+
+最终s5-connector-restore-full-private.log完整私有PG16/Redis/MinIO候选边界、构造保全及Stream恢复race PASS，日志无FAIL/SKIP/DATA RACE；s5-connector-restore-legacy-compile.log以integration_postgres标签和空匹配编译通过（no tests to run），未执行该标签的数据库测试；s5-connector-restore-build.log全后端build exit0。git diff --check通过。这些证据不替代Agent B目标PG17环境验收。

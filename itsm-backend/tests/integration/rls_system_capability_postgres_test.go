@@ -174,13 +174,15 @@ func TestPostgresRLSRuntimeConnectorRestore(t *testing.T) {
 	clients, _ := runtimeClients(t, f)
 	registry := connector.NewRegistry()
 	registry.Register(func() connector.Connector { return webhook.New() })
-	manager := connector.NewManager(registry, zap.NewNop().Sugar(), nil)
+	policy, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "restore-test", Capabilities: map[string]string{"connector_poll": "enabled"}})
+	require.NoError(t, err)
+	manager := connector.NewManager(registry, zap.NewNop().Sugar(), policy)
 	owner := controller.NewConnectorController(manager, registry, nil, zap.NewNop().Sugar(), clients.Tenant, clients.System)
 	require.NoError(t, owner.LoadAll(tenantctx.SystemContext(f.ctx, "test:restore", "restore persisted connectors")))
 	for _, id := range []int{f.tenant.ID, other.ID} {
 		_, ok := manager.Get(id, "webhook")
 		require.True(t, ok)
 	}
-	_, err := clients.System.ConnectorConfig.Delete().Exec(f.ctx)
+	_, err = clients.System.ConnectorConfig.Delete().Exec(f.ctx)
 	require.ErrorContains(t, err, "permission denied")
 }
