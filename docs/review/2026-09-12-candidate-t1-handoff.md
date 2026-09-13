@@ -905,3 +905,11 @@ bootstrap实际注册器按webhook capability决定handler或known reserved type
 `kaf-replay-binary-half-green.log` 固定真实KAF完成/重放race PASS；`kaf-replay-fraction-full-private.log` 完整intake、Webhook真实Worker正负测、Redis离线/历史保全及PG/Redis/MinIO应用构造保全PASS，无skip或race。全后端kaf-replay-fraction-build.log exit0，git diff --check通过；独立review_execution_scope_s1审阅精度、历史整数微秒和测试边界无阻断。该确定性RED→GREEN解释并修复上轮已知半微秒重放缺口，不以此前三次随机复测通过代替根因。
 
 证据来自本机私有PG16，仍须在B的目标PG17准入/业务测试中复核；不等于目标环境验收。CandidateSHA与候选停止状态不变，S5其它入口、普通模式统一、完整T3/T4/G2/G3仍未完成，无共享环境变更、企业外呼或push/main合并。
+
+### B2 S5 Webhook 消费提交后 ACK 缺口联合恢复（2026-09-13）
+
+在 `565769236` 后补充真实PG/Redis/loopback联合测试 `webhook stream recovers committed intents before ack`。由真实SLA monitor及原持久发布者产生来源；真实Webhook owner提交两条目标意图和唯一消费Audit后，测试包装器等待旧消费者取消，不返回成功ACK。关闭旧bus后原PEL entry及consumer保留；新bus使用同一itsm:webhook组领取原entry，PEL归零，新旧consumer不同，Stream原entry、两条完整Outbox行及消费Audit整行不变。恢复前两个端点均零调用；随后真实共享Worker逐目标投递，两端点各一次、意图published并存在交付Audit，再poll不增加调用。旧裸Stream/组/历史pending快照保全。
+
+仅增加集成测试并将既有ACK包装器的具体审计类型改成共享窄接口，原审计恢复测试仍调用真实owner；没有生产代码、schema、配置改动。新增覆盖首次运行即PASS，不虚构RED或声称本轮修复生产缺陷。`s5-webhook-ack-recovery.log` 定向race PASS；`s5-webhook-ack-full-private.log` 完整候选intake、旧审计恢复、Webhook负测和新联合恢复、Redis离线/历史保全、PG/Redis/MinIO构造保全race PASS，无skip/race。git diff --check通过，独立review_execution_scope_s1只读复核无阻断。本轮仅测试/文档变化，以真实集成编译及运行验证，不重复既有生产构建。
+
+该测试证明消费者关闭后重建的同组恢复，不证明整个应用强杀、Redis服务重启持久性、任意出站窗口exactly-once或并发撤权。HTTP端点断言调用次数，本项未逐字段核验收到的业务body。普通模式同步路径统一、进程重启、未知消息与其它异步入口仍未完成，S5/T3/T4/G2/G3未放行。固定CandidateSHA不变、候选未启动，无共享环境变更、企业外呼、push或main合并。

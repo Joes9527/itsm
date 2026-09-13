@@ -35,6 +35,7 @@ import (
 	"itsm-backend/connector"
 	feishu "itsm-backend/connector/builtin/feishu"
 	"itsm-backend/database"
+	"itsm-backend/ent/auditlog"
 	changedomain "itsm-backend/handlers/change"
 	srdomain "itsm-backend/handlers/service_request"
 	"itsm-backend/handlers/shared/workflowcallback"
@@ -2381,6 +2382,128 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				require.Equal(t, value, afterRedis[key], "historical Redis key changed: %s", key)
 			}
 		})
+		t.Run("webhook stream recovers committed intents before ack", func(t *testing.T) {
+			streamCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+			defer cancel()
+			redisCfg, redisClient := startCandidateStreamRedis(t, streamCtx)
+			redisCfg.EventStream = config.EventStreamConfig{ClaimIdle: 500 * time.Millisecond, ClaimInterval: 50 * time.Millisecond, NackDelay: 10 * time.Millisecond}
+			_, err := redisClient.XAdd(streamCtx, &redis.XAddArgs{Stream: "sla.breached", Values: map[string]interface{}{"payload": "protected-history"}}).Result()
+			require.NoError(t, err)
+			require.NoError(t, redisClient.XGroupCreate(streamCtx, "sla.breached", "history", "0").Err())
+			_, err = redisClient.XReadGroup(streamCtx, &redis.XReadGroupArgs{Group: "history", Consumer: "original", Streams: []string{"sla.breached", ">"}, Count: 1}).Result()
+			require.NoError(t, err)
+			protected := snapshotCandidateRedis(t, streamCtx, redisClient)
+			freshWebhook, err := app.Create(ctx, identity, command("webhook-ack-recovery", "generic"))
+			require.NoError(t, err)
+			owner.Ticket.UpdateOneID(freshWebhook.WorkItemID).SetSLADefinitionID(legacySLADefinition.ID).SetSLAResponseDeadline(time.Now().Add(-time.Hour)).SetSLAResolutionDeadline(time.Now().Add(time.Hour)).SaveX(ctx)
+			_, err = monitor.CheckSLAViolations(ctx, tenant.ID)
+			require.NoError(t, err)
+			resolution := owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(freshWebhook.WorkItemID), outboxevent.EventTypeEQ("sla.breached")).OnlyX(ctx)
+			require.NoError(t, service.NewSLABreachDeliveryHandler().Deliver(ctx, resolution))
+			resolutionSource := capture.events[len(capture.events)-1]
+			var firstSent, secondSent atomic.Int32
+			firstEndpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { firstSent.Add(1); w.WriteHeader(http.StatusNoContent) }))
+			defer firstEndpoint.Close()
+			secondEndpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { secondSent.Add(1); w.WriteHeader(http.StatusNoContent) }))
+			defer secondEndpoint.Close()
+			registry := connector.NewRegistry()
+			registry.Register(func() connector.Connector { return webhookconnector.New() })
+			manager := connector.NewManager(registry, zap.NewNop().Sugar())
+			defer manager.CloseAll()
+			for provider, endpoint := range map[string]string{"ack-first": firstEndpoint.URL, "ack-second": secondEndpoint.URL} {
+				require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Provider: provider, Enabled: true, Settings: map[string]interface{}{"url": endpoint}}))
+			}
+			execution := config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: scopeID}}}
+			consumer, err := eventbus.NewWatermillEventBus(redisCfg, execution, authority, zap.NewNop().Sugar())
+			require.NoError(t, err)
+			defer consumer.Close()
+			audit := service.NewWebhookEventSubscriber(manager, zap.NewNop().Sugar(), runtime, policy)
+			committed := make(chan struct{}, 1)
+			require.NoError(t, consumer.RegisterSubscription("sla.breached", &candidateCommitBeforeAck{audit: audit, committed: committed}))
+			require.NoError(t, consumer.Start(streamCtx))
+			before := owner.AuditLog.Query().CountX(ctx)
+			require.NoError(t, consumer.Publish(resolutionSource))
+			select {
+			case <-committed:
+			case <-streamCtx.Done():
+				t.Fatal("webhook intents did not commit before shutdown")
+			}
+			require.Equal(t, before+1, owner.AuditLog.Query().CountX(ctx))
+			key := "candidate:intake-test:" + scopeID + ":sla.breached"
+			pending, err := redisClient.XPendingExt(streamCtx, &redis.XPendingExtArgs{Stream: key, Group: "itsm:webhook", Start: "-", End: "+", Count: 10}).Result()
+			require.NoError(t, err)
+			require.Len(t, pending, 1, "database commit has not acknowledged Redis")
+			rows, err := redisClient.XRange(streamCtx, key, "-", "+").Result()
+			require.NoError(t, err)
+			require.Len(t, rows, 1)
+			require.Equal(t, rows[0].ID, pending[0].ID)
+			var receiptBefore string
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(a)::text FROM audit_logs a WHERE tenant_id=$1 AND user_id=0 AND operation_id=$2`, tenant.ID, "webhook_consume:"+resolution.EventID).Scan(&receiptBefore))
+			var intentsBefore string
+			require.NoError(t, ownerDB.QueryRow(`SELECT coalesce(json_agg(e ORDER BY id),'[]')::text FROM outbox_events e WHERE execution_work_item_id=$1 AND event_type=$2`, freshWebhook.WorkItemID, service.WebhookDeliveryRequestedEventType).Scan(&intentsBefore))
+			require.Equal(t, 2, owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(freshWebhook.WorkItemID), outboxevent.EventTypeEQ(service.WebhookDeliveryRequestedEventType)).CountX(ctx))
+			require.Zero(t, firstSent.Load())
+			require.Zero(t, secondSent.Load())
+			require.NoError(t, consumer.Close())
+			afterClose, err := redisClient.XPendingExt(streamCtx, &redis.XPendingExtArgs{Stream: key, Group: "itsm:webhook", Start: "-", End: "+", Count: 10}).Result()
+			require.NoError(t, err)
+			require.Len(t, afterClose, 1, "closing the old consumer must leave the original entry unacknowledged")
+			require.Equal(t, pending[0].ID, afterClose[0].ID)
+			require.Equal(t, pending[0].Consumer, afterClose[0].Consumer)
+			restarted, err := eventbus.NewWatermillEventBus(redisCfg, execution, authority, zap.NewNop().Sugar())
+			require.NoError(t, err)
+			defer restarted.Close()
+			require.NoError(t, restarted.RegisterSubscription("sla.breached", audit))
+			require.NoError(t, restarted.Start(streamCtx))
+			require.Eventually(t, func() bool {
+				p, e := redisClient.XPending(streamCtx, key, "itsm:webhook").Result()
+				return e == nil && p.Count == 0
+			}, 5*time.Second, 20*time.Millisecond, "new consumer must claim and acknowledge the original entry")
+			consumers, err := redisClient.XInfoConsumers(streamCtx, key, "itsm:webhook").Result()
+			require.NoError(t, err)
+			require.Len(t, consumers, 2)
+			require.NotEqual(t, consumers[0].Name, consumers[1].Name)
+			var receiptAfter string
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(a)::text FROM audit_logs a WHERE tenant_id=$1 AND user_id=0 AND operation_id=$2`, tenant.ID, "webhook_consume:"+resolution.EventID).Scan(&receiptAfter))
+			require.JSONEq(t, receiptBefore, receiptAfter)
+			require.Equal(t, before+1, owner.AuditLog.Query().CountX(ctx))
+			afterRows, err := redisClient.XRange(streamCtx, key, "-", "+").Result()
+			require.NoError(t, err)
+			require.Equal(t, rows, afterRows, "restart must not republish or replace the original entry")
+			var intentsAfter string
+			require.NoError(t, ownerDB.QueryRow(`SELECT coalesce(json_agg(e ORDER BY id),'[]')::text FROM outbox_events e WHERE execution_work_item_id=$1 AND event_type=$2`, freshWebhook.WorkItemID, service.WebhookDeliveryRequestedEventType).Scan(&intentsAfter))
+			require.JSONEq(t, intentsBefore, intentsAfter, "redelivery must preserve the entire original intent set")
+			require.Zero(t, firstSent.Load())
+			require.Zero(t, secondSent.Load())
+			reservedSet := map[string]bool{}
+			for _, event := range owner.OutboxEvent.Query().AllX(ctx) {
+				if event.EventType != service.WebhookDeliveryRequestedEventType {
+					reservedSet[event.EventType] = true
+				}
+			}
+			var reserved []string
+			for kind := range reservedSet {
+				reserved = append(reserved, kind)
+			}
+			deliveryRegistry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{service.NewWebhookDeliveryHandler(runtime, policy, manager)}, reserved...)
+			require.NoError(t, err)
+			worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(clients.System, policy), service.OutboxDeliveryWorkerConfig{BatchSize: 1000, PollInterval: time.Second, HandlerTimeout: 5 * time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), deliveryRegistry)
+			require.NoError(t, err)
+			require.NoError(t, worker.DispatchOnce(ctx))
+			require.EqualValues(t, 1, firstSent.Load())
+			require.EqualValues(t, 1, secondSent.Load())
+			for _, intent := range owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(freshWebhook.WorkItemID), outboxevent.EventTypeEQ(service.WebhookDeliveryRequestedEventType)).AllX(ctx) {
+				require.Equal(t, "published", intent.Status)
+				require.True(t, owner.AuditLog.Query().Where(auditlog.TenantIDEQ(tenant.ID), auditlog.OperationIDEQ("webhook_deliver:"+intent.EventID)).ExistX(ctx))
+			}
+			require.NoError(t, worker.DispatchOnce(ctx))
+			require.EqualValues(t, 1, firstSent.Load())
+			require.EqualValues(t, 1, secondSent.Load())
+			afterRedis := snapshotCandidateRedis(t, streamCtx, redisClient)
+			for key, value := range protected {
+				require.Equal(t, value, afterRedis[key], "historical Redis key changed: %s", key)
+			}
+		})
 
 		t.Run("event audit deduplicates persistent delivery", func(t *testing.T) {
 			wire, err := json.Marshal(envelope)
@@ -4293,10 +4416,13 @@ func (b *candidateSourceCaptureBus) Publish(event interface{}) error {
 }
 func (*candidateSourceCaptureBus) Subscribe(string, shared.EventHandler) error { return nil }
 
-// Test-only ACK gap: the real audit commits before this handler waits for the
+// Test-only ACK gap: the real owner commits before this handler waits for the
 // old subscriber's context to close. Returning its cancellation leaves the PEL.
 type candidateCommitBeforeAck struct {
-	audit     *service.EventAuditSubscriber
+	audit interface {
+		EventConsumerID() string
+		HandleContext(context.Context, interface{}) error
+	}
 	committed chan struct{}
 }
 
