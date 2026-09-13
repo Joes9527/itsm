@@ -85,8 +85,16 @@ func TestSendNotification_MultiChannelRouting(t *testing.T) {
 	}, tenant.ID)
 	require.NoError(t, err)
 
-	// email 渠道被调用一次（收件人为 end user）
-	assert.Len(t, spy.calls, 1, "email 渠道应调用一次")
+	// Request persists the intent; only the real worker invokes the local spy.
+	require.Empty(t, spy.calls)
+	pending := client.TicketNotification.Query().Where(ticketnotification.ChannelEQ("email")).OnlyX(ctx)
+	require.Equal(t, "pending", pending.Status)
+	require.True(t, pending.SentAt.IsZero())
+	svc.SetDeliveryQueueClient(client)
+	n, err := svc.ProcessPendingDeliveries(ctx, "direct-notification-test", 10)
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+	require.Len(t, spy.calls, 1)
 	assert.Equal(t, "enduser@example.com", spy.calls[0])
 
 	// in_app 渠道创建 1 条站内通知记录
@@ -157,9 +165,11 @@ func TestSendNotification_DefaultPreferenceWhenNoRecord(t *testing.T) {
 		Content:   "x",
 	}, tenant.ID)
 	require.NoError(t, err)
-	require.Equal(t, dto.TicketNotificationEffectApplied, result.Effect)
+	require.Equal(t, dto.TicketNotificationEffectQueued, result.Effect)
+	require.Equal(t, 1, result.QueuedCount)
+	require.Equal(t, 1, result.AppliedCount)
 
 	cnt, err := client.TicketNotification.Query().Count(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, 1, cnt, "无偏好记录时应按默认偏好（in_app=true）创建站内记录")
+	assert.Equal(t, 2, cnt, "默认偏好创建站内记录及邮件意图")
 }

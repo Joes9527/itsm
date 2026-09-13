@@ -38,6 +38,7 @@ type SendTicketNotificationRequest struct {
 }
 
 const (
+	TicketNotificationEffectQueued     = "queued"
 	TicketNotificationEffectApplied    = "applied"
 	TicketNotificationEffectIdempotent = "idempotent"
 	TicketNotificationEffectBlocked    = "blocked"
@@ -48,12 +49,14 @@ const (
 // deterministic delivery block cannot expose implementation detail through the
 // public API.
 type SendTicketNotificationResult struct {
-	Effect          string `json:"effect"`
-	RecipientCount  int    `json:"recipientCount"`
-	AppliedCount    int    `json:"appliedCount"`
-	IdempotentCount int    `json:"idempotentCount"`
-	DeliveryCount   int    `json:"deliveryCount"`
-	BlockCode       string `json:"-"`
+	Effect              string `json:"effect"`
+	RecipientCount      int    `json:"recipientCount"`
+	AppliedCount        int    `json:"appliedCount"`        // Recipients with a newly materialized in-app notification.
+	IdempotentCount     int    `json:"idempotentCount"`     // Recipients whose existing intents were replayed.
+	DeliveryCount       int    `json:"deliveryCount"`       // Total durable intents, including replays; not delivery receipts.
+	QueuedCount         int    `json:"queuedCount"`         // Newly queued external intents.
+	ExternalIntentCount int    `json:"externalIntentCount"` // External intents, new or replayed, irrespective of delivery status.
+	BlockCode           string `json:"-"`
 }
 
 // UpdateNotificationPreferencesRequest 更新通知偏好请求

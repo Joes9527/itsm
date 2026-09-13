@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"itsm-backend/service/bpmn"
 	"strings"
 
 	"itsm-backend/dto"
@@ -12,6 +14,8 @@ import (
 	"itsm-backend/ent/ticketnotification"
 	"itsm-backend/ent/user"
 )
+
+var errNotificationRecipientMissing = errors.New("notification recipient missing")
 
 // EnqueueNotificationTx contributes durable notification intents to an owning
 // business transaction. It never commits or invokes a provider. Any error
@@ -23,21 +27,28 @@ func (s *TicketNotificationService) EnqueueNotificationTx(ctx context.Context, t
 // selectedChannels is a server-owned restriction on the recipient preferences.
 // nil retains all eligible preference channels; an empty set explicitly disables all.
 func (s *TicketNotificationService) enqueueNotificationTx(ctx context.Context, tx *ent.Tx, ticketID, tenantID int, req *dto.SendTicketNotificationRequest, selectedChannels map[string]bool) error {
+	_, err := s.enqueueNotificationResultTx(ctx, tx, ticketID, tenantID, req, selectedChannels)
+	return err
+}
+
+// enqueueNotificationResultTx is the sole channel materialization path. Counts
+// describe persisted intents, never provider delivery. The caller owns commit.
+func (s *TicketNotificationService) enqueueNotificationResultTx(ctx context.Context, tx *ent.Tx, ticketID, tenantID int, req *dto.SendTicketNotificationRequest, selectedChannels map[string]bool) (*dto.SendTicketNotificationResult, error) {
 	if s == nil || tx == nil || req == nil || strings.TrimSpace(req.DeliveryKey) == "" || strings.TrimSpace(req.EventType) == "" || strings.TrimSpace(req.Content) == "" || len(req.UserIDs) == 0 {
-		return fmt.Errorf("notification intent requires transaction, target, recipients and stable delivery identity")
+		return nil, fmt.Errorf("notification intent requires transaction, target, recipients and stable delivery identity")
 	}
 	if err := s.execution.BindEnt(ctx, tx, tenantID); err != nil {
-		return err
+		return nil, err
 	}
 	if err := s.execution.RequireEntMembers(ctx, tx, tenantID, ticketID); err != nil {
-		return err
+		return nil, err
 	}
 	if _, err := tx.Ticket.Query().Where(ticket.IDEQ(ticketID), ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()).Only(ctx); err != nil {
-		return fmt.Errorf("notification intent target: %w", err)
+		return nil, fmt.Errorf("notification intent target: %w", err)
 	}
 	if req.SLAAlertHistoryID != nil {
 		if _, err := tx.SLAAlertHistory.Query().Where(slaalerthistory.IDEQ(*req.SLAAlertHistoryID), slaalerthistory.TenantIDEQ(tenantID), slaalerthistory.TicketIDEQ(ticketID), slaalerthistory.NotificationTrackingVersionEQ(1)).Only(ctx); err != nil {
-			return fmt.Errorf("notification SLA owner: %w", err)
+			return nil, fmt.Errorf("notification SLA owner: %w", err)
 		}
 	}
 	// Preference reads share the caller's snapshot, including its uncommitted
@@ -48,6 +59,7 @@ func (s *TicketNotificationService) enqueueNotificationTx(ctx context.Context, t
 		preferences.client = tx.Client()
 		reader.prefService = &preferences
 	}
+	result := &dto.SendTicketNotificationResult{RecipientCount: len(uniqueTicketNotificationUserIDs(req.UserIDs))}
 	seen := map[int]bool{}
 	for _, userID := range req.UserIDs {
 		if seen[userID] {
@@ -55,28 +67,39 @@ func (s *TicketNotificationService) enqueueNotificationTx(ctx context.Context, t
 		}
 		seen[userID] = true
 		if _, err := tx.User.Query().Where(user.IDEQ(userID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).Only(ctx); err != nil {
-			return fmt.Errorf("notification intent recipient: %w", err)
+			if ent.IsNotFound(err) {
+				return nil, errNotificationRecipientMissing
+			}
+			return nil, fmt.Errorf("notification intent recipient: %w", err)
 		}
 		persisted, err := tx.TicketNotification.Query().Where(ticketnotification.TenantIDEQ(tenantID), ticketnotification.TicketIDEQ(ticketID), ticketnotification.UserIDEQ(userID), ticketnotification.DeliveryKeyEQ(req.DeliveryKey)).All(ctx)
 		if err != nil {
-			return fmt.Errorf("notification intent replay lookup: %w", err)
+			return nil, fmt.Errorf("notification intent replay lookup: %w", err)
 		}
 		for _, row := range persisted {
+			if row.Channel != "in_app" {
+				if req.InAppOnly {
+					return nil, fmt.Errorf("in-app notification identity conflicts with external intent")
+				}
+				result.ExternalIntentCount++
+			}
 			if err := validateNotificationConnectorTarget(row); err != nil {
-				return err
+				return nil, err
 			}
 			if row.Type != req.EventType || row.Content != req.Content || (row.SLAAlertHistoryID == nil) != (req.SLAAlertHistoryID == nil) || (row.SLAAlertHistoryID != nil && req.SLAAlertHistoryID != nil && *row.SLAAlertHistoryID != *req.SLAAlertHistoryID) {
-				return fmt.Errorf("notification delivery identity conflicts with persisted intent")
+				return nil, fmt.Errorf("notification delivery identity conflicts with persisted intent")
 			}
 		}
 		// Once materialized, this recipient's channels are frozen. Check identity
 		// across channels before current preferences can hide an earlier delivery.
 		if len(persisted) > 0 {
+			result.IdempotentCount++
+			result.DeliveryCount += len(persisted)
 			continue
 		}
 		prefs, err := reader.resolvePreferences(ctx, userID, tenantID, req.EventType)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		channels := []struct {
 			name    string
@@ -90,18 +113,33 @@ func (s *TicketNotificationService) enqueueNotificationTx(ctx context.Context, t
 			}
 			if channel.name == "in_app" {
 				if err := createInAppNotificationPair(ctx, tx.Client(), ticketID, userID, req, tenantID, s.clock()); err != nil {
-					return err
+					return nil, err
 				}
+				result.AppliedCount++
+				result.DeliveryCount++
 				continue
 			}
 			create := tx.TicketNotification.Create().SetNillableSLAAlertHistoryID(req.SLAAlertHistoryID).SetTenantID(tenantID).SetTicketID(ticketID).SetUserID(userID).SetType(req.EventType).SetChannel(channel.name).SetContent(req.Content).SetDeliveryKey(req.DeliveryKey).SetStatus(ticketNotificationStatusPending).SetNextAttemptAt(s.clock())
 			if err := s.BindNotificationConnectorTarget(ctx, tenantID, channel.name, create); err != nil {
-				return err
+				return nil, err
 			}
 			if _, err := create.Save(ctx); err != nil {
-				return fmt.Errorf("notification intent write: %w", err)
+				return nil, fmt.Errorf("notification intent write: %w", err)
 			}
+			result.QueuedCount++
+			result.ExternalIntentCount++
+			result.DeliveryCount++
 		}
 	}
-	return nil
+	switch {
+	case result.QueuedCount > 0:
+		result.Effect = dto.TicketNotificationEffectQueued
+	case result.AppliedCount > 0:
+		result.Effect = dto.TicketNotificationEffectApplied
+	case result.IdempotentCount > 0:
+		result.Effect = dto.TicketNotificationEffectIdempotent
+	default:
+		return blockedTicketNotificationResult(result.RecipientCount, bpmn.CallbackBlockDeliveryNotCreated), nil
+	}
+	return result, nil
 }

@@ -20,6 +20,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/ent/ticketnotification"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -456,8 +457,17 @@ func TestEmailAndCCLogsContainOnlyFixedErrorClasses(t *testing.T) {
 		EventType: "ticket_cc",
 		Content:   contentSentinel,
 	}, tenant.ID)
+	require.NoError(t, err)
+	require.Equal(t, dto.TicketNotificationEffectQueued, result.Effect)
+	notificationService.SetDeliveryQueueClient(client)
+	n, err := notificationService.ProcessPendingDeliveries(ctx, "sanitized-notification", 10)
 	require.Error(t, err)
-	require.Nil(t, result)
+	require.Zero(t, n)
+	require.NotContains(t, err.Error(), graphErrSentinel)
+	require.NotContains(t, err.Error(), smtpErrSentinel)
+	pending := client.TicketNotification.Query().Where(ticketnotification.ChannelEQ("email")).OnlyX(ctx)
+	require.Equal(t, "connector_send", pending.LastErrorClass)
+	require.Equal(t, 1, pending.AttemptCount)
 	require.NoError(t, workflow.CCTicket(ctx, &dto.CCTicketRequest{
 		TicketID: ticketEntity.ID,
 		CCUsers:  []int{recipient.ID},
@@ -465,9 +475,8 @@ func TestEmailAndCCLogsContainOnlyFixedErrorClasses(t *testing.T) {
 	}, operator.ID, tenant.ID))
 
 	allowedErrorClasses := map[string]struct{}{
-		"graph_send_failed":     {},
-		"smtp_send_failed":      {},
-		"email_delivery_failed": {},
+		"graph_send_failed": {},
+		"smtp_send_failed":  {},
 	}
 	seenErrorClasses := make(map[string]struct{})
 	for _, entry := range observed.All() {
@@ -497,7 +506,6 @@ func TestEmailAndCCLogsContainOnlyFixedErrorClasses(t *testing.T) {
 	}
 	require.Contains(t, seenErrorClasses, "graph_send_failed")
 	require.Contains(t, seenErrorClasses, "smtp_send_failed")
-	require.Contains(t, seenErrorClasses, "email_delivery_failed")
 	require.False(t, strings.Contains(fmt.Sprint(observed.AllUntimed()), recipientSentinel))
 }
 

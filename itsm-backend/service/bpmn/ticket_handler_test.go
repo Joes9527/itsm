@@ -585,3 +585,35 @@ func (f *fakeTicketStatusService) UpdateTicketStatusForWorkflow(ctx context.Cont
 	f.lastStatus = status
 	return nil
 }
+
+type notificationAcceptanceSpy struct {
+	result  *dto.SendTicketNotificationResult
+	request dto.SendTicketNotificationRequest
+}
+
+func (s *notificationAcceptanceSpy) SendNotification(_ context.Context, _ int, req *dto.SendTicketNotificationRequest, _ int) (*dto.SendTicketNotificationResult, error) {
+	s.request = *req
+	return s.result, nil
+}
+func TestTicketNotificationCallbackAcceptance(t *testing.T) {
+	for _, effect := range []string{dto.TicketNotificationEffectQueued, dto.TicketNotificationEffectIdempotent, dto.TicketNotificationEffectApplied} {
+		t.Run(effect, func(t *testing.T) {
+			spy := &notificationAcceptanceSpy{result: &dto.SendTicketNotificationResult{Effect: effect, QueuedCount: 1, ExternalIntentCount: 1}}
+			handler := NewTicketServiceTaskHandler(nil, zap.NewNop().Sugar())
+			handler.SetNotificationService(spy)
+			result, err := handler.sendNotification(context.Background(), 1, &dto.SendTicketNotificationRequest{UserIDs: []int{1}}, 1)
+			require.NoError(t, err)
+			require.NotContains(t, result.Message, "delivered")
+			require.NotNil(t, result.OutputVars)
+			require.NoError(t, ValidateHandlerEffect(result))
+		})
+	}
+	spy := &notificationAcceptanceSpy{result: &dto.SendTicketNotificationResult{Effect: dto.TicketNotificationEffectApplied, AppliedCount: 1}}
+	handler := NewTicketServiceTaskHandler(nil, zap.NewNop().Sugar())
+	handler.SetNotificationService(spy)
+	result, err := handler.sendNotification(WithBPMNCallbackExecutionKey(context.Background(), "stable-callback"), 1, &dto.SendTicketNotificationRequest{UserIDs: []int{1}}, 1)
+	require.NoError(t, err)
+	require.Equal(t, CallbackEffectApplied, result.Status)
+	require.True(t, spy.request.InAppOnly)
+	require.Equal(t, "stable-callback", spy.request.DeliveryKey)
+}

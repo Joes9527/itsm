@@ -1390,3 +1390,18 @@ s5-notification-direct-full-red.log完整私有PG16/Redis/MinIO race仅此新增
 当前完整目标/S5/S6/T3/T4/G3未完成，CandidateSHA不变、候选停止，无WSL/共享环境修改、企业外呼、push/main合并。最终独立复核下方补记。
 
 独立最终复核确认RED有效、合同无阻断。GREEN须将NotEqual(applied)收紧为明确queued/准确计数和重放结果，排除任意错误effect假绿；git diff --check通过。
+
+### B2 S5 同步通知入队收敛 GREEN（2026-09-14）
+
+关闭dced3d585的直接外发RED。SendNotification只拥有事务，调用唯一enqueueNotificationResultTx，站内双表与全部外部意图一起提交，删除请求内email/SMS/push调用。原EnqueueNotificationTx和创建/升级调用共享同一实现。内部DeliveryKey保留内容/来源冲突检查及原渠道重放；缺key生成本次调用ID，不提供HTTP重试幂等。缺recipient或后续目标绑定失败回滚整个事务。InAppOnly不新建外部意图，碰到同key已有外部意图拒绝。
+
+返回queued/HTTP202与新外部意图数；站内新建、重放接收人、总持久意图及外部意图计数明确分开。旧行不按当前状态冒充新排队或送达。BPMN将入队视为持久受理动作，输出对应证据，applied/idempotent均不再宣称外部delivered；durable key仍强制InAppOnly。UI按queued/accepted/站内生效提示。独立审阅指出并修复queued非法effect及混合外部重放文案问题，最终无新增阻断。
+
+验证证据（本机任务私有范围）：
+- s5-notification-sync-full-private.log：完整私有PG16/Redis/MinIO race PASS，无FAIL/SKIP/DATA RACE；原直接外发RED改为明确queued/精确计数、pending/SentAt及重放结果。此套执行后仅增加BPMN受理文案和定向测试，没有更改通知事务实现。
+- s5-notification-sync-final-unit.log：service/controller/service-bpmn/bootstrap四包具名race回归PASS，无FAIL/SKIP/DATA RACE。含混合目标失败全回滚、内容冲突、偏好变化不扩展、外部重放+新站内混合结果、InAppOnly及HTTP202；不声称四包所有测试都执行。
+- 原同步Graph spy正向改为先验证零调用及pending，再由真实ProcessPendingDeliveries调用进程内Graph sender一次。旧日志测试迁移到真实worker失败，保留敏感字段/内容/错误不泄漏，并核验持久错误分类与尝试次数；未发送企业邮件。
+- s5-notification-sync-ui.log：2 suites / 22 tests PASS；仅定向测试，关闭全项目coverage阈值，不宣称整体覆盖率达标。
+- s5-notification-sync-types.log：theme check与tsc通过；s5-notification-sync-build.log：全后端build exit0。git diff --check通过。
+
+本增量不完成email/push专业目标准入、飞书与裸实例入口、目标变化/重启矩阵或S5/S6/T3/T4/G3。CandidateSHA保持d7470a32dbb87acc9b5e4d9a895a146410723561，候选未启动，无WSL/共享数据库修改，无push/main合并。下一步核对email/push真实owner及其持久意图目标身份，再处理其余S5入口。

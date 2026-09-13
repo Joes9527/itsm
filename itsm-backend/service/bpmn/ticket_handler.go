@@ -77,10 +77,12 @@ func (h *TicketServiceTaskHandler) sendNotification(ctx context.Context, ticketI
 		return nil, fmt.Errorf("ticket notification result is missing")
 	}
 	switch result.Effect {
+	case dto.TicketNotificationEffectQueued:
+		return AppliedEffect("ticket notification queued", map[string]interface{}{"notification_effect": result.Effect, "queued_count": result.QueuedCount}), nil
 	case dto.TicketNotificationEffectApplied:
-		return AppliedEffect("ticket notification delivered", nil), nil
+		return AppliedEffect("ticket notification accepted", map[string]interface{}{"notification_effect": result.Effect, "applied_count": result.AppliedCount, "external_intent_count": result.ExternalIntentCount}), nil
 	case dto.TicketNotificationEffectIdempotent:
-		return IdempotentEffect("ticket notification already delivered", nil), nil
+		return IdempotentEffect("ticket notification already accepted", map[string]interface{}{"external_intent_count": result.ExternalIntentCount}), nil
 	case dto.TicketNotificationEffectBlocked:
 		code := CallbackBlockCode(result.BlockCode)
 		if !IsAllowedCallbackBlockCode(code) {

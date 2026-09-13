@@ -100,7 +100,13 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
         content: values.content,
       };
       const result = await TicketNotificationApi.sendTicketNotification(ticketId, request);
-      antMessage.success(`通知已投递 ${result.deliveryCount} 次`);
+      antMessage.success(
+        result.effect === 'queued'
+          ? '已加入发送队列'
+          : result.effect === 'idempotent'
+            ? '该通知已受理'
+            : `已生成 ${result.appliedCount} 条站内通知`
+      );
       setSendModalVisible(false);
       form.resetFields();
       await loadNotifications();

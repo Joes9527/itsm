@@ -19,6 +19,7 @@ import (
 	"itsm-backend/ent/user"
 	"itsm-backend/service/bpmn"
 
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -506,168 +507,34 @@ func (s *TicketNotificationService) SendNotification(
 	req *dto.SendTicketNotificationRequest,
 	tenantID int,
 ) (*dto.SendTicketNotificationResult, error) {
-	if req == nil || s.client == nil {
+	if s == nil || req == nil || s.client == nil {
 		return nil, fmt.Errorf("ticket notification request and client are required")
 	}
-	userIDs := uniqueTicketNotificationUserIDs(req.UserIDs)
-	if len(req.UserIDs) == 0 {
+	request := *req
+	request.UserIDs = uniqueTicketNotificationUserIDs(req.UserIDs)
+	if len(request.UserIDs) == 0 {
 		return blockedTicketNotificationResult(0, bpmn.CallbackBlockRecipientEmpty), nil
 	}
-	if len(userIDs) == 0 {
-		return blockedTicketNotificationResult(len(req.UserIDs), bpmn.CallbackBlockRecipientMissing), nil
+	// This identity belongs to this invocation only; it is not HTTP retry deduplication.
+	if request.DeliveryKey == "" {
+		request.DeliveryKey = "notification:" + uuid.NewString()
 	}
-	ticketEntity, err := s.client.Ticket.Query().Where(ticket.ID(ticketID), ticket.TenantID(tenantID)).Only(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("ticket notification target lookup failed: %w", err)
-	}
-
-	type recipientPlan struct {
-		user       *ent.User
-		prefs      *dto.NotificationPreferenceResponse
-		idempotent bool
-	}
-	recipients := make(map[int]*ent.User, len(userIDs))
-	for _, userID := range userIDs {
-		if userID <= 0 {
-			return blockedTicketNotificationResult(len(userIDs), bpmn.CallbackBlockRecipientMissing), nil
-		}
-		recipient, err := s.client.User.Query().Where(user.ID(userID), user.TenantID(tenantID), user.Active(true)).Only(ctx)
-		if err != nil {
-			if ent.IsNotFound(err) {
-				return blockedTicketNotificationResult(len(userIDs), bpmn.CallbackBlockRecipientMissing), nil
-			}
-			return nil, fmt.Errorf("ticket notification recipient lookup failed: %w", err)
-		}
-		recipients[userID] = recipient
-	}
-	plans := make([]recipientPlan, 0, len(userIDs))
-	plannedDeliveries := 0
-	for _, userID := range userIDs {
-		recipient := recipients[userID]
-		prefs, err := s.resolvePreferences(ctx, userID, tenantID, req.EventType)
-		if err != nil {
-			return nil, err
-		}
-		if req.InAppOnly {
-			prefs = &dto.NotificationPreferenceResponse{InAppEnabled: prefs.InAppEnabled}
-		}
-		plan := recipientPlan{user: recipient, prefs: prefs}
-		if req.DeliveryKey != "" {
-			exists, err := s.client.TicketNotification.Query().Where(ticketnotification.TenantID(tenantID), ticketnotification.TicketID(ticketID), ticketnotification.UserID(userID), ticketnotification.DeliveryKey(req.DeliveryKey)).Exist(ctx)
-			if err != nil {
-				return nil, fmt.Errorf("ticket notification idempotency lookup failed: %w", err)
-			}
-			if exists {
-				plan.idempotent = true
-				plannedDeliveries++
-				plans = append(plans, plan)
-				continue
-			}
-		}
-		if prefs.InAppEnabled {
-			plannedDeliveries++
-		}
-		if prefs.EmailEnabled {
-			if s.emailService == nil || strings.TrimSpace(recipient.Email) == "" {
-				return nil, fmt.Errorf("ticket email notification provider or recipient is unavailable")
-			}
-			if _, err := mail.ParseAddress(recipient.Email); err != nil {
-				return nil, fmt.Errorf("ticket email notification recipient is invalid")
-			}
-			plannedDeliveries++
-		}
-		if prefs.SmsEnabled {
-			if s.smsService == nil || strings.TrimSpace(recipient.Phone) == "" {
-				return nil, fmt.Errorf("ticket SMS notification provider or recipient is unavailable")
-			}
-			plannedDeliveries++
-		}
-		if prefs.PushEnabled {
-			if s.wsService == nil {
-				return nil, fmt.Errorf("ticket push notification provider is unavailable")
-			}
-			plannedDeliveries++
-		}
-		plans = append(plans, plan)
-	}
-	if plannedDeliveries == 0 {
-		return blockedTicketNotificationResult(len(userIDs), bpmn.CallbackBlockDeliveryNotCreated), nil
-	}
-	result := &dto.SendTicketNotificationResult{RecipientCount: len(userIDs)}
-	for _, plan := range plans {
-		if plan.idempotent {
-			result.IdempotentCount++
-			result.DeliveryCount++
-		}
-	}
-
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("ticket notification transaction begin failed: %w", err)
 	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
-		}
-	}()
-	now := s.clock()
-	for _, plan := range plans {
-		if plan.idempotent || !plan.prefs.InAppEnabled {
-			continue
-		}
-		if err := createInAppNotificationPair(ctx, tx.Client(), ticketID, plan.user.ID, req, tenantID, now); err != nil {
-			return nil, err
-		}
-		result.DeliveryCount++
+	defer tx.Rollback()
+	result, err := s.enqueueNotificationResultTx(ctx, tx, ticketID, tenantID, &request, nil)
+	if errors.Is(err, errNotificationRecipientMissing) {
+		return blockedTicketNotificationResult(len(request.UserIDs), bpmn.CallbackBlockRecipientMissing), nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("ticket notification transaction commit failed: %w", err)
 	}
-	committed = true
-	for _, plan := range plans {
-		if plan.idempotent {
-			continue
-		}
-		applied := plan.prefs.InAppEnabled
-		if plan.prefs.EmailEnabled {
-			if err := s.emailService.SendTicketNotificationForTenant(ctx, tenantID, []string{plan.user.Email}, ticketEntity.TicketNumber, ticketEntity.Title, req.EventType, req.Content); err != nil {
-				if s.logger != nil {
-					s.logger.Warnw("ticket email notification delivery failed", "error_class", "email_delivery_failed")
-				}
-				return nil, fmt.Errorf("ticket email notification delivery failed: %w", err)
-			}
-			applied = true
-			result.DeliveryCount++
-		}
-		if plan.prefs.SmsEnabled {
-			if err := s.smsService.SendTicketNotification(ctx, []string{plan.user.Phone}, ticketEntity.TicketNumber, req.EventType); err != nil {
-				if s.logger != nil {
-					s.logger.Warnw("ticket SMS notification delivery failed", "error_class", "sms_delivery_failed")
-				}
-				return nil, fmt.Errorf("ticket SMS notification delivery failed: %w", err)
-			}
-			applied = true
-			result.DeliveryCount++
-		}
-		if plan.prefs.PushEnabled {
-			s.wsService.GetHub().SendToUser(plan.user.ID, WebSocketMessage{Type: req.EventType, Payload: map[string]interface{}{"ticket_id": ticketID, "content": req.Content}})
-			applied = true
-			result.DeliveryCount++
-		}
-		if applied {
-			result.AppliedCount++
-		}
-	}
-	if result.AppliedCount > 0 {
-		result.Effect = dto.TicketNotificationEffectApplied
-		return result, nil
-	}
-	if result.IdempotentCount > 0 {
-		result.Effect = dto.TicketNotificationEffectIdempotent
-		return result, nil
-	}
-	return blockedTicketNotificationResult(len(userIDs), bpmn.CallbackBlockDeliveryNotCreated), nil
+	return result, nil
 }
 
 func uniqueTicketNotificationUserIDs(userIDs []int) []int {
@@ -693,7 +560,7 @@ func ticketNotificationDeliveryError(result *dto.SendTicketNotificationResult, e
 	if result == nil {
 		return fmt.Errorf("ticket notification result is missing")
 	}
-	if result.Effect == dto.TicketNotificationEffectApplied || result.Effect == dto.TicketNotificationEffectIdempotent {
+	if result.Effect == dto.TicketNotificationEffectQueued || result.Effect == dto.TicketNotificationEffectApplied || result.Effect == dto.TicketNotificationEffectIdempotent {
 		return nil
 	}
 	if result.Effect == dto.TicketNotificationEffectBlocked && bpmn.IsAllowedCallbackBlockCode(bpmn.CallbackBlockCode(result.BlockCode)) {
