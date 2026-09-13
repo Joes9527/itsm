@@ -203,6 +203,10 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+传输RED检查点 `c94cdfba2`：新真实Redis测试TestCandidateStreamPreservesLegacyTopicOnPublish经过现有Watermill构造/订阅/发布，新事件handler正向控制成功，但旧Stream新增、旧group lag增加、预期candidate namespace为空；历史pending逐条ID/consumer/delivery count保持，不声称旧pending消费。测试私有随机密码/PID核验的Redis7.2.16，无共享操作。独立审阅确认RED有效，补强PEL后复跑仍预期FAIL、无skip；当前该测试未GREEN。完整证据见T1最新交接。
+
+下一实现沿用唯一Watermill bus：bootstrap注入冻结策略及明确订阅合同，所有Publish/Subscribe共用可信namespace解析；服务提供已验证WorkItem主体，subscriber验证namespace/envelope/tenant/member后交给原审计所有者，审计在自身事务重新验证并幂等。已盘点两个业务发布者：SLA durable outbox与建单前AI分诊；后者空TicketID不能伪造主体或从payload自报scope获授权。不得双发旧topic或创建平行candidate bus。新namespace载荷唯一性、真实审计、成员撤销、未知事件和退出验证仍需完成；S5及后续门禁保持未勾选，CandidateSHA及未启动状态不变。
+
 **Files:** `pkg/eventbus/{eventbus.go,eventbus_test.go}`、`service/{tool_queue.go,ticket_service.go}`、`controller/connector_controller.go`、bootstrap；事件发布者由 `rg -n 'Publish\('` 生成调用清单逐项接入。
 
 - [ ] 写 `TestCandidateStreamDoesNotConsumeHistory`：旧 topic 放历史消息、记 XINFO GROUPS，新 scope 发布并订阅一次，断言旧 topic 消息/组完全不变，新消息能产生一次声明的审计。RED 后再实现。
