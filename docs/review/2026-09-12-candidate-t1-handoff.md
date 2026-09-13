@@ -1630,3 +1630,16 @@ actor/source仍需逐调用入口核对：HTTP WithIncidentAlertActor(user)、in
 验证：s5-incident-candidate-roles-gate.log真实受限职责链race PASS；s5-outbox-capability-regression.log service/database具名race PASS；s5-outbox-capability-gate-matrix.log新门禁矩阵PASS；s5-outbox-capability-full-private-first.log既定私有PG16/Redis/MinIO完整suite含29协议及新候选用例race PASS（verbose无FAIL/SKIP/DATA RACE）；s5-outbox-capability-final-core.log database/bootstrap默认标签全包race exit0；s5-outbox-capability-final-build.log全后端build exit0。独立最终只读审阅无本增量提交阻断，git diff --check通过，所有Go进程已退出。
 
 直接repository mutation/handler不在本新增入口gate覆盖范围，consumer当前RBAC/并发撤权仍未完成。继续Graph候选local_only准入及完整S5/S6/G2/T3/T4/G3；CandidateSHA和候选停止状态不变，无WSL/共享数据库操作、企业外发、push/main合并。
+
+
+### B2 S5 Graph候选初始化与邮件合同收口（2026-09-14）
+
+Graph Init原实现仅parseGraphDestination/NewClient/capture；Manifest现声明InitializationLocalOnly，不增加网络或轮询。s5-graph-local-activation-red.log先复现合法冻结声明被not admitted拒绝，green以真实Manager验证激活零HTTP、调用者后续配置变化不改变冻结邮箱/app身份、缺secret/digest mismatch/cancel具体拒绝且无实例、disabled不构造实例；outbox许可不授权notification。显式后续本机token/sendMail两请求验证捕获身份。local_only描述初始化行为，不是目的地主机白名单或发送授权。
+
+原candidate roles helper保留SMTP并新增Graph：真实Intake来源→非owner租户runtime producer→独立受限system queue→runtime handler→EmailService.SendToTarget→声明激活的GraphConnector；禁用仍能冻结完整目标，所有outbox/audit保全且零请求。启用时真实token表单app/secret、Bearer、mailbox路径、单recipient、subject/body、published与投递receipt通过。receipt核对tenant/actor/operation/resource/path/method/status/digest/result状态/版本；二次scan总HTTP不增、完整原始outbox与全部audit不变，其他全部outbox行也不变。没有live GraphProvider调用，没有企业端点。system具BYPASSRLS，隔离继续依赖WorkerPredicate，不能泛称所有身份均无RLS绕过。
+
+初次helper将CloseAll(void)误当error的编译失败保留于s5-graph-candidate-role-path.log，已修正；后续逐字段断言把OperationID指针当字符串造成receipt/final-private失败，已按可空字段NotNil/解引用修正，未修改生产行为。s5-graph-candidate-role-receipt-corrected.log最终目标用例race PASS。s5-graph-activation-core.log connector/...、database、bootstrap默认标签全包race通过，s5-graph-activation-final-build.log全后端build exit0；最终完整私有suite结果追加如下。
+
+独立完成审计及最终复核确认邮件扩展合同六项现均有实际证据，可勾选完成；这些分项完成不等同完整S5放行。SMTP身份变化零调用是发送入口probe、实际接受另由loopback证明；发送中变化主要Graph覆盖，不扩大为所有运输并发矩阵。consumer当前RBAC/并发撤权、飞书/裸实例及其余S5/S6/G2/T3/T4/G3仍未完成。CandidateSHA与候选停止状态不变，无WSL/共享数据库操作、企业外发、push/main合并。
+
+最终s5-graph-activation-final-private-corrected.log既定任务私有PG16/Redis/MinIO完整suite（29协议及SMTP/Graph候选职责链）race PASS，无FAIL/SKIP/DATA RACE。独立最终复核无本增量或邮件六项勾选阻断，git diff --check通过，所有Go进程已退出。

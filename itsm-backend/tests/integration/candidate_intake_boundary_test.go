@@ -377,9 +377,13 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 	}
 
 	t.Run("Incident email uses restricted candidate roles", func(t *testing.T) {
-		fresh, err := app.Create(ctx, identity, command("candidate-incident-mail", "incident"))
-		require.NoError(t, err)
-		verifyCandidateIncidentEmailRoles(t, ctx, owner, runtime, clients.System, database.GetRawDB(), clients.SystemDB, scopeID, tenant.ID, actor.ID, fresh.ProfessionalReference.ID)
+		for _, transport := range []string{"smtp", "graph"} {
+			t.Run(transport, func(t *testing.T) {
+				fresh, err := app.Create(ctx, identity, command("candidate-incident-mail-"+transport, "incident"))
+				require.NoError(t, err)
+				verifyCandidateIncidentEmailRoles(t, ctx, owner, runtime, clients.System, database.GetRawDB(), clients.SystemDB, scopeID, tenant.ID, actor.ID, fresh.ProfessionalReference.ID, transport)
+			})
+		}
 	})
 
 	t.Run("notification target migration preserves legacy intents", func(t *testing.T) {

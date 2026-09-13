@@ -40,6 +40,9 @@ func (g *GraphConnector) Manifest() connector.Manifest {
 		Homepage:            "https://learn.microsoft.com/en-us/graph/api/resources/mail-api-overview",
 		IsOfficial:          true,
 		RequiredPermissions: []string{"connector:write", "ticket:write"},
+		// Init only parses and captures local config; token acquisition, health
+		// checks and polling remain explicit execution operations.
+		InitializationBehavior: connector.InitializationLocalOnly,
 	}
 }
 

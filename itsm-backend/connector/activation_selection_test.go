@@ -2,6 +2,7 @@ package connector_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -100,4 +101,99 @@ func TestDisabledGraphDeclarationDoesNotConstructRuntimeInstance(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, digest, actual)
 	require.Zero(t, requests.Load())
+}
+
+func TestCandidateGraphActivationIsLocalAndTargetBound(t *testing.T) {
+	for _, scenario := range []string{"valid", "missing secret", "digest mismatch", "disabled", "cancelled"} {
+		t.Run(scenario, func(t *testing.T) {
+			var requests atomic.Int32
+			type observedRequest struct{ path, clientID, secret string }
+			observed := make(chan observedRequest, 4)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				if strings.HasSuffix(r.URL.Path, "/token") {
+					if err := r.ParseForm(); err != nil {
+						http.Error(w, "invalid form", http.StatusBadRequest)
+						return
+					}
+					observed <- observedRequest{r.URL.Path, r.Form.Get("client_id"), r.Form.Get("client_secret")}
+					w.Header().Set("Content-Type", "application/json")
+					fmt.Fprint(w, `{"access_token":"private-token","expires_in":3600}`)
+					return
+				}
+				observed <- observedRequest{path: r.URL.Path}
+				w.WriteHeader(http.StatusAccepted)
+			}))
+			defer server.Close()
+			cfg := connector.Config{TenantID: 1, Name: "msgraph-email", Provider: "microsoft", Enabled: true, Settings: map[string]interface{}{"azure_tenant_id": "private-tenant", "mailbox": "original@example.invalid", "aad_base_url": server.URL, "graph_base_url": server.URL + "/graph"}, Credentials: map[string]string{"azure_client_id": "original-app", "azure_client_secret": "private-secret"}}
+			digest, err := msgraph.New().DescribeDeliveryDestination(cfg)
+			require.NoError(t, err)
+			if scenario == "missing secret" {
+				delete(cfg.Credentials, "azure_client_secret")
+			}
+			if scenario == "digest mismatch" {
+				digest = strings.Repeat("b", 64)
+			}
+			scope := "149ff1af-a27c-47c7-827f-103271130bb9"
+			execution := config.ExecutionConfig{Mode: "candidate", DeploymentID: "graph-local-init", Scopes: []config.ExecutionScopeConfig{{TenantID: 1, ScopeID: scope}}, Capabilities: map[string]string{"outbox": "scoped"}, ConnectorTargets: []config.ConnectorTargetConfig{{TenantID: 1, ScopeID: scope, Name: cfg.Name, Provider: cfg.Provider, Settings: cfg.Settings, Credentials: cfg.Credentials, DestinationDigest: digest, Capabilities: []string{"outbox"}}}}
+			if scenario == "disabled" {
+				execution.Capabilities["outbox"] = "disabled"
+			}
+			policy, err := database.NewExecutionPolicy(execution)
+			require.NoError(t, err)
+			// Caller changes after construction cannot change the frozen activation.
+			cfg.Settings["mailbox"] = "changed@example.invalid"
+			cfg.Credentials["azure_client_id"] = "changed-app"
+			created := 0
+			registry := connector.NewRegistry()
+			registry.Register(func() connector.Connector { created++; return msgraph.New() })
+			manager := connector.NewManager(registry, nil, policy)
+			defer manager.CloseAll()
+			ctx, cancel := context.WithCancel(tenantctx.SystemContext(context.Background(), "test:graph-startup", "private activation"))
+			defer cancel()
+			if scenario == "cancelled" {
+				cancel()
+			}
+			err = manager.ActivateStartupTargets(ctx)
+			require.Zero(t, requests.Load(), "activation must not acquire tokens, check health or poll")
+			if scenario == "valid" {
+				require.NoError(t, err)
+				require.Len(t, manager.ListByTenant(1), 1)
+				ref, err := policy.EventRef(1)
+				require.NoError(t, err)
+				tenantCtx := tenantctx.WithTenantID(context.Background(), 1)
+				bound, _, actual, err := manager.ResolveDeliveryTarget(tenantCtx, ref, "outbox", cfg.Name, cfg.Provider)
+				require.NoError(t, err)
+				require.Equal(t, digest, actual)
+				graph, ok := bound.(*msgraph.GraphConnector)
+				require.True(t, ok)
+				require.Equal(t, "original@example.invalid", graph.Mailbox())
+				_, _, _, err = manager.ResolveDeliveryTarget(tenantCtx, ref, "notification", cfg.Name, cfg.Provider)
+				require.ErrorIs(t, err, executionscope.ErrDenied)
+				require.Zero(t, requests.Load())
+				require.NoError(t, graph.SendMail(tenantCtx, graph.Mailbox(), "recipient@example.invalid", "private subject", "private body", "activation-test"))
+				require.Equal(t, int32(2), requests.Load())
+				tokenRequest, mailRequest := <-observed, <-observed
+				require.Equal(t, "/private-tenant/oauth2/v2.0/token", tokenRequest.path)
+				require.Equal(t, "original-app", tokenRequest.clientID)
+				require.Equal(t, "private-secret", tokenRequest.secret)
+				require.Equal(t, "/graph/users/original@example.invalid/sendMail", mailRequest.path)
+			} else if scenario == "disabled" {
+				require.NoError(t, err)
+				require.Equal(t, 1, created)
+				require.Empty(t, manager.ListByTenant(1))
+			} else {
+				require.Error(t, err)
+				switch scenario {
+				case "missing secret":
+					require.ErrorContains(t, err, "client secret is required")
+				case "digest mismatch":
+					require.ErrorContains(t, err, "destination mismatch")
+				case "cancelled":
+					require.ErrorIs(t, err, context.Canceled)
+				}
+				require.Empty(t, manager.ListByTenant(1))
+			}
+		})
+	}
 }
