@@ -225,3 +225,19 @@ IncidentService、IncidentRuleEngine、IncidentEscalationService 的构造参数
 独立 reviewer `review_execution_scope_s1` 对上述限定事务边界、构造传递、replay 与测试设计复审无阻断问题。**仍未完成的 Incident 边界**：ExecuteRule 会先写 execution 并更新规则统计，不能以受保护 action 宣称整次规则调用无历史写入；直接 EscalateIncidentTx/EscalateToMajorIncident、UpdateIncidentTx、LinkIncidentCIs、CreateIncidentEvent/Metric、NotificationAction/MetricCollectionAction 仍待接入。给这些 owner 传入 policy 本身不等于其所有方法已受保护。
 
 S3、其他业务域/共享写入口、生产者成员准入和 S4–S6 仍未完成。未启动候选、修改 B 配置、执行共享数据库变更、推送或合并 main；固定 CandidateSHA 和 T3/T4 门禁不变。
+
+
+### B2 S3 Incident metadata / 直接升级事务范围（2026-09-13）
+
+在 `3212d33bb` 上为 UpdateIncidentTx 和 EscalateIncidentTx 增加原事务范围检查。UpdateIncident 私有实现显式接收调用方 tx；两个入口均保留原输入、租户、version 和业务校验，在首次写入前绑定可信 policy 并检查 WorkItem membership。既有 WorkItem、专业扩展、timeline 和升级告警仍使用原事务；缺少 policy/tx 明确拒绝，空升级请求返回校验错误。
+
+私有证据位于 `/Users/julian/.local/state/itsm-candidate-delivery/b2/`：
+
+- `s3-incident-metadata-red.log`：新增历史修改用例在修复前收到 nil error，按预期失败。
+- `s3-incident-metadata-pg.log`：完整 TestCandidateIntakeCreationBoundary 在真实私有 PostgreSQL、生产 enforce 驱动和受限目录快照下 PASS，未 skip。新增两入口历史拒绝、新成员事务内写入、独立连接不可见、调用方主动回滚后 Ticket/Incident 完整字段与 timeline 不变，以及非 Tx 包装入口提交后的 title/version/escalation-level 验证。
+- `s3-incident-metadata-regression.log`：service/intake/controller/integration 中 Incident、assignment、status action 和 intake 定向回归 PASS。
+- `s3-incident-metadata-build.json`：后端全量构建 exit 0。
+
+独立 reviewer `review_execution_scope_s1` 对上述限定增量审阅未发现阻断问题。测试使用空 NotifyUsers，未验证升级 alert/outbox 分支，也未注入后续写失败；主动回滚证据不能替代这些场景。
+
+本检查点只关闭上述两入口的成员准入缺口。ExecuteRule 执行记录/统计、重大事件升级、CI、独立 event/metric、notification、其他业务域和生产者成员准入，以及 S4–S6 仍未完成。未启动候选、操作共享数据库、修改 B 环境、推送或合并 main；CandidateSHA 仍为 `d7470a32dbb87acc9b5e4d9a895a146410723561`，T3/T4 门禁不变。

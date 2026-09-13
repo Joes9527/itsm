@@ -203,6 +203,53 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.Equal(t, created.WorkItemID, *relationEvent.ExecutionWorkItemID)
 	})
 
+	t.Run("Incident metadata and direct escalation require original transaction membership", func(t *testing.T) {
+		svc := service.NewIncidentService(runtime, zap.NewNop().Sugar(), policy)
+		fresh, err := app.Create(ctx, identity, command("metadata-incident", "incident"))
+		require.NoError(t, err)
+		for _, kind := range []string{"metadata", "escalation"} {
+			for _, target := range []struct{ incidentID, workItemID int }{{historical.ProfessionalReference.ID, historical.WorkItemID}, {fresh.ProfessionalReference.ID, fresh.WorkItemID}} {
+				before := owner.Ticket.GetX(ctx, target.workItemID)
+				extension := owner.Incident.GetX(ctx, target.incidentID)
+				events := owner.IncidentEvent.Query().CountX(ctx)
+				tx, err := runtime.Tx(ctx)
+				require.NoError(t, err)
+				func() {
+					defer tx.Rollback()
+					if kind == "metadata" {
+						title := "candidate metadata"
+						_, err = svc.UpdateIncidentTx(ctx, tx, target.incidentID, &dto.UpdateIncidentRequest{Version: before.Version, Title: &title}, tenant.ID)
+					} else {
+						_, err = svc.EscalateIncidentTx(ctx, tx, &dto.IncidentEscalationRequest{IncidentID: target.incidentID, EscalationLevel: 1, Reason: "candidate scope test"}, tenant.ID)
+					}
+					if target.workItemID == historical.WorkItemID {
+						require.ErrorContains(t, err, "execution scope denied")
+					} else {
+						require.NoError(t, err)
+						require.Equal(t, before.Version+1, tx.Ticket.GetX(ctx, target.workItemID).Version)
+						require.Equal(t, events+1, tx.IncidentEvent.Query().CountX(ctx))
+					}
+					require.Equal(t, before.Version, owner.Ticket.GetX(ctx, target.workItemID).Version)
+				}()
+				afterJSON, _ := json.Marshal(owner.Ticket.GetX(ctx, target.workItemID))
+				beforeJSON, _ := json.Marshal(before)
+				require.JSONEq(t, string(beforeJSON), string(afterJSON))
+				extensionAfter, _ := json.Marshal(owner.Incident.GetX(ctx, target.incidentID))
+				extensionBefore, _ := json.Marshal(extension)
+				require.JSONEq(t, string(extensionBefore), string(extensionAfter))
+				require.Equal(t, events, owner.IncidentEvent.Query().CountX(ctx))
+			}
+		}
+		title := "committed candidate metadata"
+		_, err = svc.UpdateIncident(ctx, fresh.ProfessionalReference.ID, &dto.UpdateIncidentRequest{Version: 1, Title: &title}, tenant.ID)
+		require.NoError(t, err)
+		_, err = svc.EscalateIncident(ctx, &dto.IncidentEscalationRequest{IncidentID: fresh.ProfessionalReference.ID, EscalationLevel: 1, Reason: "candidate commit"}, tenant.ID)
+		require.NoError(t, err)
+		require.Equal(t, title, owner.Ticket.GetX(ctx, fresh.WorkItemID).Title)
+		require.Equal(t, 3, owner.Ticket.GetX(ctx, fresh.WorkItemID).Version)
+		require.Equal(t, 1, owner.Incident.GetX(ctx, fresh.ProfessionalReference.ID).EscalationLevel)
+	})
+
 	t.Run("Incident commands and rule core preserve history", func(t *testing.T) {
 		svc := service.NewIncidentService(runtime, zap.NewNop().Sugar(), policy)
 		svc.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())

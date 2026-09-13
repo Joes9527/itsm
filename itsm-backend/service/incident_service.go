@@ -250,12 +250,15 @@ func (s *IncidentService) UpdateIncident(ctx context.Context, id int, req *dto.U
 
 // UpdateIncidentTx keeps validation, WorkItem/extension changes and timeline in the caller's transaction.
 func (s *IncidentService) UpdateIncidentTx(ctx context.Context, tx *ent.Tx, id int, req *dto.UpdateIncidentRequest, tenantID int) (*dto.IncidentResponse, error) {
+	if s == nil || tx == nil || s.execution == nil {
+		return nil, common.NewForbiddenError("incident execution policy and transaction required")
+	}
 	owner := *s
 	owner.client = tx.Client()
-	return owner.updateIncident(ctx, id, req, tenantID)
+	return owner.updateIncident(ctx, tx, id, req, tenantID)
 }
 
-func (s *IncidentService) updateIncident(ctx context.Context, id int, req *dto.UpdateIncidentRequest, tenantID int) (*dto.IncidentResponse, error) {
+func (s *IncidentService) updateIncident(ctx context.Context, tx *ent.Tx, id int, req *dto.UpdateIncidentRequest, tenantID int) (*dto.IncidentResponse, error) {
 	if req == nil || req.Version <= 0 || req.Force {
 		return nil, common.NewValidationError("explicit expected version required; force is unsupported", nil)
 	}
@@ -317,6 +320,13 @@ func (s *IncidentService) updateIncident(ctx context.Context, id int, req *dto.U
 		} else {
 			priority = &calculatedPriority
 		}
+	}
+
+	if err := s.execution.BindEnt(ctx, tx, tenantID); err != nil {
+		return nil, incidentExecutionFailure(err)
+	}
+	if err := s.execution.RequireEntMembers(ctx, tx, tenantID, currentIncident.WorkItemID); err != nil {
+		return nil, incidentExecutionFailure(err)
 	}
 
 	updateQuery := s.client.Incident.UpdateOneID(id).Where(incidentTenantScope(tenantID))
@@ -659,12 +669,18 @@ func (s *IncidentService) EscalateIncident(ctx context.Context, req *dto.Inciden
 }
 
 func (s *IncidentService) EscalateIncidentTx(ctx context.Context, tx *ent.Tx, req *dto.IncidentEscalationRequest, tenantID int) (*dto.IncidentEscalationResponse, error) {
+	if s == nil || tx == nil || s.execution == nil {
+		return nil, common.NewForbiddenError("incident execution policy and transaction required")
+	}
 	owner := *s
 	owner.client = tx.Client()
 	return owner.escalateIncident(ctx, tx, req, tenantID)
 }
 
 func (s *IncidentService) escalateIncident(ctx context.Context, tx *ent.Tx, req *dto.IncidentEscalationRequest, tenantID int) (*dto.IncidentEscalationResponse, error) {
+	if req == nil {
+		return nil, common.NewValidationError("escalation request required", nil)
+	}
 	if req.AutoAssign {
 		return nil, rejectIncidentAction("automatic escalation assignment is unsupported; configure an explicit assign action")
 	}
@@ -698,6 +714,13 @@ func (s *IncidentService) escalateIncident(ctx context.Context, tx *ent.Tx, req 
 	}
 	if req.EscalationLevel <= current.EscalationLevel {
 		return nil, rejectIncidentAction("escalation level must be greater than current level %d", current.EscalationLevel)
+	}
+
+	if err := s.execution.BindEnt(ctx, tx, tenantID); err != nil {
+		return nil, incidentExecutionFailure(err)
+	}
+	if err := s.execution.RequireEntMembers(ctx, tx, tenantID, current.WorkItemID); err != nil {
+		return nil, incidentExecutionFailure(err)
 	}
 
 	// 更新事件升级信息
