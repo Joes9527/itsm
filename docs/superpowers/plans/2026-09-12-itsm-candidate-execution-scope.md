@@ -421,3 +421,9 @@ Webhook前置检查点 `1d391a42b`：真实loopback HTTP复现多实例按名称
 实现06937d4e5关闭上项配置依赖：合法目标声明可随disabled/omitted能力保留，ConnectorStartupTargets全量独立快照不变；ConnectorActivationTargets从冻结policy筛选启用目标及capabilities，Manager与bootstrap依赖检查统一使用。完整身份/作用域/能力合法性检查与实际投递授权保持，混合目标不得借其它owner激活而获得禁用owner权限。
 
 config/database/connector/.../bootstrap全包race、既定私有PG16/Redis/MinIO suite和全后端build通过；副本隔离、混合owner拒绝、真实Graph禁用零新增factory/零HTTP、bootstrap禁用无Manager路径均有直接测试；独立最终审阅无阻断。详见实现T1交接记录。尚未完成可信配置描述owner、邮件045/EmailTarget/Incident outbox及原重绑RED；下一步沿candidate完整声明/standard持久ConnectorConfig生成目标，不从活跃实例反推。S5/S6/T3/T4/G3未完成，CandidateSHA不变且候选停止。
+
+### S5 候选可信声明描述入口检查点（2026-09-14）
+
+实现6a9677694：ExecutionPolicy.DeclaredConnectorTarget按精确tenant/deployment/scope/owner/name/provider读取独立冻结声明；Manager.DescribeDeclaredDeliveryTarget核对Registry纯描述与声明摘要，只返回digest，不Init/激活/返回凭据。身份校验共用，实际投递继续单独核验执行能力。取消/关闭/错误Ref与身份/摘要、副本隔离及standard拒绝已有直接用例。
+
+database/connector/.../bootstrap全包race、既定私有PG16/Redis/MinIO suite及全后端build通过，独立审阅无新增阻断。此项只关闭candidate精确声明读取与描述前置：standard ConnectorConfig读取、typed EmailTarget/045/Incident outbox与原邮件重绑RED仍未完成，下一步接入这些原持久owner，不在consumer补当前身份。S5/S6/T3/T4/G3及完整交付目标保持未完成，CandidateSHA与候选停止状态不变。
