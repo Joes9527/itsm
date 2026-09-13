@@ -943,3 +943,15 @@ bootstrap实际注册器按webhook capability决定handler或known reserved type
 独立P2指出typed普通订阅缺authority仍可登记启动，`s5-standard-webhook-authority-red.log`复现；consumerIdentity现在登记和动态Subscribe均先拒绝缺失依赖，测试要求零durable分配且非typed普通订阅仍可启动。`s5-standard-webhook-authority-green.log` eventbus全包race PASS，复审关闭。`s5-standard-webhook-regression.log`相关包PASS；`s5-standard-webhook-full-private.log`完整候选边界、两模式来源/传输、Webhook故障和ACK恢复、PG/Redis/MinIO构造保全race PASS，无skip/race。删除无调用旧helper后 `s5-standard-webhook-final-regression.log` eventbus/service/bootstrap/connector/...再次PASS；全后端 `s5-standard-webhook-build.log` exit0，git diff --check通过。独立review_execution_scope_s1最终复核无阻断，开发指南同步删除旧同步流程描述。
 
 该检查点完成普通Webhook与候选持久消费/投递所有者的代码统一，不等于全部S5或候选交付完成。不可处理/旧非持久消息当前明确NACK，持久可见阻断、整个进程重启、并发撤权和其它异步入口仍待完成。CandidateSHA不变、候选未启动，B2/B3/T3/T4/G2/G3尚未放行；无共享环境修改、企业外呼、push或main合并。
+
+### B2 S5 持久首次拒绝诊断与已确认队头阻塞（2026-09-13）
+
+在 `4b7db1035` 后补齐计划允许的新独立诊断。typed/candidate的信封、身份、来源及handler拒绝使用固定原因，复用唯一Redis publisher client向 `<physical-topic>:rejections:<frozen-owner>` 执行HSETNX。指纹由payload/UUID/event_type固定宽摘要组合生成，记录仅含status=rejected、允许的原因、摘要及首次时间，不复制原始载荷/UUID/任意错误文本。键来自冻结订阅路由，不从未授权payload自报tenant或scope建记录。首次事实不可重写、无自动TTL；不是业务Audit回执、不是ACK许可或永久禁用来源。失败记录写入失败也继续NACK，客户端仍在消费者退出后随publisher关闭。
+
+`s5-stream-rejection-red.log` 两模式真实Redis缺失诊断RED。第一次实现验证 `s5-stream-rejection-green.log` 实际FAIL：诊断已存在/可跨consumer恢复，但后续好消息未被处理。核对实际watermill-redisstream v1.4.5的processMessage同步ResendLoop，NACK会阻塞该消费者的后续消息。本轮未修改此行为，保留失败证据并将持久隔离/人工处置列为后续缺口；移除了本轮自行附加但未实现的“后续好消息继续”成功断言，不能因此声称队头阻塞已解决。独立审阅亦纠正先前将待执行预期称为测试支持的表述。
+
+最终 `s5-stream-rejection-evidence.log` 两模式真实Redis验证首次记录、零handler、同PEL entry跨consumer重建保留及完整诊断不变；WRONGTYPE真实诊断键故障验证错误观察、原key保全、PEL1/零handler，移除私有故障后记录成功。另一个测试先发布同一消息，再令fixture authority拒绝，恢复允许后原消息消费ACK、PEL0、Stream仍一entry且首次记录不变。此授权使用fixture，不等于真实PG撤权联合恢复或永久隔离；未验证Redis服务重启持久性。两个测试race PASS。
+
+`s5-stream-rejection-regression.log` eventbus/service/bootstrap回归PASS；`s5-stream-rejection-full-private.log`完整候选边界、普通/候选来源与Webhook恢复、PG/Redis/MinIO构造保全及新增拒绝测试race PASS，无skip/race。全后端 `s5-stream-rejection-build.log` exit0，git diff --check通过。独立review_execution_scope_s1复核记录边界、故障和同消息恢复无新增阻断，结论限定为首次拒绝诊断及可重验；开发指南已明确队头阻塞与证据读取方式。
+
+S5不可处理消息的完整处置、进程重启及其它异步入口继续未完成，不以该诊断检查点放行B2/B3/T3/T4/G2/G3。CandidateSHA及未启动状态不变，无共享环境变更、企业外呼、push或main合并。

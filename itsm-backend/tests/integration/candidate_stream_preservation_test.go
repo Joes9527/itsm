@@ -12,14 +12,18 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/ThreeDotsLabs/watermill-redisstream/pkg/redisstream"
+	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 	"itsm-backend/common/executionscope"
 	"itsm-backend/config"
 	"itsm-backend/pkg/eventbus"
@@ -233,3 +237,131 @@ func TestCandidateStreamDeliversOfflineMessages(t *testing.T) {
 }
 
 func (candidateStreamObserver) EventConsumerID() string { return "event_audit" }
+
+func TestPersistentStreamRejectionEvidenceSurvivesConsumerRestart(t *testing.T) {
+	for _, mode := range []string{"candidate", "standard"} {
+		t.Run(mode, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			cfg, client := startCandidateStreamRedis(t, ctx)
+			cfg.EventStream = config.EventStreamConfig{ClaimIdle: 200 * time.Millisecond, ClaimInterval: 20 * time.Millisecond, NackDelay: 20 * time.Millisecond}
+			execution := config.ExecutionConfig{Mode: mode, DeploymentID: "rejection-test"}
+			topic := "sla.breached"
+			if mode == "candidate" {
+				scope := uuid.NewString()
+				execution.Scopes = []config.ExecutionScopeConfig{{TenantID: 1, ScopeID: scope}}
+				topic = "candidate:rejection-test:" + scope + ":sla.breached"
+			}
+			protectedID, err := client.XAdd(ctx, &redis.XAddArgs{Stream: "protected.history", Values: map[string]interface{}{"payload": "protected"}}).Result()
+			require.NoError(t, err)
+			bad := message.NewMessage("untrusted-secret-uuid", []byte(`{"credential":"never-copy-this-secret"}`))
+			bad.Metadata.Set("event_type", "sla.breached")
+			values, err := (redisstream.DefaultMarshallerUnmarshaller{}).Marshal(topic, bad)
+			require.NoError(t, err)
+			entryID, err := client.XAdd(ctx, &redis.XAddArgs{Stream: topic, Values: values}).Result()
+			require.NoError(t, err)
+			received := make(chan interface{}, 8)
+			evidenceKey := topic + ":rejections:event_audit"
+			require.NoError(t, client.Set(ctx, evidenceKey, "private-storage-fault", 0).Err())
+			core, logs := observer.New(zap.ErrorLevel)
+			newConsumer := func() *eventbus.WatermillEventBus {
+				bus, e := eventbus.NewWatermillEventBus(cfg, execution, candidateStreamFixtureAuthority{}, zap.New(core).Sugar())
+				require.NoError(t, e)
+				require.NoError(t, bus.RegisterSubscription("sla.breached", standardExecutionObserver{candidateStreamObserver{received}}))
+				require.NoError(t, bus.Start(ctx))
+				return bus
+			}
+			bus := newConsumer()
+			defer bus.Close()
+			require.Eventually(t, func() bool { return logs.FilterMessage("Persistent event rejection evidence unavailable").Len() > 0 }, 3*time.Second, 20*time.Millisecond)
+			require.Equal(t, "private-storage-fault", client.Get(ctx, evidenceKey).Val())
+			require.Empty(t, received)
+			require.EqualValues(t, 1, client.XPending(ctx, topic, "itsm:event_audit").Val().Count)
+			require.NoError(t, client.Del(ctx, evidenceKey).Err())
+			require.Eventually(t, func() bool { n, e := client.HLen(ctx, evidenceKey).Result(); return e == nil && n == 1 }, 3*time.Second, 20*time.Millisecond, "rejected message needs persistent evidence")
+			evidence, err := client.HGetAll(ctx, evidenceKey).Result()
+			require.NoError(t, err)
+			require.Empty(t, received)
+			for _, value := range evidence {
+				require.NotContains(t, value, "never-copy-this-secret")
+				require.NotContains(t, value, "untrusted-secret-uuid")
+				var record map[string]interface{}
+				require.NoError(t, json.Unmarshal([]byte(value), &record))
+				require.Equal(t, "rejected", record["status"])
+				require.Equal(t, "envelope_invalid", record["reason"])
+			}
+			pending, err := client.XPendingExt(ctx, &redis.XPendingExtArgs{Stream: topic, Group: "itsm:event_audit", Start: "-", End: "+", Count: 10}).Result()
+			require.NoError(t, err)
+			require.Len(t, pending, 1)
+			require.Equal(t, entryID, pending[0].ID)
+			oldConsumer := pending[0].Consumer
+			require.NoError(t, bus.Close())
+			restarted := newConsumer()
+			defer restarted.Close()
+			require.Eventually(t, func() bool {
+				p, e := client.XPendingExt(ctx, &redis.XPendingExtArgs{Stream: topic, Group: "itsm:event_audit", Start: "-", End: "+", Count: 10}).Result()
+				return e == nil && len(p) == 1 && p[0].ID == entryID && p[0].Consumer != oldConsumer
+			}, 3*time.Second, 20*time.Millisecond)
+			after, err := client.HGetAll(ctx, evidenceKey).Result()
+			require.NoError(t, err)
+			require.Equal(t, evidence, after, "first rejection fact must be immutable across retries")
+			require.Empty(t, received, "malformed source never reaches its owner")
+			protected, err := client.XRange(ctx, "protected.history", "-", "+").Result()
+			require.NoError(t, err)
+			require.Len(t, protected, 1)
+			require.Equal(t, protectedID, protected[0].ID)
+			require.Equal(t, "protected", protected[0].Values["payload"])
+		})
+	}
+}
+
+type recoverableStreamAuthority struct{ rejected atomic.Bool }
+
+func (a *recoverableStreamAuthority) ValidateEvent(ctx context.Context, ref executionscope.Ref, env eventbus.Envelope) error {
+	if a.rejected.Load() {
+		return fmt.Errorf("private source temporarily denied")
+	}
+	return (candidateStreamFixtureAuthority{}).ValidateEvent(ctx, ref, env)
+}
+
+func TestPersistentStreamRejectionCanRecoverWithoutLosingEvidence(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cfg, client := startCandidateStreamRedis(t, ctx)
+	cfg.EventStream = config.EventStreamConfig{NackDelay: 20 * time.Millisecond}
+	scope := uuid.NewString()
+	execution := config.ExecutionConfig{Mode: "candidate", DeploymentID: "source-recovery", Scopes: []config.ExecutionScopeConfig{{TenantID: 1, ScopeID: scope}}}
+	authority := &recoverableStreamAuthority{}
+	bus, err := eventbus.NewWatermillEventBus(cfg, execution, authority, zap.NewNop().Sugar())
+	require.NoError(t, err)
+	defer bus.Close()
+	require.NoError(t, bus.Publish(candidateStreamEvent{tenantID: 1, WorkItemID: 200, eventID: "same-source-recovery"}))
+	authority.rejected.Store(true)
+	received := make(chan interface{}, 1)
+	require.NoError(t, bus.RegisterSubscription("sla.breached", candidateStreamObserver{received}))
+	require.NoError(t, bus.Start(ctx))
+	topic := "candidate:source-recovery:" + scope + ":sla.breached"
+	key := topic + ":rejections:event_audit"
+	require.Eventually(t, func() bool { return client.HLen(ctx, key).Val() == 1 }, 3*time.Second, 20*time.Millisecond)
+	before, err := client.HGetAll(ctx, key).Result()
+	require.NoError(t, err)
+	for _, value := range before {
+		var record map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(value), &record))
+		require.Equal(t, "source_rejected", record["reason"])
+	}
+	require.Empty(t, received)
+	require.EqualValues(t, 1, client.XPending(ctx, topic, "itsm:event_audit").Val().Count)
+	authority.rejected.Store(false)
+	select {
+	case value := <-received:
+		require.Equal(t, "same-source-recovery", value.(eventbus.Envelope).EventID)
+	case <-ctx.Done():
+		t.Fatal("same message did not recover after source authorization")
+	}
+	require.Eventually(t, func() bool { return client.XPending(ctx, topic, "itsm:event_audit").Val().Count == 0 }, 3*time.Second, 20*time.Millisecond)
+	after, err := client.HGetAll(ctx, key).Result()
+	require.NoError(t, err)
+	require.Equal(t, before, after)
+	require.EqualValues(t, 1, client.XLen(ctx, topic).Val(), "recovery must not republish source")
+}

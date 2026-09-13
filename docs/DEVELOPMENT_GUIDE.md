@@ -20,7 +20,7 @@
 
 `redis.event_stream.claim_idle`、`claim_interval`、`nack_delay` 使用时长格式（如 `60s`、`5s`、`1s`）；负数拒绝，零或未配置分别使用当前传输库的60秒、5秒及应用的1秒默认值。配置由构造器复制，持久消费者使用这些值；standard 的非完整信封订阅保留原 fanout 消费语义。领取超时不是排他锁：慢处理可能被其他实例重领，写入所有者必须重验授权并提供持久幂等回执。当前审计已具备该回执，语义是至少一次投递加审计幂等，不是传输恰好一次。Webhook 的候选 typed envelope 已接入下述消费事务，但完整投递恢复、不可处理事件的持久阻断及其它异步入口仍未完成，不能据此启动候选。
 
-Webhook 事件订阅只接受 `WebhookEventTopics()` 注册的类型及完整持久信封，普通与候选模式共用下述意图事务和Worker。原同步外发分支已删除；配置目标或传入原始map均不能触发直接外发。Webhook声明稳定逻辑所有者`webhook`，其消费组按既有生命周期建立/关闭，错误或旧非持久消息拒绝并NACK；不可处理消息的持久阻断仍待完成。
+Webhook 事件订阅只接受 `WebhookEventTopics()` 注册的类型及完整持久信封，普通与候选模式共用下述意图事务和Worker。原同步外发分支已删除；配置目标或传入原始map均不能触发直接外发。Webhook声明稳定逻辑所有者`webhook`，其消费组按既有生命周期建立/关闭，错误或旧非持久消息拒绝并NACK。持久首次拒绝诊断保存在 `<physical-topic>:rejections:<owner>` Redis hash，字段为消息/载荷/事件类型摘要的组合指纹，值只包含固定原因、摘要与首次时间；HSETNX保证重试/消费者重建不改写首次事实，不复制原始UUID、载荷或错误文本。记录是历史观察，不是ACK许可或永久禁止重验；存储失败仍NACK。键无自动TTL，操作员可只读HGETALL并结合原PEL核查，不应将记录存在解释为业务已完成。当前传输库会在同一NACK消息上循环重试，永久坏消息可阻住该消费者后续消息；持久隔离/人工处置及服务重启持久性仍待完成，不能以本诊断门禁放行S5。
 
 持久事件来源校验使用冻结部署身份：`ExecutionPolicy.EventRef` 在standard模式返回部署与租户、空scope，在candidate模式返回原准入ref；`CandidateRef`仍只适用于candidate。EventRef本身不赋予业务权限。共享authority在原事务核验持久Outbox主体、事件ID、载荷及发生时间，candidate另保留scope/角色绑定/成员门禁。普通模式发布ExecutionEvent时同样强制稳定事件类型/租户、持久来源校验与原eventID；声明ExecutionEnvelopeHandler的订阅者仅在严格信封、冻结部署/模式、transport ID及来源验证后收到完整Envelope。没有持久主体的既有事件不伪造WorkItem。普通Webhook已接入同一持久意图/Worker及稳定消费组；这不代表运行角色准入、全部重启场景或目标环境上线证明。
 

@@ -40,6 +40,7 @@ type Envelope struct {
 // WatermillEventBus implements shared.EventBus interface using Watermill with Redis Stream
 type WatermillEventBus struct {
 	authority           EventAuthority
+	rejectionClient     redis.Cmdable
 	routes              *streamRoutes
 	publisher           message.Publisher
 	subscriber          streamSubscriber
@@ -184,7 +185,7 @@ func NewWatermillEventBus(cfg *config.RedisConfig, execution config.ExecutionCon
 		}
 		return subscriber, nil
 	}
-	bus := &WatermillEventBus{authority: authority, routes: routes, publisher: publisher, logger: logger}
+	bus := &WatermillEventBus{rejectionClient: publisherClient, authority: authority, routes: routes, publisher: publisher, logger: logger}
 	bus.newSubscriber = makeSubscriber
 	if !routes.candidate {
 		bus.subscriber, err = makeSubscriber("")
@@ -381,6 +382,7 @@ func (eb *WatermillEventBus) subscribeRoute(eventType, consumer string, route st
 			// Required persistent identity is checked before invoking its owner.
 			_, typed := handler.(ExecutionEnvelopeHandler)
 			if eb.routes.candidate || typed {
+				reason := "envelope_invalid"
 				env, decodeErr := DecodeExecutionEnvelope(msg.Payload)
 				tenant := env.TenantID
 				if eb.routes.candidate {
@@ -388,12 +390,14 @@ func (eb *WatermillEventBus) subscribeRoute(eventType, consumer string, route st
 				}
 				ref, refErr := eb.routes.refFor(tenant)
 				if decodeErr == nil && refErr == nil {
+					reason = "identity_mismatch"
 					decodeErr = validateEnvelopeRoute(env, ref, eventType)
 				}
 				if decodeErr == nil && refErr == nil && (msg.UUID != env.EventID || msg.Metadata.Get("event_type") != eventType) {
 					decodeErr = fmt.Errorf("event transport identity mismatch")
 				}
 				if decodeErr == nil && refErr == nil {
+					reason = "source_rejected"
 					if eb.authority == nil {
 						decodeErr = fmt.Errorf("persistent event authority required")
 					} else {
@@ -401,7 +405,7 @@ func (eb *WatermillEventBus) subscribeRoute(eventType, consumer string, route st
 					}
 				}
 				if decodeErr != nil || refErr != nil {
-					eb.logger.Errorw("Persistent event rejected", "event_type", eventType, "error", errors.Join(decodeErr, refErr))
+					eb.recordRejection(ctx, consumer, route, msg, reason)
 					msg.Nack()
 					continue
 				}
@@ -423,7 +427,11 @@ func (eb *WatermillEventBus) subscribeRoute(eventType, consumer string, route st
 				handleErr = handler.Handle(deliver)
 			}
 			if err := handleErr; err != nil {
-				eb.logger.Errorw("Failed to handle event", "event_type", eventType, "error", err)
+				if eb.routes.candidate || typed {
+					eb.recordRejection(ctx, consumer, route, msg, "handler_rejected")
+				} else {
+					eb.logger.Errorw("Failed to handle event", "event_type", eventType, "error", err)
+				}
 				msg.Nack()
 				continue
 			}
