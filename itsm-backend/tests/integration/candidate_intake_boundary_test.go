@@ -2651,6 +2651,60 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		}
 	})
 
+	t.Run("ticket repository update joins caller transaction", func(t *testing.T) {
+		repo := ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar())
+		fresh, err := app.Create(ctx, identity, command("ticket-edit-repository", "generic"))
+		require.NoError(t, err)
+		for _, mode := range []string{"rollback", "commit", "stale"} {
+			func() {
+				before := owner.Ticket.GetX(ctx, fresh.WorkItemID)
+				var beforeJSON string
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, before.ID).Scan(&beforeJSON))
+				beforeTags := owner.TicketTag.Query().CountX(ctx)
+				beforeIDs := before.QueryTags().IDsX(ctx)
+				tx, err := runtime.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+				require.NoError(t, err)
+				defer tx.Rollback()
+				require.NoError(t, policy.BindEnt(ctx, tx, tenant.ID))
+				require.NoError(t, policy.RequireEntMembers(ctx, tx, tenant.ID, before.ID))
+				tags, err := service.NewTicketTagService(tx.Client()).ResolveTagIDsByNames(ctx, []string{"caller-tx-" + mode}, tenant.ID, true)
+				require.NoError(t, err)
+				title := "caller transaction " + mode
+				version := before.Version
+				if mode == "stale" {
+					version--
+				}
+				updated, err := repo.UpdateTx(ctx, tx, before.ID, &ticketrepo.UpdateParams{Title: &title, Version: version, ReplaceTags: true, TagIDs: tags}, tenant.ID)
+				if mode == "stale" {
+					require.ErrorContains(t, err, "version conflict")
+				} else {
+					require.NoError(t, err)
+					require.Equal(t, before.Version+1, updated.Version)
+					require.Equal(t, tags, tx.Ticket.GetX(ctx, before.ID).QueryTags().IDsX(ctx))
+				}
+				var uncommittedJSON string
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, before.ID).Scan(&uncommittedJSON))
+				require.JSONEq(t, beforeJSON, uncommittedJSON, "repository must not commit caller transaction")
+				require.Equal(t, beforeTags, owner.TicketTag.Query().CountX(ctx))
+				if mode == "commit" {
+					require.NoError(t, tx.Commit())
+					after := owner.Ticket.GetX(ctx, before.ID)
+					require.Equal(t, title, after.Title)
+					require.Equal(t, before.Version+1, after.Version)
+					require.Equal(t, tags, after.QueryTags().IDsX(ctx))
+					require.Equal(t, beforeTags+1, owner.TicketTag.Query().CountX(ctx))
+				} else {
+					require.NoError(t, tx.Rollback())
+					var afterJSON string
+					require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, before.ID).Scan(&afterJSON))
+					require.JSONEq(t, beforeJSON, afterJSON)
+					require.Equal(t, beforeTags, owner.TicketTag.Query().CountX(ctx))
+					require.Equal(t, beforeIDs, owner.Ticket.GetX(ctx, before.ID).QueryTags().IDsX(ctx))
+				}
+			}()
+		}
+	})
+
 	t.Run("ticket edits preserve historical records and reject orphan tag writes", func(t *testing.T) {
 		svc := service.NewTicketService(&service.TicketServiceConfig{Client: runtime, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: policy, NotificationService: service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)})
 		fresh, err := app.Create(ctx, identity, command("ticket-edit-member", "generic"))

@@ -68,10 +68,28 @@ func (r *EntRepository) GetByNumber(ctx context.Context, ticketNumber string, te
 
 // Update 更新工单
 func (r *EntRepository) Update(ctx context.Context, id int, params *UpdateParams, tenantID int) (*Ticket, error) {
-	// 先获取当前工单（包含版本号）
-	current, err := r.GetByID(ctx, id, tenantID)
+	return updateTicket(ctx, r.Client(), id, params, tenantID)
+}
+
+// UpdateTx uses only the caller's transaction for reads, CAS and tag relations.
+// Authorization and execution-scope admission remain the command owner's duty.
+func (r *EntRepository) UpdateTx(ctx context.Context, tx *ent.Tx, id int, params *UpdateParams, tenantID int) (*Ticket, error) {
+	if tx == nil {
+		return nil, fmt.Errorf("ticket update requires caller transaction")
+	}
+	return updateTicket(ctx, tx.Client(), id, params, tenantID)
+}
+
+func updateTicket(ctx context.Context, client *ent.Client, id int, params *UpdateParams, tenantID int) (*Ticket, error) {
+	if params == nil {
+		return nil, fmt.Errorf("ticket update params are required")
+	}
+	current, err := client.Ticket.Query().Where(ticket.IDEQ(id), ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()).Only(ctx)
 	if err != nil {
-		return nil, err
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("ticket not found: %w", err)
+		}
+		return nil, fmt.Errorf("get ticket: %w", err)
 	}
 
 	coreMutation := params.Title != nil || params.Description != nil || params.Status != nil || params.GenericSubtype != nil || params.Priority != nil || params.AssigneeID != nil || params.CategoryID != nil || params.Resolution != nil
@@ -87,7 +105,7 @@ func (r *EntRepository) Update(ctx context.Context, id int, params *UpdateParams
 		return nil, fmt.Errorf("version conflict: expected %d, got %d", current.Version, params.Version)
 	}
 
-	builder := r.Client().Ticket.UpdateOneID(id).
+	builder := client.Ticket.UpdateOneID(id).
 		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(params.Version)).
 		SetVersion(current.Version + 1) // 版本号递增
 

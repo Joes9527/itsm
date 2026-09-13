@@ -241,6 +241,65 @@ func TestRepository_Update(t *testing.T) {
 	assert.Equal(t, PriorityCritical, updated.Priority)
 }
 
+// UpdateTx must join the caller transaction: a later failure must undo the
+// ticket CAS, newly created tag and replacement of existing tag relations.
+func TestRepository_UpdateTx_CallerOwnsCommit(t *testing.T) {
+	for _, commit := range []bool{false, true} {
+		t.Run(fmt.Sprintf("commit=%t", commit), func(t *testing.T) {
+			fx := newRepoFixture(t)
+			defer fx.client.Close()
+			writer, ok := fx.repo.(interface {
+				UpdateTx(context.Context, *ent.Tx, int, *UpdateParams, int) (*Ticket, error)
+			})
+			require.True(t, ok, "repository must support caller-owned update transactions")
+			created, err := fx.createTicket(fx.ctx, &CreateParams{Title: "Original", RecordClass: "generic", Priority: PriorityLow, RequesterID: fx.user.ID}, fx.tenant.ID)
+			require.NoError(t, err)
+			originalTag, err := fx.client.TicketTag.Create().SetName("original").SetTenantID(fx.tenant.ID).Save(fx.ctx)
+			require.NoError(t, err)
+			require.NoError(t, fx.client.Ticket.UpdateOneID(created.ID).AddTagIDs(originalTag.ID).Exec(fx.ctx))
+			tx, err := fx.client.Tx(fx.ctx)
+			require.NoError(t, err)
+			defer tx.Rollback()
+			addedTag, err := tx.TicketTag.Create().SetName("new").SetTenantID(fx.tenant.ID).Save(fx.ctx)
+			require.NoError(t, err)
+			title := "Updated in caller transaction"
+			updated, err := writer.UpdateTx(fx.ctx, tx, created.ID, &UpdateParams{Title: &title, Version: created.Version, ReplaceTags: true, TagIDs: []int{addedTag.ID}}, fx.tenant.ID)
+			require.NoError(t, err)
+			require.Equal(t, created.Version+1, updated.Version)
+			inside, err := tx.Ticket.Get(fx.ctx, created.ID)
+			require.NoError(t, err)
+			require.Equal(t, title, inside.Title)
+			ids, err := inside.QueryTags().IDs(fx.ctx)
+			require.NoError(t, err)
+			require.Equal(t, []int{addedTag.ID}, ids)
+			if commit {
+				require.NoError(t, tx.Commit())
+			} else {
+				require.NoError(t, tx.Rollback())
+			}
+			outside, err := fx.client.Ticket.Get(fx.ctx, created.ID)
+			require.NoError(t, err)
+			ids, err = outside.QueryTags().IDs(fx.ctx)
+			require.NoError(t, err)
+			count, err := fx.client.TicketTag.Query().Count(fx.ctx)
+			require.NoError(t, err)
+			if commit {
+				assert.Equal(t, title, outside.Title)
+				assert.Equal(t, created.Version+1, outside.Version)
+				assert.Equal(t, []int{addedTag.ID}, ids)
+				assert.Equal(t, 2, count)
+			} else {
+				assert.Equal(t, created.Title, outside.Title)
+				assert.Equal(t, created.Version, outside.Version)
+				assert.Equal(t, []int{originalTag.ID}, ids)
+				assert.Equal(t, 1, count)
+			}
+			_, err = writer.UpdateTx(fx.ctx, nil, created.ID, &UpdateParams{Version: outside.Version}, fx.tenant.ID)
+			require.Error(t, err, "nil transaction must never fall back to autocommit")
+		})
+	}
+}
+
 func TestRepository_Update_NotFound(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()

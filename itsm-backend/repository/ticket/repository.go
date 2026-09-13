@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"itsm-backend/ent"
 	"itsm-backend/repository/base"
 )
 
@@ -14,6 +15,8 @@ type Repository interface {
 	GetByID(ctx context.Context, id int, tenantID int) (*Ticket, error)
 	GetByNumber(ctx context.Context, ticketNumber string, tenantID int) (*Ticket, error)
 	Update(ctx context.Context, id int, params *UpdateParams, tenantID int) (*Ticket, error)
+	// UpdateTx joins a required caller-owned transaction; it never commits it.
+	UpdateTx(ctx context.Context, tx *ent.Tx, id int, params *UpdateParams, tenantID int) (*Ticket, error)
 
 	// 列表查询
 	List(ctx context.Context, tenantID int, filters *FilterParams, pagination *base.QueryParams) (*base.ListResult[Ticket], error)

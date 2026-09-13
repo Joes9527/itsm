@@ -680,3 +680,14 @@ Callback contract新增version及generic typed lifecycle result，沿既有流�
 独立review_execution_scope_s1确认RED有效及计划方向无明显错误，并补充：子任务入口当前没有CanEdit且parent核验在事务外；工具approved expectedVersion必须持久化，operationId从invocation派生，不能重试时读取新version，业务成功后done记录失败靠receipt恢复。编辑Feishu事件必须继续使用相同event_type与稳定aggregate排序键，显式校验编辑receipt，不能另起类型越过手动升级前序或接受任意audit/action/status。
 
 完整S3/S4/S5/S6/B3/T3/T4/G2/G3仍未完成。CandidateSHA保持原值、候选未启动，无WSL/共享环境变更、企业实发、共享迁移、推送或main合并。
+
+
+### B2 S3 工单编辑仓储调用方事务前置（2026-09-13）
+
+在 `d012377ff` 后增加Repository.UpdateTx，要求非nil调用方*ent.Tx；普通Update与UpdateTx共用唯一字段映射、tenant/deleted/version CAS及专业字段限制。UpdateTx只使用tx.Client，不自行提交/回滚。原普通Update仍有未迁移生产调用，未另建平行业务实现；仓储不替代命令所有者的当前授权、scope/member或错误后回滚责任。
+
+证据位于candidate-delivery/b2：`s3-ticket-edit-repository-red.log` 在接口不存在时运行断言失败（仓储能力缺失检查，不是新的业务缺陷RED）；实现后 `s3-ticket-edit-repository-green.log` 仓储包PASS。SQLite检查原标签替换、工单版本和新标签一起提交或回滚、nil tx拒绝。`s3-ticket-edit-repository-pg.log` 仅运行新增 `ticket repository update joins caller transaction`，真实私有PG16无skip，调用方显式Bind/member后复用现有TicketTagService(tx.Client())及UpdateTx；独立owner连接确认提交前整行和标签数不可见，提交后标题/版本/关联可见，主动回滚或stale version后回滚恢复整行、标签目录及原关联。该测试证明事务加入能力，不等于真实TicketService已接入。
+
+`s3-ticket-edit-repository-regression.log` 仓储/工单服务/controller定向回归PASS；`s3-ticket-edit-repository-build.log` 全后端构建exit0。git diff --check通过，独立review_execution_scope_s1只读复审无阻断。未重跑完整候选PG；已知 `ticket edits preserve historical records and reject orphan tag writes` 仍未修复，当前测试集不全绿。
+
+下一步必须把TicketService原编辑及HTTP/子任务/工具/前端统一接入trusted Meta/receipt，并在原事务内完成当前授权、成员/版本、标签、审计、通知/SLA及飞书更新意图；本次仅完成仓储前置，不能以仓储测试替代上述业务验收。S3/S4/S5/S6/B3/T3/T4/G2/G3仍未完成，固定CandidateSHA不变，候选未启动，无WSL/共享环境变更、企业实发、共享迁移、推送或main合并。
