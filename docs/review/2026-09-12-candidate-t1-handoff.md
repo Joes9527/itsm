@@ -486,3 +486,16 @@ Outbox 并发/回滚测试提交 `56879f7c9`；独立 reviewer 确认限定结�
 已核对原写链：monitor CheckSLAViolations预加载/分页查询全部租户记录，createViolation独立INSERT后直接调用NotifySLABreached及eventbus.Publish；SLAAlertService的CheckAndTriggerAlerts/TriggerSLAWarning独立入口、checkAndCreateAlert的重复/cooldown读取、history INSERT与NotificationSent UPDATE均需原事务成员核验。critical分支还有直接email SendTicketNotification。不能仅过滤扫描或把client替换txClient就宣称外部效果可回滚。
 
 下一接入须按单WorkItem原事务重读deadline/cycle、成员及重复条件，通知意图进入既有投递边界，事件使用可靠提交后机制；不新增candidate专用引擎。monitor当前创建失败只日志、warning只bool、alert Exist错误忽略/创建失败continue、通知失败仍NotificationSent=true，需明确错误传播，避免范围拒绝/数据库失败被当成功。当前RED只覆盖violation，不证明warning/critical/notification/eventbus；上述路径及升级扫描、其它专项/S5/S6/B3/G2/G3未完成。固定CandidateSHA不变、候选保持停止，无WSL/共享库操作或实发、推送/main合并。
+
+
+### B2 S4 SLA 前置：调用方事务内通知意图（2026-09-13）
+
+在 `f8b7043cb` 后先补原事务通知贡献能力 `TicketNotificationService.EnqueueNotificationTx`，**尚未接入monitor/alert生产调用，SLA历史RED未修复**。该方法需要调用方tx、稳定DeliveryKey及明确目标/接收人，Bind/Require范围与tenant/active recipient检查；站内通知复用唯一createInAppNotificationPair，email/sms/push只写现有TicketNotification pending，后续交给已隔离Worker。方法不commit、不发送、不另建通知表或worker。偏好服务浅复制到tx.Client，查询与调用方配置修改共享事务快照。
+
+按既有tenant/ticket/user/DeliveryKey跨channel检查Type/Content冲突，已materialized recipient的渠道不随重放时偏好变化增加。首次全禁用偏好不写任何意图，可正常返回；没有durable suppression receipt，不代表已发送或持久化抑制。并发重复由既有唯一约束拒绝，调用方必须回滚/重试；本次不声称完成并发专项。
+
+证据：`s4-sla-notification-intents-verified-pg.log` **仅notification_intents子测试PASS**，不是完整candidate套件PASS。真实私有PG证明：历史拒绝、主动rollback、commit后的两条TicketNotification与一条unified Notification、email pending且sent_at空、重复不增、内容冲突拒绝；unified Notification实际INSERT后故障，使调用方WorkItem标题及两表整体回滚。同事务新建email-only偏好被读取；切in_app-only后不同内容拒绝、同内容重放原email ID/渠道/内容及数量不变；全禁用后冲突仍拒绝，新key零写。最终偏好事务rollback。
+
+`s4-sla-notification-intents-final-regression.log` Notification定向回归PASS；`s4-sla-notification-intents-final-build.json`后端build exit0，其后仅加强测试断言，由verified PG验证。独立reviewer review_execution_scope_s1发现的P2（按当前channel检查导致偏好切换绕过内容冲突）已修复，复审确认无新事务逃逸；建议补强的重放后直接行数/ID断言已落实并PASS。
+
+下一步继续把violation/alert持久化、通知意图和可靠事件意图纳入原事务，移除其直接发送/提交前发布路径；还需单项重读与幂等、错误传播、alert/升级周期与故障测试。S4/S5/S6/B3/G2/G3均未完成，原SLA confirmed-red仍是未解决门禁。CandidateSHA不变，无候选启动、企业发送、WSL/共享数据库改动、推送/main合并。

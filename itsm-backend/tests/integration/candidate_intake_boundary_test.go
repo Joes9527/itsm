@@ -1782,6 +1782,112 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 
 	})
 
+	t.Run("notification intents share the owning transaction", func(t *testing.T) {
+		fresh, err := app.Create(ctx, identity, command("notification-tx-member", "generic"))
+		require.NoError(t, err)
+		svc := service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)
+		request := dto.SendTicketNotificationRequest{UserIDs: []int{actor.ID, actor.ID}, EventType: "sla_violated", Content: "Transactional SLA notification", DeliveryKey: "candidate-notify-tx"}
+		run := func(itemID int, req *dto.SendTicketNotificationRequest, commit bool) error {
+			tx, e := runtime.Tx(ctx)
+			if e != nil {
+				return e
+			}
+			defer tx.Rollback()
+			if e = svc.EnqueueNotificationTx(ctx, tx, itemID, tenant.ID, req); e != nil {
+				return e
+			}
+			if commit {
+				return tx.Commit()
+			}
+			return nil
+		}
+		counts := func() []int {
+			return []int{owner.TicketNotification.Query().CountX(ctx), owner.Notification.Query().CountX(ctx)}
+		}
+		before := counts()
+		require.ErrorIs(t, run(historical.WorkItemID, &request, true), executionscope.ErrDenied)
+		require.Equal(t, before, counts())
+		require.NoError(t, run(fresh.WorkItemID, &request, false))
+		require.Equal(t, before, counts())
+		require.NoError(t, run(fresh.WorkItemID, &request, true))
+		require.Equal(t, []int{before[0] + 2, before[1] + 1}, counts())
+		var pending int
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM ticket_notifications WHERE delivery_key=$1 AND channel='email' AND status='pending' AND sent_at IS NULL`, request.DeliveryKey).Scan(&pending))
+		require.Equal(t, 1, pending)
+		require.NoError(t, run(fresh.WorkItemID, &request, true))
+		require.Equal(t, []int{before[0] + 2, before[1] + 1}, counts())
+		conflict := request
+		conflict.Content = "Conflicting content"
+		require.Error(t, run(fresh.WorkItemID, &conflict, true))
+		require.Equal(t, []int{before[0] + 2, before[1] + 1}, counts())
+		injected := errors.New("injected unified notification write failure")
+		inject := false
+		writes := 0
+		runtime.Notification.Use(func(next ent.Mutator) ent.Mutator {
+			return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+				v, e := next.Mutate(ctx, m)
+				if e == nil && inject {
+					writes++
+					return nil, injected
+				}
+				return v, e
+			})
+		})
+		snapshot := owner.Ticket.GetX(ctx, fresh.WorkItemID)
+		tx, err := runtime.Tx(ctx)
+		require.NoError(t, err)
+		defer tx.Rollback()
+		require.NoError(t, policy.BindEnt(ctx, tx, tenant.ID))
+		_, err = tx.Ticket.UpdateOneID(fresh.WorkItemID).SetTitle("owning write must roll back").Save(ctx)
+		require.NoError(t, err)
+		faultRequest := request
+		faultRequest.DeliveryKey = "candidate-notify-tx-fault"
+		inject = true
+		rejected := svc.EnqueueNotificationTx(ctx, tx, fresh.WorkItemID, tenant.ID, &faultRequest)
+		inject = false
+		require.ErrorIs(t, rejected, injected)
+		require.Equal(t, 1, writes)
+		require.NoError(t, tx.Rollback())
+		require.Equal(t, snapshot.Title, owner.Ticket.GetX(ctx, fresh.WorkItemID).Title)
+		require.Equal(t, []int{before[0] + 2, before[1] + 1}, counts())
+		svc.SetNotificationPreferenceService(service.NewNotificationPreferenceService(runtime, zap.NewNop().Sugar()))
+		prefTx, err := runtime.Tx(ctx)
+		require.NoError(t, err)
+		defer prefTx.Rollback()
+		pref := prefTx.NotificationPreference.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetEventType("sla_warning").SetEmailEnabled(true).SetInAppEnabled(false).SetSmsEnabled(false).SetPushEnabled(false).SaveX(ctx)
+		changed := request
+		changed.EventType = "sla_warning"
+		changed.DeliveryKey = "notify-pref-snapshot"
+		require.NoError(t, svc.EnqueueNotificationTx(ctx, prefTx, fresh.WorkItemID, tenant.ID, &changed))
+		rows, err := prefTx.TicketNotification.Query().Where(func(sel *entsql.Selector) { sel.Where(entsql.EQ(sel.C("delivery_key"), changed.DeliveryKey)) }).All(ctx)
+		require.NoError(t, err)
+		require.Len(t, rows, 1)
+		require.Equal(t, "email", rows[0].Channel)
+		prefTx.NotificationPreference.UpdateOneID(pref.ID).SetEmailEnabled(false).SetInAppEnabled(true).SaveX(ctx)
+		mismatch := changed
+		mismatch.Content = "Changed after preference switch"
+		require.Error(t, svc.EnqueueNotificationTx(ctx, prefTx, fresh.WorkItemID, tenant.ID, &mismatch))
+		require.NoError(t, svc.EnqueueNotificationTx(ctx, prefTx, fresh.WorkItemID, tenant.ID, &changed))
+		replayRows, err := prefTx.TicketNotification.Query().Where(func(sel *entsql.Selector) { sel.Where(entsql.EQ(sel.C("delivery_key"), changed.DeliveryKey)) }).All(ctx)
+		require.NoError(t, err)
+		require.Len(t, replayRows, 1)
+		require.Equal(t, rows[0].ID, replayRows[0].ID)
+		require.Equal(t, "email", replayRows[0].Channel)
+		require.Equal(t, rows[0].Content, replayRows[0].Content)
+
+		prefTx.NotificationPreference.UpdateOneID(pref.ID).SetInAppEnabled(false).SaveX(ctx)
+		require.Error(t, svc.EnqueueNotificationTx(ctx, prefTx, fresh.WorkItemID, tenant.ID, &mismatch))
+		disabled := changed
+		disabled.DeliveryKey = "notify-explicitly-disabled"
+		require.NoError(t, svc.EnqueueNotificationTx(ctx, prefTx, fresh.WorkItemID, tenant.ID, &disabled))
+		var extra int
+		extra, err = prefTx.TicketNotification.Query().Where(func(sel *entsql.Selector) { sel.Where(entsql.EQ(sel.C("delivery_key"), disabled.DeliveryKey)) }).Count(ctx)
+		require.NoError(t, err)
+		require.Zero(t, extra)
+		require.NoError(t, prefTx.Rollback())
+		require.Equal(t, []int{before[0] + 2, before[1] + 1}, counts())
+
+	})
 	t.Run("real SLA scan preserves historical violations", func(t *testing.T) {
 		fresh, err := app.Create(ctx, identity, command("sla-scan-member", "generic"))
 		require.NoError(t, err)
