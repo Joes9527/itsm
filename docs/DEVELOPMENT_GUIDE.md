@@ -392,3 +392,6 @@ Webhook 新意图生产者与投递 Worker 通过唯一 Manager.ResolveDeliveryT
 
 
 持久push现复用原WebSocket Hub单一发送队列，frame可携带非阻塞写入回执；所有按用户投递入口均同时匹配tenant/user，普通实时通知仍best-effort且不得作持久完成依据。Notification Worker等待至少一个匹配连接的消息Write及writer.Close成功，才提交原sent/SentAt；这表示socket传输接受，不表示浏览器消费或用户已读。无匹配连接/全部缓冲满属于确定未入队，可重试；曾入队但无成功回执、断线或超时属于delivery_unknown，不自动重发。一个连接成功后不保证其余在线连接均收到。成功写入后数据库完成失败继续由原processing lease恢复为unknown，不宣称exactly-once。此结果协议不替代notification capability、执行范围与候选目标准入；相关门禁仍须分别核验。
+
+
+通知Worker对已按执行范围筛选的每行，先派生所属tenant上下文并核验冻结`notification`能力，再进入pending claim或processing租约恢复。禁用时不写attempt、lease、retry或终态，返回保留ErrDenied原因的汇总错误；空队列的0,nil仅表示没有处理，不能证明能力已启用。email/push已授权业务请求仍可持久为queued，不承诺关闭能力时会自动发送；连接器producer依照原目标binder要求保持不变。标准/候选正常通知Worker必须显式启用对应能力，不能依赖测试或部署默认值。该执行开关不替代邮件精确目标/提供方身份核验。

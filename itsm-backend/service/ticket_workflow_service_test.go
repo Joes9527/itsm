@@ -449,7 +449,7 @@ func TestEmailAndCCLogsContainOnlyFixedErrorClasses(t *testing.T) {
 	require.NoError(t, err)
 	ticketEntity, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
 	require.NoError(t, err)
-	notificationService := NewTicketNotificationService(client, logger, executionfixture.Standard())
+	notificationService := NewTicketNotificationService(client, logger, standardNotificationPolicy(t))
 	notificationService.SetEmailService(emailService)
 	smtpErr = errors.New(smtpErrSentinel)
 	result, err := notificationService.SendNotification(ctx, ticketEntity.ID, &dto.SendTicketNotificationRequest{

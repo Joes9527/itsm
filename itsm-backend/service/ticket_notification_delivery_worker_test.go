@@ -3,9 +3,11 @@ package service
 import (
 	"context"
 	"errors"
+	"itsm-backend/common/executionscope"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/config"
 	"itsm-backend/database"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -605,5 +607,49 @@ func TestTicketNotificationPushWithoutEligibleRecipientIsNotDelivered(t *testing
 				assert.Empty(t, connection.Send, "another tenant cannot receive the queued notification")
 			}
 		})
+	}
+}
+
+func TestTicketNotificationDisabledCapabilityPreservesQueuedIntent(t *testing.T) {
+	for _, channel := range []string{"email", "push"} {
+		for _, state := range []string{"pending", "expired processing"} {
+			t.Run(channel+"/"+state, func(t *testing.T) {
+				client, svc, ctx := setupTicketNotificationTest(t)
+				defer client.Close()
+				tenant, recipient, item := createNotifTestData(t, client, ctx)
+				logger := zaptest.NewLogger(t).Sugar()
+				svc.SetNotificationPreferenceService(NewNotificationPreferenceService(client, logger))
+				client.NotificationPreference.Create().SetTenantID(tenant.ID).SetUserID(recipient.ID).SetEventType("ticket_updated").SetInAppEnabled(false).SetEmailEnabled(channel == "email").SetSmsEnabled(false).SetPushEnabled(channel == "push").SaveX(ctx)
+				probe := &durableNotificationGraphSender{}
+				mail := NewEmailService(EmailConfig{}, logger)
+				mail.SetGraphProvider(func(int) (GraphMailSender, string, bool) { return probe, "local@example.invalid", true })
+				svc.SetEmailService(mail)
+				svc.SetWebSocketService(&WebSocketService{hub: NewWebSocketHub(logger), logger: logger})
+				svc.SetDeliveryQueueClient(client)
+				_, err := svc.SendNotification(ctx, item.ID, &dto.SendTicketNotificationRequest{UserIDs: []int{recipient.ID}, EventType: "ticket_updated", Content: "disabled worker", DeliveryKey: "disabled-worker"}, tenant.ID)
+				require.NoError(t, err)
+				policy, policyErr := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "test-standard"})
+				require.NoError(t, policyErr)
+				svc.execution = policy
+				if state == "expired processing" {
+					row := client.TicketNotification.Query().OnlyX(ctx)
+					row.Update().SetStatus(ticketNotificationStatusProcessing).SetAttemptCount(1).SetLeaseOwner("previous-worker").SetLeaseExpiresAt(time.Now().Add(-time.Minute)).SaveX(ctx)
+				}
+				before := client.TicketNotification.Query().OnlyX(ctx)
+				n, err := svc.ProcessPendingDeliveries(ctx, "disabled-notification", 10)
+				assert.ErrorIs(t, err, executionscope.ErrDenied)
+				assert.Zero(t, n)
+				after := client.TicketNotification.Query().OnlyX(ctx)
+				// Compare every exported persisted field, including json-hidden lease and
+				// target fields; Ent's private config contains incomparable functions.
+				bv, av := reflect.ValueOf(before).Elem(), reflect.ValueOf(after).Elem()
+				for i := 0; i < bv.NumField(); i++ {
+					if bv.Type().Field(i).IsExported() {
+						assert.Equal(t, bv.Field(i).Interface(), av.Field(i).Interface(), bv.Type().Field(i).Name)
+					}
+				}
+				assert.Empty(t, probe.sentCalls())
+			})
+		}
 	}
 }

@@ -1427,3 +1427,15 @@ s5-push-socket-green.log与s5-push-final-unit.log覆盖离线/满/错tenant、�
 最终四包具名race回归s5-push-final-unit.log PASS，完整私有PG16/Redis/MinIO suite s5-push-full-private.log PASS，无FAIL/SKIP/DATA RACE；s5-push-build.log全后端build exit0；独立复审无新增阻断，git diff --check通过。Go进程均已退出。
 
 本增量不关闭email/push notification capability与部署目标准入、邮件持久身份、飞书/裸实例、S5/S6/T3/T4/G3。下一步继续原通知owner与冻结ExecutionPolicy的email/push能力核验，禁止仅凭本次socket测试放行候选。CandidateSHA保持d7470a32dbb87acc9b5e4d9a895a146410723561且候选停止，无WSL/共享数据库操作、企业外发、push/main合并。
+
+### B2 S5 通知能力在claim及recovery之前生效（2026-09-14）
+
+依据已接受执行范围设计第3–4节，通知执行禁用必须约束poll/claim/recovery，不仅依赖bootstrap是否启动。原Worker的email/push可绕过连接器分支中的RequireCapability，禁用策略仍领取/发送或修改过期processing。s5-notification-disabled-worker-red.log覆盖email/push×pending/expired四项：错误未保留ErrDenied、状态/尝试/租约或发送发生变化。RED整Ent比较另含不可比较config函数，GREEN已修正为逐个导出字段比较，包含JSON隐藏的目标/lease；实际旁路证据来自其它断言，不靠该比较假失败。
+
+ProcessPendingDeliveries现对范围查询返回的每行先派生tenant context，再核验冻结notification能力，之后才能进入recovery或claim。拒绝保留ErrDenied原因并不修改行。空队列0,nil仅表示没有处理，不能作为能力准入证据。email/push业务producer仍可记录queued请求，不声称禁用时已执行；连接器producer的既有目标binder要求保持。该区别经独立审阅核对原设计，不引入平行机制。
+
+s5-notification-disabled-final-pg.log原SendNotification→真实候选受限client/System队列四项PASS，pending与过期processing均raw row JSON不变，邮件探针零调用，清理结果亦断言成功。push无活跃socket，零执行由ErrDenied和整行保全证明，不冒充活跃socket接收验证。s5-notification-disabled-full-private.log完整私有PG16/Redis/MinIO race PASS，无FAIL/SKIP/DATA RACE；最终仅补清理断言后定向PG再通过，未改生产实现。
+
+s5-notification-disabled-final-unit.log四包具名race回归PASS；局部通知fixture显式开启standard notification，不修改通用executionfixture.Standard或生产默认。SLA provenance的worker显式开启原candidate deployment/scope能力，保留原失败投递与projection断言。s5-notification-disabled-build.log全后端build exit0；独立最终复核无新增阻断，清理建议已处理；git diff --check通过，Go进程均已退出。
+
+只关闭通知Worker冻结能力旁路。email精确持久目标、专业邮件/裸实例入口、push完整部署准入及剩余S5/S6/T3/T4/G3未完成。固定CandidateSHA与候选停止状态不变，无WSL/共享数据库操作、企业外发、push/main合并。下一步继续专业邮件目标身份及实际Graph provider边界。

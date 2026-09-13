@@ -3351,6 +3351,45 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.NoError(t, e)
 	})
 
+	t.Run("disabled notification worker preserves pending and recovery", func(t *testing.T) {
+		disabled, e := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: scopeID}}})
+		require.NoError(t, e)
+		fresh, e := app.Create(ctx, identity, command("disabled-notification-worker", "generic"))
+		require.NoError(t, e)
+		svc := service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), disabled)
+		svc.SetNotificationPreferenceService(service.NewNotificationPreferenceService(runtime, zap.NewNop().Sugar()))
+		svc.SetDeliveryQueueClient(clients.System)
+		probe := &candidateNotificationMailProbe{}
+		email := service.NewEmailService(service.EmailConfig{}, zap.NewNop().Sugar())
+		email.SetGraphProvider(func(int) (service.GraphMailSender, string, bool) { return probe, "local@example.invalid", true })
+		svc.SetEmailService(email)
+		for _, channel := range []string{"email", "push"} {
+			for _, state := range []string{"pending", "processing"} {
+				t.Run(channel+"/"+state, func(t *testing.T) {
+					eventType := "disabled_" + channel + "_" + state
+					pref := owner.NotificationPreference.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetEventType(eventType).SetInAppEnabled(false).SetEmailEnabled(channel == "email").SetSmsEnabled(false).SetPushEnabled(channel == "push").SaveX(ctx)
+					defer func() { require.NoError(t, owner.NotificationPreference.DeleteOne(pref).Exec(ctx)) }()
+					result, e := svc.SendNotification(ctx, fresh.WorkItemID, &dto.SendTicketNotificationRequest{UserIDs: []int{actor.ID}, EventType: eventType, Content: "disabled execution", DeliveryKey: eventType}, tenant.ID)
+					require.NoError(t, e)
+					require.Equal(t, dto.TicketNotificationEffectQueued, result.Effect)
+					row := owner.TicketNotification.Query().Where(ticketnotification.TicketIDEQ(fresh.WorkItemID), ticketnotification.DeliveryKeyEQ(eventType)).OnlyX(ctx)
+					defer func() { require.NoError(t, owner.TicketNotification.DeleteOne(row).Exec(ctx)) }()
+					if state == "processing" {
+						row.Update().SetStatus("processing").SetAttemptCount(1).SetLeaseOwner("old-worker").SetLeaseExpiresAt(time.Now().Add(-time.Minute)).SaveX(ctx)
+					}
+					var before, after string
+					require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(n)::text FROM ticket_notifications n WHERE id=$1`, row.ID).Scan(&before))
+					n, e := svc.ProcessPendingDeliveries(context.Background(), "disabled-worker", 1000)
+					require.ErrorIs(t, e, executionscope.ErrDenied)
+					require.Zero(t, n)
+					require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(n)::text FROM ticket_notifications n WHERE id=$1`, row.ID).Scan(&after))
+					require.JSONEq(t, before, after)
+					require.Empty(t, probe.recipients)
+				})
+			}
+		}
+	})
+
 	t.Run("notification producer freezes connector target", func(t *testing.T) {
 		policy, e := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: scopeID}}, Capabilities: map[string]string{"notification": "scoped"}})
 		require.NoError(t, e)
@@ -5012,7 +5051,9 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.True(t, legacyRows[0].NotificationSent, "restored historical fact stays unchanged")
 		var notificationID, historyID, workItemID int
 		require.NoError(t, ownerDB.QueryRow(`SELECT id,sla_alert_history_id,ticket_id FROM ticket_notifications WHERE sla_alert_history_id IS NOT NULL AND channel='email' ORDER BY id LIMIT 1`).Scan(&notificationID, &historyID, &workItemID))
-		worker := service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)
+		workerPolicy, policyErr := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: scopeID}}, Capabilities: map[string]string{"notification": "scoped"}})
+		require.NoError(t, policyErr)
+		worker := service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), workerPolicy)
 		worker.SetDeliveryQueueClient(clients.System)
 		_, deliveryErr := worker.ProcessPendingDeliveries(context.Background(), "sla-linked-notification-worker", 1000)
 		require.Error(t, deliveryErr, "missing email provider is explicit")

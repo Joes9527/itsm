@@ -128,6 +128,12 @@ func (s *TicketNotificationService) ProcessPendingDeliveries(ctx context.Context
 	failed := false
 	var causes []error
 	for _, row := range candidates {
+		rowCtx := tenantctx.WithTenantID(ctx, row.TenantID)
+		if err := s.execution.RequireCapability(rowCtx, row.TenantID, "notification"); err != nil {
+			causes = append(causes, err)
+			failed = true
+			continue
+		}
 		if row.Status == ticketNotificationStatusProcessing {
 			changed, err := s.recoverExpiredDelivery(ctx, row, now)
 			if err != nil || changed > 0 {
@@ -136,7 +142,6 @@ func (s *TicketNotificationService) ProcessPendingDeliveries(ctx context.Context
 			}
 			continue
 		}
-		rowCtx := tenantctx.WithTenantID(ctx, row.TenantID)
 		claimed, claimErr := s.claimDelivery(ctx, workerID, row)
 		if claimErr != nil {
 			causes = append(causes, claimErr)
