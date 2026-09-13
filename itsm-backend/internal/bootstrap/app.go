@@ -827,7 +827,7 @@ func NewApplication() *Application {
 
 	// SLA Monitor & Alert Services (legacy, for background tasks)
 	slaMonitorService := service.NewSLAMonitorService(client, sugar, executionPolicy)
-	slaAlertService := service.NewSLAAlertService(client, sugar)
+	slaAlertService := service.NewSLAAlertService(client, sugar, executionPolicy)
 	escalationService := service.NewEscalationService(client, sugar)
 	escalationMatrixService := service.NewEscalationMatrixService(sugar)
 	escalationMatrixController := controller.NewEscalationMatrixController(sugar, escalationMatrixService)

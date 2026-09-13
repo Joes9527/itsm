@@ -198,6 +198,12 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 	legacySLADefinition := owner.SLADefinition.Create().SetName("Candidate scope SLA").SetResponseTime(60).SetResolutionTime(240).SetTenantID(tenant.ID).SaveX(ctx)
 	// Historical SLA deadlines are restored facts, established before scope migration.
 	owner.Ticket.UpdateOneID(historical.WorkItemID).SetSLADefinitionID(legacySLADefinition.ID).SetSLAResponseDeadline(time.Now().Add(-time.Hour)).SetSLAResolutionDeadline(time.Now().Add(-time.Hour)).SaveX(ctx)
+	historicalAlertItems := make([]int, 0, 2)
+	for _, key := range []string{"alert-scan", "alert-warning"} {
+		item := owner.Ticket.Create().SetTitle("historical " + key).SetTicketNumber("OLD-" + key).SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetCreatedAt(time.Now().Add(-time.Hour)).SetSLADefinitionID(legacySLADefinition.ID).SetSLAResponseDeadline(time.Now().Add(5 * time.Minute)).SaveX(ctx)
+		historicalAlertItems = append(historicalAlertItems, item.ID)
+	}
+	owner.SLAAlertRule.Create().SetName("Critical SLA admission").SetTenantID(tenant.ID).SetSLADefinitionID(legacySLADefinition.ID).SetAlertLevel("critical").SetThresholdPercentage(20).SetNotificationChannels([]string{"in_app", "email"}).SaveX(ctx)
 	var historicalNotifications []*ent.TicketNotification
 	for _, state := range []string{"pending", "processing"} {
 		create := owner.TicketNotification.Create().SetTenantID(tenant.ID).SetTicketID(historical.WorkItemID).SetUserID(actor.ID).SetType("created").SetChannel("email").SetContent("Historical notification").SetDeliveryKey("legacy-notify-" + state).SetStatus(state).SetNextAttemptAt(time.Now().Add(-time.Minute))
@@ -1995,6 +2001,122 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM outbox_events WHERE execution_work_item_id=$1 AND event_type='sla.breached'`, target.WorkItemID).Scan(&queued))
 		require.Equal(t, 2, queued)
 		t.Logf("new member violations=%d; historical preservation checked independently", created)
+	})
+	t.Run("SLA alert direct entries preserve historical rows", func(t *testing.T) {
+		alerts := service.NewSLAAlertService(runtime, zap.NewNop().Sugar(), policy)
+		alerts.SetNotificationService(service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy))
+		entries := []struct {
+			name string
+			run  func(int) (bool, error)
+		}{
+			{"scan", func(id int) (bool, error) { return alerts.CheckAndTriggerAlerts(ctx, id, tenant.ID) }},
+			{"warning", func(id int) (bool, error) { return alerts.TriggerSLAWarning(ctx, id, "response_time", tenant.ID) }},
+		}
+		for i, entry := range entries {
+			t.Run(entry.name, func(t *testing.T) {
+				var before, after string
+				require.NoError(t, ownerDB.QueryRow(`SELECT COALESCE(json_agg(h ORDER BY id)::text,'[]') FROM sla_alert_histories h WHERE ticket_id=$1`, historicalAlertItems[i]).Scan(&before))
+				_, err := entry.run(historicalAlertItems[i])
+				assert.ErrorIs(t, err, executionscope.ErrDenied, "historical direct entry must reject")
+				require.NoError(t, ownerDB.QueryRow(`SELECT COALESCE(json_agg(h ORDER BY id)::text,'[]') FROM sla_alert_histories h WHERE ticket_id=$1`, historicalAlertItems[i]).Scan(&after))
+				assert.JSONEq(t, before, after, "historical alert history must remain unchanged")
+				fresh, err := app.Create(ctx, identity, command("sla-alert-"+entry.name, "generic"))
+				require.NoError(t, err)
+				owner.Ticket.UpdateOneID(fresh.WorkItemID).SetCreatedAt(time.Now().Add(-time.Hour)).SetSLADefinitionID(legacySLADefinition.ID).SetSLAResponseDeadline(time.Now().Add(5 * time.Minute)).SaveX(ctx)
+				triggered, err := entry.run(fresh.WorkItemID)
+				require.NoError(t, err)
+				require.True(t, triggered, "new candidate must execute the alert")
+				var histories, sent, pending int
+				require.NoError(t, ownerDB.QueryRow(`SELECT count(*),count(*) FILTER (WHERE notification_sent) FROM sla_alert_histories WHERE ticket_id=$1`, fresh.WorkItemID).Scan(&histories, &sent))
+				require.Equal(t, 1, histories)
+				assert.Zero(t, sent, "unconfigured email transport must not be reported sent")
+				require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM ticket_notifications WHERE ticket_id=$1 AND channel='email' AND status='pending'`, fresh.WorkItemID).Scan(&pending))
+				assert.Equal(t, 1, pending, "alert must commit a deferred email intent")
+				version := owner.Ticket.GetX(ctx, fresh.WorkItemID).Version
+				triggered, err = entry.run(fresh.WorkItemID)
+				require.NoError(t, err)
+				require.False(t, triggered)
+				require.Equal(t, version, owner.Ticket.GetX(ctx, fresh.WorkItemID).Version)
+				for _, fault := range []string{"history", "notification"} {
+					target, err := app.Create(ctx, identity, command("sla-alert-fault-"+entry.name+fault, "generic"))
+					require.NoError(t, err)
+					beforeItem := owner.Ticket.UpdateOneID(target.WorkItemID).SetCreatedAt(time.Now().Add(-time.Hour)).SetSLADefinitionID(legacySLADefinition.ID).SetSLAResponseDeadline(time.Now().Add(5 * time.Minute)).SaveX(ctx)
+					active := true
+					writes := 0
+					injected := errors.New("injected SLA alert write failure")
+					hook := func(next ent.Mutator) ent.Mutator {
+						return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+							v, e := next.Mutate(ctx, m)
+							if active && e == nil {
+								writes++
+								return nil, injected
+							}
+							return v, e
+						})
+					}
+					if fault == "history" {
+						runtime.SLAAlertHistory.Use(hook)
+					} else {
+						runtime.Notification.Use(hook)
+					}
+					unifiedBefore := owner.Notification.Query().CountX(ctx)
+					triggered, err = entry.run(target.WorkItemID)
+					active = false
+					require.Equal(t, unifiedBefore, owner.Notification.Query().CountX(ctx), "unified notifications roll back with alert")
+					require.ErrorIs(t, err, injected)
+					require.False(t, triggered)
+					require.Equal(t, 1, writes)
+					require.Equal(t, beforeItem.Version, owner.Ticket.GetX(ctx, target.WorkItemID).Version)
+					for _, query := range []string{`SELECT count(*) FROM sla_alert_histories WHERE ticket_id=$1`, `SELECT count(*) FROM ticket_notifications WHERE ticket_id=$1`} {
+						var n int
+						require.NoError(t, ownerDB.QueryRow(query, target.WorkItemID).Scan(&n))
+						require.Zero(t, n)
+					}
+					triggered, err = entry.run(target.WorkItemID)
+					require.NoError(t, err)
+					require.True(t, triggered)
+				}
+
+			})
+		}
+	})
+	t.Run("SLA alert channels and active cycle", func(t *testing.T) {
+		notifications := service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)
+		notifications.SetNotificationPreferenceService(service.NewNotificationPreferenceService(runtime, zap.NewNop().Sugar()))
+		pref := owner.NotificationPreference.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetEventType("sla_violated").SetEmailEnabled(false).SetInAppEnabled(true).SetSmsEnabled(false).SetPushEnabled(false).SaveX(ctx)
+		defer owner.NotificationPreference.DeleteOneID(pref.ID).Exec(ctx)
+		alerts := service.NewSLAAlertService(runtime, zap.NewNop().Sugar(), policy)
+		alerts.SetNotificationService(notifications)
+		for _, tc := range []struct {
+			name              string
+			channels          []string
+			elapsed, timeLeft time.Duration
+			paused            int
+			want              bool
+			notifications     int
+		}{
+			{"empty", []string{}, 55 * time.Minute, 5 * time.Minute, 0, true, 0},
+			{"email disabled by user", []string{"email"}, 55 * time.Minute, 5 * time.Minute, 0, true, 0},
+			{"in app", []string{"in_app"}, 55 * time.Minute, 5 * time.Minute, 0, true, 1},
+			{"reopened new cycle", []string{"in_app"}, 10 * time.Minute, 50 * time.Minute, 0, false, 0},
+			{"paused early", []string{"in_app"}, 90 * time.Minute, 30 * time.Minute, 60, false, 0},
+			{"paused warning", []string{"in_app"}, 110 * time.Minute, 10 * time.Minute, 60, true, 1},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				definition := owner.SLADefinition.Create().SetName(tc.name).SetTenantID(tenant.ID).SetResponseTime(60).SetResolutionTime(240).SaveX(ctx)
+				owner.SLAAlertRule.Create().SetName(tc.name).SetTenantID(tenant.ID).SetSLADefinitionID(definition.ID).SetThresholdPercentage(20).SetNotificationChannels(tc.channels).SaveX(ctx)
+				fresh, err := app.Create(ctx, identity, command("sla-active-"+tc.name, "generic"))
+				require.NoError(t, err)
+				now := time.Now()
+				owner.Ticket.UpdateOneID(fresh.WorkItemID).SetCreatedAt(now.Add(-24 * time.Hour)).SetSLACycleNumber(2).SetSLACycleStartedAt(now.Add(-tc.elapsed)).SetSLAPausedMinutes(tc.paused).SetSLADefinitionID(definition.ID).SetSLAResponseDeadline(now.Add(tc.timeLeft)).SaveX(ctx)
+				triggered, err := alerts.TriggerSLAWarning(ctx, fresh.WorkItemID, "response_time", tenant.ID)
+				require.NoError(t, err)
+				require.Equal(t, tc.want, triggered)
+				var n int
+				require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM ticket_notifications WHERE ticket_id=$1`, fresh.WorkItemID).Scan(&n))
+				require.Equal(t, tc.notifications, n)
+			})
+		}
 	})
 	require.Equal(t, oldRow.Title, owner.Ticket.GetX(ctx, historical.WorkItemID).Title)
 }

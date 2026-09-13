@@ -956,38 +956,23 @@ func (s *TicketNotificationService) EnqueueSLABreachedTx(ctx context.Context, tx
 	})
 }
 
-// NotifySLAAlertLevelChanged SLA预警级别变更时发送通知
-func (s *TicketNotificationService) NotifySLAAlertLevelChanged(
-	ctx context.Context,
-	ticketID int,
-	alertLevel string, // warning, critical
-	percentage float64,
-	tenantID int,
-) error {
-	ticket, err := s.client.Ticket.Get(ctx, ticketID)
-	if err != nil {
-		return fmt.Errorf("failed to get ticket: %w", err)
+// EnqueueSLAAlertTx honors the rule's declared channels and user preferences.
+func (s *TicketNotificationService) EnqueueSLAAlertTx(ctx context.Context, tx *ent.Tx, item *ent.Ticket, history *ent.SLAAlertHistory, channels []string) error {
+	if err := validateIncidentAlertChannels(channels); err != nil {
+		return err
 	}
-
-	levelText := map[string]string{
-		"warning":  "警告",
-		"critical": "严重",
-	}[alertLevel]
-
-	content := fmt.Sprintf("【SLA%s】工单 #%s 剩余时间不足 %.1f%%，请及时处理！",
-		levelText, ticket.TicketNumber, percentage)
-
-	userIDs := []int{ticket.RequesterID}
-	if ticket.AssigneeID > 0 {
-		userIDs = append(userIDs, ticket.AssigneeID)
+	selected := make(map[string]bool, len(channels))
+	for _, channel := range channels {
+		selected[channel] = true
 	}
-
-	result, err := s.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-		UserIDs:   userIDs,
-		EventType: "sla_violated",
-		Content:   content,
-	}, tenantID)
-	return ticketNotificationDeliveryError(result, err)
+	users := []int{item.RequesterID}
+	if item.AssigneeID > 0 {
+		users = append(users, item.AssigneeID)
+	}
+	return s.enqueueNotificationTx(ctx, tx, item.ID, item.TenantID, &dto.SendTicketNotificationRequest{
+		UserIDs: users, EventType: "sla_violated", DeliveryKey: fmt.Sprintf("sla-alert:%d", history.ID),
+		Content: fmt.Sprintf("【SLA预警 %s】工单 #%s 剩余时间 %.1f%%，请及时处理！", history.AlertLevel, item.TicketNumber, history.ActualPercentage),
+	}, selected)
 }
 
 // ListTicketNotifications 获取工单通知列表

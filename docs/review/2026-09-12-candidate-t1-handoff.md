@@ -517,3 +517,15 @@ Outbox 并发/回滚测试提交 `56879f7c9`；独立 reviewer 确认限定结�
 - 独立 reviewer `review_execution_scope_s1` 的后台 tenant context、启动依赖两项阻断均修复并复审通过；最终旧入口删除与分项依赖测试复审无新阻断。
 
 本次完成的是 SLA violation 增量。SLAAlertService/warning/critical transport、escalation、其它共享业务写入口与完整周期/S5/S6/B3/T3/T4/G2/G3 仍未完成。CandidateSHA 仍为 `d7470a32dbb87acc9b5e4d9a895a146410723561`，候选保持停止；无 WSL/共享数据库操作、企业发送、推送或 main 合并。
+
+### B2 S4 SLA alert 原事务创建与通知意图（2026-09-13）
+
+在 `73cc9a3e1` 后接入 SLAAlertService 两个直接入口。构造必选冻结 policy；统一 triggerAlerts 在原事务检查 tenant/成员/deleted，并读取当前 deadline/cycle、规则、duplicate/cooldown，首次写 history 前执行带成员条件的 Ticket version CAS。history 与通知意图共用事务，错误明确返回；重复/cooldown 保留现有 ticket/rule 共享语义。时间比例采用当前 SLA cycle 并扣除已计入 deadline 的暂停延长。
+
+通知渠道取规则配置与用户偏好的交集，空集合不回落默认渠道，未知渠道显式失败。有配置渠道但缺 notifier 时在 CAS/首写前拒绝。移除 NotifySLAAlertLevelChanged 的同步发送及 critical 额外邮件，去掉无投递证据的 NotificationSent=true。**完整发送关联及状态投影尚未实现**：新 history 暂保留 false，不将队列创建等同发送完成；monitor 的候选告警拒绝仍保留，bootstrap 暂未接入告警周期，下一增量必须完成关联/投影及接入才能放行。
+
+证据（本机 candidate-delivery/b2）：`s4-sla-alert-direct-confirmed-red.log` 有效 RED，两入口各自实际新增 039 前历史 alert history；新成员独立触发且恰一 history，但 email pending=0、notification_sent=true。首个 direct-red 因测试表名拼写错误，仅为 fixture 失败，不计隔离证据。
+
+`s4-sla-alert-verified-pg.log` 完整 TestCandidateIntakeCreationBoundary PASS，无 skip。历史 JSON 保全、两个直接入口新成员/history/email pending、重复与版本不变；history 与 unified notification 实际写后故障均使 history/两张通知表及版本回滚，解除后成功。空渠道、email-only 与用户禁 email、inapp交集通过；reopen/pause 是 owner 设定的前置状态，仅验证当前周期/暂停计算，不代表生命周期 E2E。`s4-sla-alert-final-regression.log` SLA/Notification/AlertChannel service/bootstrap 回归 PASS，`s4-sla-alert-final-build.json` 后端 build exit0，integration-compile 标签编译 PASS（未运行该标签集）。独立 reviewer review_execution_scope_s1 复审无新增阻断。
+
+下步按结构化 history→notification 关联和实际状态查询投影处理发送完成，禁止从 DeliveryKey 反推授权；还需完整告警周期、escalation、S5/S6/B3/T3/T4/G2/G3。固定 CandidateSHA 不变，候选保持停止；无共享数据库/WSL操作、企业发送、推送或 main 合并。

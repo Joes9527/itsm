@@ -315,7 +315,9 @@ func TestSLAMonitorService_WarningWithPausedCycle(t *testing.T) {
 					}
 				}
 				item := create.SaveX(ctx)
-				monitor.SetAlertService(NewSLAAlertService(client, zaptest.NewLogger(t).Sugar()))
+				alerts := NewSLAAlertService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
+				alerts.SetNotificationService(NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard()))
+				monitor.SetAlertService(alerts)
 				warned := monitor.checkAndTriggerWarning(ctx, item, start.Add(tc.elapsed))
 				require.Equal(t, tc.want, warned, "60-minute active target must warn once 50 active minutes have elapsed")
 				histories := client.SLAAlertHistory.Query().AllX(ctx)

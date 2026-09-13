@@ -16,6 +16,12 @@ import (
 // business transaction. It never commits or invokes a provider. Any error
 // requires the caller to roll back, including intents already written here.
 func (s *TicketNotificationService) EnqueueNotificationTx(ctx context.Context, tx *ent.Tx, ticketID, tenantID int, req *dto.SendTicketNotificationRequest) error {
+	return s.enqueueNotificationTx(ctx, tx, ticketID, tenantID, req, nil)
+}
+
+// selectedChannels is a server-owned restriction on the recipient preferences.
+// nil retains all eligible preference channels; an empty set explicitly disables all.
+func (s *TicketNotificationService) enqueueNotificationTx(ctx context.Context, tx *ent.Tx, ticketID, tenantID int, req *dto.SendTicketNotificationRequest, selectedChannels map[string]bool) error {
 	if s == nil || tx == nil || req == nil || strings.TrimSpace(req.DeliveryKey) == "" || strings.TrimSpace(req.EventType) == "" || strings.TrimSpace(req.Content) == "" || len(req.UserIDs) == 0 {
 		return fmt.Errorf("notification intent requires transaction, target, recipients and stable delivery identity")
 	}
@@ -70,7 +76,7 @@ func (s *TicketNotificationService) EnqueueNotificationTx(ctx context.Context, t
 		// Explicitly disabled preferences produce no intent. There is no durable
 		// suppression receipt; callers must not treat this as a sent notification.
 		for _, channel := range channels {
-			if !channel.enabled {
+			if !channel.enabled || (selectedChannels != nil && !selectedChannels[channel.name]) {
 				continue
 			}
 			if channel.name == "in_app" {

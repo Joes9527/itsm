@@ -50,7 +50,7 @@ func TestIncidentEscalationRuleRequiresEmailRecipientsAtSave(t *testing.T) {
 }
 
 func TestSLAAlertRuleRejectsUnsupportedChannelBeforePersistence(t *testing.T) {
-	service := NewSLAAlertService(nil, zap.NewNop().Sugar())
+	service := NewSLAAlertService(nil, zap.NewNop().Sugar(), executionfixture.Standard())
 	_, err := service.CreateAlertRule(context.Background(), &dto.CreateSLAAlertRuleRequest{NotificationChannels: []string{"sms"}}, 7)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported alert channel: sms")

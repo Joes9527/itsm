@@ -614,7 +614,7 @@ func TestWorkItemChangeLifecycleTerminalClocks(t *testing.T) {
 				if bound {
 					f.client.Ticket.UpdateOneID(item.ID).SetSLAResponseDeadline(time.Now().Add(time.Minute)).SetSLAResolutionDeadline(time.Now().Add(time.Minute)).ExecX(f.ctx)
 				}
-				alerts := service.NewSLAAlertService(f.client, zap.NewNop().Sugar())
+				alerts := service.NewSLAAlertService(f.client, zap.NewNop().Sugar(), executionfixture.Standard())
 				alerted, err := alerts.CheckAndTriggerAlerts(f.ctx, item.ID, f.tenant.ID)
 				require.NoError(t, err)
 				require.False(t, alerted)
