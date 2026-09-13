@@ -3308,6 +3308,39 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		})
 	}
 
+	t.Run("direct notification enqueues without provider calls", func(t *testing.T) {
+		fresh, e := app.Create(ctx, identity, command("direct-notification-queue", "generic"))
+		require.NoError(t, e)
+		pref := owner.NotificationPreference.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetEventType("direct_queue_test").SetEmailEnabled(true).SetInAppEnabled(false).SetSmsEnabled(false).SetPushEnabled(false).SaveX(ctx)
+		defer func() { require.NoError(t, owner.NotificationPreference.DeleteOne(pref).Exec(ctx)) }()
+		probe := &candidateNotificationMailProbe{}
+		email := service.NewEmailService(service.EmailConfig{}, zap.NewNop().Sugar())
+		email.SetGraphProvider(func(int) (service.GraphMailSender, string, bool) { return probe, "local-sender@example.invalid", true })
+		svc := service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)
+		svc.SetNotificationPreferenceService(service.NewNotificationPreferenceService(runtime, zap.NewNop().Sugar()))
+		svc.SetEmailService(email)
+		req := dto.SendTicketNotificationRequest{UserIDs: []int{actor.ID}, EventType: "direct_queue_test", Content: "private queued notification", DeliveryKey: "direct-queue-test"}
+		result, e := svc.SendNotification(ctx, fresh.WorkItemID, &req, tenant.ID)
+		require.NoError(t, e)
+		assert.Empty(t, probe.recipients, "request owner must not call transport")
+		require.NotNil(t, result)
+		assert.NotEqual(t, dto.TicketNotificationEffectApplied, result.Effect, "queued external notification is not delivered")
+		rows := owner.TicketNotification.Query().Where(ticketnotification.TicketIDEQ(fresh.WorkItemID), ticketnotification.DeliveryKeyEQ(req.DeliveryKey)).AllX(ctx)
+		assert.Len(t, rows, 1, "external intent must be durable before response")
+		for _, row := range rows {
+			assert.Equal(t, "email", row.Channel)
+			assert.Equal(t, "pending", row.Status)
+			assert.True(t, row.SentAt.IsZero())
+		}
+		_, e = svc.SendNotification(ctx, fresh.WorkItemID, &req, tenant.ID)
+		require.NoError(t, e)
+		assert.Empty(t, probe.recipients, "same request must not resend outside the worker")
+		assert.Equal(t, 1, owner.TicketNotification.Query().Where(ticketnotification.TicketIDEQ(fresh.WorkItemID), ticketnotification.DeliveryKeyEQ(req.DeliveryKey)).CountX(ctx))
+		// Test-only queue cleanup, after assertions; not delivery evidence.
+		_, e = owner.TicketNotification.Delete().Where(ticketnotification.TicketIDEQ(fresh.WorkItemID)).Exec(ctx)
+		require.NoError(t, e)
+	})
+
 	t.Run("notification producer freezes connector target", func(t *testing.T) {
 		policy, e := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: scopeID}}, Capabilities: map[string]string{"notification": "scoped"}})
 		require.NoError(t, e)
@@ -6758,4 +6791,11 @@ func (*candidateSMSConnector) Manifest() connector.Manifest {
 	m := (&candidateNotificationConnector{}).Manifest()
 	m.Name = "sms"
 	return m
+}
+
+type candidateNotificationMailProbe struct{ recipients []string }
+
+func (p *candidateNotificationMailProbe) SendMail(_ context.Context, _ string, to, _, _, _ string) error {
+	p.recipients = append(p.recipients, to)
+	return nil
 }

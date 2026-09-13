@@ -1377,3 +1377,16 @@ s5-notification-cc-owner-private.log真实PG两个owner正向/拒绝通过；s5-
 s5-notification-cc-owner-regression.log service、service/bpmn、internal/bootstrap三包具名race回归PASS；不声称三包所有测试均执行。独立最终复核无新增阻断。同步SendNotification直接外发、email/push专业准入、目标变更/重启矩阵、飞书与裸Get/Send尚待完成，不勾选整个S5/S6/G2。固定CandidateSHA与停止状态不变，无共享数据库/WSL操作、企业外呼、push/main合并。最终构建下方补记。
 
 最终s5-notification-cc-build.log全后端build exit0，git diff --check通过。当前无进行中的Go进程，后续可继续同步通知入口工作。
+
+
+### B2 S5 同步通知直接外发 RED 与结果合同（2026-09-14）
+
+SendNotification现仅先提交站内行，随后直接调用email/SMS/push；纯外部渠道没有队列事实，先前DeliveryKey存在性查询无法提供幂等。新增真实PG direct_notification_enqueues_without_provider_calls：新合法WorkItem、明确email-only偏好、进程内GraphMailSender探针，稳定内部DeliveryKey连调两次。s5-notification-direct-outbound-red.log复现探针分别1/2次、零外部通知意图、applied；并非真实企业邮件或HTTP调用。
+
+s5-notification-direct-full-red.log完整私有PG16/Redis/MinIO race仅此新增用例及父测试FAIL，无其他FAIL/SKIP/DATA RACE；上轮f02bb4197绿色证据不覆盖新增要求。本轮无生产修复，也未将单测仅编译或无关构建当作验证。新意图测试清理只删除fresh WorkItem通知（当前0行），不触及受保护历史。
+
+调用方调查：DTO当前仅applied/idempotent/blocked，HTTP始终200，前端TicketNotificationSection无条件显示“通知已投递deliveryCount次”。BPMN仅在有durable callback key时设置InAppOnly；现enqueue已检查该字段，不能误称完全忽略。原S5追加实现合同：唯一enqueue返回精确结果并在原事务冻结所有意图，SendNotification删除直接外发；queued/站内计数分开、HTTP202、前端类型与文案同步；内部key继续去重，HTTP缺key生成本次意图ID不等于网络重试幂等，不扩大为新请求ID产品能力。全偏好禁用无receipt不算交付；非durable BPMN不能将queued译为delivered。旧provider正向要改为queue→真实worker，不能删掉投递验证。
+
+当前完整目标/S5/S6/T3/T4/G3未完成，CandidateSHA不变、候选停止，无WSL/共享环境修改、企业外呼、push/main合并。最终独立复核下方补记。
+
+独立最终复核确认RED有效、合同无阻断。GREEN须将NotEqual(applied)收紧为明确queued/准确计数和重放结果，排除任意错误effect假绿；git diff --check通过。
