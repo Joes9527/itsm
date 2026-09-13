@@ -940,39 +940,20 @@ func (s *TicketNotificationService) NotifySLAWarning(
 	return ticketNotificationDeliveryError(result, err)
 }
 
-// NotifySLABreached SLA违规时发送通知
-func (s *TicketNotificationService) NotifySLABreached(
-	ctx context.Context,
-	ticketID int,
-	violationType string, // response_time, resolution_time
-	exceededMinutes float64,
-	tenantID int,
-) error {
-	ticket, err := s.client.Ticket.Get(ctx, ticketID)
-	if err != nil {
-		return fmt.Errorf("failed to get ticket: %w", err)
+// EnqueueSLABreachedTx records breach notifications with their owning violation.
+func (s *TicketNotificationService) EnqueueSLABreachedTx(ctx context.Context, tx *ent.Tx, item *ent.Ticket, violationID int, violationType string, exceededMinutes float64) error {
+	slaType := map[string]string{"response_time": "响应时间", "resolution_time": "解决时间"}[violationType]
+	if slaType == "" || violationID <= 0 {
+		return fmt.Errorf("invalid SLA violation notification")
 	}
-
-	slaType := map[string]string{
-		"response_time":   "响应时间",
-		"resolution_time": "解决时间",
-	}[violationType]
-
-	content := fmt.Sprintf("【SLA违规】工单 #%s 的%s已违反SLA，超时 %.1f 分钟",
-		ticket.TicketNumber, slaType, exceededMinutes)
-
-	// 获取需要通知的用户列表（创建人、处理人、相关经理）
-	userIDs := []int{ticket.RequesterID}
-	if ticket.AssigneeID > 0 {
-		userIDs = append(userIDs, ticket.AssigneeID)
+	users := []int{item.RequesterID}
+	if item.AssigneeID > 0 {
+		users = append(users, item.AssigneeID)
 	}
-
-	result, err := s.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-		UserIDs:   userIDs,
-		EventType: "sla_violated",
-		Content:   content,
-	}, tenantID)
-	return ticketNotificationDeliveryError(result, err)
+	return s.EnqueueNotificationTx(ctx, tx, item.ID, item.TenantID, &dto.SendTicketNotificationRequest{
+		UserIDs: users, EventType: "sla_violated", DeliveryKey: fmt.Sprintf("sla-violation:%d", violationID),
+		Content: fmt.Sprintf("【SLA违规】工单 #%s 的%s已违反SLA，超时 %.1f 分钟", item.TicketNumber, slaType, exceededMinutes),
+	})
 }
 
 // NotifySLAAlertLevelChanged SLA预警级别变更时发送通知

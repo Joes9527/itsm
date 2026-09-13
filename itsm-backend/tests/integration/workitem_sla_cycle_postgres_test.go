@@ -202,7 +202,7 @@ func TestWorkItemSLACycleCompletionProjection(t *testing.T) {
 	require.True(t, got.ResponseDeadline.Equal(at.Add(time.Hour)))
 	require.Equal(t, 0, got.ResponseTimeUsed)
 	require.Equal(t, 30, got.ResolutionTimeUsed)
-	metrics, err := service.NewSLAMonitorService(f.client, zap.NewNop().Sugar()).CalculateSLAMetrics(f.ctx, f.tenant.ID, at.Add(-time.Hour), at.Add(time.Hour))
+	metrics, err := service.NewSLAMonitorService(f.client, zap.NewNop().Sugar(), executionfixture.Standard()).CalculateSLAMetrics(f.ctx, f.tenant.ID, at.Add(-time.Hour), at.Add(time.Hour))
 	require.NoError(t, err)
 	require.Zero(t, metrics.ViolatedTickets)
 	require.Equal(t, 0.5, metrics.AvgResolutionHours)

@@ -34,7 +34,7 @@ func (app *Application) startAPIRuntime(ctx context.Context) (func(), error) {
 		{"webhook", app.eventRuntime != nil},
 		{"connector_poll", app.connectorRuntime != nil && app.connectorManager != nil},
 		{"embedding", app.DBClient != nil && app.Embedder != nil && app.VectorStore != nil},
-		{"sla", app.DBClient != nil},
+		{"sla", app.slaMonitor != nil && app.executionPolicy != nil && (app.executionPolicy.IsCandidate() || app.systemClient != nil)},
 		{"escalation", app.DBClient != nil},
 	}
 	for _, requirement := range requirements {

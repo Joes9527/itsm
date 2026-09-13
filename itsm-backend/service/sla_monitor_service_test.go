@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 
@@ -21,7 +22,7 @@ import (
 func setupSLAMonitorTest(t *testing.T) (*ent.Client, *SLAMonitorService, context.Context) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	logger := zaptest.NewLogger(t).Sugar()
-	service := NewSLAMonitorService(client, logger)
+	service := NewSLAMonitorService(client, logger, executionfixture.Standard())
 	ctx := context.Background()
 	return client, service, ctx
 }
@@ -243,15 +244,11 @@ func TestSLAMonitorService_CreateViolation(t *testing.T) {
 		SetTicketNumber("TKT-VIOL-001").
 		SetTenantID(testTenant.ID).
 		SetRequesterID(testUser.ID).
-		SetSLADefinitionID(slaDef.ID). // 必须设置SLA定义ID
+		SetSLADefinitionID(slaDef.ID).SetSLAResponseDeadline(time.Now().Add(-time.Hour)). // persisted deadline
 		Save(ctx)
 	require.NoError(t, err)
 
-	// 创建违规记录
-	slaDefMap := map[int]string{slaDef.ID: slaDef.Name}
-	deadline := time.Now().Add(-1 * time.Hour) // 1小时前已经过期
-
-	err = service.createViolation(ctx, ticket, "response_time", deadline, slaDefMap)
+	_, _, err = service.checkTicketViolations(ctx, ticket.ID, testTenant.ID)
 	require.NoError(t, err)
 
 	// 验证违规记录已创建

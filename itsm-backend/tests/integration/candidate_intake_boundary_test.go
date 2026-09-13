@@ -1894,7 +1894,8 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		owner.Ticket.UpdateOneID(fresh.WorkItemID).SetSLADefinitionID(legacySLADefinition.ID).SetSLAResponseDeadline(time.Now().Add(-time.Hour)).SetSLAResolutionDeadline(time.Now().Add(-time.Hour)).SaveX(ctx)
 		var before string
 		require.NoError(t, ownerDB.QueryRow(`SELECT COALESCE(json_agg(v ORDER BY id)::text,'[]') FROM sla_violations v WHERE ticket_id=$1`, historical.WorkItemID).Scan(&before))
-		monitor := service.NewSLAMonitorService(runtime, zap.NewNop().Sugar())
+		monitor := service.NewSLAMonitorService(runtime, zap.NewNop().Sugar(), policy)
+		monitor.SetNotificationService(service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy))
 		stats, err := monitor.CheckSLAViolations(ctx, tenant.ID)
 		require.NoError(t, err)
 		require.GreaterOrEqual(t, stats.NewViolations, 2, "new member must still be monitored")
@@ -1904,6 +1905,95 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		var created int
 		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM sla_violations WHERE ticket_id=$1`, fresh.WorkItemID).Scan(&created))
 		require.Equal(t, 2, created)
+		var queued int
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM outbox_events WHERE execution_work_item_id=$1 AND event_type='sla.breached'`, fresh.WorkItemID).Scan(&queued))
+		require.Equal(t, 2, queued, "every committed violation needs a durable event")
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM ticket_notifications WHERE ticket_id=$1`, fresh.WorkItemID).Scan(&queued))
+		require.Equal(t, 4, queued, "in-app and deferred email for each breach")
+		version := owner.Ticket.GetX(ctx, fresh.WorkItemID).Version
+		replay, err := monitor.CheckSLAViolations(ctx, tenant.ID)
+		require.NoError(t, err)
+		require.Zero(t, replay.NewViolations)
+		require.Equal(t, version, owner.Ticket.GetX(ctx, fresh.WorkItemID).Version, "duplicate scan must not mutate version")
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM ticket_notifications WHERE ticket_id=$1`, fresh.WorkItemID).Scan(&queued))
+		require.Equal(t, 4, queued)
+		for _, fault := range []string{"notification", "second outbox"} {
+			t.Run(fault+" rolls back complete SLA transaction", func(t *testing.T) {
+				target, err := app.Create(ctx, identity, command("sla-fault-"+fault, "generic"))
+				require.NoError(t, err)
+				original := owner.Ticket.UpdateOneID(target.WorkItemID).SetSLADefinitionID(legacySLADefinition.ID).SetSLAResponseDeadline(time.Now().Add(-time.Hour)).SetSLAResolutionDeadline(time.Now().Add(-time.Hour)).SaveX(ctx)
+				injected := errors.New("injected SLA transaction failure")
+				active := true
+				writes := 0
+				hook := func(next ent.Mutator) ent.Mutator {
+					return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+						value, e := next.Mutate(ctx, m)
+						if e == nil && active {
+							writes++
+							if fault == "notification" || writes == 2 {
+								return nil, injected
+							}
+						}
+						return value, e
+					})
+				}
+				if fault == "notification" {
+					runtime.Notification.Use(hook)
+				} else {
+					runtime.OutboxEvent.Use(hook)
+				}
+				_, err = monitor.CheckSLAViolations(ctx, tenant.ID)
+				active = false
+				require.ErrorIs(t, err, injected)
+				if fault == "notification" {
+					require.Equal(t, 1, writes)
+				} else {
+					require.Equal(t, 2, writes)
+				}
+				require.Equal(t, original.Version, owner.Ticket.GetX(ctx, target.WorkItemID).Version)
+				for _, query := range []string{
+					`SELECT count(*) FROM sla_violations WHERE ticket_id=$1`,
+					`SELECT count(*) FROM ticket_notifications WHERE ticket_id=$1`,
+					`SELECT count(*) FROM outbox_events WHERE execution_work_item_id=$1 AND event_type='sla.breached'`,
+				} {
+					var count int
+					require.NoError(t, ownerDB.QueryRow(query, target.WorkItemID).Scan(&count))
+					require.Zero(t, count)
+				}
+				stats, err := monitor.CheckSLAViolations(ctx, tenant.ID)
+				require.NoError(t, err)
+				require.Equal(t, 2, stats.NewViolations)
+			})
+		}
+		target, err := app.Create(ctx, identity, command("sla-concurrent", "generic"))
+		require.NoError(t, err)
+		owner.Ticket.UpdateOneID(target.WorkItemID).SetSLADefinitionID(legacySLADefinition.ID).SetSLAResponseDeadline(time.Now().Add(-time.Hour)).SetSLAResolutionDeadline(time.Now().Add(-time.Hour)).SaveX(ctx)
+		beforeVersion := owner.Ticket.GetX(ctx, target.WorkItemID).Version
+		_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='closed' WHERE id=$1", scopeID)
+		require.NoError(t, err)
+		_, denied := monitor.CheckSLAViolations(ctx, tenant.ID)
+		_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='active' WHERE id=$1", scopeID)
+		require.NoError(t, err)
+		require.ErrorIs(t, denied, executionscope.ErrDenied)
+		require.Equal(t, beforeVersion, owner.Ticket.GetX(ctx, target.WorkItemID).Version)
+		ready := make(chan struct{})
+		results := make(chan error, 2)
+		for i := 0; i < 2; i++ {
+			go func() { <-ready; _, e := monitor.CheckSLAViolations(ctx, tenant.ID); results <- e }()
+		}
+		close(ready)
+		first, second := <-results, <-results
+		require.True(t, first == nil || second == nil, "at least one competing scan must commit: %v / %v", first, second)
+		for _, e := range []error{first, second} {
+			if e != nil {
+				require.Contains(t, e.Error(), "SLA cycle changed during scan")
+			}
+		}
+		require.Equal(t, beforeVersion+1, owner.Ticket.GetX(ctx, target.WorkItemID).Version)
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM sla_violations WHERE ticket_id=$1`, target.WorkItemID).Scan(&queued))
+		require.Equal(t, 2, queued)
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM outbox_events WHERE execution_work_item_id=$1 AND event_type='sla.breached'`, target.WorkItemID).Scan(&queued))
+		require.Equal(t, 2, queued)
 		t.Logf("new member violations=%d; historical preservation checked independently", created)
 	})
 	require.Equal(t, oldRow.Title, owner.Ticket.GetX(ctx, historical.WorkItemID).Title)

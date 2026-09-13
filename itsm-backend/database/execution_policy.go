@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"itsm-backend/common/executionscope"
 	"itsm-backend/config"
@@ -85,3 +86,17 @@ func (p *ExecutionPolicy) RequireEntMembers(ctx context.Context, tx *ent.Tx, ten
 // IsCandidate reports the frozen deployment mode, not authorization. Callers must
 // BindEnt first so absent policy or unadmitted tenant cannot bypass enforcement.
 func (p *ExecutionPolicy) IsCandidate() bool { return p != nil && p.mode == "candidate" }
+
+// CandidateTenantIDs returns a copy of the frozen discovery manifest. Each
+// tenant still needs its own bound transaction; this is not authorization.
+func (p *ExecutionPolicy) CandidateTenantIDs() []int {
+	if p == nil || !p.IsCandidate() {
+		return nil
+	}
+	ids := make([]int, 0, len(p.scopes))
+	for id := range p.scopes {
+		ids = append(ids, id)
+	}
+	sort.Ints(ids)
+	return ids
+}

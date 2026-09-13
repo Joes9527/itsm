@@ -499,3 +499,21 @@ Outbox 并发/回滚测试提交 `56879f7c9`；独立 reviewer 确认限定结�
 `s4-sla-notification-intents-final-regression.log` Notification定向回归PASS；`s4-sla-notification-intents-final-build.json`后端build exit0，其后仅加强测试断言，由verified PG验证。独立reviewer review_execution_scope_s1发现的P2（按当前channel检查导致偏好切换绕过内容冲突）已修复，复审确认无新事务逃逸；建议补强的重放后直接行数/ID断言已落实并PASS。
 
 下一步继续把violation/alert持久化、通知意图和可靠事件意图纳入原事务，移除其直接发送/提交前发布路径；还需单项重读与幂等、错误传播、alert/升级周期与故障测试。S4/S5/S6/B3/G2/G3均未完成，原SLA confirmed-red仍是未解决门禁。CandidateSHA不变，无候选启动、企业发送、WSL/共享数据库改动、推送/main合并。
+
+### B2 S4 SLA violation 原事务接入（2026-09-13）
+
+在 `af1106661` 后，前述历史违规 RED 已由本增量修复。SLAMonitorService 构造必选 frozen ExecutionPolicy；扫描在原事务附成员 SQL 条件并按 ID 分页，每个 WorkItem 的写事务重新读取 deadline/cycle、成员与重复记录。首个新增违规前以 tenant/ID/version/member 做 version+1 CAS，两类违规共享一次 fence；冲突及写入错误向调用方传播，不再日志后伪报成功。无新增违规不更新版本。
+
+违规、站内通知/外部 pending 通知、结构化 `sla.breached` OutboxEvent 同事务提交。旧 NotifySLABreached 直接发送路径移除，改用唯一 EnqueueSLABreachedTx→EnqueueNotificationTx。通用 outbox registry 注册 SLA handler，验证 tenant/WorkItem/violation/event 身份，保留字符串 SLA 事件契约与持久化 occurrence/breach 时间；无 bus 显式 blocked，Publish 错误按 delivery_unknown 阻断自动重发，未声明 replay-safe。未进行任何企业投递或 Redis 发布验收。
+
+实际 bootstrap timer 复用已配置 monitor，经 runSLACycle：候选只发现 frozen manifest IDs，standard 通过 system client 只读发现，逐租户 WithTenantID 撤销 SystemBypass；启动前检查 monitor/policy/discovery。移除无调用的 StartSLAWatcher/CheckAllTenantsSLA，避免平行周期入口。候选若配置尚未隔离的 alertService，扫描前显式拒绝；并未将告警能力计为完成。
+
+本机 `candidate-delivery/b2` 证据：
+
+- `s4-sla-atomic-events-red.log` FAIL：历史违规变化且新成员缺少 durable SLA event。
+- `s4-sla-atomic-final-pg.log` **完整 TestCandidateIntakeCreationBoundary PASS，无 skip**：历史违规原始 JSON 不变；新成员两违规、两事件、四通知（站内+email pending）；重复扫描无新增及版本不变。unified notification 实际写后故障、第二条 outbox 实际写后故障使违规/通知/事件及版本整体回滚，解除故障后两违规成功。closed scope 拒绝；两并发扫描最终精确两违规/两事件、版本仅+1。并发起跑不等于确定性 SQL 竞态或进程重启覆盖。
+- `s4-sla-atomic-race.log` SLA 子测试 race PASS（删除无调用旧 watcher 前，写路径相同）。`s4-sla-atomic-final-runtime.log` service/bootstrap/database SLA/事件/启动/冻结清单定向回归 PASS。handler 使用本地假 bus 验证契约与不确定错误；bootstrap 标准发现用 SQLite 实际查询验证上下文，不替代 PG 角色准入证据。
+- `s4-sla-atomic-final-build.json` 后端全量 build exit0；`s4-sla-atomic-integration-compile.log` integration_postgres 标签编译 PASS（删除无调用旧 watcher 前），不代表该标签运行验收。
+- 独立 reviewer `review_execution_scope_s1` 的后台 tenant context、启动依赖两项阻断均修复并复审通过；最终旧入口删除与分项依赖测试复审无新阻断。
+
+本次完成的是 SLA violation 增量。SLAAlertService/warning/critical transport、escalation、其它共享业务写入口与完整周期/S5/S6/B3/T3/T4/G2/G3 仍未完成。CandidateSHA 仍为 `d7470a32dbb87acc9b5e4d9a895a146410723561`，候选保持停止；无 WSL/共享数据库操作、企业发送、推送或 main 合并。

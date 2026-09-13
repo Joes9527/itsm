@@ -85,6 +85,8 @@ type Application struct {
 	Logger                   *zap.SugaredLogger
 	DBClient                 *ent.Client
 	systemClient             *ent.Client
+	slaMonitor               slaViolationMonitor
+	executionPolicy          *database.ExecutionPolicy
 	Router                   *gin.Engine
 	Embedder                 service.Embedder
 	VectorStore              *service.VectorStore
@@ -688,7 +690,7 @@ func NewApplication() *Application {
 	toolQueue := service.NewToolQueue(client, toolRegistry, intakeApplication, ticketService, 100, sugar)
 	feishuSyncService := service.NewFeishuSyncService(client, sugar, intakeApplication)
 	outboxRegistry, err := service.NewOutboxEventTypeRegistry(
-		[]service.OutboxDeliveryHandler{service.NewWorkflowStartOutboxHandler(client, concreteProcessEngine, systemClient), incidentService.RuleEngine(), service.NewIncidentStatusDeliveryHandler(incidentService.RuleEngine()), service.NewFeishuCreationDeliveryHandler(feishuSyncService, func(tenantID int) (service.FeishuTaskCreator, bool) {
+		[]service.OutboxDeliveryHandler{service.NewSLABreachDeliveryHandler(), service.NewWorkflowStartOutboxHandler(client, concreteProcessEngine, systemClient), incidentService.RuleEngine(), service.NewIncidentStatusDeliveryHandler(incidentService.RuleEngine()), service.NewFeishuCreationDeliveryHandler(feishuSyncService, func(tenantID int) (service.FeishuTaskCreator, bool) {
 			conn, ok := connectorManager.Get(tenantID, "feishu")
 			if !ok {
 				return nil, false
@@ -824,7 +826,7 @@ func NewApplication() *Application {
 	approvalChainController := controller.NewApprovalChainController(approvalChainService, sugar)
 
 	// SLA Monitor & Alert Services (legacy, for background tasks)
-	slaMonitorService := service.NewSLAMonitorService(client, sugar)
+	slaMonitorService := service.NewSLAMonitorService(client, sugar, executionPolicy)
 	slaAlertService := service.NewSLAAlertService(client, sugar)
 	escalationService := service.NewEscalationService(client, sugar)
 	escalationMatrixService := service.NewEscalationMatrixService(sugar)
@@ -1011,6 +1013,8 @@ func NewApplication() *Application {
 		Cfg:                  cfg,
 		Logger:               sugar,
 		DBClient:             client,
+		slaMonitor:           slaMonitorService,
+		executionPolicy:      executionPolicy,
 		systemClient:         systemClient,
 		Router:               r,
 		Embedder:             embedder,
@@ -1373,7 +1377,6 @@ func (app *Application) startBackgroundTasks(lifecycleCtx context.Context) {
 	app.backgroundTasks.Add(1)
 	go func() {
 		defer app.backgroundTasks.Done()
-		slaMonitorService := service.NewSLAMonitorService(app.DBClient, app.Logger)
 		escalationService := service.NewEscalationService(app.DBClient, app.Logger)
 
 		ctx := lifecycleCtx
@@ -1393,14 +1396,8 @@ func (app *Application) startBackgroundTasks(lifecycleCtx context.Context) {
 				if !app.Cfg.Execution.Enabled("sla") {
 					continue
 				}
-				tenants, err := app.DBClient.Tenant.Query().All(ctx)
-				if err != nil {
-					continue
-				}
-				for _, t := range tenants {
-					if _, err := slaMonitorService.CheckSLAViolations(ctx, t.ID); err != nil {
-						app.Logger.Warnw("SLA violation check failed", "error", err, "tenant_id", t.ID)
-					}
+				if err := app.runSLACycle(ctx); err != nil {
+					app.Logger.Warnw("SLA violation cycle failed", "error", err)
 				}
 			case <-escalationTicker.C:
 				if !app.Cfg.Execution.Enabled("escalation") {

@@ -606,7 +606,7 @@ func TestWorkItemChangeLifecycleTerminalClocks(t *testing.T) {
 				}
 				// Actual active monitor/alert entry points must not manufacture a new
 				// violation after closure, even though old breach facts remain true.
-				monitor := service.NewSLAMonitorService(f.client, zap.NewNop().Sugar())
+				monitor := service.NewSLAMonitorService(f.client, zap.NewNop().Sugar(), executionfixture.Standard())
 				stats, err := monitor.CheckSLAViolations(f.ctx, f.tenant.ID)
 				require.NoError(t, err)
 				require.Zero(t, stats.NewViolations)

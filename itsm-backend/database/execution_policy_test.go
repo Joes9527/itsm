@@ -10,6 +10,10 @@ func TestExecutionPolicyFreezesAdmittedTenants(t *testing.T) {
 	cfg := config.ExecutionConfig{Mode: "candidate", DeploymentID: "candidate-test", Scopes: []config.ExecutionScopeConfig{{TenantID: 1, ScopeID: "11111111-1111-4111-8111-111111111111"}}}
 	policy, err := NewExecutionPolicy(cfg)
 	require.NoError(t, err)
+	ids := policy.CandidateTenantIDs()
+	require.Equal(t, []int{1}, ids)
+	ids[0] = 99
+	require.Equal(t, []int{1}, policy.CandidateTenantIDs())
 	cfg.Scopes[0].TenantID = 2
 	cfg.Scopes[0].ScopeID = "22222222-2222-4222-8222-222222222222"
 	ref, scoped, err := policy.scopeFor(1)
