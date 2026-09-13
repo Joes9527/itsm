@@ -16,6 +16,19 @@ func (p *ExecutionPolicy) RequireConnectorDelivery(ctx context.Context, ref exec
 	return p.RequireCapability(ctx, ref.TenantID, capability)
 }
 
+// RequirePersistedConnectorDescription permits standard-mode configuration
+// reads only. Candidate descriptions must use their frozen declarations.
+// This checks source identity, not execution enablement or business authority.
+func (p *ExecutionPolicy) RequirePersistedConnectorDescription(ctx context.Context, ref executionscope.Ref, capability string) error {
+	if err := p.requireConnectorIdentity(ctx, ref, capability); err != nil {
+		return err
+	}
+	if p.mode != "standard" {
+		return executionscope.ErrDenied
+	}
+	return nil
+}
+
 func (p *ExecutionPolicy) requireConnectorIdentity(ctx context.Context, ref executionscope.Ref, capability string) error {
 	if p == nil || ctx == nil || tenantctx.IsSystemBypass(ctx) {
 		return executionscope.ErrDenied

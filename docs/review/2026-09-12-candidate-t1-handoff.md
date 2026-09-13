@@ -1501,3 +1501,15 @@ Manager.DescribeDeclaredDeliveryTarget不从活跃实例选择，读取上述声
 本步不关闭邮件重绑RED、045/EmailTarget/Incident outbox或S5/S6/T3/T4/G3。下一步standard持久配置读取及typed邮件目标生产/执行接入；禁止consumer临时绑定当前身份。CandidateSHA不变，候选停止，无WSL/共享数据库操作、企业外发、push/main合并。
 
 最终验证：s5-declared-description-final.log database/connector/.../bootstrap全包race PASS；s5-declared-description-full-private.log既定私有PG16/Redis/MinIO suite race PASS，均无FAIL/SKIP/DATA RACE；s5-declared-description-build.log全后端build exit0。git diff --check通过，本轮Go进程均已退出。
+
+### B2 S5 标准配置来源的事务内描述入口（2026-09-14）
+
+s5-persisted-description-red.log先复现Manager缺持久配置描述方法。DescribePersistedDeliveryTarget沿原ConnectorConfig读取调用方提供的Ent client，policy门禁仅允许standard且精确Ref/tenant/合法owner，不要求执行能力开启；candidate禁止使用标准数据库配置代替冻结声明。按tenant/name/Enabled读取至多2行，只有唯一且provider精确匹配才描述，不按当前实例或迭代顺序择一，也不跨提供方回退。
+
+SQLite真实事务内未提交配置可被描述，原事务回滚后记录0；另有tenant2同名启用且坏JSON记录，tenant1读取仍正确。所有工厂调用仅注册prototype一次，无活跃实例。缺失/重复/禁用/错误provider/跨tenant及JSON语法/类型失败均拒绝，无原始坏配置错误泄漏。candidate模式、无tenant/system/cancel/错误deployment/unknown owner及nilclient拒绝；查询拦截器故障保留原始cause，Manager关闭后不再查询。
+
+独立审阅无当前Graph路径阻断。边界：*ent.Client接口可传普通client，因此生产接入必须显式传原tx.Client()；本测试证明能够共用原事务，不能证明所有未来调用都如此。json.Unmarshal并非完整严格JSON，重复key及大整数归一化未统一处理；当前Graph目的地字段要求字符串，不将此证据泛化到数值身份。SQLite证据不替代PG17/角色准入，本轮未重复私有PG suite。
+
+邮件生产者/worker与Incident outbox尚未调用这些描述入口，typed EmailTarget/045和原目标重绑RED仍未关闭。下一步将两种可信来源汇入原EmailService目标结构与原持久协议，不以接口存在宣称邮件已绑定。固定CandidateSHA与候选停止状态不变，无WSL/共享数据库操作、企业外发、push/main合并，S5/S6/T3/T4/G3未完成。
+
+最终验证：s5-persisted-description-final.log database/connector/.../bootstrap全包race PASS，无FAIL/SKIP/DATA RACE；s5-persisted-description-build.log全后端build exit0。独立最终只读审阅无新增阻断，git diff --check通过，本轮Go进程已退出。
