@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 
@@ -40,7 +41,7 @@ func newDelegationFixture(t *testing.T) (*CustomProcessEngine, *KafDelegationSer
 	client := enttest.Open(t, "sqlite3", "file:kaf_delegation_service?mode=memory&cache=shared&_fk=1")
 	t.Cleanup(func() { client.Close() })
 
-	engineIface := NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar())
+	engineIface := NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	engine, ok := engineIface.(*CustomProcessEngine)
 	require.True(t, ok)
 

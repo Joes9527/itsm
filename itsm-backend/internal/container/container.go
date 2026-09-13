@@ -95,7 +95,7 @@ func (c *Container) initCoreServices(policy *database.ExecutionPolicy) {
 
 	// BPMN binding and professional transition orchestration.
 	c.processBindingService = service.NewProcessBindingService(c.client)
-	processEngine := service.NewCustomProcessEngine(c.client, c.logger)
+	processEngine := service.NewCustomProcessEngine(c.client, c.logger, policy)
 	c.processTriggerService = service.NewProcessTriggerService(c.client, processEngine)
 }
 

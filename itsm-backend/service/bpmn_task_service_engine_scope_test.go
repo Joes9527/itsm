@@ -107,7 +107,7 @@ func setupTicketCallbackEngine(t *testing.T) (*ent.Client, *CustomProcessEngine,
 	require.NoError(t, err)
 
 	logger := zap.NewNop().Sugar()
-	engine := NewCustomProcessEngine(client, logger).(*CustomProcessEngine)
+	engine := NewCustomProcessEngine(client, logger, executionfixture.Standard()).(*CustomProcessEngine)
 
 	// 用引擎自身的流程定义服务部署夹具（和管理端 /bpmn/process-definitions 走同一条路径），
 	// 而不是手写 ent 插入，保证 definition/deployment 行的形状与生产一致。
@@ -243,7 +243,7 @@ func TestTaskService_ReusesEngineInstanceAndRegistry(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	t.Cleanup(func() { _ = client.Close() })
 
-	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar()).(*CustomProcessEngine)
+	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard()).(*CustomProcessEngine)
 
 	first := engine.TaskService()
 	second := engine.TaskService()

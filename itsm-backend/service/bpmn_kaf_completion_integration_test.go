@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"itsm-backend/handlers/common/accessgrant"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"sync"
 	"testing"
 	"time"
@@ -190,7 +191,7 @@ func testPostgresKafFinalFence(t *testing.T, access bool) {
 	clientB, _ := openBPMNPostgresIntegrationClient(t)
 	barrier := &postgresKafFenceBarrier{arrived: make(chan struct{}), release: make(chan struct{})}
 	clientA.KafTaskActionLedger.Use(barrier.hook())
-	engine := NewCustomProcessEngine(clientA, zap.NewNop().Sugar()).(*CustomProcessEngine)
+	engine := NewCustomProcessEngine(clientA, zap.NewNop().Sugar(), executionfixture.Standard()).(*CustomProcessEngine)
 	contributor := &postgresAccessContribution{}
 	if access {
 		engine.SetAccessCompletionContributor(contributor)

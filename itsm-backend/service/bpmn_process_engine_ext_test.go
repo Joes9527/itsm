@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 
@@ -94,7 +95,7 @@ func TestBPMNProcessEngine_GetTasksUsesTenantScopedProcessTasks(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	engine := NewCustomProcessEngine(client, logger).(*CustomProcessEngine)
+	engine := NewCustomProcessEngine(client, logger, executionfixture.Standard()).(*CustomProcessEngine)
 	getTasks := engine.exprEngine.Functions["getTasks"].(func(context.Context, string) []interface{})
 	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, 101)
 	tasks := getTasks(tenantCtx, "alice")
@@ -777,7 +778,7 @@ func newApprovalDecisionTestEngine(t *testing.T) (*CustomProcessEngine, context.
 	client := enttest.Open(t, "sqlite3", "file:approval_decisions_engine?mode=memory&cache=shared&_fk=1")
 	t.Cleanup(func() { client.Close() })
 	logger := zaptest.NewLogger(t).Sugar()
-	engineIface := NewCustomProcessEngine(client, logger)
+	engineIface := NewCustomProcessEngine(client, logger, executionfixture.Standard())
 	engine, ok := engineIface.(*CustomProcessEngine)
 	require.True(t, ok, "expected ProcessEngine to be *CustomProcessEngine")
 	return engine, context.Background()

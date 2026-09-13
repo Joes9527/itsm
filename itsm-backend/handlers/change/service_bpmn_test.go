@@ -277,7 +277,7 @@ func TestChangeServiceTaskHandler_CreateChange_DelegatesToRealServiceAndCreatesW
 	ConfigureChangeIntakeFixture(ctx, client, tenantID, "agent")
 	app := NewChangeIntakeApp(client, svc, logger)
 
-	engine := service.NewCustomProcessEngine(client, logger).(*service.CustomProcessEngine)
+	engine := service.NewCustomProcessEngine(client, logger, executionfixture.Standard()).(*service.CustomProcessEngine)
 	engine.CallbackRegistry().GetHandler("change_service_handler").(*bpmn.ChangeServiceTaskHandler).SetCreationApplication(app, client)
 	source := client.Ticket.Create().SetTenantID(tenantID).SetRequesterID(actorID).SetOpenedByID(actorID).SetTitle("BPMN 源工单").SetTicketNumber("SOURCE-CREATE").SetRecordClass("generic").SetStatus("open").SetPriority("medium").SaveX(ctx)
 

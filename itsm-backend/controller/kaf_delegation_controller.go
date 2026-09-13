@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"itsm-backend/database"
 	"net/http"
 	"strconv"
 	"strings"
@@ -22,9 +23,9 @@ type KafDelegationController struct {
 	processEngine service.ProcessEngine
 }
 
-func NewKafDelegationController(client *ent.Client, processEngine service.ProcessEngine) *KafDelegationController {
+func NewKafDelegationController(client *ent.Client, processEngine service.ProcessEngine, execution *database.ExecutionPolicy) *KafDelegationController {
 	return &KafDelegationController{
-		service:       service.NewKafDelegationService(client),
+		service:       service.NewKafDelegationService(client, execution),
 		processEngine: processEngine,
 	}
 }

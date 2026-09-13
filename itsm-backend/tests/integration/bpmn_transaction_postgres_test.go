@@ -49,7 +49,7 @@ func transactionBPMNFixture(t *testing.T, userTask bool) (*incidentEffectsFixtur
 	ctx = service.WithBPMNAccessScope(ctx, service.BPMNAccessScope{TenantID: f.tenant.ID, UserID: f.actor.ID})
 	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, f.tenant.ID)
 	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, f.actor.ID)
-	engine := service.NewCustomProcessEngine(clients.Tenant, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
+	engine := service.NewCustomProcessEngine(clients.Tenant, zap.NewNop().Sugar(), executionfixture.Standard()).(*service.CustomProcessEngine)
 	engine.SetCallbackCandidateClient(clients.System)
 	domain := service.NewIncidentService(clients.Tenant, zap.NewNop().Sugar(), executionfixture.Standard())
 	domain.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())

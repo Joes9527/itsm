@@ -40,7 +40,7 @@ func newGovernedChangeFixture(t *testing.T, kind string) *governedChangeFixture 
 	approver := client.User.Create().SetTenantID(tenant).SetUsername("governed-cab").SetName("CAB").SetEmail("cab@example.test").SetPasswordHash("test").SetRole("super_admin").SetActive(true).SaveX(ctx)
 	role := client.Role.Create().SetTenantID(tenant).SetCode("change_manager").SetName("CAB").SaveX(ctx)
 	approver.Update().AddRoleIDs(role.ID).ExecX(ctx)
-	engine := service.NewCustomProcessEngine(client, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
+	engine := service.NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard()).(*service.CustomProcessEngine)
 	svc := NewService(NewEntRepository(client, nil), client, zap.NewNop().Sugar(), executionfixture.Standard())
 	svc.SetProcessEngine(engine)
 	deployment := client.ProcessDeployment.Create().SetTenantID(tenant).SetDeploymentID("governed").SetDeploymentName("Governed").SaveX(ctx)

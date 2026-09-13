@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -107,7 +108,7 @@ func setupReleaseController(t *testing.T) (*gin.Engine, *ent.Client, int, int) {
 	_, err := service.NewBPMNTemplateService(client).LoadAndDeployTemplates(context.Background(), tenantID)
 	require.NoError(t, err)
 	require.NoError(t, service.NewProcessBindingService(client).InitDefaultBindings(context.Background(), tenantID))
-	engine := service.NewCustomProcessEngine(client, logger)
+	engine := service.NewCustomProcessEngine(client, logger, executionfixture.Standard())
 	svc.SetProcessEngine(engine)
 	svc.SetProcessTriggerService(service.NewProcessTriggerService(client, engine))
 	ctrl := NewReleaseController(logger, svc)

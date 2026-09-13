@@ -263,7 +263,7 @@ func TestPostgresIntakeMSPSharedSnapshotAndDurableEffects(t *testing.T) {
 	require.NoError(t, owner.RuleEngine().Deliver(ctx, event))
 	require.NoError(t, owner.RuleEngine().Deliver(ctx, event))
 	start := clients.Tenant.OutboxEvent.Query().Where(outboxevent.EventType("workflow.start.requested")).OnlyX(ctx)
-	engine := service.NewCustomProcessEngine(clients.Tenant, logger).(*service.CustomProcessEngine)
+	engine := service.NewCustomProcessEngine(clients.Tenant, logger, executionfixture.Standard()).(*service.CustomProcessEngine)
 	handler := service.NewWorkflowStartOutboxHandler(clients.Tenant, engine, clients.System)
 	require.NoError(t, handler.Deliver(ctx, start))
 	require.NoError(t, handler.Deliver(ctx, start))

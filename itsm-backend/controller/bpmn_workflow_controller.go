@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"itsm-backend/database"
 	"strconv"
 	"strings"
 	"time"
@@ -28,13 +29,13 @@ type BPMNWorkflowController struct {
 }
 
 // NewBPMNWorkflowController 创建BPMN工作流控制器
-func NewBPMNWorkflowController(processEngine service.ProcessEngine, versionService *service.BPMNVersionService, clients ...*ent.Client) *BPMNWorkflowController {
+func NewBPMNWorkflowController(processEngine service.ProcessEngine, versionService *service.BPMNVersionService, execution *database.ExecutionPolicy, clients ...*ent.Client) *BPMNWorkflowController {
 	controller := &BPMNWorkflowController{
 		processEngine:  processEngine,
 		versionService: versionService,
 	}
 	if len(clients) > 0 && clients[0] != nil {
-		controller.kafDelegationController = NewKafDelegationController(clients[0], processEngine)
+		controller.kafDelegationController = NewKafDelegationController(clients[0], processEngine, execution)
 	}
 	return controller
 }

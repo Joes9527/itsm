@@ -120,7 +120,7 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 	require.NoError(t, err)
 
 	// Initialize BPMN Engine & Trigger Service
-	engine := service.NewCustomProcessEngine(client, logger)
+	engine := service.NewCustomProcessEngine(client, logger, executionfixture.Standard())
 	triggerSvc := service.NewProcessTriggerService(client, engine)
 	slaSvc := service.NewTicketSLAService(client, logger)
 
@@ -138,7 +138,7 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 	// Initialize Controllers & Handlers
 	ticketController := controller.NewTicketController(ticketSvc, nil, nil, client, logger)
 	versionSvc := service.NewBPMNVersionService(client, logger)
-	bpmnController := controller.NewBPMNWorkflowController(engine, versionSvc)
+	bpmnController := controller.NewBPMNWorkflowController(engine, versionSvc, executionfixture.Standard())
 
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, logger, sameTransactionDirectory{})

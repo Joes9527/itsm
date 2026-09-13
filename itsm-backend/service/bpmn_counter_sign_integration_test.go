@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"sync"
 	"testing"
@@ -186,7 +187,7 @@ func TestCounterSignDistinctChildVotesConvergePostgres(t *testing.T) {
 			release: release,
 		}
 		clients[i].ProcessTask.Intercept(barriers[i].interceptor())
-		engines[i] = NewCustomProcessEngine(clients[i], zap.NewNop().Sugar()).(*CustomProcessEngine)
+		engines[i] = NewCustomProcessEngine(clients[i], zap.NewNop().Sugar(), executionfixture.Standard()).(*CustomProcessEngine)
 	}
 
 	results := make(chan error, 2)

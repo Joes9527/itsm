@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 
 	"itsm-backend/ent"
@@ -41,7 +42,7 @@ func setupUserTaskCallbackEnv(t *testing.T) (*ent.Client, ProcessEngine, context
 	require.NoError(t, err)
 
 	logger := zap.NewNop().Sugar()
-	engine := NewCustomProcessEngine(client, logger)
+	engine := NewCustomProcessEngine(client, logger, executionfixture.Standard())
 
 	_, err = NewBPMNTemplateService(client).LoadAndDeployTemplates(ctx, tenant.ID)
 	require.NoError(t, err)

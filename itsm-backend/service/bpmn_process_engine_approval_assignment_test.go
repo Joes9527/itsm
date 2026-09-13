@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"testing"
 	"time"
@@ -32,7 +33,7 @@ func newApprovalAssignmentFixture(t *testing.T) *approvalAssignmentFixture {
 	client := enttest.Open(t, "sqlite3", "file:approval_assignment_test?mode=memory&cache=shared&_fk=1")
 	t.Cleanup(func() { client.Close() })
 	logger := zaptest.NewLogger(t).Sugar()
-	engineIface := NewCustomProcessEngine(client, logger)
+	engineIface := NewCustomProcessEngine(client, logger, executionfixture.Standard())
 	engine, ok := engineIface.(*CustomProcessEngine)
 	require.True(t, ok, "expected ProcessEngine to be *CustomProcessEngine")
 

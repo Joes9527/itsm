@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -206,7 +207,7 @@ func newBPMNWorkflowTestRouter(t *testing.T) (*gin.Engine, *fakeTaskService) {
 	t.Cleanup(func() { _ = client.Close() })
 	fakeTask := &fakeTaskService{}
 	engine := &fakeProcessEngine{taskSvc: fakeTask}
-	ctrl := NewBPMNWorkflowController(engine, nil)
+	ctrl := NewBPMNWorkflowController(engine, nil, executionfixture.Standard())
 
 	r := gin.New()
 	r.Use(gin.Recovery())

@@ -363,3 +363,23 @@ B2 私有证据（均位于本机 candidate-delivery/b2）：
 当前 tagged candidate test 明确处于 RED，待后续修复后重新运行并审阅。未操作 WSL/共享库或启动候选，固定 CandidateSHA 不变，未推送/合并 main；S3/S4 及全交付继续未完成。
 
 独立 reviewer `review_execution_scope_s1` 确认上述真实 RED 有效；补充必须覆盖 ensureKafCompletionReceipt/updateKafCompletionReceipt/makeKafCallbacksDue/enqueueRecoveredKafCallback/runKafFencedWrite 的独立恢复写事务，forClient 克隆需保留 policy 和原 tx。当前新 process instance fixture 仍无结构引用，正向修复测试需在新建时显式设置，不能回填历史。建议增加 claim 后关闭 scope 的 finalize/recover 完整字段保全断言。
+
+
+### B2 S3/S4 KAF 原事务准入与异步恢复（2026-09-13）
+
+关闭 `e512a0edf` 的历史 claim RED：冻结 execution policy 显式贯通 bootstrap/container→CustomProcessEngine→KafDelegationService，以及 BPMNWorkflowController→KafDelegationController 的独立构造链。测试调用显式 standard/candidate；无默认 standard 或可变 setter。forClient 保留冻结策略和调用方 owningTx。policy.IsCandidate 仅描述模式，所有调用先 BindEnt，nil policy 不得绕过写检查。
+
+候选原事务从 tenant/task→ProcessInstance.ExecutionWorkItemID 校验成员，NULL 拒绝，不猜测业务字符串或回填历史。claim INSERT 与随后独立 lease CAS 分别准入；已 applied ledger 先只读查验回放，避免 INSERT 探测。finalizeKafAction 改为受保护事务，finalizeAppliedKafAction 与 persistNonCompletingAction 在原事务首写前准入。completion、callback retry/recovery、receipt create/update、runKafFencedWrite 也在各自原事务检查，原 token/lease/version fencing 保留。只有 ErrDenied 映射 Forbidden，基础设施故障保留 cause。
+
+恢复测试同时复现现有缺陷：异步 KAF recovery 调用了仅同步 handler 提供的 callback contract filter，重新开放 scope 仍报 `callback handler has no synchronous contract`。异步恢复现复用首次完成的 validateAndCloneBPMNParticipantVariables 校验，再设置权威 descriptor.action；保持 KAF 不是同步 CallbackContractProvider，未知 handler 仍拒绝。
+
+本机 candidate-delivery/b2 证据：
+
+- `s4-kaf-writes-pg.log`：历史 claim 已 false、ledger 0→0；失败仅因旧 completion 文本断言，已改用 ErrDenied 语义断言。独立审阅指出错误分类，已修复。
+- `s4-kaf-claim-final-pg.log`：真实新成员 claim、非空 digest、重复领取 InProgress；scope closed 时拒绝重取已过期 lease，ledger 完整字段不变，完整基础测试 PASS。
+- `s4-kaf-recovery-final-pg.log`：恢复 scope 拒绝通过，但重新 active 遇到上述异步合同错误，未作为成功证据。
+- `s4-kaf-recovery-verified-pg.log`：最终完整真实私有 PG TestCandidateIntakeCreationBoundary PASS、未 skip。包含 claim 拒绝/成功/重取范围、新成员 completion/fence 写后故障回滚与精度重放；已完成任务回执置 pending 后，closed scope 拒绝恢复，相关 receipt/callback 完整字段与 base/extension/task/instance/ledger 等不变；active 后原引擎恢复成功。
+- `s4-kaf-recovery-regression.log`：service/service-bpmn/controller/service_request 四包 KAF/BPMN/Access/SSLVPN/Callback 定向回归 PASS；`s4-kaf-recovery-build.json`：最终后端全量构建 exit 0。
+- `s4-kaf-integration-compile.log`：integration 标签下五包编译 PASS（其后仅恢复实现与新增测试改动，由最终构建、定向回归和真实 PG 验证）。编译不代表目标环境测试运行。
+
+独立 reviewer `review_execution_scope_s1` 最终确认错误分类、构造传递、原事务、异步变量边界与最终 PG PASS 无阻断。**仍属分段验证**：claim 与 completion 使用不同 fixture ledger，并未证明完整 ExecuteAction；初始审批/provider 仍为前置 fixture。历史 applied claim 专项、active scope 下过期 lease 成功重取、scope 关闭后全部 finalize/non-completing 分支及 HTTP 入口还需真实专项测试。CreateDelegatedTask 两条生产路径、非 KAF 通用 callback/outbox worker、共享能力、S4其余/S5/S6/B3 尚未完成。固定 CandidateSHA 不变，候选不启动，未操作 WSL/共享库、推送或合并 main。

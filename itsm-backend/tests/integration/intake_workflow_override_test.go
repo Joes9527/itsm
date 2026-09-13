@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 
@@ -144,7 +145,7 @@ func TestIntakeBPMNRuntimeWorkflowOverrideRequiresCurrentPermission(t *testing.T
 			}
 			xml := `<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><process id="source" isExecutable="true"><startEvent id="start"/><serviceTask id="create"><extensionElements><metaData name="service_task_type">incident_task</metaData><metaData name="action">create_incident</metaData></extensionElements></serviceTask><endEvent id="end"/><sequenceFlow id="a" sourceRef="start" targetRef="create"/><sequenceFlow id="b" sourceRef="create" targetRef="end"/></process></definitions>`
 			definition := entryDefinition(t, f, "source", f.identity.TenantID, xml)
-			engine := service.NewCustomProcessEngine(f.client, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
+			engine := service.NewCustomProcessEngine(f.client, zap.NewNop().Sugar(), executionfixture.Standard()).(*service.CustomProcessEngine)
 			engine.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler).SetCreationApplication(f.app, f.client)
 			ctx = service.WithTrustedBPMNTenantContext(ctx, f.identity.TenantID)
 			ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, f.identity.ActorID)

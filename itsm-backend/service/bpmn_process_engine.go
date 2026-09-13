@@ -110,6 +110,7 @@ type TaskService interface {
 // CustomProcessEngine 是ProcessEngine接口的实现
 // 充当领域服务(Domain Service)，协调流程定义、实例和任务实体的生命周期
 type CustomProcessEngine struct {
+	execution                   *database.ExecutionPolicy
 	accessCompletionContributor AccessCompletionContributor
 	client                      *ent.Client
 	logger                      *zap.SugaredLogger
@@ -144,11 +145,11 @@ type kafCompletionFence struct {
 }
 
 // NewCustomProcessEngine 创建自定义流程引擎实例
-func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger) ProcessEngine {
+func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) ProcessEngine {
 	groupResolver := bpmn.NewGroupResolver(client)
 	participationResolver := newBPMNParticipationResolver(client, groupResolver)
 	instanceAccessPolicy := newBPMNInstanceAccessPolicy(client, participationResolver)
-	engine := &CustomProcessEngine{
+	engine := &CustomProcessEngine{execution: execution,
 		client:                client,
 		logger:                logger,
 		parser:                NewBPMNParser(),
@@ -169,7 +170,7 @@ func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger) Proce
 	// 这一个 engine 的 registry 里注入 TicketService/IncidentService。任务完成路径若临时
 	// 新建 engine，持久化执行和 worker 恢复都会拿到未注入的空 registry。
 	engine.taskService = &bpmnTaskService{client: client, logger: logger, groupResolver: engine.groupResolver, participationResolver: participationResolver, instanceAccessPolicy: instanceAccessPolicy, engine: engine}
-	engine.kafDelegationService = NewKafDelegationService(client)
+	engine.kafDelegationService = NewKafDelegationService(client, execution)
 	// 注册流程相关的内置函数
 	engine.registerProcessFunctions()
 

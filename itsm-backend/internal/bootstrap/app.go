@@ -317,7 +317,7 @@ func NewApplication() *Application {
 
 	// BPMN 子服务（必须在 TicketService 之前创建）
 	processBindingService := service.NewProcessBindingService(client)
-	concreteProcessEngine := service.NewCustomProcessEngine(client, sugar).(*service.CustomProcessEngine)
+	concreteProcessEngine := service.NewCustomProcessEngine(client, sugar, executionPolicy).(*service.CustomProcessEngine)
 	concreteProcessEngine.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 	concreteProcessEngine.SetCallbackCandidateClient(systemClient)
 	var processEngine service.ProcessEngine = concreteProcessEngine
@@ -575,7 +575,7 @@ func NewApplication() *Application {
 	ticketTagService := service.NewTicketTagService(client)
 	ticketTagController := controller.NewTicketTagController(ticketTagService, sugar.Desugar())
 
-	bpmnWorkflowController := controller.NewBPMNWorkflowController(processEngine, bpmnVersionService, client)
+	bpmnWorkflowController := controller.NewBPMNWorkflowController(processEngine, bpmnVersionService, executionPolicy, client)
 
 	// BPMN Process Trigger Controller (processBindingService/processTriggerService 已于 119-122 行预创建并注入 V2)
 	configInheritanceService := service.NewConfigInheritanceService(client, sugar)

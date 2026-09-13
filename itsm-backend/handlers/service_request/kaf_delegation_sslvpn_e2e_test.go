@@ -256,7 +256,7 @@ func newSSLVPNDelegationFixture(t *testing.T, supplied ...*ent.Client) *sslvpnDe
 	automation, err := client.User.Create().SetUsername("kaf-automation").SetEmail("kaf@sslvpn.example.test").SetName("KAF Automation").SetPasswordHash("hash").SetRole("kaf_automation").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 	workflowCtx := context.WithValue(context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID), bpmn.BPMNUserIDContextKey, automation.ID)
-	return &sslvpnDelegationFixture{client: client, engine: itsmservice.NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar()), delegation: itsmservice.NewKafDelegationService(client), ctx: workflowCtx, tenant: tenant, requester: requester, approver: approver}
+	return &sslvpnDelegationFixture{client: client, engine: itsmservice.NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard()), delegation: itsmservice.NewKafDelegationService(client, executionfixture.Standard()), ctx: workflowCtx, tenant: tenant, requester: requester, approver: approver}
 }
 
 func deploySSLVPNDefinition(t *testing.T, fx *sslvpnDelegationFixture, key, nodes, flows string) {

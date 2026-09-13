@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"itsm-backend/common/executionscope"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/config"
 	"itsm-backend/database"
@@ -31,7 +32,9 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/intakerequest"
+	"itsm-backend/ent/kaftaskcompletionreceipt"
 	"itsm-backend/ent/outboxevent"
+	"itsm-backend/ent/processcallbackoutbox"
 	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/servicerequestaccesssnapshot"
 	"itsm-backend/ent/ticket"
@@ -270,7 +273,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			require.NoError(t, owner.CatalogAccessPolicy.DeleteOne(accessPolicy).Exec(ctx))
 		}()
 		completionOwner := srdomain.NewService(srdomain.NewEntRepository(runtime, policy), runtime, zap.NewNop().Sugar(), nil, policy)
-		engine := service.NewCustomProcessEngine(runtime, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
+		engine := service.NewCustomProcessEngine(runtime, zap.NewNop().Sugar(), policy).(*service.CustomProcessEngine)
 		engine.SetAccessCompletionContributor(completionOwner)
 		engine.CallbackRegistry().RegisterHandler(bpmn.NewKafDelegateServiceTaskHandler(runtime, zap.NewNop().Sugar()))
 		injected := errors.New("injected KAF final lease fence failure")
@@ -291,7 +294,11 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			deployment := owner.ProcessDeployment.Create().SetDeploymentID(key).SetDeploymentName(key).SetTenantID(tenant.ID).SaveX(ctx)
 			xml := `<?xml version="1.0" encoding="UTF-8"?><bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="https://example.invalid"><bpmn:process id="candidate-kaf" isExecutable="true"><bpmn:startEvent id="Start"/><bpmn:serviceTask id="Current"/><bpmn:endEvent id="End"/><bpmn:sequenceFlow id="S1" sourceRef="Start" targetRef="Current"/><bpmn:sequenceFlow id="S2" sourceRef="Current" targetRef="End"/></bpmn:process></bpmn:definitions>`
 			definition := owner.ProcessDefinition.Create().SetKey(key).SetName(key).SetVersion("1").SetIsLatest(true).SetBpmnXML([]byte(xml)).SetDeploymentID(deployment.ID).SetTenantID(tenant.ID).SaveX(ctx)
-			instance := owner.ProcessInstance.Create().SetProcessInstanceID(key).SetProcessDefinitionKey(key).SetProcessDefinitionID(definition.ID).SetBusinessKey(fmt.Sprintf("service_request_item:%d", itemID)).SetBusinessType("service_request_item").SetBusinessID(itemID).SetStatus("running").SetCurrentActivityID("Current").SetVersion(1).SetTenantID(tenant.ID).SaveX(ctx)
+			var executionID *int
+			if kind != "historical" {
+				executionID = &itemID
+			}
+			instance := owner.ProcessInstance.Create().SetNillableExecutionWorkItemID(executionID).SetProcessInstanceID(key).SetProcessDefinitionKey(key).SetProcessDefinitionID(definition.ID).SetBusinessKey(fmt.Sprintf("service_request_item:%d", itemID)).SetBusinessType("service_request_item").SetBusinessID(itemID).SetStatus("running").SetCurrentActivityID("Current").SetVersion(1).SetTenantID(tenant.ID).SaveX(ctx)
 			task := owner.ProcessTask.Create().SetTaskID(key).SetProcessInstanceID(instance.ID).SetProcessDefinitionKey(key).SetTaskDefinitionKey("Current").SetTaskName(key).SetCreatedTime(time.Now().Add(-time.Second)).SetTaskType(bpmn.KafDelegateTaskType).SetStatus("delegated").SetTaskVariables(map[string]interface{}{"allowed_actions": "complete_bpmn_task"}).SetCallbackHandlerID("kaf_delegate_handler").SetCallbackTaskType(bpmn.KafDelegateTaskType).SetCallbackAction(accessgrant.Capability).SetCallbackConfigRef(fmt.Sprint(accessPolicy.ID)).SetTenantID(tenant.ID).SaveX(ctx)
 			owner.ProcessApprovalDecision.Create().SetProcessInstanceID(instance.ID).SetProcessTaskID(task.ID).SetProcessInstanceKey(key).SetTaskID(key + "-approval").SetProcessDefinitionKey(key).SetNodeKey("Approval").SetActorID(actor.ID).SetAction("approve").SetDecision("approved").SetTenantID(tenant.ID).SaveX(ctx)
 			owner.ServiceRequestAccessSnapshot.Create().SetWorkItemID(itemID).SetPolicyID(accessPolicy.ID).SetPolicyVersion(1).SetProvider("graph").SetExternalSystem("directory").SetSubjectID("approved-subject").SetGroupID("approved-group").SetDurationKey("month").SetDurationSeconds(2592000).SaveX(ctx)
@@ -300,7 +307,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 					Execution: service.KafActionExecution{RunID: "historical-claim", StepID: "finish", CorrelationID: key, ProcedureRef: "access", ProcedureVersion: "1"}}
 				claim.Execution.IdempotencyKey = fmt.Sprintf("%d:%s:%s:%s", tenant.ID, task.TaskID, claim.Execution.RunID, claim.Execution.StepID)
 				beforeClaims := owner.KafTaskActionLedger.Query().CountX(ctx)
-				_, claimed, claimErr := service.NewKafDelegationService(runtime).ClaimKafAction(ctx, task, claim)
+				_, claimed, claimErr := service.NewKafDelegationService(runtime, policy).ClaimKafAction(ctx, task, claim)
 				t.Logf("historical claim: claimed=%t, ledger count before=%d after=%d", claimed, beforeClaims, owner.KafTaskActionLedger.Query().CountX(ctx))
 				require.Error(t, claimErr, "historical task must be rejected before ledger INSERT or lease UPDATE")
 				require.False(t, claimed)
@@ -321,8 +328,37 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				verifiedAt = time.Now().UTC().Truncate(time.Millisecond).Add(1500 * time.Nanosecond)
 			}
 			variables := map[string]interface{}{"kaf_access_result": map[string]interface{}{"outcome": "granted", "provider": "graph", "subjectId": "approved-subject", "groupId": "approved-group", "baseline": "not_member", "verifiedAt": verifiedAt.Format(time.RFC3339Nano), "evidenceRef": key}}
+			if kind != "historical" {
+				claim := service.KafActionRequest{Action: "complete_bpmn_task", ExpectedVersion: instance.Version,
+					Execution: service.KafActionExecution{RunID: "candidate-claim", StepID: "finish", CorrelationID: key, ProcedureRef: "access", ProcedureVersion: "1"}}
+				claim.Execution.IdempotencyKey = fmt.Sprintf("%d:%s:%s:%s", tenant.ID, task.TaskID, claim.Execution.RunID, claim.Execution.StepID)
+				claim.Payload.AccessResult, err = json.Marshal(variables["kaf_access_result"])
+				require.NoError(t, err)
+				claimOwner := service.NewKafDelegationService(runtime, policy)
+				claimedLedger, claimed, claimErr := claimOwner.ClaimKafAction(ctx, task, claim)
+				require.NoError(t, claimErr)
+				require.True(t, claimed)
+				require.Equal(t, "executing", claimedLedger.ResultStatus)
+				require.NotEmpty(t, claimedLedger.RequestDigest)
+				_, claimed, claimErr = claimOwner.ClaimKafAction(ctx, task, claim)
+				require.ErrorIs(t, claimErr, service.ErrKafActionInProgress)
+				require.False(t, claimed)
+				if kind == "rollback" {
+					owner.KafTaskActionLedger.UpdateOneID(claimedLedger.ID).SetLeaseExpiresAt(time.Now().Add(-time.Minute)).ExecX(ctx)
+					beforeClaim, _ := json.Marshal(owner.KafTaskActionLedger.GetX(ctx, claimedLedger.ID))
+					_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='closed' WHERE id=$1", scopeID)
+					require.NoError(t, err)
+					_, claimed, claimErr = claimOwner.ClaimKafAction(ctx, task, claim)
+					_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='active' WHERE id=$1", scopeID)
+					require.NoError(t, err)
+					require.ErrorIs(t, claimErr, executionscope.ErrDenied)
+					require.False(t, claimed)
+					afterClaim, _ := json.Marshal(owner.KafTaskActionLedger.GetX(ctx, claimedLedger.ID))
+					require.JSONEq(t, string(beforeClaim), string(afterClaim))
+				}
+			}
 			snapshot := func() []byte {
-				v, err := json.Marshal([]interface{}{owner.Ticket.GetX(ctx, itemID), owner.ServiceRequest.Query().Where(servicerequest.TicketIDEQ(itemID)).OnlyX(ctx), owner.ProcessTask.GetX(ctx, task.ID), owner.ProcessInstance.GetX(ctx, instance.ID), owner.KafTaskActionLedger.GetX(ctx, ledger.ID), owner.KafTaskCompletionReceipt.Query().CountX(ctx), owner.ServiceRequestAccessResult.Query().CountX(ctx), owner.AuditLog.Query().CountX(ctx), owner.OutboxEvent.Query().CountX(ctx)})
+				v, err := json.Marshal([]interface{}{owner.Ticket.GetX(ctx, itemID), owner.ServiceRequest.Query().Where(servicerequest.TicketIDEQ(itemID)).OnlyX(ctx), owner.ProcessTask.GetX(ctx, task.ID), owner.ProcessInstance.GetX(ctx, instance.ID), owner.KafTaskActionLedger.GetX(ctx, ledger.ID), owner.KafTaskCompletionReceipt.Query().Where(kaftaskcompletionreceipt.LedgerIDEQ(ledger.ID)).AllX(ctx), owner.ProcessCallbackOutbox.Query().Where(processcallbackoutbox.ProcessTaskIDEQ(task.ID)).AllX(ctx), owner.ServiceRequestAccessResult.Query().CountX(ctx), owner.AuditLog.Query().CountX(ctx), owner.OutboxEvent.Query().CountX(ctx)})
 				require.NoError(t, err)
 				return v
 			}
@@ -332,7 +368,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			fail = false
 			switch kind {
 			case "historical":
-				require.ErrorContains(t, err, "execution scope denied")
+				require.ErrorIs(t, err, executionscope.ErrDenied)
 				require.JSONEq(t, string(before), string(snapshot()))
 			case "rollback":
 				require.ErrorIs(t, err, injected)
@@ -345,6 +381,19 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				replayed := snapshot()
 				require.NoError(t, engine.CompleteKafDelegatedTask(actionCtx, ledger.ID, key, key, variables))
 				require.JSONEq(t, string(replayed), string(snapshot()))
+				if kind == "success" {
+					owner.KafTaskCompletionReceipt.Update().Where(kaftaskcompletionreceipt.LedgerIDEQ(ledger.ID)).SetStatus("callback_pending").SaveX(ctx)
+					beforeRecovery := snapshot()
+					_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='closed' WHERE id=$1", scopeID)
+					require.NoError(t, err)
+					recoveryErr := engine.CompleteKafDelegatedTask(actionCtx, ledger.ID, key, key, variables)
+					_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='active' WHERE id=$1", scopeID)
+					require.NoError(t, err)
+					require.ErrorIs(t, recoveryErr, executionscope.ErrDenied)
+					require.JSONEq(t, string(beforeRecovery), string(snapshot()))
+					require.NoError(t, engine.CompleteKafDelegatedTask(actionCtx, ledger.ID, key, key, variables))
+				}
+
 			}
 		}
 	})

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 
 	"itsm-backend/ent/enttest"
@@ -40,7 +41,7 @@ func TestApprovalGatewayReadsApplicationVariableName(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := zap.NewNop().Sugar()
-	engine := NewCustomProcessEngine(client, logger)
+	engine := NewCustomProcessEngine(client, logger, executionfixture.Standard())
 
 	deploymentSvc := NewBPMNTemplateService(client)
 

@@ -367,7 +367,7 @@ func TestPostgresRLSRuntimeCallbackSweep(t *testing.T) {
 	clients, cfg := runtimeClients(t, f)
 	_, err := f.db.ExecContext(f.ctx, "GRANT SELECT,UPDATE ON process_callback_outboxes TO "+cfg.User)
 	require.NoError(t, err)
-	engine := service.NewCustomProcessEngine(clients.Tenant, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
+	engine := service.NewCustomProcessEngine(clients.Tenant, zap.NewNop().Sugar(), executionfixture.Standard()).(*service.CustomProcessEngine)
 	engine.SetCallbackCandidateClient(clients.System)
 	count, err := engine.ProcessPendingCallbacks(context.Background(), "a7-callback-worker", 10)
 	require.NoError(t, err)

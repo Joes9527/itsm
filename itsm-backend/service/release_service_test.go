@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"strings"
 	"sync"
@@ -88,7 +89,7 @@ func TestReleaseService_CreateReleaseRollsBackWhenWorkflowStartFails(t *testing.
 	actor := client.User.Create().SetUsername("failing-workflow").SetEmail("failing-workflow@test").SetName("Failing workflow").SetPasswordHash("x").SetActive(true).SetTenantID(tenant.ID).SaveX(ctx)
 
 	svc := NewReleaseService(client, zaptest.NewLogger(t).Sugar())
-	svc.SetProcessEngine(NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar()))
+	svc.SetProcessEngine(NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard()))
 	svc.SetProcessTriggerService(&failingReleaseProcessTrigger{err: errors.New("binding unavailable")})
 	result, err := svc.CreateRelease(ctx, &dto.CreateReleaseRequest{
 		ReleaseNumber: "REL-START-FAIL", Title: "rollback release", Type: "minor",
@@ -108,7 +109,7 @@ func TestReleaseService_CreateReleaseRollsBackWhenWorkflowReturnsEmptySuccess(t 
 	actor := client.User.Create().SetUsername("empty-workflow").SetEmail("empty-workflow@test").SetName("Empty workflow").SetPasswordHash("x").SetActive(true).SetTenantID(tenant.ID).SaveX(ctx)
 
 	svc := NewReleaseService(client, zaptest.NewLogger(t).Sugar())
-	svc.SetProcessEngine(NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar()))
+	svc.SetProcessEngine(NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard()))
 	svc.SetProcessTriggerService(&emptyReleaseProcessTrigger{})
 	result, err := svc.CreateRelease(ctx, &dto.CreateReleaseRequest{
 		ReleaseNumber: "REL-EMPTY-START", Title: "rollback empty workflow start", Type: "minor",
@@ -128,7 +129,7 @@ func TestReleaseService_CreateReleaseRollsBackWhenWorkflowIdentityMismatches(t *
 	actor := client.User.Create().SetUsername("wrong-workflow").SetEmail("wrong-workflow@test").SetName("Wrong workflow").SetPasswordHash("x").SetActive(true).SetTenantID(tenant.ID).SaveX(ctx)
 
 	svc := NewReleaseService(client, zaptest.NewLogger(t).Sugar())
-	svc.SetProcessEngine(NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar()))
+	svc.SetProcessEngine(NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard()))
 	svc.SetProcessTriggerService(&mismatchedReleaseProcessTrigger{})
 	result, err := svc.CreateRelease(ctx, &dto.CreateReleaseRequest{
 		ReleaseNumber: "REL-WRONG-START", Title: "rollback mismatched workflow start", Type: "minor",
@@ -147,7 +148,7 @@ func TestReleaseService_DeliversTransactionalWorkflowCallbacksOnlyAfterCommit(t 
 	actor := client.User.Create().SetUsername("release-post-commit").SetEmail("release-post-commit@test").SetName("Post commit").SetPasswordHash("x").SetActive(true).SetTenantID(tenant.ID).SaveX(ctx)
 	trigger := &commitObservingReleaseProcessTrigger{client: client}
 	svc := NewReleaseService(client, zaptest.NewLogger(t).Sugar())
-	svc.SetProcessEngine(NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar()))
+	svc.SetProcessEngine(NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard()))
 	svc.SetProcessTriggerService(trigger)
 
 	created, err := svc.CreateRelease(ctx, &dto.CreateReleaseRequest{
@@ -340,7 +341,7 @@ func TestReleaseService_UpdateReleaseStatusFailsClosedWithoutAuthoritativeWorkfl
 	require.ErrorContains(t, err, "workflow engine is unavailable")
 	require.Equal(t, "draft", client.Release.GetX(ctx, release.ID).Status)
 
-	engine := NewCustomProcessEngine(client, logger)
+	engine := NewCustomProcessEngine(client, logger, executionfixture.Standard())
 	releaseService.SetProcessEngine(engine)
 	_, err = releaseService.UpdateReleaseStatus(ctx, release.ID, testTenant.ID, testUser.ID, "scheduled")
 	require.ErrorContains(t, err, "workflow instance not found")
@@ -493,7 +494,7 @@ func requireReleaseCreationWorkflow(t *testing.T, client *ent.Client, releaseSer
 	_, err := NewBPMNTemplateService(client).LoadAndDeployTemplates(ctx, tenantID)
 	require.NoError(t, err)
 	require.NoError(t, NewProcessBindingService(client).InitDefaultBindings(ctx, tenantID))
-	engine := NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar())
+	engine := NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	releaseService.SetProcessEngine(engine)
 	releaseService.SetProcessTriggerService(NewProcessTriggerService(client, engine))
 }

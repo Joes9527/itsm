@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -97,7 +98,7 @@ func TestIntakeCreationDurableStartPreservesActorAndCanonicalIdentity(t *testing
 			require.NoError(t, err)
 			require.True(t, replay.Replayed)
 			require.Equal(t, result.WorkItemID, replay.WorkItemID)
-			engine := service.NewCustomProcessEngine(f.client, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
+			engine := service.NewCustomProcessEngine(f.client, zap.NewNop().Sugar(), executionfixture.Standard()).(*service.CustomProcessEngine)
 			handler := service.NewWorkflowStartOutboxHandler(f.client, engine, f.client)
 			require.NoError(t, handler.Deliver(ctx, event))
 			require.NoError(t, handler.Deliver(ctx, event))

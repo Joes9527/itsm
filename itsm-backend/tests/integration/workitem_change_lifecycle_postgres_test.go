@@ -62,7 +62,7 @@ func newChangeLifecycleFixture(t *testing.T, kind string) *changeLifecycleFixtur
 	ctx := tenantctx.WithTenantID(f.ctx, f.tenant.ID)
 	owner := changedomain.NewService(changedomain.NewEntRepository(clients.Tenant, nil), clients.Tenant, zap.NewNop().Sugar(), executionfixture.Standard())
 	owner.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
-	engine := service.NewCustomProcessEngine(clients.Tenant, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
+	engine := service.NewCustomProcessEngine(clients.Tenant, zap.NewNop().Sugar(), executionfixture.Standard()).(*service.CustomProcessEngine)
 	engine.SetCallbackCandidateClient(clients.System)
 	engine.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 	owner.SetProcessEngine(engine)

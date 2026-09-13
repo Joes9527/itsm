@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"testing"
 
@@ -180,7 +181,7 @@ func TestResolveRoleCandidates_MatchesPrimaryAndAdditionalRole(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	engine := NewCustomProcessEngine(client, logger).(*CustomProcessEngine)
+	engine := NewCustomProcessEngine(client, logger, executionfixture.Standard()).(*CustomProcessEngine)
 	names, err := engine.resolveRoleCandidates(ctx, tenant.ID, "it_director")
 	require.NoError(t, err)
 
@@ -225,7 +226,7 @@ func TestCreateUserTask_AssigneeGmChain_ResolvesSubmitterOwnChain(t *testing.T) 
 		Save(ctx)
 	require.NoError(t, err)
 
-	engine := NewCustomProcessEngine(client, logger).(*CustomProcessEngine)
+	engine := NewCustomProcessEngine(client, logger, executionfixture.Standard()).(*CustomProcessEngine)
 
 	instance := &ent.ProcessInstance{TenantID: tenant.ID}
 	assignee := engine.resolveGmChainAssignee(ctx, instance, submitter)
@@ -259,7 +260,7 @@ func TestCreateUserTask_AssigneeGmChain_SelfApprovalFallsBackEmpty(t *testing.T)
 
 	// 提交人自己没有更上级的总经理（manager_id=0），resolveGmChainAssignee 应该返回空串，
 	// 而不是报错或者把提交人自己当成审批人。
-	engine := NewCustomProcessEngine(client, logger).(*CustomProcessEngine)
+	engine := NewCustomProcessEngine(client, logger, executionfixture.Standard()).(*CustomProcessEngine)
 	instance := &ent.ProcessInstance{TenantID: tenant.ID}
 	assignee := engine.resolveGmChainAssignee(ctx, instance, gmSubmitter)
 	assert.Equal(t, "", assignee)

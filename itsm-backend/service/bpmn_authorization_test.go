@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"strings"
 	"testing"
@@ -155,7 +156,7 @@ func newBPMNAuthorizationFixtureWithClient(t *testing.T, client *ent.Client) *bp
 	require.NoError(t, err)
 	workItems := make(map[int]*ent.Ticket)
 
-	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar()).(*CustomProcessEngine)
+	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard()).(*CustomProcessEngine)
 
 	return &bpmnAuthorizationFixture{
 		workItems:   workItems,

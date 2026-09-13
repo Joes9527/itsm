@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -64,7 +65,7 @@ func TestWorkItemBPMNHTTPStartIdentityBoundary(t *testing.T) {
 			ctx.Set("user_id", f.actor.ID)
 			ctx.Set("role", "super_admin")
 			ctx.Set("client", f.runtime)
-			controller.NewBPMNWorkflowController(f.engine, nil).StartProcess(ctx)
+			controller.NewBPMNWorkflowController(f.engine, nil, executionfixture.Standard()).StartProcess(ctx)
 			if tc.allowed {
 				require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 				require.Equal(t, 1, f.client.ProcessInstance.Query().CountX(f.ctx), recorder.Body.String())

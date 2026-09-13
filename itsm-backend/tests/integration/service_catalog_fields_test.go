@@ -72,7 +72,7 @@ func setupServiceCatalogFieldsRouter(t *testing.T) (*gin.Engine, *ent.Tenant, *e
 		require.NoError(t, registry.Register(owner))
 	}
 	scService.SetCreatorRegistry(registry)
-	scService.SetPublicationEngine(service.NewCustomProcessEngine(client, logger).(*service.CustomProcessEngine))
+	scService.SetPublicationEngine(service.NewCustomProcessEngine(client, logger, executionfixture.Standard()).(*service.CustomProcessEngine))
 	resolver := intake.NewResolver(scService, service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
 	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard())
 	srHandler.SetCreationApplication(app)

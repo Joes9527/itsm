@@ -81,3 +81,7 @@ func (p *ExecutionPolicy) RequireEntMembers(ctx context.Context, tx *ent.Tx, ten
 	}
 	return nil
 }
+
+// IsCandidate reports the frozen deployment mode, not authorization. Callers must
+// BindEnt first so absent policy or unadmitted tenant cannot bypass enforcement.
+func (p *ExecutionPolicy) IsCandidate() bool { return p != nil && p.mode == "candidate" }

@@ -175,7 +175,7 @@ func TestWorkflowNumericContinuationAfterPersistedReload(t *testing.T) {
 	task := f.client.ProcessTask.Query().OnlyX(ctx)
 	require.Equal(t, "checkpoint", task.TaskDefinitionKey)
 	task.Update().SetAssignee(fmt.Sprint(f.actor.ID)).SaveX(ctx)
-	restarted := NewCustomProcessEngine(f.client, zap.NewNop().Sugar()).(*CustomProcessEngine)
+	restarted := NewCustomProcessEngine(f.client, zap.NewNop().Sugar(), executionfixture.Standard()).(*CustomProcessEngine)
 	require.NoError(t, restarted.CompleteTask(f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, map[string]any{}))
 	tasks := f.client.ProcessTask.Query().AllX(ctx)
 	require.Len(t, tasks, 2)

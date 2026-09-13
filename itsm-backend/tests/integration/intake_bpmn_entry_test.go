@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/ticket"
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 )
@@ -25,7 +26,7 @@ func TestIntakeBPMNCreationReplaysAfterFailure(t *testing.T) {
 				ctx := context.Background()
 				source, err := f.app.Create(ctx, f.identity, f.command)
 				require.NoError(t, err)
-				engine := service.NewCustomProcessEngine(f.client, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
+				engine := service.NewCustomProcessEngine(f.client, zap.NewNop().Sugar(), executionfixture.Standard()).(*service.CustomProcessEngine)
 				if kind == "incident" {
 					engine.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler).SetCreationApplication(f.app, f.client)
 				} else {
@@ -158,7 +159,7 @@ func TestIntakeBPMNIncidentSourcePolicy(t *testing.T) {
 			ctx := context.Background()
 			source, err := f.app.Create(ctx, f.identity, f.command)
 			require.NoError(t, err)
-			engine := service.NewCustomProcessEngine(f.client, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
+			engine := service.NewCustomProcessEngine(f.client, zap.NewNop().Sugar(), executionfixture.Standard()).(*service.CustomProcessEngine)
 			engine.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler).SetCreationApplication(f.app, f.client)
 			deployment := f.client.ProcessDeployment.Create().SetTenantID(f.identity.TenantID).SetDeploymentID("source-policy").SetDeploymentName("Source policy").SaveX(ctx)
 			xml := []byte(`<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="test"><bpmn:process id="creation" isExecutable="true"><bpmn:startEvent id="start"/><bpmn:serviceTask id="create"><bpmn:extensionElements><bpmn:metaData name="service_task_type">incident_task</bpmn:metaData><bpmn:metaData name="action">create_incident</bpmn:metaData></bpmn:extensionElements></bpmn:serviceTask><bpmn:endEvent id="end"/><bpmn:sequenceFlow id="a" sourceRef="start" targetRef="create"/><bpmn:sequenceFlow id="b" sourceRef="create" targetRef="end"/></bpmn:process></bpmn:definitions>`)

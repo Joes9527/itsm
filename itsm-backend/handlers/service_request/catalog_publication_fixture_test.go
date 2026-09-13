@@ -35,7 +35,7 @@ func configureCatalogPublicationForTest(ctx context.Context, client *ent.Client,
 		panic(err)
 	}
 	catalog.SetCreatorRegistry(registry)
-	engine := service.NewCustomProcessEngine(client, logger).(*service.CustomProcessEngine)
+	engine := service.NewCustomProcessEngine(client, logger, executionfixture.Standard()).(*service.CustomProcessEngine)
 	engine.SetPublicationKAFConfig(&config.Config{KAFOutbox: config.KAFOutboxConfig{WebhookURL: "http://127.0.0.1:1"}})
 	catalog.SetPublicationEngine(engine)
 }

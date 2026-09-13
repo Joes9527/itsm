@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/enttest"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 )
@@ -74,7 +75,7 @@ func TestPublicationDeclaredWorkflowValidation(t *testing.T) {
 			xml := `<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><process id="flow" isExecutable="true"><startEvent id="start"/>` + tc.xml + `<endEvent id="end"/><sequenceFlow id="a" sourceRef="start" targetRef="task"/><sequenceFlow id="b" sourceRef="task" targetRef="end"/></process></definitions>`
 			definition := client.ProcessDefinition.Create().SetTenantID(1).SetDeploymentID(dep.ID).SetKey("flow").SetName("Publication").SetVersion("1.2.0").SetIsLatest(true).SetIsActive(true).SetBpmnXML([]byte(xml)).SaveX(ctx)
 			svc := newCatalogPublisher(NewEntRepository(client), client, zap.NewNop().Sugar(), nil)
-			svc.SetPublicationEngine(service.NewCustomProcessEngine(client, zap.NewNop().Sugar()).(*service.CustomProcessEngine))
+			svc.SetPublicationEngine(service.NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard()).(*service.CustomProcessEngine))
 			input := dto.CreateServiceCatalogRequest{Name: "Consultation", Category: "IT", Status: "enabled", TargetClass: "generic", ProcessDefinitionKey: "flow", RequiresApproval: tc.approval}
 			catalog, err := svc.Create(ctx, 1, input)
 			if !tc.ok {

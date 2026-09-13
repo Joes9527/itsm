@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"itsm-backend/database"
 	"itsm-backend/handlers/common/accessgrant"
 	"net/http"
 	"strconv"
@@ -43,6 +44,7 @@ type ApprovedAccessReader interface {
 	ReadApprovedAccess(context.Context, *ent.Client, int, int, *ent.ProcessTask) (*accessgrant.ApprovedContext, error)
 }
 type KafDelegationService struct {
+	execution    *database.ExecutionPolicy
 	accessReader ApprovedAccessReader
 	client       *ent.Client
 	outbox       kafDelegationOutbox
@@ -160,8 +162,8 @@ type kafDelegatedTaskCursor struct {
 func (s *KafDelegationService) SetApprovedAccessReader(owner ApprovedAccessReader) {
 	s.accessReader = owner
 }
-func NewKafDelegationService(client *ent.Client) *KafDelegationService {
-	return &KafDelegationService{
+func NewKafDelegationService(client *ent.Client, execution *database.ExecutionPolicy) *KafDelegationService {
+	return &KafDelegationService{execution: execution,
 		client: client,
 		outbox: NewOutboxEventRepository(client),
 		now:    time.Now,
@@ -653,9 +655,24 @@ func (s *KafDelegationService) claimKafActionOnce(ctx context.Context, task *ent
 	if err != nil {
 		return nil, false, err
 	}
+	// Applied receipts are read-only; do not probe their uniqueness by INSERT.
+	if existing, lookupErr := loadKafActionLedger(ctx, s.client, task, req); lookupErr == nil {
+		if err := validateKafActionLedger(existing, task, req); err != nil {
+			return nil, false, err
+		}
+		if existing.ResultStatus == "applied" {
+			return existing, false, nil
+		}
+	} else if !ent.IsNotFound(lookupErr) {
+		return nil, false, lookupErr
+	}
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return nil, false, fmt.Errorf("start KAF action claim transaction: %w", err)
+	}
+	defer tx.Rollback()
+	if err := requireKafExecutionTx(ctx, tx, s.execution, task.TenantID, task.TaskID); err != nil {
+		return nil, false, err
 	}
 	var ledger *ent.KafTaskActionLedger
 	if req.Action == kafActionFailure && task.CallbackAction == accessgrant.Capability {
@@ -726,9 +743,17 @@ func (s *KafDelegationService) claimKafActionOnce(ctx context.Context, task *ent
 	if ledger.ResultStatus == "failed_terminal" {
 		return nil, false, fmt.Errorf("%w: action has a terminal failure", ErrKafActionInvalid)
 	}
+	leaseTx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	defer leaseTx.Rollback()
+	if err := requireKafExecutionTx(ctx, leaseTx, s.execution, task.TenantID, task.TaskID); err != nil {
+		return nil, false, err
+	}
 	now := s.now()
 	leaseOwner := uuid.NewString()
-	updated, err := s.client.KafTaskActionLedger.Update().Where(
+	updated, err := leaseTx.KafTaskActionLedger.Update().Where(
 		kaftaskactionledger.IDEQ(ledger.ID),
 		kaftaskactionledger.Or(
 			kaftaskactionledger.ResultStatusIn("pending", "failed_retryable"),
@@ -744,10 +769,14 @@ func (s *KafDelegationService) claimKafActionOnce(ctx context.Context, task *ent
 	if updated != 1 {
 		return nil, false, fmt.Errorf("%w: %w", ErrKafActionConflict, ErrKafActionInProgress)
 	}
-	ledger, err = s.client.KafTaskActionLedger.Get(ctx, ledger.ID)
+	ledger, err = leaseTx.KafTaskActionLedger.Get(ctx, ledger.ID)
 	if err != nil {
 		return nil, false, fmt.Errorf("load claimed KAF action ledger: %w", err)
 	}
+	if err := leaseTx.Commit(); err != nil {
+		return nil, false, err
+	}
+	ledger.Unwrap()
 	return ledger, true, nil
 }
 
@@ -826,7 +855,15 @@ func (s *KafDelegationService) finalizeKafAction(ctx context.Context, ledger *en
 	if ledger == nil || ledger.LeaseOwner == "" {
 		return fmt.Errorf("%w: action lease is required for finalization", ErrKafActionConflict)
 	}
-	update := s.client.KafTaskActionLedger.Update().Where(
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := requireKafExecutionTx(ctx, tx, s.execution, ledger.TenantID, ledger.TaskID); err != nil {
+		return err
+	}
+	update := tx.KafTaskActionLedger.Update().Where(
 		kaftaskactionledger.IDEQ(ledger.ID), kaftaskactionledger.ResultStatusEQ("executing"),
 		kaftaskactionledger.LeaseOwnerEQ(ledger.LeaseOwner),
 		kaftaskactionledger.LeaseExpiresAtGT(s.now()),
@@ -847,7 +884,7 @@ func (s *KafDelegationService) finalizeKafAction(ctx context.Context, ledger *en
 	if updated != 1 {
 		return fmt.Errorf("%w: action lease was lost before finalization", ErrKafActionConflict)
 	}
-	return nil
+	return tx.Commit()
 }
 
 // finalizeAppliedKafAction commits the durable audit reference and applied
@@ -862,6 +899,9 @@ func (s *KafDelegationService) finalizeAppliedKafAction(ctx context.Context, tas
 		return fmt.Errorf("start KAF action finalization transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := requireKafExecutionTx(ctx, tx, s.execution, task.TenantID, task.TaskID); err != nil {
+		return err
+	}
 	payload, err := json.Marshal(map[string]interface{}{"action": ledger.Action, "idempotencyKey": ledger.IdempotencyKey})
 	if err != nil {
 		return fmt.Errorf("marshal KAF action result payload: %w", err)
@@ -899,6 +939,9 @@ func (s *KafDelegationService) persistNonCompletingAction(ctx context.Context, t
 		return fmt.Errorf("start KAF action transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := requireKafExecutionTx(ctx, tx, s.execution, task.TenantID, task.TaskID); err != nil {
+		return err
+	}
 	updated, err := tx.ProcessInstance.Update().Where(
 		processinstance.IDEQ(instance.ID), processinstance.TenantIDEQ(task.TenantID), processinstance.VersionEQ(req.ExpectedVersion),
 	).SetVersion(req.ExpectedVersion + 1).Save(ctx)

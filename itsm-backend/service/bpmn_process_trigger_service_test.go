@@ -4,6 +4,7 @@ import (
 	"context"
 	stdErrors "errors"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"testing"
 	"time"
@@ -50,7 +51,7 @@ func TestTriggerProcess_PopulatesStructuredBusinessIdentity(t *testing.T) {
 		SaveX(ctx)
 
 	logger := zaptest.NewLogger(t).Sugar()
-	engine := NewCustomProcessEngine(client, logger)
+	engine := NewCustomProcessEngine(client, logger, executionfixture.Standard())
 	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
 	tenantCtx = WithTrustedBPMNTenantContext(tenantCtx, tenant.ID)
 
@@ -133,7 +134,7 @@ func TestTriggerProcessRejectsBusinessTypeThatDisagreesWithWorkItemRecordClass(t
 		return deployErr
 	}())
 
-	_, err := NewProcessTriggerService(client, NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar())).TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
+	_, err := NewProcessTriggerService(client, NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())).TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
 		BusinessType:         dto.BusinessTypeGeneric,
 		BusinessID:           workItem.ID,
 		ProcessDefinitionKey: "ticket_general_flow",
@@ -179,7 +180,7 @@ func TestTriggerProcessScopeOverridesRequestTriggeredBy(t *testing.T) {
 	_, err = deploySvc.LoadAndDeployTemplates(workflowCtx, tenant.ID)
 	require.NoError(t, err)
 
-	resp, err := NewProcessTriggerService(client, NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar())).TriggerProcess(workflowCtx, &dto.ProcessTriggerRequest{
+	resp, err := NewProcessTriggerService(client, NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())).TriggerProcess(workflowCtx, &dto.ProcessTriggerRequest{
 		BusinessType:         dto.BusinessTypeGeneric,
 		BusinessID:           workItem.ID,
 		ProcessDefinitionKey: "ticket_general_flow",

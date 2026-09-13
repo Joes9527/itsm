@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"os"
 	"testing"
 
@@ -94,7 +95,7 @@ func TestBPMNTemplateService_DeployAndStartTicketUrgentFlow(t *testing.T) {
 	require.NoError(t, err, "ticket_urgent_flow 模板应该能正常部署")
 
 	logger := zaptest.NewLogger(t).Sugar()
-	engineIface := NewCustomProcessEngine(client, logger)
+	engineIface := NewCustomProcessEngine(client, logger, executionfixture.Standard())
 	engine, ok := engineIface.(*CustomProcessEngine)
 	require.True(t, ok)
 
@@ -145,7 +146,7 @@ func TestBPMNTemplateService_DeployAndStartChangeEmergencyFlow(t *testing.T) {
 	require.NoError(t, err, "change_emergency_flow 模板应该能正常部署")
 
 	logger := zaptest.NewLogger(t).Sugar()
-	engineIface := NewCustomProcessEngine(client, logger)
+	engineIface := NewCustomProcessEngine(client, logger, executionfixture.Standard())
 	engine, ok := engineIface.(*CustomProcessEngine)
 	require.True(t, ok)
 
