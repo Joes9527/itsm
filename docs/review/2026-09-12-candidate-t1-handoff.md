@@ -1081,3 +1081,15 @@ S5不可处理消息的完整处置、进程重启及其它异步入口继续未
 实施验证须区分“撤权先提交→写入拒绝”与“写事务先持锁→独立撤权等待提交/回滚后生效”。若在当前预检位置加锁，现有同步hook会等待自身持有的锁；需改成独立goroutine并以数据库等待证据验证顺序，不能把超时/错误当成撤权已提交。业务首次写、审批参数及结果并发竞争继续待完成。新增RED使当前具名测试及包含它的全套不能报告通过；此前GREEN只属于此前范围。CandidateSHA及候选未启动状态不变，未放行S5/T3/T4/G2/G3，无共享环境操作、企业外呼或push/main合并。
 
 最终具名race复验s5-tool-revocation-final-red.log仍为预期RED：撤权提交标记通过，失败仅为应拒绝却返回nil及调用整行被改写。没有运行不相关构建来掩盖失败；git diff --check通过。生产修复尚未完成。
+
+### B2 S5 候选工具授权事务锁（2026-09-13）
+
+在73c3ce8a4真实撤权RED之后，新增普通迁移042_tool_execution_authority_lock（依赖041/040/039及037，不改变旧迁移SQL或038退役契约）。窄SECURITY DEFINER函数lock_candidate_tool_authority使用session_user按binding→scope→登记FOR SHARE锁序核验显式candidate mode、deployment、tenant、scope、事务设置和真实调用，锁持有至调用者事务提交/回滚。固定search_path和全限定业务对象，剥离PUBLIC/default角色EXECUTE；只有明确授权的候选业务身份可调用，不赋予登记/范围配置DML。登记SELECT不足仍保留42501。候选RequireEntToolInvocation以此唯一入口替换无锁查询；standard保持既有路径，函数本身拒绝standard，不能据此宣称standard授权锁完成。
+
+准入新增候选锁函数EXECUTE要求；真实PG验证缺能力拒绝、明确授权通过。构造fixture先安装042并仅授予业务身份EXECUTE；system运输白名单未放宽。迁移测试按新增实际目录更新数量并覆盖042合法前缀与缺037/039/040/041的拒绝，既有退役账本仍可升级。
+
+原同步撤权hook在新锁下会等待自身，故改为独立连接/goroutine：pg_blocking_pids确认撤权真正等待结果事务，结果提交和实际UPDATE后注入错误回滚两种序列均完成撤权，下一调用拒绝且调用整行保全；已提交创建业务保持一张工单。测试清理先取消并等待已启动revoker完成，再独立有界ctx恢复scope，关闭独立审阅发现的失败清理竞争。s5-tool-authority-lock-private.log定向race GREEN；s5-tool-authority-lock-final-private.log最终完整私有PG16/Redis/MinIO ScopeRegistration、Intake、构造保全及Stream/Webhook/审计恢复race PASS，无skip/race。s5-tool-authority-lock-packages-final.log migration/database/bootstrap全包race PASS；独立review_execution_scope_s1最终复核无阻断。
+
+界限：该项验证候选scope撤权与工具来源原事务；binding并发撤销专项、成功/失败和审批参数变化竞争、业务首次写入来源授权仍待完成。B的目标PG17迁移/角色与T3、真实业务主题T4/G3未通过。目标启动前须按完整清单安装042及显式EXECUTE，不能仅复制代码启动。CandidateSHA与候选未启动状态不变，无共享环境操作、企业外呼、push/main合并。
+
+最终s5-tool-authority-lock-build.log全后端build exit0，git diff --check通过。日志及私有数据库测试结果不替代目标环境验收。

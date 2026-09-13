@@ -51,6 +51,15 @@ OR has_any_column_privilege($1,'INSERT,UPDATE,REFERENCES')`, table).Scan(&readab
 			return fmt.Errorf("runtime cannot execute enrollment trigger directly")
 		}
 	}
+	if cfg.Mode == "candidate" {
+		var available bool
+		if err = db.QueryRowContext(ctx, `SELECT has_function_privilege('public.lock_candidate_tool_authority(uuid,text,bigint,bigint)','EXECUTE')`).Scan(&available); err != nil {
+			return fmt.Errorf("inspect tool authority lock capability: %w", err)
+		}
+		if !available {
+			return fmt.Errorf("candidate runtime requires tool authority lock capability")
+		}
+	}
 	var configured bool
 	err = db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.execution_runtime_bindings WHERE runtime_role=session_user AND deployment_id=$1 AND mode=$2)`, cfg.DeploymentID, cfg.Mode).Scan(&configured)
 	if err != nil {

@@ -341,6 +341,21 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM execution_scope_members`).Scan(&n))
 		return n
 	}
+	ensureToolAuthorityLock := func() {
+		var exists bool
+		require.NoError(t, ownerDB.QueryRow(`SELECT to_regprocedure('public.lock_candidate_tool_authority(uuid,text,bigint,bigint)') IS NOT NULL`).Scan(&exists))
+		if !exists {
+			_, err := ownerDB.ExecContext(ctx, "ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON FUNCTIONS TO "+runtimeRole)
+			require.NoError(t, err)
+			_, err = ownerDB.ExecContext(ctx, migration.GetMigrationSQL(migration.ToolExecutionAuthorityLockVersion))
+			require.NoError(t, err)
+			var allowed bool
+			require.NoError(t, ownerDB.QueryRow(`SELECT has_function_privilege($1,'public.lock_candidate_tool_authority(uuid,text,bigint,bigint)','EXECUTE')`, runtimeRole).Scan(&allowed))
+			require.False(t, allowed, "default EXECUTE must be stripped")
+		}
+		_, err := ownerDB.ExecContext(ctx, "GRANT EXECUTE ON FUNCTION public.lock_candidate_tool_authority(uuid,text,bigint,bigint) TO "+runtimeRole)
+		require.NoError(t, err)
+	}
 	t.Run("tool invocation enrollment is atomic and history preserving", func(t *testing.T) {
 		var before string
 		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, historicalTool.ID).Scan(&before))
@@ -363,6 +378,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.False(t, allowed, "default table grants must be removed")
 		_, err = ownerDB.ExecContext(ctx, "GRANT SELECT ON execution_tool_invocations TO "+runtimeRole)
 		require.NoError(t, err)
+		ensureToolAuthorityLock()
 		create := func(c *ent.Client) *ent.ToolInvocationCreate {
 			return c.ToolInvocation.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetToolName("create_ticket").SetArguments(`{"title":"New scoped source"}`).SetStatus("pending")
 		}
@@ -472,6 +488,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		}
 		_, err := ownerDB.ExecContext(ctx, "GRANT SELECT ON execution_tool_invocations TO "+runtimeRole)
 		require.NoError(t, err)
+		ensureToolAuthorityLock()
 		repository := aidomain.NewEntRepository(runtime, policy)
 		for _, approval := range []bool{true, false} {
 			state := "auto"
@@ -553,6 +570,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		}
 		_, err := ownerDB.ExecContext(ctx, "GRANT SELECT ON execution_tool_invocations TO "+runtimeRole)
 		require.NoError(t, err)
+		ensureToolAuthorityLock()
 		repository := aidomain.NewEntRepository(runtime, policy)
 		tools := service.NewToolRegistry(nil, service.NewIncidentService(runtime, zap.NewNop().Sugar(), policy), nil, runtime)
 		svc := aidomain.NewService(repository, zap.NewNop().Sugar(), nil, tools, nil, nil, nil, nil, nil, nil, nil)
@@ -610,6 +628,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		}
 		_, err := ownerDB.ExecContext(ctx, "GRANT SELECT ON execution_tool_invocations TO "+runtimeRole)
 		require.NoError(t, err)
+		ensureToolAuthorityLock()
 
 		repository := aidomain.NewEntRepository(runtime, policy)
 		svc := aidomain.NewService(repository, zap.NewNop().Sugar(), nil, nil, nil, nil, nil, nil, nil, nil, nil)
@@ -743,6 +762,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		}
 		_, err := ownerDB.ExecContext(ctx, "GRANT SELECT ON execution_tool_invocations TO "+runtimeRole)
 		require.NoError(t, err)
+		ensureToolAuthorityLock()
 
 		snapshot := func() string {
 			var raw string
@@ -855,47 +875,96 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			})
 		}
 
-		t.Run("scope closed after outcome precheck preserves invocation", func(t *testing.T) {
-			tx, err := runtime.Tx(ctx)
-			require.NoError(t, err)
-			require.NoError(t, policy.BindEnt(ctx, tx, tenant.ID))
-			call, err := tx.ToolInvocation.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetToolName("create_ticket").SetArguments(`{"title":"Outcome scope revocation"}`).SetNeedsApproval(true).SetApprovalState("approved").SetApprovedBy(actor.ID).SetApprovedAt(time.Now()).SetStatus("pending").Save(ctx)
-			require.NoError(t, err)
-			require.NoError(t, tx.Commit())
-			var before, after string
-			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, call.ID).Scan(&before))
-			items := owner.Ticket.Query().CountX(ctx)
-			var armed atomic.Bool
-			var revoked atomic.Bool
-			armed.Store(true)
-			defer func() {
-				armed.Store(false)
-				_, err := ownerDB.ExecContext(ctx, `UPDATE execution_scopes SET status='active' WHERE id=$1`, scopeID)
+		for _, finish := range []string{"commit", "rollback"} {
+			t.Run("scope revocation waits for outcome "+finish, func(t *testing.T) {
+				tx, err := runtime.Tx(ctx)
 				require.NoError(t, err)
-			}()
-			runtime.ToolInvocation.Use(func(next ent.Mutator) ent.Mutator {
-				return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
-					if m.Op().Is(ent.OpUpdate|ent.OpUpdateOne) && armed.CompareAndSwap(true, false) {
-						// Commit revocation after outcome authority reads, before the real UPDATE.
-						revokeCtx, cancel := context.WithTimeout(c, 5*time.Second)
-						defer cancel()
-						_, err := ownerDB.ExecContext(revokeCtx, `UPDATE execution_scopes SET status='closed' WHERE id=$1`, scopeID)
-						if err != nil {
-							return nil, err
+				require.NoError(t, policy.BindEnt(ctx, tx, tenant.ID))
+				call, err := tx.ToolInvocation.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetToolName("create_ticket").SetArguments(`{"title":"Outcome scope revocation"}`).SetNeedsApproval(true).SetApprovalState("approved").SetApprovedBy(actor.ID).SetApprovedAt(time.Now()).SetStatus("pending").Save(ctx)
+				require.NoError(t, err)
+				require.NoError(t, tx.Commit())
+				var before, after string
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, call.ID).Scan(&before))
+				items := owner.Ticket.Query().CountX(ctx)
+				var armed atomic.Bool
+				revoked := make(chan error, 1)
+				finished := make(chan struct{})
+				var started atomic.Bool
+				operationCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				defer cancel()
+				connection, err := ownerDB.Conn(operationCtx)
+				require.NoError(t, err)
+				defer connection.Close()
+				var pid int
+				require.NoError(t, connection.QueryRowContext(operationCtx, `SELECT pg_backend_pid()`).Scan(&pid))
+				injected := errors.New("rollback locked outcome")
+				armed.Store(true)
+				defer func() {
+					armed.Store(false)
+					cancel()
+					if started.Load() {
+						select {
+						case <-finished:
+						case <-time.After(5 * time.Second):
+							t.Fatal("revoker cleanup did not finish")
 						}
-						revoked.Store(true)
 					}
-					return next.Mutate(c, m)
+					restoreCtx, restoreCancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer restoreCancel()
+					_, err := ownerDB.ExecContext(restoreCtx, `UPDATE execution_scopes SET status='active' WHERE id=$1`, scopeID)
+					require.NoError(t, err)
+				}()
+				runtime.ToolInvocation.Use(func(next ent.Mutator) ent.Mutator {
+					return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
+						fired := m.Op().Is(ent.OpUpdate|ent.OpUpdateOne) && armed.CompareAndSwap(true, false)
+						if fired {
+							started.Store(true)
+							go func() {
+								defer close(finished)
+								_, err := connection.ExecContext(operationCtx, `UPDATE execution_scopes SET status='closed' WHERE id=$1`, scopeID)
+								revoked <- err
+							}()
+							require.Eventually(t, func() bool {
+								var waiting bool
+								err := ownerDB.QueryRowContext(operationCtx, `SELECT cardinality(pg_blocking_pids($1))>0`, pid).Scan(&waiting)
+								return err == nil && waiting
+							}, 5*time.Second, 10*time.Millisecond, "revocation must wait on the outcome transaction")
+						}
+						value, err := next.Mutate(c, m)
+						if err == nil && fired && finish == "rollback" {
+							return nil, injected
+						}
+						return value, err
+					})
 				})
+				err = queue.ProcessJob(ctx, service.ToolJob{InvocationID: call.ID, TenantID: tenant.ID})
+				if finish == "commit" {
+					require.NoError(t, err)
+				} else {
+					require.ErrorIs(t, err, injected)
+				}
+				require.False(t, armed.Load())
+				select {
+				case err := <-revoked:
+					require.NoError(t, err)
+				case <-operationCtx.Done():
+					t.Fatal("revocation did not finish after outcome transaction")
+				}
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, call.ID).Scan(&after))
+				if finish == "rollback" {
+					require.JSONEq(t, before, after)
+				} else {
+					require.Equal(t, "done", owner.ToolInvocation.GetX(ctx, call.ID).Status)
+				}
+				err = queue.ProcessJob(ctx, service.ToolJob{InvocationID: call.ID, TenantID: tenant.ID})
+				require.ErrorIs(t, err, executionscope.ErrDenied, "committed revocation blocks the next write")
+				var afterRetry string
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, call.ID).Scan(&afterRetry))
+				require.JSONEq(t, after, afterRetry)
+				assert.Equal(t, items+1, owner.Ticket.Query().CountX(ctx), "business committed before this revocation")
 			})
-			err = queue.ProcessJob(ctx, service.ToolJob{InvocationID: call.ID, TenantID: tenant.ID})
-			assert.Error(t, err, "committed scope revocation must block outcome UPDATE")
-			require.False(t, armed.Load())
-			require.True(t, revoked.Load(), "revocation must actually commit before the outcome UPDATE")
-			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, call.ID).Scan(&after))
-			assert.JSONEq(t, before, after, "invocation must remain unchanged after committed revocation")
-			assert.Equal(t, items+1, owner.Ticket.Query().CountX(ctx), "business committed before this revocation")
-		})
+
+		}
 
 	})
 	t.Run("new base extension and member commit together", func(t *testing.T) {

@@ -142,8 +142,19 @@ GRANT SELECT ON execution_scopes,execution_scope_members,execution_runtime_bindi
 		t.Run("missing tool origin read rejected", func(t *testing.T) {
 			require.Error(t, database.ValidateExecutionRuntime(ctx, run, cfg))
 		})
+		_, err = owner.Exec(migration.GetMigrationSQL(migration.ToolExecutionAuthorityLockVersion))
+		require.NoError(t, err)
+		_, err = owner.Exec("GRANT EXECUTE ON FUNCTION public.lock_candidate_tool_authority(uuid,text,bigint,bigint) TO " + runtimeRole)
+		require.NoError(t, err)
 		_, err = owner.Exec("GRANT SELECT ON execution_tool_invocations TO " + runtimeRole)
 		require.NoError(t, err)
+		t.Run("missing authority capability rejected", func(t *testing.T) {
+			_, err := owner.Exec("REVOKE EXECUTE ON FUNCTION public.lock_candidate_tool_authority(uuid,text,bigint,bigint) FROM " + runtimeRole)
+			require.NoError(t, err)
+			require.Error(t, database.ValidateExecutionRuntime(ctx, run, cfg))
+			_, err = owner.Exec("GRANT EXECUTE ON FUNCTION public.lock_candidate_tool_authority(uuid,text,bigint,bigint) TO " + runtimeRole)
+			require.NoError(t, err)
+		})
 		require.NoError(t, database.ValidateExecutionRuntime(ctx, run, cfg))
 		for _, grant := range []string{"UPDATE ON execution_tool_invocations", "UPDATE(tenant_id) ON execution_tool_invocations", "EXECUTE ON FUNCTION public.register_new_execution_tool_invocation()"} {
 			t.Run(grant, func(t *testing.T) {

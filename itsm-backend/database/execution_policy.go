@@ -149,13 +149,7 @@ func (p *ExecutionPolicy) RequireEntToolInvocation(ctx context.Context, tx *ent.
 		return err
 	}
 	var id int
-	err = scanExecutionRow(ctx, tx.Client(), &id, `SELECT m.invocation_id FROM public.execution_tool_invocations m
- JOIN public.tool_invocations i ON i.id=m.invocation_id AND i.tenant_id=m.tenant_id
- JOIN public.execution_scopes s ON s.id=m.scope_id AND s.tenant_id=m.tenant_id
- JOIN public.execution_runtime_bindings b ON b.deployment_id=s.deployment_id
- WHERE b.runtime_role=session_user AND b.mode='candidate' AND s.status='active'
- AND s.id=$1 AND s.deployment_id=$2 AND s.tenant_id=$3 AND m.invocation_id=$4
- AND current_setting('app.execution_scope_id',true)=$1::text`, ref.ScopeID, ref.DeploymentID, ref.TenantID, invocationID)
+	err = scanExecutionRow(ctx, tx.Client(), &id, `SELECT * FROM public.lock_candidate_tool_authority($1::uuid,$2::text,$3::bigint,$4::bigint)`, ref.ScopeID, ref.DeploymentID, ref.TenantID, invocationID)
 	if err == sql.ErrNoRows {
 		return executionscope.ErrDenied
 	}
