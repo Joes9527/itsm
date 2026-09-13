@@ -4,11 +4,13 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -23,13 +25,14 @@ import (
 )
 
 type candidateStreamEvent struct {
+	tenantID     int
 	WorkItemID   int    `json:"workItemId"`
 	DeploymentID string `json:"deploymentId"`
 	ScopeID      string `json:"scopeId"`
 }
 
 func (candidateStreamEvent) EventType() string     { return "sla.breached" }
-func (candidateStreamEvent) TenantID() string      { return "1" }
+func (e candidateStreamEvent) TenantID() string    { return strconv.Itoa(e.tenantID) }
 func (candidateStreamEvent) OccurredAt() time.Time { return time.Unix(1700000000, 0).UTC() }
 
 type candidateStreamObserver struct{ received chan interface{} }
@@ -39,8 +42,8 @@ func (h candidateStreamObserver) Handle(event interface{}) error {
 	return nil
 }
 
-// This is the transport isolation RED. It deliberately uses the application's
-// existing constructor, which currently cannot accept a frozen scope policy.
+// This verifies transport isolation through the application's constructor
+// with an explicit frozen candidate manifest.
 // Payload scope fields are fixture data, never evidence of authorization.
 // Membership validation and real audit persistence remain separate requirements.
 func TestCandidateStreamPreservesLegacyTopicOnPublish(t *testing.T) {
@@ -73,9 +76,9 @@ func TestCandidateStreamPreservesLegacyTopicOnPublish(t *testing.T) {
 		return e == nil && strings.Contains(info, fmt.Sprintf("process_id:%d\r\n", command.Process.Pid))
 	}, 5*time.Second, 20*time.Millisecond, "verify test Redis PID before writing fixtures")
 	cfg := &config.RedisConfig{Host: "127.0.0.1", Port: port, Password: password}
-	legacyPublisher, err := eventbus.NewWatermillEventBus(cfg, zap.NewNop().Sugar())
+	legacyPublisher, err := eventbus.NewWatermillEventBus(cfg, config.ExecutionConfig{Mode: "standard", DeploymentID: "legacy-test"}, zap.NewNop().Sugar())
 	require.NoError(t, err)
-	require.NoError(t, legacyPublisher.Publish(candidateStreamEvent{WorkItemID: 100}))
+	require.NoError(t, legacyPublisher.Publish(candidateStreamEvent{tenantID: 1, WorkItemID: 100}))
 	require.NoError(t, legacyPublisher.Close())
 	const topic = "sla.breached"
 	require.NoError(t, client.XGroupCreate(ctx, topic, "protected-history-group", "0").Err())
@@ -98,7 +101,8 @@ func TestCandidateStreamPreservesLegacyTopicOnPublish(t *testing.T) {
 	beforePendingEntries := pendingEntries()
 	require.Len(t, beforePendingEntries, 1)
 
-	bus, err := eventbus.NewWatermillEventBus(cfg, zap.NewNop().Sugar())
+	scope, secondScope := uuid.NewString(), uuid.NewString()
+	bus, err := eventbus.NewWatermillEventBus(cfg, config.ExecutionConfig{Mode: "candidate", DeploymentID: "stream-test", Scopes: []config.ExecutionScopeConfig{{TenantID: 1, ScopeID: scope}, {TenantID: 2, ScopeID: secondScope}}}, zap.NewNop().Sugar())
 	require.NoError(t, err)
 	defer bus.Close()
 	observed := make(chan interface{}, 4)
@@ -107,17 +111,31 @@ func TestCandidateStreamPreservesLegacyTopicOnPublish(t *testing.T) {
 	// Confirm the real subscriber is waiting before the positive-control publish.
 	require.Eventually(t, func() bool {
 		clients, e := client.ClientList(ctx).Result()
-		return e == nil && strings.Contains(clients, "cmd=xread")
+		return e == nil && strings.Count(clients, "cmd=xread") == 2
 	}, 3*time.Second, 10*time.Millisecond)
-	scope := uuid.NewString()
-	require.NoError(t, bus.Publish(candidateStreamEvent{WorkItemID: 200, DeploymentID: "stream-test", ScopeID: scope}))
+	require.NoError(t, bus.Publish(candidateStreamEvent{tenantID: 1, WorkItemID: 200, DeploymentID: "payload-cannot-route", ScopeID: uuid.NewString()}))
 	select {
 	case event := <-observed:
 		require.EqualValues(t, 200, event.(map[string]interface{})["workItemId"], "new event positive control")
 	case <-ctx.Done():
 		t.Fatal("subscriber did not process new event")
 	}
+	require.NoError(t, bus.Publish(candidateStreamEvent{tenantID: 2, WorkItemID: 300}))
+	select {
+	case event := <-observed:
+		require.EqualValues(t, 300, event.(map[string]interface{})["workItemId"])
+		require.Equal(t, "2", event.(map[string]interface{})["tenantId"])
+	case <-ctx.Done():
+		t.Fatal("second tenant subscriber did not process its new event")
+	}
 	require.NoError(t, bus.Close())
+	secondRows, err := client.XRange(ctx, "candidate:stream-test:"+secondScope+":"+topic, "-", "+").Result()
+	require.NoError(t, err)
+	require.Len(t, secondRows, 1)
+	var secondEnvelope eventbus.Envelope
+	require.NoError(t, json.Unmarshal([]byte(secondRows[0].Values["payload"].(string)), &secondEnvelope))
+	require.Equal(t, "2", secondEnvelope.TenantID)
+	require.JSONEq(t, `{"workItemId":300,"deploymentId":"","scopeId":""}`, string(secondEnvelope.Payload))
 	after, err := client.XRange(ctx, topic, "-", "+").Result()
 	require.NoError(t, err)
 	assert.Equal(t, before, after, "candidate publish must not append to the protected legacy topic")
@@ -131,4 +149,15 @@ func TestCandidateStreamPreservesLegacyTopicOnPublish(t *testing.T) {
 	length, err := client.XLen(ctx, "candidate:stream-test:"+scope+":"+topic).Result()
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, length, "new event belongs only in the candidate namespace")
+	newRows, err := client.XRange(ctx, "candidate:stream-test:"+scope+":"+topic, "-", "+").Result()
+	require.NoError(t, err)
+	require.Len(t, newRows, 1)
+	var envelope eventbus.Envelope
+	require.NoError(t, json.Unmarshal([]byte(newRows[0].Values["payload"].(string)), &envelope))
+	require.Equal(t, topic, envelope.EventType)
+	require.Equal(t, "1", envelope.TenantID)
+	var payload candidateStreamEvent
+	require.NoError(t, json.Unmarshal(envelope.Payload, &payload))
+	require.Equal(t, 200, payload.WorkItemID)
+	require.Equal(t, "payload-cannot-route", payload.DeploymentID, "business payload cannot change transport namespace")
 }

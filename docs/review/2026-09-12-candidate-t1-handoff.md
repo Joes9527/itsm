@@ -805,3 +805,13 @@ Callback contract新增version及generic typed lifecycle result，沿既有流�
 只读调用盘点：此Watermill Publish业务调用仅有SLABreachDeliveryHandler和handlers/ai.Service.TriageTicket。前者来源为已持久outbox；后者为建单前分诊，TicketID为空，不能捏造WorkItem归属。下一步同一构造器贯通冻结ExecutionPolicy及订阅合同，候选publisher在Redis写前验证结构化主体，subscriber只订阅可信namespace并核对envelope/tenant/member；审计所有者仍须在自身写事务核验并保留幂等回执，不能仅改topic字符串。无主体建单前AI事件不得进入受限执行空间，按既有明确禁用/失败边界处理，保留分诊业务含义。不增加第二套candidate bus、不双发旧topic，不从payload自报scope赋权。
 
 独立review_execution_scope_s1确认传输RED有效并建议补充逐条PEL保全，已采纳；真实Audit持久化、成员撤销、非法envelope/未知事件、subscriber退出及新namespace唯一载荷校验仍待GREEN阶段。S5及完整B2/B3/T3/T4/G2/G3未完成，CandidateSHA不变且候选未启动；无WSL、共享数据、企业实发、推送或main合并。
+
+### B2 S5 冻结配置驱动的双向 Stream 路由（2026-09-13）
+
+在 `c94cdfba2` 的真实传输RED后，唯一NewWatermillEventBus构造器显式接收ExecutionConfig，bootstrap及测试调用同时迁移；配置验证在创建Redis clients之前，复制mode和每项deployment/scope/tenant，后续配置slice/map修改不改变路由。拒绝同scope绑定多tenant；candidate发布必须有稳定topic和规范正整数tenant，租户必须在冻结清单，topic不能直接提供物理namespace。Publish与Subscribe使用同一路由生成逻辑，前者只写对应candidate:deployment:scope:stable-topic，后者展开冻结租户清单；不双发旧topic，不读取payload自报scope/deployment决定路由。standard保持原topic语义。这只是传输限制，构造器不等于数据库角色准入或业务授权。
+
+`s5-stream-routing-final.log` 真实Redis测试由原RED转GREEN并增强为双租户：实际两条订阅均进入XREAD后分别发布，新事件各到唯一独立Stream并核验信封tenant/目标payload；故意不一致的payload scope不能改变物理位置。旧XRANGE、group及pending摘要、逐条ID/consumer/delivery count保持，idle自然增长不比较。同一日志包含完整应用构造保全测试：真实私有PG16/Redis7.2.16/MinIO夹具保持，未启动runtime；以上无skip。单位测试覆盖冻结后配置修改、无配置/重复scope拒绝、非法topic/tenant和无稳定事件在写Redis前失败。新增非法输入用例直接通过，未宣称单独RED。
+
+`s5-stream-routing-regression.log` eventbus及bootstrap完整包回归PASS；`s5-stream-routing-build.log` 全后端build exit0。独立review_execution_scope_s1限定审阅无新增阻断，建议的双租户真实路由补强已采纳；git diff --check通过。未改前端，不重复前端验证。
+
+下一阶段仍需贯通窄authority与同一冻结数据库ExecutionPolicy，校验active scope、role binding、tenant/member，并用持久outbox eventID及结构主体验证生产来源；合法member本身不证明Redis payload是业务事实。消费信封须严格校验并保留可信身份，原审计写事务再次准入/幂等并在成功后ACK。当前fanout没有持久消费组恢复保证，namespace不能解决离线遗漏或重复审计；无效消息可观察阻断、建单前无主体AI事件处理、订阅取消/恢复及真实Redis+PG联测均待完成。本阶段不构成candidate启动许可，S5、完整B2/B3/T3/T4/G2/G3仍未完成；固定CandidateSHA不变，候选未启动，无WSL或共享数据操作、企业实发、推送或main合并。

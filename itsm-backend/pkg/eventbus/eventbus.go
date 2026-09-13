@@ -37,6 +37,7 @@ type Envelope struct {
 
 // WatermillEventBus implements shared.EventBus interface using Watermill with Redis Stream
 type WatermillEventBus struct {
+	routes        *streamRoutes
 	publisher     message.Publisher
 	subscriber    streamSubscriber
 	logger        *zap.SugaredLogger
@@ -95,7 +96,14 @@ func (eb *WatermillEventBus) Start(ctx context.Context) error {
 }
 
 // NewWatermillEventBus creates a new WatermillEventBus instance
-func NewWatermillEventBus(cfg *config.RedisConfig, logger *zap.SugaredLogger) (*WatermillEventBus, error) {
+func NewWatermillEventBus(cfg *config.RedisConfig, execution config.ExecutionConfig, logger *zap.SugaredLogger) (*WatermillEventBus, error) {
+	routes, err := newStreamRoutes(execution)
+	if err != nil {
+		return nil, fmt.Errorf("invalid event execution configuration: %w", err)
+	}
+	if cfg == nil || logger == nil {
+		return nil, fmt.Errorf("event Redis configuration and logger required")
+	}
 	// Publisher and subscriber each own and close their Redis client.
 	options := &redis.Options{
 		Addr:     fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
@@ -134,6 +142,7 @@ func NewWatermillEventBus(cfg *config.RedisConfig, logger *zap.SugaredLogger) (*
 	}
 
 	return &WatermillEventBus{
+		routes:     routes,
 		publisher:  publisher,
 		subscriber: subscriber,
 		logger:     logger,
@@ -161,6 +170,21 @@ func (eb *WatermillEventBus) Publish(event interface{}) error {
 	}
 
 	se, isStable := event.(stableEvent)
+	if eb.routes == nil {
+		return fmt.Errorf("event transport execution configuration required")
+	}
+	if eb.routes.candidate && !isStable {
+		return fmt.Errorf("candidate event must declare a stable topic and tenant")
+	}
+	tenant := ""
+	if isStable {
+		tenant = se.TenantID()
+	}
+	topic := resolveTopic(event)
+	physicalTopic, routeErr := eb.routes.publishTopic(topic, tenant)
+	if routeErr != nil {
+		return routeErr
+	}
 
 	var payload []byte
 	var err error
@@ -186,14 +210,12 @@ func (eb *WatermillEventBus) Publish(event interface{}) error {
 		}
 	}
 
-	topic := resolveTopic(event)
-
 	// Create message
 	msg := message.NewMessage(watermill.NewUUID(), payload)
 	msg.Metadata.Set("event_type", topic)
 
 	// Publish to Redis Stream
-	if err := eb.publisher.Publish(topic, msg); err != nil {
+	if err := eb.publisher.Publish(physicalTopic, msg); err != nil {
 		return fmt.Errorf("failed to publish event: %w", err)
 	}
 
@@ -204,6 +226,19 @@ func (eb *WatermillEventBus) Publish(event interface{}) error {
 // Subscribe subscribes to events of a specific type.
 // 订阅 topic 使用稳定事件类型名（如 "ticket.created"）。
 func (eb *WatermillEventBus) Subscribe(eventType string, handler shared.EventHandler) error {
+	routes, err := eb.routes.subscriptionRoutes(eventType)
+	if err != nil {
+		return err
+	}
+	for _, route := range routes {
+		if err := eb.subscribeRoute(eventType, route, handler); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (eb *WatermillEventBus) subscribeRoute(eventType string, route streamRoute, handler shared.EventHandler) error {
 	eb.mu.Lock()
 	if !eb.started || eb.closed || handler == nil || eventType == "" {
 		eb.mu.Unlock()
@@ -213,7 +248,7 @@ func (eb *WatermillEventBus) Subscribe(eventType string, handler shared.EventHan
 	eb.consumers.Add(1)
 	eb.mu.Unlock()
 	// Subscribe to the topic
-	messages, err := eb.subscriber.Subscribe(ctx, eventType)
+	messages, err := eb.subscriber.Subscribe(ctx, route.topic)
 	if err != nil {
 		eb.consumers.Done()
 		return fmt.Errorf("failed to subscribe to event type %s: %w", eventType, err)

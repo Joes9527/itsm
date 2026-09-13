@@ -300,7 +300,7 @@ func NewApplication() *Application {
 	incidentService.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 
 	// 初始化 EventBus 事件总线
-	eventBus, err := eventbus.NewWatermillEventBus(&cfg.Redis, sugar)
+	eventBus, err := eventbus.NewWatermillEventBus(&cfg.Redis, cfg.Execution, sugar)
 	if err != nil {
 		sugar.Fatalw("Failed to initialize event bus", "error", err)
 	}
