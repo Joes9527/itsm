@@ -658,3 +658,12 @@ Callback contract新增version及generic typed lifecycle result，沿既有流�
 - 初轮typed result未声明及generic输出识别问题导致正常流程推进失败，已修正并真实推进成功；没有把其中编译/夹具失败算成业务RED。只读review_execution_scope_s1复审本轮事务主线及修复，无新增阻断。
 
 边界：process/instance/callback为owner前置夹具，运行的是实际领取、领域命令、流程推进，不是完整流程创建/启动链。user-task completion分支、普通actor撤权、租约过期/同worker旧attempt、参数恶意篡改及跨worker同时运行专项仍待覆盖；本轮不是所有BPMN写入口接入，assign/update_status等仍需按S3逐项核验。S3/S4/S5/S6/B3/T3/T4/G2/G3仍未完成，固定CandidateSHA不变、候选未启动，无WSL/共享环境、企业实发、共享迁移、推送或main合并。
+
+
+### B2 S3 工单详情读取去除飞书副作用（2026-09-13）
+
+在 `bcd1f5c47` 后确认GetTicket在repo.GetByID成功后启动goroutine、开启事务、调用UpdateExistingTicketTask并更新映射，读取本身造成外部写入。按S3“GET历史工单不触发Feishu”要求删除该整段，保留原仓储返回与错误契约，不新增开关或异步替代路径。
+
+`TestTicketReadDoesNotUpdateFeishuTask`保存在现有integration/feishu_creation_delivery_test.go：真实SQLite映射、实际Feishu connector指向httptest本地接收端；先直接UpdateTask正向控制PATCH=1，再GetTicket。s3-ticket-read-feishu-red.log有效RED实际PATCH=2。移除后s3-ticket-read-feishu-green.log读取PATCH仍1、映射JSON原样，另两项原创建意图/手动自动共用创建意图测试PASS。观察窗口1秒为有界动态证据，源码中完整删除读后goroutine提供直接佐证，不声称任意延迟任务的形式化证明。s3-ticket-read-regression.log service/controller读取/Feishu定向PASS，build.json全后端exit0；本轮未重跑完整候选PG，未将SQLite测试写成候选环境验收。独立review_execution_scope_s1只读审阅无阻断。
+
+本轮仅修复GetTicket。剩余六处TicketService业务写调用UpdateExistingTicketTask及FeishuSyncService手动同步API仍绕过新update队列，需继续接入原事务/范围与可靠投递；不删除合法写入应产生的同步功能。S3/S4/S5/S6/B3/T3/T4/G2/G3仍未完成。固定CandidateSHA不变、候选保持停止，未执行企业调用、WSL/共享环境变更、共享迁移、推送或main合并。

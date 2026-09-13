@@ -30,6 +30,8 @@
 
 已配置Feishu时，手动命令在原事务新增 `feishu.task.update.requested`，冻结目标、映射、操作身份和发送快照，审计回执绑定其摘要。必须已有非空且TaskID=GUID的映射；缺失或不一致会回滚整条命令，不自动创建远端任务。既有Worker按目标顺序发送，投递前和结果写回核验持久claim/attempt、范围、当前权限和操作回执；完成事务锁住事件行。远端GUID不一致、调用后错误或回执失败均转入delivery_unknown并阻挡后序，不自动重试。该协议只覆盖新的手动更新事件；TicketLifecycleService/EscalationService重复手动方法已移除，生产HTTP手动升级只有TicketService所有者。BPMN升级已接入独立工作流事务（见下），其他Feishu直发入口仍待接入，候选尚未放行。
 
+工单详情读取 `TicketService.GetTicket` 仅调用原仓储查询，不启动飞书同步、后台事务或更新映射。同步由明确的业务写意图承担；其它旧业务写同步和手动同步API仍待完成候选准入，不能因读取已纯化而宣称全部同步安全。
+
 ### BPMN 工单升级事务
 
 `ticket_task/escalate` 由 TicketService 的独立工作流命令处理。持久回调必须携带正整数 `version`；保留 `escalate_to`（省略/空值默认high）、`escalation_reason`、`notify_admin_ids` 及 `escalated` 状态语义。旧缺version回调不会被自动补值，必须核对其流程配置与原操作意图。仅generic可用，专业类型走所属领域命令。

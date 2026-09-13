@@ -399,48 +399,7 @@ func mapProcessStatusToDTO(status string) dto.ProcessStatus {
 
 // GetTicket 获取工单
 func (s *TicketService) GetTicket(ctx context.Context, id int, tenantID int) (*ticket.Ticket, error) {
-	updated, err := s.repo.GetByID(ctx, id, tenantID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 异步同步工单到飞书
-	if s.connectorManager != nil {
-		go func() {
-			ctx2, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			// 获取Feishu连接器
-			conn, ok := s.connectorManager.Get(tenantID, "feishu")
-			if !ok {
-				// 飞书连接器未配置，忽略
-				return
-			}
-			feishuConn, ok := conn.(*feishuConnector.Feishu)
-			if !ok {
-				return
-			}
-			// 开启事务
-			tx, err := s.client.Tx(ctx2)
-			if err != nil {
-				s.logger.Warnw("Failed to start transaction for feishu sync", "error", err, "ticket_id", updated.ID)
-				return
-			}
-			defer tx.Rollback()
-			// 同步工单到飞书
-			_, err = feishuConn.UpdateExistingTicketTask(ctx2, tx, s.toEntTicket(updated))
-			if err != nil {
-				s.logger.Warnw("Failed to sync ticket to feishu", "error", err, "ticket_id", updated.ID)
-				return
-			}
-			// 提交事务
-			if err := tx.Commit(); err != nil {
-				s.logger.Warnw("Failed to commit transaction for feishu sync", "error", err, "ticket_id", updated.ID)
-				return
-			}
-		}()
-	}
-
-	return updated, nil
+	return s.repo.GetByID(ctx, id, tenantID)
 }
 
 // GetTicketByNumber 根据编号获取工单

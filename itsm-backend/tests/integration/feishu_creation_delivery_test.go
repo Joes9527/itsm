@@ -2,12 +2,14 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/outboxevent"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -206,4 +208,52 @@ func TestFeishuConcurrentManualSyncWritesOneIntent(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "pending", replay.SyncStatus)
 	require.Equal(t, 1, f.client.OutboxEvent.Query().CountX(ctx))
+}
+
+func TestTicketReadDoesNotUpdateFeishuTask(t *testing.T) {
+	ctx := context.Background()
+	var patches atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/open-apis/auth/v3/tenant_access_token/internal" {
+			_, _ = w.Write([]byte(`{"code":0,"tenant_access_token":"local-test-token","expire":7200}`))
+			return
+		}
+		if r.Method == http.MethodPatch {
+			patches.Add(1)
+		}
+		_, _ = w.Write([]byte(`{"code":0,"data":{"task":{"guid":"read-test-task","summary":"local task"}}}`))
+	}))
+	defer server.Close()
+	var owner *service.TicketService
+	var fc *feishu.Feishu
+	fixture := newUnifiedIntakeFixture(t, func(client *ent.Client, logger *zap.SugaredLogger) *service.TicketService {
+		registry := connector.NewRegistry()
+		registry.Register(func() connector.Connector { fc = feishu.New(); return fc })
+		manager := connector.NewManager(registry, logger)
+		t.Cleanup(manager.CloseAll)
+		tenant := client.Tenant.Query().OnlyX(ctx)
+		require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "feishu", Enabled: true, Credentials: map[string]string{"app_id": "local-app", "app_secret": "local-only"}, Settings: map[string]any{"base_url": server.URL}}))
+		owner = configuredCreationTicketOwnerWithConnector(client, logger, manager)
+		return owner
+	})
+	item, err := fixture.app.Create(ctx, fixture.identity, fixture.command)
+	require.NoError(t, err)
+	mapping := fixture.client.FeishuTicketSync.Create().SetTenantID(fixture.identity.TenantID).SetTicketID(item.WorkItemID).SetFeishuTaskID("read-test-task").SetFeishuTaskGUID("read-test-task").SaveX(ctx)
+	// Prove the configured local connector can reach its receiver before asserting no read-side send.
+	_, err = fc.UpdateTask(ctx, "read-test-task", &feishu.FeishuTask{Name: "local positive control"})
+	require.NoError(t, err)
+	require.EqualValues(t, 1, patches.Load())
+	before, err := json.Marshal(mapping)
+	require.NoError(t, err)
+	result, err := owner.GetTicket(ctx, item.WorkItemID, fixture.identity.TenantID)
+	require.NoError(t, err)
+	require.Equal(t, item.WorkItemID, result.ID)
+	deadline := time.NewTimer(time.Second)
+	defer deadline.Stop()
+	<-deadline.C
+	require.EqualValues(t, 1, patches.Load(), "reading a ticket must not issue a remote update")
+	after, err := json.Marshal(fixture.client.FeishuTicketSync.GetX(ctx, mapping.ID))
+	require.NoError(t, err)
+	require.JSONEq(t, string(before), string(after), "reading must preserve the sync mapping")
 }
