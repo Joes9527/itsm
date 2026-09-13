@@ -20,6 +20,8 @@
 
 `redis.event_stream.claim_idle`、`claim_interval`、`nack_delay` 使用时长格式（如 `60s`、`5s`、`1s`）；负数拒绝，零或未配置分别使用当前传输库的60秒、5秒及应用的1秒默认值。配置由构造器复制，候选消费者使用这些值；standard 保留原 fanout 消费语义。领取超时不是排他锁：慢处理可能被其他实例重领，写入所有者必须重验授权并提供持久幂等回执。当前审计已具备该回执，语义是至少一次投递加审计幂等，不是传输恰好一次。Webhook 的候选 typed envelope 接入、不可处理事件的持久阻断及其它异步入口仍未完成，不能据此启动候选。
 
+Webhook 事件订阅只接受 `WebhookEventTopics()` 注册的类型；未配置目标返回错误，不再静默成功。同步发送按既有 tenant/name/provider 实例身份精确投递，缺失或已撤销目标不回退到同名其它实例；传输 context 的取消和租户限制传入发送超时。此查找只验证调用时的实例表，不构成并发撤销/同 key 配置变更栅栏。多目标部分成功后重投仍可能重复成功目标；候选持久投递尚须逐目标 outbox 意图、冻结目标及回执，不得因本修复宣称外部幂等或启用候选 Webhook。
+
 离线与 ACK 间隙恢复测试分别为 `TestCandidateStreamDeliversOfflineMessages` 和 `TestCandidateIntakeCreationBoundary/stream_source_requires_current_persistent_authority/stream_consumer_recovers_committed_audit_before_ack`，后者同时需要下述私有 PostgreSQL socket 和 Redis 二进制变量。它验证真实审计提交后停止 ACK、关闭旧 bus、新 bus 领取原 pending 消息，原审计不变且旧 Stream 保全；不替代整个应用/操作系统重启或完整 outbox Worker 投递验证。
 
 本机范围测试使用专属 Unix socket PostgreSQL，`CANDIDATE_SCOPE_TEST_SOCKET` 必须指向带 `candidate-test-instance` 标记（内容为 `itsm-candidate-isolated-test` 加换行）的私有测试实例；端口为25439。测试只创建/删除随机命名的自有数据库及角色，不读取普通业务 DSN。运行 `go test -tags candidate_scope ./tests/integration -run '^TestCandidateScopeRegistration$' -count=1`。未设置变量产生 skip，不是通过；本机 PostgreSQL16 证据不能代替目标 PostgreSQL17 复核。

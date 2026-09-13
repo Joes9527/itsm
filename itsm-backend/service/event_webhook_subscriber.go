@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"time"
 
+	"itsm-backend/common/executionscope"
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/connector"
 
 	"go.uber.org/zap"
@@ -29,12 +31,32 @@ func NewWebhookEventSubscriber(manager *connector.Manager, logger *zap.SugaredLo
 
 // Handle implements shared.EventHandler。
 func (s *WebhookEventSubscriber) Handle(event interface{}) error {
+	return s.HandleContext(context.Background(), event)
+}
+
+func (s *WebhookEventSubscriber) HandleContext(ctx context.Context, event interface{}) error {
+	if s == nil || s.manager == nil || ctx == nil {
+		return executionscope.ErrDenied
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	raw, ok := event.(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("unexpected event shape %T", event)
 	}
 
 	eventType, _ := raw["eventType"].(string)
+	known := false
+	for _, topic := range WebhookEventTopics() {
+		if topic == eventType {
+			known = true
+			break
+		}
+	}
+	if !known {
+		return fmt.Errorf("unsupported webhook event type")
+	}
 	tenantID := 0
 	if v, ok := raw["tenantId"].(string); ok {
 		tenantID, _ = strconv.Atoi(v)
@@ -42,6 +64,13 @@ func (s *WebhookEventSubscriber) Handle(event interface{}) error {
 	if tenantID <= 0 {
 		return fmt.Errorf("event missing valid tenantId")
 	}
+	if tenant, ok := tenantctx.TenantID(ctx); ok && tenant != tenantID {
+		return executionscope.ErrDenied
+	}
+	if tenantctx.IsSystemBypass(ctx) {
+		return executionscope.ErrDenied
+	}
+	ctx = tenantctx.WithTenantID(ctx, tenantID)
 
 	payload, err := json.Marshal(raw)
 	if err != nil {
@@ -56,7 +85,7 @@ func (s *WebhookEventSubscriber) Handle(event interface{}) error {
 			continue
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		msg := &connector.Message{
 			Type:    "text",
 			Title:   fmt.Sprintf("ITSM 事件: %s", eventType),
@@ -65,7 +94,7 @@ func (s *WebhookEventSubscriber) Handle(event interface{}) error {
 				"eventType": eventType,
 			},
 		}
-		err := s.manager.Send(ctx, tenantID, "webhook", msg)
+		err := s.manager.SendToInstance(ctx, tenantID, "webhook", cfg.Provider, msg)
 		cancel()
 		if err != nil {
 			s.logger.Warnw("webhook event push failed", "error", err, "tenant_id", tenantID, "event_type", eventType)
@@ -75,9 +104,7 @@ func (s *WebhookEventSubscriber) Handle(event interface{}) error {
 	}
 
 	if sent == 0 {
-		// 该租户未配置 webhook——静默跳过，不阻塞事件流
-		s.logger.Debugw("no webhook connector configured for tenant, skip", "tenant_id", tenantID, "event_type", eventType)
-		return nil
+		return fmt.Errorf("webhook event has no configured target")
 	}
 
 	s.logger.Debugw("webhook event pushed", "tenant_id", tenantID, "event_type", eventType, "instances", sent)

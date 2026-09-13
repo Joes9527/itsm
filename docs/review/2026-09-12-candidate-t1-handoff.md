@@ -857,3 +857,13 @@ Close 禁止新订阅并取消 context，等待正在建立的 Subscribe 退出�
 验证：`s5-stream-offline-green.log`、`s5-stream-ack-recovery-pg.log`、`s5-durable-full-private.log` PASS；最终修复后 `s5-durable-regression.log` 六个受影响包 PASS，`s5-durable-final-race.log` 同时覆盖全部新增 lifecycle、完整候选 intake、真实 Redis 离线/历史保全及 PG/Redis/MinIO 应用构造保全 PASS，无skip、无race。独立 review_execution_scope_s1 复核关闭上述P2，未发现本检查点新增阻断。全后端 `s5-durable-build.log` exit0，git diff --check通过。日志保存在任务私有 b2 目录，未提交测试产物。
 
 S5 仍未完成：Webhook candidate typed envelope 与其写入所有者、无效消息的持久可见阻断、其它请求异步/工具入口仍待接入；外部效果不能仅靠消费组认定幂等。S3/S4/S6及B3/T3/T4/G2/G3不因本检查点放行。固定 CandidateSHA 仍为 `d7470a32dbb87acc9b5e4d9a895a146410723561`，候选未启动；未操作WSL/共享数据库，未企业实发、推送或合并main。
+
+### B2 S5 Webhook 实例路由与必需分发失败修复（2026-09-13）
+
+在 `5b3ad10c0` 后核查真实 Webhook owner：旧实现遍历租户实例但每次用 tenant/name 的 Manager.Send 随机选择同名实例，多目标可能重复串投；无目标静默成功，未知eventType仍出站。`s5-webhook-dispatch-red.log` 使用任务内loopback HTTP测试端点复现三项失败，多实例预期每端点2次而实际某端点4次。沿用Manager的tenant/name/provider实例键增加精确发送入口，订阅者使用枚举的provider，不创建第二套实例目录；缺失/已撤销实例不fallback。必需Webhook无目标及未注册类型返回error，不能ACK成功。
+
+`UsesDeliveryContext` 先在 `s5-webhook-context-red.log` 复现不支持ContextEventHandler，再将Handle委派HandleContext，原传输ctx派生每次发送超时；已取消ctx、不同tenant和SystemBypass在发送前拒绝。定向测试核验零外呼及匹配tenant正向控制，精确目标测试覆盖跨tenant/缺失provider/Revoke后不fallback；这是调用前取消证据，不声称已验证发送途中断连。`s5-webhook-dispatch-green.log`、`s5-webhook-dispatch-race.log` PASS；完整service、connector/...、bootstrap及eventbus回归 `s5-webhook-regression.log` PASS。独立review_execution_scope_s1两次只读复核无新增阻断，确认ctx循环派生与实例路由边界。全后端 `s5-webhook-build.log` exit0，git diff --check通过。
+
+当前仍是同步多目标发送：前目标成功后其它失败会导致Redis重投重复前目标。实例查找释放锁后仍可能与撤销/同key配置重绑竞争，不能把精确key当成配置版本或撤权栅栏。下一候选接入须在typed来源/成员核验原事务中，按source eventID与冻结目标建立既有outbox意图及消费回执；持久化目标/配置摘要与载荷摘要，worker重新核验当前目标一致、claim/attempt/范围，未知投递结果进入delivery_unknown，重放不重新枚举增添目标。本轮不把同步发送包装成候选幂等：typed Envelope仍拒绝，候选不放行。
+
+未修改数据库schema、执行共享操作或使用企业目标；候选SHA不变、候选未启动，无推送/main合并。S5、完整B2/B3及T3/T4/G2/G3仍未完成。
