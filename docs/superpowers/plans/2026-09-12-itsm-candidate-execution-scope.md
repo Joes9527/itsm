@@ -203,6 +203,9 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+工具结果竞争检查点 `7acbcaba0`：真实失败业务INSERT后回滚与成功业务提交后，两个ProcessJob结果写回事务竞争同一调用；done先/failed先均验证实际锁等待、后到40001保留cause及整次重试。最终一工单一创建回执，done首次完成整行不被覆盖，failed可恢复正确done；结果WorkItemID/编号/recordClass及Error=nil与真实创建记录匹配，工单整行（状态/版本在内）不变。业务两次尝试有意先后完成，不宣称同时INSERT竞争。完整私有PG16/Redis/MinIO race与独立审阅通过，无skip/race；本轮仅测试/文档，未重复生产构建，证据见T1。工具复合项和S5/S6、鉴权、目标T3/T4/G3保持未完成；固定CandidateSHA及候选停止状态不变。
+
+
 工具授权事务修复检查点 `eedec3389`：下述e12a7d297身份撤权RED已修复。新增043替换旧042函数入口，候选来源锁扩展至原调用、不同actor/approver/requester及当前Role/RolePermission/Permission，权限规则仍复用既有Go逻辑；Queue与审批使用RR，原业务RR与目录共享快照不变，40001保留并要求完整事务重试。9类撤权×业务提交/实际INSERT后回滚共18项真实PG验证等待精确业务PID，撤权提交后必须明确身份/权限拒绝；原审批竞争验证等待及冲突后整次重试。新增用户fixture曾影响后续SLA收件人数，已按生命周期停用且保留引用，原断言未放宽。最终完整私有PG16/Redis/MinIO race、具名回归、迁移/database测试、全后端build及独立审阅通过，详情与失败记录见T1。该矩阵仅证明创建路径，不外推编辑/审批/结果各自完整矩阵；结果竞争与剩余S5/S6、目标PG17/T3、真实T4/G3仍未完成。固定CandidateSHA及候选未启动状态不变，无共享环境操作或push/main合并。
 
 
