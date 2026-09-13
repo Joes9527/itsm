@@ -120,7 +120,7 @@ func (s *TicketNotificationService) enqueueNotificationResultTx(ctx context.Cont
 				continue
 			}
 			create := tx.TicketNotification.Create().SetNillableSLAAlertHistoryID(req.SLAAlertHistoryID).SetTenantID(tenantID).SetTicketID(ticketID).SetUserID(userID).SetType(req.EventType).SetChannel(channel.name).SetContent(req.Content).SetDeliveryKey(req.DeliveryKey).SetStatus(ticketNotificationStatusPending).SetNextAttemptAt(s.clock())
-			if err := s.BindNotificationConnectorTarget(ctx, tenantID, channel.name, create); err != nil {
+			if err := s.BindNotificationTargetTx(ctx, tx, tenantID, channel.name, create); err != nil {
 				return nil, err
 			}
 			if _, err := create.Save(ctx); err != nil {

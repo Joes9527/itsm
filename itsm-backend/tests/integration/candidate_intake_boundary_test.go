@@ -250,7 +250,12 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 	legacyManualItem, err := historicalApp.Create(ctx, identity, command("legacy-manual-receipt", "generic"))
 	require.NoError(t, err)
 	legacyManualCommand := dto.TicketEscalationCommand{WorkItemID: legacyManualItem.WorkItemID, Reason: "legacy confirmed upgrade", Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: 1, Source: "http", OperationID: "legacy-manual-command"}}
-	legacyManualOwner := service.NewTicketService(&service.TicketServiceConfig{Execution: executionfixture.Standard(), Client: owner, Repository: ticketrepo.NewEntRepository(owner, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), NotificationService: service.NewTicketNotificationService(owner, zap.NewNop().Sugar(), executionfixture.Standard())})
+	// Historical command receipts use an explicit in-app preference. Independent
+	// NULL-target email rows below model the old transport protocol for migrations.
+	legacyCommandPreference := owner.NotificationPreference.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetEventType("ticket_updated").SetInAppEnabled(true).SetEmailEnabled(false).SetSmsEnabled(false).SetPushEnabled(false).SaveX(ctx)
+	legacyNotifier := service.NewTicketNotificationService(owner, zap.NewNop().Sugar(), executionfixture.Standard())
+	legacyNotifier.SetNotificationPreferenceService(service.NewNotificationPreferenceService(owner, zap.NewNop().Sugar()))
+	legacyManualOwner := service.NewTicketService(&service.TicketServiceConfig{Execution: executionfixture.Standard(), Client: owner, Repository: ticketrepo.NewEntRepository(owner, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), NotificationService: legacyNotifier})
 	legacyManualResult, err := legacyManualOwner.EscalateTicket(ctx, legacyManualCommand)
 	require.NoError(t, err)
 	legacyEditItem, err := historicalApp.Create(ctx, identity, command("legacy-edit-receipt", "generic"))
@@ -264,6 +269,7 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 	laterLegacyEdit.Fields.Status = "in_progress"
 	_, err = legacyManualOwner.UpdateTicket(ctx, laterLegacyEdit)
 	require.NoError(t, err)
+	require.NoError(t, owner.NotificationPreference.DeleteOne(legacyCommandPreference).Exec(ctx))
 	legacySLAHistory := owner.SLAAlertHistory.Create().SetTicketID(historicalAlertItems[0]).SetTicketNumber("OLD-alert-scan").SetTicketTitle("historical alert").SetAlertRuleID(legacySLAAlertRule.ID).SetAlertRuleName(legacySLAAlertRule.Name).SetTenantID(tenant.ID).SetNotificationSent(true).SaveX(ctx)
 	var historicalNotifications []*ent.TicketNotification
 	for _, state := range []string{"pending", "processing"} {
@@ -3315,10 +3321,11 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		pref := owner.NotificationPreference.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetEventType("direct_queue_test").SetEmailEnabled(true).SetInAppEnabled(false).SetSmsEnabled(false).SetPushEnabled(false).SaveX(ctx)
 		defer func() { require.NoError(t, owner.NotificationPreference.DeleteOne(pref).Exec(ctx)) }()
 		probe := &candidateNotificationMailProbe{}
-		email := service.NewEmailService(service.EmailConfig{}, zap.NewNop().Sugar())
+		email := service.NewEmailService(candidateNotificationEmailConfig(t), zap.NewNop().Sugar())
 		email.SetGraphProvider(func(int) (service.GraphMailSender, string, bool) { return probe, "local-sender@example.invalid", true })
 		svc := service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)
 		svc.SetNotificationPreferenceService(service.NewNotificationPreferenceService(runtime, zap.NewNop().Sugar()))
+		email.SetDeliveryTargetDependencies(nil, policy)
 		svc.SetEmailService(email)
 		req := dto.SendTicketNotificationRequest{UserIDs: []int{actor.ID}, EventType: "direct_queue_test", Content: "private queued notification", DeliveryKey: "direct-queue-test"}
 		result, e := svc.SendNotification(ctx, fresh.WorkItemID, &req, tenant.ID)
@@ -3361,8 +3368,9 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		svc.SetNotificationPreferenceService(service.NewNotificationPreferenceService(runtime, zap.NewNop().Sugar()))
 		svc.SetDeliveryQueueClient(clients.System)
 		probe := &candidateNotificationMailProbe{}
-		email := service.NewEmailService(service.EmailConfig{}, zap.NewNop().Sugar())
+		email := service.NewEmailService(candidateNotificationEmailConfig(t), zap.NewNop().Sugar())
 		email.SetGraphProvider(func(int) (service.GraphMailSender, string, bool) { return probe, "local@example.invalid", true })
+		email.SetDeliveryTargetDependencies(nil, disabled)
 		svc.SetEmailService(email)
 		for _, channel := range []string{"email", "push"} {
 			for _, state := range []string{"pending", "processing"} {
@@ -3680,7 +3688,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 	t.Run("notification intents share the owning transaction", func(t *testing.T) {
 		fresh, err := app.Create(ctx, identity, command("notification-tx-member", "generic"))
 		require.NoError(t, err)
-		svc := service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)
+		svc := newCandidateNotificationOwner(t, runtime, zap.NewNop().Sugar(), policy)
 		request := dto.SendTicketNotificationRequest{UserIDs: []int{actor.ID, actor.ID}, EventType: "sla_violated", Content: "Transactional SLA notification", DeliveryKey: "candidate-notify-tx"}
 		run := func(itemID int, req *dto.SendTicketNotificationRequest, commit bool) error {
 			tx, e := runtime.Tx(ctx)
@@ -3790,7 +3798,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.NoError(t, err)
 		owner.Ticket.UpdateOneID(fresh.WorkItemID).SetSLADefinitionID(legacySLADefinition.ID).SetSLAResponseDeadline(time.Now().Add(-time.Hour)).SetSLAResolutionDeadline(time.Now().Add(time.Hour)).SaveX(ctx)
 		monitor := service.NewSLAMonitorService(runtime, zap.NewNop().Sugar(), policy)
-		monitor.SetNotificationService(service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy))
+		monitor.SetNotificationService(newCandidateNotificationOwner(t, runtime, zap.NewNop().Sugar(), policy))
 		_, err = monitor.CheckSLAViolations(ctx, tenant.ID)
 		require.NoError(t, err)
 		row := owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(fresh.WorkItemID), outboxevent.EventTypeEQ("sla.breached")).OnlyX(ctx)
@@ -4795,7 +4803,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		var before string
 		require.NoError(t, ownerDB.QueryRow(`SELECT COALESCE(json_agg(v ORDER BY id)::text,'[]') FROM sla_violations v WHERE ticket_id=$1`, historical.WorkItemID).Scan(&before))
 		monitor := service.NewSLAMonitorService(runtime, zap.NewNop().Sugar(), policy)
-		monitor.SetNotificationService(service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy))
+		monitor.SetNotificationService(newCandidateNotificationOwner(t, runtime, zap.NewNop().Sugar(), policy))
 		stats, err := monitor.CheckSLAViolations(ctx, tenant.ID)
 		require.NoError(t, err)
 		require.GreaterOrEqual(t, stats.NewViolations, 2, "new member must still be monitored")
@@ -4898,7 +4906,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 	})
 	t.Run("SLA alert direct entries preserve historical rows", func(t *testing.T) {
 		alerts := service.NewSLAAlertService(runtime, zap.NewNop().Sugar(), policy)
-		alerts.SetNotificationService(service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy))
+		alerts.SetNotificationService(newCandidateNotificationOwner(t, runtime, zap.NewNop().Sugar(), policy))
 		entries := []struct {
 			name string
 			run  func(int) (bool, error)
@@ -4975,7 +4983,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		}
 	})
 	t.Run("SLA alert channels and active cycle", func(t *testing.T) {
-		notifications := service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)
+		notifications := newCandidateNotificationOwner(t, runtime, zap.NewNop().Sugar(), policy)
 		notifications.SetNotificationPreferenceService(service.NewNotificationPreferenceService(runtime, zap.NewNop().Sugar()))
 		pref := owner.NotificationPreference.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetEventType("sla_violated").SetEmailEnabled(false).SetInAppEnabled(true).SetSmsEnabled(false).SetPushEnabled(false).SaveX(ctx)
 		defer owner.NotificationPreference.DeleteOneID(pref.ID).Exec(ctx)
@@ -5023,7 +5031,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 	})
 	t.Run("real candidate SLA monitor includes alerts", func(t *testing.T) {
 		alerts := service.NewSLAAlertService(runtime, zap.NewNop().Sugar(), policy)
-		notifier := service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)
+		notifier := newCandidateNotificationOwner(t, runtime, zap.NewNop().Sugar(), policy)
 		alerts.SetNotificationService(notifier)
 		monitor := service.NewSLAMonitorService(runtime, zap.NewNop().Sugar(), policy)
 		monitor.SetNotificationService(notifier)
@@ -5120,7 +5128,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 	t.Run("matrix escalation preserves historical alerts", func(t *testing.T) {
 		owner.SLADefinition.UpdateOneID(legacySLADefinition.ID).SetEscalationRules(map[string]interface{}{"medium": []interface{}{map[string]interface{}{"level": 1, "afterMinutes": 0, "notifyRoles": []interface{}{"requester"}, "description": "candidate escalation"}}}).SaveX(ctx)
 		owner.SLAAlertRule.UpdateOneID(legacySLAAlertRule.ID).SetEscalationEnabled(true).SaveX(ctx)
-		notifier := service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)
+		notifier := newCandidateNotificationOwner(t, runtime, zap.NewNop().Sugar(), policy)
 		alerts := service.NewSLAAlertService(runtime, zap.NewNop().Sugar(), policy)
 		alerts.SetNotificationService(notifier)
 		fresh, err := app.Create(ctx, identity, command("sla-matrix-member", "generic"))
@@ -5159,7 +5167,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		var notificationsBefore, notificationsAfter int
 		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM ticket_notifications WHERE ticket_id=$1`, historical.WorkItemID).Scan(&notificationsBefore))
 		escalation := service.NewEscalationService(runtime, zap.NewNop().Sugar(), policy)
-		escalation.SetNotificationService(service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy))
+		escalation.SetNotificationService(newCandidateNotificationOwner(t, runtime, zap.NewNop().Sugar(), policy))
 		require.NoError(t, escalation.ProcessEscalations(ctx, tenant.ID))
 		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, historical.WorkItemID).Scan(&after))
 		require.JSONEq(t, before, after)
@@ -5173,7 +5181,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		fresh, err := app.Create(ctx, identity, command("automatic-reminder-member", "generic"))
 		require.NoError(t, err)
 		escalation := service.NewEscalationService(runtime, zap.NewNop().Sugar(), policy)
-		escalation.SetNotificationService(service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy))
+		escalation.SetNotificationService(newCandidateNotificationOwner(t, runtime, zap.NewNop().Sugar(), policy))
 		old := time.Now().Add(-48 * time.Hour)
 		owner.Ticket.UpdateOneID(fresh.WorkItemID).SetCreatedAt(old).SetSLACycleStartedAt(old).SetSLACycleNumber(1).SaveX(ctx)
 		count := func() int {
@@ -5200,7 +5208,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 
 	t.Run("automatic reminder notification and audit rollback", func(t *testing.T) {
 		escalation := service.NewEscalationService(runtime, zap.NewNop().Sugar(), policy)
-		escalation.SetNotificationService(service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy))
+		escalation.SetNotificationService(newCandidateNotificationOwner(t, runtime, zap.NewNop().Sugar(), policy))
 		// Drain prior valid work before arming faults for the next isolated target.
 		require.NoError(t, escalation.ProcessEscalations(ctx, tenant.ID))
 		for _, fault := range []string{"notification", "audit"} {
@@ -5452,7 +5460,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			var before, after string
 			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, fresh.WorkItemID).Scan(&before))
 			handler := &candidateEscalationHandler{TicketServiceTaskHandler: bpmn.NewTicketServiceTaskHandler(runtime, zap.NewNop().Sugar())}
-			handler.SetEscalationService(service.NewTicketService(&service.TicketServiceConfig{Client: runtime, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: policy, NotificationService: service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)}))
+			handler.SetEscalationService(service.NewTicketService(&service.TicketServiceConfig{Client: runtime, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: policy, NotificationService: newCandidateNotificationOwner(t, runtime, zap.NewNop().Sugar(), policy)}))
 			if closeBeforeWrite {
 				handler.before = func() {
 					_, e := ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='closed' WHERE id=$1", scopeID)
@@ -5563,7 +5571,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 	})
 
 	t.Run("ticket edits preserve historical records and reject orphan tag writes", func(t *testing.T) {
-		svc := service.NewTicketService(&service.TicketServiceConfig{Client: runtime, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: policy, NotificationService: service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)})
+		svc := service.NewTicketService(&service.TicketServiceConfig{Client: runtime, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: policy, NotificationService: newCandidateNotificationOwner(t, runtime, zap.NewNop().Sugar(), policy)})
 		fresh, err := app.Create(ctx, identity, command("ticket-edit-member", "generic"))
 		require.NoError(t, err)
 		for _, target := range []struct {
@@ -5651,7 +5659,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 	})
 
 	t.Run("ticket edit status side effects share original transaction", func(t *testing.T) {
-		notifications := service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)
+		notifications := newCandidateNotificationOwner(t, runtime, zap.NewNop().Sugar(), policy)
 		notifications.SetNotificationPreferenceService(service.NewNotificationPreferenceService(runtime, zap.NewNop().Sugar()))
 		preference := owner.NotificationPreference.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetEventType("ticket_updated").SetEmailEnabled(false).SetInAppEnabled(true).SetSmsEnabled(false).SetPushEnabled(false).SaveX(ctx)
 		defer func() { require.NoError(t, owner.NotificationPreference.DeleteOneID(preference.ID).Exec(ctx)) }()
@@ -5751,7 +5759,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				var persistedChannel, status, key string
 				require.NoError(t, ownerDB.QueryRow(`SELECT channel,status,delivery_key FROM ticket_notifications WHERE ticket_id=$1`, before.ID).Scan(&persistedChannel, &status, &key))
 				require.Equal(t, "email", persistedChannel)
-				require.Equal(t, "pending", status, "producer must only enqueue; no provider attached")
+				require.Equal(t, "pending", status, "producer must only enqueue; transport must not execute")
 				require.Equal(t, fmt.Sprintf("ticket:edit:%d:version:%d", before.ID, before.Version+1), key)
 			}
 		}
@@ -6085,7 +6093,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		fresh, err := app.Create(ctx, identity, command("manual-feishu-update", "generic"))
 		require.NoError(t, err)
 		owner.FeishuTicketSync.Create().SetTenantID(tenant.ID).SetTicketID(fresh.WorkItemID).SetFeishuTaskID("local-task").SetFeishuTaskGUID("local-task").SetSyncStatus("synced").SaveX(ctx)
-		svc := service.NewTicketService(&service.TicketServiceConfig{Execution: policy, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Client: runtime, Logger: zap.NewNop().Sugar(), ConnectorManager: manager, NotificationService: service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)})
+		svc := service.NewTicketService(&service.TicketServiceConfig{Execution: policy, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Client: runtime, Logger: zap.NewNop().Sugar(), ConnectorManager: manager, NotificationService: newCandidateNotificationOwner(t, runtime, zap.NewNop().Sugar(), policy)})
 		item := owner.Ticket.GetX(ctx, fresh.WorkItemID)
 		cmd := dto.TicketEscalationCommand{WorkItemID: item.ID, Reason: "bounded Feishu update", Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: item.Version, OperationID: "manual-feishu-update", Source: "http"}}
 		_, err = svc.EscalateTicket(ctx, cmd)
@@ -6454,7 +6462,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 	})
 
 	t.Run("manual escalation preserves historical WorkItems", func(t *testing.T) {
-		svc := service.NewTicketService(&service.TicketServiceConfig{Execution: policy, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Client: runtime, Logger: zap.NewNop().Sugar(), NotificationService: service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)})
+		svc := service.NewTicketService(&service.TicketServiceConfig{Execution: policy, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Client: runtime, Logger: zap.NewNop().Sugar(), NotificationService: newCandidateNotificationOwner(t, runtime, zap.NewNop().Sugar(), policy)})
 
 		var legacyBefore, legacyAfter string
 		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, legacyManualItem.WorkItemID).Scan(&legacyBefore))
@@ -6819,7 +6827,7 @@ func newStandardWebhookSourceFixture(t *testing.T, parent context.Context, clien
 	policy, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "standard-webhook-test", Capabilities: map[string]string{"webhook": "enabled", "outbox": "enabled"}})
 	require.NoError(t, err)
 	monitor := service.NewSLAMonitorService(client, zap.NewNop().Sugar(), policy)
-	monitor.SetNotificationService(service.NewTicketNotificationService(client, zap.NewNop().Sugar(), policy))
+	monitor.SetNotificationService(newCandidateNotificationOwner(t, client, zap.NewNop().Sugar(), policy))
 	_, err = monitor.CheckSLAViolations(ctx, tenant.ID)
 	require.NoError(t, err)
 	source := client.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(item.ID), outboxevent.EventTypeEQ("sla.breached")).OnlyX(ctx)

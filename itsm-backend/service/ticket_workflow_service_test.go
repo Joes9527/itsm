@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"itsm-backend/common/tenantctx"
 	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/smtp"
 	"strconv"
@@ -327,11 +328,16 @@ func TestCCTicketDoesNotDispatchConnectorBeforeTransactionCommit(t *testing.T) {
 		})
 	})
 
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
+	mailOwner := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar(), standardNotificationPolicy(t))
+	_, mailCalls := configureNotificationSMTPProbe(mailOwner)
+	service.SetNotificationService(mailOwner)
 	err = service.CCTicket(ctx, &dto.CCTicketRequest{
 		TicketID:       tk.ID,
 		CCUsers:        []int{recipient.ID},
 		NotifyChannels: []string{"email"},
 	}, operator.ID, tenant.ID)
+	require.Empty(t, *mailCalls)
 
 	require.ErrorContains(t, err, "injected history failure before connector dispatch")
 	assert.Empty(t, fake.sentMessages())
@@ -356,11 +362,16 @@ func TestCCTicketPersistsExternalDeliveryWithoutDispatch(t *testing.T) {
 	fake := &durableNotificationConnector{}
 	configureDurableNotificationConnector(t, notificationService, tenant.ID, fake)
 
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
+	mailOwner := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar(), standardNotificationPolicy(t))
+	_, mailCalls := configureNotificationSMTPProbe(mailOwner)
+	service.SetNotificationService(mailOwner)
 	err = service.CCTicket(ctx, &dto.CCTicketRequest{
 		TicketID:       tk.ID,
 		CCUsers:        []int{recipient.ID},
 		NotifyChannels: []string{"email"},
 	}, operator.ID, tenant.ID)
+	require.Empty(t, *mailCalls)
 
 	require.NoError(t, err)
 	assert.Empty(t, fake.sentMessages())
@@ -385,11 +396,16 @@ func TestCCTicketPersistsExternalDeliveryWhenConnectorManagerUnavailable(t *test
 	tk, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
 	require.NoError(t, err)
 
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
+	mailOwner := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar(), standardNotificationPolicy(t))
+	_, mailCalls := configureNotificationSMTPProbe(mailOwner)
+	service.SetNotificationService(mailOwner)
 	err = service.CCTicket(ctx, &dto.CCTicketRequest{
 		TicketID:       tk.ID,
 		CCUsers:        []int{recipient.ID},
 		NotifyChannels: []string{"email"},
 	}, operator.ID, tenant.ID)
+	require.Empty(t, *mailCalls)
 
 	require.NoError(t, err)
 	notification := client.TicketNotification.Query().OnlyX(ctx)
@@ -450,8 +466,11 @@ func TestEmailAndCCLogsContainOnlyFixedErrorClasses(t *testing.T) {
 	ticketEntity, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
 	require.NoError(t, err)
 	notificationService := NewTicketNotificationService(client, logger, standardNotificationPolicy(t))
+	emailService.config.DeliveryTransport = "smtp"
+	emailService.SetDeliveryTargetDependencies(nil, notificationService.execution)
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
 	notificationService.SetEmailService(emailService)
-	smtpErr = errors.New(smtpErrSentinel)
+	smtpErr = newEmailTransportError("smtp", "connect", emailNotAccepted, errors.New(smtpErrSentinel))
 	result, err := notificationService.SendNotification(ctx, ticketEntity.ID, &dto.SendTicketNotificationRequest{
 		UserIDs:   []int{recipient.ID},
 		EventType: "ticket_cc",
@@ -534,11 +553,16 @@ func TestCCTicketRejectsUnknownNotifyChannelsBeforeEffects(t *testing.T) {
 			ticket, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
 			require.NoError(t, err)
 
+			ctx = tenantctx.WithTenantID(ctx, tenant.ID)
+			mailOwner := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar(), standardNotificationPolicy(t))
+			_, mailCalls := configureNotificationSMTPProbe(mailOwner)
+			service.SetNotificationService(mailOwner)
 			err = service.CCTicket(ctx, &dto.CCTicketRequest{
 				TicketID:       ticket.ID,
 				CCUsers:        []int{recipient.ID},
 				NotifyChannels: tt.channels,
 			}, operator.ID, tenant.ID)
+			require.Empty(t, *mailCalls)
 			if tt.wantError {
 				require.ErrorContains(t, err, "通知渠道")
 				assert.Zero(t, client.TicketCC.Query().CountX(ctx))

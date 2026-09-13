@@ -23,7 +23,7 @@ import (
 // NotificationTargetBinder is supplied by the existing notification owner.
 // It binds only transport identity; the CC owner retains its transaction.
 type NotificationTargetBinder interface {
-	BindNotificationConnectorTarget(context.Context, int, string, *ent.TicketNotificationCreate) error
+	BindNotificationTargetTx(context.Context, *ent.Tx, int, string, *ent.TicketNotificationCreate) error
 }
 
 // CCTaskHandler 抄送服务任务处理器
@@ -208,7 +208,7 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 
 	// 发送通知给抄送人
 	if ccNotify && len(addedUsers) > 0 {
-		if err := h.createCCNotifications(ctx, tx.Client(), ticketID, addedUsers, notifyChannels, tenantID); err != nil {
+		if err := h.createCCNotifications(ctx, tx, ticketID, addedUsers, notifyChannels, tenantID); err != nil {
 			return nil, err
 		}
 	}
@@ -492,7 +492,8 @@ func parseNotifyChannelsFromVars(variables map[string]interface{}) ([]string, er
 	return parseNotifyChannels(channels)
 }
 
-func (h *CCTaskHandler) createCCNotifications(ctx context.Context, client *ent.Client, ticketID int, userIDs []int, channels []string, tenantID int) error {
+func (h *CCTaskHandler) createCCNotifications(ctx context.Context, tx *ent.Tx, ticketID int, userIDs []int, channels []string, tenantID int) error {
+	client := tx.Client()
 	ticketEntity, err := client.Ticket.Query().Where(ticket.ID(ticketID), ticket.TenantID(tenantID)).Only(ctx)
 	if err != nil {
 		return fmt.Errorf("获取抄送通知工单失败")
@@ -516,11 +517,11 @@ func (h *CCTaskHandler) createCCNotifications(ctx context.Context, client *ent.C
 			if hasExecutionKey {
 				create.SetDeliveryKey(ccNotificationDeliveryKey(executionKey, ticketID, userID, channel))
 			}
-			if channel != "in_app" && channel != "email" && channel != "push" {
+			if channel != "in_app" && channel != "push" {
 				if h.notificationTargets == nil {
 					return executionscope.ErrDenied
 				}
-				if err := h.notificationTargets.BindNotificationConnectorTarget(ctx, tenantID, channel, create); err != nil {
+				if err := h.notificationTargets.BindNotificationTargetTx(ctx, tx, tenantID, channel, create); err != nil {
 					return err
 				}
 			}

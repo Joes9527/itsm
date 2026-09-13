@@ -365,6 +365,10 @@ func (s *TicketNotificationService) dispatchClaimedDelivery(ctx context.Context,
 		return "delivery_target_invalid", nil
 	}
 	if row.Channel == "email" {
+		target, targetErr := notificationEmailTarget(row)
+		if targetErr != nil {
+			return "delivery_target_invalid", targetErr
+		}
 		if s.emailService == nil || strings.TrimSpace(userEntity.Email) == "" {
 			return "delivery_target_invalid", nil
 		}
@@ -374,11 +378,14 @@ func (s *TicketNotificationService) dispatchClaimedDelivery(ctx context.Context,
 		// Content and recipient identity are durable queue facts. Resolve only
 		// the current address of that same active recipient at delivery time.
 		message := &EmailMessage{To: []string{userEntity.Email}, Subject: fmt.Sprintf("[ITSM] 工单 %s - %s", ticketEntity.TicketNumber, row.Type), BodyText: row.Content, DeliveryID: deliveryKey, DisableProviderFallback: true}
-		if err := s.emailService.SendForTenant(ctx, row.TenantID, message); err != nil {
+		if err := s.emailService.SendToTarget(ctx, row.TenantID, "notification", target, message); err != nil {
 			if emailTransportOutcomeOf(err) == emailAcceptanceUnknown {
-				return "delivery_unknown", nil
+				return "delivery_unknown", err
 			}
-			return "connector_send", nil
+			if errors.Is(err, executionscope.ErrDenied) {
+				return "delivery_target_invalid", err
+			}
+			return "connector_send", err
 		}
 		return "", nil
 	}

@@ -6,6 +6,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
@@ -60,6 +61,7 @@ func TestSendNotification_MultiChannelRouting(t *testing.T) {
 	defer client.Close()
 
 	tenant, user, ticket := createNotifTestData(t, client, ctx)
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
 
 	// 偏好：comment_added 启用 email + in_app，禁用 sms + push
 	_, err := client.NotificationPreference.Create().
@@ -70,12 +72,7 @@ func TestSendNotification_MultiChannelRouting(t *testing.T) {
 
 	// 注入偏好服务 + email 服务（Graph spy）
 	svc.SetNotificationPreferenceService(NewNotificationPreferenceService(client, zaptest.NewLogger(t).Sugar()))
-	spy := &graphSenderSpy{}
-	emailSvc := NewEmailService(EmailConfig{}, zaptest.NewLogger(t).Sugar())
-	emailSvc.SetGraphProvider(func(_ int) (GraphMailSender, string, bool) {
-		return spy, "ai-support@example.com", true
-	})
-	svc.SetEmailService(emailSvc)
+	_, calls := configureNotificationSMTPProbe(svc)
 
 	_, err = svc.SendNotification(ctx, ticket.ID, &dto.SendTicketNotificationRequest{
 		UserIDs:   []int{user.ID},
@@ -85,7 +82,7 @@ func TestSendNotification_MultiChannelRouting(t *testing.T) {
 	require.NoError(t, err)
 
 	// Request persists the intent; only the real worker invokes the local spy.
-	require.Empty(t, spy.calls)
+	require.Empty(t, *calls)
 	pending := client.TicketNotification.Query().Where(ticketnotification.ChannelEQ("email")).OnlyX(ctx)
 	require.Equal(t, "pending", pending.Status)
 	require.True(t, pending.SentAt.IsZero())
@@ -93,8 +90,8 @@ func TestSendNotification_MultiChannelRouting(t *testing.T) {
 	n, err := svc.ProcessPendingDeliveries(ctx, "direct-notification-test", 10)
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
-	require.Len(t, spy.calls, 1)
-	assert.Equal(t, "enduser@example.com", spy.calls[0])
+	require.Len(t, *calls, 1)
+	assert.Equal(t, "enduser@example.com", (*calls)[0])
 
 	// in_app 渠道创建 1 条站内通知记录
 	cnt, err := client.TicketNotification.Query().
@@ -109,6 +106,7 @@ func TestSendNotification_InAppDisabledNoRecord(t *testing.T) {
 	defer client.Close()
 
 	tenant, user, ticket := createNotifTestData(t, client, ctx)
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
 
 	// 偏好：全部禁用
 	_, err := client.NotificationPreference.Create().
@@ -133,6 +131,7 @@ func TestSendNotification_ZeroRecipientsReturnsBlockedEvidence(t *testing.T) {
 	client, svc, ctx := setupTicketNotificationTest(t)
 	defer client.Close()
 	tenant, _, ticket := createNotifTestData(t, client, ctx)
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
 
 	result, err := svc.SendNotification(ctx, ticket.ID, &dto.SendTicketNotificationRequest{
 		EventType: "ticket_updated",
@@ -149,14 +148,11 @@ func TestSendNotification_DefaultPreferenceWhenNoRecord(t *testing.T) {
 	defer client.Close()
 
 	tenant, user, ticket := createNotifTestData(t, client, ctx)
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
 
 	// 不创建偏好记录 → 走默认偏好（email+in_app）
 	svc.SetNotificationPreferenceService(NewNotificationPreferenceService(client, zaptest.NewLogger(t).Sugar()))
-	emailService := NewEmailService(EmailConfig{}, zaptest.NewLogger(t).Sugar())
-	emailService.SetGraphProvider(func(_ int) (GraphMailSender, string, bool) {
-		return &graphSenderSpy{}, "ai-support@example.com", true
-	})
-	svc.SetEmailService(emailService)
+	configureNotificationSMTPProbe(svc)
 
 	result, err := svc.SendNotification(ctx, ticket.ID, &dto.SendTicketNotificationRequest{
 		UserIDs:   []int{user.ID},

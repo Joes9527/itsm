@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"go.uber.org/zap"
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/dto"
 
 	"github.com/stretchr/testify/require"
@@ -14,6 +15,8 @@ func TestTicketNotificationMissingRecipientBlocksWholeDelivery(t *testing.T) {
 	client, svc, ctx := setupTicketNotificationTest(t)
 	t.Cleanup(func() { require.NoError(t, client.Close()) })
 	tenant, recipient, ticketEntity := createNotifTestData(t, client, ctx)
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
+	configureNotificationSMTPProbe(svc)
 
 	result, err := svc.SendNotification(ctx, ticketEntity.ID, &dto.SendTicketNotificationRequest{
 		UserIDs:   []int{recipient.ID, recipient.ID + 100000},
@@ -31,6 +34,8 @@ func TestTicketNotificationStableDeliveryKeyIsIdempotent(t *testing.T) {
 	client, svc, ctx := setupTicketNotificationTest(t)
 	t.Cleanup(func() { require.NoError(t, client.Close()) })
 	tenant, recipient, ticketEntity := createNotifTestData(t, client, ctx)
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
+	configureNotificationSMTPProbe(svc)
 	req := &dto.SendTicketNotificationRequest{
 		UserIDs: []int{recipient.ID}, EventType: "ticket_updated", Content: "once",
 		DeliveryKey: "ticket-notification-idempotent", InAppOnly: true,
@@ -50,6 +55,8 @@ func TestTicketNotificationQueueReplayAndConflict(t *testing.T) {
 	client, svc, ctx := setupTicketNotificationTest(t)
 	defer client.Close()
 	tenant, recipient, item := createNotifTestData(t, client, ctx)
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
+	configureNotificationSMTPProbe(svc)
 	svc.SetNotificationPreferenceService(NewNotificationPreferenceService(client, zap.NewNop().Sugar()))
 	pref := client.NotificationPreference.Create().SetUserID(recipient.ID).SetTenantID(tenant.ID).SetEventType("ticket_updated").SetEmailEnabled(true).SetInAppEnabled(true).SetSmsEnabled(false).SetPushEnabled(false).SaveX(ctx)
 	req := &dto.SendTicketNotificationRequest{UserIDs: []int{recipient.ID, recipient.ID}, EventType: "ticket_updated", Content: "once", DeliveryKey: "mixed-once"}
@@ -83,6 +90,8 @@ func TestTicketNotificationMixedTargetFailureRollsBack(t *testing.T) {
 	client, svc, ctx := setupTicketNotificationTest(t)
 	defer client.Close()
 	tenant, recipient, item := createNotifTestData(t, client, ctx)
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
+	configureNotificationSMTPProbe(svc)
 	svc.SetNotificationPreferenceService(NewNotificationPreferenceService(client, zap.NewNop().Sugar()))
 	client.NotificationPreference.Create().SetUserID(recipient.ID).SetTenantID(tenant.ID).SetEventType("ticket_updated").SetEmailEnabled(true).SetInAppEnabled(true).SetSmsEnabled(true).SetPushEnabled(false).SaveX(ctx)
 	result, err := svc.SendNotification(ctx, item.ID, &dto.SendTicketNotificationRequest{UserIDs: []int{recipient.ID}, EventType: "ticket_updated", Content: "rollback"}, tenant.ID)
@@ -96,6 +105,8 @@ func TestTicketNotificationMixedReplayKeepsExternalEvidence(t *testing.T) {
 	client, svc, ctx := setupTicketNotificationTest(t)
 	defer client.Close()
 	tenant, recipient, item := createNotifTestData(t, client, ctx)
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
+	configureNotificationSMTPProbe(svc)
 	svc.SetNotificationPreferenceService(NewNotificationPreferenceService(client, zap.NewNop().Sugar()))
 	client.NotificationPreference.Create().SetUserID(recipient.ID).SetTenantID(tenant.ID).SetEventType("ticket_updated").SetEmailEnabled(true).SetInAppEnabled(false).SetSmsEnabled(false).SetPushEnabled(false).SaveX(ctx)
 	req := &dto.SendTicketNotificationRequest{UserIDs: []int{recipient.ID}, EventType: "ticket_updated", Content: "mixed replay", DeliveryKey: "mixed-replay"}

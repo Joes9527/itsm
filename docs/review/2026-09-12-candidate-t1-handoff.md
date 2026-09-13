@@ -1552,3 +1552,25 @@ s5-email-bound-send-red.log先复现缺SendToTarget。新增EmailTarget.Validate
 最终验证：s5-email-bound-send-final.log service/Graph具名race PASS，非service全量；首次regression命令误写./bootstrap导致setup失败，正确路径./internal/bootstrap的s5-email-bound-send-regression-corrected.log connector/.../bootstrap/database全包race PASS；s5-email-bound-send-full-private.log既定私有PG16/Redis/MinIO suite race PASS，均无FAIL/SKIP/DATA RACE；s5-email-bound-send-build.log全后端build exit0。git diff --check通过，所有本轮Go进程退出。
 
 此步仅发送前置，原producer/worker/Incident outbox仍未接v2；原队列邮件重绑RED未关闭。下一步把EmailTarget写入原通知事务，并在worker按持久目标调用新入口，更新原真实正例以验证领取/回执，而不是以生产失败代替重绑验收。固定CandidateSHA不变，候选停止；无WSL/共享数据库操作、企业外发、push/main合并，S5/S6/T3/T4/G3未完成。
+
+
+### B2 S5 原通知邮件目标接入进行中（2026-09-14，未提交）
+
+在9839ed101之上，BindNotificationTargetTx显式接原*ent.Tx，统一原enqueue、creation、workflow CC、BPMN CC四条生产路径，email以EmailService.DescribeDeliveryTarget写v2目标。worker仅解码持久字段，拒绝旧NULL，按SendToTarget发送并保留cause；replay复用原目标，非email行拒绝target_transport。未新增队列，未迁移目标环境。
+
+s5-email-queue-binding-red.log先复现新邮件无target、缺owner仍提交以及旧NULL实际发送；s5-email-queue-binding-green.log完整SMTP原事务/worker race PASS，验证缺owner连同in_app整事务回滚、稳定目标loopback接受、重绑及legacy拒绝。原Graph重绑测试已改为真实持久ConnectorConfig+注册Graph+loopback的分别mailbox/Graph端点/AAD端点/client身份矩阵，不再依赖已不用的GraphProvider spy。
+
+独立审阅发现裸ErrDenied被默认unknown掩盖，s5-email-queue-classification-red.log以worker终态精确复现。SendToTarget现标记发送是否开始，发送前错误统一not_accepted，保留cause；已开始发送后的unknown不覆盖。s5-email-queue-classification-green.log新队列矩阵及EmailTarget具名race PASS：重绑零HTTP且failed/delivery_target_invalid；稳定Graph token+mail后sent；发送中同配置换代failed/delivery_unknown，第二sweep无重发。该证据仍不替代原业务路径广泛回归。
+
+宽回归s5-email-queue-regression-initial.log仍失败，尚不能提交为已验收改动：旧3个邮件worker fixture（RoutesLogicalEmailThroughBootstrapEmailWiring/Retry/Malformed）、DisabledCapability邮件fixture、MultiChannelRouting/DefaultPreference、MissingRecipient/QueueReplay/MixedReplay、EmailAndCCLogs、BPMN CC known_channels_deduplicate未在生产前装配可信邮件目标/租户上下文。必须保留原正向/重试/保全/日志/CC断言并更新为真实目标，不弱化生产门禁或删测试；原分类失败已由上述green覆盖。下一步修复这些fixture，补disabled下原事务描述及CC回滚证据，运行相关回归/真实私有PG/build并复审；Incident仍未接入。当前工作保留未提交，不关闭S5/S6/T3/T4/G3，CandidateSHA和候选停止状态不变。
+
+
+### B2 S5 原通知邮件v2队列接入验证完成（2026-09-14）
+
+承接上一进行中检查点，已更新旧测试的可信邮件配置和明确租户上下文，未削弱生产门禁。三个原Graph worker用真实注册Graph连接器+原ConnectorConfig+loopback接收端，保留正常收件人、失败后pending与再次成功断言；多通道/默认偏好/replay使用显式SMTP目标及进程内probe，真实SMTP接受由队列loopback用例另证。disabled测试现于生产前冻结关闭能力，仍写完整SMTP目标，pending/expired均逐字段不变且零外呼。workflow CC保留历史写入故障回滚与无外呼，BPMN路由单测owner double核验原tx已有CC写入；不将double当作真实发送。
+
+私有PG最初失败于历史manual回执夹具调用新producer却无邮件owner。独立审阅后，仅在历史manual/edit构造期间设置ticket_updated站内偏好并注入真实prefService，随即删除偏好；真实命令/回执和独立旧email NULL协议数据均保留，没有先写v2再清字段。当前候选producer使用显式任务私有loopback SMTP配置，监听器主动拒绝且cleanup要求零连接，只证明生产不外呼，不证明接受。缺transport/缺notifier/CC缺Manager与错scope等负例保留，SMS-only路径无多余邮件owner。
+
+最终s5-email-queue-service-final.log相关service/BPMN/引导具名race PASS（非service全量），s5-email-queue-disabled-producer.log禁用下原生产与保全race PASS；s5-email-queue-full-private-final.log既定私有PG16/Redis/MinIO suite race PASS，均无FAIL/SKIP/DATA RACE；s5-email-queue-build.log全后端build exit0。初始失败记录保留：fixture-regression前旧夹具失败、full-private-initial历史入口失败、private-history后续缺配置失败；均由最终验证覆盖。独立最终只读审阅无本增量提交阻断，git diff --check通过，所有本轮Go进程已退出。
+
+原邮件队列目标重绑RED现由真实队列分别邮箱/端点/应用身份零外呼、稳定发送与in-flight未知不重发关闭；仅关闭notification v2 producer/worker这项，不关闭完整邮件专业目标扩展合同。仍需Incident原outbox typed目标/版本/摘要/receipt/旧载荷策略，Graph候选local_only实际准入及其余S5/S6/G2/T3/T4/G3。固定CandidateSHA不变，候选停止，无WSL/共享数据库操作、企业外发、push/main合并。

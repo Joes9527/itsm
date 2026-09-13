@@ -296,7 +296,7 @@ func (s *TicketWorkflowService) CCTicket(ctx context.Context, req *dto.CCTicketR
 	}
 
 	if len(addedUserIDs) > 0 {
-		if err := txService.createCCNotifications(ctx, tk, addedUserIDs, notifyChannels, tenantID); err != nil {
+		if err := txService.createCCNotifications(ctx, tx, tk, addedUserIDs, notifyChannels, tenantID); err != nil {
 			return err
 		}
 	}
@@ -800,7 +800,7 @@ func normalizeNotifyChannels(channels []string) ([]string, error) {
 	return result, nil
 }
 
-func (s *TicketWorkflowService) createCCNotifications(ctx context.Context, tk *ent.Ticket, userIDs []int, channels []string, tenantID int) error {
+func (s *TicketWorkflowService) createCCNotifications(ctx context.Context, tx *ent.Tx, tk *ent.Ticket, userIDs []int, channels []string, tenantID int) error {
 	now := time.Now()
 	content := fmt.Sprintf("工单 %s「%s」已抄送给你", tk.TicketNumber, tk.Title)
 	users, err := s.client.User.Query().Where(user.IDIn(uniqueInts(userIDs)...), user.TenantID(tenantID)).All(ctx)
@@ -831,11 +831,11 @@ func (s *TicketWorkflowService) createCCNotifications(ctx context.Context, tk *e
 			} else {
 				create.SetDeliveryKey("ticket-notification-" + uuid.NewString()).SetNextAttemptAt(now)
 			}
-			if notificationConnectorChannel(channel) {
+			if channel == "email" || notificationConnectorChannel(channel) {
 				if s.notifications == nil {
 					return executionscope.ErrDenied
 				}
-				if err := s.notifications.BindNotificationConnectorTarget(ctx, tenantID, channel, create); err != nil {
+				if err := s.notifications.BindNotificationTargetTx(ctx, tx, tenantID, channel, create); err != nil {
 					return err
 				}
 			}

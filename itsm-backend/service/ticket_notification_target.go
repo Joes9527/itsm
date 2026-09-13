@@ -19,9 +19,29 @@ func notificationConnectorChannel(channel string) bool {
 
 // Select only while producing a new intent. Delivery and replay never select
 // from current configuration again. Multiple enabled providers are ambiguous.
-func (s *TicketNotificationService) BindNotificationConnectorTarget(ctx context.Context, tenantID int, channel string, create *ent.TicketNotificationCreate) error {
+func (s *TicketNotificationService) BindNotificationTargetTx(ctx context.Context, tx *ent.Tx, tenantID int, channel string, create *ent.TicketNotificationCreate) error {
+	if s == nil || tx == nil || create == nil {
+		return executionscope.ErrDenied
+	}
+	if channel == "email" {
+		if s.emailService == nil {
+			return executionscope.ErrDenied
+		}
+		target, err := s.emailService.DescribeDeliveryTarget(ctx, tx, tenantID, "notification")
+		if err != nil {
+			return err
+		}
+		if err := target.Validate(); err != nil {
+			return err
+		}
+		create.SetTargetProtocolVersion(target.ProtocolVersion).SetTargetTransport(target.Transport).SetTargetDestinationDigest(target.DestinationDigest)
+		if target.Transport == "graph" {
+			create.SetTargetConnectorName(target.ConnectorName).SetTargetConnectorProvider(target.ConnectorProvider)
+		}
+		return nil
+	}
 	if !notificationConnectorChannel(channel) {
-		if channel == "in_app" || channel == "email" || channel == "push" {
+		if channel == "in_app" || channel == "push" {
 			return nil
 		}
 		return executionscope.ErrDenied
@@ -71,6 +91,13 @@ func validateNotificationConnectorTarget(row *ent.TicketNotification) error {
 	if row == nil {
 		return executionscope.ErrDenied
 	}
+	if row.Channel == "email" {
+		_, err := notificationEmailTarget(row)
+		return err
+	}
+	if row.TargetTransport != nil {
+		return executionscope.ErrDenied
+	}
 	if !notificationConnectorChannel(row.Channel) {
 		if row.Channel != "in_app" && row.Channel != "email" && row.Channel != "push" {
 			return executionscope.ErrDenied
@@ -104,4 +131,25 @@ func (s *TicketNotificationService) resolveNotificationConnectorTarget(ctx conte
 		return nil, 0, executionscope.ErrDenied
 	}
 	return target, generation, nil
+}
+
+// Decode only persisted identity. Legacy empty targets never select current configuration.
+func notificationEmailTarget(row *ent.TicketNotification) (EmailTarget, error) {
+	if row == nil || row.Channel != "email" || row.TargetProtocolVersion == nil || row.TargetTransport == nil || row.TargetDestinationDigest == nil {
+		return EmailTarget{}, executionscope.ErrDenied
+	}
+	target := EmailTarget{ProtocolVersion: *row.TargetProtocolVersion, Transport: *row.TargetTransport, DestinationDigest: *row.TargetDestinationDigest}
+	if row.TargetConnectorName != nil {
+		target.ConnectorName = *row.TargetConnectorName
+	}
+	if row.TargetConnectorProvider != nil {
+		target.ConnectorProvider = *row.TargetConnectorProvider
+	}
+	if target.Transport == "smtp" && (row.TargetConnectorName != nil || row.TargetConnectorProvider != nil) {
+		return EmailTarget{}, executionscope.ErrDenied
+	}
+	if err := target.Validate(); err != nil {
+		return EmailTarget{}, err
+	}
+	return target, nil
 }

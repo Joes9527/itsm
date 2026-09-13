@@ -15,7 +15,13 @@ type graphTargetSender interface {
 // SendToTarget executes an already recorded identity. It never chooses current
 // defaults, reads configuration rows, or falls back to another transport.
 // The durable owner remains responsible for source, claim and receipt checks.
-func (s *EmailService) SendToTarget(ctx context.Context, tenantID int, capability string, target EmailTarget, msg *EmailMessage) error {
+func (s *EmailService) SendToTarget(ctx context.Context, tenantID int, capability string, target EmailTarget, msg *EmailMessage) (resultErr error) {
+	started := false
+	defer func() {
+		if resultErr != nil && !started {
+			resultErr = newEmailTransportError(target.Transport, "preflight", emailNotAccepted, resultErr)
+		}
+	}()
 	if s == nil || s.targetPolicy == nil || target.Validate() != nil {
 		return executionscope.ErrDenied
 	}
@@ -39,6 +45,7 @@ func (s *EmailService) SendToTarget(ctx context.Context, tenantID int, capabilit
 		}
 		copy := *msg
 		copy.DisableProviderFallback = true
+		started = true
 		sendErr := sender.sendViaSMTP(ctx, &copy)
 		current, err := s.describeSMTPTarget()
 		if err != nil || current != target {
@@ -64,6 +71,7 @@ func (s *EmailService) SendToTarget(ctx context.Context, tenantID int, capabilit
 	if err := s.prepareMessage(msg); err != nil {
 		return newEmailTransportError("graph", "validation", emailNotAccepted, err)
 	}
+	started = true
 	sendErr := s.sendViaGraph(ctx, sender, sender.Mailbox(), msg)
 	_, currentGeneration, currentDigest, err := manager.ResolveDeliveryTarget(ctx, ref, capability, target.ConnectorName, target.ConnectorProvider)
 	if err != nil || currentGeneration != generation || currentDigest != target.DestinationDigest {

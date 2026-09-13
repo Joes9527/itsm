@@ -254,43 +254,27 @@ func TestTicketNotificationWorkerFencesUnknownSendWithStableDeliveryKey(t *testi
 
 func TestTicketNotificationWorkerRoutesLogicalEmailThroughBootstrapEmailWiring(t *testing.T) {
 	fixture := newDurableNotificationFixture(t, "notification-bootstrap-email")
-	row := fixture.enqueueExternalCCWithChannel(t, "email")
-
-	// Bootstrap registers the Graph connector as msgraph-email, not as the
-	// logical email delivery channel. The durable worker must use EmailService.
 	_, registered := connector.Default().Get("msgraph-email")
 	require.True(t, registered)
-	fixture.notifications.SetConnectorManager(connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), nil))
 	graph := &durableNotificationGraphSender{}
-	emailService := NewEmailService(EmailConfig{}, zaptest.NewLogger(t).Sugar())
-	requestedTenantIDs := make([]int, 0, 1)
-	emailService.SetGraphProvider(func(tenantID int) (GraphMailSender, string, bool) {
-		requestedTenantIDs = append(requestedTenantIDs, tenantID)
-		return graph, "sender@example.test", true
-	})
-	fixture.notifications.SetEmailService(emailService)
-
+	configureDurableGraphQueue(t, fixture, graph)
+	row := fixture.enqueueExternalCCWithChannel(t, "email")
+	require.Empty(t, graph.sentCalls())
+	require.Equal(t, "msgraph-email", *row.TargetConnectorName)
 	now := time.Now().Add(time.Hour)
 	fixture.notifications.now = func() time.Time { return now }
 	completed, err := fixture.notifications.ProcessPendingDeliveries(fixture.ctx, "notification-bootstrap-email-worker", 10)
 	require.NoError(t, err)
 	require.Equal(t, 1, completed)
-	require.Equal(t, []int{fixture.tenant.ID}, requestedTenantIDs)
 	require.Equal(t, []string{fixture.recipient.Email}, graph.sentCalls())
 	require.Equal(t, ticketNotificationStatusSent, fixture.client.TicketNotification.GetX(fixture.ctx, row.ID).Status)
 }
 
 func TestTicketNotificationWorkerRetriesEmailServiceFailure(t *testing.T) {
 	fixture := newDurableNotificationFixture(t, "notification-email-retry")
+	graph := &durableNotificationGraphSender{sendErr: errors.New("private receiver unavailable")}
+	configureDurableGraphQueue(t, fixture, graph)
 	row := fixture.enqueueExternalCCWithChannel(t, "email")
-	fixture.notifications.SetConnectorManager(connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), nil))
-	graph := &durableNotificationGraphSender{sendErr: newEmailTransportError("graph", "connect", emailNotAccepted, errors.New("graph temporarily unavailable"))}
-	emailService := NewEmailService(EmailConfig{}, zaptest.NewLogger(t).Sugar())
-	emailService.SetGraphProvider(func(_ int) (GraphMailSender, string, bool) {
-		return graph, "sender@example.test", true
-	})
-	fixture.notifications.SetEmailService(emailService)
-
 	now := time.Now().Add(time.Hour)
 	fixture.notifications.now = func() time.Time { return now }
 	completed, err := fixture.notifications.ProcessPendingDeliveries(fixture.ctx, "notification-email-retry-worker", 10)
@@ -316,14 +300,9 @@ func TestTicketNotificationWorkerTreatsMalformedEmailAsPermanent(t *testing.T) {
 	fixture.recipient = fixture.client.User.UpdateOneID(fixture.recipient.ID).
 		SetEmail("malformed-address").
 		SaveX(fixture.ctx)
-	row := fixture.enqueueExternalCCWithChannel(t, "email")
 	graph := &durableNotificationGraphSender{}
-	emailService := NewEmailService(EmailConfig{}, zaptest.NewLogger(t).Sugar())
-	emailService.SetGraphProvider(func(_ int) (GraphMailSender, string, bool) {
-		return graph, "sender@example.test", true
-	})
-	fixture.notifications.SetEmailService(emailService)
-
+	configureDurableGraphQueue(t, fixture, graph)
+	row := fixture.enqueueExternalCCWithChannel(t, "email")
 	now := time.Now().Add(time.Hour)
 	fixture.notifications.now = func() time.Time { return now }
 	completed, err := fixture.notifications.ProcessPendingDeliveries(
@@ -617,25 +596,28 @@ func TestTicketNotificationDisabledCapabilityPreservesQueuedIntent(t *testing.T)
 				client, svc, ctx := setupTicketNotificationTest(t)
 				defer client.Close()
 				tenant, recipient, item := createNotifTestData(t, client, ctx)
+				ctx = tenantctx.WithTenantID(ctx, tenant.ID)
 				logger := zaptest.NewLogger(t).Sugar()
 				svc.SetNotificationPreferenceService(NewNotificationPreferenceService(client, logger))
 				client.NotificationPreference.Create().SetTenantID(tenant.ID).SetUserID(recipient.ID).SetEventType("ticket_updated").SetInAppEnabled(false).SetEmailEnabled(channel == "email").SetSmsEnabled(false).SetPushEnabled(channel == "push").SaveX(ctx)
-				probe := &durableNotificationGraphSender{}
-				mail := NewEmailService(EmailConfig{}, logger)
-				mail.SetGraphProvider(func(int) (GraphMailSender, string, bool) { return probe, "local@example.invalid", true })
-				svc.SetEmailService(mail)
+				policy, policyErr := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "test-standard"})
+				require.NoError(t, policyErr)
+				svc.execution = policy
+				_, calls := configureNotificationSMTPProbe(svc)
 				svc.SetWebSocketService(&WebSocketService{hub: NewWebSocketHub(logger), logger: logger})
 				svc.SetDeliveryQueueClient(client)
 				_, err := svc.SendNotification(ctx, item.ID, &dto.SendTicketNotificationRequest{UserIDs: []int{recipient.ID}, EventType: "ticket_updated", Content: "disabled worker", DeliveryKey: "disabled-worker"}, tenant.ID)
 				require.NoError(t, err)
-				policy, policyErr := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "test-standard"})
-				require.NoError(t, policyErr)
-				svc.execution = policy
 				if state == "expired processing" {
 					row := client.TicketNotification.Query().OnlyX(ctx)
 					row.Update().SetStatus(ticketNotificationStatusProcessing).SetAttemptCount(1).SetLeaseOwner("previous-worker").SetLeaseExpiresAt(time.Now().Add(-time.Minute)).SaveX(ctx)
 				}
 				before := client.TicketNotification.Query().OnlyX(ctx)
+				if channel == "email" {
+					require.NotNil(t, before.TargetTransport)
+					require.Equal(t, "smtp", *before.TargetTransport)
+					require.NotNil(t, before.TargetDestinationDigest)
+				}
 				n, err := svc.ProcessPendingDeliveries(ctx, "disabled-notification", 10)
 				assert.ErrorIs(t, err, executionscope.ErrDenied)
 				assert.Zero(t, n)
@@ -648,35 +630,14 @@ func TestTicketNotificationDisabledCapabilityPreservesQueuedIntent(t *testing.T)
 						assert.Equal(t, bv.Field(i).Interface(), av.Field(i).Interface(), bv.Type().Field(i).Name)
 					}
 				}
-				assert.Empty(t, probe.sentCalls())
+				assert.Empty(t, *calls)
 			})
 		}
 	}
 }
 
 func TestTicketNotificationEmailRejectsTargetChangeAfterEnqueue(t *testing.T) {
-	client, svc, ctx := setupTicketNotificationTest(t)
-	defer client.Close()
-	tenant, recipient, item := createNotifTestData(t, client, ctx)
-	logger := zaptest.NewLogger(t).Sugar()
-	svc.SetNotificationPreferenceService(NewNotificationPreferenceService(client, logger))
-	client.NotificationPreference.Create().SetTenantID(tenant.ID).SetUserID(recipient.ID).SetEventType("ticket_updated").SetInAppEnabled(false).SetEmailEnabled(true).SetSmsEnabled(false).SetPushEnabled(false).SaveX(ctx)
-	original, replacement := &durableNotificationGraphSender{}, &durableNotificationGraphSender{}
-	mail := NewEmailService(EmailConfig{}, logger)
-	mail.SetGraphProvider(func(int) (GraphMailSender, string, bool) { return original, "original@example.invalid", true })
-	svc.SetEmailService(mail)
-	svc.SetDeliveryQueueClient(client)
-	result, err := svc.SendNotification(ctx, item.ID, &dto.SendTicketNotificationRequest{UserIDs: []int{recipient.ID}, EventType: "ticket_updated", Content: "frozen mail target", DeliveryKey: "mail-target-change"}, tenant.ID)
-	require.NoError(t, err)
-	require.Equal(t, dto.TicketNotificationEffectQueued, result.Effect)
-	// Reconfigure the existing provider after the durable request was accepted.
-	mail.SetGraphProvider(func(int) (GraphMailSender, string, bool) { return replacement, "replacement@example.invalid", true })
-	n, err := svc.ProcessPendingDeliveries(ctx, "mail-target-change", 10)
-	assert.Error(t, err, "a different mailbox/provider must not inherit an existing intent")
-	assert.Zero(t, n)
-	assert.Empty(t, original.sentCalls())
-	assert.Empty(t, replacement.sentCalls())
-	row := client.TicketNotification.Query().OnlyX(ctx)
-	assert.NotEqual(t, ticketNotificationStatusSent, row.Status)
-	assert.True(t, row.SentAt.IsZero())
+	for _, field := range []string{"mailbox", "graph endpoint", "aad endpoint", "client identity", "in flight", "stable"} {
+		t.Run(field, func(t *testing.T) { verifyNotificationGraphTargetQueue(t, field) })
+	}
 }
