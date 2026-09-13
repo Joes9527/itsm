@@ -21,7 +21,7 @@ import (
 
 type webhookSender interface {
 	Send(context.Context, *connector.Message) error
-	WebhookDestinationIdentity() string
+	connector.DeliveryDestination
 }
 
 type boundWebhookTarget struct {
@@ -46,7 +46,7 @@ func (h *WebhookDeliveryHandler) target(tenantID int, p webhookDeliveryPayload) 
 		return boundWebhookTarget{}, fmt.Errorf("webhook target unavailable")
 	}
 	target, ok := conn.(webhookSender)
-	if !ok || target.WebhookDestinationIdentity() == "" || target.WebhookDestinationIdentity() != p.Target.DestinationDigest {
+	if !ok || target.DeliveryDestinationIdentity() == "" || target.DeliveryDestinationIdentity() != p.Target.DestinationDigest {
 		return boundWebhookTarget{}, fmt.Errorf("webhook destination changed")
 	}
 	return boundWebhookTarget{target, generation}, nil

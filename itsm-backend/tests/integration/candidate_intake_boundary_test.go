@@ -4,7 +4,9 @@ package integration
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -3702,11 +3704,19 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			defer secondEndpoint.Close()
 			registry := connector.NewRegistry()
 			registry.Register(func() connector.Connector { return webhookconnector.New() })
-			manager := connector.NewManager(registry, zap.NewNop().Sugar(), nil)
-			defer manager.CloseAll()
+			targetExecution := config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: scopeID}}, Capabilities: map[string]string{"webhook": "scoped"}}
 			for provider, endpoint := range map[string]string{"ack-first": firstEndpoint.URL, "ack-second": secondEndpoint.URL} {
-				require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Provider: provider, Enabled: true, Settings: map[string]interface{}{"url": endpoint}}))
+				encoded, err := json.Marshal(endpoint)
+				require.NoError(t, err)
+				digest := sha256.Sum256(encoded)
+				targetExecution.ConnectorTargets = append(targetExecution.ConnectorTargets, config.ConnectorTargetConfig{TenantID: tenant.ID, ScopeID: scopeID, Name: "webhook", Provider: provider,
+					DestinationDigest: hex.EncodeToString(digest[:]), Capabilities: []string{"webhook"}, Settings: map[string]interface{}{"url": endpoint}})
 			}
+			targetPolicy, err := database.NewExecutionPolicy(targetExecution)
+			require.NoError(t, err)
+			manager := connector.NewManager(registry, zap.NewNop().Sugar(), targetPolicy)
+			defer manager.CloseAll()
+			require.NoError(t, manager.ActivateStartupTargets(tenantctx.SystemContext(ctx, "test:declared-webhooks", "activate frozen loopback targets through the production owner")))
 			execution := config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: scopeID}}}
 			consumer, err := eventbus.NewWatermillEventBus(redisCfg, execution, authority, zap.NewNop().Sugar())
 			require.NoError(t, err)

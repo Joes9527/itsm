@@ -3,8 +3,10 @@ package connector
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"itsm-backend/common/executionscope"
+	"itsm-backend/config"
 	"sync"
 	"time"
 
@@ -16,6 +18,7 @@ import (
 type CapabilityGate interface {
 	RequireCapability(context.Context, int, string) error
 	RequireStartupCapability(context.Context, string) error
+	ConnectorStartupTargets(context.Context) ([]config.ConnectorTargetConfig, error)
 }
 
 type Manager struct {
@@ -23,9 +26,12 @@ type Manager struct {
 	registry *Registry
 	logger   *zap.SugaredLogger
 
-	mu             sync.RWMutex
-	nextGeneration uint64
-	instances      map[string]*instance // key = tenantID + "/" + connectorName + "/" + instanceID
+	mu               sync.RWMutex
+	nextGeneration   uint64
+	instances        map[string]*instance // key = tenantID + "/" + connectorName + "/" + instanceID
+	closed           bool
+	startupAttempted bool
+	initializing     sync.WaitGroup // Add under mu before closed can become true.
 }
 
 type instance struct {
@@ -33,6 +39,7 @@ type instance struct {
 	cfg        Config
 	conn       Connector
 	health     json.RawMessage
+	target     *targetAuthority
 }
 
 // NewManager 创建管理器
@@ -54,19 +61,28 @@ func instanceKey(c Config) string {
 
 // Provision 根据配置创建/更新一个连接器实例
 func (m *Manager) Provision(ctx context.Context, cfg Config) error {
+	m.mu.Lock()
+	unavailable := m.closed || m.startupAttempted
+	if unavailable {
+		m.mu.Unlock()
+		return executionscope.ErrDenied
+	}
+	m.initializing.Add(1)
+	m.mu.Unlock()
+	defer m.initializing.Done()
 	if !cfg.Enabled {
 		m.Revoke(cfg)
 		return nil
 	}
-	factory, ok := m.registry.Get(cfg.Name)
-	if !ok {
-		return fmt.Errorf("connector %q not registered", cfg.Name)
-	}
-	c := factory()
-	if err := c.Init(ctx, cfg); err != nil {
-		return fmt.Errorf("connector %q init failed: %w", cfg.Name, err)
+	c, err := m.initializeConnector(ctx, cfg, nil, "")
+	if err != nil {
+		return err
 	}
 	m.mu.Lock()
+	if m.closed || m.startupAttempted {
+		m.mu.Unlock()
+		return errors.Join(executionscope.ErrDenied, c.Close())
+	}
 	m.nextGeneration++
 	m.instances[instanceKey(cfg)] = &instance{cfg: cfg, conn: c, generation: m.nextGeneration}
 	m.mu.Unlock()
@@ -222,6 +238,12 @@ func (m *Manager) RefreshHealth(ctx context.Context, tenantID int) error {
 
 // CloseAll 关闭所有连接器（用于优雅停机）
 func (m *Manager) CloseAll() {
+	m.mu.Lock()
+	m.closed = true
+	m.mu.Unlock()
+	// No new initializer can Add after closed is set under the same mutex.
+	// Wait without holding mu so pending batches can reject publication and clean up.
+	m.initializing.Wait()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for k, inst := range m.instances {

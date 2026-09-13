@@ -40,16 +40,17 @@ func New() *Webhook {
 
 func (w *Webhook) Manifest() connector.Manifest {
 	return connector.Manifest{
-		Name:                "webhook",
-		Version:             "1.0.0",
-		Title:               "通用 Webhook 出站",
-		Provider:            "generic",
-		Type:                connector.TypeWebhook,
-		Description:         "把 ITSM 事件以 HTTP POST 推送到任意端点，支持 HMAC-SHA256 签名",
-		Capabilities:        []connector.Capability{connector.CapSendMessage, connector.CapCreateTicket, connector.CapUpdateTicket},
-		Tags:                []string{"webhook", "outbound", "generic"},
-		IsOfficial:          true,
-		RequiredPermissions: []string{"connector:write", "ticket:write"},
+		InitializationBehavior: connector.InitializationLocalOnly,
+		Name:                   "webhook",
+		Version:                "1.0.0",
+		Title:                  "通用 Webhook 出站",
+		Provider:               "generic",
+		Type:                   connector.TypeWebhook,
+		Description:            "把 ITSM 事件以 HTTP POST 推送到任意端点，支持 HMAC-SHA256 签名",
+		Capabilities:           []connector.Capability{connector.CapSendMessage, connector.CapCreateTicket, connector.CapUpdateTicket},
+		Tags:                   []string{"webhook", "outbound", "generic"},
+		IsOfficial:             true,
+		RequiredPermissions:    []string{"connector:write", "ticket:write"},
 	}
 }
 
@@ -128,5 +129,5 @@ func (w *Webhook) HealthCheck(ctx context.Context) connector.HealthStatus {
 
 func (w *Webhook) Close() error { return nil }
 
-// WebhookDestinationIdentity identifies the immutable endpoint captured at Init.
-func (w *Webhook) WebhookDestinationIdentity() string { return w.destination }
+// DeliveryDestinationIdentity identifies the immutable endpoint captured at Init.
+func (w *Webhook) DeliveryDestinationIdentity() string { return w.destination }

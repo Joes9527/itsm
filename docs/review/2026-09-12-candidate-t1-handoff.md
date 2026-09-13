@@ -1231,3 +1231,17 @@ s5-connector-target-final-unit.log具名config/database race PASS，包含notifi
 s5-connector-target-full-private.log在环境解析增量之前执行完整私有PG16/Redis/MinIO候选边界与Stream回归，只有507f62293具名请求激活的七项已知断言失败，其余所选子测试通过，无SKIP/DATA RACE；整套结果明确为FAIL，非验收通过。后续环境解析改动通过上方真实配置链测试，未重复不读取配置加载器的私有fixture套件。s5-connector-target-build.log为环境解析增量前全后端构建通过，最终构建另记。
 
 最终s5-connector-target-final-build.log全后端build exit0，git diff --check通过。当前只完成声明配置/冻结前置，不能据此关闭507f62293或S5/G2。
+
+### B2 S5 可信目标启动与生命周期接入（2026-09-14）
+
+s5-connector-startup-red.log实际API生命周期复现声明未激活就进入背景任务，以及未知registry/无效目的地/摘要不符/未声明初始化行为不阻止启动，共五场景RED。现消费者前调用唯一Manager.ActivateStartupTargets；冻结声明整批预检registry manifest local_only，再复用普通Provision内部初始化，Init后核对通用DeliveryDestinationIdentity，全部成功才发布generation。原Webhook专用身份接口全量替换，既有URL摘要含义不变；初始化行为加入manifest checksum。当前只有检查过的builtin Webhook声明local_only，无Init网络请求；未知行为拒绝，不以声明字符串代替真实实现检查。
+
+失败批次关闭当前失败对象和已准备对象，Join保留原错与清理错；已尝试Manager不得再次启动。独立审阅P2指出CloseAll可能早于阻塞Init清理返回，s5-connector-startup-close-red.log真实复现；现初始化在锁内登记WaitGroup，关闭先标closed再解锁等待清理，最终发布再检查closed/context。普通Provision同样受关闭等待及可信启动后不可变更约束。关闭竞争测试用同步通道与100ms观察窗口；Close不主动取消Init，调用方须取消生命周期且Init须遵守上下文。
+
+s5-connector-startup-consumer-close-red.log补测复现工具队列Start失败未Close；现先取消/Close失败队列与事件运行时，再清理连接器依赖。s5-connector-startup-final-unit.log具名bootstrap/connector/service race PASS，覆盖当前失败对象/部分批次、目的地身份缺失、错误保留、关闭竞争、失败后禁止重试和后续消费者启动失败。不是全部消费者失败的穷举。独立最终审阅无新增阻断。
+
+s5-connector-startup-full-private.log将候选Webhook stream ack恢复旅程从手动Provision改为真实Manager冻结声明激活：原持久消息恢复、意图保全、真实outbox worker两接收端各一次发送、重复调度零新增均PASS；真实接收端仅loopback。整体私有PG16/Redis/MinIO suite仍只有507f62293请求激活七项已知失败，无SKIP/DATA RACE，整套为FAIL。之后仅补工具队列失败Close和接口嵌入，最终具名回归通过，不把此前完整suite描述为当前整套绿色。
+
+本轮完成可信目标启动路径，不关闭启动前DirectProvision、Marketplace首次持久化、Send/Get裸实例旁路，也未证明完整通知/所有provider或候选整进程重启。CandidateSHA与停止状态不变，S5/S6及T3/T4/G3未完成，无共享环境变更、真实企业外呼或push/main合并。最终构建结果下方补记。
+
+最终s5-connector-startup-build.log全后端build exit0，git diff --check通过。尚未关闭的七项RED继续阻止当前版本放行。

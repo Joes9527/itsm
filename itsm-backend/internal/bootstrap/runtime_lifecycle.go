@@ -9,7 +9,7 @@ import (
 
 // startAPIRuntime owns cancellation and waits before callers close dependencies.
 // The dedicated KAF process remains the only owner of KAF delivery.
-func (app *Application) startAPIRuntime(ctx context.Context) (func(), error) {
+func (app *Application) startAPIRuntime(ctx context.Context) (stop func(), err error) {
 	if app.Cfg == nil {
 		return nil, fmt.Errorf("execution configuration required")
 	}
@@ -43,6 +43,34 @@ func (app *Application) startAPIRuntime(ctx context.Context) (func(), error) {
 		}
 	}
 	runtimeCtx, cancel := context.WithCancel(ctx)
+	targetsActivated := false
+	defer func() {
+		if err != nil {
+			cancel()
+			if targetsActivated {
+				app.connectorManager.CloseAll()
+			}
+		}
+	}()
+	if app.executionPolicy != nil && app.executionPolicy.IsCandidate() {
+		startupCtx := tenantctx.SystemContext(runtimeCtx, "runtime:connector-targets", "activate frozen candidate targets")
+		if app.connectorManager == nil {
+			targets, targetErr := app.executionPolicy.ConnectorStartupTargets(startupCtx)
+			if targetErr != nil {
+				return nil, targetErr
+			}
+			if len(targets) != 0 {
+				return nil, fmt.Errorf("declared connector targets require a manager")
+			}
+		} else {
+			if err := app.connectorManager.ActivateStartupTargets(startupCtx); err != nil {
+				return nil, fmt.Errorf("activate candidate targets: %w", err)
+			}
+			targetsActivated = true
+		}
+	} else if len(app.Cfg.Execution.ConnectorTargets) != 0 {
+		return nil, fmt.Errorf("declared connector targets require frozen candidate policy")
+	}
 	if app.eventRuntime != nil {
 		if err := app.eventRuntime.Start(runtimeCtx); err != nil {
 			cancel()
@@ -52,6 +80,7 @@ func (app *Application) startAPIRuntime(ctx context.Context) (func(), error) {
 	if app.toolQueue != nil && app.Cfg.Execution.Enabled("tool_queue") {
 		if err := app.toolQueue.Start(runtimeCtx); err != nil {
 			cancel()
+			app.toolQueue.Close()
 			if app.eventRuntime != nil {
 				_ = app.eventRuntime.Close()
 			}

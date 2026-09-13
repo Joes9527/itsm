@@ -62,10 +62,10 @@ func (s *WebhookEventSubscriber) snapshotWebhookTarget(cfg connector.Config) (we
 		return webhookTarget{}, fmt.Errorf("webhook target unavailable")
 	}
 	target, ok := conn.(webhookSender)
-	if !ok || target.WebhookDestinationIdentity() == "" {
+	if !ok || target.DeliveryDestinationIdentity() == "" {
 		return webhookTarget{}, fmt.Errorf("webhook destination identity unavailable")
 	}
-	return webhookTarget{Provider: cfg.Provider, DestinationDigest: target.WebhookDestinationIdentity()}, nil
+	return webhookTarget{Provider: cfg.Provider, DestinationDigest: target.DeliveryDestinationIdentity()}, nil
 }
 
 func (s *WebhookEventSubscriber) consumeExecutionWebhook(ctx context.Context, event interface{}) error {
