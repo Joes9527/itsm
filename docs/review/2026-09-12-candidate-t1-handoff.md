@@ -893,3 +893,15 @@ bootstrap实际注册器按webhook capability决定handler或known reserved type
 回归异常单列：`s5-webhook-worker-final-race.log` 首轮完整测试在执行Webhook之前的KAF_access_completion回执重放出现一次 `verified access replay evidence unavailable`（line562），本轮Webhook场景全部通过、无race警告。`s5-webhook-kaf-recheck.log` 该子测试单独race连续3次PASS；原因尚未确定，不能将其称已修复或删除失败证据。service/connector/.../bootstrap/eventbus回归 `s5-webhook-worker-regression.log` PASS。最终补强后的完整私有PG/Redis/MinIO回归 `s5-webhook-worker-final-private.log` PASS，无skip或race；全后端 `s5-webhook-worker-build.log` exit0，git diff --check通过。独立review_execution_scope_s1最终复核配置注册与错误分类无新增阻断；这些通过不消除上述偶发KAF失败的根因缺口。
 
 本阶段仍不等于S5/G2完成：普通模式同步发送尚须迁入同一持久所有者并移除旧路径；Redis消费至出站的ACK间隙联合恢复、进程重启、完整权限撤销竞争、无效消息持久阻断及其它异步入口仍待验证。固定CandidateSHA不变、候选未启动；无schema迁移、共享环境改动、企业外呼、push或main合并。
+
+### KAF 回执重放偶发失败的确定性修复（2026-09-13）
+
+在 `be81ef8b4` 后追查上轮KAF replay失败。私有PG16只读探针证明PostgreSQL先将十进制秒小数解析为float再放大到微秒：`.0010005` 实际存1001μs，`.0080005`存8001μs，`.2510005`存251001μs；旧helper先把整数纳秒除1000，得到精确十进制半值，RoundToEven分别算1000/8000/251000。原fixture随机毫秒落点使该差异表现为偶发；不是Webhook外呼或已提交回执丢失。
+
+将success_even_half固定为过去一秒的`.0010005`，fixture任务创建时间设在5秒前以满足原有验证时序；`kaf-replay-binary-half-red.log` 在原line562稳定复现相同错误。生产只修改accessReceiptTimestamp的运算顺序：先形成fractional seconds float，再乘1e6并RoundToEven；继续只处理小数部分，避免UnixNano有效年限。没有放宽±微秒容差，没有修改原始请求digest、身份/授权/字段比较或任何持久时间值，不执行历史修复/backfill。
+
+`kaf-pg-fraction-probe.log` 保存7个实际PG输入/输出参考（含向上、精确偶/奇半值、普通纳秒及进位到下一秒）；同包单元测试使用这些参考覆盖1800/2026/2500年。初次把helper测试加在外部test package导致编译错误，见kaf-replay-fraction-regression.log，不计业务RED；已将新测试放入同目录access_completion_precision_test.go，既有测试不迁移。该日志中的service包已PASS，修正落点后kaf-replay-fraction-domain.log领域全包PASS。
+
+`kaf-replay-binary-half-green.log` 固定真实KAF完成/重放race PASS；`kaf-replay-fraction-full-private.log` 完整intake、Webhook真实Worker正负测、Redis离线/历史保全及PG/Redis/MinIO应用构造保全PASS，无skip或race。全后端kaf-replay-fraction-build.log exit0，git diff --check通过；独立review_execution_scope_s1审阅精度、历史整数微秒和测试边界无阻断。该确定性RED→GREEN解释并修复上轮已知半微秒重放缺口，不以此前三次随机复测通过代替根因。
+
+证据来自本机私有PG16，仍须在B的目标PG17准入/业务测试中复核；不等于目标环境验收。CandidateSHA与候选停止状态不变，S5其它入口、普通模式统一、完整T3/T4/G2/G3仍未完成，无共享环境变更、企业外呼或push/main合并。

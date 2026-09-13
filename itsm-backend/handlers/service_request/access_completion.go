@@ -131,10 +131,12 @@ func (s *Service) ValidateAccessCompletionReplay(ctx context.Context, client *en
 	return nil
 }
 
-// PostgreSQL timestamp parsing rounds fractional seconds to microseconds, with
-// ties to even. Round only the fractional second, avoiding UnixNano overflow for
-// valid RFC3339 dates outside its narrower range.
+// PostgreSQL parses decimal fractional seconds as a float before scaling to
+// microseconds and rounding. Preserve that order: e.g. .0010005 becomes
+// 1000.5000000000001 microseconds, not the exact decimal tie 1000.5.
+// Round only the fraction to avoid UnixNano overflow for valid RFC3339 dates.
 func accessReceiptTimestamp(value time.Time) time.Time {
-	micros := time.Duration(math.RoundToEven(float64(value.Nanosecond()) / 1000))
+	fraction := float64(value.Nanosecond()) / float64(time.Second)
+	micros := time.Duration(math.RoundToEven(fraction * float64(time.Second/time.Microsecond)))
 	return value.Truncate(time.Second).Add(micros * time.Microsecond)
 }

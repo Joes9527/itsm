@@ -479,7 +479,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				executionID = &itemID
 			}
 			instance := owner.ProcessInstance.Create().SetNillableExecutionWorkItemID(executionID).SetProcessInstanceID(key).SetProcessDefinitionKey(key).SetProcessDefinitionID(definition.ID).SetBusinessKey(fmt.Sprintf("service_request_item:%d", itemID)).SetBusinessType("service_request_item").SetBusinessID(itemID).SetStatus("running").SetCurrentActivityID("Current").SetVersion(1).SetTenantID(tenant.ID).SaveX(ctx)
-			task := owner.ProcessTask.Create().SetTaskID(key).SetProcessInstanceID(instance.ID).SetProcessDefinitionKey(key).SetTaskDefinitionKey("Current").SetTaskName(key).SetCreatedTime(time.Now().Add(-time.Second)).SetTaskType(bpmn.KafDelegateTaskType).SetStatus("delegated").SetTaskVariables(map[string]interface{}{"allowed_actions": "complete_bpmn_task"}).SetCallbackHandlerID("kaf_delegate_handler").SetCallbackTaskType(bpmn.KafDelegateTaskType).SetCallbackAction(accessgrant.Capability).SetCallbackConfigRef(fmt.Sprint(accessPolicy.ID)).SetTenantID(tenant.ID).SaveX(ctx)
+			task := owner.ProcessTask.Create().SetTaskID(key).SetProcessInstanceID(instance.ID).SetProcessDefinitionKey(key).SetTaskDefinitionKey("Current").SetTaskName(key).SetCreatedTime(time.Now().Add(-5 * time.Second)).SetTaskType(bpmn.KafDelegateTaskType).SetStatus("delegated").SetTaskVariables(map[string]interface{}{"allowed_actions": "complete_bpmn_task"}).SetCallbackHandlerID("kaf_delegate_handler").SetCallbackTaskType(bpmn.KafDelegateTaskType).SetCallbackAction(accessgrant.Capability).SetCallbackConfigRef(fmt.Sprint(accessPolicy.ID)).SetTenantID(tenant.ID).SaveX(ctx)
 			owner.ProcessApprovalDecision.Create().SetProcessInstanceID(instance.ID).SetProcessTaskID(task.ID).SetProcessInstanceKey(key).SetTaskID(key + "-approval").SetProcessDefinitionKey(key).SetNodeKey("Approval").SetActorID(actor.ID).SetAction("approve").SetDecision("approved").SetTenantID(tenant.ID).SaveX(ctx)
 			owner.ServiceRequestAccessSnapshot.Create().SetWorkItemID(itemID).SetPolicyID(accessPolicy.ID).SetPolicyVersion(1).SetProvider("graph").SetExternalSystem("directory").SetSubjectID("approved-subject").SetGroupID("approved-group").SetDurationKey("month").SetDurationSeconds(2592000).SaveX(ctx)
 			if kind == "historical" {
@@ -502,7 +502,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			}
 			verifiedAt := time.Now().UTC().Truncate(time.Microsecond).Add(offset)
 			if kind == "success_even_half" {
-				verifiedAt = time.Now().UTC().Truncate(time.Millisecond).Add(500 * time.Nanosecond)
+				verifiedAt = time.Now().UTC().Add(-time.Second).Truncate(time.Second).Add(time.Millisecond + 500*time.Nanosecond)
 			}
 			if kind == "success_odd_half" {
 				verifiedAt = time.Now().UTC().Truncate(time.Millisecond).Add(1500 * time.Nanosecond)
