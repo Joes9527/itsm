@@ -1405,3 +1405,13 @@ s5-notification-direct-full-red.log完整私有PG16/Redis/MinIO race仅此新增
 - s5-notification-sync-types.log：theme check与tsc通过；s5-notification-sync-build.log：全后端build exit0。git diff --check通过。
 
 本增量不完成email/push专业目标准入、飞书与裸实例入口、目标变化/重启矩阵或S5/S6/T3/T4/G3。CandidateSHA保持d7470a32dbb87acc9b5e4d9a895a146410723561，候选未启动，无WSL/共享数据库修改，无push/main合并。下一步核对email/push真实owner及其持久意图目标身份，再处理其余S5入口。
+
+### B2 S5 持久邮件解析不可用时禁止跨provider回退（2026-09-14）
+
+当前目标复核后继续email/push准入盘点，发现EmailService.SendForTenant的DisableProviderFallback仅覆盖Graph发送错误，配置了GraphProvider但解析不可用或nil sender时仍会实际调用SMTP并返回成功。s5-email-unavailable-fallback-red.log两个进程内SMTP探针用例准确复现；无企业/网络邮件。沿原发送owner修复该分支：禁止fallback时返回email_route_unavailable，不切换提供方；该错误证明零发送，分类not_accepted，避免Notification Worker或IncidentAlertDeliveryHandler误标delivery_unknown。无GraphProvider的显式SMTP保留成功正向，允许fallback旧语义不变。
+
+s5-email-unavailable-fallback-green.log：EmailService/EmailAndCC/TicketNotification/SendNotification具名race回归PASS；s5-email-unavailable-incident.log IncidentAlert具名race回归PASS。s5-email-unavailable-full-private.log完整私有PG16/Redis/MinIO suite race PASS，无FAIL/SKIP/DATA RACE；s5-email-unavailable-build.log全后端build exit0；独立审阅无新增阻断，git diff --check通过。
+
+影响边界：bootstrap始终注入GraphProvider，因此持久邮件在该解析器无可用Graph目标时保持未发送，不再以全局SMTP代替；本次没有启用候选邮件。此项只关闭单次调用跨provider回退，不证明跨重启目标绑定。实际newTenantGraphProvider仍用Manager.Get(tenant, msgraph-email)，专业邮件身份/准入未完成；Incident告警和通知共用此owner。push SendToUser按user ID投递且不返回接收事实，Notification Worker仍无从证明已送达，须在原Hub/队列协议内解决，不能以void返回当投递证据。后续继续真实owner目标/结果合同，S5/S6/T3/T4/G3与总目标保持未完成。
+
+固定CandidateSHA与候选停止状态不变，无WSL/共享数据库操作，无push/main合并。源码与测试当前均无运行进程。

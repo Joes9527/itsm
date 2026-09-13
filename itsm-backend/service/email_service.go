@@ -75,6 +75,9 @@ type emailDeliveryOutcomeCarrier interface{ DeliveryOutcome() string }
 type emailDeliveryStageCarrier interface{ DeliveryStage() string }
 
 func emailTransportOutcomeOf(err error) emailTransportOutcome {
+	if errors.Is(err, errEmailRouteMissing) {
+		return emailNotAccepted
+	}
 	var carrier emailDeliveryOutcomeCarrier
 	if errors.As(err, &carrier) && carrier.DeliveryOutcome() == string(emailNotAccepted) {
 		return emailNotAccepted
@@ -186,6 +189,11 @@ func (s *EmailService) SendForTenant(ctx context.Context, tenantID int, msg *Ema
 					return emailDeliveryError(routeErrors...)
 				}
 			}
+		}
+		// A configured Graph route that cannot currently resolve is still not
+		// authorization to move a durable delivery to another provider.
+		if msg.DisableProviderFallback {
+			return emailDeliveryError(errEmailRouteMissing)
 		}
 	}
 	if s.smtpConfigured() {

@@ -771,3 +771,26 @@ func startOutcomeSMTPServer(t *testing.T, dataResponse string, closeAfterData bo
 	require.NoError(t, err)
 	return EmailConfig{Host: host, Port: port, Username: "mailer", Password: "secret", From: "mailer@example.test"}
 }
+
+func TestEmailServiceDurableDeliveryDoesNotFallbackWhenGraphUnavailable(t *testing.T) {
+	for _, scenario := range []string{"unavailable", "nil sender"} {
+		t.Run(scenario, func(t *testing.T) {
+			svc := NewEmailService(EmailConfig{Host: "smtp.example.test", Port: 587, Username: "mailer", From: "mailer@example.test"}, zaptest.NewLogger(t).Sugar())
+			svc.SetGraphProvider(func(int) (GraphMailSender, string, bool) { return nil, "graph@example.test", scenario == "nil sender" })
+			calls := 0
+			svc.smtpSend = func(context.Context, string, smtp.Auth, string, []string, []byte) error { calls++; return nil }
+			err := svc.SendForTenant(context.Background(), 42, &EmailMessage{To: []string{"recipient@example.test"}, Subject: "durable", BodyText: "body", DeliveryID: "unavailable-graph", DisableProviderFallback: true})
+			require.ErrorIs(t, err, errEmailRouteMissing)
+			require.Equal(t, emailNotAccepted, emailTransportOutcomeOf(err))
+			require.Zero(t, calls, "unavailable Graph must not authorize another transport")
+		})
+	}
+}
+
+func TestEmailServiceDurableExplicitSMTPWithoutGraph(t *testing.T) {
+	svc := NewEmailService(EmailConfig{Host: "smtp.example.test", Port: 587, Username: "mailer", From: "mailer@example.test"}, zaptest.NewLogger(t).Sugar())
+	calls := 0
+	svc.smtpSend = func(context.Context, string, smtp.Auth, string, []string, []byte) error { calls++; return nil }
+	require.NoError(t, svc.SendForTenant(context.Background(), 42, &EmailMessage{To: []string{"recipient@example.test"}, Subject: "smtp", BodyText: "body", DeliveryID: "explicit-smtp", DisableProviderFallback: true}))
+	require.Equal(t, 1, calls)
+}

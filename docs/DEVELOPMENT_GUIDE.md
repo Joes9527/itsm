@@ -386,3 +386,6 @@ Webhook 新意图生产者与投递 Worker 通过唯一 Manager.ResolveDeliveryT
 
 
 同步通知结果：`queued` / HTTP 202 表示本次新外部意图已提交；`appliedCount` 是本次新建站内通知的接收人数，`queuedCount` 是本次新外部意图数，`idempotentCount` 是复用已有意图的接收人数，`deliveryCount` 是总持久意图数而非送达次数，`externalIntentCount` 包括新建及重放外部意图，不推断其送达状态。混合结果保留各计数；BPMN回调描述已受理/已排队，durable callback继续使用内部稳定key并限制InAppOnly。已有外部意图与InAppOnly冲突时拒绝。内部key重放核对原内容/来源并冻结原渠道；无key仅生成本次调用ID，不保证HTTP重试去重。全偏好禁用没有持久receipt，返回blocked。页面按结果显示排队、受理或站内生效，不显示虚构送达次数。email/push专业准入、真实环境重启及端到端验收仍待完成。
+
+
+持久邮件设置`DisableProviderFallback`时，已配置GraphProvider但当前解析不可用（含nil sender）须返回`email_route_unavailable`，不得改用SMTP；这是零发送的`not_accepted`，不是结果未知。未配置GraphProvider的显式SMTP仍可发送。普通允许fallback调用保持原行为。该规则只限制一次调用的跨provider回退，不证明重启后的目标绑定：bootstrap的Graph解析仍需迁移精确目标合同，不能据此放行候选企业邮件。
