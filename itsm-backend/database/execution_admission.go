@@ -31,7 +31,7 @@ FROM pg_roles r WHERE r.rolname=current_user`).Scan(&unsafe)
 	if unsafe {
 		return fmt.Errorf("execution runtime requires a restricted non-owner tenant identity")
 	}
-	for _, table := range []string{"public.execution_scopes", "public.execution_scope_members", "public.execution_runtime_bindings"} {
+	for _, table := range []string{"public.execution_scopes", "public.execution_scope_members", "public.execution_runtime_bindings", "public.execution_tool_invocations"} {
 		var readable bool
 		err = db.QueryRowContext(ctx, `SELECT has_table_privilege($1,'SELECT'),
 has_table_privilege($1,'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
@@ -43,11 +43,13 @@ OR has_any_column_privilege($1,'INSERT,UPDATE,REFERENCES')`, table).Scan(&readab
 			return fmt.Errorf("execution scope objects require read-only privileges")
 		}
 	}
-	if err = db.QueryRowContext(ctx, `SELECT has_function_privilege('public.register_new_execution_member()','EXECUTE')`).Scan(&unsafe); err != nil {
-		return err
-	}
-	if unsafe {
-		return fmt.Errorf("runtime cannot execute enrollment trigger directly")
+	for _, function := range []string{"public.register_new_execution_member()", "public.register_new_execution_tool_invocation()"} {
+		if err = db.QueryRowContext(ctx, `SELECT has_function_privilege($1,'EXECUTE')`, function).Scan(&unsafe); err != nil {
+			return fmt.Errorf("inspect execution enrollment privileges: %w", err)
+		}
+		if unsafe {
+			return fmt.Errorf("runtime cannot execute enrollment trigger directly")
+		}
 	}
 	var configured bool
 	err = db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.execution_runtime_bindings WHERE runtime_role=session_user AND deployment_id=$1 AND mode=$2)`, cfg.DeploymentID, cfg.Mode).Scan(&configured)

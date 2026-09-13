@@ -135,6 +135,24 @@ GRANT SELECT ON execution_scopes,execution_scope_members,execution_runtime_bindi
 	}
 	t.Run("runtime admission checks role and configured scopes", func(t *testing.T) {
 		cfg := config.ExecutionConfig{Mode: "candidate", DeploymentID: scope.DeploymentID, Scopes: []config.ExecutionScopeConfig{{TenantID: scope.TenantID, ScopeID: scope.ScopeID}}}
+		_, err := owner.Exec(`CREATE TABLE tool_invocations(id bigint PRIMARY KEY, tenant_id bigint NOT NULL)`)
+		require.NoError(t, err)
+		_, err = owner.Exec(migration.GetMigrationSQL(migration.ToolInvocationExecutionScopeVersion))
+		require.NoError(t, err)
+		t.Run("missing tool origin read rejected", func(t *testing.T) {
+			require.Error(t, database.ValidateExecutionRuntime(ctx, run, cfg))
+		})
+		_, err = owner.Exec("GRANT SELECT ON execution_tool_invocations TO " + runtimeRole)
+		require.NoError(t, err)
+		require.NoError(t, database.ValidateExecutionRuntime(ctx, run, cfg))
+		for _, grant := range []string{"UPDATE ON execution_tool_invocations", "UPDATE(tenant_id) ON execution_tool_invocations", "EXECUTE ON FUNCTION public.register_new_execution_tool_invocation()"} {
+			t.Run(grant, func(t *testing.T) {
+				_, err := owner.Exec("GRANT " + grant + " TO " + runtimeRole)
+				require.NoError(t, err)
+				defer func() { _, err := owner.Exec("REVOKE " + grant + " FROM " + runtimeRole); require.NoError(t, err) }()
+				require.Error(t, database.ValidateExecutionRuntime(ctx, run, cfg))
+			})
+		}
 		require.NoError(t, database.ValidateExecutionRuntime(ctx, run, cfg))
 		require.Error(t, database.ValidateExecutionRuntime(ctx, owner, cfg), "owner must not be admitted as runtime")
 		cfg.DeploymentID = "other"

@@ -1051,3 +1051,11 @@ S5不可处理消息的完整处置、进程重启及其它异步入口继续未
 真实PG回归使用真实registry/IncidentService/AI仓库：成功读取后审计INSERT故障使调用与scope登记共同回滚；撤销本测试角色的incidents SELECT使实际工具读取失败，但成功新增一条failed审计和登记，未误报审计不可用。权限在测试结束恢复。HTTP实际handler测试确认503及cause隐藏。`s5-tool-audit-packages.log` AI/bootstrap全包race PASS；`s5-tool-audit-full-private.log` 完整私有PG/Redis/MinIO候选边界、Webhook/审计与Stream恢复回归race PASS，无skip/race；`s5-tool-audit-build.log` 全后端build exit0。独立review_execution_scope_s1复核无新增阻断，git diff --check通过。
 
 证据仅为本机私有PG16等依赖。查询与审计不在同一事务，未实现请求重试去重；直接测试身份/可选缓存RBAC不代表完整HTTP权限验收。首次业务写原事务来源复核、结果条件回写、041运行角色准入等仍未完成。CandidateSHA与候选未启动状态不变，S5/T3/T4/G2/G3未放行，无B环境/共享数据库变更、企业外呼、push/main合并。
+
+### B2 S5 041业务运行身份准入（2026-09-13）
+
+真实PG `s5-tool-role-red.log` 复现四种旧准入错误放行：041登记表缺SELECT、表UPDATE、列UPDATE及登记函数EXECUTE。ValidateExecutionRuntime现将execution_tool_invocations纳入必需只读对象，并检查register_new_execution_tool_invocation()不可由业务身份直接执行。既有有效身份通过，逐项危险授权拒绝，撤回后再次通过；不修改迁移内容或放宽运输身份白名单。工具来源由tenant路径读取，运输身份不需要新增工具登记权限。
+
+构造保全fixture在快照前安装041，保持业务身份SELECT及运输身份原最小权限。它不是完整迁移目录顺序验收。`s5-tool-role-full-private.log` 包含ScopeRegistration、完整Intake、构造保全及Stream/Webhook/审计恢复race PASS，无skip/race；`s5-tool-role-packages.log` database/bootstrap全包race PASS，`s5-tool-role-build.log` 全后端build exit0。独立review_execution_scope_s1复核无阻断，git diff --check通过。
+
+本检查点完成代码侧041业务角色准入，缺对象/授权会启动失败；B仍须在目标PG17按完整迁移链和显式只读授权执行准入。本机PG16合成fixture不替代T3环境交接。业务首次写原事务来源复核及完成/失败条件写回仍待完成，S5/T3/T4/G2/G3未放行。固定CandidateSHA与候选未启动状态不变，无共享数据库、B配置、企业外呼、push/main合并。

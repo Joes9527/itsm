@@ -96,6 +96,8 @@ func TestCandidateConstructPreservesDatabaseAndStreams(t *testing.T) {
 	require.NoError(t, err)
 	_, err = owner.ExecContext(ctx, migration.GetMigrationSQL("039_candidate_execution_scope"))
 	require.NoError(t, err)
+	_, err = owner.ExecContext(ctx, migration.GetMigrationSQL(migration.ToolInvocationExecutionScopeVersion))
+	require.NoError(t, err)
 	scope := uuid.NewString()
 	_, err = owner.ExecContext(ctx, `INSERT INTO execution_scopes(id,deployment_id,tenant_id,status,created_by) VALUES($1,'construct-test',$2,'active',$3)`, scope, tenant.ID, user.ID)
 	require.NoError(t, err)
