@@ -45,6 +45,9 @@ func TestGetEscalatedPriority(t *testing.T) {
 				assert.NotEqual(t, tt.currentPriority, escalated,
 					"升级后优先级应变化")
 			}
+			if tt.currentPriority == "critical" {
+				assert.Equal(t, "critical", escalated, "highest priority cannot be downgraded by escalation")
+			}
 			assert.NotEmpty(t, escalated)
 		})
 	}

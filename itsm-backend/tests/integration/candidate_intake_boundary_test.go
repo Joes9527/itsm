@@ -48,6 +48,7 @@ import (
 	catalogdomain "itsm-backend/handlers/service_catalog"
 	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/migration"
+	ticketrepo "itsm-backend/repository/ticket"
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
@@ -2372,6 +2373,30 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM audit_logs WHERE path=$1 AND action='work_item.escalation.long_pending'`, fmt.Sprint(fresh.WorkItemID)).Scan(&receipts))
 			require.Equal(t, 1, receipts)
 		}
+	})
+
+	t.Run("manual escalation preserves historical WorkItems", func(t *testing.T) {
+		svc := service.NewTicketService(&service.TicketServiceConfig{Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Client: runtime, Logger: zap.NewNop().Sugar()})
+		owner.Ticket.UpdateOneID(historicalAlertItems[1]).SetPriority("high").SaveX(ctx)
+		var before, after string
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, historicalAlertItems[1]).Scan(&before))
+		_, err := svc.EscalateTicket(ctx, historicalAlertItems[1], "bounded manual escalation", tenant.ID, actor.ID)
+		assert.ErrorIs(t, err, executionscope.ErrDenied)
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, historicalAlertItems[1]).Scan(&after))
+		assert.JSONEq(t, before, after)
+		fresh, err := app.Create(ctx, identity, command("manual-escalation-member", "generic"))
+		require.NoError(t, err)
+		owner.Ticket.UpdateOneID(fresh.WorkItemID).SetPriority("high").SaveX(ctx)
+		updated, err := svc.EscalateTicket(ctx, fresh.WorkItemID, "bounded manual escalation", tenant.ID, actor.ID)
+		require.NoError(t, err)
+		require.Equal(t, "critical", string(updated.Priority))
+		assert.Nil(t, updated.AssigneeID, "escalation must not invent an assignee from hardcoded IDs")
+		var receipts int
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM audit_logs WHERE path=$1 AND action='work_item.escalation.manual'`, fmt.Sprint(fresh.WorkItemID)).Scan(&receipts))
+		assert.Equal(t, 1, receipts, "manual change requires a durable actor/reason receipt")
+		highest, err := svc.EscalateTicket(ctx, fresh.WorkItemID, "highest priority remains highest", tenant.ID, actor.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "critical", string(highest.Priority), "escalation must never downgrade critical")
 	})
 	require.Equal(t, oldRow.Title, owner.Ticket.GetX(ctx, historical.WorkItemID).Title)
 }

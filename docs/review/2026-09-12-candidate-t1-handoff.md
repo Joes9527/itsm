@@ -562,3 +562,14 @@ Outbox 并发/回滚测试提交 `56879f7c9`；独立 reviewer 确认限定结�
 - 独立 reviewer `review_execution_scope_s1` 提出的无效配置接口已移除、旧周期缺口已修复，复审无新增阻断。
 
 边界：重开为owner设置前置状态，不是真实生命周期E2E；unassigned故障回滚尚未单独验证，matrix多级整体回滚及确定性并发CAS仍待补证。真实HTTP TicketService.EscalateTicket及TicketLifecycleService、EscalationService旧无调用手动方法尚未接入；尤其后者仍含无效AlertRuleID=0/notification_sent=true，不将其计为本轮完成。下一步先统一真实手动升级所有者和原事务审计/通知，再处理其它共享写入口、S4剩余专项、S5/S6/B3/T3/T4/G2/G3。固定CandidateSHA仍为 `d7470a32dbb87acc9b5e4d9a895a146410723561`，未启动候选、未修改WSL/共享环境或执行共享迁移，无推送/main合并或企业实发。
+
+
+### B2 S3 手动升级有效RED及原事务依赖（2026-09-13）
+
+在 `0266df8b0` 后，核实真实生产路由为 router→TicketController.EscalateTicket→TicketService.EscalateTicket（ticket:escalate）。TicketLifecycleService 的同名方法/接口仅测试调用，EscalationService旧零AlertRuleID方法亦无生产调用；后续应保留TicketService唯一HTTP手动所有者并迁移有效行为测试、移除上述平行方法，不能添加长期兼容包装。BPMN ticket_handler 的escalate分支独立使用escalate_to及escalated状态，不在此HTTP入口覆盖内。
+
+本轮只新增失败回归，不修改生产实现。`s3-manual-escalation-contract-red-2.log` 为真实任务私有PG16有效RED：039前generic historicalAlertItems[1]被手动升级，调用未ErrDenied，原始整行JSON的priority/status/assignee/version/updated_at变化；新candidate member的high→critical独立正向通过，但原未分配项被写为硬编码用户1，manual审计回执为0。第二次最高级调用因硬编码用户2不存在而被FK拒绝，**不能将此集成调用作为已观察到降级的证据**；`s3-manual-escalation-priority-red.log` 则直接验证真实TicketService helper，将critical实际返回high，证明降级错误。最初manual-red选择了Incident历史fixture，被已有专业边界拒绝，不计范围越界证据；已改为真实generic后确认。
+
+原方法的另一个必要依赖是事务外goroutine飞书更新。修复不能只删掉这项既有功能：需要原事务冻结update intent（existing mapping ID/GUID、tenant/WorkItem结构引用、actor、稳定操作回执、目标identity、WorkItem version、payload），注册独立update handler并复用现有scoped Outbox Worker，不能冒用creation事件或新增worker。consumer核验真实手动操作回执、当前权限/member、mapping/目标一致，成功回执不能改写GUID；外部调用后不确定错误/成功后落盘失败明确delivery_unknown，不声明ReplaySafe。必须处理同一远端任务跨worker更新顺序，禁止仅凭发送前version检查或进程内锁宣称不会旧快照覆盖新状态。映射尚未创建不能偷偷创建远端任务或假成功。
+
+独立review_execution_scope_s1只读确认调用归属和必要依赖。下一实施顺序已补入原执行计划：稳定手动命令元数据与唯一路径；飞书更新持久化/串行及不确定性；原事务scope/授权/version/审计/通知/事件；真实回滚/重放/权限与并发验证。当前手动升级仍未修复，新RED使当前测试集不再全绿，不将上一轮PASS套用到本HEAD。整个S3/S4和后续门禁仍未完成，CandidateSHA未更新，未启动候选，无共享环境变更、企业发送、推送或main合并。
