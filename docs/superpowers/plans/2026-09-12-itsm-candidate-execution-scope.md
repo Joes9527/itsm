@@ -203,6 +203,11 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+Manager配置owner检查点 `15374aa47`（2026-09-14）：Provision（含disabled）和contextful Revoke自身调用唯一RequireIntegrationManagement，candidate/nil/错租户/SystemBypass拒绝，standard恢复保留启动gate后WithTenantID。直接Revoke可信实例RED→GREEN；关闭失败保留对象并返回，HTTP不继续DBdelete。审阅P2取消Init后发布经确定性RED修复：发布锁内取消检查，关闭新对象并保留两个cause。candidate通知/Feishu/Webhook正向迁移真实声明启动，third新Manager重放不扩展原receipt；standard目标重绑防御保留原generation断言，未把candidate RED统一换成standard。
+
+s5-manager-gate-full-private.log完整私有PG16/Redis/MinIO候选边界/构造保全/Stream恢复race PASS，507f62293剩余三项直接激活RED已关闭，无skip/race。随后取消补丁和7场景×3操作owner矩阵经具名race PASS；standard Feishu/BPMN CC/消费者清理补验通过，integration_postgres仅编译通过未执行DB测试，全后端build和独立最终复核通过。详情见实现T1。此为配置owner门禁完成，Send/Get/GetInstance裸实例及targetAuthority在投递owner中的权限消费仍待关闭，不勾选整个S5/G2；WSL目标恢复、T3/T4/G3仍未完成，CandidateSHA及停止状态不变，无共享环境操作或push/main合并。
+
+
 连接器 HTTP 管理准入检查点 `5e57b761f`（2026-09-14）：Provision/Revoke 入口在解析、实例操作、持久化和轮询之前委托同一RequireIntegrationManagement，拒绝candidate/nil策略/无或错tenant/SystemBypass，取消固定失败。私有PG DELETE先RED复现原行被删，现保全；合法standard provider正向又复现原Revoke丢失provider导致实例残留，现按tenant/name携完整cfg逐一撤销，与原数据库删除范围一致。具名race、多provider关闭及外租户保全、后端build和独立复核通过。s5-connector-http-verified-private.log完整私有PG16/Redis/MinIO套件HTTP创建负例及删除保全/standard真实DB操作通过，原七项激活失败降至直接Manager三项，整套仍FAIL，无skip/race，不放行候选。
 
 后续仍须接入Manager.Provision（含disabled）与contextful Revoke owner门禁、Send/Get权限；快照撤销并发竞争与旧持久化错误语义未关闭。LoadAll WithTenantID已撤销继承SystemBypass，无需放宽gate。candidate通知/飞书/Webhook正向fixture应迁移可信声明，standard可变目标防御用例须保留原重绑/generation验证，详见实现T1交接，不以统一改standard消除candidate RED。固定CandidateSHA、候选停止及共享环境边界不变，完整T1–T5/G1–G3目标保持未完成。
