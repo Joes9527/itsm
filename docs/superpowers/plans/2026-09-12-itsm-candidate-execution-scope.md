@@ -121,6 +121,8 @@ EXISTS (
 - [ ] SLA/escalation 的初始查询即限制成员，级联发事件保持同归属；独立 KAF dispatcher 使用同一 repository 策略。测试调用真正的原 worker，不创建 candidate 专用 worker 实现。
 - [ ] 运行并发领取、租约超时、已执行未回执重启、未知新事件、跨租户与完整周期测试 GREEN；证明新任务原有幂等及失败状态保留，提交 `fix: scope worker claims and recovery before mutation`。
 
+SLA violation 增量 `73cc9a3e1` 已修复历史违规 RED：冻结清单/原事务成员扫描、单工单 deadline/cycle/duplicate 重读与 version CAS；两违规、原事务通知意图和结构化 sla.breached outbox 原子提交。既有通用worker注册契约校验handler，不确定发布阻断重发。bootstrap统一周期入口按冻结候选清单或standard受限发现逐租户执行，补齐依赖启动检查并移除无调用旧watcher。`s4-sla-atomic-final-pg.log` 完整candidate intake边界PASS，含历史保全、新成员、重复、通知/第二条outbox写后故障回滚、closed scope、两并发最终无重复；race、定向回归、构建和限定复审通过。并发不证明确定性SQL竞态；SQLite标准发现/本地假bus不替代PG角色或真实事件投递。SLAAlertService/warning/critical transport及escalation仍未完成，候选配置未隔离alert分支时显式拒绝；S4保持未勾选，CandidateSHA和停止状态不变。详细证据见实现分支T1最新交接。
+
 ## S5：Stream 与请求异步边界
 
 **Files:** `pkg/eventbus/{eventbus.go,eventbus_test.go}`、`service/{tool_queue.go,ticket_service.go}`、`controller/connector_controller.go`、bootstrap；事件发布者由 `rg -n 'Publish\('` 生成调用清单逐项接入。
