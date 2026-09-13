@@ -89,7 +89,7 @@ func TestOutboxDeliveryWorkerReclaimsExpiredDeliveryAfterRestart(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	eventID := enqueueIncidentAlertDeliveryForWorker(t, repository, now)
-	claimed, err := repository.ClaimDueByEventType(ctx, now, 1, incidentAlertDeliveryEventType)
+	claimed, err := repository.ClaimDueByEventType(ctx, now, 1, incidentAlertDeliveryEventType, false)
 	require.NoError(t, err)
 	require.Len(t, claimed, 1)
 
@@ -141,7 +141,7 @@ func TestOutboxDeliveryWorkerDoesNotResendAmbiguousExpiredAttempt(t *testing.T) 
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	eventID := enqueueIncidentAlertDeliveryForWorker(t, repository, now)
-	claimed, err := repository.ClaimDueByEventType(ctx, now, 1, incidentAlertDeliveryEventType)
+	claimed, err := repository.ClaimDueByEventType(ctx, now, 1, incidentAlertDeliveryEventType, false)
 	require.NoError(t, err)
 	require.Len(t, claimed, 1)
 	repository.clock = func() time.Time { return now }

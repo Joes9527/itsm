@@ -181,6 +181,8 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 	oldRow := owner.Ticket.GetX(ctx, historical.WorkItemID)
 	oldReceipt := owner.IntakeRequest.Query().Where(intakerequest.WorkItemIDEQ(historical.WorkItemID)).OnlyX(ctx)
 	// Restored queue fixtures predate execution scope migration and keep NULL refs.
+
+	legacyOrdered := owner.OutboxEvent.Create().SetEventID("legacy-ordered-barrier").SetEventType("candidate-ordered-barrier").SetTenantID(tenant.ID).SetAggregateType("test_target").SetAggregateID("legacy-target").SetPayload(json.RawMessage(`{}`)).SaveX(ctx)
 	var historicalOutbox []*ent.OutboxEvent
 	for _, state := range []string{"pending", "unknown", "expired", "ambiguous"} {
 		kind := "candidate-test-delivery"
@@ -1504,7 +1506,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			t.Run(action.name, func(t *testing.T) {
 				eventType := "transition-" + action.name
 				row := owner.OutboxEvent.Create().SetEventID(eventType).SetEventType(eventType).SetTenantID(tenant.ID).SetAggregateType("work_item").SetAggregateID(fmt.Sprint(fresh.WorkItemID)).SetExecutionWorkItemID(fresh.WorkItemID).SetPayload(json.RawMessage(`{}`)).SetNextAttemptAt(time.Now().Add(-time.Minute)).SaveX(ctx)
-				claimed, err := repo.ClaimDueByEventType(workerCtx, time.Now(), 10, eventType)
+				claimed, err := repo.ClaimDueByEventType(workerCtx, time.Now(), 10, eventType, false)
 				require.NoError(t, err)
 				require.Len(t, claimed, 1)
 				require.Equal(t, row.ID, claimed[0].ID)
@@ -1559,7 +1561,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		for i := 0; i < 2; i++ {
 			go func() {
 				<-start
-				rows, e := repo.ClaimDueByEventType(workerCtx, time.Now(), 100, kind)
+				rows, e := repo.ClaimDueByEventType(workerCtx, time.Now(), 100, kind, false)
 				results <- result{rows, e}
 			}()
 		}
@@ -1587,7 +1589,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.NoError(t, repo.MarkDeliveryAttemptStarted(workerCtx, ambiguous.ID, ambiguous.ClaimToken, "local-attempt"))
 		owner.OutboxEvent.UpdateOneID(expired.ID).SetClaimExpiresAt(time.Now().Add(-time.Minute)).SaveX(ctx)
 		owner.OutboxEvent.UpdateOneID(ambiguous.ID).SetClaimExpiresAt(time.Now().Add(-time.Minute)).SaveX(ctx)
-		recovered, err := repo.ClaimDueByEventType(workerCtx, time.Now(), 100, kind)
+		recovered, err := repo.ClaimDueByEventType(workerCtx, time.Now(), 100, kind, false)
 		require.NoError(t, err)
 		require.Len(t, recovered, 1)
 		require.Equal(t, expired.ID, recovered[0].ID)
@@ -1623,7 +1625,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				kind := "audit-fault-" + branch
 				row := owner.OutboxEvent.Create().SetEventID(kind).SetEventType(kind).SetTenantID(tenant.ID).SetAggregateType("work_item").SetAggregateID(fmt.Sprint(fresh.WorkItemID)).SetExecutionWorkItemID(fresh.WorkItemID).SetPayload(json.RawMessage(`{}`)).SetNextAttemptAt(time.Now().Add(-time.Minute)).SaveX(ctx)
 				if branch != "unregistered" {
-					claimed, e := repo.ClaimDueByEventType(workerCtx, time.Now(), 10, kind)
+					claimed, e := repo.ClaimDueByEventType(workerCtx, time.Now(), 10, kind, false)
 					require.NoError(t, e)
 					require.Len(t, claimed, 1)
 					row = claimed[0]
@@ -1643,7 +1645,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 					case "unknown":
 						return repo.MarkDeliveryUnknown(workerCtx, row, row.ClaimToken, "test")
 					case "recovery":
-						_, e := repo.ClaimDueByEventType(workerCtx, time.Now(), 10, kind)
+						_, e := repo.ClaimDueByEventType(workerCtx, time.Now(), 10, kind, false)
 						return e
 					default:
 						known := []string{}
@@ -2382,6 +2384,151 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		}
 	})
 
+	t.Run("ordered outbox holds successor while predecessor runs", func(t *testing.T) {
+		firstItem, err := app.Create(ctx, identity, command("ordered-first", "generic"))
+		require.NoError(t, err)
+		otherItem, err := app.Create(ctx, identity, command("ordered-other", "generic"))
+		require.NoError(t, err)
+		makeEvent := func(key string, itemID int) *ent.OutboxEvent {
+			return owner.OutboxEvent.Create().SetEventID(key).SetEventType("candidate-ordered-delivery").SetTenantID(tenant.ID).SetAggregateType("work_item").SetAggregateID(fmt.Sprint(itemID)).SetExecutionWorkItemID(itemID).SetPayload(json.RawMessage(`{}`)).SaveX(ctx)
+		}
+		first := makeEvent("ordered-one", firstItem.WorkItemID)
+		second := makeEvent("ordered-two", firstItem.WorkItemID)
+		other := makeEvent("ordered-other", otherItem.WorkItemID)
+		receiver := &candidateOrderedReceiver{firstID: first.ID, entered: make(chan int, 4), release: make(chan struct{})}
+		reserved := []string{}
+		seen := map[string]bool{}
+		for _, row := range owner.OutboxEvent.Query().AllX(ctx) {
+			if row.EventType != receiver.EventType() && !seen[row.EventType] {
+				reserved = append(reserved, row.EventType)
+				seen[row.EventType] = true
+			}
+		}
+		registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{receiver}, reserved...)
+		require.NoError(t, err)
+		worker := func() *service.OutboxDeliveryWorker {
+			w, e := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(clients.System, policy), service.OutboxDeliveryWorkerConfig{BatchSize: 1, PollInterval: time.Second, HandlerTimeout: 10 * time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), registry)
+			require.NoError(t, e)
+			return w
+		}
+		completed := make(chan error, 1)
+		one, two := worker(), worker()
+		go func() { completed <- one.DispatchOnce(ctx) }()
+		released := false
+		defer func() {
+			if !released {
+				close(receiver.release)
+			}
+		}()
+		select {
+		case id := <-receiver.entered:
+			require.Equal(t, first.ID, id)
+		case <-time.After(5 * time.Second):
+			t.Fatal("first worker did not reach declared receiver")
+		}
+		require.NoError(t, two.DispatchOnce(ctx))
+		assert.Equal(t, "pending", owner.OutboxEvent.GetX(ctx, second.ID).Status, "same target successor must remain unclaimed")
+		assert.Equal(t, "published", owner.OutboxEvent.GetX(ctx, other.ID).Status, "independent target should continue")
+		close(receiver.release)
+		released = true
+		require.NoError(t, <-completed)
+		require.NoError(t, two.DispatchOnce(ctx))
+		require.Equal(t, "published", owner.OutboxEvent.GetX(ctx, second.ID).Status)
+	})
+
+	t.Run("ordered outbox stops after delivery acknowledgement failure", func(t *testing.T) {
+		fresh, err := app.Create(ctx, identity, command("ordered-ack-fault", "generic"))
+		require.NoError(t, err)
+		makeEvent := func(key string) *ent.OutboxEvent {
+			return owner.OutboxEvent.Create().SetEventID(key).SetEventType("candidate-ordered-delivery").SetTenantID(tenant.ID).SetAggregateType("work_item").SetAggregateID(fmt.Sprint(fresh.WorkItemID)).SetExecutionWorkItemID(fresh.WorkItemID).SetPayload(json.RawMessage(`{}`)).SaveX(ctx)
+		}
+		first := makeEvent("ordered-ack-first")
+		second := makeEvent("ordered-ack-second")
+		receiver := &candidateOrderedReceiver{entered: make(chan int, 4), release: make(chan struct{})}
+		reserved := []string{}
+		seen := map[string]bool{}
+		for _, row := range owner.OutboxEvent.Query().AllX(ctx) {
+			if row.EventType != receiver.EventType() && !seen[row.EventType] {
+				reserved = append(reserved, row.EventType)
+				seen[row.EventType] = true
+			}
+		}
+		registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{receiver}, reserved...)
+		require.NoError(t, err)
+		worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(clients.System, policy), service.OutboxDeliveryWorkerConfig{BatchSize: 1, PollInterval: time.Second, HandlerTimeout: time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), registry)
+		require.NoError(t, err)
+		active := true
+		writes := 0
+		injected := errors.New("ordered published write failed")
+		clients.System.OutboxEvent.Use(func(next ent.Mutator) ent.Mutator {
+			return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+				v, err := next.Mutate(ctx, m)
+				if mutation, ok := m.(*ent.OutboxEventMutation); ok {
+					state, set := mutation.Status()
+					if active && set && state == "published" && err == nil {
+						writes++
+						return nil, injected
+					}
+				}
+				return v, err
+			})
+		})
+		err = worker.DispatchOnce(ctx)
+		active = false
+		require.ErrorIs(t, err, injected)
+		require.Equal(t, 1, writes)
+		require.Equal(t, 1, len(receiver.entered), "receiver actually ran once")
+		require.Equal(t, "publishing", owner.OutboxEvent.GetX(ctx, first.ID).Status)
+		require.NoError(t, worker.DispatchOnce(ctx))
+		require.Equal(t, "pending", owner.OutboxEvent.GetX(ctx, second.ID).Status)
+		require.Equal(t, 1, len(receiver.entered), "successor must not follow an unacknowledged call")
+		owner.OutboxEvent.UpdateOneID(first.ID).SetClaimExpiresAt(time.Now().Add(-time.Minute)).SaveX(ctx)
+		require.NoError(t, worker.DispatchOnce(ctx))
+		require.Equal(t, "blocked", owner.OutboxEvent.GetX(ctx, first.ID).Status)
+		require.Contains(t, owner.OutboxEvent.GetX(ctx, first.ID).LastError, "delivery_unknown")
+		require.Equal(t, "pending", owner.OutboxEvent.GetX(ctx, second.ID).Status)
+		require.Equal(t, 1, len(receiver.entered))
+	})
+	t.Run("ordered outbox preserves unresolved barriers", func(t *testing.T) {
+		fresh, err := app.Create(ctx, identity, command("ordered-barriers", "generic"))
+		require.NoError(t, err)
+		repo := service.NewOutboxEventRepository(clients.System, policy)
+		workerCtx := tenantctx.SystemContext(ctx, "outbox:poll", "ordered barrier verification")
+		makeEvent := func(key, target string) *ent.OutboxEvent {
+			return owner.OutboxEvent.Create().SetEventID(key).SetEventType("candidate-ordered-barrier").SetTenantID(tenant.ID).SetAggregateType("test_target").SetAggregateID(target).SetExecutionWorkItemID(fresh.WorkItemID).SetPayload(json.RawMessage(`{}`)).SaveX(ctx)
+		}
+		historicalSuccessor := makeEvent("after-legacy-ordered", "legacy-target")
+		var before, after string
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(e)::text FROM outbox_events e WHERE id=$1`, legacyOrdered.ID).Scan(&before))
+		successors := []int{historicalSuccessor.ID}
+		for _, state := range []string{"blocked", "dead_letter", "unrecognized", "pending"} {
+			first := makeEvent("barrier-"+state, state)
+			owner.OutboxEvent.UpdateOneID(first.ID).SetStatus(state).SetNextAttemptAt(time.Now().Add(time.Hour)).SaveX(ctx)
+			successors = append(successors, makeEvent("successor-"+state, state).ID)
+		}
+		ambiguous := makeEvent("ordered-unknown-first", "unknown-target")
+		later := makeEvent("ordered-unknown-second", "unknown-target")
+		rows, err := repo.ClaimDueByEventType(workerCtx, time.Now(), 100, "candidate-ordered-barrier", true)
+		require.NoError(t, err)
+		require.Len(t, rows, 1)
+		require.Equal(t, ambiguous.ID, rows[0].ID)
+		require.NoError(t, repo.MarkDeliveryAttemptStarted(workerCtx, rows[0].ID, rows[0].ClaimToken, rows[0].EventID))
+		owner.OutboxEvent.UpdateOneID(ambiguous.ID).SetClaimExpiresAt(time.Now().Add(-time.Minute)).SaveX(ctx)
+		rows, err = repo.ClaimDueByEventType(workerCtx, time.Now(), 100, "candidate-ordered-barrier", true)
+		require.NoError(t, err)
+		require.Empty(t, rows)
+		require.Equal(t, "blocked", owner.OutboxEvent.GetX(ctx, ambiguous.ID).Status)
+		require.Contains(t, owner.OutboxEvent.GetX(ctx, ambiguous.ID).LastError, "delivery_unknown")
+		successors = append(successors, later.ID)
+		for _, id := range successors {
+			row := owner.OutboxEvent.GetX(ctx, id)
+			require.Equal(t, "pending", row.Status)
+			require.Zero(t, row.AttemptCount)
+			require.Empty(t, row.ClaimToken)
+		}
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(e)::text FROM outbox_events e WHERE id=$1`, legacyOrdered.ID).Scan(&after))
+		require.JSONEq(t, before, after)
+	})
 	t.Run("manual escalation preserves historical WorkItems", func(t *testing.T) {
 		svc := service.NewTicketService(&service.TicketServiceConfig{Execution: policy, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Client: runtime, Logger: zap.NewNop().Sugar(), NotificationService: service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)})
 
@@ -2526,3 +2673,24 @@ func (*candidateNotificationConnector) HealthCheck(context.Context) connector.He
 	return connector.HealthStatus{OK: true}
 }
 func (*candidateNotificationConnector) Close() error { return nil }
+
+// This declared local receiver lets two real workers overlap deterministically.
+type candidateOrderedReceiver struct {
+	firstID int
+	entered chan int
+	release chan struct{}
+}
+
+func (*candidateOrderedReceiver) EventType() string       { return "candidate-ordered-delivery" }
+func (*candidateOrderedReceiver) SerialByAggregate() bool { return true }
+func (r *candidateOrderedReceiver) Deliver(ctx context.Context, event *ent.OutboxEvent) error {
+	r.entered <- event.ID
+	if event.ID == r.firstID {
+		select {
+		case <-r.release:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
+}

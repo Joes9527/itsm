@@ -21,6 +21,13 @@ type OutboxDeliveryHandler interface {
 	Deliver(context.Context, *ent.OutboxEvent) error
 }
 
+// OrderedOutboxDeliveryHandler declares a shared target sequence. The registry
+// freezes this server-owned declaration; payload fields cannot enable or disable it.
+type OrderedOutboxDeliveryHandler interface {
+	OutboxDeliveryHandler
+	SerialByAggregate() bool
+}
+
 // ReplaySafeOutboxDeliveryHandler declares durable domain deduplication for every
 // effect, including a crash after commit. External transports default to ambiguous.
 type ReplaySafeOutboxDeliveryHandler interface {
@@ -97,7 +104,7 @@ func (w *OutboxDeliveryWorker) DispatchOnce(ctx context.Context) error {
 		w.logger.Errorw("unknown outbox event types blocked", "count", blocked)
 	}
 	for _, eventType := range w.eventTypes {
-		events, err := w.repository.ClaimDueByEventType(ctx, w.now().UTC(), w.config.BatchSize, eventType)
+		events, err := w.repository.ClaimDueByEventType(ctx, w.now().UTC(), w.config.BatchSize, eventType, w.registry.SerialByAggregate(eventType))
 		if err != nil {
 			return fmt.Errorf("claim %s outbox deliveries: %w", eventType, err)
 		}

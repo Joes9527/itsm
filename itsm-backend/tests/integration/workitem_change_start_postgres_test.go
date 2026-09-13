@@ -83,7 +83,7 @@ func TestChangeSubmitOwnsFrozenWorkflowStart(t *testing.T) {
 			// Later routing changes must not select a different definition at submit.
 			f.client.ProcessBinding.Update().Where(processbinding.BusinessType("change_request")).SetProcessDefinitionKey("change_emergency_flow").ExecX(f.ctx)
 			worker := func() error {
-				due, err := service.NewOutboxEventRepository(f.runtime, executionfixture.Standard()).ClaimDueByEventType(f.ctx, time.Now().Add(time.Second), 100, "workflow.start.requested")
+				due, err := service.NewOutboxEventRepository(f.runtime, executionfixture.Standard()).ClaimDueByEventType(f.ctx, time.Now().Add(time.Second), 100, "workflow.start.requested", false)
 				if err != nil {
 					return err
 				}

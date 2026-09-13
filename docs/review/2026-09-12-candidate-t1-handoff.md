@@ -589,3 +589,19 @@ Outbox 并发/回滚测试提交 `56879f7c9`；独立 reviewer 确认限定结�
 - 初轮编译重复import、外部测试包装类型不匹配已修正；这些编译失败不作为业务RED。独立review_execution_scope_s1指出权限sentinel映射及历史重放时序问题，均修复并复审无新事务/权限阻断。
 
 并发同key冲突后的自动回执恢复、真实HTTP当前角色撤销、Feishu配置门禁/持久更新、旧平行入口及BPMN仍待验证/实现；S3/S4/S5/S6/B3/T3/T4/G2/G3未完成。CandidateSHA未更新，候选未启动；无WSL/共享环境、企业发送、推送或main合并。
+
+
+### B2 S4 有序Outbox领取前置（2026-09-13）
+
+为手动升级的Feishu durable update补齐跨Worker顺序前置，复用原Outbox而不新增worker/表。handler通过OrderedOutboxDeliveryHandler声明SerialByAggregate，registry注册时冻结；worker传给唯一ClaimDueByEventType实现。候选列表与claim CAS均附相同NOT EXISTS：同tenant/event_type/aggregate_type/aggregate_id且较小ID的前序必须全部published，NULL/未知及所有其它状态均阻挡。外层原scope/member条件保留，前序子查询刻意不按member过滤，避免越过历史未决事件。KAF专属调用及原直接测试调用显式false；新能力未应用到未声明类型。
+
+本机candidate-delivery/b2证据：
+
+- `s4-outbox-ordering-red.log` 有效RED：两个独立真实worker，first本地receiver已进入且阻塞，second把同目标后序published而独立目标仍pending。
+- `s4-outbox-ordering-final-pg.log` 完整TestCandidateIntakeCreationBoundary PASS，无skip。first阻塞时same-target successor保持pending，另一目标published；first完成后successor才published。不是仅同时起跑的概率性并发测试。
+- 同一最终PG：039前NULL execution ref前序原始row_to_json所有字段保全，新成员同目标后序保持pending/attempt0；blocked/dead_letter/unknown状态与future-due pending均阻挡。真实MarkDeliveryAttemptStarted后owner设置过期，原recovery转delivery_unknown/blocked，后序不越过。
+- 本地receiver已返回成功后，published实际写后注入故障，确认事务回滚留下publishing且后续worker不调用successor；过期恢复blocked后仍无第二次投递。这里使用声明的本地接收端，没有企业调用。
+- `s4-outbox-ordering-regression.log` service/bootstrap Outbox/KAF/IncidentAlert定向PASS，含注册声明捕获后修改handler flag仍保持冻结结果；build.json全后端exit0；integration-compile.log为integration_postgres标签编译PASS，未运行该标签集。
+- 独立review_execution_scope_s1复审SQL别名/原CAS/历史前序/冻结声明与最终故障证据，无新问题。
+
+边界：只证明新协议领取和恢复的顺序前置。生产者必须先在同目标取得事务CAS/锁再插入，序列本身不证明commit顺序；真实远端目标必须共用类型/稳定aggregate键。Feishu producer/handler、mapping/目的地/操作回执绑定、外部不确定性验证和旧在途/直发路径未接入，因此手动升级Feishu门禁不解除。未做生产规模查询性能验收；没有新增索引/迁移。S3/S4/S5/S6/B3/T3/T4/G2/G3及固定CandidateSHA交付仍未完成，候选未启动，无共享环境/WSL变更、企业实发、推送或main合并。

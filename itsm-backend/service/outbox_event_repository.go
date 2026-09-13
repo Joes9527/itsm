@@ -13,6 +13,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/outboxevent"
 
+	entsql "entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/google/uuid"
 )
@@ -129,14 +130,17 @@ func enqueueOutboxEvent(ctx context.Context, client *ent.Client, tx *ent.Tx, eve
 // is conditionally updated again, so a competing dispatcher that claimed it
 // first is never returned to this caller.
 func (r *OutboxEventRepository) ClaimDue(ctx context.Context, now time.Time, limit int) ([]*ent.OutboxEvent, error) {
-	return r.ClaimDueByEventType(ctx, now, limit, "")
+	return r.ClaimDueByEventType(ctx, now, limit, "", false)
 }
 
 // ClaimDueByEventType applies the same lease protocol as ClaimDue while
 // preventing one delivery integration from claiming another event type.
-func (r *OutboxEventRepository) ClaimDueByEventType(ctx context.Context, now time.Time, limit int, eventType string) ([]*ent.OutboxEvent, error) {
+func (r *OutboxEventRepository) ClaimDueByEventType(ctx context.Context, now time.Time, limit int, eventType string, serialByAggregate bool) ([]*ent.OutboxEvent, error) {
+	if serialByAggregate && strings.TrimSpace(eventType) == "" {
+		return nil, fmt.Errorf("ordered claims require a registered event type")
+	}
 	for attempt := 0; attempt < outboxEventClaimRetryAttempts; attempt++ {
-		claimed, err := r.claimDue(ctx, now, limit, eventType)
+		claimed, err := r.claimDue(ctx, now, limit, eventType, serialByAggregate)
 		if err == nil || !isRetryableOutboxClaimError(err) || attempt == outboxEventClaimRetryAttempts-1 {
 			return claimed, err
 		}
@@ -156,7 +160,7 @@ func (r *OutboxEventRepository) ClaimDueByEventType(ctx context.Context, now tim
 	return nil, nil
 }
 
-func (r *OutboxEventRepository) claimDue(ctx context.Context, now time.Time, limit int, eventType string) ([]*ent.OutboxEvent, error) {
+func (r *OutboxEventRepository) claimDue(ctx context.Context, now time.Time, limit int, eventType string, serialByAggregate bool) ([]*ent.OutboxEvent, error) {
 	if limit <= 0 {
 		return nil, nil
 	}
@@ -235,6 +239,9 @@ func (r *OutboxEventRepository) claimDue(ctx context.Context, now time.Time, lim
 	if eventType != "" {
 		candidateQuery = candidateQuery.Where(outboxevent.EventTypeEQ(eventType))
 	}
+	if serialByAggregate {
+		candidateQuery.Where(orderedOutboxHead)
+	}
 	candidates, err := candidateQuery.
 		Order(ent.Asc(outboxevent.FieldNextAttemptAt)).
 		Limit(limit).
@@ -254,6 +261,9 @@ func (r *OutboxEventRepository) claimDue(ctx context.Context, now time.Time, lim
 			)
 		if eventType != "" {
 			claim = claim.Where(outboxevent.EventTypeEQ(eventType))
+		}
+		if serialByAggregate {
+			claim.Where(orderedOutboxHead)
 		}
 		updated, err := claim.
 			SetStatus(outboxEventStatusPublishing).
@@ -586,4 +596,21 @@ func isRetryableOutboxClaimError(err error) bool {
 		strings.Contains(message, "database table is locked") ||
 		strings.Contains(message, "could not serialize access") ||
 		strings.Contains(message, "deadlock detected")
+}
+
+// A preceding event remains a barrier even when historical, blocked, or outside
+// the current execution scope. Scope protects the outer mutation, never erases a
+// predecessor. Producers must serialize before INSERT; a sequence alone does not
+// establish transaction commit order. Published is the only terminal success.
+func orderedOutboxHead(s *entsql.Selector) {
+	previous := entsql.Table(outboxevent.Table).As("outbox_predecessor")
+	earlier := entsql.Select(previous.C(outboxevent.FieldID)).From(previous).Where(entsql.And(
+		entsql.ColumnsLT(previous.C(outboxevent.FieldID), s.C(outboxevent.FieldID)),
+		entsql.ColumnsEQ(previous.C(outboxevent.FieldTenantID), s.C(outboxevent.FieldTenantID)),
+		entsql.ColumnsEQ(previous.C(outboxevent.FieldEventType), s.C(outboxevent.FieldEventType)),
+		entsql.ColumnsEQ(previous.C(outboxevent.FieldAggregateType), s.C(outboxevent.FieldAggregateType)),
+		entsql.ColumnsEQ(previous.C(outboxevent.FieldAggregateID), s.C(outboxevent.FieldAggregateID)),
+		entsql.Or(entsql.IsNull(previous.C(outboxevent.FieldStatus)), entsql.NEQ(previous.C(outboxevent.FieldStatus), outboxEventStatusPublished)),
+	))
+	s.Where(entsql.Not(entsql.Exists(earlier)))
 }

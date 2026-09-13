@@ -30,6 +30,12 @@
 
 **当前临时门禁：** 已配置Feishu同步时，命令在写入前明确失败。可靠update intent/消费者及远端更新顺序尚未实现，不能据此启动候选或宣称同步能力已交付。旧TicketLifecycleService/EscalationService手动方法与BPMN升级仍待整理/接入。
 
+### Outbox 按目标串行投递
+
+需要顺序的handler实现 `OrderedOutboxDeliveryHandler.SerialByAggregate()`，注册表在构造时冻结声明，通用worker据此领取。`ClaimDueByEventType`现在显式接受排序布尔值；独立KAF dispatcher仍只领取自身类型并传false。事件payload不能声明或撤销排序。只有同tenant/event_type/aggregate_type/aggregate_id的所有较小ID前序均为published时，后序才可领取；历史NULL执行引用、blocked/dead_letter/未知状态及未来到期pending都保持阻挡，不能自动跳过。后序保持pending，操作员应先核对该目标的前序终态。
+
+该能力要求生产者先取得同目标事务锁/CAS再INSERT并持有至提交；数据库序列本身不保证提交顺序。同一远端目标的所有更新必须共用相同类型与稳定aggregate键，handler仍需核验真实mapping/目的地/actor/执行范围。已有在途旧协议调用、其他类型或直接provider调用不自动获得顺序保证。当前Feishu update尚未接入，手动升级的Feishu门禁继续保留。
+
 ## 1. 常用开发命令
 
 ### 前端 (itsm-frontend)
