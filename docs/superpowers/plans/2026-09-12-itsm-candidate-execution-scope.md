@@ -99,6 +99,9 @@ S3 阶段记录（2026-09-13；基础提交 `6261941b4`，统一创建接入 `04
 
 通用 Worker 原混排 RED 已由 `065226f1e` 修复：冻结 WorkerPredicate 在原事务核对实际 system role binding/manifest，并将 scope/member/结构引用/tenant 限制加入全部领取、恢复、unknown、attempt/retry/finalize SQL。system角色仅允许scope三表可选SELECT，单租户Bind不放宽；两bootstrap显式policy，无默认standard。最终 `s4-outbox-worker-verified-pg.log` 完整私有PG测试PASS：历史四类/外租户NULL与真实成员完整行及audit不变，新候选正常投递；7个真实claim后转换分别scope关闭/binding撤销拒绝保全，恢复后成功。四包回归、全构建、integration标签编译及独立只读复审通过。后续 `56879f7c9` 补齐两并发claim的12唯一事件、无attempt过期重领/旧token拒绝及有attempt过期blocked+audit；四分支真实audit写后故障回滚通过，解除后状态+新增audit断言也PASS。并发起跑不保证确定性SQL竞态，进程重启/完整周期未验证。callback历史RED现由 `a0a1ddc4d` 修复：两扫描、claim/retry/completeTx/outcome、engine领取后读取及推进事务、enqueue/blocked原事务范围约束；System只允许instance三个身份列可选SELECT，单租户绑定不放宽。最终 s4-callback-worker-final-pg.log 全PASS：历史两行不变，新成员本地handler经真实engine到End(callback/instance均completed)，scope与两种role binding撤销时明确失败且全表不变；四包回归/全构建/integration标签编译/独立复审通过。candidate内联执行键、入队/用户回调与故障专项仍待验证，handler与token推进保持既有分段边界；通知/SLA/escalation和完整周期待完成，S4继续未勾选，详见T1最新交接。固定CandidateSHA和候选停止状态不变。
 
+
+通知Worker范围增量 `e479b8d3d`：构造显式policy，原scan/claim/expired/complete/retry/fail均在事务附加tenant_id/ticket_id成员SQL。s4-notification-worker-delivery-pg.log全PASS：旧pending/expired原始PG全字段保全；新成员缺传输显式failed；本地声明connector成功sent；发送后scope关闭导致完成写回拒绝、后续过期转delivery_unknown且不重复发送。四包回归/container编译、全build、integration编译、独立复审通过。仅任务私有PG与本地接收端；binding/并发/写后故障及生产者/mark-read尚未验证，SLA/escalation和其余门禁未完成，详见T1最新交接。
+
 - [ ] 写 `TestCandidateWorkerPreservesHistoricalStates`，混排历史 unknown/pending/expired claim、候选 pending、跨租户 pending；捕获每条 status/attempt/claim/updated_at，运行一次真实 Dispatch/Claim，要求历史逐字段不变。当前全量 claim/BlockUnknown 应 RED。
 - [ ] 所有未知事件标记、expired claim 回收、claim、mark attempt、retry、published/dead-letter 语句在原事务内加入同一个成员 EXISTS 条件，不能仅过滤返回的 slice。查询形状：
 ```sql
