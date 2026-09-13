@@ -17,6 +17,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -106,11 +107,21 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 	roleCreated := false
 	systemRole := name + "_system"
 	systemCreated := false
+	standardRole := name + "_standard"
+	standardCreated := false
+	var standardFixtureClient *ent.Client
 	defer func() {
+		if standardFixtureClient != nil {
+			require.NoError(t, standardFixtureClient.Close())
+		}
 		_, err := admin.Exec("DROP DATABASE " + name + " WITH (FORCE)")
 		require.NoError(t, err)
 		if systemCreated {
 			_, err = admin.Exec("DROP ROLE " + systemRole)
+			require.NoError(t, err)
+		}
+		if standardCreated {
+			_, err = admin.Exec("DROP ROLE " + standardRole)
 			require.NoError(t, err)
 		}
 		if roleCreated {
@@ -348,6 +359,26 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 	policy, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: scopeID}}})
 	require.NoError(t, err)
 	app := application(runtime, policy, clients.IntakeDirectorySnapshot())
+	// Private component fixture role, not target runtime/RLS admission evidence.
+	standardWebhookClient := func() *ent.Client {
+		if standardFixtureClient != nil {
+			return standardFixtureClient
+		}
+		_, err := admin.ExecContext(ctx, "CREATE ROLE "+standardRole+" LOGIN BYPASSRLS NOINHERIT")
+		require.NoError(t, err)
+		standardCreated = true
+		for _, statement := range []string{"GRANT USAGE ON SCHEMA public TO " + standardRole, "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO " + standardRole, "GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO " + standardRole} {
+			_, err = ownerDB.ExecContext(ctx, statement)
+			require.NoError(t, err)
+		}
+		_, err = ownerDB.ExecContext(ctx, `INSERT INTO execution_runtime_bindings VALUES($1,'standard-webhook-test','standard')`, standardRole)
+		require.NoError(t, err)
+		db, err := sql.Open("postgres", dsn(name, standardRole))
+		require.NoError(t, err)
+		standardFixtureClient = ent.NewClient(ent.Driver(entsql.OpenDB("postgres", db)))
+		return standardFixtureClient
+	}
+
 	t.Run("candidate cloud discovery direct entry is disabled", func(t *testing.T) {
 		discovery := service.NewCloudDiscoveryService(runtime, zap.NewNop().Sugar(), policy)
 		require.ErrorIs(t, discovery.DiscoverAll(ctx, tenant.ID), executionscope.ErrDenied)
@@ -3733,8 +3764,10 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			}
 			require.NoError(t, worker.DispatchOnce(ctx))
 			require.EqualValues(t, 2, sent.Load(), "published intents are not re-sent")
-			for _, scenario := range []string{"redirect", "destination_changed", "during_send_rebind", "receipt_fault", "server_error", "authority_scope", "authority_notification", "authority_outbox", "authority_deployment"} {
+			for _, scenario := range []string{"redirect", "destination_changed", "during_send_rebind", "receipt_fault", "server_error", "authority_scope", "authority_notification", "authority_outbox", "authority_deployment", "resolver_transient", "resolver_canceled", "resolver_deadline"} {
 				t.Run(scenario, func(t *testing.T) {
+					ctx, tenantID, deliveryPolicy, deliveryClient, workerClient := ctx, tenant.ID, policy, runtime, clients.System
+					mutable := scenario == "destination_changed" || scenario == "during_send_rebind"
 					var redirected, attempted atomic.Int32
 					var onSend func()
 					otherEndpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { redirected.Add(1); w.WriteHeader(http.StatusOK) }))
@@ -3753,33 +3786,46 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 						}
 					}))
 					defer redirectEndpoint.Close()
-					freshRedirect, e := app.Create(ctx, identity, command("webhook-"+scenario, "generic"))
-					require.NoError(t, e)
-					owner.Ticket.UpdateOneID(freshRedirect.WorkItemID).SetSLADefinitionID(legacySLADefinition.ID).SetSLAResponseDeadline(time.Now().Add(-time.Hour)).SetSLAResolutionDeadline(time.Now().Add(time.Hour)).SaveX(ctx)
-					_, e = monitor.CheckSLAViolations(ctx, tenant.ID)
-					require.NoError(t, e)
-					sourceRow := owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(freshRedirect.WorkItemID), outboxevent.EventTypeEQ("sla.breached")).OnlyX(ctx)
+					var sourceRow *ent.OutboxEvent
+					var freshWorkItemID int
+					if mutable {
+						fixture := newStandardWebhookSourceFixture(t, ctx, standardWebhookClient(), "mutable-"+scenario)
+						ctx, tenantID, deliveryPolicy, deliveryClient, workerClient = fixture.ctx, fixture.tenantID, fixture.policy, standardWebhookClient(), standardWebhookClient()
+						freshWorkItemID, sourceRow = fixture.workItemID, fixture.source
+					} else {
+						freshRedirect, e := app.Create(ctx, identity, command("webhook-"+scenario, "generic"))
+						require.NoError(t, e)
+						freshWorkItemID = freshRedirect.WorkItemID
+						owner.Ticket.UpdateOneID(freshWorkItemID).SetSLADefinitionID(legacySLADefinition.ID).SetSLAResponseDeadline(time.Now().Add(-time.Hour)).SetSLAResolutionDeadline(time.Now().Add(time.Hour)).SaveX(ctx)
+						_, e = monitor.CheckSLAViolations(ctx, tenantID)
+						require.NoError(t, e)
+						sourceRow = owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(freshWorkItemID), outboxevent.EventTypeEQ("sla.breached")).OnlyX(ctx)
+					}
 					require.NoError(t, service.NewSLABreachDeliveryHandler().Deliver(ctx, sourceRow))
 					captured := capture.events[len(capture.events)-1]
 					raw, e := json.Marshal(captured)
 					require.NoError(t, e)
 					freshEnv := envelope
 					execID := *envelope.Execution
-					execID.WorkItemID = freshRedirect.WorkItemID
+					execID.WorkItemID = freshWorkItemID
+					ref, e := deliveryPolicy.EventRef(tenantID)
+					require.NoError(t, e)
+					execID.DeploymentID, execID.ScopeID = ref.DeploymentID, ref.ScopeID
+					freshEnv.TenantID = strconv.Itoa(tenantID)
 					freshEnv.Execution = &execID
 					freshEnv.EventID = sourceRow.EventID
 					freshEnv.Payload = raw
 					freshEnv.OccurredAt = captured.(interface{ OccurredAt() time.Time }).OccurredAt()
 					var targetManager *connector.Manager
-					if scenario == "destination_changed" || scenario == "during_send_rebind" {
+					if mutable {
 						// Standard mutable-instance fixture preserves the original digest/generation defense tests.
-						targetManager = connector.NewManager(registry, zap.NewNop().Sugar(), candidateTestStandardManagement(t))
-						require.NoError(t, targetManager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Provider: "redirect", Enabled: true, Settings: map[string]interface{}{"url": redirectEndpoint.URL}}))
+						targetManager = connector.NewManager(registry, zap.NewNop().Sugar(), deliveryPolicy)
+						require.NoError(t, targetManager.Provision(ctx, connector.Config{TenantID: tenantID, Name: "webhook", Provider: "redirect", Enabled: true, Settings: map[string]interface{}{"url": redirectEndpoint.URL}}))
 						t.Cleanup(targetManager.CloseAll)
 					} else {
-						targetManager = candidateDeclaredManager(t, ctx, tenant.ID, scopeID, registry, candidateWebhookTarget("redirect", redirectEndpoint.URL))
+						targetManager = candidateDeclaredManager(t, ctx, tenantID, scopeID, registry, candidateWebhookTarget("redirect", redirectEndpoint.URL))
 					}
-					require.NoError(t, service.NewWebhookEventSubscriber(targetManager, zap.NewNop().Sugar(), runtime, policy).HandleContext(ctx, freshEnv))
+					require.NoError(t, service.NewWebhookEventSubscriber(targetManager, zap.NewNop().Sugar(), deliveryClient, deliveryPolicy).HandleContext(ctx, freshEnv))
 					if strings.HasPrefix(scenario, "authority_") {
 						// The producer committed an authorized intent. Independently replace
 						// only the runtime target used by the real delivery worker.
@@ -3795,21 +3841,53 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 							targetDeployment = "other-deployment"
 						}
 						declaration := candidateWebhookTarget("redirect", redirectEndpoint.URL)
-						declaration.TenantID, declaration.ScopeID = tenant.ID, targetScope
+						declaration.TenantID, declaration.ScopeID = tenantID, targetScope
 						declaration.Capabilities = []string{capability}
-						unrelatedPolicy, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: targetDeployment, Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: targetScope}}, Capabilities: map[string]string{capability: "scoped"}, ConnectorTargets: []config.ConnectorTargetConfig{declaration}})
+						unrelatedPolicy, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: targetDeployment, Scopes: []config.ExecutionScopeConfig{{TenantID: tenantID, ScopeID: targetScope}}, Capabilities: map[string]string{capability: "scoped"}, ConnectorTargets: []config.ConnectorTargetConfig{declaration}})
 						require.NoError(t, err)
 						targetManager = connector.NewManager(registry, zap.NewNop().Sugar(), unrelatedPolicy)
 						defer targetManager.CloseAll()
 						require.NoError(t, targetManager.ActivateStartupTargets(tenantctx.SystemContext(ctx, "test:unrelated-worker-target", "activate only a loopback target without this intent authority")))
 					}
 
+					if strings.HasPrefix(scenario, "resolver_") {
+						cause := errors.New("injected target resolver failure")
+						if scenario == "resolver_canceled" {
+							cause = context.Canceled
+						}
+						if scenario == "resolver_deadline" {
+							cause = context.DeadlineExceeded
+						}
+						declaration := candidateWebhookTarget("redirect", redirectEndpoint.URL)
+						declaration.TenantID, declaration.ScopeID = tenantID, scopeID
+						p, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenantID, ScopeID: scopeID}}, Capabilities: map[string]string{"webhook": "scoped"}, ConnectorTargets: []config.ConnectorTargetConfig{declaration}})
+						require.NoError(t, err)
+						failingManager := connector.NewManager(registry, zap.NewNop().Sugar(), &webhookResolverFailureGate{ExecutionPolicy: p, err: cause})
+						defer failingManager.CloseAll()
+						require.NoError(t, failingManager.ActivateStartupTargets(tenantctx.SystemContext(ctx, "test:resolver-failure", "activate a loopback target before injecting resolution failure")))
+						repo := service.NewOutboxEventRepository(workerClient, deliveryPolicy)
+						workerCtx := tenantctx.SystemContext(ctx, "outbox:poll", "test pre-send resolver failure")
+						rows, err := repo.ClaimDueByEventType(workerCtx, time.Now(), 1000, service.WebhookDeliveryRequestedEventType, false)
+						require.NoError(t, err)
+						require.Len(t, rows, 1)
+						intent := rows[0]
+						require.Equal(t, freshWorkItemID, *intent.ExecutionWorkItemID)
+						require.NoError(t, repo.MarkDeliveryAttemptStarted(workerCtx, intent.ID, intent.ClaimToken, intent.EventID))
+						err = service.NewWebhookDeliveryHandler(deliveryClient, deliveryPolicy, failingManager).Deliver(ctx, intent)
+						assert.ErrorIs(t, err, cause, "pre-send failure must retain its cause")
+						assert.Zero(t, attempted.Load())
+						assert.Zero(t, owner.AuditLog.Query().Where(auditlog.TenantID(tenantID), auditlog.OperationID("webhook_deliver:"+intent.EventID)).CountX(ctx))
+						// Test-only cleanup of this directly claimed intent; no worker outcome is asserted.
+						require.NoError(t, repo.MarkBlocked(workerCtx, intent.ID, intent.ClaimToken, "test-only direct delivery completed"))
+						return
+					}
+
 					if scenario == "destination_changed" {
-						require.NoError(t, targetManager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Provider: "redirect", Enabled: true, Settings: map[string]interface{}{"url": otherEndpoint.URL}}))
+						require.NoError(t, targetManager.Provision(ctx, connector.Config{TenantID: tenantID, Name: "webhook", Provider: "redirect", Enabled: true, Settings: map[string]interface{}{"url": otherEndpoint.URL}}))
 					}
 					if scenario == "during_send_rebind" {
 						onSend = func() {
-							e := targetManager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Provider: "redirect", Enabled: true, Settings: map[string]interface{}{"url": otherEndpoint.URL}})
+							e := targetManager.Provision(ctx, connector.Config{TenantID: tenantID, Name: "webhook", Provider: "redirect", Enabled: true, Settings: map[string]interface{}{"url": otherEndpoint.URL}})
 							if e != nil {
 								panic(e)
 							}
@@ -3817,7 +3895,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 					}
 					receiptFaultActive := scenario == "receipt_fault"
 					defer func() { receiptFaultActive = false }()
-					runtime.AuditLog.Use(func(next ent.Mutator) ent.Mutator {
+					deliveryClient.AuditLog.Use(func(next ent.Mutator) ent.Mutator {
 						return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
 							value, e := next.Mutate(c, m)
 							if e != nil {
@@ -3835,21 +3913,21 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 						})
 					})
 
-					targetRegistry, e := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{service.NewWebhookDeliveryHandler(runtime, policy, targetManager)}, reserved...)
+					targetRegistry, e := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{service.NewWebhookDeliveryHandler(deliveryClient, deliveryPolicy, targetManager)}, reserved...)
 					require.NoError(t, e)
-					targetWorker, e := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(clients.System, policy), service.OutboxDeliveryWorkerConfig{BatchSize: 1000, PollInterval: time.Second, HandlerTimeout: 5 * time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), targetRegistry)
+					targetWorker, e := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(workerClient, deliveryPolicy), service.OutboxDeliveryWorkerConfig{BatchSize: 1000, PollInterval: time.Second, HandlerTimeout: 5 * time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), targetRegistry)
 					require.NoError(t, e)
 					require.NoError(t, targetWorker.DispatchOnce(ctx))
 					require.Zero(t, redirected.Load(), "frozen endpoint must not redirect the payload")
-					intent := owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(freshRedirect.WorkItemID), outboxevent.EventTypeEQ(service.WebhookDeliveryRequestedEventType)).OnlyX(ctx)
+					intent := owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(freshWorkItemID), outboxevent.EventTypeEQ(service.WebhookDeliveryRequestedEventType)).OnlyX(ctx)
 					if strings.HasPrefix(scenario, "authority_") {
 						assert.Equal(t, "blocked", intent.Status, "an unrelated declaration must not authorize a persisted intent")
 						assert.Zero(t, attempted.Load(), "worker must reject before the local HTTP request")
-						assert.Zero(t, owner.AuditLog.Query().Where(auditlog.TenantID(tenant.ID), auditlog.OperationID("webhook_deliver:"+intent.EventID)).CountX(ctx), "wrong target authority must not acquire a delivered receipt")
+						assert.Zero(t, owner.AuditLog.Query().Where(auditlog.TenantID(tenantID), auditlog.OperationID("webhook_deliver:"+intent.EventID)).CountX(ctx), "wrong target authority must not acquire a delivered receipt")
 						attemptsBeforeReplay := attempted.Load()
 						require.NoError(t, targetWorker.DispatchOnce(ctx))
 						assert.Equal(t, attemptsBeforeReplay, attempted.Load(), "terminal delivery state must not cause another attempt")
-						assert.Zero(t, owner.AuditLog.Query().Where(auditlog.TenantID(tenant.ID), auditlog.OperationID("webhook_deliver:"+intent.EventID)).CountX(ctx), "repeated rejected poll must not create a delivered receipt")
+						assert.Zero(t, owner.AuditLog.Query().Where(auditlog.TenantID(tenantID), auditlog.OperationID("webhook_deliver:"+intent.EventID)).CountX(ctx), "repeated rejected poll must not create a delivered receipt")
 						return
 					}
 					require.Equal(t, "blocked", intent.Status)
@@ -4073,6 +4151,11 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			}
 		})
 		t.Run("standard webhook uses durable owner and recovers before ack", func(t *testing.T) {
+			fixture := newStandardWebhookSourceFixture(t, ctx, standardWebhookClient(), "ack-recovery")
+			ctx := fixture.ctx
+			tenantID := fixture.tenantID
+			standard := fixture.policy
+
 			streamCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 			defer cancel()
 			redisCfg, redisClient := startCandidateStreamRedis(t, streamCtx)
@@ -4083,12 +4166,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			_, err = redisClient.XReadGroup(streamCtx, &redis.XReadGroupArgs{Group: "history", Consumer: "original", Streams: []string{"protected.legacy", ">"}, Count: 1}).Result()
 			require.NoError(t, err)
 			protected := snapshotCandidateRedis(t, streamCtx, redisClient)
-			freshWebhook, err := app.Create(ctx, identity, command("standard-webhook-ack-recovery", "generic"))
-			require.NoError(t, err)
-			owner.Ticket.UpdateOneID(freshWebhook.WorkItemID).SetSLADefinitionID(legacySLADefinition.ID).SetSLAResponseDeadline(time.Now().Add(-time.Hour)).SetSLAResolutionDeadline(time.Now().Add(time.Hour)).SaveX(ctx)
-			_, err = monitor.CheckSLAViolations(ctx, tenant.ID)
-			require.NoError(t, err)
-			resolution := owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(freshWebhook.WorkItemID), outboxevent.EventTypeEQ("sla.breached")).OnlyX(ctx)
+			resolution := fixture.source
 			require.NoError(t, service.NewSLABreachDeliveryHandler().Deliver(ctx, resolution))
 			resolutionSource := capture.events[len(capture.events)-1]
 			var firstSent, secondSent atomic.Int32
@@ -4098,19 +4176,17 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			defer secondEndpoint.Close()
 			registry := connector.NewRegistry()
 			registry.Register(func() connector.Connector { return webhookconnector.New() })
-			manager := connector.NewManager(registry, zap.NewNop().Sugar(), candidateTestStandardManagement(t))
+			manager := connector.NewManager(registry, zap.NewNop().Sugar(), standard)
 			defer manager.CloseAll()
 			for provider, endpoint := range map[string]string{"ack-first": firstEndpoint.URL, "ack-second": secondEndpoint.URL} {
-				require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Provider: provider, Enabled: true, Settings: map[string]interface{}{"url": endpoint}}))
+				require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenantID, Name: "webhook", Provider: provider, Enabled: true, Settings: map[string]interface{}{"url": endpoint}}))
 			}
-			execution := config.ExecutionConfig{Mode: "standard", DeploymentID: "standard-webhook-test"}
-			standard, err := database.NewExecutionPolicy(execution)
-			require.NoError(t, err)
-			standardAuthority := service.NewExecutionEventAuthority(owner, standard)
+			execution := config.ExecutionConfig{Mode: "standard", DeploymentID: "standard-webhook-test", Capabilities: map[string]string{"webhook": "enabled", "outbox": "enabled"}}
+			standardAuthority := service.NewExecutionEventAuthority(standardWebhookClient(), standard)
 			consumer, err := eventbus.NewWatermillEventBus(redisCfg, execution, standardAuthority, zap.NewNop().Sugar())
 			require.NoError(t, err)
 			defer consumer.Close()
-			audit := service.NewWebhookEventSubscriber(manager, zap.NewNop().Sugar(), owner, standard)
+			audit := service.NewWebhookEventSubscriber(manager, zap.NewNop().Sugar(), standardWebhookClient(), standard)
 			committed := make(chan struct{}, 1)
 			require.NoError(t, consumer.RegisterSubscription("sla.breached", &candidateCommitBeforeAck{audit: audit, committed: committed}))
 			require.NoError(t, consumer.Start(streamCtx))
@@ -4131,10 +4207,10 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			require.Len(t, rows, 1)
 			require.Equal(t, rows[0].ID, pending[0].ID)
 			var receiptBefore string
-			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(a)::text FROM audit_logs a WHERE tenant_id=$1 AND user_id=0 AND operation_id=$2`, tenant.ID, "webhook_consume:"+resolution.EventID).Scan(&receiptBefore))
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(a)::text FROM audit_logs a WHERE tenant_id=$1 AND user_id=0 AND operation_id=$2`, tenantID, "webhook_consume:"+resolution.EventID).Scan(&receiptBefore))
 			var intentsBefore string
-			require.NoError(t, ownerDB.QueryRow(`SELECT coalesce(json_agg(e ORDER BY id),'[]')::text FROM outbox_events e WHERE execution_work_item_id=$1 AND event_type=$2`, freshWebhook.WorkItemID, service.WebhookDeliveryRequestedEventType).Scan(&intentsBefore))
-			require.Equal(t, 2, owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(freshWebhook.WorkItemID), outboxevent.EventTypeEQ(service.WebhookDeliveryRequestedEventType)).CountX(ctx))
+			require.NoError(t, ownerDB.QueryRow(`SELECT coalesce(json_agg(e ORDER BY id),'[]')::text FROM outbox_events e WHERE execution_work_item_id=$1 AND event_type=$2`, fixture.workItemID, service.WebhookDeliveryRequestedEventType).Scan(&intentsBefore))
+			require.Equal(t, 2, owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(fixture.workItemID), outboxevent.EventTypeEQ(service.WebhookDeliveryRequestedEventType)).CountX(ctx))
 			require.Zero(t, firstSent.Load())
 			require.Zero(t, secondSent.Load())
 			require.NoError(t, consumer.Close())
@@ -4157,14 +4233,14 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			require.Len(t, consumers, 2)
 			require.NotEqual(t, consumers[0].Name, consumers[1].Name)
 			var receiptAfter string
-			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(a)::text FROM audit_logs a WHERE tenant_id=$1 AND user_id=0 AND operation_id=$2`, tenant.ID, "webhook_consume:"+resolution.EventID).Scan(&receiptAfter))
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(a)::text FROM audit_logs a WHERE tenant_id=$1 AND user_id=0 AND operation_id=$2`, tenantID, "webhook_consume:"+resolution.EventID).Scan(&receiptAfter))
 			require.JSONEq(t, receiptBefore, receiptAfter)
 			require.Equal(t, before+1, owner.AuditLog.Query().CountX(ctx))
 			afterRows, err := redisClient.XRange(streamCtx, key, "-", "+").Result()
 			require.NoError(t, err)
 			require.Equal(t, rows, afterRows, "restart must not republish or replace the original entry")
 			var intentsAfter string
-			require.NoError(t, ownerDB.QueryRow(`SELECT coalesce(json_agg(e ORDER BY id),'[]')::text FROM outbox_events e WHERE execution_work_item_id=$1 AND event_type=$2`, freshWebhook.WorkItemID, service.WebhookDeliveryRequestedEventType).Scan(&intentsAfter))
+			require.NoError(t, ownerDB.QueryRow(`SELECT coalesce(json_agg(e ORDER BY id),'[]')::text FROM outbox_events e WHERE execution_work_item_id=$1 AND event_type=$2`, fixture.workItemID, service.WebhookDeliveryRequestedEventType).Scan(&intentsAfter))
 			require.JSONEq(t, intentsBefore, intentsAfter, "redelivery must preserve the entire original intent set")
 			require.Zero(t, firstSent.Load())
 			require.Zero(t, secondSent.Load())
@@ -4178,16 +4254,16 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			for kind := range reservedSet {
 				reserved = append(reserved, kind)
 			}
-			deliveryRegistry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{service.NewWebhookDeliveryHandler(owner, standard, manager)}, reserved...)
+			deliveryRegistry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{service.NewWebhookDeliveryHandler(standardWebhookClient(), standard, manager)}, reserved...)
 			require.NoError(t, err)
-			worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(owner, standard), service.OutboxDeliveryWorkerConfig{BatchSize: 1000, PollInterval: time.Second, HandlerTimeout: 5 * time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), deliveryRegistry)
+			worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(standardWebhookClient(), standard), service.OutboxDeliveryWorkerConfig{BatchSize: 1000, PollInterval: time.Second, HandlerTimeout: 5 * time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), deliveryRegistry)
 			require.NoError(t, err)
 			require.NoError(t, worker.DispatchOnce(ctx))
 			require.EqualValues(t, 1, firstSent.Load())
 			require.EqualValues(t, 1, secondSent.Load())
-			for _, intent := range owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(freshWebhook.WorkItemID), outboxevent.EventTypeEQ(service.WebhookDeliveryRequestedEventType)).AllX(ctx) {
+			for _, intent := range owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(fixture.workItemID), outboxevent.EventTypeEQ(service.WebhookDeliveryRequestedEventType)).AllX(ctx) {
 				require.Equal(t, "published", intent.Status)
-				require.True(t, owner.AuditLog.Query().Where(auditlog.TenantIDEQ(tenant.ID), auditlog.OperationIDEQ("webhook_deliver:"+intent.EventID)).ExistX(ctx))
+				require.True(t, owner.AuditLog.Query().Where(auditlog.TenantIDEQ(tenantID), auditlog.OperationIDEQ("webhook_deliver:"+intent.EventID)).ExistX(ctx))
 			}
 			require.NoError(t, worker.DispatchOnce(ctx))
 			require.EqualValues(t, 1, firstSent.Load())
@@ -6302,4 +6378,40 @@ func candidateDeclaredManager(t *testing.T, ctx context.Context, tenantID int, s
 	t.Cleanup(manager.CloseAll)
 	require.NoError(t, manager.ActivateStartupTargets(tenantctx.SystemContext(ctx, "test:declared-delivery", "activate local declared fixture targets")))
 	return manager
+}
+
+// Seeds a fresh private tenant/WorkItem, then uses the real standard SLA source
+// producer. This is delivery testing, not WorkItem creation or role admission E2E.
+type standardWebhookSourceFixture struct {
+	ctx                  context.Context
+	tenantID, workItemID int
+	policy               *database.ExecutionPolicy
+	source               *ent.OutboxEvent
+}
+
+func newStandardWebhookSourceFixture(t *testing.T, parent context.Context, client *ent.Client, name string) standardWebhookSourceFixture {
+	t.Helper()
+	tenant := client.Tenant.Create().SetName("Standard webhook " + name).SetCode("webhook-" + name).SaveX(parent)
+	ctx := tenantctx.WithTenantID(parent, tenant.ID)
+	user := client.User.Create().SetTenantID(tenant.ID).SetUsername("webhook-" + name).SetName("Private webhook fixture").SetEmail(name + "@example.invalid").SetPasswordHash("test-only").SetRole("requester").SaveX(ctx)
+	sla := client.SLADefinition.Create().SetTenantID(tenant.ID).SetName("Private webhook SLA").SetResponseTime(60).SetResolutionTime(240).SaveX(ctx)
+	item := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(user.ID).SetTitle("Private standard webhook source").SetTicketNumber("STANDARD-WEBHOOK-" + name).SetSLADefinitionID(sla.ID).SetSLAResponseDeadline(time.Now().Add(-time.Hour)).SetSLAResolutionDeadline(time.Now().Add(time.Hour)).SaveX(ctx)
+	policy, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "standard-webhook-test", Capabilities: map[string]string{"webhook": "enabled", "outbox": "enabled"}})
+	require.NoError(t, err)
+	monitor := service.NewSLAMonitorService(client, zap.NewNop().Sugar(), policy)
+	monitor.SetNotificationService(service.NewTicketNotificationService(client, zap.NewNop().Sugar(), policy))
+	_, err = monitor.CheckSLAViolations(ctx, tenant.ID)
+	require.NoError(t, err)
+	source := client.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(item.ID), outboxevent.EventTypeEQ("sla.breached")).OnlyX(ctx)
+	return standardWebhookSourceFixture{ctx, tenant.ID, item.ID, policy, source}
+}
+
+// Inject only the resolver failure; startup still uses the real frozen policy.
+type webhookResolverFailureGate struct {
+	*database.ExecutionPolicy
+	err error
+}
+
+func (g *webhookResolverFailureGate) RequireConnectorDelivery(context.Context, executionscope.Ref, string) error {
+	return g.err
 }

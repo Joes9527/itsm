@@ -40,14 +40,18 @@ func NewWebhookDeliveryHandler(client *ent.Client, policy *database.ExecutionPol
 }
 func (*WebhookDeliveryHandler) EventType() string { return WebhookDeliveryRequestedEventType }
 
-func (h *WebhookDeliveryHandler) target(tenantID int, p webhookDeliveryPayload) (boundWebhookTarget, error) {
-	conn, generation, ok := h.manager.GetInstance(tenantID, "webhook", p.Target.Provider)
-	if !ok {
-		return boundWebhookTarget{}, fmt.Errorf("webhook target unavailable")
+func (h *WebhookDeliveryHandler) target(ctx context.Context, tenantID int, p webhookDeliveryPayload) (boundWebhookTarget, error) {
+	if p.Source.Execution == nil {
+		return boundWebhookTarget{}, executionscope.ErrDenied
+	}
+	ref := executionscope.Ref{TenantID: tenantID, DeploymentID: p.Source.Execution.DeploymentID, ScopeID: p.Source.Execution.ScopeID}
+	conn, generation, digest, err := h.manager.ResolveDeliveryTarget(ctx, ref, "webhook", "webhook", p.Target.Provider)
+	if err != nil {
+		return boundWebhookTarget{}, err
 	}
 	target, ok := conn.(webhookSender)
-	if !ok || target.DeliveryDestinationIdentity() == "" || target.DeliveryDestinationIdentity() != p.Target.DestinationDigest {
-		return boundWebhookTarget{}, fmt.Errorf("webhook destination changed")
+	if !ok || digest != p.Target.DestinationDigest {
+		return boundWebhookTarget{}, fmt.Errorf("webhook destination changed: %w", executionscope.ErrDenied)
 	}
 	return boundWebhookTarget{target, generation}, nil
 }
@@ -72,9 +76,9 @@ func (h *WebhookDeliveryHandler) Deliver(ctx context.Context, event *ent.OutboxE
 	if err = tx.Commit(); err != nil {
 		return err
 	}
-	target, err := h.target(event.TenantID, payload)
+	target, err := h.target(ctx, event.TenantID, payload)
 	if err != nil {
-		return blockOutboxDelivery("webhook destination changed or unavailable")
+		return webhookPreflightError(err)
 	}
 	body, err := json.Marshal(payload.Source)
 	if err != nil {
@@ -93,7 +97,7 @@ func (h *WebhookDeliveryHandler) Deliver(ctx context.Context, event *ent.OutboxE
 	if _, err = h.validateTx(ctx, tx, event); err != nil {
 		return blockOutboxDelivery("delivery_unknown: webhook authority changed after send")
 	}
-	current, err := h.target(event.TenantID, payload)
+	current, err := h.target(ctx, event.TenantID, payload)
 	if err != nil || current.generation != target.generation {
 		return blockOutboxDelivery("delivery_unknown: webhook instance changed after send")
 	}

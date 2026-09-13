@@ -1304,3 +1304,18 @@ s5-webhook-target-full-red.log完整私有PG16/Redis/MinIO race仅新增8个场�
 独立只读审阅确认两侧RED有效且清理范围正确。后续沿唯一Manager/ExecutionPolicy建立精确目标解析：真实owner已验证Ref、代码固定capability、tenant/name/provider与冻结mode/deployment/scope完全一致；candidate私有目标scope/能力/摘要匹配，standard空scope、实际deployment一致且显式启用投递能力。producer提交新意图前检查，worker已有意图发送前及回执复核独立检查，保留同对象/generation及原DB source/member/claim/lease/receipt合同。原standard Manager与candidate worker混合的重绑防御fixture必须改完整standard链，不放宽一致性迁就旧测试。完整合同已补原S5计划。
 
 本轮仅新增真实RED与实施合同，未修复生产路径；未进行不相关构建或将编译成功当验收。Send/Get/GetInstance裸入口及通知/Feishu目标消费仍未完成，完整目标、CandidateSHA、候选停止及共享环境边界不变，无企业/云外呼、共享数据库修改、push/main合并。
+
+
+### B2 S5 Webhook 精确声明消费与发送前错误分类（2026-09-14）
+
+producer 与 Worker 现统一调用 Manager.ResolveDeliveryTarget，以冻结 ExecutionPolicy 比较来源 Ref 的 deployment/tenant/scope 与显式投递能力。candidate 同时检查实例私有声明的 scope、能力、目的地摘要，standard 要求同 deployment、空 scope、显式启用 webhook；精确 tenant/name/provider 比较保留。Worker 捕获同一实例发送并后置检查 generation，原 source/member/claim/lease/receipt 事务合同不变。新意图提交前核验，旧消费回执重放不扩大目标集合。
+
+s5-webhook-target-gate-private.log 原8项 RED 全部转绿。严格身份检查暴露旧 standard Manager/candidate source 混合夹具；destination_changed、during_send_rebind 与 standard ACK 恢复现使用完整 standard 链和真实 SLA source。首次 owner 连接建单被数据库运行身份触发器拒绝（s5-webhook-standard-chain-verified.log），未削弱触发器；改为本任务临时数据库内独立 standard 绑定角色，s5-webhook-standard-bound-role.log PASS。该角色有宽表权限及 BYPASSRLS，仅为组件夹具，不代表 standard 应用角色准入；WorkItem 是直接 seed，不能称创建 E2E。临时角色随本次随机数据库关闭清理，不触及 WSL/共享库。
+
+独立审阅 P2 指出发送前所有 resolver 错误错误地转永久 blocked。s5-webhook-resolver-cause-red.log 在实际 PG claim、attempt marker 与 Deliver 路径分别复现临时、取消、deadline cause 丢失，三者零 HTTP/零交付 receipt。修复为明确目的地不匹配包装 ErrDenied，发送前复用 webhookPreflightError 保留其它 cause；发送后不确定结果仍 delivery_unknown。测试中的最终 MarkBlocked 是直接 claim 清理，不作为实际 Worker 重试结果证据。
+
+s5-webhook-target-full-green.log 完整私有 PG16/Redis/MinIO 所选注册、intake、构造保全、Stream race suite PASS，无 FAIL/SKIP/DATA RACE，包含新增8项授权拒绝及3项cause回归；不能替代 WSL PG17/G2。s5-webhook-target-unit.log database/connector/service 具名 race PASS，覆盖精确冻结身份、上下文/能力拒绝、standard 正向，以及全局 notification 已启用但精确目标仅允许 webhook 时仍拒绝的矩阵；未宣称全包运行。独立复核 P2 已关闭且无新增阻断，最终构建和增量审阅下方补记。
+
+裸 Get/Send/GetInstance、通知/飞书目标消费与剩余请求异步入口仍待接入。完整目标、S5/S6/T3/T4/G3 未完成；固定 CandidateSHA 不变，候选未启动，无共享环境操作、企业/云外呼、push 或 main 合并。
+
+最终 s5-webhook-target-build.log 全后端 build exit0；git diff --check通过。独立最终增量复核无新增阻断，未运行额外外部测试。新增单测在完整私有suite之后，仅修改测试与文档，无生产增量。

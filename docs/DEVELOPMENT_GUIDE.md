@@ -374,3 +374,6 @@ Creation requester controls use the actual target resource's `create_on_behalf` 
 Manager 配置操作不再允许缺失部署策略或租户上下文。standard 恢复仍先检查 connector_poll 启动权限，LoadAll 按条派生 WithTenantID（清除 SystemBypass）再走普通 Provision，不为恢复放宽请求准入。candidate 只通过声明启动建立目标，普通激活、停用与撤销均拒绝。Revoke 返回关闭错误并保留实例，不把失败当作成功移除；HTTP 收到该错误后停止后续配置删除。多实例撤销仍可能部分完成，并非整组事务。普通 Provision 在初始化后、发布锁内重新检查取消；取消时关闭新对象并保留取消与清理错误。CloseAll 保持停机清理职责，不要求请求管理准入。
 
 对应candidate测试使用真实声明启动；notification/Feishu的本地探针声明local_only和稳定通用目的地摘要，原专业投递身份与断言保留。新增目标的重放测试创建新的启动配置与Manager，检查原receipt不扩展；目标变化和发送中重绑的generation防御保留为显式standard可变实例场景。测试配置不构成目标WSL部署授权，声明目标自身也不替代投递owner对scope、意图与权限的核验。
+
+
+Webhook 新意图生产者与投递 Worker 通过唯一 Manager.ResolveDeliveryTarget 解析精确 tenant/name/provider 目标。冻结 ExecutionPolicy 要求来源 Ref 的 deployment/tenant/scope 完全匹配，投递能力仅限 webhook/notification/outbox；standard 必须显式启用能力且 scope 为空，candidate 还检查实例私有声明的 scope、能力与当前目的地摘要。Webhook owner 固定使用 webhook，不由载荷选择能力。目标检查不能替代已有 source、成员、claim、租约与回执事务检查；发送使用已捕获的同一对象，发送后再次核验目标及 generation。发送前非 ErrDenied 的取消、超时和基础设施错误保留 cause；发送后不确定性仍要求核对。该接入目前只覆盖 Webhook owner，裸 Get/Send 及通知/飞书目标授权仍待处理。

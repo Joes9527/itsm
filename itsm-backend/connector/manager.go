@@ -16,6 +16,7 @@ import (
 // Manager 负责"已注册连接器" + "已配置实例" 的生命周期管理
 // 多个租户、每个租户可挂多个同名连接器实例（例如：飞书A区机器人 + 飞书B区机器人）
 type CapabilityGate interface {
+	RequireConnectorDelivery(context.Context, executionscope.Ref, string) error
 	RequireIntegrationManagement(context.Context, int) error
 	RequireCapability(context.Context, int, string) error
 	RequireStartupCapability(context.Context, string) error

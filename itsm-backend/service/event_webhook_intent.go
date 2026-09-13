@@ -56,16 +56,12 @@ type webhookConsumptionReceipt struct {
 
 // Only the destination digest is persisted; URLs and connector secrets are not
 // copied into an event. A worker must compare the current destination before send.
-func (s *WebhookEventSubscriber) snapshotWebhookTarget(cfg connector.Config) (webhookTarget, error) {
-	conn, _, ok := s.manager.GetInstance(cfg.TenantID, cfg.Name, cfg.Provider)
-	if !ok {
-		return webhookTarget{}, fmt.Errorf("webhook target unavailable")
+func (s *WebhookEventSubscriber) snapshotWebhookTarget(ctx context.Context, ref executionscope.Ref, cfg connector.Config) (webhookTarget, error) {
+	_, _, digest, err := s.manager.ResolveDeliveryTarget(ctx, ref, "webhook", cfg.Name, cfg.Provider)
+	if err != nil {
+		return webhookTarget{}, err
 	}
-	target, ok := conn.(webhookSender)
-	if !ok || target.DeliveryDestinationIdentity() == "" {
-		return webhookTarget{}, fmt.Errorf("webhook destination identity unavailable")
-	}
-	return webhookTarget{Provider: cfg.Provider, DestinationDigest: target.DeliveryDestinationIdentity()}, nil
+	return webhookTarget{Provider: cfg.Provider, DestinationDigest: digest}, nil
 }
 
 func (s *WebhookEventSubscriber) consumeExecutionWebhook(ctx context.Context, event interface{}) error {
@@ -173,7 +169,7 @@ func (s *WebhookEventSubscriber) consumeExecutionWebhook(ctx context.Context, ev
 		if cfg.Name != "webhook" || !cfg.Enabled {
 			continue
 		}
-		target, e := s.snapshotWebhookTarget(cfg)
+		target, e := s.snapshotWebhookTarget(ctx, ref, cfg)
 		if e != nil {
 			return e
 		}
