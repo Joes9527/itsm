@@ -402,6 +402,55 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.ErrorIs(t, noClient.LoadAll(tenantctx.SystemContext(ctx, "test:candidate-no-client", "reject before query")), executionscope.ErrDenied)
 
 	})
+	t.Run("candidate request cannot activate an undeclared delivery target", func(t *testing.T) {
+		var sends atomic.Int32
+		receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			sends.Add(1)
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer receiver.Close()
+		for _, entry := range []string{"manager", "controller"} {
+			t.Run(entry, func(t *testing.T) {
+				saved := owner.ConnectorConfig.Create().SetTenantID(tenant.ID).SetName("webhook").SetProvider("historical-preserved").SetEnabled(false).SetSettings(`{"history":"preserved"}`).SaveX(ctx)
+				defer owner.ConnectorConfig.DeleteOneID(saved.ID).ExecX(ctx)
+				var before, after string
+				var countBefore, countAfter int
+				require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM connector_configs WHERE tenant_id=$1`, tenant.ID).Scan(&countBefore))
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(c)::text FROM connector_configs c WHERE id=$1`, saved.ID).Scan(&before))
+				reg := connector.NewRegistry()
+				reg.Register(func() connector.Connector { return webhookconnector.New() })
+				manager := connector.NewManager(reg, zap.NewNop().Sugar(), policy)
+				defer manager.CloseAll()
+				cfg := connector.Config{TenantID: tenant.ID, Name: "webhook", Provider: "request-target", Enabled: true, Settings: map[string]interface{}{"url": receiver.URL}}
+				beforeSends := sends.Load()
+				if entry == "manager" {
+					assert.ErrorIs(t, manager.Provision(ctx, cfg), executionscope.ErrDenied)
+				} else {
+					ctrl := controller.NewConnectorController(manager, reg, marketplace.New(), zap.NewNop().Sugar(), runtime, clients.System)
+					router := gin.New()
+					router.Use(func(c *gin.Context) { c.Set("tenant_id", tenant.ID); c.Next() })
+					router.POST("/connectors/configs", ctrl.Provision)
+					body, err := json.Marshal(dto.ProvisionConnectorRequest{Name: cfg.Name, Provider: cfg.Provider, Enabled: true, Settings: cfg.Settings})
+					require.NoError(t, err)
+					request := httptest.NewRequest(http.MethodPost, "/connectors/configs", strings.NewReader(string(body))).WithContext(ctx)
+					request.Header.Set("Content-Type", "application/json")
+					response := httptest.NewRecorder()
+					router.ServeHTTP(response, request)
+					assert.Equal(t, http.StatusForbidden, response.Code)
+				}
+				assert.Empty(t, manager.ListByTenant(tenant.ID), "request configuration is not trusted startup authority")
+				if _, exists := manager.Get(tenant.ID, "webhook"); exists {
+					// Exercise the real built-in connector, with only a loopback receiver.
+					require.NoError(t, manager.Send(ctx, tenant.ID, "webhook", &connector.Message{Type: "text", Content: "unadmitted target probe"}))
+				}
+				assert.Equal(t, beforeSends, sends.Load(), "an undeclared target must not become usable for outbound delivery")
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(c)::text FROM connector_configs c WHERE id=$1`, saved.ID).Scan(&after))
+				assert.JSONEq(t, before, after, "rejected activation must preserve historical configuration")
+				require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM connector_configs WHERE tenant_id=$1`, tenant.ID).Scan(&countAfter))
+				assert.Equal(t, countBefore, countAfter, "rejected activation must not insert another configuration")
+			})
+		}
+	})
 	t.Run("candidate connector read routes do not probe unscoped instances", func(t *testing.T) {
 		var calls, foreignCalls atomic.Int32
 		receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -1209,3 +1209,11 @@ s5-connector-restore-red.log真实PG复现直接LoadAll在候选策略下返回n
 s5-connector-restore-unit.log四包具名Capability/Health/Connector/Runtime/API race PASS；独立review_execution_scope_s1复核无新增阻断。实际poll/provider、受控scope新目标激活、直接Provision/Send/Get路径仍未完成，本轮仅历史恢复准入。CandidateSHA、候选停止及共享环境边界不变，S5/S6、鉴权及目标T3/T4/G3继续待验收。未执行共享数据库操作、真实企业/云调用或push/main合并。
 
 最终s5-connector-restore-full-private.log完整私有PG16/Redis/MinIO候选边界、构造保全及Stream恢复race PASS，日志无FAIL/SKIP/DATA RACE；s5-connector-restore-legacy-compile.log以integration_postgres标签和空匹配编译通过（no tests to run），未执行该标签的数据库测试；s5-connector-restore-build.log全后端build exit0。git diff --check通过。这些证据不替代Agent B目标PG17环境验收。
+
+### B2 S5 请求激活未声明连接器目标RED（2026-09-14）
+
+新增真实Manager与Gin Provision handler负测，使用生产builtin Webhook、仅loopback接收端以及受限runtime客户端。未声明目标的直接Provision返回nil、HTTP返回200，两者均发布实例；测试随后显式Manager.Send各产生一次本机请求，不能表述为Provision本身发送消息。HTTP路径还改写本子测试预置既存配置的provider、enabled、settings及时间等字段，原行JSON比较失败；该行是私有fixture新建，不是迁移前遗留行。新增租户配置行数保全断言避免未来拒绝时误插新行。
+
+s5-connector-request-activation-red.log与补充行数断言后的s5-connector-request-activation-final-red.log均为七项预期断言失败，无SKIP/DATA RACE。独立审阅确认RED有效且正确拒绝不会因发送探针被误判（无实例时不发送）。本轮只有测试和计划细化，未修复生产入口，不重复生产构建，也不将此前绿色套件当作当前版本放行依据。尚未测试Marketplace或生产认证中间件。
+
+独立只读调查还发现Marketplace先提交UpdateInstallationConfig后Provision；下一修复必须在首次持久化前拒绝，并在既有ExecutionConfig增加冻结的可信精确目标声明、复用唯一Manager和manifest初始化行为约束。既有通知/Webhook worker仍拥有业务投递权限，不因声明目标存在而开放Test/诊断/polling；详见设计worktree现有S5实施范围。CandidateSHA和停止状态保持不变，完整目标未完成，无共享数据库操作、真实企业外呼、push或main合并。
