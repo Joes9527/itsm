@@ -205,6 +205,8 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 连接器可信目标激活实施范围（2026-09-14，accepted，尚未实现）：
 
+可信启动增量`5ebf4a7df`：API消费者前由唯一Manager预检整批local_only manifest、统一初始化、核对通用目的地身份并原子发布；失败清理当前及prepared对象，Close等待在途初始化，后续工具队列启动失败先Close再清理目标。真实bootstrap RED→GREEN、独立P2关闭竞争RED→GREEN、具名race与最终后端build通过；候选Webhook ack恢复旅程已改为声明激活，真实worker发送/去重通过。完整私有suite仍有507f62293七项已知失败，整体FAIL。启动前普通配置和Marketplace持久化、裸Send/Get及全部provider边界未关闭，因此下方复合项继续未完成，CandidateSHA与停止状态不变。详细证据与100ms关闭观察窗口、非所有消费者故障穷举等限制见T1。
+
 前置RED `507f62293`：真实Manager/Gin Provision handler允许未声明candidate目标，测试随后通过builtin Webhook各向loopback发送一次；HTTP还改写私有fixture既存配置。s5-connector-request-activation-final-red.log七项预期失败，无skip/race，独立复核有效。配置行数保全断言已补；不覆盖Marketplace、生产认证或迁移前遗留数据。当前含新用例的测试为RED，生产未修复，不能引用此前绿色结果放行。
 
 - [x] 在现有ExecutionConfig中声明精确tenant/scope、connector name/provider、允许的既有投递能力和不可变配置身份；验证scope归属、能力开启、重复实例键，构造时深复制。声明来自可信启动配置，凭证沿既有安全配置来源解析，不写日志或提交秘密。前置提交`0347fdc78`：具名config/database race、完整config包及最终后端build通过，独立审阅无阻断；修复既有环境解析不递归列表对象的问题。实际目标身份核验和Manager消费仍属于下项，未实现。目的地摘要不等于业务投递授权；outbox不能授权所有handler。配置数值有损JSON往返拒绝，不恢复加载前精度。完整私有suite仍仅含507f62293七项已知失败，整体为FAIL，详细证据见T1。
