@@ -456,3 +456,12 @@ database/connector/.../bootstrap全包race、既定私有PG16/Redis/MinIO suite�
 Graph/SMTP loopback、目标变化零调用、发送中换代unknown、v2形状及调用身份测试通过；密码轮换仅证明允许进入一次注入sender尝试，不代表实际认证通过，多收件人分类为单元证据。具名service/Graph race、connector/.../internal/bootstrap/database全包race、既定私有PG16/Redis/MinIO suite及全后端build通过；首次回归路径误写bootstrap的setup失败已保留记录并更正，详见T1交接。
 
 原producer/worker/Incident outbox尚未调用此入口，原队列重绑RED仍未关闭。下一步在原业务事务绑定并持久化v2目标，worker验证后调用SendToTarget，保留真实正常发送、重绑拒绝和领取/回执覆盖。S5/S6/T3/T4/G3仍未完成，CandidateSHA和候选停止状态不变，无WSL/共享数据库操作、企业外发、push/main合并。
+
+
+### S5 notification邮件v2生产与队列接入检查点（2026-09-14）
+
+实现58af40837将原enqueue/creation/workflow CC/BPMN CC统一沿BindNotificationTargetTx写入v2目标；worker解码持久字段、拒绝旧NULL、按SendToTarget执行。发送前错误明确not_accepted，发送后目标变化unknown不重发；重放不重新选目标。原重绑RED已由真实Graph队列分别mailbox/端点/client身份变化零HTTP、稳定sent、in-flight unknown且不重发覆盖，SMTP完整事务与loopback也通过。缺目标整事务回滚；notification禁用下完整目标仍可入队且worker逐字段保全。
+
+旧service/CC夹具已更新可信配置与租户，不删正常发送/重试/日志/回滚断言。历史manual/edit仅在构造期间采用显式站内偏好生成真实回执，独立旧email NULL协议夹具和044→045保全断言不变。候选PG producer用任务私有SMTP目标且监听器cleanup断言零连接；缺依赖负例保留，不把配置存在或owner double当作发送证据。最终相关具名race、既定私有PG16/Redis/MinIO suite、全后端build及独立复审通过，详见T1。
+
+下一步Incident原outbox邮件typed目标、版本/完整payload摘要与receipt、旧载荷策略；不得造新队列或consumer补绑。Graph candidate local_only实际激活合同及完整S5/S6/G2/T3/T4/G3仍未完成。固定CandidateSHA和候选停止状态不变，未操作WSL/共享数据库、未企业外发、未push/main合并。
