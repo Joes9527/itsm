@@ -40,6 +40,8 @@ const (
 )
 
 type ToolQueue struct {
+	admit      func(context.Context, ToolJob) error
+	admissions sync.WaitGroup
 	execution  *database.ExecutionPolicy
 	mu         sync.Mutex
 	cond       *sync.Cond
@@ -65,18 +67,18 @@ func NewToolQueue(client *ent.Client, tools *ToolRegistry, app creation.Applicat
 		panic("tool queue requires the shared creation application and tenant client")
 	}
 	q := &ToolQueue{execution: execution, client: client, tools: tools, creation: app, tickets: tickets}
-	q.initialize(capacity, logger, q.ProcessJob)
+	q.initialize(capacity, logger, q.ProcessJob, func(ctx context.Context, job ToolJob) error { _, _, err := q.loadApprovedTool(ctx, job); return err })
 	return q
 }
 
-func (q *ToolQueue) initialize(capacity int, logger *zap.SugaredLogger, process func(context.Context, ToolJob) error) {
+func (q *ToolQueue) initialize(capacity int, logger *zap.SugaredLogger, process func(context.Context, ToolJob) error, admit func(context.Context, ToolJob) error) {
 	if capacity <= 0 {
 		capacity = 100
 	}
 	if logger == nil {
 		logger = zap.NewNop().Sugar()
 	}
-	if process == nil {
+	if process == nil || admit == nil {
 		panic("tool queue requires a job processor")
 	}
 	q.capacity = capacity
@@ -85,6 +87,7 @@ func (q *ToolQueue) initialize(capacity int, logger *zap.SugaredLogger, process 
 	q.stopping = make(chan struct{})
 	q.stopped = make(chan struct{})
 	q.process = process
+	q.admit = admit
 	q.logger = logger
 	q.cond = sync.NewCond(&q.mu)
 }
@@ -126,11 +129,26 @@ func (q *ToolQueue) Close() {
 		q.mu.Unlock()
 	})
 	<-q.stopped
+	q.admissions.Wait()
 }
 
 func (q *ToolQueue) Enqueue(job ToolJob) error {
 	if job.TenantID <= 0 || job.InvocationID <= 0 {
 		return fmt.Errorf("tool invocation identity is required")
+	}
+	q.mu.Lock()
+	if q.state != toolQueueAccepting {
+		q.mu.Unlock()
+		return fmt.Errorf("%w; approved invocation remains pending", ErrToolQueueClosed)
+	}
+	q.admissions.Add(1)
+	parent := q.workerCtx
+	q.mu.Unlock()
+	defer q.admissions.Done()
+	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
+	defer cancel()
+	if err := q.admit(ctx, job); err != nil {
+		return err
 	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -177,57 +195,66 @@ func (q *ToolQueue) worker() {
 
 // ProcessJob rechecks the persisted approval and original caller at the execution
 // boundary. The invocation ID is the stable source identity across lost acks.
-func (q *ToolQueue) ProcessJob(ctx context.Context, job ToolJob) error {
+// loadApprovedTool reads current source, approval and identities in one transaction.
+// Both enqueue and execution call it; business writes must still revalidate in their own transaction.
+func (q *ToolQueue) loadApprovedTool(ctx context.Context, job ToolJob) (inv *ent.ToolInvocation, actor *ent.User, err error) {
 	if job.TenantID <= 0 || job.InvocationID <= 0 {
-		return creation.NewInvalidCommand("tool invocation identity is required", creation.FieldError{}, nil)
+		return nil, nil, creation.NewInvalidCommand("tool invocation identity is required", creation.FieldError{}, nil)
 	}
 	if ctx == nil || tenantctx.IsSystemBypass(ctx) {
-		return fmt.Errorf("explicit tool execution context required")
+		return nil, nil, fmt.Errorf("explicit tool execution context required")
 	}
 	if tenantID, ok := tenantctx.TenantID(ctx); ok && tenantID != job.TenantID {
-		return fmt.Errorf("tool execution tenant mismatch")
+		return nil, nil, fmt.Errorf("tool execution tenant mismatch")
 	}
 	ctx = tenantctx.WithTenantID(ctx, job.TenantID)
-	if q.execution == nil {
-		return fmt.Errorf("tool execution policy required")
-	}
-	scopeTx, scopeErr := q.client.Tx(ctx)
-	if scopeErr != nil {
-		return scopeErr
-	}
-	scopeErr = q.execution.BindEnt(ctx, scopeTx, job.TenantID)
-	if scopeErr == nil {
-		scopeErr = q.execution.RequireEntToolInvocation(ctx, scopeTx, job.TenantID, job.InvocationID)
-	}
-	closeErr := scopeTx.Rollback()
-	if scopeErr != nil || closeErr != nil {
-		return errors.Join(scopeErr, closeErr)
-	}
-
-	inv, err := q.client.ToolInvocation.Query().Where(toolinvocation.IDEQ(job.InvocationID), toolinvocation.TenantIDEQ(job.TenantID)).Only(ctx)
-	if err != nil {
-		return err
-	}
-	if !inv.NeedsApproval || inv.ApprovalState != "approved" || inv.ApprovedBy <= 0 || inv.ApprovedAt.IsZero() || inv.UserID <= 0 || inv.DryRun {
-		return creation.NewPermissionDenied("approved invocation and original actor are required", nil)
-	}
-	actor, err := q.client.User.Query().Where(user.IDEQ(inv.UserID), user.TenantIDEQ(inv.TenantID), user.ActiveEQ(true)).Only(ctx)
-	if err != nil {
-		return creation.NewPermissionDenied("tool actor is unavailable", err)
-	}
-	approver, err := q.client.User.Query().Where(user.IDEQ(inv.ApprovedBy), user.TenantIDEQ(inv.TenantID), user.ActiveEQ(true)).Only(ctx)
-	if err != nil {
-		return creation.NewPermissionDenied("tool approver is unavailable", err)
+	if q.execution == nil || q.client == nil {
+		return nil, nil, fmt.Errorf("tool execution dependencies required")
 	}
 	tx, err := q.client.Tx(ctx)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	err = authorization.RequireCurrentPermission(ctx, tx, creation.Identity{TenantID: inv.TenantID, ActorID: approver.ID, RequesterID: approver.ID, Role: approver.Role}, "ai", "write")
-	_ = tx.Rollback()
+	defer func() {
+		if closeErr := tx.Rollback(); closeErr != nil {
+			inv = nil
+			actor = nil
+			err = errors.Join(err, closeErr)
+		}
+	}()
+	if err = q.execution.BindEnt(ctx, tx, job.TenantID); err != nil {
+		return nil, nil, err
+	}
+	if err = q.execution.RequireEntToolInvocation(ctx, tx, job.TenantID, job.InvocationID); err != nil {
+		return nil, nil, err
+	}
+	inv, err = tx.ToolInvocation.Query().Where(toolinvocation.IDEQ(job.InvocationID), toolinvocation.TenantIDEQ(job.TenantID)).Only(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !inv.NeedsApproval || inv.ApprovalState != "approved" || inv.ApprovedBy <= 0 || inv.ApprovedAt.IsZero() || inv.UserID <= 0 || inv.DryRun {
+		return nil, nil, creation.NewPermissionDenied("approved invocation and original actor are required", nil)
+	}
+	actor, err = tx.User.Query().Where(user.IDEQ(inv.UserID), user.TenantIDEQ(inv.TenantID), user.ActiveEQ(true)).Only(ctx)
+	if err != nil {
+		return nil, nil, creation.NewPermissionDenied("tool actor is unavailable", err)
+	}
+	approver, err := tx.User.Query().Where(user.IDEQ(inv.ApprovedBy), user.TenantIDEQ(inv.TenantID), user.ActiveEQ(true)).Only(ctx)
+	if err != nil {
+		return nil, nil, creation.NewPermissionDenied("tool approver is unavailable", err)
+	}
+	if err = authorization.RequireCurrentPermission(ctx, tx, creation.Identity{TenantID: inv.TenantID, ActorID: approver.ID, RequesterID: approver.ID, Role: approver.Role}, "ai", "write"); err != nil {
+		return nil, nil, err
+	}
+	return inv, actor, nil
+}
+
+func (q *ToolQueue) ProcessJob(ctx context.Context, job ToolJob) error {
+	inv, actor, err := q.loadApprovedTool(ctx, job)
 	if err != nil {
 		return err
 	}
+	ctx = tenantctx.WithTenantID(ctx, job.TenantID)
 	var result any
 	switch inv.ToolName {
 	case "create_ticket":

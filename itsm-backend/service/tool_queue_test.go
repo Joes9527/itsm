@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"itsm-backend/ent/enttest"
 
@@ -18,7 +19,7 @@ import (
 func newLifecycleTestQueue(t *testing.T, capacity int, processor func(context.Context, ToolJob) error, logger *zap.SugaredLogger) *ToolQueue {
 	t.Helper()
 	q := &ToolQueue{}
-	q.initialize(capacity, logger, processor)
+	q.initialize(capacity, logger, processor, allowLifecycleAdmission)
 	require.NoError(t, q.Start(context.Background()))
 	t.Cleanup(q.Close)
 	return q
@@ -31,7 +32,7 @@ func TestToolQueueRequiresExplicitStartAndHonorsCancellation(t *testing.T) {
 		close(started)
 		<-ctx.Done()
 		return ctx.Err()
-	})
+	}, allowLifecycleAdmission)
 	t.Cleanup(q.Close)
 	require.Error(t, q.Enqueue(ToolJob{InvocationID: 1, TenantID: 1}))
 	ctx, cancel := context.WithCancel(context.Background())
@@ -47,7 +48,7 @@ func TestToolQueueRequiresExplicitStartAndHonorsCancellation(t *testing.T) {
 
 func TestToolQueueCanCloseBeforeStart(t *testing.T) {
 	q := &ToolQueue{}
-	q.initialize(1, nil, func(context.Context, ToolJob) error { t.Fatal("unstarted processor ran"); return nil })
+	q.initialize(1, nil, func(context.Context, ToolJob) error { t.Fatal("unstarted processor ran"); return nil }, allowLifecycleAdmission)
 	q.Close()
 	require.Error(t, q.Start(context.Background()))
 }
@@ -250,4 +251,66 @@ func TestToolQueueRejectsInvalidIdentity(t *testing.T) {
 		return errors.New("must not run")
 	}, zap.NewNop().Sugar())
 	require.Error(t, q.Enqueue(ToolJob{}))
+}
+
+func allowLifecycleAdmission(ctx context.Context, _ ToolJob) error { return ctx.Err() }
+
+func TestToolQueueCloseWaitsForAdmissionAndPreventsLateEnqueue(t *testing.T) {
+	for _, lateSuccess := range []bool{false, true} {
+		name := "honors cancellation"
+		if lateSuccess {
+			name = "returns success after cancellation"
+		}
+		t.Run(name, func(t *testing.T) {
+			q := &ToolQueue{}
+			entered, canceled, release := make(chan struct{}), make(chan struct{}), make(chan struct{})
+			var releaseOnce sync.Once
+			processed := make(chan struct{}, 1)
+			q.initialize(1, nil, func(context.Context, ToolJob) error { processed <- struct{}{}; return nil }, func(ctx context.Context, _ ToolJob) error {
+				close(entered)
+				<-ctx.Done()
+				close(canceled)
+				<-release
+				if lateSuccess {
+					return nil
+				}
+				return ctx.Err()
+			})
+			require.NoError(t, q.Start(context.Background()))
+			t.Cleanup(func() { releaseOnce.Do(func() { close(release) }); q.Close() })
+			await := func(ch <-chan struct{}) {
+				t.Helper()
+				select {
+				case <-ch:
+				case <-time.After(5 * time.Second):
+					t.Fatal("queue lifecycle barrier timed out")
+				}
+			}
+			enqueueDone := make(chan error, 1)
+			go func() { enqueueDone <- q.Enqueue(ToolJob{InvocationID: 1, TenantID: 1}) }()
+			await(entered)
+			closed := make(chan struct{})
+			go func() { q.Close(); close(closed) }()
+			await(canceled)
+			select {
+			case <-closed:
+				t.Error("Close returned before admission exited")
+			default:
+			}
+			releaseOnce.Do(func() { close(release) })
+			select {
+			case err := <-enqueueDone:
+				if lateSuccess {
+					require.ErrorIs(t, err, ErrToolQueueClosed)
+				} else {
+					require.ErrorIs(t, err, context.Canceled)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("enqueue did not return")
+			}
+			await(closed)
+			require.Empty(t, processed)
+			require.ErrorIs(t, q.Enqueue(ToolJob{InvocationID: 2, TenantID: 1}), ErrToolQueueClosed)
+		})
+	}
 }

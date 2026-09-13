@@ -1010,3 +1010,14 @@ S5不可处理消息的完整处置、进程重启及其它异步入口继续未
 `s5-tool-origin-regression.log` database/service/bootstrap及既有工具集成的具名定向race通过；不是四个包全部测试。独立review_execution_scope_s1最终复核P2关闭，无新增预检阻断。`s5-tool-origin-full-private.log` 完整私有PG/Redis/MinIO候选边界、两模式Webhook/审计恢复、Stream消费及进程终止恢复race PASS，无skip/race；`s5-tool-origin-build.log` 全后端build exit0，git diff --check通过。
 
 该检查点只关闭已复现的历史调用直接执行入口；enqueue、AI创建及审批原事务、业务首次写事务再次校验、完成/失败回写条件以及新表运行时权限审计仍未完成。独立预检不能关闭其后的撤权竞争，不用它宣称S5或真实候选业务准入。CandidateSHA及候选未启动状态不变，无共享环境改动、企业外呼、push/main合并。
+
+
+### B2 S5 工具入队与执行共用来源和审批预检（2026-09-13）
+
+在 `677fdd6b2` 后新增真实Enqueue断言，`s5-tool-enqueue-red.log` 复现历史调用入队返回nil；执行预检随后拒绝不代表入队已受控。现在Enqueue和ProcessJob复用loadApprovedTool，在一个事务读取041来源、当前审批状态、有效调用者/审批者及既有ai:write权限，删除分散的重复预检逻辑。执行仍重新调用，不信任内存任务已有检查结果；新工具通过实际worker完成，再直接重放只新增一个WorkItem/member。该读取事务使用默认隔离，不声称一致快照/审批锁，也不替代业务原事务授权。
+
+入队在accepting状态锁内登记进行中检查，锁外以worker生命周期派生30秒上限context校验，完成后锁内重查状态与容量。Close取消worker/context并等待worker及所有入队检查退出；Add与停止状态切换同锁，关闭后没有新Add。测试初始化显式注入测试admit函数，生产构造固定真实校验且不接受nil，不新增配置旁路。新TestToolQueueCloseWaitsForAdmissionAndPreventsLateEnqueue在校验收到取消后故意阻塞，证明Close仍等待，释放后没有业务调用且再入队ErrClosed。
+
+`s5-tool-enqueue-green.log` 原入队RED→GREEN；补强后 `s5-tool-enqueue-lifecycle.log` 工具/生命周期及既有工具集成的具名定向race PASS。`s5-tool-enqueue-full-private.log` 完整候选边界/PG/Redis/MinIO构造保全、审计/Webhook恢复及Stream/子进程恢复race PASS，无skip/race；包含pending、rejected、dry_run、inactive actor入队拒绝且调用整行不变/无工单新增。独立review_execution_scope_s1复核限定入队增量无新增阻断。`s5-tool-enqueue-build.log` 全后端build exit0，git diff --check通过。审阅后的测试补强覆盖忽略取消仍返回nil时最终ErrClosed拒绝，及各等待点5秒超时；`s5-tool-enqueue-late-success.log` 两种取消行为race PASS，生产代码未再变更。
+
+尚未完成：AI创建/审批写入原事务、业务首次写事务复核、结果条件回写、新表运行角色准入。当前actor/approver查询沿用既有PermissionDenied包装并保留cause，不把它说成全部基础设施错误分类已统一。CandidateSHA及候选未启动状态不变，S5和后续G2/G3未放行；没有共享环境、B配置、企业外呼、push/main合并。

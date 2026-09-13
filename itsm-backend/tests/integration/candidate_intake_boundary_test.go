@@ -482,6 +482,8 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		beforeMembers := memberCount()
 		queue := service.NewToolQueue(runtime, nil, app, nil, 1, zap.NewNop().Sugar(), policy)
 		defer queue.Close()
+		require.NoError(t, queue.Start(ctx))
+		assert.ErrorIs(t, queue.Enqueue(service.ToolJob{InvocationID: historicalTool.ID, TenantID: tenant.ID}), executionscope.ErrDenied, "history must be rejected before enqueue")
 		err = queue.ProcessJob(ctx, service.ToolJob{InvocationID: historicalTool.ID, TenantID: tenant.ID})
 		assert.ErrorIs(t, err, executionscope.ErrDenied, "copied approval must not authorize new candidate work")
 		assert.JSONEq(t, before, snapshot(), "historical invocation must remain unchanged")
@@ -495,7 +497,33 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit())
 		freshJob := service.ToolJob{InvocationID: fresh.ID, TenantID: tenant.ID}
-		require.NoError(t, queue.ProcessJob(ctx, freshJob))
+		for _, state := range []string{"pending", "rejected", "dry_run", "inactive_actor"} {
+			t.Run("enqueue rejects "+state, func(t *testing.T) {
+				if state == "inactive_actor" {
+					owner.User.UpdateOneID(actor.ID).SetActive(false).ExecX(ctx)
+				} else if state == "dry_run" {
+					owner.ToolInvocation.UpdateOneID(fresh.ID).SetDryRun(true).ExecX(ctx)
+				} else {
+					owner.ToolInvocation.UpdateOneID(fresh.ID).SetApprovalState(state).ExecX(ctx)
+				}
+				defer func() {
+					owner.User.UpdateOneID(actor.ID).SetActive(true).ExecX(ctx)
+					owner.ToolInvocation.UpdateOneID(fresh.ID).SetApprovalState("approved").SetDryRun(false).ExecX(ctx)
+				}()
+				var beforeCall, afterCall string
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, fresh.ID).Scan(&beforeCall))
+				require.Error(t, queue.Enqueue(freshJob))
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, fresh.ID).Scan(&afterCall))
+				require.JSONEq(t, beforeCall, afterCall)
+				require.Equal(t, beforeItems, owner.Ticket.Query().CountX(ctx))
+			})
+		}
+		require.NoError(t, queue.Enqueue(freshJob))
+		require.Eventually(t, func() bool {
+			row, err := owner.ToolInvocation.Get(ctx, fresh.ID)
+			return err == nil && row.Status == "done"
+		}, 3*time.Second, 20*time.Millisecond)
+
 		require.NoError(t, queue.ProcessJob(ctx, freshJob))
 		require.Equal(t, beforeItems+1, owner.Ticket.Query().CountX(ctx))
 		require.Equal(t, beforeMembers+1, memberCount())
