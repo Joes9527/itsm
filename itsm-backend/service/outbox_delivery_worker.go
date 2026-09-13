@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common/executionscope"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
 
@@ -93,9 +94,18 @@ func NewOutboxDeliveryWorker(
 }
 
 func (w *OutboxDeliveryWorker) DispatchOnce(ctx context.Context) error {
+	if ctx == nil {
+		return executionscope.ErrDenied
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	// The transport polls across tenants; only its separately configured repository
 	// may hold database privileges for that server-owned operation.
 	ctx = tenantctx.SystemContext(ctx, "outbox:poll", "claim and acknowledge tenant delivery events")
+	if err := w.repository.execution.RequireWorkerCapability(ctx, "outbox"); err != nil {
+		return err
+	}
 	blocked, err := w.repository.BlockUnknownPendingEventTypes(ctx, w.now().UTC(), w.config.BatchSize, w.registry.KnownTypes())
 	if err != nil {
 		return fmt.Errorf("block unknown outbox event types: %w", err)

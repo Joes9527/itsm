@@ -414,3 +414,8 @@ EmailService.SendToTarget只执行已记录且通过v2校验的目标，要求�
 Incident邮件告警沿原outbox写入v2载荷，冻结WorkItem/Incident/Alert/tenant/event、单收件人、正文、actor/source/correlation和EmailTarget；接受审计在同一业务事务保存唯一事件摘要清单。创建入口要求显式正actor及非空source，并用原事务查询同租户active用户；缺上下文不再自动补0/system。HTTP创建告警及升级入口传播登录身份，明确身份拒绝返回403；这不替代入口RBAC，也不证明并发撤权或消费时当前权限复核。
 
 Incident消费者核验持久claim/token/lease/attempt、源记录与成员关系、接受审计及完整载荷摘要，随后按记录目标调用SendToTarget；v1、未知字段/渠道、篡改内容或目标、冲突回执均拒绝。发送后重验并保存稳定投递回执；已存在匹配回执、发送后回执/发布故障按unknown处理，恢复不自动重发。仅任务私有PG和loopback SMTP已提供协议证据，不能替代候选受限角色准入、Graph实际激活或企业发送验收。
+
+
+共享OutboxDeliveryWorker.DispatchOnce在任何unknown事件阻断、租约恢复、领取或attempt写入前核验同一repository冻结policy的outbox能力；禁用返回明确拒绝并保全队列，不等到handler才拒绝。此运行级检查要求内部system上下文，但不授予数据库权限；原WorkerPredicate、业务RLS、来源/member与专业owner能力仍独立校验。合法业务事务在执行禁用期间仍可接受完整意图。测试fixture的Standard()默认继续禁用，需要运行worker的成功用例显式Standard("outbox")。
+
+候选Incident SMTP的私有PG职责链现已验证：真实Intake创建来源，非super/non-bypass租户runtime写原意图与投递审计，独立非super system队列连接领取/推进；system本身具BYPASSRLS且无tickets UPDATE，隔离依赖现有WorkerPredicate，不能称其无绕过能力。禁用下完整outbox/audit不变，启用后本机SMTP只接受一次且其他outbox行不变；incident.created由既有专业消费者保留，本协议用例不运行它。该证据不替代WSL PG17恢复、所有角色准入、Graph准入或完整S5。

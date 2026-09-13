@@ -63,3 +63,32 @@ func TestStartupCapabilityRequiresExplicitStandardSystemContext(t *testing.T) {
 	cancel()
 	require.ErrorIs(t, enabled.RequireStartupCapability(canceled, "connector_poll"), context.Canceled)
 }
+
+func TestExecutionWorkerCapabilityRequiresExplicitFrozenPermission(t *testing.T) {
+	for _, mode := range []string{"standard", "candidate"} {
+		t.Run(mode, func(t *testing.T) {
+			cfg := config.ExecutionConfig{Mode: mode, DeploymentID: "worker-gate", Capabilities: map[string]string{"outbox": "enabled"}}
+			if mode == "candidate" {
+				cfg.Scopes = []config.ExecutionScopeConfig{{TenantID: 1, ScopeID: "149ff1af-a27c-47c7-827f-103271130bb9"}}
+				cfg.Capabilities["outbox"] = "scoped"
+			}
+			enabled, err := NewExecutionPolicy(cfg)
+			require.NoError(t, err)
+			cfg.Capabilities["outbox"] = "disabled"
+			disabled, err := NewExecutionPolicy(cfg)
+			require.NoError(t, err)
+			ctx := tenantctx.SystemContext(context.Background(), "outbox:poll", "worker gate test")
+			require.NoError(t, enabled.RequireWorkerCapability(ctx, "outbox"))
+			require.ErrorIs(t, disabled.RequireWorkerCapability(ctx, "outbox"), executionscope.ErrDenied)
+			require.ErrorIs(t, enabled.RequireWorkerCapability(ctx, "unknown"), executionscope.ErrDenied)
+			require.ErrorIs(t, enabled.RequireWorkerCapability(context.Background(), "outbox"), executionscope.ErrDenied)
+			require.ErrorIs(t, enabled.RequireWorkerCapability(tenantctx.WithTenantID(ctx, 1), "outbox"), executionscope.ErrDenied)
+			require.ErrorIs(t, enabled.RequireWorkerCapability(nil, "outbox"), executionscope.ErrDenied)
+			cancelled, cancel := context.WithCancel(ctx)
+			cancel()
+			require.ErrorIs(t, enabled.RequireWorkerCapability(cancelled, "outbox"), context.Canceled)
+			var absent *ExecutionPolicy
+			require.ErrorIs(t, absent.RequireWorkerCapability(ctx, "outbox"), executionscope.ErrDenied)
+		})
+	}
+}

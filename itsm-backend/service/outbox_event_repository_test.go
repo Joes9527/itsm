@@ -413,7 +413,7 @@ func newOutboxRepositoryWithDriver(t *testing.T, driverName string) (*OutboxEven
 	db.SetMaxIdleConns(4)
 	client := enttest.NewClient(t, enttest.WithOptions(ent.Driver(entsql.OpenDB(dialect.SQLite, db))))
 	t.Cleanup(func() { _ = client.Close() })
-	return NewOutboxEventRepository(client, executionfixture.Standard()), client, db
+	return NewOutboxEventRepository(client, executionfixture.Standard("outbox")), client, db
 }
 
 type sqliteOutboxUpdateTracker struct {

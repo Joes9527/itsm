@@ -217,3 +217,19 @@ func (p *ExecutionPolicy) RequireStartupCapability(ctx context.Context, name str
 	}
 	return nil
 }
+
+// RequireWorkerCapability checks the frozen run-level switch before a worker
+// scans or changes queues. It does not grant a database role, tenant access or
+// WorkItem membership; repositories must still enforce their existing gates.
+func (p *ExecutionPolicy) RequireWorkerCapability(ctx context.Context, name string) error {
+	if p == nil || ctx == nil || !tenantctx.IsSystemBypass(ctx) {
+		return executionscope.ErrDenied
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !p.capabilities[name] {
+		return fmt.Errorf("%w: worker capability %s is disabled", executionscope.ErrDenied, name)
+	}
+	return nil
+}

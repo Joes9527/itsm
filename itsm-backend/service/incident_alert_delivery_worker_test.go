@@ -8,6 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/common/executionscope"
+	"itsm-backend/config"
+	"itsm-backend/database"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/outboxevent"
@@ -333,5 +336,67 @@ func validIncidentAlertDeliveryPayload(eventID string) incidentAlertDeliveryPayl
 		Version: 1, EventID: eventID, TenantID: 7, AlertID: 42, Channel: "email",
 		Recipients: []string{"operator@example.com"}, Subject: "CPU high", Message: "CPU exceeded threshold",
 		ActorID: 9, Source: "user", CorrelationID: "request-42",
+	}
+}
+
+func TestOutboxDeliveryWorkerDisabledPreservesEveryQueueState(t *testing.T) {
+	for _, mode := range []string{"standard", "candidate"} {
+		t.Run(mode, func(t *testing.T) {
+			_, client, db := newOutboxRepositoryWithDriver(t, "sqlite3")
+			ctx := context.Background()
+			for _, state := range []string{"pending", "unknown", "expired"} {
+				kind := incidentAlertDeliveryEventType
+				if state == "unknown" {
+					kind = "unregistered-private-event"
+				}
+				row := client.OutboxEvent.Create().SetEventID("disabled-" + state).SetEventType(kind).SetTenantID(1).SetAggregateType("incident_alert").SetAggregateID("1").SetPayload(json.RawMessage(`{"private":"original"}`)).SetNextAttemptAt(time.Now().Add(-time.Hour))
+				if state == "expired" {
+					row.SetStatus("publishing").SetClaimToken("original-claim").SetClaimExpiresAt(time.Now().Add(-time.Minute)).SetLastError("delivery_attempt_started:disabled-expired")
+				}
+				row.SaveX(ctx)
+			}
+			snapshot := func(query string) [][]any {
+				rows, err := db.QueryContext(ctx, query)
+				require.NoError(t, err)
+				defer rows.Close()
+				columns, err := rows.Columns()
+				require.NoError(t, err)
+				var result [][]any
+				for rows.Next() {
+					values := make([]any, len(columns))
+					pointers := make([]any, len(columns))
+					for i := range values {
+						pointers[i] = &values[i]
+					}
+					require.NoError(t, rows.Scan(pointers...))
+					for i, value := range values {
+						if bytes, ok := value.([]byte); ok {
+							values[i] = append([]byte(nil), bytes...)
+						}
+					}
+					result = append(result, values)
+				}
+				require.NoError(t, rows.Err())
+				return result
+			}
+			before, audits := snapshot("SELECT * FROM outbox_events ORDER BY id"), snapshot("SELECT * FROM audit_logs ORDER BY id")
+			cfg := config.ExecutionConfig{Mode: mode, DeploymentID: "disabled-worker"}
+			if mode == "candidate" {
+				cfg.Scopes = []config.ExecutionScopeConfig{{TenantID: 1, ScopeID: "149ff1af-a27c-47c7-827f-103271130bb9"}}
+			}
+			policy, err := database.NewExecutionPolicy(cfg)
+			require.NoError(t, err)
+			sender := &recordingIncidentAlertEmailSender{}
+			worker, err := NewOutboxDeliveryWorker(NewOutboxEventRepository(client, policy), OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: time.Second, MaxAttempts: 3}, zaptest.NewLogger(t).Sugar(), testOutboxRegistry(t, sender))
+			require.NoError(t, err)
+			require.ErrorIs(t, worker.DispatchOnce(ctx), executionscope.ErrDenied)
+			require.ErrorIs(t, worker.DispatchOnce(nil), executionscope.ErrDenied)
+			cancelled, cancel := context.WithCancel(ctx)
+			cancel()
+			require.ErrorIs(t, worker.DispatchOnce(cancelled), context.Canceled)
+			require.Equal(t, before, snapshot("SELECT * FROM outbox_events ORDER BY id"))
+			require.Equal(t, audits, snapshot("SELECT * FROM audit_logs ORDER BY id"))
+			require.Empty(t, sender.deliveries)
+		})
 	}
 }

@@ -6,8 +6,12 @@ import (
 	"itsm-backend/database"
 )
 
-func Standard() *database.ExecutionPolicy {
-	policy, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "test-standard"})
+func Standard(enabledCapabilities ...string) *database.ExecutionPolicy {
+	capabilities := make(map[string]string, len(enabledCapabilities))
+	for _, capability := range enabledCapabilities {
+		capabilities[capability] = "enabled"
+	}
+	policy, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "test-standard", Capabilities: capabilities})
 	if err != nil {
 		panic(err)
 	}

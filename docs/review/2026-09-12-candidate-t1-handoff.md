@@ -1615,3 +1615,18 @@ actor/source仍需逐调用入口核对：HTTP WithIncidentAlertActor(user)、in
 最终s5-incident-claims-source-snapshot.log全部29协议场景race PASS，无FAIL/SKIP/DATA RACE；git diff --check通过，独立最终只读复审无本测试增量阻断。本轮仅测试改动，未重复不受影响的全后端构建或全私有suite；其前次生产检查点证据仍见上一节。没有活跃Go进程。
 
 本证据是standard owner下真实领取后的直接handler发送前预检，原12例继续覆盖完整worker；不等同并发撤权、candidate受限角色发送或新的完整worker恢复证明。下一步仍为candidate角色发送/Graph准入及完整S5/S6/G2/T3/T4/G3。固定CandidateSHA与候选停止状态不变，无WSL/共享数据库操作、企业外发、push/main合并。
+
+
+### B2 S5 候选Incident邮件职责链及共享Outbox禁用门禁（2026-09-14）
+
+新增独立incident_email_candidate_roles_test.go helper，复用既定任务私有PG候选角色与RLS构造；主journey仅以真实Intake创建来源并调用helper。对应真实底层连接池核验runtime非super/non-bypass且有业务写权限、system非super/BYPASSRLS且无tickets UPDATE。system仍依赖原WorkerPredicate隔离，不能称其无绕过能力。首次通过保护Ent driver做raw目录查询被不支持接口拒绝，已改为实际同一底层池诊断，不改变业务连接。
+
+真实RED s5-incident-candidate-roles-pools.log：outbox disabled下新意图仍被直接DispatchOnce领取并标记blocked，违反禁用保全。修复共享worker在nil/cancel检查与原SystemContext之后、任何scan/unknown-block/recovery/claim之前调用同repository冻结RequireWorkerCapability("outbox")。新运行级gate不取代scope/role/member，也不阻止原业务事务接受完整意图；handler专业owner能力检查保留。RequireStartupCapability仍只负责standard启动，不放宽它。
+
+候选原runtime producer→system queue worker→runtime Incident handler→真实本机SMTP已通过：disabled完整outbox/audit保全，enabled记录目标实际RCPT/正文仅一次接受、持久receipt和published；二次扫描不重发；其他全部outbox行逐行原始JSON不变。incident.created属于既有专业consumer，本协议单独保留，不运行或伪造完成它。此证据不等于所有候选角色准入、Graph或WSL可交付。
+
+新增standard/candidate禁用矩阵：已注册pending、unknown pending、expired publishing带attempt marker均以SELECT *完整SQL快照核对outbox/audit保全、零sender；nil/cancel拒绝。policy覆盖冻结配置、正确内部ctx、缺/错误ctx、未知cap、nil policy、取消。通用Standard()默认不变，仅增加显式可选cap；旧outbox成功fixture启用outbox，既有候选共享worker fixture明确scoped；新禁用负例独立配置，未删负例。
+
+验证：s5-incident-candidate-roles-gate.log真实受限职责链race PASS；s5-outbox-capability-regression.log service/database具名race PASS；s5-outbox-capability-gate-matrix.log新门禁矩阵PASS；s5-outbox-capability-full-private-first.log既定私有PG16/Redis/MinIO完整suite含29协议及新候选用例race PASS（verbose无FAIL/SKIP/DATA RACE）；s5-outbox-capability-final-core.log database/bootstrap默认标签全包race exit0；s5-outbox-capability-final-build.log全后端build exit0。独立最终只读审阅无本增量提交阻断，git diff --check通过，所有Go进程已退出。
+
+直接repository mutation/handler不在本新增入口gate覆盖范围，consumer当前RBAC/并发撤权仍未完成。继续Graph候选local_only准入及完整S5/S6/G2/T3/T4/G3；CandidateSHA和候选停止状态不变，无WSL/共享数据库操作、企业外发、push/main合并。

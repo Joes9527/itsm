@@ -353,7 +353,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 	require.NoError(t, err)
 	defer clients.Close()
 	runtime := clients.Tenant
-	policy, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: scopeID}}})
+	policy, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: scopeID}}, Capabilities: map[string]string{"outbox": "scoped"}})
 	require.NoError(t, err)
 	app := application(runtime, policy, clients.IntakeDirectorySnapshot())
 	// Private component fixture role, not target runtime/RLS admission evidence.
@@ -375,6 +375,12 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		standardFixtureClient = ent.NewClient(ent.Driver(entsql.OpenDB("postgres", db)))
 		return standardFixtureClient
 	}
+
+	t.Run("Incident email uses restricted candidate roles", func(t *testing.T) {
+		fresh, err := app.Create(ctx, identity, command("candidate-incident-mail", "incident"))
+		require.NoError(t, err)
+		verifyCandidateIncidentEmailRoles(t, ctx, owner, runtime, clients.System, database.GetRawDB(), clients.SystemDB, scopeID, tenant.ID, actor.ID, fresh.ProfessionalReference.ID)
+	})
 
 	t.Run("notification target migration preserves legacy intents", func(t *testing.T) {
 		migrationSQL := migration.GetMigrationSQL("044_notification_connector_target")
