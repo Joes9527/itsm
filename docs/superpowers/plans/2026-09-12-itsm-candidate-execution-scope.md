@@ -93,6 +93,8 @@ S3 阶段记录（2026-09-13；基础提交 `6261941b4`，统一创建接入 `04
 
 ## S4：队列原子领取、恢复及周期执行
 
+当前新增阻断证据：实现 worktree 的 `s4-kaf-historical-claim-red.log` 真实运行显示历史 KAF task 的 ClaimKafAction 新增 ledger 并取得 lease（0→1），独立复审确认，候选测试处于有效 RED。详见 T1 交接最新检查点；后续须同时保护初始 INSERT、独立 lease CAS、finalize/non-completing、completion receipt/callback recovery 每个原事务并贯通两条冻结 policy 构造链。完成事务已通过不等于外层领取/恢复已受保护。
+
 **Files:** `service/{outbox_event_repository.go,outbox_delivery_worker.go,kaf_outbox_dispatcher.go,bpmn_callback_outbox.go,ticket_notification_service.go,sla_monitor_service.go,escalation_service.go}`、bootstrap 注入点及对应现有测试。
 
 - [ ] 写 `TestCandidateWorkerPreservesHistoricalStates`，混排历史 unknown/pending/expired claim、候选 pending、跨租户 pending；捕获每条 status/attempt/claim/updated_at，运行一次真实 Dispatch/Claim，要求历史逐字段不变。当前全量 claim/BlockUnknown 应 RED。
