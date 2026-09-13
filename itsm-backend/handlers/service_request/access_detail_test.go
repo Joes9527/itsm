@@ -6,12 +6,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	sr "itsm-backend/handlers/service_request"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 )
 
 func TestManagedAccessDetailUsesAuthoritativeFulfillment(t *testing.T) {
 	fx, task, itemID, req := verifiedAccessFixture(t)
-	owner := sr.NewService(sr.NewEntRepository(fx.client), fx.client, zap.NewNop().Sugar(), nil)
+	owner := sr.NewService(sr.NewEntRepository(fx.client, executionfixture.Standard()), fx.client, zap.NewNop().Sugar(), nil, executionfixture.Standard())
 	r := gin.New()
 	r.Use(srAuth(fx.tenant.ID, fx.requester.ID))
 	r.GET("/by-ticket/:ticketId", sr.NewHandler(owner).GetByTicket)

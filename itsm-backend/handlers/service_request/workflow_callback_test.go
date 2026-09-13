@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/enttest"
 	sr "itsm-backend/handlers/service_request"
 	"itsm-backend/handlers/shared/workflowcallback"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 )
@@ -22,7 +23,7 @@ func TestCompletionNoteUpdatePreservesResolvedAt(t *testing.T) {
 	resolvedAt := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
 	wi := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(requester.ID).SetTicketNumber("SR-NOTE").SetTitle("resolved request").SetRecordClass("service_request_item").SetStatus("resolved").SetResolvedAt(resolvedAt).SetVersion(7).SaveX(ctx)
 	request := client.ServiceRequest.Create().SetTicketID(wi.ID).SetCatalogID(1).SetCompletedAt(resolvedAt).SetCompletionNote("original note").SaveX(ctx)
-	service := sr.NewService(sr.NewEntRepository(client), client, zaptest.NewLogger(t).Sugar(), nil)
+	service := sr.NewService(sr.NewEntRepository(client, executionfixture.Standard()), client, zaptest.NewLogger(t).Sugar(), nil, executionfixture.Standard())
 	result, err := service.ApplyServiceRequestWorkflowCallback(ctx, workflowcallback.ServiceRequestCommand{RequestID: request.ID, TenantID: tenant.ID, Action: "complete_request", CompletionNote: "corrected note"})
 	require.NoError(t, err)
 	require.Equal(t, workflowcallback.StatusApplied, result.Status)
@@ -56,7 +57,7 @@ func TestCompletionExtensionFailureRollsBackPriorWorkItemCAS(t *testing.T) {
 			return next.Mutate(mutationCtx, mutation)
 		})
 	})
-	service := sr.NewService(sr.NewEntRepository(client), client, zaptest.NewLogger(t).Sugar(), nil)
+	service := sr.NewService(sr.NewEntRepository(client, executionfixture.Standard()), client, zaptest.NewLogger(t).Sugar(), nil, executionfixture.Standard())
 	_, err := service.ApplyServiceRequestWorkflowCallback(ctx, workflowcallback.ServiceRequestCommand{RequestID: request.ID, TenantID: tenant.ID, Action: "complete_request", CompletionNote: "must rollback"})
 	require.ErrorContains(t, err, "injected completion extension failure")
 	require.Equal(t, wi.Version+1, versionBeforeExtensionFailure, "WorkItem CAS must execute before the failing extension write")

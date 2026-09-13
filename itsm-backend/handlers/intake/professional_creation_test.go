@@ -48,7 +48,7 @@ func TestAuthoritativeProfessionalGraph(t *testing.T) {
 				command.Incident.Subcategory = "VPN"
 
 			case "service_request_item":
-				domain = srhandler.NewService(nil, client, zap.NewNop().Sugar(), service.NewApprovalChainResolver(client, zap.NewNop().Sugar()))
+				domain = srhandler.NewService(nil, client, zap.NewNop().Sugar(), service.NewApprovalChainResolver(client, zap.NewNop().Sugar()), executionfixture.Standard())
 				catalog := client.ServiceCatalog.Create().SetTenantID(identity.TenantID).SetName("VPN").SetTargetClass("service_request_item").SetRequiresApproval(false).SaveX(context.Background())
 				command.CatalogItemID = &catalog.ID
 				command.CatalogVersion = "1"

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	creation "itsm-backend/handlers/common/workitemcreation"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -177,7 +178,7 @@ func TestSSLVPNRequest_CreateRollsBackWorkItemAndDoesNotStartBPMNWhenExtensionPe
 	configureCatalogPublicationForTest(fx.ctx, fx.client, fx.tenant.ID, scSvc)
 	catalog, err := scSvc.Create(fx.ctx, fx.tenant.ID, catalogCreateInput("SSLVPN access", "SSLVPN access request", "Delegated SSLVPN access", 1, "enabled", 0, 0, nil, "sslvpn_extension_failure", "access"))
 	require.NoError(t, err)
-	svc := NewService(NewEntRepository(fx.client), fx.client, logger, nil)
+	svc := NewService(NewEntRepository(fx.client, executionfixture.Standard()), fx.client, logger, nil)
 
 	_, err = svc.SubmitCreation(fx.ctx, fx.tenant.ID, fx.requester.ID, catalog.ID, &ServiceRequest{ComplianceAck: true, FormData: map[string]interface{}{"title": "SSLVPN extension failure", "reason": "verify atomic creation"}})
 	require.ErrorContains(t, err, "could not create service request extension")
@@ -216,7 +217,7 @@ func TestSSLVPNRequest_ConflictingRecordClassVariableCannotReachKAF(t *testing.T
 func TestSSLVPNIncident_UsesSameDelegationTransportWithoutServiceRequestConversion(t *testing.T) {
 	fx := newSSLVPNDelegationFixture(t)
 	deploySSLVPNDefinition(t, fx, "incident_emergency_flow", "", sslvpnIncidentFlows)
-	owner := NewService(NewEntRepository(fx.client), fx.client, zaptest.NewLogger(t).Sugar(), nil)
+	owner := NewService(NewEntRepository(fx.client, executionfixture.Standard()), fx.client, zaptest.NewLogger(t).Sugar(), nil)
 	// This configured fixture binding delegates incident work to its real definition.
 	fx.client.ProcessBinding.Update().Where(processbinding.TenantIDEQ(fx.tenant.ID), processbinding.BusinessTypeEQ("incident")).SetProcessDefinitionKey("incident_emergency_flow").SetConditions(map[string]any{}).ExecX(fx.ctx)
 	result, err := owner.app.Create(fx.ctx, creation.Identity{TenantID: fx.tenant.ID, ActorID: fx.requester.ID, RequesterID: fx.requester.ID, Role: fx.requester.Role, Channel: "http"}, creation.CreateWorkItemCommand{RecordClass: "incident", IntakeKind: "incident", Confirmation: "confirmed", IdempotencyKey: "sslvpn-incident", Title: "SSLVPN connection unavailable", Description: "VPN client cannot establish a connection", Priority: "high", Incident: &creation.IncidentInput{Severity: "high"}})
@@ -278,7 +279,7 @@ func createSSLVPNServiceRequestForDefinition(t *testing.T, fx *sslvpnDelegationF
 	configureCatalogPublicationForTest(fx.ctx, fx.client, fx.tenant.ID, scSvc)
 	catalog, err := scSvc.Create(fx.ctx, fx.tenant.ID, catalogCreateInput("SSLVPN access", "SSLVPN access request", "Delegated SSLVPN access", 1, "enabled", 0, 0, nil, definitionKey, "access"))
 	require.NoError(t, err)
-	svc := NewService(NewEntRepository(fx.client), fx.client, logger, nil)
+	svc := NewService(NewEntRepository(fx.client, executionfixture.Standard()), fx.client, logger, nil)
 	created, err := svc.SubmitCreation(fx.ctx, fx.tenant.ID, fx.requester.ID, catalog.ID, &ServiceRequest{ComplianceAck: true, FormData: map[string]interface{}{"title": "SSLVPN access request", "reason": "VPN profile details must stay in ITSM"}})
 	require.NoError(t, err)
 	return created

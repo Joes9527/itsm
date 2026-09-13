@@ -71,7 +71,8 @@ type postgresAccessContribution struct{ called bool }
 func (p *postgresAccessContribution) ValidateAccessCompletionReplay(context.Context, *ent.Client, *ent.ProcessTask, *ent.KafTaskActionLedger) error {
 	return nil
 }
-func (p *postgresAccessContribution) ContributeAccessCompletion(ctx context.Context, client *ent.Client, task *ent.ProcessTask, ledger *ent.KafTaskActionLedger, raw json.RawMessage) error {
+func (p *postgresAccessContribution) ContributeAccessCompletion(ctx context.Context, tx *ent.Tx, task *ent.ProcessTask, ledger *ent.KafTaskActionLedger, raw json.RawMessage) error {
+	client := tx.Client()
 	p.called = true
 	return client.AuditLog.Create().SetTenantID(task.TenantID).SetResource("work_item").SetAction("c2.access_contribution_probe").SetPath("test").SetMethod("POST").SetStatusCode(200).Exec(ctx)
 }

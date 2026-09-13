@@ -10,6 +10,7 @@ import (
 	"itsm-backend/handlers/service_catalog"
 	sr "itsm-backend/handlers/service_request"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 )
 
@@ -30,7 +31,7 @@ func configureCatalogPublicationForTest(ctx context.Context, client *ent.Client,
 	configureSRIntakeFixture(ctx, client, tenantID)
 	logger := zap.NewNop().Sugar()
 	registry := intake.NewCreatorRegistry()
-	if err := registry.Register(sr.NewService(sr.NewEntRepository(client), client, logger, service.NewApprovalChainResolver(client, logger))); err != nil {
+	if err := registry.Register(sr.NewService(sr.NewEntRepository(client, executionfixture.Standard()), client, logger, service.NewApprovalChainResolver(client, logger), executionfixture.Standard())); err != nil {
 		panic(err)
 	}
 	catalog.SetCreatorRegistry(registry)

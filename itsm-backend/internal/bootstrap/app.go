@@ -630,9 +630,9 @@ func NewApplication() *Application {
 	delegatedExecutionHandler := delegated_execution.NewHandler(delegated_execution.NewService(client))
 
 	// Domain: Service Request (DDD)
-	srRepo := service_request.NewEntRepository(client)
+	srRepo := service_request.NewEntRepository(client, executionPolicy)
 	chainResolver := service.NewApprovalChainResolver(client, sugar)
-	srService := service_request.NewService(srRepo, client, sugar, chainResolver)
+	srService := service_request.NewService(srRepo, client, sugar, chainResolver, executionPolicy)
 	srService.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 	srHandler := service_request.NewHandler(srService)
 	bpmnWorkflowController.SetApprovedAccessReader(srService)

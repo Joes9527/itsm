@@ -45,7 +45,7 @@ func NewService(repo sr.Repository, client *ent.Client, logger *zap.SugaredLogge
 	if chain == nil {
 		chain = service.NewApprovalChainResolver(client, logger)
 	}
-	owner := sr.NewService(repo, client, logger, chain)
+	owner := sr.NewService(repo, client, logger, chain, executionfixture.Standard())
 	registry := intake.NewCreatorRegistry()
 	if err := registry.Register(owner); err != nil {
 		panic(err)
@@ -191,5 +191,5 @@ func createSRRepositoryFixture(ctx context.Context, client *ent.Client, input *S
 	if err != nil {
 		return nil, err
 	}
-	return NewEntRepository(client).Get(ctx, record.ID, input.TenantID)
+	return NewEntRepository(client, executionfixture.Standard()).Get(ctx, record.ID, input.TenantID)
 }

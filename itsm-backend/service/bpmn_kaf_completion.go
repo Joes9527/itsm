@@ -26,9 +26,9 @@ import (
 )
 
 // AccessCompletionContributor is implemented by the Requested Item domain.
-// The supplied client belongs to the existing BPMN completion transaction.
+// Contributions use the existing BPMN completion transaction; replay is read-only.
 type AccessCompletionContributor interface {
-	ContributeAccessCompletion(context.Context, *ent.Client, *ent.ProcessTask, *ent.KafTaskActionLedger, json.RawMessage) error
+	ContributeAccessCompletion(context.Context, *ent.Tx, *ent.ProcessTask, *ent.KafTaskActionLedger, json.RawMessage) error
 	ValidateAccessCompletionReplay(context.Context, *ent.Client, *ent.ProcessTask, *ent.KafTaskActionLedger) error
 }
 
@@ -127,7 +127,7 @@ func (e *CustomProcessEngine) CompleteKafDelegatedTask(ctx context.Context, ledg
 		if err != nil {
 			return err
 		}
-		if err := e.accessCompletionContributor.ContributeAccessCompletion(ctx, tx.Client(), task, ledger, raw); err != nil {
+		if err := e.accessCompletionContributor.ContributeAccessCompletion(ctx, tx, task, ledger, raw); err != nil {
 			return err
 		}
 	} else if variables["kaf_access_result"] != nil {

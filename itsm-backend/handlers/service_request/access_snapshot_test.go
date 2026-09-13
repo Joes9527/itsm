@@ -12,6 +12,7 @@ import (
 	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 )
 
@@ -44,7 +45,7 @@ func TestAccessSnapshotTrustedRequesterAndFrozenTerms(t *testing.T) {
 	require.NoError(t, saveAccessSnapshot(ctx, tx, item.ID, snapshot))
 	require.NoError(t, tx.Commit())
 	c.CatalogAccessPolicy.UpdateOne(policy).SetGroupID("changed-group").SetDurationOptions([]accessgrant.DurationOption{{Key: "month", Label: "一个月", Seconds: 3600}}).AddVersion(1).SaveX(ctx)
-	owner := NewService(NewEntRepository(c), c, zap.NewNop().Sugar(), nil)
+	owner := NewService(NewEntRepository(c, executionfixture.Standard()), c, zap.NewNop().Sugar(), nil, executionfixture.Standard())
 	frozen, err := owner.ReadAccessSnapshot(ctx, c, tenant.ID, item.ID)
 	require.NoError(t, err)
 	require.Equal(t, snapshot, frozen)

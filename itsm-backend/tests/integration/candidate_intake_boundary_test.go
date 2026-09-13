@@ -24,6 +24,8 @@ import (
 	"itsm-backend/config"
 	"itsm-backend/database"
 	changedomain "itsm-backend/handlers/change"
+	srdomain "itsm-backend/handlers/service_request"
+	"itsm-backend/handlers/shared/workflowcallback"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -97,22 +99,32 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 	role := owner.Role.Create().SetTenantID(tenant.ID).SetName("Requester").SetCode("requester").SaveX(ctx)
 	permission := owner.Permission.Create().SetTenantID(tenant.ID).SetCode("create-work").SetName("Create work").SetResource("*").SetAction("*").SaveX(ctx)
 	owner.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).SaveX(ctx)
-	for _, class := range []string{"generic", "incident", "problem", "change_request"} {
+	for _, class := range []string{"generic", "incident", "problem", "change_request", "service_request_item"} {
 		owner.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType(class).SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
 	}
 	identity := creation.Identity{TenantID: tenant.ID, ActorID: actor.ID, RequesterID: actor.ID, Role: actor.Role, Channel: "http"}
 	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
+	catalog := owner.ServiceCatalog.Create().SetTenantID(tenant.ID).SetName("Candidate request").SetCategory("general").SetDescription("candidate").SetTargetClass("service_request_item").SetRequiresApproval(false).SetStatus("enabled").SaveX(ctx)
+	catalogTx, err := owner.Tx(ctx)
+	require.NoError(t, err)
+	resolvedCatalog, _, err := catalogdomain.NewService(nil, owner, zap.NewNop().Sugar(), nil).ResolveCreationCatalog(ctx, catalogTx, identity, catalog.ID)
+	require.NoError(t, err)
+	require.NoError(t, catalogTx.Rollback())
 	command := func(key, class string) creation.CreateWorkItemCommand {
 		cmd := creation.CreateWorkItemCommand{RecordClass: class, IntakeKind: class, Confirmation: "confirmed", Title: "scope " + key, IdempotencyKey: key}
 		if class == "change_request" {
 			cmd.Change = &creation.ChangeInput{Type: "normal", Justification: "candidate", ImpactScope: "low", RiskLevel: "low", ImplementationPlan: "candidate implementation", RollbackPlan: "candidate rollback"}
+		}
+		if class == "service_request_item" {
+			cmd.IntakeKind = "catalog_item"
+			cmd.CatalogItemID, cmd.CatalogVersion, cmd.FormSchemaVersion = &catalog.ID, resolvedCatalog.Version, resolvedCatalog.FormSchemaVersion
 		}
 		return cmd
 	}
 	application := func(client *ent.Client, policy *database.ExecutionPolicy, directory database.DirectorySnapshot) *intake.Service {
 		logger := zap.NewNop().Sugar()
 		registry := intake.NewCreatorRegistry()
-		for _, creator := range []creation.ProfessionalCreator{&service.TicketService{}, service.NewIncidentService(client, logger, policy), problemdomain.NewService(nil, logger, policy), changedomain.NewService(nil, client, logger, policy)} {
+		for _, creator := range []creation.ProfessionalCreator{&service.TicketService{}, service.NewIncidentService(client, logger, policy), problemdomain.NewService(nil, logger, policy), changedomain.NewService(nil, client, logger, policy), srdomain.NewService(nil, client, logger, service.NewApprovalChainResolver(client, logger), policy)} {
 			require.NoError(t, registry.Register(creator))
 		}
 		resolver := intake.NewResolver(catalogdomain.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
@@ -141,6 +153,8 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 	legacyPIRService.SetDirectorySnapshot(sameTransactionDirectory{})
 	legacyPIRMeta := workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: 1, Source: "http", OperationID: "legacy-pir"}
 	legacyPIR, err := legacyPIRService.CreatePIR(ctx, &dto.CreateChangePIRRequest{ChangeID: historicalChange.ProfessionalReference.ID, OverallResult: "successful"}, legacyPIRMeta)
+	require.NoError(t, err)
+	historicalRequest, err := historicalApp.Create(ctx, identity, command("historical-request", "service_request_item"))
 	require.NoError(t, err)
 	legacyCommand := dto.IncidentCommand{IncidentID: historical.ProfessionalReference.ID, Action: "acknowledge", Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: 1, Source: "http", OperationID: "legacy-command"}}
 	legacyOwner := service.NewIncidentService(owner, zap.NewNop().Sugar(), executionfixture.Standard())
@@ -228,6 +242,82 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		relationEvent := owner.OutboxEvent.Query().Where(outboxevent.EventTypeEQ(service.RelationCreatedEventType)).OnlyX(ctx)
 		require.NotNil(t, relationEvent.ExecutionWorkItemID)
 		require.Equal(t, created.WorkItemID, *relationEvent.ExecutionWorkItemID)
+	})
+
+	t.Run("Requested Item writes preserve history", func(t *testing.T) {
+		repo := srdomain.NewEntRepository(runtime, policy)
+		svc := srdomain.NewService(repo, runtime, zap.NewNop().Sugar(), nil, policy)
+		svc.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
+		for _, kind := range []string{"update", "delete", "update_request", "assign_request", "provision_resource", "approve_request", "complete_request"} {
+			fresh, err := app.Create(ctx, identity, command("request-"+kind, "service_request_item"))
+			require.NoError(t, err)
+			for _, target := range []struct{ id, workID int }{{historicalRequest.ProfessionalReference.ID, historicalRequest.WorkItemID}, {fresh.ProfessionalReference.ID, fresh.WorkItemID}} {
+				before := owner.Ticket.GetX(ctx, target.workID)
+				extensionBefore, _ := json.Marshal(owner.ServiceRequest.GetX(ctx, target.id))
+				audits, outboxes := owner.AuditLog.Query().CountX(ctx), owner.OutboxEvent.Query().CountX(ctx)
+				switch kind {
+				case "update":
+					_, err = svc.Update(ctx, target.id, tenant.ID, actor.ID, actor.Role, &srdomain.ServiceRequest{CostCenter: "candidate cost center"})
+				case "delete":
+					err = svc.Delete(ctx, target.id, workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: before.Version, Source: "http", OperationID: fmt.Sprintf("delete-request-%d", target.id)})
+				default:
+					cost := "candidate callback cost"
+					_, err = svc.ApplyServiceRequestWorkflowCallback(ctx, workflowcallback.ServiceRequestCommand{RequestID: target.id, TenantID: tenant.ID, Action: kind, AssigneeID: actor.ID, CostCenter: &cost, CompletionNote: "candidate completion"})
+				}
+				if target.workID == historicalRequest.WorkItemID {
+					require.ErrorContains(t, err, "execution scope denied")
+					beforeJSON, _ := json.Marshal(before)
+					afterJSON, _ := json.Marshal(owner.Ticket.GetX(ctx, target.workID))
+					require.JSONEq(t, string(beforeJSON), string(afterJSON))
+					extensionAfter, _ := json.Marshal(owner.ServiceRequest.GetX(ctx, target.id))
+					require.JSONEq(t, string(extensionBefore), string(extensionAfter))
+					require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx))
+					require.Equal(t, outboxes, owner.OutboxEvent.Query().CountX(ctx))
+				} else {
+					require.NoError(t, err)
+					require.Greater(t, owner.Ticket.GetX(ctx, target.workID).Version, before.Version)
+				}
+			}
+		}
+	})
+
+	t.Run("Requested Item extension failure rolls back base", func(t *testing.T) {
+		svc := srdomain.NewService(srdomain.NewEntRepository(runtime, policy), runtime, zap.NewNop().Sugar(), nil, policy)
+		svc.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
+		injected := errors.New("injected Requested Item extension failure")
+		fail := false
+		runtime.ServiceRequest.Use(func(next ent.Mutator) ent.Mutator {
+			return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+				v, err := next.Mutate(ctx, m)
+				if err == nil && fail {
+					return nil, injected
+				}
+				return v, err
+			})
+		})
+		defer func() { fail = false }()
+		for _, kind := range []string{"update", "complete_request"} {
+			fresh, err := app.Create(ctx, identity, command("request-rollback-"+kind, "service_request_item"))
+			require.NoError(t, err)
+			before, _ := json.Marshal(owner.Ticket.GetX(ctx, fresh.WorkItemID))
+			extensionBefore, _ := json.Marshal(owner.ServiceRequest.GetX(ctx, fresh.ProfessionalReference.ID))
+			audits, outboxes := owner.AuditLog.Query().CountX(ctx), owner.OutboxEvent.Query().CountX(ctx)
+			fail = true
+			if kind == "update" {
+				_, err = svc.Update(ctx, fresh.ProfessionalReference.ID, tenant.ID, actor.ID, actor.Role, &srdomain.ServiceRequest{CostCenter: "rollback cost"})
+			} else {
+				_, err = svc.ApplyServiceRequestWorkflowCallback(ctx, workflowcallback.ServiceRequestCommand{RequestID: fresh.ProfessionalReference.ID, TenantID: tenant.ID, Action: kind, CompletionNote: "rollback completion"})
+			}
+			fail = false
+			require.Error(t, err)
+			require.ErrorContains(t, err, injected.Error())
+			after, _ := json.Marshal(owner.Ticket.GetX(ctx, fresh.WorkItemID))
+			extensionAfter, _ := json.Marshal(owner.ServiceRequest.GetX(ctx, fresh.ProfessionalReference.ID))
+			require.JSONEq(t, string(before), string(after))
+			require.JSONEq(t, string(extensionBefore), string(extensionAfter))
+			require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx))
+			require.Equal(t, outboxes, owner.OutboxEvent.Query().CountX(ctx))
+		}
 	})
 
 	t.Run("Change and PIR writes preserve history", func(t *testing.T) {

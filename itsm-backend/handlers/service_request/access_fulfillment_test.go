@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/servicerequestaccessresult"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/intake"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 )
@@ -71,7 +72,7 @@ func TestAccessResultFulfillmentUsesProfessionalAndWorkflowOwners(t *testing.T) 
 				c.ProcessInstance.UpdateOne(inst).SetStatus("suspended").SaveX(ctx)
 				expected = "unknown"
 			}
-			owner := NewService(NewEntRepository(c), c, zap.NewNop().Sugar(), nil)
+			owner := NewService(NewEntRepository(c, executionfixture.Standard()), c, zap.NewNop().Sugar(), nil, executionfixture.Standard())
 			got, err := owner.ReadFulfillment(ctx, c, item)
 			require.NoError(t, err)
 			require.Equal(t, expected, got.State)

@@ -105,6 +105,9 @@ func (s *Service) applyWorkflowUpdate(ctx context.Context, cmd workflowcallback.
 	if !changed {
 		return callbackIdempotent(fmt.Sprintf("service request %d already matches", current.ID)), nil
 	}
+	if err := requireRequestExecutionTx(ctx, tx, s.execution, cmd.TenantID, current.TicketID); err != nil {
+		return workflowcallback.Result{}, err
+	}
 	if err := tx.Ticket.UpdateOneID(current.TicketID).Where(ticket.TenantID(cmd.TenantID), ticket.RecordClassEQ("service_request_item"), ticket.DeletedAtIsNil(), ticket.VersionEQ(current.Edges.WorkItem.Version)).SetUpdatedAt(time.Now()).AddVersion(1).Exec(ctx); err != nil {
 		_ = tx.Rollback()
 		if !ent.IsNotFound(err) {
@@ -154,6 +157,14 @@ func (s *Service) applyWorkflowAssignment(ctx context.Context, cmd workflowcallb
 	if cmd.AssigneeID <= 0 {
 		return callbackBlocked("assignee is required"), nil
 	}
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return workflowcallback.Result{}, err
+	}
+	defer tx.Rollback()
+	owner := *s
+	owner.client = tx.Client()
+	s = &owner
 	current, err := s.loadWorkflowRequest(ctx, cmd.RequestID, cmd.TenantID)
 	if err != nil {
 		return workflowcallback.Result{}, err
@@ -173,6 +184,9 @@ func (s *Service) applyWorkflowAssignment(ctx context.Context, cmd workflowcallb
 	if workItem.AssigneeID == cmd.AssigneeID {
 		return callbackIdempotent(fmt.Sprintf("service request %d already assigned", current.ID)), nil
 	}
+	if err := requireRequestExecutionTx(ctx, tx, s.execution, cmd.TenantID, workItem.ID); err != nil {
+		return workflowcallback.Result{}, err
+	}
 	affected, err := s.client.Ticket.Update().Where(
 		ticket.ID(workItem.ID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item"), ticket.VersionEQ(workItem.Version),
 	).SetAssigneeID(cmd.AssigneeID).SetUpdatedAt(time.Now()).AddVersion(1).Save(ctx)
@@ -180,6 +194,9 @@ func (s *Service) applyWorkflowAssignment(ctx context.Context, cmd workflowcallb
 		return workflowcallback.Result{}, err
 	}
 	if affected == 1 {
+		if err := tx.Commit(); err != nil {
+			return workflowcallback.Result{}, err
+		}
 		return callbackApplied(fmt.Sprintf("service request %d assigned", current.ID)), nil
 	}
 	latest, err := s.client.Ticket.Query().Where(ticket.ID(workItem.ID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item")).Only(ctx)
@@ -205,6 +222,9 @@ func (s *Service) applyWorkflowProvision(ctx context.Context, cmd workflowcallba
 		return workflowcallback.Result{}, err
 	}
 	defer tx.Rollback()
+	if err := requireRequestExecutionTx(ctx, tx, s.execution, cmd.TenantID, current.TicketID); err != nil {
+		return workflowcallback.Result{}, err
+	}
 	if err := tx.Ticket.UpdateOneID(current.TicketID).Where(ticket.TenantID(cmd.TenantID), ticket.RecordClassEQ("service_request_item"), ticket.DeletedAtIsNil(), ticket.VersionEQ(current.Edges.WorkItem.Version)).SetUpdatedAt(time.Now()).AddVersion(1).Exec(ctx); err != nil {
 		_ = tx.Rollback()
 		if !ent.IsNotFound(err) {
@@ -291,6 +311,9 @@ func (s *Service) applyWorkflowAggregate(ctx context.Context, cmd workflowcallba
 	}
 	now := time.Now()
 	// Every aggregate writer acquires the owning WorkItem before its extension.
+	if err := requireRequestExecutionTx(ctx, tx, s.execution, cmd.TenantID, workItem.ID); err != nil {
+		return rollback(err)
+	}
 	if workItemWrite || requestWrite {
 		update := tx.Ticket.Update().Where(
 			ticket.ID(workItem.ID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item"), ticket.VersionEQ(workItem.Version),

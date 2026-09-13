@@ -13,6 +13,7 @@ import (
 	sr "itsm-backend/handlers/service_request"
 	"itsm-backend/handlers/shared/workflowcallback"
 	"itsm-backend/migration"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"os"
 	"sync"
 	"testing"
@@ -76,7 +77,7 @@ func TestPostgresServiceRequestAuthorityApplyReapplyEntAndTenantScope(t *testing
 		_, err = f.db.ExecContext(f.ctx, migration.GetMigrationSQL(srAuthorityVersion))
 		require.NoError(t, err)
 	}
-	repo := sr.NewEntRepository(f.client)
+	repo := sr.NewEntRepository(f.client, executionfixture.Standard())
 	got, err := repo.Get(f.ctx, request.ID, f.tenant.ID)
 	require.NoError(t, err)
 	require.Equal(t, wi.Version, got.Version)
@@ -170,7 +171,7 @@ func TestPostgresServiceRequestCompletionAndExtensionUpdateUseWorkItemLockOrder(
 			return value, err
 		})
 	})
-	repo := sr.NewEntRepository(f.client)
+	repo := sr.NewEntRepository(f.client, executionfixture.Standard())
 	input, err := repo.Get(ctx, request.ID, f.tenant.ID)
 	require.NoError(t, err)
 	input.CostCenter = "concurrent update"
@@ -181,7 +182,7 @@ func TestPostgresServiceRequestCompletionAndExtensionUpdateUseWorkItemLockOrder(
 	case <-ctx.Done():
 		t.Fatal("extension update did not acquire WorkItem lock: ", ctx.Err())
 	}
-	service := sr.NewService(repo, f.client, zaptest.NewLogger(t).Sugar(), nil)
+	service := sr.NewService(repo, f.client, zaptest.NewLogger(t).Sugar(), nil, executionfixture.Standard())
 	type callbackOutcome struct {
 		result workflowcallback.Result
 		err    error

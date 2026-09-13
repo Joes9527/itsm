@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -122,7 +123,7 @@ func TestSSLVPNApprovalRejectionNeverDelegates(t *testing.T) {
 			if level == "manager" {
 				assert.Zero(t, h.client.ProcessTask.Query().Where(processtask.ProcessInstanceIDEQ(instance.ID), processtask.TaskDefinitionKeyEQ("UserTask_L2NetworkOpsApproval")).CountX(ctx))
 			}
-			owner := sr.NewService(sr.NewEntRepository(h.client), h.client, zap.NewNop().Sugar(), nil)
+			owner := sr.NewService(sr.NewEntRepository(h.client, executionfixture.Standard()), h.client, zap.NewNop().Sugar(), nil, executionfixture.Standard())
 			item := h.client.Ticket.GetX(ctx, created.WorkItemID)
 			fulfillment, err := owner.ReadFulfillment(ctx, h.client, item)
 			require.NoError(t, err)

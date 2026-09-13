@@ -50,7 +50,7 @@ func newUnifiedIntakeFixture(t *testing.T, ticketOwners ...func(*ent.Client, *za
 	if len(ticketOwners) > 0 {
 		genericOwner = ticketOwners[0](client, logger)
 	}
-	for _, owner := range []creation.ProfessionalCreator{genericOwner, service.NewIncidentService(client, logger, executionfixture.Standard()), problemdomain.NewService(nil, logger, executionfixture.Standard()), changedomain.NewService(nil, client, logger, executionfixture.Standard()), requestdomain.NewService(nil, client, logger, service.NewApprovalChainResolver(client, logger))} {
+	for _, owner := range []creation.ProfessionalCreator{genericOwner, service.NewIncidentService(client, logger, executionfixture.Standard()), problemdomain.NewService(nil, logger, executionfixture.Standard()), changedomain.NewService(nil, client, logger, executionfixture.Standard()), requestdomain.NewService(nil, client, logger, service.NewApprovalChainResolver(client, logger), executionfixture.Standard())} {
 		require.NoError(t, registry.Register(owner))
 	}
 	resolver := intake.NewResolver(catalogdomain.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))

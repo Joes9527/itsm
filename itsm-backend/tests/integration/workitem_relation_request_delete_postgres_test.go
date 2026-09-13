@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent"
 	requestDomain "itsm-backend/handlers/service_request"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -28,7 +29,7 @@ func TestWorkItemRelationsServiceRequestDeletionRejectsReference(t *testing.T) {
 	cmd.TargetID = item.ID
 	_, err = f.owner.Apply(f.ctx, cmd, false)
 	require.NoError(t, err)
-	owner := requestDomain.NewService(requestDomain.NewEntRepository(f.runtime.Tenant), f.runtime.Tenant, zap.NewNop().Sugar(), nil)
+	owner := requestDomain.NewService(requestDomain.NewEntRepository(f.runtime.Tenant, executionfixture.Standard()), f.runtime.Tenant, zap.NewNop().Sugar(), nil, executionfixture.Standard())
 	owner.SetDirectorySnapshot(f.runtime.IntakeDirectorySnapshot())
 	err = owner.Delete(f.ctx, sr.ID, cmd.Meta)
 	require.Error(t, err, "RequestedItem deletion must reject an active reference")
@@ -53,7 +54,7 @@ func TestWorkItemRelationsRequestedItemPolicyAcrossDeletionEntrypoints(t *testin
 					f.client.RolePermission.Create().SetTenantID(f.tenant.ID).SetRoleID(role.ID).SetPermissionID(p.ID).ExecX(f.ctx)
 				}
 			}
-			owner := requestDomain.NewService(requestDomain.NewEntRepository(f.runtime.Tenant), f.runtime.Tenant, zap.NewNop().Sugar(), nil)
+			owner := requestDomain.NewService(requestDomain.NewEntRepository(f.runtime.Tenant, executionfixture.Standard()), f.runtime.Tenant, zap.NewNop().Sugar(), nil, executionfixture.Standard())
 			owner.SetDirectorySnapshot(f.runtime.IntakeDirectorySnapshot())
 			generic := service.NewTicketServiceForTest(f.runtime.Tenant, zap.NewNop().Sugar())
 			generic.SetDirectorySnapshot(f.runtime.IntakeDirectorySnapshot())
@@ -124,7 +125,7 @@ func TestWorkItemRelationsServiceRequestDeletionCurrentAuthority(t *testing.T) {
 					})
 				})
 			}
-			owner := requestDomain.NewService(requestDomain.NewEntRepository(f.runtime.Tenant), f.runtime.Tenant, zap.NewNop().Sugar(), nil)
+			owner := requestDomain.NewService(requestDomain.NewEntRepository(f.runtime.Tenant, executionfixture.Standard()), f.runtime.Tenant, zap.NewNop().Sugar(), nil, executionfixture.Standard())
 			owner.SetDirectorySnapshot(f.runtime.IntakeDirectorySnapshot())
 			meta := f.command("delete").Meta
 			if scenario == "foreign" {
@@ -154,7 +155,7 @@ func TestWorkItemRelationsServiceRequestOldSnapshotCannotMissReference(t *testin
 	require.NoError(t, err)
 	item := f.client.Ticket.Create().SetTenantID(f.tenant.ID).SetRequesterID(f.actor.ID).SetTicketNumber("REQ-RACE").SetTitle("request race").SetRecordClass("service_request_item").SetStatus("submitted").SaveX(f.ctx)
 	sr := f.client.ServiceRequest.Create().SetTicketID(item.ID).SetCatalogID(1).SaveX(f.ctx)
-	owner := requestDomain.NewService(requestDomain.NewEntRepository(f.runtime.Tenant), f.runtime.Tenant, zap.NewNop().Sugar(), nil)
+	owner := requestDomain.NewService(requestDomain.NewEntRepository(f.runtime.Tenant, executionfixture.Standard()), f.runtime.Tenant, zap.NewNop().Sugar(), nil, executionfixture.Standard())
 	owner.SetDirectorySnapshot(f.runtime.IntakeDirectorySnapshot())
 	ready, release := make(chan struct{}), make(chan struct{})
 	f.runtime.Tenant.ServiceRequest.Intercept(ent.InterceptFunc(func(next ent.Querier) ent.Querier {
@@ -205,7 +206,7 @@ func TestWorkItemServiceRequestDeletionHTTPCurrentIdentity(t *testing.T) {
 			require.NoError(t, err)
 			item := f.client.Ticket.Create().SetTenantID(f.tenant.ID).SetRequesterID(f.actor.ID).SetTicketNumber("REQ-HTTP").SetTitle("request http").SetRecordClass("service_request_item").SetStatus("submitted").SaveX(f.ctx)
 			sr := f.client.ServiceRequest.Create().SetTicketID(item.ID).SetCatalogID(1).SaveX(f.ctx)
-			owner := requestDomain.NewService(requestDomain.NewEntRepository(f.runtime.Tenant), f.runtime.Tenant, zap.NewNop().Sugar(), nil)
+			owner := requestDomain.NewService(requestDomain.NewEntRepository(f.runtime.Tenant, executionfixture.Standard()), f.runtime.Tenant, zap.NewNop().Sugar(), nil, executionfixture.Standard())
 			owner.SetDirectorySnapshot(f.runtime.IntakeDirectorySnapshot())
 			status := 200
 			if scenario == "linked" {

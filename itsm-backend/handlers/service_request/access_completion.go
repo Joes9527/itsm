@@ -18,7 +18,11 @@ import (
 // ContributeAccessCompletion owns verified professional fulfillment inside
 // BPMN's caller-owned transaction. It never commits, starts another transaction,
 // or invokes an external system.
-func (s *Service) ContributeAccessCompletion(ctx context.Context, client *ent.Client, task *ent.ProcessTask, ledger *ent.KafTaskActionLedger, raw json.RawMessage) error {
+func (s *Service) ContributeAccessCompletion(ctx context.Context, tx *ent.Tx, task *ent.ProcessTask, ledger *ent.KafTaskActionLedger, raw json.RawMessage) error {
+	if tx == nil {
+		return fmt.Errorf("access completion requires an owning transaction")
+	}
+	client := tx.Client()
 	if task == nil || ledger == nil || ledger.TaskID != task.TaskID || ledger.TenantID != task.TenantID || ledger.Action != "complete_bpmn_task" || ledger.ResultStatus != "executing" {
 		return fmt.Errorf("verified access requires the executing task action")
 	}
@@ -56,6 +60,9 @@ func (s *Service) ContributeAccessCompletion(ctx context.Context, client *ent.Cl
 	}
 	if exists {
 		return fmt.Errorf("verified access result already exists; replay its owning action")
+	}
+	if err := requireRequestExecutionTx(ctx, tx, s.execution, tenantID, item.ID); err != nil {
+		return err
 	}
 	if err := client.ServiceRequestAccessResult.Create().SetWorkItemID(item.ID).SetProcessTaskID(task.ID).
 		SetOutcome(servicerequestaccessresult.Outcome(result.Outcome)).SetProvider(servicerequestaccessresult.Provider(result.Provider)).

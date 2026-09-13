@@ -40,6 +40,9 @@ func (s *Service) Delete(ctx context.Context, id int, m workitemmutation.Meta) e
 		}
 		return err
 	}
+	if err := requireRequestExecutionTx(ctx, tx, s.execution, m.TenantID, req.TicketID); err != nil {
+		return err
+	}
 	guard := service.NewWorkItemRelationService(s.client, s.directory)
 	err = guard.GuardDeletionTx(ctx, tx, m, req.TicketID)
 	if err != nil {

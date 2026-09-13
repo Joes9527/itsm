@@ -45,7 +45,7 @@ func resolverFixtureWithClient(t *testing.T, client *ent.Client, identity creati
 	logger := zap.NewNop().Sugar()
 	resolver := NewResolver(cataloghandler.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
 	registry := NewCreatorRegistry()
-	domain := srhandler.NewService(nil, client, logger, service.NewApprovalChainResolver(client, logger))
+	domain := srhandler.NewService(nil, client, logger, service.NewApprovalChainResolver(client, logger), executionfixture.Standard())
 	require.NoError(t, registry.Register(domain))
 	return &resolverFixture{client: client, actor: identity, catalog: catalog, app: NewService(client, resolver, registry, NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard())}
 }

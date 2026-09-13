@@ -3,6 +3,7 @@ package service_request_test
 import (
 	"context"
 	"encoding/json"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 
@@ -58,7 +59,7 @@ func TestService_Create_FullChain_TicketStatusReflectedAfterChange(t *testing.T)
 	catalog, err := scService.Create(ctx, tenant.ID, catalogCreateInput("云主机申请-全链路", "云服务", "desc", 1, "enabled", 0, 0, nil, "", ""))
 	require.NoError(t, err)
 
-	srRepo := NewEntRepository(client)
+	srRepo := NewEntRepository(client, executionfixture.Standard())
 	logger := zaptest.NewLogger(t).Sugar()
 	svc := NewService(srRepo, client, logger, nil)
 
@@ -133,7 +134,7 @@ func TestService_Create_FormDataFieldValuesConsistency_FieldLevel(t *testing.T) 
 	}, "", ""))
 	require.NoError(t, err)
 
-	srRepo := NewEntRepository(client)
+	srRepo := NewEntRepository(client, executionfixture.Standard())
 	logger := zaptest.NewLogger(t).Sugar()
 	svc := NewService(srRepo, client, logger, nil)
 
@@ -234,7 +235,7 @@ func TestService_Create_ResolvesApprovalChainIntoFormData(t *testing.T) {
 	catalog, err := scService.Create(ctx, tenant.ID, catalogCreateInput("云主机申请-审批链", "云服务", "desc", 1, "enabled", 0, 0, nil, "", ""))
 	require.NoError(t, err)
 
-	srRepo := NewEntRepository(client)
+	srRepo := NewEntRepository(client, executionfixture.Standard())
 	logger := zaptest.NewLogger(t).Sugar()
 	chainResolver := service.NewApprovalChainResolver(client, logger)
 	svc := NewService(srRepo, client, logger, chainResolver)
@@ -299,7 +300,7 @@ func TestService_Create_NoApprovalChainConfigured_FormDataHasNoApprovalChainKey(
 	catalog, err := scService.Create(ctx, tenant.ID, catalogCreateInput("云主机申请-无审批链", "云服务", "desc", 1, "enabled", 0, 0, nil, "", ""))
 	require.NoError(t, err)
 
-	srRepo := NewEntRepository(client)
+	srRepo := NewEntRepository(client, executionfixture.Standard())
 	logger := zaptest.NewLogger(t).Sugar()
 	chainResolver := service.NewApprovalChainResolver(client, logger) // 有效但租户下无配置
 	svc := NewService(srRepo, client, logger, chainResolver)
@@ -363,7 +364,7 @@ func TestService_Create_IncidentCatalog_NoServiceRequestRowCreated(t *testing.T)
 		Save(ctx)
 	require.NoError(t, err)
 
-	srRepo := NewEntRepository(client)
+	srRepo := NewEntRepository(client, executionfixture.Standard())
 	logger := zaptest.NewLogger(t).Sugar()
 	svc := NewService(srRepo, client, logger, nil)
 
@@ -415,7 +416,7 @@ func TestService_Update_ForbiddenForNonOwnerWithoutPermission(t *testing.T) {
 	catalog, err := scService.Create(ctx, tenant.ID, catalogCreateInput("云主机申请-权限", "云服务", "desc", 1, "enabled", 0, 0, nil, "", ""))
 	require.NoError(t, err)
 
-	srRepo := NewEntRepository(client)
+	srRepo := NewEntRepository(client, executionfixture.Standard())
 	logger := zaptest.NewLogger(t).Sugar()
 	svc := NewService(srRepo, client, logger, nil)
 
@@ -464,7 +465,7 @@ func TestService_Update_AllowedForNonOwnerWithSuperAdminRole(t *testing.T) {
 	catalog, err := scService.Create(ctx, tenant.ID, catalogCreateInput("云主机申请-管理员", "云服务", "desc", 1, "enabled", 0, 0, nil, "", ""))
 	require.NoError(t, err)
 
-	srRepo := NewEntRepository(client)
+	srRepo := NewEntRepository(client, executionfixture.Standard())
 	logger := zaptest.NewLogger(t).Sugar()
 	svc := NewService(srRepo, client, logger, nil)
 
@@ -510,7 +511,7 @@ func TestService_CrossTenantIsolation_GetUpdateDelete(t *testing.T) {
 	catalogA, err := scService.Create(ctx, tenantA.ID, catalogCreateInput("云主机申请-跨租户", "云服务", "desc", 1, "enabled", 0, 0, nil, "", ""))
 	require.NoError(t, err)
 
-	srRepo := NewEntRepository(client)
+	srRepo := NewEntRepository(client, executionfixture.Standard())
 	logger := zaptest.NewLogger(t).Sugar()
 	svc := NewService(srRepo, client, logger, nil)
 

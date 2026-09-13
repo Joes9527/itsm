@@ -16,6 +16,7 @@ import (
 )
 
 type Service struct {
+	execution     *database.ExecutionPolicy
 	directory     database.DirectorySnapshot
 	repo          Repository
 	client        *ent.Client
@@ -23,8 +24,8 @@ type Service struct {
 	chainResolver *service.ApprovalChainResolver
 }
 
-func NewService(repo Repository, client *ent.Client, logger *zap.SugaredLogger, chainResolver *service.ApprovalChainResolver) *Service {
-	return &Service{repo: repo, client: client, logger: logger, chainResolver: chainResolver}
+func NewService(repo Repository, client *ent.Client, logger *zap.SugaredLogger, chainResolver *service.ApprovalChainResolver, execution *database.ExecutionPolicy) *Service {
+	return &Service{execution: execution, repo: repo, client: client, logger: logger, chainResolver: chainResolver}
 }
 
 // Client exposes the underlying ent client so the handler layer can query
@@ -126,6 +127,9 @@ func (s *Service) Update(ctx context.Context, id, tenantID, actorID int, actorRo
 
 	// 3. Save
 	if err := s.repo.Update(ctx, req); err != nil {
+		if appErr, ok := common.AsAppError(err); ok {
+			return nil, appErr
+		}
 		s.logger.Errorw("Failed to update service request", "error", err)
 		return nil, common.NewInternalError("Failed to update service request", err)
 	}

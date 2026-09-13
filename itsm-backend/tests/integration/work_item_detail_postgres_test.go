@@ -11,6 +11,7 @@ import (
 	"itsm-backend/common/tenantctx"
 	requestdomain "itsm-backend/handlers/service_request"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -69,7 +70,7 @@ func TestPostgresServiceRequestDetailPreservesRequestScopeForCustomFields(t *tes
 	clients, cfg := runtimeClients(t, f)
 	_, err := f.db.ExecContext(f.ctx, "GRANT SELECT ON service_requests,field_values TO "+cfg.User)
 	require.NoError(t, err)
-	owner := requestdomain.NewService(requestdomain.NewEntRepository(clients.Tenant), clients.Tenant, zap.NewNop().Sugar(), nil)
+	owner := requestdomain.NewService(requestdomain.NewEntRepository(clients.Tenant, executionfixture.Standard()), clients.Tenant, zap.NewNop().Sugar(), nil, executionfixture.Standard())
 	handler := requestdomain.NewHandler(owner)
 	router := gin.New()
 	router.GET("/detail", func(c *gin.Context) {

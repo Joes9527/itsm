@@ -51,9 +51,9 @@ func setupServiceCatalogFieldsRouter(t *testing.T) (*gin.Engine, *ent.Tenant, *e
 	scService := service_catalog.NewService(scRepo, client, logger, sameTransactionDirectory{})
 	scHandler := service_catalog.NewHandler(scService)
 
-	srRepo := service_request.NewEntRepository(client)
+	srRepo := service_request.NewEntRepository(client, executionfixture.Standard())
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	srService := service_request.NewService(srRepo, client, logger, service.NewApprovalChainResolver(client, logger))
+	srService := service_request.NewService(srRepo, client, logger, service.NewApprovalChainResolver(client, logger), executionfixture.Standard())
 	srHandler := service_request.NewHandler(srService)
 
 	// Wire the real shared Intake application: service request creation now

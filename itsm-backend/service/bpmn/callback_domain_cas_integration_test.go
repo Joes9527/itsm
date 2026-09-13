@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"os"
 	"sort"
 	"strings"
@@ -123,8 +124,8 @@ func TestServiceRequestCallbackConcurrentCompletePostgresHasSingleAppliedAggrega
 		NewServiceRequestServiceTaskHandler(setupClient, logger),
 		NewServiceRequestServiceTaskHandler(workerClient, logger),
 	}
-	handlers[0].SetServiceRequestService(servicerequesthandler.NewService(nil, setupClient, logger, nil))
-	handlers[1].SetServiceRequestService(servicerequesthandler.NewService(nil, workerClient, logger, nil))
+	handlers[0].SetServiceRequestService(servicerequesthandler.NewService(nil, setupClient, logger, nil, executionfixture.Standard()))
+	handlers[1].SetServiceRequestService(servicerequesthandler.NewService(nil, workerClient, logger, nil, executionfixture.Standard()))
 	results := make(chan callbackCASResult, 2)
 	for _, handler := range handlers {
 		go func(handler *ServiceRequestServiceTaskHandler) {

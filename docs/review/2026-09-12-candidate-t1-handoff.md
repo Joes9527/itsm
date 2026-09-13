@@ -312,3 +312,18 @@ B2 私有证据：
 - `s3-change-build.json`：后端全量构建 exit 0。`s3-change-tagged-compile.log`：integration_postgres 标签下受影响六包编译通过，未运行目标环境 E2E。
 
 独立 reviewer `review_execution_scope_s1` 确认生产事务、callback 委托和构造传递无其他阻断，复审确认 fixture 编译阻断关闭并读取回归/PG PASS。**本次未完成的验收**：真实候选 task completion/callback、完整 Change 审批/实施/评审生命周期和其并发重试，Change command/metadata 的迁移前回执专项验证；不能用已通过的 draft metadata/cancel 或标签编译代替。Requested Item、共享能力、生产者/消费者完整范围与 S4–S6/B3 仍未完成，候选不启动，T3/T4/G2/G3 不放行。固定 CandidateSHA 不变，无共享环境操作、推送或 main 合并。
+
+
+### B2 S3 Requested Item 原事务范围（2026-09-13）
+
+在 `dfa851b68` 上向 Requested Item Service/EntRepository 显式注入可信 execution policy，bootstrap 复用冻结实例，测试调用显式区分 standard/candidate。Update 的原 repository 事务在 extension identity 核验后、Ticket CAS 前准入；Delete 在 GuardDeletionTx 前准入；update/provision/aggregate workflow callback 在原事务首写前准入，assignment 改由同一事务读取、准入、CAS 和提交。原业务授权、版本与 no-op 行为保留。AccessCompletion contributor 显式接收 BPMN 原 `*ent.Tx`，在 access result 首写前准入，不另开事务。scope denied 映射 Forbidden，其他错误保持原 cause。
+
+B2 私有证据（均位于本机 candidate-delivery/b2）：
+
+- `s3-request-boundary-red.log`：历史 Requested Item update 被错误接受，边界测试 RED。先前 `s3-request-red.log` 是缺少 approval resolver 的 fixture 失败；修复后才获得有效 RED。
+- `s3-request-regression.log`：外部 service_request_test 的 repository 构造参数遗漏导致编译失败，已逐调用显式补齐 Standard，没有改用隐藏默认策略的包装器或削弱断言。
+- `s3-request-regression-final.log`：service_request/intake/service/controller/integration 五包定向回归 PASS。
+- `s3-request-final-pg.log`：完整真实私有 PG TestCandidateIntakeCreationBoundary PASS、未 skip。历史 update/delete 及 update/assign/provision/approve/complete callback 拒绝，Ticket、ServiceRequest 完整字段及 audit/outbox 数量不变；新成员各入口成功。update 和 complete_request 在 extension 实际写入后注入错误，base、extension、audit/outbox 全回滚。
+- `s3-request-build.json`：后端全量构建 exit 0。`s3-request-tagged-compile.log`：integration_postgres 标签下六包编译通过，仅编译，不代表目标环境 E2E。
+
+独立 reviewer `review_execution_scope_s1` 复核生产原事务、构造迁移和新增故障断言无阻断，并确认回归/最终 PG PASS。仍未验证真实 BPMN/KAF AccessCompletion 的双租户上下文传递和完整 task/ledger 回滚；直接域 callback 测试不能替代真实入口验收。update/provision 的初始读取仍在原有事务外，保留版本 CAS，本次没有声称全部读取均在事务内。共享能力、其他生产者/消费者、S4–S6/B3 仍未完成，S3 不勾选，候选不启动，T3/T4/G2/G3 不放行。固定 CandidateSHA 不变，无共享环境操作、推送或 main 合并。

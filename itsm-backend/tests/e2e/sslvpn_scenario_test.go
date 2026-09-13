@@ -144,8 +144,8 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 	scService := service_catalog.NewService(scRepo, client, logger, sameTransactionDirectory{})
 	scHandler := service_catalog.NewHandler(scService)
 
-	srRepo := service_request.NewEntRepository(client)
-	srService := service_request.NewService(srRepo, client, logger, service.NewApprovalChainResolver(client, logger))
+	srRepo := service_request.NewEntRepository(client, executionfixture.Standard())
+	srService := service_request.NewService(srRepo, client, logger, service.NewApprovalChainResolver(client, logger), executionfixture.Standard())
 	srHandler := service_request.NewHandler(srService)
 
 	// Wire the real shared Intake application, mirroring production bootstrap:
