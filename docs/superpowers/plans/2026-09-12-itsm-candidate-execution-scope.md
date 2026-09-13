@@ -115,12 +115,15 @@ S3 阶段记录（2026-09-13；基础提交 `6261941b4`，统一创建接入 `04
 
 真实引擎领取后由原Ticket handler另行通知/写Ticket，随后才推进流程。`s3-bpmn-escalation-scope-red.log`真实私有PG先验证正向，再在原handler调用前确定性关闭scope：sweep error但Ticket priority/status/updated_at已修改，整行保全FAIL；当前测试集不全绿。owner仅构造process/instance/callback前置夹具，不等于启动/入队全链。独立审阅确认RED有效；原测试cleanup恢复scope并隔离故意失败callback，未操作共享环境。
 
-- [ ] 引擎将当前callback id/tenant/executionKey/lease owner/attempt放入可信调用上下文；只读execution key不可作为写授权。
-- [ ] TicketService新增独立workflow升级所有者，由handler注入接口调用。保持escalate_to、notify_admin_ids和escalated流程语义，不复用HTTP升级语义；移除handler直接写。
-- [ ] 原事务锁定processing callback并核验当前owner/attempt/未过期lease/handler/action/kind及CallbackPredicate，重读instance结构WorkItem引用/业务类型/当前activity；user-task另核验completed task与持久completion actor，service-task使用initiator。
-- [ ] 参数只从持久callback读取，严格解析优先级与整数接收人，核验当前actor权限、接收人tenant/active、generic/未删除、scope/member及Ticket version CAS；操作摘要覆盖目标/动作/接收人，合法receipt重放仍重新授权。
-- [ ] 状态/priority/version、immutable audit receipt及EnqueueNotificationTx在同事务提交，保持原durable callback站内通知语义，不扩展企业渠道。领域提交后的流程推进沿既有引擎，推进失败重试以receipt幂等，不以字段相等判定已执行。
+- [x] 引擎将当前callback id/tenant/executionKey/lease owner/attempt放入可信调用上下文；只读execution key不可作为写授权。
+- [x] TicketService新增独立workflow升级所有者，由handler注入接口调用。保持escalate_to、notify_admin_ids和escalated流程语义，不复用HTTP升级语义；移除handler直接写。
+- [x] 原事务锁定processing callback并核验当前owner/attempt/未过期lease/handler/action/kind及CallbackPredicate，重读instance结构WorkItem引用/业务类型/当前activity；user-task另核验completed task与持久completion actor，service-task使用initiator。
+- [x] 参数只从持久callback读取，严格解析优先级与整数接收人，核验当前actor权限、接收人tenant/active、generic/未删除、scope/member及Ticket version CAS；操作摘要覆盖目标/动作/接收人，合法receipt重放仍重新授权。
+- [x] 状态/priority/version、immutable audit receipt及EnqueueNotificationTx在同事务提交，保持原durable callback站内通知语义，不扩展企业渠道。领域提交后的流程推进沿既有引擎，推进失败重试以receipt幂等，不以字段相等判定已执行。
 - [ ] 真实PG验证scope撤销、lease丢失、伪造目标/actor、通知/审计写后回滚及领域提交后流程推进失败重放；回归/构建及独立复审。领域事务与流程推进仍为分段事务，不声明全链原子。
+
+
+工作流升级事务增量 `bcd1f5c47` 已实现上述代码接入：handler不再直接写，bootstrap注入独立TicketService workflow command；原callback attempt/lease等可信身份在业务事务持久匹配并锁定callback/instance/Ticket，原事务scope/actor/version/审计/站内通知，领域receipt重放与后续引擎推进分段。version为持久回调必需字段，缺失拒绝；generic typed result接回原生命周期投影，保留原change别名规范化。s3-bpmn-escalation-full-pg.log完整候选边界PASS，无skip；真实worker positive/default、scope撤销、lease owner变化、专业目标拒绝、通知/审计实际写后回滚恢复、领域已提交而推进实际写后失败并在接收人禁用后成功receipt重放。定向三包回归/build/标签编译通过，独立复审无新增阻断。旧永久extension失败hook限定原用例生效，原断言未削弱。user-task分支/真实流程启动、普通actor撤权、旧attempt/过期/多worker专项仍待补，复合验收项不勾选；其他BPMN和共享写入口仍待逐项处理。完整证据与限制见T1最新交接。
 
 S3/S4/S5/S6及候选完整交付仍未完成，CandidateSHA不变、候选停止。
 
