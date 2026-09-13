@@ -74,7 +74,7 @@ func (s *WebhookEventSubscriber) consumeExecutionWebhook(ctx context.Context, ev
 	}
 	env, ok := event.(eventbus.Envelope)
 	if !ok {
-		return fmt.Errorf("candidate webhook requires the complete typed envelope")
+		return fmt.Errorf("webhook requires the complete typed envelope")
 	}
 	wire, err := json.Marshal(env)
 	if err != nil {

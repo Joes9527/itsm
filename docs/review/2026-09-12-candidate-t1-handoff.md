@@ -933,3 +933,13 @@ bootstrap实际注册器按webhook capability决定handler或known reserved type
 `s5-standard-transport-pg-redis.log` 使用真实SLA持久来源、明确私有owner校验连接及真实Redis，普通bus发布两次均以原eventID交付typed Envelope，冻结部署、空scope、WorkItem与payload保持，源Outbox整行和Audit保全。该连接不代表standard应用角色准入；传输重复交付不是外部副作用恰好一次。首次完整 `s5-standard-transport-full-private.log` 因旧历史fixture误用实现ExecutionEvent的类型且无authority而拒绝；改用明确不声明持久合同的historicalStreamEvent定义类型，保留原JSON字段/稳定元数据和原历史Stream/组/PEL断言，未放宽生产校验。最终 `s5-standard-transport-final-private.log` 完整候选边界、普通来源传输、Webhook Worker/ACK恢复及PG/Redis/MinIO构造保全race PASS，无skip/race；全后端 `s5-standard-transport-build.log` exit0，git diff --check通过。独立review_execution_scope_s1复核P2及fixture修订无新增阻断。
 
 普通Webhook尚未声明typed合同，仍须迁入原意图/Worker并删除同步分支；普通durable consumer组、进程重启和其它异步入口继续待完成。本前置不等于S5或候选交付完成，CandidateSHA及候选停止状态不变，无共享环境修改、企业外呼、push或main合并。
+
+### B2 S5 普通/候选 Webhook 持久所有者统一（2026-09-13）
+
+在 `83a9591a3` 后删除Webhook subscriber的完整standard同步外发分支，两模式唯一调用consumeExecutionWebhook；声明ExecutionEnvelopeRequired，原意图事务、消费Audit与WebhookDeliveryHandler不复制实现。普通typed订阅强制稳定logical owner，采用同一itsm:owner持久组/factory和Close管理；重复登记/启动拒绝，身份登记时冻结，同owner跨topic复用subscriber。非typed普通订阅仍保留原fanout合同，不伪造建单前AI事件主体。盘点无生产调用后同时删除旧SendToInstance helper，既有精确实例测试保留原位置并核验Worker真实使用的GetInstance。
+
+`s5-standard-webhook-red.log` 在旧路径返回成功后缺少消费Audit，确定性FAIL；`s5-standard-webhook-green.log` 真实PG/Redis/loopback原意图及Audit提交、阻断ACK、旧consumer退出同PEL保留、新consumer同组领取后原完整意图/Audit/Stream entry不变，通过race。随后真实共享Worker两目标各一次、published及交付Audit、重复poll无新增发送，另一历史topic/组/PEL保全。源由本测试candidate创建/monitor生成真实SLA事实，普通消费/Worker显式使用私有owner连接与standard policy；该组合验证共享所有者及传输合同，不冒充standard应用角色准入或完全普通模式创建旅程。端点断言次数，未逐字段核验body，重建consumer不等于OS/Redis服务重启。
+
+独立P2指出typed普通订阅缺authority仍可登记启动，`s5-standard-webhook-authority-red.log`复现；consumerIdentity现在登记和动态Subscribe均先拒绝缺失依赖，测试要求零durable分配且非typed普通订阅仍可启动。`s5-standard-webhook-authority-green.log` eventbus全包race PASS，复审关闭。`s5-standard-webhook-regression.log`相关包PASS；`s5-standard-webhook-full-private.log`完整候选边界、两模式来源/传输、Webhook故障和ACK恢复、PG/Redis/MinIO构造保全race PASS，无skip/race。删除无调用旧helper后 `s5-standard-webhook-final-regression.log` eventbus/service/bootstrap/connector/...再次PASS；全后端 `s5-standard-webhook-build.log` exit0，git diff --check通过。独立review_execution_scope_s1最终复核无阻断，开发指南同步删除旧同步流程描述。
+
+该检查点完成普通Webhook与候选持久消费/投递所有者的代码统一，不等于全部S5或候选交付完成。不可处理/旧非持久消息当前明确NACK，持久可见阻断、整个进程重启、并发撤权和其它异步入口仍待完成。CandidateSHA不变、候选未启动，B2/B3/T3/T4/G2/G3尚未放行；无共享环境修改、企业外呼、push或main合并。

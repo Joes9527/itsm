@@ -20,12 +20,16 @@ func (eb *WatermillEventBus) consumerIdentity(handler shared.EventHandler) (stri
 	if eb.routes == nil {
 		return "", fmt.Errorf("event transport execution configuration required")
 	}
-	if !eb.routes.candidate {
+	_, typed := handler.(ExecutionEnvelopeHandler)
+	if typed && eb.authority == nil {
+		return "", fmt.Errorf("persistent event authority required before subscription")
+	}
+	if !eb.routes.candidate && !typed {
 		return "", nil
 	}
 	owner, ok := handler.(DurableEventHandler)
 	if !ok {
-		return "", fmt.Errorf("candidate event handler must declare a durable consumer identity")
+		return "", fmt.Errorf("persistent event handler must declare a durable consumer identity")
 	}
 	name := owner.EventConsumerID()
 	if !consumerIDPattern.MatchString(name) {
@@ -37,7 +41,7 @@ func (eb *WatermillEventBus) consumerIdentity(handler shared.EventHandler) (stri
 // subscriberForLocked allocates client resources only; Subscribe owns network
 // operations. The caller holds mu so Close sees every owned subscriber.
 func (eb *WatermillEventBus) subscriberForLocked(consumer string) (streamSubscriber, error) {
-	if !eb.routes.candidate {
+	if consumer == "" {
 		return eb.subscriber, nil
 	}
 	if eb.newSubscriber == nil {

@@ -2,9 +2,7 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/pkg/eventbus"
 	"net/http"
@@ -36,32 +34,18 @@ func provisionTestWebhook(t *testing.T, manager *connector.Manager, tenantID int
 }
 
 func TestWebhookEventSubscriber_PushesToConfiguredWebhook(t *testing.T) {
-	var receivedBody []byte
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedBody, _ = io.ReadAll(r.Body)
-		w.WriteHeader(http.StatusOK)
-	}))
+	var received atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { received.Add(1); w.WriteHeader(http.StatusOK) }))
 	defer server.Close()
-
 	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar())
+	defer manager.CloseAll()
 	provisionTestWebhook(t, manager, 7, server.URL)
-
 	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar(), nil, executionfixture.Standard())
+	// A configured endpoint does not authorize raw synchronous delivery.
+	require.Error(t, sub.Handle(map[string]interface{}{"eventType": "sla.breached", "tenantId": "7", "ticketId": "28"}))
+	require.Zero(t, received.Load())
+	var _ eventbus.ExecutionEnvelopeHandler = sub
 
-	event := map[string]interface{}{
-		"eventType":  "sla.breached",
-		"tenantId":   "7",
-		"occurredAt": "2026-08-14T10:00:00Z",
-		"ticketId":   "28",
-	}
-
-	require.NoError(t, sub.Handle(event))
-	require.NotEmpty(t, receivedBody, "webhook server should receive a POST body")
-
-	var payload map[string]interface{}
-	require.NoError(t, json.Unmarshal(receivedBody, &payload))
-	// Manager.Send 通过连接器发送 Content——验证消息体含事件类型
-	assert.Contains(t, string(receivedBody), "sla.breached")
 }
 
 func TestWebhookEventSubscriber_RejectsTenantWithoutWebhook(t *testing.T) {
@@ -111,9 +95,9 @@ func TestWebhookEventSubscriber_SendsToEachDeclaredInstance(t *testing.T) {
 	}
 	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar(), nil, executionfixture.Standard())
 	for attempt := int32(1); attempt <= 10; attempt++ {
-		require.NoError(t, sub.Handle(map[string]interface{}{"eventType": "sla.breached", "tenantId": "7"}))
+		require.Error(t, sub.Handle(map[string]interface{}{"eventType": "sla.breached", "tenantId": "7"}))
 		for i := range counts {
-			require.Equal(t, attempt, counts[i].Load(), "every declared instance must receive this event once")
+			require.Zero(t, counts[i].Load(), "raw replay must not send to any declared target")
 		}
 	}
 }
@@ -135,8 +119,8 @@ func TestWebhookEventSubscriber_UsesDeliveryContext(t *testing.T) {
 	require.Error(t, handler.HandleContext(tenantctx.WithTenantID(t.Context(), 8), event))
 	require.Error(t, handler.HandleContext(tenantctx.SystemContext(t.Context(), "webhook-test", "no bypass"), event))
 	require.Zero(t, count.Load())
-	require.NoError(t, handler.HandleContext(tenantctx.WithTenantID(t.Context(), 7), event))
-	require.EqualValues(t, 1, count.Load())
+	require.Error(t, handler.HandleContext(tenantctx.WithTenantID(t.Context(), 7), event))
+	require.Zero(t, count.Load())
 }
 
 func TestWebhookExactInstanceDispatchDoesNotFallback(t *testing.T) {
@@ -148,12 +132,17 @@ func TestWebhookExactInstanceDispatchDoesNotFallback(t *testing.T) {
 	cfg := connector.Config{Name: "webhook", Provider: "chosen", TenantID: 7, Enabled: true, Settings: map[string]interface{}{"url": server.URL}}
 	require.NoError(t, manager.Provision(t.Context(), cfg))
 	msg := &connector.Message{Type: "text", Content: "test"}
-	require.Error(t, manager.SendToInstance(t.Context(), 8, "webhook", "chosen", msg))
-	require.Error(t, manager.SendToInstance(t.Context(), 7, "webhook", "missing", msg))
+	_, _, ok := manager.GetInstance(8, "webhook", "chosen")
+	require.False(t, ok)
+	_, _, ok = manager.GetInstance(7, "webhook", "missing")
+	require.False(t, ok)
 	require.Zero(t, count.Load())
-	require.NoError(t, manager.SendToInstance(t.Context(), 7, "webhook", "chosen", msg))
+	chosen, _, ok := manager.GetInstance(7, "webhook", "chosen")
+	require.True(t, ok)
+	require.NoError(t, chosen.Send(t.Context(), msg))
 	manager.Revoke(cfg)
 	provisionTestWebhook(t, manager, 7, server.URL)
-	require.Error(t, manager.SendToInstance(t.Context(), 7, "webhook", "chosen", msg))
+	_, _, ok = manager.GetInstance(7, "webhook", "chosen")
+	require.False(t, ok)
 	require.EqualValues(t, 1, count.Load(), "revoked target cannot fall back to remaining instance")
 }

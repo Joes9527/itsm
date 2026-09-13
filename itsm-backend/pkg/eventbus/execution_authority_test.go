@@ -204,7 +204,7 @@ func TestStandardTypedSubscriberRejectsUntrustedIdentity(t *testing.T) {
 	require.NoError(t, err)
 	subscriber := &controlledStreamSubscriber{messages: make(chan *message.Message, 1)}
 	received, contexts := make(chan interface{}, 1), make(chan context.Context, 1)
-	bus := &WatermillEventBus{routes: routes, publisher: &fakePublisher{}, subscriber: subscriber, logger: zap.NewNop().Sugar(), authority: eventAuthorityFunc(func(_ context.Context, ref executionscope.Ref, env Envelope) error {
+	bus := &WatermillEventBus{routes: routes, publisher: &fakePublisher{}, subscriber: subscriber, newSubscriber: func(string) (streamSubscriber, error) { return subscriber, nil }, logger: zap.NewNop().Sugar(), authority: eventAuthorityFunc(func(_ context.Context, ref executionscope.Ref, env Envelope) error {
 		if ref.DeploymentID != "standard-source" || ref.ScopeID != "" || ref.TenantID != 1 || env.EventID != "stored-1" {
 			return errors.New("source missing")
 		}

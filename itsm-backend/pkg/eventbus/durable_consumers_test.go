@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"itsm-backend/common/executionscope"
 	"itsm-backend/config"
 )
 
@@ -150,4 +151,47 @@ func TestDurableDynamicSubscriptionFailureStopsPartialRoutes(t *testing.T) {
 	require.Equal(t, 2, calls)
 	require.EqualValues(t, 1, sub.closes.Load(), "partial subscription must not stay live after failure")
 	require.Error(t, bus.ctx.Err())
+}
+
+type typedNamedConsumer struct{ *namedConsumer }
+
+func (typedNamedConsumer) ExecutionEnvelopeRequired() {}
+
+func TestStandardTypedOwnersUseFrozenDurableGroups(t *testing.T) {
+	routes, err := newStreamRoutes(config.ExecutionConfig{Mode: "standard", DeploymentID: "standard-durable"})
+	require.NoError(t, err)
+	bus := &WatermillEventBus{authority: eventAuthorityFunc(func(context.Context, executionscope.Ref, Envelope) error { return nil }), routes: routes, publisher: &fakePublisher{}, subscriber: &lifecycleSubscriber{}, logger: zap.NewNop().Sugar()}
+	defer bus.Close()
+	var groups []string
+	bus.newSubscriber = func(group string) (streamSubscriber, error) {
+		groups = append(groups, group)
+		return &lifecycleSubscriber{}, nil
+	}
+	owner := typedNamedConsumer{&namedConsumer{name: "webhook"}}
+	require.NoError(t, bus.RegisterSubscription("sla.breached", owner))
+	require.Error(t, bus.RegisterSubscription("sla.breached", typedNamedConsumer{&namedConsumer{name: "webhook"}}))
+	require.Error(t, bus.RegisterSubscription("sla.breached", typedNamedConsumer{&namedConsumer{name: "Invalid:owner"}}))
+	require.NoError(t, bus.RegisterSubscription("sla.breached", lifecycleHandler{}))
+	owner.name = "changed-after-registration"
+	require.Empty(t, groups)
+	require.NoError(t, bus.Start(context.Background()))
+	require.Equal(t, []string{"itsm:webhook"}, groups)
+	require.Error(t, bus.Subscribe("sla.breached", typedNamedConsumer{&namedConsumer{name: "webhook"}}))
+	require.NoError(t, bus.Subscribe("ticket.created", typedNamedConsumer{&namedConsumer{name: "webhook"}}))
+	require.Len(t, groups, 1)
+}
+
+func TestStandardTypedOwnerRequiresAuthorityBeforeSubscription(t *testing.T) {
+	routes, err := newStreamRoutes(config.ExecutionConfig{Mode: "standard", DeploymentID: "missing-authority"})
+	require.NoError(t, err)
+	bus := &WatermillEventBus{routes: routes, publisher: &fakePublisher{}, subscriber: &lifecycleSubscriber{}, logger: zap.NewNop().Sugar()}
+	defer bus.Close()
+	var allocations int
+	bus.newSubscriber = func(string) (streamSubscriber, error) { allocations++; return &lifecycleSubscriber{}, nil }
+	owner := typedNamedConsumer{&namedConsumer{name: "webhook"}}
+	require.Error(t, bus.RegisterSubscription("sla.breached", owner))
+	require.NoError(t, bus.RegisterSubscription("ticket.created", lifecycleHandler{}))
+	require.NoError(t, bus.Start(context.Background()))
+	require.Error(t, bus.Subscribe("sla.breached", owner))
+	require.Zero(t, allocations, "missing authority must fail before durable group allocation")
 }

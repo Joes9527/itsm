@@ -145,26 +145,6 @@ func (m *Manager) Send(ctx context.Context, tenantID int, name string, msg *Mess
 	return c.Send(ctx, msg)
 }
 
-// SendToInstance dispatches to the declared tenant/name/provider identity.
-// A missing or revoked instance must never fall back to another target.
-func (m *Manager) SendToInstance(ctx context.Context, tenantID int, name, provider string, msg *Message) error {
-	if ctx == nil || tenantID <= 0 || name == "" || msg == nil {
-		return fmt.Errorf("invalid connector dispatch")
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	m.mu.RLock()
-	inst, ok := m.instances[instanceKey(Config{TenantID: tenantID, Name: name, Provider: provider})]
-	if !ok || !inst.cfg.Enabled {
-		m.mu.RUnlock()
-		return fmt.Errorf("connector instance not provisioned")
-	}
-	c := inst.conn
-	m.mu.RUnlock()
-	return c.Send(ctx, msg)
-}
-
 // HealthCheckAll 对所有运行中的连接器做健康检查
 func (m *Manager) HealthCheckAll(ctx context.Context) map[string]HealthStatus {
 	m.mu.RLock()

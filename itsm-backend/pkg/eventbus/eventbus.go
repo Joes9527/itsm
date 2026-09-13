@@ -91,7 +91,7 @@ func (eb *WatermillEventBus) RegisterSubscription(topic string, handler shared.E
 	if err != nil {
 		return err
 	}
-	if eb.routes.candidate {
+	if consumer != "" {
 		for _, existing := range eb.subscriptions {
 			if existing.topic == topic && existing.consumer == consumer {
 				return fmt.Errorf("duplicate durable event subscription")
@@ -185,9 +185,8 @@ func NewWatermillEventBus(cfg *config.RedisConfig, execution config.ExecutionCon
 		return subscriber, nil
 	}
 	bus := &WatermillEventBus{authority: authority, routes: routes, publisher: publisher, logger: logger}
-	if routes.candidate {
-		bus.newSubscriber = makeSubscriber
-	} else {
+	bus.newSubscriber = makeSubscriber
+	if !routes.candidate {
 		bus.subscriber, err = makeSubscriber("")
 		if err != nil {
 			_ = publisher.Close()
@@ -342,7 +341,7 @@ func (eb *WatermillEventBus) subscribeRoute(eventType, consumer string, route st
 		return fmt.Errorf("event runtime is not accepting subscriptions")
 	}
 	key := consumer + ":" + route.topic
-	if eb.routes.candidate && eb.activeSubscriptions[key] {
+	if consumer != "" && eb.activeSubscriptions[key] {
 		eb.mu.Unlock()
 		return fmt.Errorf("durable event subscription already started")
 	}

@@ -16,17 +16,17 @@
 
 工具队列及事件订阅需要显式运行阶段启动；取消后等待已启动任务退出，再关闭数据库和连接器。禁止从业务构造器调用 Start。禁用的必需能力必须报告未验证，不能把 pending、外部阻断或未运行的 Worker 标为成功。
 
-候选 Stream 消费者必须通过 `EventConsumerID()` 声明稳定逻辑所有者；登记时固定身份，同一 owner/topic 重复登记拒绝。审计使用 `event_audit`，Webhook 使用 `webhook`，分别持有 `itsm:<owner>` 消费组；副本共享组但由传输库生成不同消费者实例名。组只在显式 Start/Subscribe 时建立，首次从 `0` 读取该候选 namespace 内的离线消息，已有组保留进度；不得用重建组、SETID、删除历史或订阅旧裸 topic 恢复消费。Close 先取消订阅并等待订阅建立结束，再关闭每个拥有的 subscriber 并等待处理退出。候选多租户订阅在部分建立后失败时停止整个事件运行实例，保留组及进度，不留下部分租户继续处理；恢复需重新构造并显式启动。
+候选 Stream 消费者及普通模式的完整信封消费者必须通过 `EventConsumerID()` 声明稳定逻辑所有者；登记时固定身份，同一 owner/topic 重复登记拒绝。完整信封订阅登记及动态Subscribe必须已注入来源校验器，缺失时在分配持久subscriber前拒绝。审计使用 `event_audit`，Webhook 使用 `webhook`，分别持有 `itsm:<owner>` 消费组；副本共享组但由传输库生成不同消费者实例名。组只在显式 Start/Subscribe 时建立，首次从 `0` 读取对应 topic 内的离线消息，已有组保留进度；不得用重建组、SETID、删除历史或订阅旧裸 topic 恢复消费。Close 先取消订阅并等待订阅建立结束，再关闭每个拥有的 subscriber 并等待处理退出。候选多租户订阅在部分建立后失败时停止整个事件运行实例，保留组及进度，不留下部分租户继续处理；恢复需重新构造并显式启动。
 
-`redis.event_stream.claim_idle`、`claim_interval`、`nack_delay` 使用时长格式（如 `60s`、`5s`、`1s`）；负数拒绝，零或未配置分别使用当前传输库的60秒、5秒及应用的1秒默认值。配置由构造器复制，候选消费者使用这些值；standard 保留原 fanout 消费语义。领取超时不是排他锁：慢处理可能被其他实例重领，写入所有者必须重验授权并提供持久幂等回执。当前审计已具备该回执，语义是至少一次投递加审计幂等，不是传输恰好一次。Webhook 的候选 typed envelope 已接入下述消费事务，但完整投递恢复、不可处理事件的持久阻断及其它异步入口仍未完成，不能据此启动候选。
+`redis.event_stream.claim_idle`、`claim_interval`、`nack_delay` 使用时长格式（如 `60s`、`5s`、`1s`）；负数拒绝，零或未配置分别使用当前传输库的60秒、5秒及应用的1秒默认值。配置由构造器复制，持久消费者使用这些值；standard 的非完整信封订阅保留原 fanout 消费语义。领取超时不是排他锁：慢处理可能被其他实例重领，写入所有者必须重验授权并提供持久幂等回执。当前审计已具备该回执，语义是至少一次投递加审计幂等，不是传输恰好一次。Webhook 的候选 typed envelope 已接入下述消费事务，但完整投递恢复、不可处理事件的持久阻断及其它异步入口仍未完成，不能据此启动候选。
 
-Webhook 事件订阅只接受 `WebhookEventTopics()` 注册的类型；未配置目标返回错误，不再静默成功。同步发送按既有 tenant/name/provider 实例身份精确投递，缺失或已撤销目标不回退到同名其它实例；传输 context 的取消和租户限制传入发送超时。此查找只验证调用时的实例表，不构成并发撤销/同 key 配置变更栅栏。多目标部分成功后重投仍可能重复成功目标；候选持久投递采用下述意图与回执协议，不得因同步路由修复宣称外部幂等或启用候选 Webhook。
+Webhook 事件订阅只接受 `WebhookEventTopics()` 注册的类型及完整持久信封，普通与候选模式共用下述意图事务和Worker。原同步外发分支已删除；配置目标或传入原始map均不能触发直接外发。Webhook声明稳定逻辑所有者`webhook`，其消费组按既有生命周期建立/关闭，错误或旧非持久消息拒绝并NACK；不可处理消息的持久阻断仍待完成。
 
-持久事件来源校验使用冻结部署身份：`ExecutionPolicy.EventRef` 在standard模式返回部署与租户、空scope，在candidate模式返回原准入ref；`CandidateRef`仍只适用于candidate。EventRef本身不赋予业务权限。共享authority在原事务核验持久Outbox主体、事件ID、载荷及发生时间，candidate另保留scope/角色绑定/成员门禁。普通模式发布ExecutionEvent时同样强制稳定事件类型/租户、持久来源校验与原eventID；声明ExecutionEnvelopeHandler的订阅者仅在严格信封、冻结部署/模式、transport ID及来源验证后收到完整Envelope。没有持久主体的既有事件不伪造WorkItem。普通Webhook持久接线及消费组仍待统一，不可将来源与传输支持当作全链路上线证明。
+持久事件来源校验使用冻结部署身份：`ExecutionPolicy.EventRef` 在standard模式返回部署与租户、空scope，在candidate模式返回原准入ref；`CandidateRef`仍只适用于candidate。EventRef本身不赋予业务权限。共享authority在原事务核验持久Outbox主体、事件ID、载荷及发生时间，candidate另保留scope/角色绑定/成员门禁。普通模式发布ExecutionEvent时同样强制稳定事件类型/租户、持久来源校验与原eventID；声明ExecutionEnvelopeHandler的订阅者仅在严格信封、冻结部署/模式、transport ID及来源验证后收到完整Envelope。没有持久主体的既有事件不伪造WorkItem。普通Webhook已接入同一持久意图/Worker及稳定消费组；这不代表运行角色准入、全部重启场景或目标环境上线证明。
 
-候选 Webhook subscriber 必须注入数据库 client 与冻结 ExecutionPolicy，拒绝原始 map；完整 typed Envelope 的 active scope、角色绑定、成员及持久来源在同一 RR 事务核验，按当前明确目标建立 `webhook.event.delivery.requested` outbox 意图与唯一 `webhook_consume:<sourceEventID>` 审计回执。回执状态 `enqueued` / 202 仅表示意图已提交，不表示外部投递成功。重放再次校验来源，核对原回执及完整持久意图摘要，复用原目标集合；配置新增实例不扩大旧事件的投递范围。摘要使用保留数字精度的JSON对象键规范化，容纳JSONB重排但不忽略未知字段。目标只保存provider和URL摘要，不保存URL/凭据；该摘要不等于完整配置版本。原始来源保存在审计字符串中，Worker使用回执原文重验来源，并以完整意图摘要校对JSONB副本。
+Webhook subscriber 在两模式均必须注入数据库 client 与冻结 ExecutionPolicy，拒绝原始 map；完整 typed Envelope 的持久来源在同一 RR 事务核验，candidate另核验active scope、角色绑定与成员，按当前明确目标建立 `webhook.event.delivery.requested` outbox 意图与唯一 `webhook_consume:<sourceEventID>` 审计回执。回执状态 `enqueued` / 202 仅表示意图已提交，不表示外部投递成功。重放再次校验来源，核对原回执及完整持久意图摘要，复用原目标集合；配置新增实例不扩大旧事件的投递范围。摘要使用保留数字精度的JSON对象键规范化，容纳JSONB重排但不忽略未知字段。目标只保存provider和URL摘要，不保存URL/凭据；该摘要不等于完整配置版本。原始来源保存在审计字符串中，Worker使用回执原文重验来源，并以完整意图摘要校对JSONB副本。
 
-候选 Webhook handler 已接入共享outbox Worker，按当前 publishing claim/token/租约/attempt marker、WorkItem、完整意图摘要、消费回执身份及意图成员核验；发送后重验并写 `webhook_deliver:<eventID>` 交付审计，再由原Worker标记published。`webhook`能力关闭时，注册器把该type保留为known reserved，outbox可运行但不领取这些意图。前置明确拒绝记blocked，基础设施错误保留原cause由已有Worker处理；发出请求后的错误、非2xx或回执不确定记delivery_unknown，不自动重发。
+Webhook handler 在两模式均接入共享outbox Worker，按当前 publishing claim/token/租约/attempt marker、WorkItem、完整意图摘要、消费回执身份及意图成员核验；发送后重验并写 `webhook_deliver:<eventID>` 交付审计，再由原Worker标记published。`webhook`能力关闭时，注册器把该type保留为known reserved，outbox可运行但不领取这些意图。前置明确拒绝记blocked，基础设施错误保留原cause由已有Worker处理；发出请求后的错误、非2xx或回执不确定记delivery_unknown，不自动重发。
 
 发送捕获精确实例对象及进程内generation，校验对象在Init冻结的URL摘要后使用同一对象发送，发送后核对当前generation。builtin同时冻结endpoint和签名secret，不从可变Config map重新取出站目标；禁止HTTP自动重定向，3xx不视为成功。URL摘要不证明完整配置版本，generation只识别当前进程内实例重绑，不是跨进程的持久版本或并发撤权栅栏。实例在发送后变化可能意味着原目标已接收，须保留unknown；不得改投新目标。
 
