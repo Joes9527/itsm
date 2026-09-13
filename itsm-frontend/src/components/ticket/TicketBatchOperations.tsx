@@ -77,19 +77,19 @@ const TicketBatchOperations: React.FC<TicketBatchOperationsProps> = ({
         description: '将选中的工单分配给指定处理人',
       },
       {
-        key:'updateStatus',
+        key: 'update_status',
         label: '批量更新状态',
         icon: <Flag />,
         description: '批量更新工单状态',
       },
       {
-        key:'addTags',
+        key: 'add_tags',
         label: '批量添加标签',
         icon: <Tag />,
         description: '为选中的工单添加标签',
       },
       {
-        key:'setPriority',
+        key: 'set_priority',
         label: '批量设置优先级',
         icon: <Flag />,
         description: '批量设置工单优先级',

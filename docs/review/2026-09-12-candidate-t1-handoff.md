@@ -785,3 +785,13 @@ Callback contract新增version及generic typed lifecycle result，沿既有流�
 证据：`s3-ticket-edit-concurrent-pg.log` 初始并发定向PASS；`s3-ticket-edit-history-pg.log` 补强胜方完整Result/title和历史用例后PASS；最终 `s3-ticket-edit-concurrent-final-pg.log` 完整TestCandidateIntakeCreationBoundary PASS无skip，`s3-ticket-edit-concurrent-race.log` 两个新增场景的真实私有PG及Go race检测PASS。新用例直接通过，属于补强已有实现验证，未描述为新的业务RED。独立review_execution_scope_s1只读审阅及补强后复审均无阻断；git diff --check通过。生产代码/前端未变，未重复构建或前端测试。
 
 同时设计worktree纠正原设计顶部“实施未开始”的过期状态，保留accepted并明确进行中、候选未启动、G2/G3未通过，链接当前实施入口。完整S3/S4/S5/S6及B3/T3/T4/G2/G3仍未完成，真实组件/浏览器、完整业务周期与候选运行不能由这些测试替代。固定CandidateSHA不变，无WSL/共享数据库操作、企业实发、推送或main合并。
+
+### B2 S3 编辑真实组件交互与批量入口修复（2026-09-13）
+
+在 `12c38eda4` 后补入 TicketDetail 普通编辑与 TicketBatchOperations 的真实 React/AntD 组件测试，API 边界使用 mock。Detail 通过实际编辑按钮、标题输入、Alt+R 刷新和保存按钮验证：表单打开时 version 冻结；不确定结果再次确认复用完整 payload/version/operationId；明确409/4090后刷新并重新打开表单确认才使用新版本和新操作。测试使用 document.body 作为键盘事件目标；初轮 window 目标和 JSDOM 样式查询兼容性失败属于测试环境问题，不计业务RED。
+
+真实批量菜单测试发现 updateStatus/addTags/setPriority 与 render/execute 的 update_status/add_tags/set_priority 不一致。`s3-ticket-edit-batch-menu-red.log` 两项实际菜单操作均打开空表单并缺少对应标签；生产代码仅统一三个菜单 key 至既有执行分支，不增加映射或兼容入口。新增状态/优先级/标签菜单字段可达性测试；标签只核验打开字段，不声称提交成功。批量状态及优先级通过实际选择和确认模拟网络中断，父组件刷新版本后再次确认仍使用完整原请求；明确冲突后再次确认才使用刷新版本及新operationId，不自动重提。
+
+最终 `s3-ticket-edit-component-full.log` 两套完整组件测试23 PASS、无skip；定向运行关闭全仓coverage门槛。`s3-ticket-edit-component-typecheck.log` 主题校验与全前端type-check exit0；git diff --check通过。独立review_execution_scope_s1只读审阅无新增阻断。未改后端，因此未重复Go构建/PG测试。PointerEventsCheckLevel.Never沿用组件测试环境约定，不能证明浏览器遮罩、布局与点击可达性；mock刷新及冲突也不能替代实际HTTP、后端提交或候选业务E2E。
+
+本轮仅补齐普通详情/批量编辑的组件证据，AI建议实际交互、跨页面重载恢复、浏览器和候选业务周期仍未验证；S3/S4/S5/S6及B3/T3/T4/G2/G3保持未完成。固定CandidateSHA仍为d7470a32dbb87acc9b5e4d9a895a146410723561，候选未启动；无WSL或共享数据库变更、企业实发、推送或main合并。
