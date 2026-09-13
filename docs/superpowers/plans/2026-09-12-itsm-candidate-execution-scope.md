@@ -203,6 +203,8 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+结果写回撤权RED检查点 `73c3ce8a4`：真实ToolQueue业务提交后、结果实际UPDATE前，独立连接成功提交scope关闭，ProcessJob仍nil且pending→done。最终race RED确认撤权提交标记、调用整行变化，见T1及s5-tool-revocation-final-red.log。当前测试失败，生产缺陷未修，不能引用此前GREEN关闭此项。下一步在可信数据库窄入口锁住session_user binding与scope至原事务提交/回滚，保持业务身份只读；锁后核验mode/deployment/tenant/scope/登记和事务设置，standard显式binding，固定search_path/剥离PUBLIC和默认ACL，统一与INSERT/审批锁顺序。验证撤权先提交拒绝，以及写事务先持锁时撤权实际等待提交/回滚后生效；新锁下同步hook须改为有界并发测试，不能把超时当撤权成功。CandidateSHA与未启动状态不变，全部交付门禁未放行。
+
 工具完成记录检查点 `da9a5783c`：真实PG重放覆盖首次replayed结果RED→GREEN，done经当前来源/审批身份预检后不再执行；完成/失败写回自有事务复核并按身份/参数/审批和非done条件更新，错误固定。实际post-UPDATE故障回滚调用整行，创建业务已提交，重试一工单恢复done；nil registry失败路径重试固定failed，非未知工具查找验收。回归另发现关闭竞态取消错误遗漏ErrClosed及测试清理挂死，现统一锁内分类保留双cause并保证释放；具名工具race三次、最终完整私有race、build和独立复核通过，无skip/race，证据详见T1。并发成功/失败与审批参数变化竞争、scope撤权栅栏及业务首次写授权仍待完成。CandidateSHA和未启动状态不变，未放行后续门禁。
 
 041业务身份准入检查点 `ace4236d2`：真实PG复现缺SELECT、表/列UPDATE、登记函数EXECUTE均被旧检查放行的四项RED，现要求工具登记表只读并拒绝登记函数直接执行；有效身份与撤回危险授权后均通过。运输身份未放宽，工具来源读取属tenant路径。ScopeRegistration、完整私有恢复/构造回归、database/bootstrap race及build通过，无skip/race，独立复核无阻断，详见T1。fixture不是完整迁移目录顺序验收；目标PG17迁移和显式角色授权仍待B交接。业务原事务与结果写回继续待完成，CandidateSHA与未启动状态不变，交付门禁未放行。
