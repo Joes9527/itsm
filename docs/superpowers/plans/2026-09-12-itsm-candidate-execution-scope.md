@@ -474,3 +474,10 @@ Graph/SMTP loopback、目标变化零调用、发送中换代unknown、v2形状�
 真实任务私有PG/SMTP12场景（包含实际RCPT/正文、篡改、旧版本、未知字段/渠道、manifest/receipt冲突、写后故障及恢复），actor六负一正、两个HTTP负例、相关service/controller具名race、既定PG16/Redis/MinIO完整suite和全后端build通过；独立最终只读复审无本增量提交阻断。原worker SQLite仅明确domain double策略证据，真实consumer保留FOR UPDATE并以PG验证。详见T1最新交接记录；未冒称service全量或bootstrap无匹配用例为其完整测试。
 
 后续仍须claim专项负例、candidate受限角色发送、Graph候选local_only准入、consumer现行RBAC/并发撤权及其余S5/S6/G2/T3/T4/G3。完整S5不勾选完成。CandidateSHA仍d7470a32dbb87acc9b5e4d9a895a146410723561，候选停止，无WSL/共享数据库操作、企业外发、push/main合并。
+
+
+### S5 Incident领取与来源预检检查点（2026-09-14）
+
+测试提交ff9ffe323以真实repo领取/attempt建立前置，增加合法SMTP正例及token/lease/marker/event/tenant/status/row/type负例，追加Alert删除与Alert→Incident→WorkItem/tenant关联更换拒绝。PG原始outbox完整行与全部audit内容快照避免Ent隐藏字段造成假保全；不宣称全部source表不变。全部29协议场景race PASS、独立复核无新增阻断，详细日志与首次FK保护失败见T1记录。生产代码未改，本轮未重复无关全构建/全suite。
+
+仅关闭这批发送前claim/source预检证据缺口；candidate受限角色实际发送、并发撤权、Graph候选准入及完整S5/S6/G2/T3/T4/G3继续未完成。CandidateSHA不变，候选保持停止，未操作WSL/共享数据或企业发送。
