@@ -276,6 +276,9 @@ func (c *IncidentController) UpdateIncident(ctx *gin.Context) {
 	}
 	response, err := c.incidentService.UpdateIncident(ctx.Request.Context(), id, &req, tenantID, creation.Identity{ActorID: ctx.GetInt("user_id"), TenantID: tenantID, Role: ctx.GetString("role"), Channel: "http"})
 	if err != nil {
+		if common.RespondSerializationConflict(ctx, err) {
+			return
+		}
 		// 处理版本冲突错误
 		if common.IsVersionConflictError(err) {
 			conflictErr := err.(*common.VersionConflictError)
@@ -813,6 +816,9 @@ func (c *IncidentController) AssignIncident(ctx *gin.Context) {
 	tenantID := ctx.GetInt("tenant_id")
 	incident, err := c.incidentService.AssignIncident(ctx.Request.Context(), id, assigneeID, tenantID, creation.Identity{ActorID: ctx.GetInt("user_id"), TenantID: tenantID, Role: ctx.GetString("role"), Channel: "http"})
 	if err != nil {
+		if common.RespondSerializationConflict(ctx, err) {
+			return
+		}
 		c.logger.Errorw("Failed to assign incident", "error", err, "id", id)
 		common.Fail(ctx, common.InternalErrorCode, err.Error())
 		return

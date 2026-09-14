@@ -12,7 +12,6 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/user"
 )
 
 // Only explicit actor/permission/participant denials may remove a row from a
@@ -48,8 +47,8 @@ func (e *CustomProcessEngine) authorizeBoundTask(ctx context.Context, client *en
 	default:
 		return fmt.Errorf("unsupported bound task command %q", command)
 	}
-	actor, err := loadTaskMutationActor(ctx, client, scope)
-	if ent.IsNotFound(err) {
+	actor, err := e.resolveAssignmentUser(ctx, client, scope.UserID, scope.TenantID)
+	if unavailableBPMNIdentity(err) {
 		return denyBPMNTaskAccess("bound task actor unavailable")
 	}
 	if err != nil {
@@ -59,7 +58,8 @@ func (e *CustomProcessEngine) authorizeBoundTask(ctx context.Context, client *en
 	if err != nil {
 		return err
 	}
-	visible, err := client.Ticket.Query().Where(ticket.ID(item.ID), ticket.TenantID(scope.TenantID), authorization.WorkItemRowScope(actor.ID, actor.Role)).Exist(ctx)
+	role := authorization.EffectiveSessionRole(actor)
+	visible, err := client.Ticket.Query().Where(ticket.ID(item.ID), ticket.TenantID(scope.TenantID), authorization.WorkItemRowScope(actor.ID, role)).Exist(ctx)
 	if err != nil {
 		return err
 	}
@@ -72,11 +72,11 @@ func (e *CustomProcessEngine) authorizeBoundTask(ctx context.Context, client *en
 		taskAction = "update"
 		elevated = scope.CanUpdateAllTasks
 	}
-	if !authorization.HasResourcePermission(client, actor.Role, "task", taskAction, scope.TenantID) ||
-		!authorization.HasResourcePermission(client, actor.Role, policy.Resource, "read", scope.TenantID) {
+	if !authorization.HasResourcePermission(client, role, "task", taskAction, scope.TenantID) ||
+		!authorization.HasResourcePermission(client, role, policy.Resource, "read", scope.TenantID) {
 		return denyBPMNTaskAccess("insufficient bound task read permission")
 	}
-	if command != "" && !authorization.HasResourcePermission(client, actor.Role, policy.Resource, policy.FulfillmentAction(), scope.TenantID) {
+	if command != "" && !authorization.HasResourcePermission(client, role, policy.Resource, policy.FulfillmentAction(), scope.TenantID) {
 		return denyBPMNTaskAccess("insufficient professional fulfillment permission")
 	}
 	assignment, err := e.resolveTaskAssignment(ctx, client, task)
@@ -124,6 +124,8 @@ func (s *bpmnTaskService) ProjectTaskView(ctx context.Context, task *ent.Process
 	result.Assignee = assignment.Assignee
 	result.AssigneeSource = assignment.Source
 	result.AssignmentState = assignment.State
+	result.ResponsibleUserID = assignment.ResponsibleUserID
+	result.ActorID = assignment.ActorID
 	result.UIActions = s.engine.taskUIActions(ctx, task)
 	return result, nil
 }
@@ -138,8 +140,8 @@ func (e *CustomProcessEngine) boundAssignmentMatchesIdentity(ctx context.Context
 	if err != nil || id <= 0 {
 		return false, nil
 	}
-	owner, err := e.client.User.Query().Where(user.ID(id), user.TenantID(task.TenantID)).Only(ctx)
-	if ent.IsNotFound(err) {
+	owner, err := e.resolveAssignmentUser(ctx, e.client, id, task.TenantID)
+	if unavailableBPMNIdentity(err) {
 		return false, nil
 	}
 	if err != nil {

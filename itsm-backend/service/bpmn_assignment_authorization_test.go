@@ -121,7 +121,11 @@ func TestBPMNBoundAssignmentResolverFailsClosed(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			require.Equal(t, "unavailable", assignment.State)
+			wantState := "unavailable"
+			if scenario == "missing" {
+				wantState = "unassigned"
+			}
+			require.Equal(t, wantState, assignment.State)
 			require.Empty(t, assignment.Assignee)
 		})
 	}

@@ -143,6 +143,7 @@ terminal mutation:
   run existing domain callback in owning transaction -> commit
 ```
 
+- [ ] Complete the verified Task4 MSP integration: bound task effective-owner/actor lookup must reuse the existing directory/current-allocation policy, accepting authorized active MSP identities under customer RLS while denying revoked/unallocated/inactive/ordinary foreign identities. Keep row/professional/BPMN permission intersections and preserve exact callback provenance; no initiator or variables fallback.
 - [ ] Add real Postgres races: reassign vs complete/create/terminate and audit failure mid multi-task termination. Assert one serial order, no mixed owner history, no partial cancellation, no deadlock, old actor denied after successful assignment response. Use isolated schema and ordinary tenant connection; do not substitute SQLite for this evidence.
 - [ ] Run focused lifecycle/concurrency tests then affected engine suite. Commit `fix(bpmn): serialize bound task lifecycle with WorkItem assignment`.
 

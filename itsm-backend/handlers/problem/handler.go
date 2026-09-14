@@ -436,6 +436,9 @@ func (h *Handler) Update(c *gin.Context) {
 
 	updated, err := h.service.Update(c.Request.Context(), tenantID, id, updates, creation.Identity{ActorID: c.GetInt("user_id"), TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
 	}

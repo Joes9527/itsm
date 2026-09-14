@@ -113,7 +113,7 @@ func (e *CustomProcessEngine) StartProcessByDefinitionID(ctx context.Context, de
 		return nil, &processStartDefinitionError{}
 	}
 	keys := make([]string, 0)
-	txEngine := e.forClient(tx.Client(), &keys)
+	txEngine := e.forTransaction(tx, &keys)
 	instance, err := txEngine.startResolvedProcess(ctx, resolved, businessKey, businessType, businessID, variables, identity, digest)
 	if err != nil {
 		_ = tx.Rollback()

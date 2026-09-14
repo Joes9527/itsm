@@ -118,6 +118,10 @@ func (e *CustomProcessEngine) CompleteKafDelegatedTask(ctx context.Context, ledg
 		return fmt.Errorf("start KAF BPMN completion transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	task, err = lockBPMNTaskLifecycle(ctx, tx.Client(), task)
+	if err != nil {
+		return err
+	}
 	if task.CallbackAction == accessgrant.Capability {
 		if e.accessCompletionContributor == nil {
 			return fmt.Errorf("verified access completion owner unavailable")
@@ -132,13 +136,13 @@ func (e *CustomProcessEngine) CompleteKafDelegatedTask(ctx context.Context, ledg
 	} else if variables["kaf_access_result"] != nil {
 		return fmt.Errorf("access result supplied for a different delegated capability")
 	}
-	txEngine := e.forClient(tx.Client(), nil)
+	txEngine := e.forTransaction(tx, nil)
 	receipt, err := txEngine.ensureKafCompletionReceipt(ctx, ledger.ID, ledger.TenantID, taskID)
 	if err != nil {
 		return err
 	}
 	executionKeys := make([]string, 0)
-	effect, err := e.completeTaskWithClient(ctx, tx.Client(), taskID, completionVariables, &executionKeys)
+	effect, err := txEngine.completeTaskWithClient(ctx, tx.Client(), taskID, completionVariables, &executionKeys)
 	if err != nil {
 		return err
 	}
@@ -300,7 +304,7 @@ func (e *CustomProcessEngine) enqueueRecoveredKafCallback(ctx context.Context, l
 		return err
 	}
 	keys := make([]string, 0, 1)
-	txEngine := e.forClient(tx.Client(), &keys)
+	txEngine := e.forTransaction(tx, &keys)
 	if err := txEngine.enqueueUserTaskCallback(ctx, task, descriptor, plan); err != nil {
 		return err
 	}

@@ -350,6 +350,9 @@ func (h *Handler) UpdateChange(c *gin.Context) {
 	existing.AssigneeID = nil // owner is omitted by this edit endpoint
 	res, err := h.svc.UpdateChange(c.Request.Context(), existing, creation.Identity{ActorID: c.GetInt("user_id"), TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
 		common.InternalError(c, "更新变更失败: "+err.Error())
 		return
 	}
@@ -498,6 +501,9 @@ func (h *Handler) AssignChange(c *gin.Context) {
 	existing.AssigneeID = &req.AssigneeID
 	res, err := h.svc.UpdateChange(c.Request.Context(), existing, creation.Identity{ActorID: c.GetInt("user_id"), TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
 		common.InternalError(c, "分配变更失败: "+err.Error())
 		return
 	}

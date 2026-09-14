@@ -108,6 +108,9 @@ func (tc *TicketController) UpdateTicket(c *gin.Context) {
 
 	ticket, err := tc.ticketService.UpdateTicket(c.Request.Context(), ticketID, &req, tenantID, creation.Identity{ActorID: c.GetInt("user_id"), TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
 		// 处理版本冲突错误
 		if common.IsVersionConflictError(err) {
 			conflictErr := err.(*common.VersionConflictError)
@@ -343,6 +346,9 @@ func (tc *TicketController) AssignTicket(c *gin.Context) {
 
 	ticket, err := tc.ticketService.AssignTicket(c.Request.Context(), ticketID, assigneeID, tenantID, creation.Identity{ActorID: assignedBy, TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
 		tc.logger.Errorw("Failed to assign ticket", "error", err, "ticket_id", ticketID, "tenant_id", tenantID)
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
@@ -556,6 +562,9 @@ func (tc *TicketController) AssignTickets(c *gin.Context) {
 	// 实现工单分配功能
 	err := tc.ticketService.AssignTickets(c.Request.Context(), tenantID, req.TicketIDs, req.AssigneeID, creation.Identity{ActorID: c.GetInt("user_id"), TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
 		tc.logger.Errorw("Assign tickets failed", "error", err, "ticket_ids", req.TicketIDs, "assignee_id", req.AssigneeID, "tenant_id", tenantID)
 		common.Fail(c, common.InternalErrorCode, "分配失败: "+err.Error())
 		return

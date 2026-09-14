@@ -18,6 +18,8 @@ type BPMNTaskUIActions struct {
 type BPMNTaskResponse struct {
 	AssigneeSource       string                 `json:"assigneeSource"`
 	AssignmentState      string                 `json:"assignmentState"`
+	ResponsibleUserID    int                    `json:"responsibleUserId"`
+	ActorID              int                    `json:"actorId"`
 	UIActions            BPMNTaskUIActions      `json:"uiActions"`
 	ID                   int                    `json:"id"`
 	TaskID               string                 `json:"taskId"`

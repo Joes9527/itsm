@@ -8,7 +8,6 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processinstance"
-	"itsm-backend/ent/user"
 	"strconv"
 	"strings"
 )
@@ -110,11 +109,11 @@ func (e *CustomProcessEngine) resolveTaskAssignment(ctx context.Context, client 
 			match = entry
 		}
 		if match != nil {
+			assignment.State = "terminal"
 			assignment.ResponsibleUserID = match.AssigneeID
 			assignment.ActorID = match.UserID
 			if match.AssigneeID > 0 {
 				assignment.Assignee = strconv.Itoa(match.AssigneeID)
-				assignment.State = "assigned"
 			}
 		}
 		return assignment, nil
@@ -127,10 +126,11 @@ func (e *CustomProcessEngine) resolveTaskAssignment(ctx context.Context, client 
 		return assignment, err
 	}
 	if item.AssigneeID <= 0 {
+		assignment.State = "unassigned"
 		return assignment, nil
 	}
-	owner, err := client.User.Query().Where(user.ID(item.AssigneeID), user.TenantID(task.TenantID), user.Active(true)).Only(ctx)
-	if ent.IsNotFound(err) {
+	owner, err := e.resolveAssignmentUser(ctx, client, item.AssigneeID, task.TenantID)
+	if unavailableBPMNIdentity(err) {
 		return assignment, nil
 	}
 	if err != nil {

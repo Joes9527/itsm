@@ -102,6 +102,8 @@ func TestBPMNAssignmentSourceCreationPersistsBindingWithoutParticipantSnapshot(t
 		"requester_id": requester.ID,
 		"assignee_id":  requester.ID,
 	})
+	item := f.client.Ticket.Create().SetTitle("Bound").SetTicketNumber("BOUND-CREATE").SetRequesterID(requester.ID).SetTenantID(instance.TenantID).SaveX(f.ctx)
+	instance = instance.Update().SetBusinessID(item.ID).SetBusinessType("ticket").SaveX(f.ctx)
 	require.NoError(t, f.engine.createUserTask(f.ctx, instance, &BPMNUserTask{
 		ID: "fulfill", Name: "Fulfill", TaskPurpose: "fulfillment", AssigneeSource: BPMNAssigneeSourceWorkItem,
 	}))

@@ -71,6 +71,9 @@ func getBPMNTenantContext(ctx *gin.Context) (context.Context, int, bool) {
 }
 
 func respondBPMNError(ctx *gin.Context, err error, fallback string) {
+	if common.RespondSerializationConflict(ctx, err) {
+		return
+	}
 	var appErr *common.AppError
 	errorClass := "internal"
 	if errors.As(err, &appErr) {

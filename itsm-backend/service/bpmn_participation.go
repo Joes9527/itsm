@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"itsm-backend/database"
 	"itsm-backend/ent"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/processinstance"
@@ -16,14 +17,17 @@ import (
 )
 
 type bpmnActorIdentity struct {
+	boundOnly        bool
 	UserID, TenantID int
 	UserTokens       map[string]struct{}
 	GroupTokens      map[string]struct{}
 }
 
 type bpmnParticipationResolver struct {
-	client        *ent.Client
-	groupResolver *bpmn.GroupResolver
+	assignmentDirectory database.DirectorySnapshot
+	assignmentTx        *ent.Tx
+	client              *ent.Client
+	groupResolver       *bpmn.GroupResolver
 	// Populated only on a short-lived read projection resolver, never on the engine's mutation resolver.
 	readActor *bpmnActorIdentity
 }
@@ -36,7 +40,10 @@ func (r *bpmnParticipationResolver) forClient(client *ent.Client) *bpmnParticipa
 	if client == nil || (client == r.client && r.readActor != nil) {
 		return r
 	}
-	return newBPMNParticipationResolver(client, bpmn.NewGroupResolver(client))
+	clone := newBPMNParticipationResolver(client, bpmn.NewGroupResolver(client))
+	clone.assignmentDirectory = r.assignmentDirectory
+	clone.assignmentTx = r.assignmentTx
+	return clone
 }
 
 func (r *bpmnParticipationResolver) resolveActor(ctx context.Context, scope BPMNAccessScope) (*bpmnActorIdentity, error) {
@@ -54,6 +61,14 @@ func (r *bpmnParticipationResolver) resolveActor(ctx context.Context, scope BPMN
 		}).
 		Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) && r.assignmentDirectory != nil {
+			engine := &CustomProcessEngine{client: r.client, assignmentDirectory: r.assignmentDirectory, assignmentTx: r.assignmentTx}
+			current, lookupErr := engine.resolveAssignmentUser(ctx, r.client, scope.UserID, scope.TenantID)
+			if lookupErr != nil {
+				return nil, lookupErr
+			}
+			return &bpmnActorIdentity{UserID: current.ID, TenantID: scope.TenantID, UserTokens: map[string]struct{}{strconv.Itoa(current.ID): {}}, GroupTokens: map[string]struct{}{}, boundOnly: true}, nil
+		}
 		return nil, fmt.Errorf("resolve BPMN actor: %w", err)
 	}
 
@@ -86,6 +101,9 @@ func (r *bpmnParticipationResolver) resolveActor(ctx context.Context, scope BPMN
 
 func (r *bpmnParticipationResolver) matchesTask(task *ent.ProcessTask, actor *bpmnActorIdentity) bool {
 	if task == nil || actor == nil || task.TenantID != actor.TenantID {
+		return false
+	}
+	if actor.boundOnly && task.AssigneeSource == "" {
 		return false
 	}
 	return containsToken(task.Assignee, actor.UserTokens) ||
@@ -125,7 +143,7 @@ func (r *bpmnParticipationResolver) participatingInstanceIDs(ctx context.Context
 	instanceIDs := make([]int, 0, len(tasks))
 	for _, task := range tasks {
 		if task.AssigneeSource != "" {
-			engine := &CustomProcessEngine{client: r.client}
+			engine := &CustomProcessEngine{client: r.client, assignmentDirectory: r.assignmentDirectory, assignmentTx: r.assignmentTx}
 			scope := BPMNAccessScope{UserID: actor.UserID, TenantID: actor.TenantID}
 			if err := engine.authorizeBoundTask(ctx, r.client, task, scope, ""); err != nil {
 				if isBPMNTaskAccessDenial(err) {

@@ -294,6 +294,7 @@ func NewApplication() *Application {
 	// BPMN 子服务（必须在 TicketService 之前创建）
 	processBindingService := service.NewProcessBindingService(client)
 	concreteProcessEngine := service.NewCustomProcessEngine(client, sugar).(*service.CustomProcessEngine)
+	concreteProcessEngine.SetAssignmentDirectory(clients.IntakeDirectorySnapshot())
 	concreteProcessEngine.SetCallbackCandidateClient(systemClient)
 	var processEngine service.ProcessEngine = concreteProcessEngine
 	processTriggerService := service.NewProcessTriggerService(client, processEngine)

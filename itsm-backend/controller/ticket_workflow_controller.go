@@ -126,6 +126,9 @@ func (tc *TicketWorkflowController) ForwardTicket(c *gin.Context) {
 
 	err := tc.workflowService.ForwardTicket(c.Request.Context(), &req, userID, tenantID, creation.Identity{ActorID: userID, TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
 		tc.logger.Errorw("Failed to forward ticket", "error", err, "ticket_id", req.TicketID)
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return

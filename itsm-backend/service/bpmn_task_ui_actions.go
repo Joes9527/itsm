@@ -39,7 +39,7 @@ func (e *CustomProcessEngine) taskUIReadProjection(ctx context.Context) (*Custom
 	projected := *e
 	resolver := newBPMNParticipationResolver(e.client, bpmn.NewGroupResolver(e.client))
 	if !scope.CanUpdateAllTasks {
-		actor, err := resolver.resolveActor(ctx, scope)
+		actor, err := e.participationResolver.resolveActor(ctx, scope)
 		if err != nil {
 			return nil, err
 		}

@@ -24,6 +24,9 @@ type Handler struct {
 }
 
 func failServiceRequest(c *gin.Context, err error) {
+	if common.RespondSerializationConflict(c, err) {
+		return
+	}
 	if appErr, ok := common.AsAppError(err); ok {
 		switch appErr.Code {
 		case common.ErrCodeBadRequest, common.ErrCodeValidation:
