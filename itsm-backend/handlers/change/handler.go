@@ -347,7 +347,8 @@ func (h *Handler) UpdateChange(c *gin.Context) {
 		existing.RelatedTickets = req.RelatedTickets
 	}
 
-	res, err := h.svc.UpdateChange(c.Request.Context(), existing)
+	existing.AssigneeID = nil // owner is omitted by this edit endpoint
+	res, err := h.svc.UpdateChange(c.Request.Context(), existing, creation.Identity{ActorID: c.GetInt("user_id"), TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
 		common.InternalError(c, "更新变更失败: "+err.Error())
 		return
@@ -495,7 +496,7 @@ func (h *Handler) AssignChange(c *gin.Context) {
 		return
 	}
 	existing.AssigneeID = &req.AssigneeID
-	res, err := h.svc.UpdateChange(c.Request.Context(), existing)
+	res, err := h.svc.UpdateChange(c.Request.Context(), existing, creation.Identity{ActorID: c.GetInt("user_id"), TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
 		common.InternalError(c, "分配变更失败: "+err.Error())
 		return

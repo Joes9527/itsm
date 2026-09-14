@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -18,6 +19,8 @@ import (
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/ent/ticket"
+	assignment "itsm-backend/handlers/common/workitemassignment"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
 
@@ -42,6 +45,7 @@ func (s *Service) IsUnfinished(_ context.Context, _ *ent.Client, item *ent.Ticke
 }
 
 type Service struct {
+	sessions              *authorization.SessionReader
 	repo                  Repository
 	logger                *zap.SugaredLogger
 	entClient             *ent.Client
@@ -89,8 +93,43 @@ func (s *Service) ListChanges(ctx context.Context, tenantID int, page, size int,
 	return s.repo.List(ctx, tenantID, page, size, status, search, riskLevel)
 }
 
-func (s *Service) UpdateChange(ctx context.Context, c *Change) (*Change, error) {
-	return s.repo.Update(ctx, c)
+func (s *Service) SetSessionReader(sessions *authorization.SessionReader) { s.sessions = sessions }
+
+func (s *Service) UpdateChange(ctx context.Context, c *Change, identity creation.Identity) (*Change, error) {
+	if c.AssigneeID == nil {
+		return s.repo.Update(ctx, c)
+	}
+	if s.sessions == nil || identity.TenantID != c.TenantID {
+		return nil, fmt.Errorf("verified Change assignment session is required")
+	}
+	var result *Change
+	err := s.sessions.Write(ctx, identity, func(session *authorization.SessionSnapshot) error {
+		existing, err := s.repo.GetTx(ctx, session.Tx, c.ID, c.TenantID)
+		if err != nil {
+			return err
+		}
+		if existing.WorkItemID == nil {
+			return fmt.Errorf("Change WorkItem is required")
+		}
+		item, err := session.AuthorizeWorkItemAssignment(ctx, *existing.WorkItemID)
+		if err != nil {
+			return err
+		}
+		allowed, err := s.IsUnfinished(ctx, session.Tx.Client(), item)
+		if err != nil {
+			return err
+		}
+		if !allowed {
+			return fmt.Errorf("Change is not assignable")
+		}
+		_, err = service.NewWorkItemAssignmentWriter(session).Apply(ctx, session.Tx.Client(), assignment.Command{WorkItemID: item.ID, TenantID: c.TenantID, ActorID: session.Actor.ID, ActorTenantID: session.Actor.TenantID, AssigneeID: *c.AssigneeID, ExpectedVersion: item.Version, Source: identity.Channel + ".change.assign"})
+		if err != nil {
+			return err
+		}
+		result, err = s.repo.UpdateTx(ctx, session.Tx, c, item.Version+1)
+		return err
+	})
+	return result, err
 }
 
 func (s *Service) DeleteChange(ctx context.Context, id int, tenantID int) error {
@@ -227,6 +266,7 @@ func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitte
 		}
 
 		triggerCtx := service.WithTrustedBPMNTenantContext(ctx, tenantID)
+		triggerCtx = service.WithBPMNAccessScope(triggerCtx, service.BPMNAccessScope{UserID: submitterID, TenantID: tenantID})
 		triggerResp, err := s.processTriggerService.TriggerProcess(triggerCtx, &dto.ProcessTriggerRequest{
 			BusinessType:         dto.BusinessTypeChange,
 			BusinessID:           workItemID,

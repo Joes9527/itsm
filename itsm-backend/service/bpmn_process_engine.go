@@ -428,10 +428,6 @@ func (e *CustomProcessEngine) startResolvedProcess(ctx context.Context, definiti
 	}
 
 	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, definition.TenantID)
-	if err := e.executeStep(ctx, instance, process, startEvent.ID, variables); err != nil {
-		return nil, err
-	}
-
 	actor, userName, err := resolveBPMNProcessStartActor(ctx, e.client, definition.TenantID, variables)
 	if err != nil {
 		return nil, err
@@ -440,6 +436,15 @@ func (e *CustomProcessEngine) startResolvedProcess(ctx context.Context, definiti
 	if actor != nil {
 		userID = actor.ID
 	}
+	if _, trusted, err := trustedBPMNProcessStartActorID(ctx, definition.TenantID); err != nil {
+		return nil, err
+	} else if trusted && actor != nil {
+		ctx = context.WithValue(ctx, callbackActorKey{}, callbackActor{actor.ID, actor.TenantID, definition.TenantID, "bpmn_start"})
+	}
+	if err := e.executeStep(ctx, instance, process, startEvent.ID, variables); err != nil {
+		return nil, err
+	}
+
 	auditVariables := variables
 	if provenance, ok := ctx.Value(intakeStartActorKey{}).(intakeStartActor); ok {
 		// Identity evidence belongs to the audit. The frozen workflow input also
@@ -524,6 +529,13 @@ func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Conte
 	mutationActor, err := e.captureTaskMutationActor(ctx, client, task)
 	if err != nil {
 		return nil, err
+	}
+	if mutationActor.userID > 0 && !mutationActor.internal {
+		actor, err := client.User.Get(ctx, mutationActor.userID)
+		if err != nil {
+			return nil, err
+		}
+		ctx = context.WithValue(ctx, callbackActorKey{}, callbackActor{actor.ID, actor.TenantID, task.TenantID, "bpmn_task_complete"})
 	}
 	if err := ValidateBPMNTaskLifecycle(BPMNTaskCommandComplete, task.Status); err != nil {
 		return nil, newBPMNTaskMutationConflict(task, BPMNTaskCommandComplete, false, mutationActor)
@@ -749,7 +761,7 @@ func (e *CustomProcessEngine) enqueueUserTaskCallback(ctx context.Context, task 
 		row, err = e.callbackOutbox.enqueue(ctx, e.client, request)
 	}
 	if err != nil {
-		return fmt.Errorf("enqueue user task callback failed")
+		return fmt.Errorf("enqueue user task callback failed: %w", err)
 	}
 	if plan.BlockCode == "" {
 		e.collectCallbackExecutionKey(row.ExecutionKey)
@@ -1250,7 +1262,7 @@ func (e *CustomProcessEngine) enqueueServiceTaskCallback(
 		row, err = e.callbackOutbox.enqueue(ctx, e.client, request)
 	}
 	if err != nil {
-		return fmt.Errorf("enqueue service task callback failed")
+		return fmt.Errorf("enqueue service task callback failed: %w", err)
 	}
 	if plan.BlockCode != "" {
 		return nil
@@ -1362,6 +1374,12 @@ func (e *CustomProcessEngine) executeClaimedCallback(ctx context.Context, worker
 	}
 	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, claimedRow.TenantID)
 	ctx = bpmn.WithBPMNCallbackExecutionKey(ctx, claimedRow.ExecutionKey)
+	if actor, provenanceErr := loadCallbackProvenance(ctx, e.client, claimedRow); provenanceErr == nil {
+		ctx = context.WithValue(ctx, callbackActorKey{}, actor)
+	} else if claimedRow.Action == "assign" || claimedRow.Action == "assign_ticket" || claimedRow.Action == "assign_incident" || claimedRow.Action == "assign_request" {
+		return bpmnCallbackExecutionResult{Effect: bpmn.BlockedEffect(bpmn.CallbackBlockHandlerContract, "callback actor provenance missing or ambiguous")}, nil
+	}
+
 	claimedRow.Variables, err = filterPersistedBPMNCallbackPayload(handler, claimedRow.Action, claimedRow.Variables)
 	if err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackHandlerError(err)

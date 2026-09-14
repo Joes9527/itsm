@@ -496,32 +496,53 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, page, size int, 
 	return result, total, nil
 }
 
+func (r *EntRepository) GetTx(ctx context.Context, tx *ent.Tx, id, tenantID int) (*Problem, error) {
+	bound := *r
+	bound.client = tx.Client()
+	return bound.Get(ctx, id, tenantID)
+}
+
 func (r *EntRepository) Update(ctx context.Context, p *Problem) (*Problem, error) {
 	tx, err := r.client.Tx(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("start problem update transaction: %w", err)
+		return nil, err
 	}
+	defer tx.Rollback()
+	result, err := r.UpdateTx(ctx, tx, p, 0)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// UpdateTx preserves the caller's aggregate version when shared assignment has
+// already advanced it. It never writes ownership or commits the transaction.
+func (r *EntRepository) UpdateTx(ctx context.Context, tx *ent.Tx, p *Problem, targetVersion int) (*Problem, error) {
 	current, err := tx.Problem.Query().Where(problem.IDEQ(p.ID), problemTenantScope(p.TenantID)).WithWorkItem(withProblemWorkItemProjection).Only(ctx)
 	if err != nil {
-		return nil, rollbackProblemTx(tx, err)
+		return nil, err
 	}
 	now := time.Now()
 	var selected *ent.TicketCategory
 	if p.CategoryID != nil && *p.CategoryID != 0 {
 		selected, err = tx.TicketCategory.Query().Where(ticketcategory.IDEQ(*p.CategoryID), ticketcategory.TenantIDEQ(p.TenantID), ticketcategory.IsActiveEQ(true)).Only(ctx)
 		if err != nil {
-			return nil, rollbackProblemTx(tx, fmt.Errorf("active ticket category not found in tenant: %w", err))
+			return nil, fmt.Errorf("active ticket category not found in tenant: %w", err)
 		}
+	}
+	if targetVersion == 0 {
+		targetVersion = current.Edges.WorkItem.Version + 1
+	}
+	if targetVersion < current.Edges.WorkItem.Version || targetVersion > current.Edges.WorkItem.Version+1 {
+		return nil, fmt.Errorf("invalid aggregate version")
 	}
 	workItemUpdate := tx.Ticket.UpdateOneID(current.WorkItemID).
 		Where(ticket.TenantIDEQ(p.TenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(current.Edges.WorkItem.Version)).
 		SetTitle(p.Title).SetDescription(p.Description).SetStatus(p.Status).SetPriority(p.Priority).
-		SetUpdatedAt(now).AddVersion(1)
-	if p.AssigneeID == nil {
-		workItemUpdate.ClearAssigneeID()
-	} else {
-		workItemUpdate.SetAssigneeID(*p.AssigneeID)
-	}
+		SetUpdatedAt(now).SetVersion(targetVersion)
 	if p.CategoryID != nil {
 		if *p.CategoryID == 0 {
 			workItemUpdate.ClearCategoryID()
@@ -541,7 +562,7 @@ func (r *EntRepository) Update(ctx context.Context, p *Problem) (*Problem, error
 	}
 	workItem, err := workItemUpdate.Save(ctx)
 	if err != nil {
-		return nil, rollbackProblemTx(tx, fmt.Errorf("update problem work item: %w", err))
+		return nil, fmt.Errorf("update problem work item: %w", err)
 	}
 	update := tx.Problem.UpdateOneID(p.ID).
 		Where(problemTenantScope(p.TenantID)).
@@ -554,10 +575,7 @@ func (r *EntRepository) Update(ctx context.Context, p *Problem) (*Problem, error
 
 	saved, err := update.Save(ctx)
 	if err != nil {
-		return nil, rollbackProblemTx(tx, err)
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, rollbackProblemTx(tx, err)
+		return nil, err
 	}
 	saved.Edges.WorkItem = workItem
 	if p.CategoryID == nil {

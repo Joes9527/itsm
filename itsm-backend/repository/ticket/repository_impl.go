@@ -2,6 +2,7 @@ package ticket
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"itsm-backend/authorization"
 	"time"
@@ -67,6 +68,25 @@ func (r *EntRepository) GetByNumber(ctx context.Context, ticketNumber string, te
 
 // Update 更新工单
 func (r *EntRepository) Update(ctx context.Context, id int, params *UpdateParams, tenantID int) (*Ticket, error) {
+	return r.update(ctx, id, params, tenantID, true)
+}
+
+// UpdateAssignedFields follows the shared assignment writer in the caller's
+// transaction, preserving its already-incremented aggregate version.
+func (r *EntRepository) UpdateAssignedFields(ctx context.Context, assigned *ent.Ticket, params *UpdateParams, tenantID int) (*Ticket, error) {
+	if assigned == nil || assigned.TenantID != tenantID || assigned.Version != params.Version {
+		return nil, fmt.Errorf("assignment aggregate identity mismatch")
+	}
+	probe, err := r.Client().Tx(ctx)
+	if !errors.Is(err, ent.ErrTxStarted) {
+		if probe != nil {
+			_ = probe.Rollback()
+		}
+		return nil, fmt.Errorf("assigned field update requires caller transaction")
+	}
+	return r.update(ctx, assigned.ID, params, tenantID, false)
+}
+func (r *EntRepository) update(ctx context.Context, id int, params *UpdateParams, tenantID int, advanceVersion bool) (*Ticket, error) {
 	// 先获取当前工单（包含版本号）
 	current, err := r.GetByID(ctx, id, tenantID)
 	if err != nil {
@@ -80,7 +100,10 @@ func (r *EntRepository) Update(ctx context.Context, id int, params *UpdateParams
 
 	builder := r.Client().Ticket.UpdateOneID(id).
 		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(params.Version)).
-		SetVersion(current.Version + 1) // 版本号递增
+		SetVersion(current.Version)
+	if advanceVersion {
+		builder.SetVersion(current.Version + 1)
+	}
 
 	if params.Title != nil {
 		builder.SetTitle(*params.Title)
@@ -107,9 +130,6 @@ func (r *EntRepository) Update(ctx context.Context, id int, params *UpdateParams
 	}
 	if params.Priority != nil {
 		builder.SetPriority(string(*params.Priority))
-	}
-	if params.AssigneeID != nil {
-		builder.SetAssigneeID(*params.AssigneeID)
 	}
 	if params.CategoryID != nil {
 		if *params.CategoryID == 0 {
@@ -405,22 +425,6 @@ func (r *EntRepository) UpdateStatus(ctx context.Context, id int, status Status,
 }
 
 // AssignTicket 分配工单
-func (r *EntRepository) AssignTicket(ctx context.Context, id int, assigneeID int, tenantID int) (*Ticket, error) {
-	current, err := r.GetByID(ctx, id, tenantID)
-	if err != nil {
-		return nil, err
-	}
-	if err := current.Assign(assigneeID); err != nil {
-		return nil, err
-	}
-	status := current.Status
-	return r.Update(ctx, id, &UpdateParams{
-		AssigneeID: &assigneeID,
-		Status:     &status,
-		Version:    current.Version,
-	}, tenantID)
-}
-
 // UpdateSLADeadlines 更新 SLA 截止时间
 func (r *EntRepository) UpdateSLADeadlines(ctx context.Context, id int, responseDeadline, resolutionDeadline *time.Time, slaDefinitionID *int, tenantID int) error {
 	builder := r.Client().Ticket.UpdateOneID(id).

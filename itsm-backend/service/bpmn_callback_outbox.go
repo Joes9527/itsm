@@ -89,6 +89,15 @@ func (o *bpmnCallbackOutbox) enqueue(ctx context.Context, client *ent.Client, re
 	if client == nil {
 		return nil, fmt.Errorf("bpmn callback outbox client is required")
 	}
+	if _, hasActor := ctx.Value(callbackActorKey{}).(callbackActor); hasActor {
+		probe, err := client.Tx(ctx)
+		if !errors.Is(err, ent.ErrTxStarted) {
+			if probe != nil {
+				_ = probe.Rollback()
+			}
+			return nil, fmt.Errorf("callback provenance requires caller transaction")
+		}
+	}
 	executionKey := strings.TrimSpace(request.ExecutionKey)
 	if executionKey == "" {
 		executionKey = uuid.NewString()
@@ -114,7 +123,14 @@ func (o *bpmnCallbackOutbox) enqueue(ctx context.Context, client *ent.Client, re
 	if request.Variables != nil {
 		create.SetVariables(copyBPMNCallbackVariables(request.Variables))
 	}
-	return create.Save(ctx)
+	row, err := create.Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := recordCallbackProvenance(ctx, client, row); err != nil {
+		return nil, err
+	}
+	return row, nil
 }
 
 // enqueueBlocked records a definition-time contract failure as a terminal

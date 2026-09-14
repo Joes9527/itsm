@@ -274,7 +274,7 @@ func (c *IncidentController) UpdateIncident(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	response, err := c.incidentService.UpdateIncident(ctx.Request.Context(), id, &req, tenantID)
+	response, err := c.incidentService.UpdateIncident(ctx.Request.Context(), id, &req, tenantID, creation.Identity{ActorID: ctx.GetInt("user_id"), TenantID: tenantID, Role: ctx.GetString("role"), Channel: "http"})
 	if err != nil {
 		// 处理版本冲突错误
 		if common.IsVersionConflictError(err) {
@@ -811,7 +811,7 @@ func (c *IncidentController) AssignIncident(ctx *gin.Context) {
 	}
 
 	tenantID := ctx.GetInt("tenant_id")
-	incident, err := c.incidentService.AssignIncident(ctx.Request.Context(), id, assigneeID, tenantID)
+	incident, err := c.incidentService.AssignIncident(ctx.Request.Context(), id, assigneeID, tenantID, creation.Identity{ActorID: ctx.GetInt("user_id"), TenantID: tenantID, Role: ctx.GetString("role"), Channel: "http"})
 	if err != nil {
 		c.logger.Errorw("Failed to assign incident", "error", err, "id", id)
 		common.Fail(ctx, common.InternalErrorCode, err.Error())
@@ -1115,7 +1115,7 @@ func (c *IncidentController) UpdateRootCause(ctx *gin.Context) {
 
 	_, err = c.incidentService.UpdateIncident(ctx.Request.Context(), id, &dto.UpdateIncidentRequest{
 		RootCause: &req,
-	}, tenantID)
+	}, tenantID, creation.Identity{ActorID: ctx.GetInt("user_id"), TenantID: tenantID, Role: ctx.GetString("role"), Channel: "http"})
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			common.Fail(ctx, common.NotFoundErrorCode, "事件不存在")
@@ -1205,7 +1205,7 @@ func (c *IncidentController) UpdateImpactAssessment(ctx *gin.Context) {
 
 	_, err = c.incidentService.UpdateIncident(ctx.Request.Context(), id, &dto.UpdateIncidentRequest{
 		ImpactAnalysis: &req,
-	}, tenantID)
+	}, tenantID, creation.Identity{ActorID: ctx.GetInt("user_id"), TenantID: tenantID, Role: ctx.GetString("role"), Channel: "http"})
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			common.Fail(ctx, common.NotFoundErrorCode, "事件不存在")

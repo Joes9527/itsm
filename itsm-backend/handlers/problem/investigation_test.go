@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -362,7 +363,7 @@ func TestRCAWritesProblemAuthorityAndKnownError(t *testing.T) {
 		_, err := svc.UpdateRootCauseAnalysis(ctx, created.ID, &dto.UpdateRootCauseAnalysisRequest{RootCauseDescription: &revised}, tenant.ID)
 		require.NoError(t, err)
 	}}
-	edited, err := problem.NewService(staleRepo, logger).Update(ctx, tenant.ID, p.ID, &problem.Problem{Title: "Unrelated title edit"})
+	edited, err := problem.NewService(staleRepo, logger).Update(ctx, tenant.ID, p.ID, &problem.Problem{Title: "Unrelated title edit"}, creation.Identity{})
 	require.NoError(t, err)
 	require.Equal(t, "RCA changed concurrently", edited.RootCause)
 }

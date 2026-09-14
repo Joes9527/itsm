@@ -17,7 +17,6 @@ import (
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/user"
 )
 
 const EventType = "work_item.assigned"
@@ -45,17 +44,18 @@ type Event struct {
 }
 type Enqueue func(context.Context, *ent.Client, Event) error
 
-// ActorValidator uses the owning caller's verified directory/session snapshot.
-// It must validate native actor, selected tenant and provenance against Command.
+// IdentityValidator uses the owning caller's verified directory/session snapshot.
+// It must validate actor provenance and every nonzero assignee against the
+// selected target tenant using the existing directory/allocation policy.
 // Row visibility and professional assignment permission remain caller obligations.
-type ActorValidator func(context.Context, *ent.Client, Command) error
+type IdentityValidator func(context.Context, *ent.Client, Command) error
 type Writer struct {
-	enqueue       Enqueue
-	validateActor ActorValidator
+	enqueue          Enqueue
+	validateIdentity IdentityValidator
 }
 
-func NewWriter(enqueue Enqueue, validateActor ActorValidator) *Writer {
-	return &Writer{enqueue: enqueue, validateActor: validateActor}
+func NewWriter(enqueue Enqueue, validateIdentity IdentityValidator) *Writer {
+	return &Writer{enqueue: enqueue, validateIdentity: validateIdentity}
 }
 func (c Command) Validate() error {
 	if c.WorkItemID <= 0 || c.TenantID <= 0 || c.ActorTenantID <= 0 || c.ActorID <= 0 || c.AssigneeID < 0 || c.ExpectedVersion <= 0 ||
@@ -77,7 +77,7 @@ func (w *Writer) Apply(ctx context.Context, client *ent.Client, cmd Command) (*e
 	if err := cmd.Validate(); err != nil {
 		return nil, err
 	}
-	if w == nil || w.enqueue == nil || w.validateActor == nil || client == nil {
+	if w == nil || w.enqueue == nil || w.validateIdentity == nil || client == nil {
 		return nil, fmt.Errorf("assignment dependencies are required")
 	}
 	if scope, ok := tenantctx.TenantID(ctx); ok && scope != cmd.TenantID {
@@ -92,7 +92,7 @@ func (w *Writer) Apply(ctx context.Context, client *ent.Client, cmd Command) (*e
 		}
 		return nil, fmt.Errorf("assignment requires caller transaction")
 	}
-	if err = w.validateActor(ctx, client, cmd); err != nil {
+	if err = w.validateIdentity(ctx, client, cmd); err != nil {
 		return nil, err
 	}
 	item, err := client.Ticket.Query().Where(ticket.ID(cmd.WorkItemID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(), lock).Only(ctx)
@@ -101,15 +101,6 @@ func (w *Writer) Apply(ctx context.Context, client *ent.Client, cmd Command) (*e
 	}
 	if item.Version != cmd.ExpectedVersion {
 		return nil, ErrVersionConflict
-	}
-	if cmd.AssigneeID > 0 {
-		exists, err := client.User.Query().Where(user.ID(cmd.AssigneeID), user.TenantID(cmd.TenantID), user.Active(true)).Exist(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if !exists {
-			return nil, fmt.Errorf("active target-tenant assignee is required")
-		}
 	}
 	if item.AssigneeID == cmd.AssigneeID {
 		return item, nil

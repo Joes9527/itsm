@@ -3,9 +3,11 @@ package service
 import (
 	"context"
 	"fmt"
+	"itsm-backend/handlers/shared/workflowcallback"
 	"strings"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -18,12 +20,16 @@ import (
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcategory"
 	"itsm-backend/ent/user"
+	assignment "itsm-backend/handlers/common/workitemassignment"
+	creation "itsm-backend/handlers/common/workitemcreation"
 
 	entsql "entgo.io/ent/dialect/sql"
 	"go.uber.org/zap"
 )
 
 type IncidentService struct {
+	workflowAssignment    workflowcallback.AssignmentBoundary
+	sessions              *authorization.SessionReader
 	priorityMatrixService *PriorityMatrixService
 	client                *ent.Client
 	logger                *zap.SugaredLogger
@@ -227,14 +233,43 @@ func (s *IncidentService) GetIncidentCIs(ctx context.Context, incidentID int, te
 	return cis, nil
 }
 
-// UpdateIncident 更新事件
-func (s *IncidentService) UpdateIncident(ctx context.Context, id int, req *dto.UpdateIncidentRequest, tenantID int) (*dto.IncidentResponse, error) {
+func (s *IncidentService) SetSessionReader(sessions *authorization.SessionReader) {
+	s.sessions = sessions
+}
+
+type incidentAssignmentMutation struct {
+	writer  *assignment.Writer
+	command assignment.Command
+}
+
+// UpdateIncident keeps professional and shared edits in the same owning transaction.
+func (s *IncidentService) UpdateIncident(ctx context.Context, id int, req *dto.UpdateIncidentRequest, tenantID int, identity creation.Identity) (*dto.IncidentResponse, error) {
+	if req.AssigneeID != nil {
+		if s.sessions == nil || identity.TenantID != tenantID {
+			return nil, fmt.Errorf("verified Incident assignment session is required")
+		}
+		var result *dto.IncidentResponse
+		err := s.sessions.Write(ctx, identity, func(session *authorization.SessionSnapshot) error {
+			var err error
+			current, loadErr := session.Tx.Incident.Query().Where(incident.ID(id), incidentTenantScope(tenantID)).Only(ctx)
+			if loadErr != nil {
+				return loadErr
+			}
+			if _, authErr := session.AuthorizeWorkItemAssignment(ctx, current.WorkItemID); authErr != nil {
+				return authErr
+			}
+			mutation := &incidentAssignmentMutation{writer: NewWorkItemAssignmentWriter(session), command: assignment.Command{TenantID: tenantID, ActorID: session.Actor.ID, ActorTenantID: session.Actor.TenantID, Source: identity.Channel + ".incident.update"}}
+			result, err = s.UpdateIncidentTx(ctx, session.Tx, id, req, tenantID, mutation)
+			return err
+		})
+		return result, err
+	}
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
-	result, err := s.UpdateIncidentTx(ctx, tx, id, req, tenantID)
+	result, err := s.UpdateIncidentTx(ctx, tx, id, req, tenantID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -245,13 +280,13 @@ func (s *IncidentService) UpdateIncident(ctx context.Context, id int, req *dto.U
 }
 
 // UpdateIncidentTx keeps validation, WorkItem/extension changes and timeline in the caller's transaction.
-func (s *IncidentService) UpdateIncidentTx(ctx context.Context, tx *ent.Tx, id int, req *dto.UpdateIncidentRequest, tenantID int) (*dto.IncidentResponse, error) {
+func (s *IncidentService) UpdateIncidentTx(ctx context.Context, tx *ent.Tx, id int, req *dto.UpdateIncidentRequest, tenantID int, mutation *incidentAssignmentMutation) (*dto.IncidentResponse, error) {
 	owner := *s
 	owner.client = tx.Client()
-	return owner.updateIncident(ctx, id, req, tenantID)
+	return owner.updateIncident(ctx, id, req, tenantID, mutation)
 }
 
-func (s *IncidentService) updateIncident(ctx context.Context, id int, req *dto.UpdateIncidentRequest, tenantID int) (*dto.IncidentResponse, error) {
+func (s *IncidentService) updateIncident(ctx context.Context, id int, req *dto.UpdateIncidentRequest, tenantID int, mutation *incidentAssignmentMutation) (*dto.IncidentResponse, error) {
 	s.logger.Infow("Updating incident", "id", id, "tenant_id", tenantID)
 
 	// 获取当前事件实体
@@ -291,8 +326,8 @@ func (s *IncidentService) updateIncident(ctx context.Context, id int, req *dto.U
 		if !canAssignIncidentStatus(currentIncident.Edges.WorkItem.Status) {
 			return nil, rejectIncidentAction("resolved, closed, or cancelled incidents cannot be reassigned")
 		}
-		if err := s.validateIncidentAssignee(ctx, *req.AssigneeID, tenantID); err != nil {
-			return nil, err
+		if mutation == nil || mutation.writer == nil {
+			return nil, fmt.Errorf("verified Incident assignment writer is required")
 		}
 	}
 	if req.CategoryID != nil && *req.CategoryID != 0 {
@@ -348,13 +383,23 @@ func (s *IncidentService) updateIncident(ctx context.Context, id int, req *dto.U
 		updateQuery.SetMetadata(req.Metadata)
 	}
 
-	workItemUpdate := s.client.Ticket.UpdateOneID(currentIncident.WorkItemID).
-		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(currentIncident.Edges.WorkItem.Version)).
-		SetUpdatedAt(time.Now()).
-		AddVersion(1)
-	if !req.Force && req.Version > 0 {
-		workItemUpdate.Where(ticket.VersionEQ(req.Version))
+	expectedVersion := currentIncident.Edges.WorkItem.Version
+	nextVersion := expectedVersion + 1
+	if req.AssigneeID != nil {
+		cmd := mutation.command
+		cmd.WorkItemID = currentIncident.WorkItemID
+		cmd.AssigneeID = *req.AssigneeID
+		cmd.ExpectedVersion = expectedVersion
+		updated, err := mutation.writer.Apply(ctx, s.client, cmd)
+		if err != nil {
+			return nil, err
+		}
+		expectedVersion = updated.Version
 	}
+	workItemUpdate := s.client.Ticket.UpdateOneID(currentIncident.WorkItemID).
+		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(expectedVersion)).
+		SetUpdatedAt(time.Now()).
+		SetVersion(nextVersion)
 	if req.Title != nil {
 		workItemUpdate.SetTitle(*req.Title)
 	}
@@ -369,9 +414,6 @@ func (s *IncidentService) updateIncident(ctx context.Context, id int, req *dto.U
 	}
 	if priority != nil {
 		workItemUpdate.SetPriority(*priority)
-	}
-	if req.AssigneeID != nil {
-		workItemUpdate.SetAssigneeID(*req.AssigneeID)
 	}
 	if req.CategoryID != nil {
 		if *req.CategoryID == 0 {
@@ -438,12 +480,28 @@ func (s *IncidentService) IsUnfinished(_ context.Context, _ *ent.Client, item *e
 	}
 }
 
-func (s *IncidentService) AssignIncident(ctx context.Context, id int, assigneeID int, tenantID int) (*dto.IncidentResponse, error) {
-	outcome, err := s.assignIncident(ctx, id, assigneeID, tenantID, false)
+func (s *IncidentService) AssignIncident(ctx context.Context, id, assigneeID, tenantID int, identity creation.Identity) (*dto.IncidentResponse, error) {
+	if s.sessions == nil || identity.TenantID != tenantID {
+		return nil, fmt.Errorf("verified Incident assignment session is required")
+	}
+	var result *dto.IncidentMutationOutcome
+	err := s.sessions.Write(ctx, identity, func(session *authorization.SessionSnapshot) error {
+		owner := *s
+		owner.client = session.Tx.Client()
+		current, err := owner.getIncidentEntity(ctx, id, tenantID)
+		if err != nil {
+			return err
+		}
+		if _, err := session.AuthorizeWorkItemAssignment(ctx, current.WorkItemID); err != nil {
+			return err
+		}
+		result, err = owner.assignIncident(ctx, id, assigneeID, tenantID, false, &incidentAssignmentMutation{writer: NewWorkItemAssignmentWriter(session), command: assignment.Command{TenantID: tenantID, ActorID: session.Actor.ID, ActorTenantID: session.Actor.TenantID, Source: identity.Channel + ".incident.assign"}})
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
-	return outcome.Incident, nil
+	return result.Incident, nil
 }
 
 // AssignIncidentForWorkflow atomically applies the workflow assignment target:
@@ -451,10 +509,31 @@ func (s *IncidentService) AssignIncident(ctx context.Context, id int, assigneeID
 // mutation outcome lets the callback engine distinguish a retry from a first
 // application without a race-prone read in the handler.
 func (s *IncidentService) AssignIncidentForWorkflow(ctx context.Context, id int, assigneeID int, tenantID int) (*dto.IncidentMutationOutcome, error) {
-	return s.assignIncident(ctx, id, assigneeID, tenantID, true)
+	if s.workflowAssignment == nil {
+		return nil, fmt.Errorf("verified callback assignment provenance is required")
+	}
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	writer, command, err := s.workflowAssignment(ctx, tx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	owner := *s
+	owner.client = tx.Client()
+	result, err := owner.assignIncident(ctx, id, assigneeID, tenantID, true, &incidentAssignmentMutation{writer: writer, command: command})
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
-func (s *IncidentService) assignIncident(ctx context.Context, id int, assigneeID int, tenantID int, workflow bool) (*dto.IncidentMutationOutcome, error) {
+func (s *IncidentService) assignIncident(ctx context.Context, id int, assigneeID int, tenantID int, workflow bool, mutation *incidentAssignmentMutation) (*dto.IncidentMutationOutcome, error) {
 	s.logger.Infow("Assigning incident", "id", id, "assignee_id", assigneeID, "tenant_id", tenantID)
 
 	// 获取当前事件
@@ -471,46 +550,30 @@ func (s *IncidentService) assignIncident(ctx context.Context, id int, assigneeID
 	if !canAssignIncidentStatus(current.Edges.WorkItem.Status) {
 		return nil, rejectIncidentAction("resolved, closed, or cancelled incidents cannot be reassigned")
 	}
-	if current.Edges.WorkItem.AssigneeID == assigneeID && (!workflow || current.Edges.WorkItem.Status == common.IncidentStatusAssigned) {
-		return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(current), Applied: false}, nil
+	if mutation == nil || mutation.writer == nil {
+		return nil, fmt.Errorf("verified Incident assignment writer is required")
 	}
-
-	if err := s.validateIncidentAssignee(ctx, assigneeID, tenantID); err != nil {
+	cmd := mutation.command
+	cmd.WorkItemID = current.WorkItemID
+	cmd.AssigneeID = assigneeID
+	cmd.ExpectedVersion = current.Edges.WorkItem.Version
+	updated, err := mutation.writer.Apply(ctx, s.client, cmd)
+	if err != nil {
 		return nil, err
 	}
-
-	update := s.client.Ticket.UpdateOneID(current.WorkItemID).
-		Where(
-			ticket.TenantIDEQ(tenantID),
-			ticket.DeletedAtIsNil(),
-			ticket.VersionEQ(current.Edges.WorkItem.Version),
-			ticket.StatusNotIn(common.IncidentStatusResolved, common.IncidentStatusClosed, common.IncidentStatusCancelled),
-		).
-		SetAssigneeID(assigneeID).
-		SetUpdatedAt(time.Now()).
-		AddVersion(1)
-	if workflow {
-		update.SetStatus(common.IncidentStatusAssigned)
-	}
-	_, err = update.Save(ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			latest, lookupErr := s.client.Incident.Query().
-				Where(incident.IDEQ(id), incidentTenantScope(tenantID)).
-				WithWorkItem(withIncidentWorkItemProjection).Only(ctx)
-			if lookupErr == nil {
-				if !canAssignIncidentStatus(latest.Edges.WorkItem.Status) {
-					return nil, fmt.Errorf("resolved or closed incidents cannot be reassigned")
-				}
-				return nil, common.NewVersionConflictError("事件", id, current.Edges.WorkItem.Version, latest.Edges.WorkItem.Version)
-			}
-			if ent.IsNotFound(lookupErr) {
-				return nil, fmt.Errorf("incident not found")
-			}
-			return nil, fmt.Errorf("failed to verify incident assignment conflict: %w", lookupErr)
+	changed := updated.Version != current.Edges.WorkItem.Version
+	if workflow && current.Edges.WorkItem.Status != common.IncidentStatusAssigned {
+		write := s.client.Ticket.UpdateOneID(current.WorkItemID).SetStatus(common.IncidentStatusAssigned)
+		if !changed {
+			write.AddVersion(1)
 		}
-		s.logger.Errorw("Failed to assign incident", "error", err, "id", id)
-		return nil, fmt.Errorf("failed to assign incident: %w", err)
+		if err := write.Exec(ctx); err != nil {
+			return nil, err
+		}
+		changed = true
+	}
+	if !changed {
+		return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(current), Applied: false}, nil
 	}
 	updatedIncident, err := s.client.Incident.Query().Where(incident.IDEQ(id), incidentTenantScope(tenantID)).WithWorkItem(withIncidentWorkItemProjection).Only(ctx)
 	if err != nil {
@@ -518,7 +581,7 @@ func (s *IncidentService) assignIncident(ctx context.Context, id int, assigneeID
 	}
 
 	// 记录分配活动
-	s.CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
+	_, err = s.CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
 		IncidentID:  id,
 		EventType:   "assignment",
 		EventName:   "事件分配",
@@ -528,6 +591,9 @@ func (s *IncidentService) assignIncident(ctx context.Context, id int, assigneeID
 		Source:      "user",
 	}, tenantID)
 
+	if err != nil {
+		return nil, err
+	}
 	s.logger.Infow("Incident assigned successfully", "id", id, "assignee_id", assigneeID)
 	return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(updatedIncident), Applied: true}, nil
 }
@@ -1738,4 +1804,8 @@ func (s *IncidentService) mapProcessStatus(status string) dto.ProcessStatus {
 	default:
 		return dto.ProcessStatusPending
 	}
+}
+
+func (s *IncidentService) SetWorkflowAssignmentBoundary(boundary workflowcallback.AssignmentBoundary) {
+	s.workflowAssignment = boundary
 }

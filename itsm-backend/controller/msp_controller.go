@@ -6,6 +6,7 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
 
@@ -342,6 +343,7 @@ func (mc *MSPController) AssignMSPTechnician(c *gin.Context) {
 		ticketID,
 		req.CustomerTenantID,
 		assignerID,
+		creation.Identity{ActorID: assignerID, TenantID: req.CustomerTenantID, Role: c.GetString("role"), Channel: "http"},
 	)
 	if err != nil {
 		mc.logger.Errorw("Failed to assign MSP technician", "error", err, "ticket_id", ticketID)

@@ -88,6 +88,13 @@ func assignmentTestActor(ctx context.Context, client *ent.Client, cmd workitemas
 	if actor.TenantID != cmd.TenantID {
 		return errors.New("actor scope mismatch")
 	}
+	if cmd.AssigneeID > 0 {
+		_, err := client.User.Query().Where(user.ID(cmd.AssigneeID), user.TenantID(cmd.TenantID), user.Active(true)).Only(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -119,6 +126,7 @@ func TestPostgresWorkItemAssignmentWorkerRetryRestartAndUnknownTransport(t *test
 	email := service.NewEmailService(service.EmailConfig{}, zap.NewNop().Sugar())
 	email.SetGraphProvider(func(int) (service.GraphMailSender, string, bool) { return graph, "support@example.test", true })
 	notifications := service.NewTicketNotificationService(client, zap.NewNop().Sugar())
+	notifications.SetAssignmentDirectory(sameTransactionDirectory{})
 	notifications.SetEmailService(email)
 	notifications.SetDeliveryQueueClient(client)
 	newWorker := func() *service.OutboxDeliveryWorker {
@@ -167,6 +175,7 @@ func TestPostgresWorkItemAssignmentSuppressedDeliverySurvivesPreferenceChangeAnd
 	require.NoError(t, err)
 	require.Len(t, claimed, 1)
 	notifications := service.NewTicketNotificationService(client, zap.NewNop().Sugar())
+	notifications.SetAssignmentDirectory(sameTransactionDirectory{})
 	require.NoError(t, service.NewWorkItemAssignmentNotificationHandler(client, notifications).Deliver(ctx, claimed[0]))
 	require.Zero(t, client.TicketNotification.Query().CountX(ctx))
 	completedAt := client.OutboxEvent.GetX(ctx, claimed[0].ID).PublishedAt
@@ -213,6 +222,7 @@ func TestPostgresWorkItemAssignmentDeliveryReceiptFailureRollsBackMaterializatio
 				})
 			})
 			notifications := service.NewTicketNotificationService(client, zap.NewNop().Sugar())
+			notifications.SetAssignmentDirectory(sameTransactionDirectory{})
 			err = service.NewWorkItemAssignmentNotificationHandler(client, notifications).Deliver(ctx, event)
 			require.ErrorContains(t, err, "delivery receipt fault")
 			require.True(t, client.OutboxEvent.GetX(ctx, event.ID).PublishedAt.IsZero())
@@ -294,6 +304,7 @@ func TestPostgresWorkItemAssignmentAtomicAndIdempotent(t *testing.T) {
 	require.NoError(t, tx.Commit())
 	// Restarted delivery instances reuse durable event identity, including external queue rows.
 	notifications := service.NewTicketNotificationService(client, zap.NewNop().Sugar())
+	notifications.SetAssignmentDirectory(sameTransactionDirectory{})
 	notifications.SetEmailService(service.NewEmailService(service.EmailConfig{}, zap.NewNop().Sugar()))
 	for i := 0; i < 2; i++ {
 		require.NoError(t, service.NewWorkItemAssignmentNotificationHandler(client, notifications).Deliver(ctx, event))

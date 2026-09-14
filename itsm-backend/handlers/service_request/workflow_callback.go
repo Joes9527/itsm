@@ -2,14 +2,15 @@ package service_request
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	assignmentwriter "itsm-backend/handlers/common/workitemassignment"
 	"reflect"
 	"time"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/user"
 	"itsm-backend/handlers/shared/workflowcallback"
 )
 
@@ -151,45 +152,60 @@ func serviceRequestCommandMatches(current *ent.ServiceRequest, cmd workflowcallb
 }
 
 func (s *Service) applyWorkflowAssignment(ctx context.Context, cmd workflowcallback.ServiceRequestCommand) (workflowcallback.Result, error) {
-	if cmd.AssigneeID <= 0 {
-		return callbackBlocked("assignee is required"), nil
+	if cmd.AssigneeID < 0 {
+		return callbackBlocked("invalid assignee"), nil
 	}
-	current, err := s.loadWorkflowRequest(ctx, cmd.RequestID, cmd.TenantID)
+	if s.workflowAssignment == nil {
+		return workflowcallback.Result{}, fmt.Errorf("verified callback assignment boundary is required")
+	}
+	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return workflowcallback.Result{}, err
 	}
-	if _, err := s.client.User.Query().Where(user.ID(cmd.AssigneeID), user.TenantID(cmd.TenantID), user.Active(true)).Only(ctx); err != nil {
-		if ent.IsNotFound(err) {
-			result := callbackBlocked("assignee does not exist in callback tenant")
-			result.BlockCode = "target_missing"
-			return result, nil
+	defer tx.Rollback()
+	owner := *s
+	owner.client = tx.Client()
+	current, err := owner.loadWorkflowRequest(ctx, cmd.RequestID, cmd.TenantID)
+	if err != nil {
+		return workflowcallback.Result{}, err
+	}
+	item := current.Edges.WorkItem
+	unfinished, err := s.IsUnfinished(ctx, tx.Client(), item)
+	if err != nil {
+		return workflowcallback.Result{}, err
+	}
+	if !unfinished {
+		return callbackBlocked("terminal request cannot be assigned"), nil
+	}
+	writer, assignment, err := s.workflowAssignment(ctx, tx, cmd.TenantID)
+	if err != nil {
+		return workflowcallback.Result{}, err
+	}
+	assignment.WorkItemID = item.ID
+	assignment.AssigneeID = cmd.AssigneeID
+	assignment.ExpectedVersion = item.Version
+	result, err := writer.Apply(ctx, tx.Client(), assignment)
+	if errors.Is(err, assignmentwriter.ErrVersionConflict) {
+		_ = tx.Rollback()
+		latest, loadErr := s.loadWorkflowRequest(ctx, cmd.RequestID, cmd.TenantID)
+		if loadErr != nil {
+			return workflowcallback.Result{}, loadErr
 		}
-		return workflowcallback.Result{}, err
+		if latest.Edges.WorkItem.AssigneeID == cmd.AssigneeID {
+			return callbackIdempotent("service request already assigned"), nil
+		}
+		return callbackBlocked("service request has a conflicting assignment"), nil
 	}
-	workItem, err := s.client.Ticket.Query().Where(ticket.ID(current.TicketID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item")).Only(ctx)
 	if err != nil {
 		return workflowcallback.Result{}, err
 	}
-	if workItem.AssigneeID == cmd.AssigneeID {
-		return callbackIdempotent(fmt.Sprintf("service request %d already assigned", current.ID)), nil
-	}
-	affected, err := s.client.Ticket.Update().Where(
-		ticket.ID(workItem.ID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item"), ticket.VersionEQ(workItem.Version),
-	).SetAssigneeID(cmd.AssigneeID).SetUpdatedAt(time.Now()).AddVersion(1).Save(ctx)
-	if err != nil {
+	if err := tx.Commit(); err != nil {
 		return workflowcallback.Result{}, err
 	}
-	if affected == 1 {
-		return callbackApplied(fmt.Sprintf("service request %d assigned", current.ID)), nil
+	if result.Version == item.Version {
+		return callbackIdempotent("service request already assigned"), nil
 	}
-	latest, err := s.client.Ticket.Query().Where(ticket.ID(workItem.ID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item")).Only(ctx)
-	if err != nil {
-		return workflowcallback.Result{}, err
-	}
-	if latest.AssigneeID == cmd.AssigneeID {
-		return callbackIdempotent(fmt.Sprintf("service request %d already assigned", current.ID)), nil
-	}
-	return callbackBlocked(fmt.Sprintf("service request %d has a conflicting assignment", current.ID)), nil
+	return callbackApplied("service request assigned"), nil
 }
 
 func (s *Service) applyWorkflowProvision(ctx context.Context, cmd workflowcallback.ServiceRequestCommand) (workflowcallback.Result, error) {

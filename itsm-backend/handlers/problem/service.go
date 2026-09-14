@@ -6,14 +6,19 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/ent"
+	assignment "itsm-backend/handlers/common/workitemassignment"
+	creation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/service"
 
 	"go.uber.org/zap"
 )
 
 type Service struct {
-	repo   Repository
-	logger *zap.SugaredLogger
+	sessions *authorization.SessionReader
+	repo     Repository
+	logger   *zap.SugaredLogger
 }
 
 func NewService(repo Repository, logger *zap.SugaredLogger) *Service {
@@ -53,12 +58,58 @@ func (s *Service) List(ctx context.Context, tenantID int, page, size int, filter
 	return s.repo.List(ctx, tenantID, page, size, filters)
 }
 
-func (s *Service) Update(ctx context.Context, tenantID int, id int, p *Problem) (*Problem, error) {
-	existing, err := s.repo.Get(ctx, id, tenantID)
-	if err != nil {
-		return nil, err
-	}
+func (s *Service) SetSessionReader(sessions *authorization.SessionReader) { s.sessions = sessions }
 
+func (s *Service) Update(ctx context.Context, tenantID, id int, p *Problem, identity creation.Identity) (*Problem, error) {
+	if p.AssigneeID == nil {
+		existing, err := s.repo.Get(ctx, id, tenantID)
+		if err != nil {
+			return nil, err
+		}
+		merged, err := mergeProblemUpdate(existing, p)
+		if err != nil {
+			return nil, err
+		}
+		return s.repo.Update(ctx, merged)
+	}
+	if s.sessions == nil || identity.TenantID != tenantID {
+		return nil, fmt.Errorf("verified Problem assignment session is required")
+	}
+	var result *Problem
+	err := s.sessions.Write(ctx, identity, func(session *authorization.SessionSnapshot) error {
+		existing, err := s.repo.GetTx(ctx, session.Tx, id, tenantID)
+		if err != nil {
+			return err
+		}
+		if existing.WorkItemID == nil {
+			return fmt.Errorf("Problem WorkItem is required")
+		}
+		item, err := session.AuthorizeWorkItemAssignment(ctx, *existing.WorkItemID)
+		if err != nil {
+			return err
+		}
+		allowed, err := s.IsUnfinished(ctx, session.Tx.Client(), item)
+		if err != nil {
+			return err
+		}
+		if !allowed {
+			return fmt.Errorf("Problem is not assignable")
+		}
+		merged, err := mergeProblemUpdate(existing, p)
+		if err != nil {
+			return err
+		}
+		_, err = service.NewWorkItemAssignmentWriter(session).Apply(ctx, session.Tx.Client(), assignment.Command{WorkItemID: item.ID, TenantID: tenantID, ActorID: session.Actor.ID, ActorTenantID: session.Actor.TenantID, AssigneeID: *p.AssigneeID, ExpectedVersion: item.Version, Source: identity.Channel + ".problem.update"})
+		if err != nil {
+			return err
+		}
+		result, err = s.repo.UpdateTx(ctx, session.Tx, merged, item.Version+1)
+		return err
+	})
+	return result, err
+}
+
+func mergeProblemUpdate(existing, p *Problem) (*Problem, error) {
 	// Update fields if they are set (non-zero/non-empty check in Handler or here)
 	// Here assuming 'p' contains only fields to update usually, but domain entity isn't partial.
 	// We merge changes here.
@@ -108,12 +159,12 @@ func (s *Service) Update(ctx context.Context, tenantID int, id int, p *Problem) 
 		existing.AssigneeID = p.AssigneeID
 	}
 
-	return s.repo.Update(ctx, existing)
+	return existing, nil
 }
 
 // InvestigateProblem starts the investigation lifecycle for a problem.
 func (s *Service) InvestigateProblem(ctx context.Context, tenantID, id int) (*Problem, error) {
-	return s.Update(ctx, tenantID, id, &Problem{Status: "investigating"})
+	return s.Update(ctx, tenantID, id, &Problem{Status: "investigating"}, creation.Identity{})
 }
 
 // UpdateRootCause records the confirmed root cause.
@@ -122,7 +173,7 @@ func (s *Service) UpdateRootCause(ctx context.Context, tenantID, id int, rootCau
 	if rootCause == "" {
 		return nil, fmt.Errorf("rootCause is required")
 	}
-	return s.Update(ctx, tenantID, id, &Problem{RootCause: rootCause})
+	return s.Update(ctx, tenantID, id, &Problem{RootCause: rootCause}, creation.Identity{})
 }
 
 // UpdateSolution records a workaround and/or final resolution.
@@ -132,7 +183,7 @@ func (s *Service) UpdateSolution(ctx context.Context, tenantID, id int, workarou
 	if workaround == "" && resolution == "" {
 		return nil, fmt.Errorf("solution, workaround or resolution is required")
 	}
-	return s.Update(ctx, tenantID, id, &Problem{Workaround: workaround, Resolution: resolution})
+	return s.Update(ctx, tenantID, id, &Problem{Workaround: workaround, Resolution: resolution}, creation.Identity{})
 }
 
 // CloseProblem closes a problem and optionally records its final resolution.
@@ -140,7 +191,7 @@ func (s *Service) CloseProblem(ctx context.Context, tenantID, id int, resolution
 	return s.Update(ctx, tenantID, id, &Problem{
 		Status:     "closed",
 		Resolution: strings.TrimSpace(resolution),
-	})
+	}, creation.Identity{})
 }
 
 func isValidProblemPriority(priority string) bool {

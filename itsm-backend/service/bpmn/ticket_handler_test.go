@@ -2,6 +2,7 @@ package bpmn
 
 import (
 	"context"
+	"itsm-backend/handlers/shared/workflowcallback"
 	"testing"
 
 	"itsm-backend/dto"
@@ -256,6 +257,8 @@ func TestTicketServiceTaskHandler_AssignTicket(t *testing.T) {
 	handler := NewTicketServiceTaskHandler(client, logger)
 	handler.SetNotificationService(&ticketNotificationStub{})
 
+	assignmentService := &assignmentServiceStub{}
+	handler.SetTicketService(assignmentService)
 	ctx := context.Background()
 
 	// 创建测试数据
@@ -360,10 +363,11 @@ func TestTicketServiceTaskHandler_AssignTicket(t *testing.T) {
 				assert.NotNil(t, result)
 				assert.Contains(t, []CallbackEffectStatus{CallbackEffectApplied, CallbackEffectIdempotent}, result.Status)
 
-				// 验证工单已被分配
-				updatedTicket, err := client.Ticket.Get(ctx, tt.ticketID)
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedAssigneeID, updatedTicket.AssigneeID)
+				// Handler binds commands; owning service integration verifies persistence.
+				assert.Equal(t, tt.ticketID, assignmentService.id)
+				assert.Equal(t, tt.expectedAssigneeID, assignmentService.target)
+				assert.Equal(t, testTenant.ID, assignmentService.tenant)
+				assert.Zero(t, client.Ticket.GetX(ctx, tt.ticketID).AssigneeID)
 			}
 		})
 	}
@@ -584,4 +588,20 @@ func (f *fakeTicketStatusService) UpdateTicketStatusForWorkflow(ctx context.Cont
 	f.lastTicketID = ticketID
 	f.lastStatus = status
 	return nil
+}
+
+type assignmentServiceStub struct{ id, target, tenant int }
+
+func (s *assignmentServiceStub) UpdateTicketStatusForWorkflow(context.Context, int, string, int, int) error {
+	return nil
+}
+func (s *assignmentServiceStub) AssignTicketForWorkflow(_ context.Context, id, target, tenant int) (workflowcallback.Result, error) {
+	s.id = id
+	s.target = target
+	s.tenant = tenant
+	return workflowcallback.Result{Status: workflowcallback.StatusApplied}, nil
+}
+
+func (s *ticketStatusServiceEntStub) AssignTicketForWorkflow(_ context.Context, id, target, tenant int) (workflowcallback.Result, error) {
+	return workflowcallback.Result{Status: workflowcallback.StatusApplied, Message: "assignment delegated"}, nil
 }

@@ -3,6 +3,8 @@ package bpmn_test
 import (
 	"context"
 	"errors"
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/service"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -58,13 +60,15 @@ func setupServiceRequestHandlerFixture(t *testing.T) (*ent.Client, *ServiceReque
 
 	logger := zaptest.NewLogger(t).Sugar()
 	handler := NewServiceRequestServiceTaskHandler(client, logger)
-	handler.SetServiceRequestService(servicerequesthandler.NewService(nil, client, logger, nil))
+	owner := servicerequesthandler.NewService(nil, client, logger, nil)
+	owner.SetWorkflowAssignmentBoundary(service.NewWorkflowAssignmentBoundary(requestCallbackDirectory{}))
+	handler.SetServiceRequestService(owner)
 	return client, handler, tenant.ID, tkt, sr
 }
 
 func TestServiceRequestHandler_AssignRequest_SetsAuthoritativeWorkItemAssignee(t *testing.T) {
 	client, handler, tenantID, tkt, sr := setupServiceRequestHandlerFixture(t)
-	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+	ctx := requestAssignmentContext(t, client, tenantID, tkt)
 	assignee := client.User.Create().SetUsername("assignee-srh").SetEmail("assignee-srh@test.com").SetPasswordHash("x").SetName("处理人").SetTenantID(tenantID).SetActive(true).SaveX(ctx)
 
 	result, err := handler.Execute(ctx, nil, map[string]interface{}{
@@ -80,6 +84,7 @@ func TestServiceRequestHandler_AssignRequest_SetsAuthoritativeWorkItemAssignee(t
 	assert.Equal(t, tkt.ID, updated.TicketID, "professional extension retains owning WorkItem")
 	updatedWorkItem := client.Ticket.GetX(ctx, tkt.ID)
 	require.Equal(t, assignee.ID, updatedWorkItem.AssigneeID)
+	require.Equal(t, 1, client.OutboxEvent.Query().CountX(ctx), "request callback must persist shared assignment event")
 }
 
 func TestServiceRequestHandler_ProvisionCASLoserReturnsIdempotent(t *testing.T) {
@@ -396,7 +401,7 @@ func TestServiceRequestHandler_CompleteRequest_Idempotent(t *testing.T) {
 
 func TestServiceRequestHandler_NoWriteActionsReturnIdempotent(t *testing.T) {
 	client, handler, tenantID, tkt, sr := setupServiceRequestHandlerFixture(t)
-	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+	ctx := requestAssignmentContext(t, client, tenantID, tkt)
 
 	_, err := client.ServiceRequest.UpdateOne(sr).
 		SetCostCenter("CC-001").
@@ -471,4 +476,20 @@ func TestServiceRequestHandler_SetLinkedTicketStatus_AlwaysTenantScoped(t *testi
 	after, err := client.Ticket.Get(context.Background(), tkt.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "open", after.Status, "跨租户请求不得改写关联工单状态")
+}
+
+type requestCallbackDirectory struct{}
+
+func (requestCallbackDirectory) Open(_ context.Context, tx *ent.Tx, _ int) (*ent.Client, func() error, error) {
+	return tx.Client(), func() error { return nil }, nil
+}
+func requestAssignmentContext(t *testing.T, client *ent.Client, tenant int, item *ent.Ticket) context.Context {
+	t.Helper()
+	ctx := tenantctx.WithTenantID(context.Background(), tenant)
+	deployment := client.ProcessDeployment.Create().SetDeploymentID("assignment").SetDeploymentName("assignment").SetTenantID(tenant).SaveX(ctx)
+	definition := client.ProcessDefinition.Create().SetKey("assignment").SetName("assignment").SetBpmnXML([]byte("<definitions/>")).SetDeploymentID(deployment.ID).SetTenantID(tenant).SaveX(ctx)
+	instance := client.ProcessInstance.Create().SetProcessInstanceID("assignment").SetProcessDefinitionKey(definition.Key).SetProcessDefinitionID(definition.ID).SetBusinessID(item.ID).SetBusinessType("service_request").SetTenantID(tenant).SaveX(ctx)
+	row := client.ProcessCallbackOutbox.Create().SetExecutionKey("assignment").SetProcessInstanceID(instance.ID).SetTenantID(tenant).SetCallbackKind("service_task").SetHandlerID("service_request_handler").SetTaskType("service_request_task").SetElementID("assign").SetAction("assign_request").SaveX(ctx)
+	client.ProcessAuditLog.Create().SetProcessInstanceID(instance.ID).SetProcessInstanceKey(instance.ProcessInstanceID).SetProcessDefinitionID(definition.ID).SetProcessDefinitionKey(definition.Key).SetActivityID("assign").SetActivityType("service_task").SetAction("callback_execution_provenance").SetTenantID(tenant).SetUserID(item.RequesterID).SetMetadata(map[string]interface{}{"execution_key": row.ExecutionKey, "outbox_id": row.ID, "process_task_id": 0, "task_id": "", "native_tenant_id": tenant, "target_tenant_id": tenant, "source": "bpmn_start"}).SaveX(ctx)
+	return WithBPMNCallbackExecutionKey(context.WithValue(ctx, BPMNTenantIDContextKey, tenant), row.ExecutionKey)
 }

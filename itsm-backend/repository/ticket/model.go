@@ -208,7 +208,6 @@ type UpdateParams struct {
 	Status         *Status
 	GenericSubtype *string
 	Priority       *Priority
-	AssigneeID     *int
 	CategoryID     *int
 	ReplaceTags    bool
 	TagIDs         []int

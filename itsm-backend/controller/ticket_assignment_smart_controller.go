@@ -5,6 +5,7 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -40,7 +41,7 @@ func (tasc *TicketAssignmentSmartController) AutoAssign(c *gin.Context) {
 
 	tenantID := c.GetInt("tenant_id")
 
-	response, err := tasc.smartService.AutoAssign(c.Request.Context(), ticketID, tenantID)
+	response, err := tasc.smartService.AutoAssign(c.Request.Context(), ticketID, tenantID, creation.Identity{ActorID: c.GetInt("user_id"), TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
 		tasc.logger.Errorw("Failed to auto assign ticket", "error", err, "ticket_id", ticketID)
 		common.Fail(c, common.InternalErrorCode, err.Error())

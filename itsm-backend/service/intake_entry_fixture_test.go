@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"itsm-backend/authorization"
 	"itsm-backend/controller"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -46,7 +47,7 @@ type TicketService struct {
 }
 
 func NewTicketServiceForTest(client *ent.Client, logger *zap.SugaredLogger) *TicketService {
-	owner := domain.NewTicketServiceForTest(client, logger)
+	owner := domain.NewTicketService(&domain.TicketServiceConfig{Client: client, Repository: ticket.NewEntRepository(client, logger), Logger: logger, SessionReader: authorization.NewSessionReader(client, sameTransactionDirectory{})})
 	return &TicketService{owner, client, newEntryApplication(client, owner, domain.NewIncidentService(client, logger))}
 }
 func (s *TicketService) SubmitCreation(ctx context.Context, req *dto.CreateTicketRequest, tenantID int) (*ticket.Ticket, error) {

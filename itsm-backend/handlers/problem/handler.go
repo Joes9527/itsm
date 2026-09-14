@@ -434,7 +434,7 @@ func (h *Handler) Update(c *gin.Context) {
 		updates.Impact = *req.Impact
 	}
 
-	updated, err := h.service.Update(c.Request.Context(), tenantID, id, updates)
+	updated, err := h.service.Update(c.Request.Context(), tenantID, id, updates, creation.Identity{ActorID: c.GetInt("user_id"), TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return

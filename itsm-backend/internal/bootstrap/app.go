@@ -272,6 +272,7 @@ func NewApplication() *Application {
 	// 初始化业务服务层
 	incidentService := service.NewIncidentService(client, sugar)
 	incidentService.RuleEngine().SetActorDirectory(systemClient)
+	incidentService.RuleEngine().SetAssignmentDirectory(clients.IntakeDirectorySnapshot())
 
 	// 初始化 EventBus 事件总线
 	eventBus, err := eventbus.NewWatermillEventBus(&cfg.Redis, sugar)
@@ -329,11 +330,16 @@ func NewApplication() *Application {
 	// 延迟绑定 Graph 发信：发信时只查询当前租户的 msgraph 连接器。
 	emailService.SetGraphProvider(newTenantGraphProvider(connectorManager))
 	ticketNotificationService.SetEmailService(emailService)
+	ticketNotificationService.SetAssignmentDirectory(clients.IntakeDirectorySnapshot())
 	ticketSLAService := service.NewTicketSLAService(client, sugar)
 	ticketAutomationRuleService := service.NewTicketAutomationRuleService(client, sugar)
 
+	sessionReader := authorization.NewSessionReader(client, clients.IntakeDirectorySnapshot())
+	incidentService.SetSessionReader(sessionReader)
+	incidentService.SetWorkflowAssignmentBoundary(service.NewWorkflowAssignmentBoundary(clients.IntakeDirectorySnapshot()))
 	// V2 工单服务（构造函数注入）
 	ticketService := service.NewTicketService(&service.TicketServiceConfig{
+		SessionReader:         sessionReader,
 		ProcessTriggerService: processTriggerService,
 		Repository:            ticketRepoImpl,
 		Client:                client,
@@ -492,10 +498,12 @@ func NewApplication() *Application {
 	ticketAutomationRuleService.SetNotificationService(ticketNotificationService)
 	ticketAssignmentRuleService := service.NewTicketAssignmentRuleService(client, sugar)
 	ticketAssignmentSmartService := service.NewTicketAssignmentSmartService(client, sugar, ticketAssignmentService, ticketAssignmentRuleService)
+	ticketAssignmentSmartService.SetSessionReader(sessionReader)
 	ticketAssignmentSmartController := controller.NewTicketAssignmentSmartController(ticketAssignmentSmartService, ticketAssignmentRuleService, sugar)
 
 	// Ticket Workflow Service & Controller
 	ticketWorkflowService := service.NewTicketWorkflowService(client, sugar)
+	ticketWorkflowService.SetSessionReader(sessionReader)
 	ticketWorkflowController := controller.NewTicketWorkflowController(ticketWorkflowService, database.GetRawDB(), sugar)
 
 	// Ticket Automation Rule Controller (service 已于 131 行预创建并注入 V2)
@@ -513,6 +521,7 @@ func NewApplication() *Application {
 	// 所以这里先做一次类型断言。
 	if cpe, ok := processEngine.(*service.CustomProcessEngine); ok {
 		if h, ok := cpe.CallbackRegistry().GetHandler("ticket_service_handler").(*bpmn.TicketServiceTaskHandler); ok {
+			ticketService.SetWorkflowAssignmentBoundary(service.NewWorkflowAssignmentBoundary(clients.IntakeDirectorySnapshot()))
 			h.SetTicketService(ticketService)
 			h.SetNotificationService(ticketNotificationService)
 		}
@@ -529,6 +538,7 @@ func NewApplication() *Application {
 	rootCauseAnalysisService := service.NewRootCauseAnalysisService(client)
 	problemRepo := problem.NewEntRepository(client)
 	problemServiceDomain := problem.NewService(problemRepo, sugar)
+	problemServiceDomain.SetSessionReader(sessionReader)
 	problemHandler := problem.NewHandler(problemServiceDomain, client)
 	problemInvestigationService := service.NewTenantScopedProblemInvestigationService(database.GetRawDB(), sugar)
 	problemInvestigationController := controller.NewProblemInvestigationController(sugar, problemInvestigationService)
@@ -623,6 +633,7 @@ func NewApplication() *Application {
 	srRepo := service_request.NewEntRepository(client)
 	chainResolver := service.NewApprovalChainResolver(client, sugar)
 	srService := service_request.NewService(srRepo, client, sugar, chainResolver)
+	srService.SetWorkflowAssignmentBoundary(service.NewWorkflowAssignmentBoundary(clients.IntakeDirectorySnapshot()))
 	srHandler := service_request.NewHandler(srService)
 	bpmnWorkflowController.SetApprovedAccessReader(srService)
 	concreteProcessEngine.SetAccessCompletionContributor(srService)
@@ -631,6 +642,7 @@ func NewApplication() *Application {
 	// Domain: Change (DDD)
 	changeRepo := change.NewEntRepository(client, database.GetRawDB())
 	changeServiceDomain := change.NewService(changeRepo, client, sugar)
+	changeServiceDomain.SetSessionReader(sessionReader)
 	// 提交变更审批后自动启动 change_normal_flow，见 change.Service.SetProcessTriggerService 注释；
 	// CAB 审批决定/阶段流转完成 BPMN 任务需要 processEngine，见 SetProcessEngine 注释。
 	changeServiceDomain.SetProcessTriggerService(processTriggerService)
@@ -759,7 +771,6 @@ func NewApplication() *Application {
 		sugar.Warn("REDIS_HOST is not configured; token refresh unavailable")
 	}
 	refreshTokenConsumer := authentication.NewRefreshTokenConsumer(cfg.JWT.Secret, refreshTokenStore)
-	sessionReader := authorization.NewSessionReader(client, clients.IntakeDirectorySnapshot())
 	commonServiceDomain := domainCommon.NewService(commonRepo, cfg.JWT.Secret, sugar, systemClient, refreshTokenConsumer, sessionReader)
 	commonHandler := domainCommon.NewHandler(commonServiceDomain)
 

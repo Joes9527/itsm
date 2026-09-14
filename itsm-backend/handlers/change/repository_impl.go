@@ -375,18 +375,34 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, page, size int, 
 
 // Update 在同一事务内更新专业字段、WorkItem 共享字段，并把 c.RelatedTickets 描述的期望
 // 集合收敛到 WorkItemRelation（见 reconcileRelatedTicketRelations）。
+func (r *EntRepository) GetTx(ctx context.Context, tx *ent.Tx, id, tenantID int) (*Change, error) {
+	bound := *r
+	bound.client = tx.Client()
+	return bound.Get(ctx, id, tenantID)
+}
+
 func (r *EntRepository) Update(ctx context.Context, c *Change) (*Change, error) {
 	tx, err := r.client.Tx(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to start change update transaction: %w", err)
+		return nil, err
 	}
-	rollback := func(cause error) (*Change, error) {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			return nil, fmt.Errorf("%w (rollback also failed: %v)", cause, rbErr)
-		}
-		return nil, cause
+	defer tx.Rollback()
+	result, err := r.UpdateTx(ctx, tx, c, 0)
+	if err != nil {
+		return nil, err
 	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
 
+// UpdateTx preserves the caller's aggregate version when shared assignment has
+// already advanced it. It never writes ownership or commits the transaction.
+func (r *EntRepository) UpdateTx(ctx context.Context, tx *ent.Tx, c *Change, targetVersion int) (*Change, error) {
+	bound := *r
+	bound.client = tx.Client()
+	rollback := func(cause error) (*Change, error) { return nil, cause }
 	current, err := tx.Change.Query().Where(change.IDEQ(c.ID), changeTenantScope(c.TenantID)).WithWorkItem().Only(ctx)
 	if err != nil {
 		return rollback(err)
@@ -414,22 +430,24 @@ func (r *EntRepository) Update(ctx context.Context, c *Change) (*Change, error) 
 		update.SetActualEndDate(*c.ActualEndDate)
 	}
 
-	ec, err := update.Save(ctx)
-	if err != nil {
-		return rollback(err)
+	if targetVersion == 0 {
+		targetVersion = current.Edges.WorkItem.Version + 1
 	}
-	workItemUpdate := tx.Ticket.UpdateOneID(ec.WorkItemID).
+	if targetVersion < current.Edges.WorkItem.Version || targetVersion > current.Edges.WorkItem.Version+1 {
+		return nil, fmt.Errorf("invalid aggregate version")
+	}
+	workItemUpdate := tx.Ticket.UpdateOneID(current.WorkItemID).
 		Where(entticket.TenantIDEQ(c.TenantID), entticket.DeletedAtIsNil(), entticket.VersionEQ(current.Edges.WorkItem.Version)).
 		SetTitle(c.Title).SetDescription(c.Description).SetStatus(c.Status).SetPriority(c.Priority).
-		SetUpdatedAt(time.Now()).AddVersion(1)
-	if c.AssigneeID == nil {
-		workItemUpdate.ClearAssigneeID()
-	} else {
-		workItemUpdate.SetAssigneeID(*c.AssigneeID)
-	}
+		SetUpdatedAt(time.Now()).SetVersion(targetVersion)
 	workItem, err := workItemUpdate.Save(ctx)
 	if err != nil {
 		return rollback(fmt.Errorf("failed to update change work item: %w", err))
+	}
+
+	ec, err := update.Save(ctx)
+	if err != nil {
+		return rollback(err)
 	}
 
 	// 用 Change 自己的创建人作为关系写入的 actor 近似值——UpdateChange 目前没有
@@ -438,16 +456,12 @@ func (r *EntRepository) Update(ctx context.Context, c *Change) (*Change, error) 
 		return rollback(fmt.Errorf("failed to reconcile related tickets: %w", err))
 	}
 
-	if err := tx.Commit(); err != nil {
-		return rollback(fmt.Errorf("failed to commit change update transaction: %w", err))
-	}
-
 	ec.Edges.WorkItem = workItem
 	result := toDomain(ec)
-	if err := r.hydrateUsers(ctx, []*Change{result}, c.TenantID); err != nil {
+	if err := bound.hydrateUsers(ctx, []*Change{result}, c.TenantID); err != nil {
 		return nil, err
 	}
-	if err := r.hydrateRelatedTickets(ctx, []*Change{result}, c.TenantID); err != nil {
+	if err := bound.hydrateRelatedTickets(ctx, []*Change{result}, c.TenantID); err != nil {
 		return nil, err
 	}
 	return result, nil

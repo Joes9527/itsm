@@ -2,6 +2,7 @@ package change
 
 import (
 	"context"
+	"itsm-backend/ent"
 )
 
 // Repository interface for Change domain
@@ -9,6 +10,8 @@ type Repository interface {
 	// Change CRUD
 	Get(ctx context.Context, id int, tenantID int) (*Change, error)
 	List(ctx context.Context, tenantID int, page, size int, status, search, riskLevel string) ([]*Change, int, error)
+	GetTx(context.Context, *ent.Tx, int, int) (*Change, error)
+	UpdateTx(context.Context, *ent.Tx, *Change, int) (*Change, error)
 	Update(ctx context.Context, c *Change) (*Change, error)
 	Delete(ctx context.Context, id int, tenantID int) error
 	GetStats(ctx context.Context, tenantID int) (*Stats, error)

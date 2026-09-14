@@ -5,6 +5,8 @@ package integration
 import (
 	"context"
 	"fmt"
+	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"testing"
 	"time"
 
@@ -25,9 +27,10 @@ func runtimeClients(t *testing.T, f *incidentEffectsFixture) (*database.RuntimeC
 	var schema string
 	require.NoError(t, f.db.QueryRowContext(f.ctx, "SELECT current_schema()").Scan(&schema))
 	suffix := fmt.Sprint(time.Now().UnixNano())
+	runtimePassword, systemPassword := uuid.NewString(), uuid.NewString()
 	runtimeRole, systemRole := "entry_app_"+suffix, "entry_system_"+suffix
-	for _, spec := range []struct{ name, attributes string }{{runtimeRole, "NOBYPASSRLS"}, {systemRole, "BYPASSRLS"}} {
-		_, err := f.db.ExecContext(f.ctx, "CREATE ROLE "+spec.name+" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT "+spec.attributes)
+	for _, spec := range []struct{ name, attributes, password string }{{runtimeRole, "NOBYPASSRLS", runtimePassword}, {systemRole, "BYPASSRLS", systemPassword}} {
+		_, err := f.db.ExecContext(f.ctx, "CREATE ROLE "+spec.name+" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT "+spec.attributes+" PASSWORD "+pq.QuoteLiteral(spec.password))
 		require.NoError(t, err)
 		role := spec.name
 		t.Cleanup(func() {
@@ -62,7 +65,7 @@ func runtimeClients(t *testing.T, f *incidentEffectsFixture) (*database.RuntimeC
 		_, err := f.db.ExecContext(f.ctx, "GRANT "+grant+" TO "+systemRole)
 		require.NoError(t, err)
 	}
-	cfg := config.DatabaseConfig{Host: "127.0.0.1", Port: 36444, DBName: "sslvpn_test", SSLMode: "disable", Schema: schema, User: runtimeRole, SystemRoleUser: systemRole}
+	cfg := config.DatabaseConfig{Host: "127.0.0.1", Port: 36444, DBName: "sslvpn_test", SSLMode: "disable", Schema: schema, User: runtimeRole, Password: runtimePassword, SystemRoleUser: systemRole, SystemRolePassword: systemPassword}
 	clients, err := database.InitRuntimeDatabases(&cfg, &config.RLSConfig{Mode: "enforce"}, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, clients.Close()) })

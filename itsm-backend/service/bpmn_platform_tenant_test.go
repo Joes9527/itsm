@@ -43,7 +43,9 @@ func setupPlatformTenantEnv(t *testing.T) (*ent.Client, ProcessEngine, context.C
 	// "incident service 未注入" 硬失败。
 	if cpe, ok := engine.(*CustomProcessEngine); ok {
 		if h, ok := cpe.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler); ok {
-			h.SetIncidentService(NewIncidentService(client, zap.NewNop().Sugar()))
+			owner := NewIncidentService(client, zap.NewNop().Sugar())
+			owner.SetWorkflowAssignmentBoundary(NewWorkflowAssignmentBoundary(callbackFixtureDirectory{}))
+			h.SetIncidentService(owner)
 		}
 	}
 
@@ -73,6 +75,8 @@ func TestStartProcess_TrustedTenant_ServiceTaskUsesInstanceIdentity(t *testing.T
 	require.NoError(t, err)
 
 	trustedCtx := WithTrustedBPMNTenantContext(platformCtx, tenantID)
+	trustedCtx = WithBPMNAccessScope(trustedCtx, BPMNAccessScope{UserID: assignee.ID, TenantID: tenantID})
+	trustedCtx = context.WithValue(trustedCtx, bpmn.BPMNUserIDContextKey, assignee.ID)
 	instance, err := engine.StartProcess(trustedCtx, "incident_emergency_flow", "incident:platform-1", "incident", workItem.ID, map[string]interface{}{
 		"assignee_id":  assignee.ID,
 		"requester_id": assignee.ID,

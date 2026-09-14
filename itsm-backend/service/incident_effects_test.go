@@ -1,6 +1,7 @@
 package service
 
 import (
+ creation "itsm-backend/handlers/common/workitemcreation"
 	"context"
 	"errors"
 	"fmt"
@@ -30,7 +31,7 @@ func TestIncidentEffectsUpdateTimelineRollback(t *testing.T) {
 		})
 	})
 	status := "in_progress"
-	_, err = svc.UpdateIncident(ctx, inc.ID, &dto.UpdateIncidentRequest{Status: &status}, tenant.ID)
+	_, err = svc.UpdateIncident(ctx, inc.ID, &dto.UpdateIncidentRequest{Status: &status}, tenant.ID,creation.Identity{})
 	require.ErrorContains(t, err, "timeline unavailable")
 	require.Len(t, logs.All(), 1)
 	require.Equal(t, "timeline unavailable", logs.All()[0].ContextMap()["error"])

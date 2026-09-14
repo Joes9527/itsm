@@ -8,6 +8,7 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -61,7 +62,7 @@ func (tc *TicketWorkflowController) AcceptTicket(c *gin.Context) {
 		return
 	}
 
-	err := tc.workflowService.AcceptTicket(c.Request.Context(), &req, userID, tenantID)
+	err := tc.workflowService.AcceptTicket(c.Request.Context(), &req, userID, tenantID, creation.Identity{ActorID: userID, TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
 		tc.logger.Errorw("Failed to accept ticket", "error", err, "ticket_id", req.TicketID)
 		common.Fail(c, common.InternalErrorCode, err.Error())
@@ -123,7 +124,7 @@ func (tc *TicketWorkflowController) ForwardTicket(c *gin.Context) {
 		return
 	}
 
-	err := tc.workflowService.ForwardTicket(c.Request.Context(), &req, userID, tenantID)
+	err := tc.workflowService.ForwardTicket(c.Request.Context(), &req, userID, tenantID, creation.Identity{ActorID: userID, TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
 		tc.logger.Errorw("Failed to forward ticket", "error", err, "ticket_id", req.TicketID)
 		common.Fail(c, common.InternalErrorCode, err.Error())

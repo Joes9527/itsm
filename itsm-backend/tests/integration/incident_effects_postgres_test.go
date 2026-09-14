@@ -3,6 +3,7 @@
 package integration
 
 import (
+ creation "itsm-backend/handlers/common/workitemcreation"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -322,7 +323,7 @@ func TestPostgresIncidentEffectsLifecycleOwnership(t *testing.T) {
 	require.NoError(t, f.engine.Deliver(f.ctx, f.event))
 	require.Equal(t, item.Version, f.client.Ticket.GetX(f.ctx, item.ID).Version)
 	closed := "closed"
-	_, err := f.svc.UpdateIncident(f.ctx, f.inc.ID, &dto.UpdateIncidentRequest{Status: &closed}, f.tenant.ID)
+	_, err := f.svc.UpdateIncident(f.ctx, f.inc.ID, &dto.UpdateIncidentRequest{Status: &closed}, f.tenant.ID,creation.Identity{})
 	require.Error(t, err)
 	require.Equal(t, "in_progress", f.client.Ticket.GetX(f.ctx, item.ID).Status)
 }

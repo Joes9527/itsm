@@ -198,15 +198,17 @@ func (q *ToolQueue) ProcessJob(ctx context.Context, job ToolJob) error {
 			err = idErr
 			break
 		}
-		assignee := 0
+		var assignee *int
 		if raw, ok := args["assignee_id"]; ok {
-			assignee, err = positiveToolInteger(raw)
+			var id int
+			id, err = positiveToolInteger(raw)
+			assignee = &id
 			if err != nil {
 				break
 			}
 		}
 		status, _ := args["status"].(string)
-		result, err = q.tickets.UpdateTicket(ctx, id, &dto.UpdateTicketRequest{Status: status, AssigneeID: assignee, UserID: actor.ID}, inv.TenantID)
+		result, err = q.tickets.UpdateTicket(ctx, id, &dto.UpdateTicketRequest{Status: status, AssigneeID: assignee, UserID: actor.ID}, inv.TenantID, creation.Identity{ActorID: actor.ID, TenantID: inv.TenantID, Role: authorization.EffectiveSessionRole(actor), Channel: "ai_tool"})
 	default:
 		if q.tools == nil {
 			err = fmt.Errorf("tool registry is unavailable")

@@ -106,7 +106,7 @@ func (tc *TicketController) UpdateTicket(c *gin.Context) {
 		return
 	}
 
-	ticket, err := tc.ticketService.UpdateTicket(c.Request.Context(), ticketID, &req, tenantID)
+	ticket, err := tc.ticketService.UpdateTicket(c.Request.Context(), ticketID, &req, tenantID, creation.Identity{ActorID: c.GetInt("user_id"), TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
 		// 处理版本冲突错误
 		if common.IsVersionConflictError(err) {
@@ -341,7 +341,7 @@ func (tc *TicketController) AssignTicket(c *gin.Context) {
 		return
 	}
 
-	ticket, err := tc.ticketService.AssignTicket(c.Request.Context(), ticketID, assigneeID, tenantID)
+	ticket, err := tc.ticketService.AssignTicket(c.Request.Context(), ticketID, assigneeID, tenantID, creation.Identity{ActorID: assignedBy, TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
 		tc.logger.Errorw("Failed to assign ticket", "error", err, "ticket_id", ticketID, "tenant_id", tenantID)
 		common.Fail(c, common.InternalErrorCode, err.Error())
@@ -368,7 +368,7 @@ func (tc *TicketController) EscalateTicket(c *gin.Context) {
 	tenantID := c.GetInt("tenant_id")
 	escalatedBy := c.GetInt("user_id")
 
-	ticket, err := tc.ticketService.EscalateTicket(c.Request.Context(), ticketID, req.Reason, tenantID, escalatedBy)
+	ticket, err := tc.ticketService.EscalateTicket(c.Request.Context(), ticketID, req.Reason, tenantID, escalatedBy, creation.Identity{ActorID: escalatedBy, TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
 		tc.logger.Errorw("Failed to escalate ticket", "error", err, "ticket_id", ticketID, "tenant_id", tenantID)
 		common.Fail(c, common.InternalErrorCode, err.Error())
@@ -554,7 +554,7 @@ func (tc *TicketController) AssignTickets(c *gin.Context) {
 	tenantID := c.GetInt("tenant_id")
 
 	// 实现工单分配功能
-	err := tc.ticketService.AssignTickets(c.Request.Context(), tenantID, req.TicketIDs, req.AssigneeID)
+	err := tc.ticketService.AssignTickets(c.Request.Context(), tenantID, req.TicketIDs, req.AssigneeID, creation.Identity{ActorID: c.GetInt("user_id"), TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
 		tc.logger.Errorw("Assign tickets failed", "error", err, "ticket_ids", req.TicketIDs, "assignee_id", req.AssigneeID, "tenant_id", tenantID)
 		common.Fail(c, common.InternalErrorCode, "分配失败: "+err.Error())
@@ -941,7 +941,7 @@ func (tc *TicketController) UpdateSubtask(c *gin.Context) {
 		return
 	}
 
-	updatedTicket, err := tc.ticketService.UpdateTicket(c.Request.Context(), subtaskID, &req, tenantID)
+	updatedTicket, err := tc.ticketService.UpdateTicket(c.Request.Context(), subtaskID, &req, tenantID, creation.Identity{ActorID: c.GetInt("user_id"), TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
 		tc.logger.Errorw("Failed to update subtask", "error", err, "subtask_id", subtaskID, "tenant_id", tenantID)
 		common.Fail(c, common.InternalErrorCode, err.Error())

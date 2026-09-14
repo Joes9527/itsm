@@ -6,6 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"itsm-backend/authorization"
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/ent"
+	"itsm-backend/ent/enttest"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -595,7 +599,7 @@ func TestChangeControllerMutationsUseResolvedMSPTenant(t *testing.T) {
 		require.Equal(t, "MSP updated change", repo.changes[change.ID].Title)
 	})
 
-	t.Run("assign", func(t *testing.T) {
+	t.Run("assign requires verified session", func(t *testing.T) {
 		change := createTestChange(repo, customerTenantID, 1)
 		body := bytes.NewBufferString(`{"assigneeId":42}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/changes/"+strconv.Itoa(change.ID)+"/assign", body)
@@ -606,9 +610,8 @@ func TestChangeControllerMutationsUseResolvedMSPTenant(t *testing.T) {
 
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
-		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-		require.NotNil(t, repo.changes[change.ID].AssigneeID)
-		require.Equal(t, 42, *repo.changes[change.ID].AssigneeID)
+		require.Equal(t, http.StatusInternalServerError, w.Code)
+		require.Contains(t, w.Body.String(), "verified Change assignment session is required")
 	})
 }
 
@@ -833,36 +836,28 @@ func TestChangeController_SubmitChange(t *testing.T) {
 
 // TestChangeController_AssignChange tests POST /api/v1/changes/:id/assign
 func TestChangeController_AssignChange(t *testing.T) {
-	r, _, repo := setupTestHandler(t)
-
-	// Create test data
-	change := createTestChange(repo, 1, 1)
-
-	// Use camelCase field name as per API contract
-	assignReq := map[string]interface{}{
-		"assigneeId": 2,
-	}
-	requestBody, err := json.Marshal(assignReq)
-	require.NoError(t, err)
-
-	req, _ := http.NewRequest("POST", "/api/v1/changes/"+strconv.Itoa(change.ID)+"/assign", bytes.NewBuffer(requestBody))
-	req.Header.Set("Content-Type", "application/json")
-
+	client := enttest.Open(t, "sqlite3", "file:change-assignment-handler?mode=memory&cache=shared&_fk=1")
+	ctx := context.Background()
+	tenant := client.Tenant.Create().SetCode("assign").SetName("Assignment").SaveX(ctx)
+	actor := client.User.Create().SetTenantID(tenant.ID).SetUsername("actor").SetName("Actor").SetEmail("actor@example.test").SetPasswordHash("unused").SetRole("super_admin").SaveX(ctx)
+	target := client.User.Create().SetTenantID(tenant.ID).SetUsername("target").SetName("Target").SetEmail("target@example.test").SetPasswordHash("unused").SaveX(ctx)
+	item := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetOpenedByID(actor.ID).SetRecordClass("change_request").SetTicketNumber("CHG-ASSIGN").SetTitle("Change").SetStatus("draft").SaveX(ctx)
+	ext := client.Change.Create().SetWorkItemID(item.ID).SaveX(ctx)
+	svc := NewService(NewEntRepository(client, nil), client, zaptest.NewLogger(t).Sugar())
+	svc.SetSessionReader(authorization.NewSessionReader(client, sameTransactionDirectory{}))
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var response common.Response
-	err = json.Unmarshal(w.Body.Bytes(), &response)
-	require.NoError(t, err)
-	assert.Equal(t, common.SuccessCode, response.Code)
-
-	// Verify assignment was successful
-	if response.Code == common.SuccessCode {
-		data := response.Data.(map[string]interface{})
-		assert.Equal(t, float64(2), data["assigneeId"])
-	}
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{{Key: "id", Value: strconv.Itoa(ext.ID)}}
+	c.Set("user_id", actor.ID)
+	c.Set("tenant_id", tenant.ID)
+	c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: tenant.ID})
+	c.Set("role", actor.Role)
+	c.Request = httptest.NewRequest(http.MethodPost, "/changes/assign", bytes.NewBufferString(fmt.Sprintf(`{"assigneeId":%d}`, target.ID))).WithContext(tenantctx.WithTenantID(ctx, tenant.ID))
+	c.Request.Header.Set("Content-Type", "application/json")
+	NewHandler(svc).AssignChange(c)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.Equal(t, target.ID, client.Ticket.GetX(ctx, item.ID).AssigneeID)
+	require.Equal(t, 1, client.OutboxEvent.Query().CountX(ctx))
 }
 
 func TestSubmitChangeAtomicFailureLeavesDraftUnchanged(t *testing.T) {
@@ -1043,4 +1038,11 @@ func TestInferITILPractices(t *testing.T) {
 		got := inferITILPractices(summary)
 		assert.Empty(t, got)
 	})
+}
+
+func (m *mockRepository) GetTx(ctx context.Context, tx *ent.Tx, id, tenantID int) (*Change, error) {
+	return m.Get(ctx, id, tenantID)
+}
+func (m *mockRepository) UpdateTx(ctx context.Context, tx *ent.Tx, c *Change, version int) (*Change, error) {
+	return m.Update(ctx, c)
 }

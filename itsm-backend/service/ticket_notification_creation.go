@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"itsm-backend/authorization"
 	"net/mail"
 	"strings"
 
@@ -44,7 +46,13 @@ func (s *TicketNotificationService) enqueueTicketNotificationTx(ctx context.Cont
 		return creation.NewDomainValidationFailed("creation notification recipients are required", nil)
 	}
 	for _, recipientID := range recipients {
-		recipient, err := tx.User.Query().Where(user.IDEQ(recipientID), user.TenantIDEQ(item.TenantID), user.ActiveEQ(true)).Only(ctx)
+		var recipient *ent.User
+		var err error
+		if eventType == "ticket_assigned" && strings.HasPrefix(deliveryKey, "work-item-assigned:") {
+			recipient, err = s.assignmentRecipient(ctx, tx, recipientID, item.TenantID)
+		} else {
+			recipient, err = tx.User.Query().Where(user.IDEQ(recipientID), user.TenantIDEQ(item.TenantID), user.ActiveEQ(true)).Only(ctx)
+		}
 		if ent.IsNotFound(err) {
 			return creation.NewReferenceNotFound("notification recipient is unavailable", err)
 		}
@@ -93,4 +101,22 @@ func (s *TicketNotificationService) enqueueTicketNotificationTx(ctx context.Cont
 		}
 	}
 	return nil
+}
+
+func (s *TicketNotificationService) assignmentRecipient(ctx context.Context, tx *ent.Tx, recipientID, tenantID int) (*ent.User, error) {
+	if s.assignmentDirectory == nil {
+		return nil, fmt.Errorf("assignment notification directory is required")
+	}
+	directory, closeDirectory, err := s.assignmentDirectory.Open(ctx, tx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if directory == nil || closeDirectory == nil {
+		return nil, fmt.Errorf("assignment notification directory unavailable")
+	}
+	recipient, lookupErr := authorization.ResolveCurrentTenantUser(ctx, directory, recipientID, tenantID, s.clock())
+	if err := errors.Join(lookupErr, closeDirectory()); err != nil {
+		return nil, err
+	}
+	return recipient, nil
 }

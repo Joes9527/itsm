@@ -17,14 +17,17 @@ import (
 	"itsm-backend/ent/ticketcc"
 	"itsm-backend/ent/ticketworkflowrecord"
 	"itsm-backend/ent/user"
+	assignment "itsm-backend/handlers/common/workitemassignment"
+	creation "itsm-backend/handlers/common/workitemcreation"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
 type TicketWorkflowService struct {
-	client *ent.Client
-	logger *zap.SugaredLogger
+	sessions *authorization.SessionReader
+	client   *ent.Client
+	logger   *zap.SugaredLogger
 }
 
 func NewTicketWorkflowService(client *ent.Client, logger *zap.SugaredLogger) *TicketWorkflowService {
@@ -40,69 +43,37 @@ func (s *TicketWorkflowService) withClient(client *ent.Client) *TicketWorkflowSe
 	return &rebound
 }
 
-// AcceptTicket 接单（事务保护，保证工单状态更新与流转记录的原子性）
-func (s *TicketWorkflowService) AcceptTicket(ctx context.Context, req *dto.AcceptTicketRequest, userID, tenantID int) error {
-	s.logger.Infow("Accepting ticket", "ticket_id", req.TicketID, "user_id", userID)
+func (s *TicketWorkflowService) SetSessionReader(sessions *authorization.SessionReader) {
+	s.sessions = sessions
+}
 
-	// 检查工单是否存在且状态允许接单（读操作，事务外执行）
-	tk, err := s.getTicket(ctx, req.TicketID, tenantID)
-	if err != nil {
-		return err
+// AcceptTicket preserves first-response/status and its lifecycle audit in the
+// same verified transaction as the shared assignment command.
+func (s *TicketWorkflowService) AcceptTicket(ctx context.Context, req *dto.AcceptTicketRequest, userID, tenantID int, identity creation.Identity) error {
+	if s.sessions == nil || identity.ActorID != userID || identity.TenantID != tenantID {
+		return fmt.Errorf("verified acceptance session is required")
 	}
-
-	if tk.Status != "new" && tk.Status != "open" {
-		return fmt.Errorf("工单当前状态不允许接单: %s", tk.Status)
-	}
-
-	// 开启事务，保证原子性
-	tx, err := s.client.Tx(ctx)
-	if err != nil {
-		return fmt.Errorf("开启事务失败: %w", err)
-	}
-	var txErr error
-	defer func() {
-		if txErr != nil {
-			tx.Rollback()
+	return s.sessions.Write(ctx, identity, func(session *authorization.SessionSnapshot) error {
+		item, err := session.AuthorizeWorkItemAssignment(ctx, req.TicketID)
+		if err != nil {
+			return err
 		}
-	}()
-
-	txClient := tx.Client()
-
-	// 更新工单状态和分配人
-	// P1-07 修复：接单同时设置 first_response_at，供 SLA 计时使用
-	now := time.Now()
-	_, err = txClient.Ticket.UpdateOneID(req.TicketID).
-		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(tk.Version), ticket.StatusIn("new", "open")).
-		SetAssigneeID(userID).
-		SetStatus("in_progress").
-		SetFirstResponseAt(now).
-		SetVersion(tk.Version + 1).
-		Save(ctx)
-	if err != nil {
-		txErr = fmt.Errorf("failed to accept ticket: %w", err)
-		return txErr
-	}
-
-	// 记录流转记录
-	err = s.createWorkflowRecordWithClient(ctx, txClient, &dto.TicketWorkflowRecord{
-		TicketID:   req.TicketID,
-		Action:     dto.WorkflowActionAccept,
-		FromStatus: &tk.Status,
-		ToStatus:   ptrString("in_progress"),
-		Operator:   dto.WorkflowUserInfo{ID: userID},
-		Comment:    req.Comment,
-		CreatedAt:  time.Now(),
-	}, tenantID)
-	if err != nil {
-		txErr = fmt.Errorf("记录流转记录失败: %w", err)
-		return txErr
-	}
-
-	txErr = tx.Commit()
-	if txErr != nil {
-		return fmt.Errorf("提交接单事务失败: %w", txErr)
-	}
-	return txErr
+		if item.RecordClass != "generic" || (item.Status != "new" && item.Status != "open") {
+			return fmt.Errorf("ticket current state does not permit acceptance")
+		}
+		updated, err := NewWorkItemAssignmentWriter(session).Apply(ctx, session.Tx.Client(), assignment.Command{WorkItemID: item.ID, TenantID: tenantID, ActorID: userID, ActorTenantID: session.Actor.TenantID, AssigneeID: userID, ExpectedVersion: item.Version, Source: identity.Channel + ".ticket.accept", Reason: req.Comment})
+		if err != nil {
+			return err
+		}
+		mutation := session.Tx.Ticket.UpdateOneID(item.ID).SetStatus("in_progress").SetFirstResponseAt(time.Now())
+		if updated.Version == item.Version {
+			mutation.AddVersion(1)
+		}
+		if err := mutation.Exec(ctx); err != nil {
+			return err
+		}
+		return s.createWorkflowRecordWithClient(ctx, session.Tx.Client(), &dto.TicketWorkflowRecord{TicketID: item.ID, Action: dto.WorkflowActionAccept, FromStatus: &item.Status, ToStatus: ptrString("in_progress"), Operator: dto.WorkflowUserInfo{ID: userID}, Comment: req.Comment, CreatedAt: time.Now()}, tenantID)
+	})
 }
 
 // WithdrawTicket 撤回工单
@@ -146,40 +117,27 @@ func (s *TicketWorkflowService) WithdrawTicket(ctx context.Context, req *dto.Wit
 	return err
 }
 
-// ForwardTicket 转发工单
-func (s *TicketWorkflowService) ForwardTicket(ctx context.Context, req *dto.ForwardTicketRequest, userID, tenantID int) error {
-	s.logger.Infow("Forwarding ticket", "ticket_id", req.TicketID, "to_user_id", req.ToUserID, "user_id", userID)
-
-	_, err := s.getTicket(ctx, req.TicketID, tenantID)
-	if err != nil {
-		return err
+// ForwardTicket records forwarding and optional ownership transfer atomically.
+func (s *TicketWorkflowService) ForwardTicket(ctx context.Context, req *dto.ForwardTicketRequest, userID, tenantID int, identity creation.Identity) error {
+	if s.sessions == nil || identity.ActorID != userID || identity.TenantID != tenantID {
+		return fmt.Errorf("verified forwarding session is required")
 	}
-
-	// 如果转移所有权，更新assignee
-	if req.TransferOwnership {
-		_, err = s.client.Ticket.UpdateOneID(req.TicketID).
-			SetAssigneeID(req.ToUserID).
-			Save(ctx)
+	return s.sessions.Write(ctx, identity, func(session *authorization.SessionSnapshot) error {
+		item, err := session.AuthorizeWorkItemAssignment(ctx, req.TicketID)
 		if err != nil {
-			return fmt.Errorf("failed to forward ticket: %w", err)
+			return err
 		}
-	}
-
-	// 记录流转记录
-	err = s.createWorkflowRecord(ctx, &dto.TicketWorkflowRecord{
-		TicketID:  req.TicketID,
-		Action:    dto.WorkflowActionForward,
-		Operator:  dto.WorkflowUserInfo{ID: userID},
-		FromUser:  &dto.WorkflowUserInfo{ID: userID},
-		ToUser:    &dto.WorkflowUserInfo{ID: req.ToUserID},
-		Comment:   req.Comment,
-		CreatedAt: time.Now(),
-		Metadata: map[string]interface{}{
-			"transfer_ownership": req.TransferOwnership,
-		},
-	}, tenantID)
-
-	return err
+		if req.TransferOwnership {
+			if item.RecordClass != "generic" || (item.Status == "resolved" || item.Status == "closed" || item.Status == "cancelled") {
+				return fmt.Errorf("ticket is not eligible for forwarding")
+			}
+			_, err = NewWorkItemAssignmentWriter(session).Apply(ctx, session.Tx.Client(), assignment.Command{WorkItemID: item.ID, TenantID: tenantID, ActorID: userID, ActorTenantID: session.Actor.TenantID, AssigneeID: req.ToUserID, ExpectedVersion: item.Version, Source: identity.Channel + ".ticket.forward", Reason: req.Comment})
+			if err != nil {
+				return err
+			}
+		}
+		return s.createWorkflowRecordWithClient(ctx, session.Tx.Client(), &dto.TicketWorkflowRecord{TicketID: item.ID, Action: dto.WorkflowActionForward, Operator: dto.WorkflowUserInfo{ID: userID}, FromUser: &dto.WorkflowUserInfo{ID: userID}, ToUser: &dto.WorkflowUserInfo{ID: req.ToUserID}, Comment: req.Comment, CreatedAt: time.Now(), Metadata: map[string]interface{}{"transfer_ownership": req.TransferOwnership}}, tenantID)
+	})
 }
 
 // CCTicket 抄送工单

@@ -3,6 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"itsm-backend/authorization"
+	"itsm-backend/common/tenantctx"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"strings"
 	"testing"
 	"time"
@@ -29,6 +32,8 @@ func setupIncidentTest(t *testing.T) (*ent.Client, *IncidentService, context.Con
 	client := enttest.Open(t, "sqlite3", testDSN())
 	logger := zaptest.NewLogger(t).Sugar()
 	service := NewIncidentService(client, logger)
+	service.SetSessionReader(authorization.NewSessionReader(client, callbackFixtureDirectory{}))
+	service.SetWorkflowAssignmentBoundary(NewWorkflowAssignmentBoundary(callbackFixtureDirectory{}))
 	service.RuleEngine().SetActorDirectory(client)
 	ctx := context.Background()
 	return client, service, ctx
@@ -167,6 +172,7 @@ func TestIncidentService_AssignIncident_ValidatesAssigneeAndReturnsUpdatedIncide
 	require.NoError(t, err)
 	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-reporter")
 	require.NoError(t, err)
+	require.NoError(t, reporter.Update().SetRole("super_admin").Exec(ctx))
 	assignee, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-agent")
 	require.NoError(t, err)
 	workItem := createIncidentTestWorkItem(t, ctx, client, tenant.ID, reporter.ID, "Assign incident", common.IncidentStatusNew, "high")
@@ -180,7 +186,7 @@ func TestIncidentService_AssignIncident_ValidatesAssigneeAndReturnsUpdatedIncide
 	_, err = client.Ticket.UpdateOneID(workItem.ID).SetDescription("desc").Save(ctx)
 	require.NoError(t, err)
 
-	response, err := incidentService.AssignIncident(ctx, incidentEntity.ID, assignee.ID, tenant.ID)
+	response, err := incidentService.AssignIncident(tenantctx.WithTenantID(ctx, tenant.ID), incidentEntity.ID, assignee.ID, tenant.ID, creation.Identity{ActorID: reporter.ID, TenantID: tenant.ID, Role: "super_admin", Channel: "test"})
 	require.NoError(t, err)
 	require.NotNil(t, response.AssigneeID)
 	assert.Equal(t, assignee.ID, *response.AssigneeID)
@@ -190,15 +196,15 @@ func TestIncidentService_AssignIncident_ValidatesAssigneeAndReturnsUpdatedIncide
 	require.NoError(t, err)
 	otherUser, err := createIncidentTestUser(ctx, client, otherTenant.ID, "assign-other")
 	require.NoError(t, err)
-	_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, otherUser.ID, tenant.ID)
-	require.ErrorContains(t, err, "assignee not found or inactive")
+	_, err = incidentService.AssignIncident(tenantctx.WithTenantID(ctx, tenant.ID), incidentEntity.ID, otherUser.ID, tenant.ID, creation.Identity{ActorID: reporter.ID, TenantID: tenant.ID, Role: "super_admin", Channel: "test"})
+	require.ErrorContains(t, err, "tenant")
 
 	inactive, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-inactive")
 	require.NoError(t, err)
 	_, err = inactive.Update().SetActive(false).Save(ctx)
 	require.NoError(t, err)
-	_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, inactive.ID, tenant.ID)
-	require.ErrorContains(t, err, "assignee not found or inactive")
+	_, err = incidentService.AssignIncident(tenantctx.WithTenantID(ctx, tenant.ID), incidentEntity.ID, inactive.ID, tenant.ID, creation.Identity{ActorID: reporter.ID, TenantID: tenant.ID, Role: "super_admin", Channel: "test"})
+	require.ErrorContains(t, err, "unavailable")
 }
 
 func TestAssignIncidentRejectsTerminalStatuses(t *testing.T) {
@@ -210,6 +216,7 @@ func TestAssignIncidentRejectsTerminalStatuses(t *testing.T) {
 			require.NoError(t, err)
 			reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-reporter-"+status)
 			require.NoError(t, err)
+			require.NoError(t, reporter.Update().SetRole("super_admin").Exec(ctx))
 			assignee, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-target-"+status)
 			require.NoError(t, err)
 			workItem := createIncidentTestWorkItem(t, ctx, client, tenant.ID, reporter.ID, "Lifecycle guarded assignment", status, "medium")
@@ -218,7 +225,7 @@ func TestAssignIncidentRejectsTerminalStatuses(t *testing.T) {
 				Save(ctx)
 			require.NoError(t, err)
 
-			_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, assignee.ID, tenant.ID)
+			_, err = incidentService.AssignIncident(tenantctx.WithTenantID(ctx, tenant.ID), incidentEntity.ID, assignee.ID, tenant.ID, creation.Identity{ActorID: reporter.ID, TenantID: tenant.ID, Role: "super_admin", Channel: "test"})
 			require.ErrorContains(t, err, "cannot be reassigned")
 
 			persisted, err := client.Ticket.Get(ctx, workItem.ID)
@@ -228,7 +235,7 @@ func TestAssignIncidentRejectsTerminalStatuses(t *testing.T) {
 	}
 }
 
-func TestAssignIncidentRejectsConcurrentSnapshotChange(t *testing.T) {
+func TestAssignIncidentRejectsConcurrentMutationDuringTransaction(t *testing.T) {
 	for _, testCase := range []struct {
 		name       string
 		mutateRace func(context.Context, *ent.Client, int) error
@@ -244,7 +251,7 @@ func TestAssignIncidentRejectsConcurrentSnapshotChange(t *testing.T) {
 				return racer.Ticket.UpdateOneID(entity.WorkItemID).SetStatus(common.IncidentStatusResolved).Exec(ctx)
 			},
 			assertErr: func(t *testing.T, err error) {
-				require.ErrorContains(t, err, "resolved or closed incidents cannot be reassigned")
+				require.ErrorContains(t, err, "locked")
 			},
 		},
 		{
@@ -257,8 +264,7 @@ func TestAssignIncidentRejectsConcurrentSnapshotChange(t *testing.T) {
 				return racer.Ticket.UpdateOneID(entity.WorkItemID).AddVersion(1).Exec(ctx)
 			},
 			assertErr: func(t *testing.T, err error) {
-				var conflict *common.VersionConflictError
-				require.ErrorAs(t, err, &conflict)
+				require.ErrorContains(t, err, "locked")
 			},
 		},
 	} {
@@ -274,6 +280,7 @@ func TestAssignIncidentRejectsConcurrentSnapshotChange(t *testing.T) {
 			require.NoError(t, err)
 			reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-race-reporter-"+testCase.name)
 			require.NoError(t, err)
+			require.NoError(t, reporter.Update().SetRole("super_admin").Exec(ctx))
 			assignee, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-race-target-"+testCase.name)
 			require.NoError(t, err)
 			workItem := createIncidentTestWorkItem(t, ctx, client, tenant.ID, reporter.ID, "Concurrent assignment", common.IncidentStatusNew, "medium")
@@ -287,14 +294,17 @@ func TestAssignIncidentRejectsConcurrentSnapshotChange(t *testing.T) {
 				return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
 					if !raced {
 						raced = true
-						require.NoError(t, testCase.mutateRace(ctx, racer, incidentEntity.ID))
+						if err := testCase.mutateRace(ctx, racer, incidentEntity.ID); err != nil {
+							return nil, err
+						}
 					}
 					return next.Mutate(ctx, mutation)
 				})
 			})
 
 			incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar())
-			_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, assignee.ID, tenant.ID)
+			incidentService.SetSessionReader(authorization.NewSessionReader(client, callbackFixtureDirectory{}))
+			_, err = incidentService.AssignIncident(tenantctx.WithTenantID(ctx, tenant.ID), incidentEntity.ID, assignee.ID, tenant.ID, creation.Identity{ActorID: reporter.ID, TenantID: tenant.ID, Role: "super_admin", Channel: "test"})
 			require.Error(t, err)
 			testCase.assertErr(t, err)
 			require.True(t, raced)
@@ -518,7 +528,7 @@ func TestIncidentService_UpdateIncident_Success(t *testing.T) {
 		Title:    &newTitle,
 		Priority: &newPriority,
 		Version:  0, // 跳过版本检查
-	}, testTenant.ID)
+	}, testTenant.ID, creation.Identity{})
 
 	require.NoError(t, err)
 	assert.Equal(t, newTitle, response.Title)
@@ -554,7 +564,7 @@ func TestIncidentService_UpdateIncident_VersionControl(t *testing.T) {
 			Title:   &newTitle,
 			Version: 1, // 匹配当前版本
 			Force:   false,
-		}, testTenant.ID)
+		}, testTenant.ID, creation.Identity{})
 
 		require.NoError(t, err)
 		assert.Equal(t, newTitle, response.Title)
@@ -568,7 +578,7 @@ func TestIncidentService_UpdateIncident_VersionControl(t *testing.T) {
 			Title:   &newTitle,
 			Version: 1, // 使用旧版本号
 			Force:   false,
-		}, testTenant.ID)
+		}, testTenant.ID, creation.Identity{})
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "版本冲突")
@@ -587,7 +597,7 @@ func TestIncidentService_UpdateIncident_VersionControl(t *testing.T) {
 			Title:   &newTitle,
 			Version: 1,    // 旧版本号
 			Force:   true, // 强制更新
-		}, testTenant.ID)
+		}, testTenant.ID, creation.Identity{})
 
 		require.NoError(t, err)
 		assert.Equal(t, newTitle, response.Title)
@@ -599,7 +609,7 @@ func TestIncidentService_UpdateIncident_VersionControl(t *testing.T) {
 			Title:   &newTitle,
 			Version: 0, // 跳过版本检查
 			Force:   false,
-		}, testTenant.ID)
+		}, testTenant.ID, creation.Identity{})
 
 		require.NoError(t, err)
 		assert.Equal(t, newTitle, response.Title)
@@ -631,7 +641,7 @@ func TestIncidentService_UpdateIncident_StatusTransition(t *testing.T) {
 		response, err := service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
 			Status:  &newStatus,
 			Version: 0,
-		}, testTenant.ID)
+		}, testTenant.ID, creation.Identity{})
 
 		require.NoError(t, err)
 		assert.Equal(t, newStatus, response.Status)
@@ -654,7 +664,7 @@ func TestIncidentService_UpdateIncident_StatusTransition(t *testing.T) {
 		_, err = service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
 			Status:  &newStatus,
 			Version: 0,
-		}, testTenant.ID)
+		}, testTenant.ID, creation.Identity{})
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "dedicated resolve or close action")
@@ -676,7 +686,7 @@ func TestIncidentService_UpdateIncident_StatusTransition(t *testing.T) {
 		_, err = service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
 			Status:  &newStatus,
 			Version: 0,
-		}, testTenant.ID)
+		}, testTenant.ID, creation.Identity{})
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "dedicated resolve or close action")
@@ -695,7 +705,7 @@ func TestIncidentService_UpdateIncident_StatusTransition(t *testing.T) {
 		_, err = service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
 			Status:  &newStatus,
 			Version: 0,
-		}, testTenant.ID)
+		}, testTenant.ID, creation.Identity{})
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid status transition")
@@ -1010,6 +1020,9 @@ func TestIncidentServiceTaskHandler_RetryNoWriteIsIdempotent(t *testing.T) {
 			handler := bpmn.NewIncidentServiceTaskHandler(client, zaptest.NewLogger(t).Sugar())
 			handler.SetIncidentService(incidentService)
 			workflowCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+			if tc.name == "assign" {
+				workflowCtx = callbackAssignmentTestContext(t, client, user, tenant.ID, entity.WorkItemID)
+			}
 			variables := tc.vars(entity.ID, user.ID)
 
 			first, err := handler.Execute(workflowCtx, nil, variables)

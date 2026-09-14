@@ -24,7 +24,7 @@ import (
 // directly into assignment.NewWriter; they must not fabricate a SessionSnapshot.
 func NewWorkItemAssignmentWriter(session *authorization.SessionSnapshot) *assignment.Writer {
 	return assignment.NewWriter(EnqueueWorkItemAssignment, func(ctx context.Context, client *ent.Client, cmd assignment.Command) error {
-		return session.ValidateMutationActor(client, cmd.ActorID, cmd.ActorTenantID, cmd.TenantID)
+		return session.ValidateAssignmentIdentities(ctx, client, cmd.ActorID, cmd.ActorTenantID, cmd.TenantID, cmd.AssigneeID)
 	})
 }
 

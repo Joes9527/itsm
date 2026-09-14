@@ -3,6 +3,7 @@ package service_request
 import (
 	"context"
 	"fmt"
+	"itsm-backend/handlers/shared/workflowcallback"
 	"strconv"
 	"strings"
 
@@ -16,10 +17,11 @@ import (
 )
 
 type Service struct {
-	repo          Repository
-	client        *ent.Client
-	logger        *zap.SugaredLogger
-	chainResolver *service.ApprovalChainResolver
+	workflowAssignment workflowcallback.AssignmentBoundary
+	repo               Repository
+	client             *ent.Client
+	logger             *zap.SugaredLogger
+	chainResolver      *service.ApprovalChainResolver
 }
 
 func NewService(repo Repository, client *ent.Client, logger *zap.SugaredLogger, chainResolver *service.ApprovalChainResolver) *Service {
@@ -229,4 +231,8 @@ func extractServiceRequestFieldValues(formData map[string]interface{}) map[strin
 		result[k] = v
 	}
 	return result
+}
+
+func (s *Service) SetWorkflowAssignmentBoundary(boundary workflowcallback.AssignmentBoundary) {
+	s.workflowAssignment = boundary
 }

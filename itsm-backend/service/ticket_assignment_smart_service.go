@@ -6,14 +6,17 @@ import (
 	"sort"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
-	"itsm-backend/ent/ticket"
+	assignment "itsm-backend/handlers/common/workitemassignment"
+	creation "itsm-backend/handlers/common/workitemcreation"
 
 	"go.uber.org/zap"
 )
 
 type TicketAssignmentSmartService struct {
+	sessions          *authorization.SessionReader
 	client            *ent.Client
 	logger            *zap.SugaredLogger
 	assignmentService *TicketAssignmentService
@@ -34,30 +37,35 @@ func NewTicketAssignmentSmartService(
 	}
 }
 
-// AutoAssign 自动分配工单
-func (s *TicketAssignmentSmartService) AutoAssign(
-	ctx context.Context,
-	ticketID, tenantID int,
-) (*dto.AutoAssignResponse, error) {
-	tx, err := s.client.Tx(ctx)
-	if err != nil {
-		return nil, err
+func (s *TicketAssignmentSmartService) SetSessionReader(sessions *authorization.SessionReader) {
+	s.sessions = sessions
+}
+
+// AutoAssign executes the existing policy and shared assignment in one session.
+func (s *TicketAssignmentSmartService) AutoAssign(ctx context.Context, ticketID, tenantID int, identity creation.Identity) (*dto.AutoAssignResponse, error) {
+	if s.sessions == nil || identity.TenantID != tenantID {
+		return nil, fmt.Errorf("verified automatic assignment session is required")
 	}
-	defer tx.Rollback()
-	item, err := tx.Ticket.Query().Where(ticket.IDEQ(ticketID), ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()).Only(ctx)
-	if err != nil {
-		return nil, err
-	}
-	target, err := s.prepareCreation(ctx, tx, item)
-	if err != nil {
-		return nil, err
-	}
-	if target != nil {
-		if err := tx.Ticket.UpdateOneID(item.ID).SetAssigneeID(*target).Exec(ctx); err != nil {
-			return nil, err
+	var target *int
+	err := s.sessions.Write(ctx, identity, func(session *authorization.SessionSnapshot) error {
+		item, err := session.AuthorizeWorkItemAssignment(ctx, ticketID)
+		if err != nil {
+			return err
 		}
-	}
-	if err := tx.Commit(); err != nil {
+		if item.RecordClass != "generic" || item.Status == "closed" || item.Status == "cancelled" || item.Status == "resolved" {
+			return fmt.Errorf("ticket is not eligible for automatic assignment")
+		}
+		target, err = s.prepareCreation(ctx, session.Tx, item)
+		if err != nil {
+			return err
+		}
+		if target == nil {
+			return fmt.Errorf("no eligible automatic assignee is available")
+		}
+		_, err = NewWorkItemAssignmentWriter(session).Apply(ctx, session.Tx.Client(), assignment.Command{WorkItemID: item.ID, TenantID: tenantID, ActorID: session.Actor.ID, ActorTenantID: session.Actor.TenantID, AssigneeID: *target, ExpectedVersion: item.Version, Source: identity.Channel + ".ticket.auto_assign"})
+		return err
+	})
+	if err != nil {
 		return nil, err
 	}
 	return &dto.AutoAssignResponse{TicketID: ticketID, AssignedTo: target, AssignmentType: "auto", Reason: "configured assignment policy"}, nil

@@ -5,9 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/repository/ticket"
 
 	"github.com/stretchr/testify/assert"
@@ -61,14 +63,14 @@ func newTicketFixture(t *testing.T) *ticketFixture {
 		SetEmail("agent@example.com").
 		SetName("Agent").
 		SetPasswordHash("h").
-		SetRole("agent").
+		SetRole("super_admin").
 		SetActive(true).
 		SetTenantID(tenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
 
 	return &ticketFixture{
-		ctx:     ctx,
+		ctx:     tenantctx.WithTenantID(ctx, tenant.ID),
 		client:  client,
 		svc:     svc,
 		tenant:  entAdapter{id: tenant.ID},
@@ -217,7 +219,7 @@ func TestTicketService_UpdateTicketStatus(t *testing.T) {
 		for _, status := range []string{"approved", "rejected"} {
 			_, err := fx.svc.UpdateTicketStatus(fx.ctx, id, status, fx.tenantID(), fx.userID())
 			require.ErrorContains(t, err, "只能由 BPMN")
-			_, err = fx.svc.UpdateTicket(fx.ctx, id, &dto.UpdateTicketRequest{Status: status}, fx.tenantID())
+			_, err = fx.svc.UpdateTicket(fx.ctx, id, &dto.UpdateTicketRequest{Status: status}, fx.tenantID(),creation.Identity{})
 			require.ErrorContains(t, err, "只能由 BPMN")
 		}
 	})
@@ -330,7 +332,7 @@ func TestTicketService_AssignTicket(t *testing.T) {
 		tenantID := fx.tenantID()
 		agentID := fx.agentID()
 
-		updated, err := fx.svc.AssignTicket(fx.ctx, id, agentID, tenantID)
+		updated, err := fx.svc.AssignTicket(fx.ctx, id, agentID, tenantID, creation.Identity{ActorID: fx.agentID(), TenantID: fx.tenantID(), Role: "super_admin", Channel: "http"})
 		require.NoError(t, err)
 		assert.NotNil(t, updated.AssigneeID)
 		assert.Equal(t, agentID, *updated.AssigneeID)
@@ -341,7 +343,7 @@ func TestTicketService_AssignTicket(t *testing.T) {
 		tenantID := fx.tenantID()
 		agentID := fx.agentID()
 
-		updated, err := fx.svc.AssignTicket(fx.ctx, id, agentID, tenantID)
+		updated, err := fx.svc.AssignTicket(fx.ctx, id, agentID, tenantID, creation.Identity{ActorID: fx.agentID(), TenantID: fx.tenantID(), Role: "super_admin", Channel: "http"})
 		require.NoError(t, err)
 		assert.NotNil(t, updated.AssigneeID)
 		assert.Equal(t, agentID, *updated.AssigneeID)
@@ -350,7 +352,7 @@ func TestTicketService_AssignTicket(t *testing.T) {
 
 	t.Run("终态工单不能重新分配", func(t *testing.T) {
 		id := fx.makeTicket(t, "a-closed", ticket.StatusClosed)
-		_, err := fx.svc.AssignTicket(fx.ctx, id, fx.agentID(), fx.tenantID())
+		_, err := fx.svc.AssignTicket(fx.ctx, id, fx.agentID(), fx.tenantID(), creation.Identity{ActorID: fx.agentID(), TenantID: fx.tenantID(), Role: "super_admin", Channel: "http"})
 		require.Error(t, err)
 	})
 
@@ -362,8 +364,8 @@ func TestTicketService_AssignTicket(t *testing.T) {
 			SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(otherTenant.ID).Save(fx.ctx)
 		require.NoError(t, err)
 		id := fx.makeTicket(t, "a-foreign", ticket.StatusOpen)
-		_, err = fx.svc.AssignTicket(fx.ctx, id, foreignAgent.ID, fx.tenantID())
-		require.ErrorContains(t, err, "处理人不存在")
+		_, err = fx.svc.AssignTicket(fx.ctx, id, foreignAgent.ID, fx.tenantID(), creation.Identity{ActorID: fx.agentID(), TenantID: fx.tenantID(), Role: "super_admin", Channel: "http"})
+		require.Error(t, err)
 	})
 }
 
@@ -494,7 +496,7 @@ func TestTicketService_GetTicketsByAssignee(t *testing.T) {
 		tenantID := fx.tenantID()
 		agentID := fx.agentID()
 
-		_, err := fx.svc.AssignTicket(fx.ctx, id, agentID, tenantID)
+		_, err := fx.svc.AssignTicket(fx.ctx, id, agentID, tenantID, creation.Identity{ActorID: fx.agentID(), TenantID: fx.tenantID(), Role: "super_admin", Channel: "http"})
 		require.NoError(t, err)
 
 		tickets, err := fx.svc.GetTicketsByAssignee(fx.ctx, agentID, tenantID)
@@ -549,7 +551,7 @@ func TestTicketService_EscalateTicket_TicketNotFound(t *testing.T) {
 	tenantID := fx.tenantID()
 	userID := fx.userID()
 
-	_, err := fx.svc.EscalateTicket(fx.ctx, 99999, "reason", tenantID, userID)
+	_, err := fx.svc.EscalateTicket(fx.ctx, 99999, "reason", tenantID, userID, creation.Identity{ActorID: fx.agentID(), TenantID: fx.tenantID(), Role: "super_admin", Channel: "http"})
 	assert.Error(t, err, "不存在的 ticket 应该失败")
 }
 

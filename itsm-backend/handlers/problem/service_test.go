@@ -81,17 +81,17 @@ func TestProblemServiceLifecycleAndTimestamps(t *testing.T) {
 	p := createProblemHandlerProblem(t, ctx, service, tenant.ID, user.ID)
 
 	assert.Equal(t, "open", p.Status)
-	p, err := service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "investigating"})
+	p, err := service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "investigating"}, creation.Identity{})
 	require.NoError(t, err)
 	assert.Nil(t, p.ResolvedAt)
-	p, err = service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "resolved"})
+	p, err = service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "resolved"}, creation.Identity{})
 	require.NoError(t, err)
 	require.NotNil(t, p.ResolvedAt)
-	p, err = service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "investigating"})
+	p, err = service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "investigating"}, creation.Identity{})
 	require.NoError(t, err)
 	assert.Nil(t, p.ResolvedAt)
 
-	_, err = service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "unknown"})
+	_, err = service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "unknown"}, creation.Identity{})
 	require.ErrorContains(t, err, "invalid problem status transition")
 }
 
@@ -249,7 +249,7 @@ func TestProblemServiceStateMachineTransitions(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		updated, err := service.Update(ctx, tenant.ID, p.ID, &Problem{Status: tc.to})
+		updated, err := service.Update(ctx, tenant.ID, p.ID, &Problem{Status: tc.to}, creation.Identity{})
 		require.NoError(t, err, "Transition %s -> %s should be valid", tc.from, tc.to)
 		assert.Equal(t, tc.to, updated.Status)
 	}
@@ -284,7 +284,7 @@ func TestProblemServiceStateMachineTransitions(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		_, err = service.Update(ctx, tenant.ID, p.ID, &Problem{Status: tc.to})
+		_, err = service.Update(ctx, tenant.ID, p.ID, &Problem{Status: tc.to}, creation.Identity{})
 		require.ErrorContains(t, err, "invalid problem status transition", "Transition %s -> %s should fail", tc.from, tc.to)
 	}
 }
@@ -304,7 +304,7 @@ func TestProblemServiceUpdateRejectsDirectCloseUntilResolved(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			_, err := service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "closed"})
+			_, err := service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "closed"}, creation.Identity{})
 			require.ErrorContains(t, err, "invalid problem status transition")
 		})
 	}
@@ -313,7 +313,7 @@ func TestProblemServiceUpdateRejectsDirectCloseUntilResolved(t *testing.T) {
 	_, err := client.Ticket.UpdateOneID(*p.WorkItemID).SetStatus("resolved").Save(ctx)
 	require.NoError(t, err)
 
-	updated, err := service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "closed"})
+	updated, err := service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "closed"}, creation.Identity{})
 	require.NoError(t, err)
 	require.Equal(t, "closed", updated.Status)
 	require.NotNil(t, updated.ClosedAt)
@@ -385,7 +385,7 @@ func TestProblemServiceInvestigationAndSolutions(t *testing.T) {
 	assert.Equal(t, "Reduce MTU to 1400", p3.Workaround)
 	assert.Equal(t, "Upgrade switch firmware", p3.Resolution)
 
-	_, err = service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "resolved"})
+	_, err = service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "resolved"}, creation.Identity{})
 	require.NoError(t, err)
 
 	// CloseProblem
@@ -414,7 +414,7 @@ func TestProblemServiceListAndFilters(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = service.Update(ctx, tenant.ID, p2.ID, &Problem{Status: "resolved"})
+	_, err = service.Update(ctx, tenant.ID, p2.ID, &Problem{Status: "resolved"}, creation.Identity{})
 	require.NoError(t, err)
 
 	// List all
@@ -535,7 +535,7 @@ func TestProblemServiceCrossTenantIsolation(t *testing.T) {
 	require.True(t, ent.IsNotFound(err))
 
 	// Tenant B tries to UPDATE Problem A
-	_, err = service.Update(ctx, tenantB.ID, problemA.ID, &Problem{Title: "Hacked Title"})
+	_, err = service.Update(ctx, tenantB.ID, problemA.ID, &Problem{Title: "Hacked Title"}, creation.Identity{})
 	require.True(t, ent.IsNotFound(err))
 
 	// Tenant B tries to DELETE Problem A
@@ -577,13 +577,13 @@ func TestProblemServiceStats(t *testing.T) {
 	// Resolved + medium
 	p3, err := service.SubmitCreation(ctx, tenant.ID, &Problem{Title: "P3", Priority: "medium", CreatedBy: user.ID})
 	require.NoError(t, err)
-	_, err = service.Update(ctx, tenant.ID, p3.ID, &Problem{Status: "resolved"})
+	_, err = service.Update(ctx, tenant.ID, p3.ID, &Problem{Status: "resolved"}, creation.Identity{})
 	require.NoError(t, err)
 
 	// Closed + low
 	p4, err := service.SubmitCreation(ctx, tenant.ID, &Problem{Title: "P4", Priority: "low", CreatedBy: user.ID})
 	require.NoError(t, err)
-	_, err = service.Update(ctx, tenant.ID, p4.ID, &Problem{Status: "resolved"})
+	_, err = service.Update(ctx, tenant.ID, p4.ID, &Problem{Status: "resolved"}, creation.Identity{})
 	require.NoError(t, err)
 	_, err = service.CloseProblem(ctx, tenant.ID, p4.ID, "Done")
 	require.NoError(t, err)

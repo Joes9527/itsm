@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
+	"itsm-backend/database"
 	"net/mail"
 	"strings"
 	"time"
@@ -32,15 +34,16 @@ func ticketNotificationStringPtr(s string) *string {
 }
 
 type TicketNotificationService struct {
-	queueClient      *ent.Client
-	client           *ent.Client
-	logger           *zap.SugaredLogger
-	connectorManager *connector.Manager
-	emailService     *EmailService
-	smsService       *SMSService
-	prefService      *NotificationPreferenceService // 按 event_type 查偏好
-	wsService        *WebSocketService              // push 渠道（WebSocket）
-	now              func() time.Time
+	assignmentDirectory database.DirectorySnapshot
+	queueClient         *ent.Client
+	client              *ent.Client
+	logger              *zap.SugaredLogger
+	connectorManager    *connector.Manager
+	emailService        *EmailService
+	smsService          *SMSService
+	prefService         *NotificationPreferenceService // 按 event_type 查偏好
+	wsService           *WebSocketService              // push 渠道（WebSocket）
+	now                 func() time.Time
 }
 
 // NewTicketNotificationService 创建通知服务
@@ -50,6 +53,12 @@ func NewTicketNotificationService(client *ent.Client, logger *zap.SugaredLogger)
 		logger: logger,
 		now:    time.Now,
 	}
+}
+
+// SetAssignmentDirectory injects the existing restricted directory snapshot for
+// assignment recipients, including allocated MSP technicians.
+func (s *TicketNotificationService) SetAssignmentDirectory(directory database.DirectorySnapshot) {
+	s.assignmentDirectory = directory
 }
 
 // SetConnectorManager injects the connector runtime used by durable external deliveries.
@@ -283,7 +292,21 @@ func (s *TicketNotificationService) dispatchClaimedDelivery(ctx context.Context,
 	if err != nil {
 		return "delivery_target_invalid"
 	}
-	userEntity, err := s.client.User.Query().Where(user.ID(row.UserID), user.TenantID(row.TenantID), user.Active(true)).Only(ctx)
+	var userEntity *ent.User
+	if row.Type == "ticket_assigned" && row.DeliveryKey != nil && strings.HasPrefix(*row.DeliveryKey, "work-item-assigned:") {
+		var tx *ent.Tx
+		tx, err = s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+		if err == nil {
+			userEntity, err = s.assignmentRecipient(ctx, tx, row.UserID, row.TenantID)
+			if err == nil {
+				err = tx.Commit()
+			} else {
+				_ = tx.Rollback()
+			}
+		}
+	} else {
+		userEntity, err = s.client.User.Query().Where(user.ID(row.UserID), user.TenantID(row.TenantID), user.Active(true)).Only(ctx)
+	}
 	if err != nil {
 		return "delivery_target_invalid"
 	}

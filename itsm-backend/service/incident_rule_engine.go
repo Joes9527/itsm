@@ -3,6 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"itsm-backend/authorization"
+	"itsm-backend/database"
+	assignment "itsm-backend/handlers/common/workitemassignment"
 	"time"
 
 	"itsm-backend/dto"
@@ -17,10 +20,11 @@ import (
 )
 
 type IncidentRuleEngine struct {
-	client         *ent.Client
-	actorDirectory *ent.Client
-	logger         *zap.SugaredLogger
-	alertCreator   IncidentAlertCreator
+	assignmentDirectory database.DirectorySnapshot
+	client              *ent.Client
+	actorDirectory      *ent.Client
+	logger              *zap.SugaredLogger
+	alertCreator        IncidentAlertCreator
 }
 
 func NewIncidentRuleEngine(client *ent.Client, logger *zap.SugaredLogger) *IncidentRuleEngine {
@@ -223,6 +227,7 @@ func (a *NotificationAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident
 
 // AssignmentAction 分配动作
 type AssignmentAction struct {
+	directory  database.DirectorySnapshot
 	AssigneeID int
 	Reason     string
 	client     *ent.Client
@@ -235,10 +240,33 @@ func (a *AssignmentAction) Execute(ctx context.Context, incident *ent.Incident, 
 
 func (a *AssignmentAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
 	incidentService := NewIncidentService(a.client, a.logger)
-
-	_, err := incidentService.UpdateIncidentTx(ctx, tx, incident.ID, &dto.UpdateIncidentRequest{
-		AssigneeID: &a.AssigneeID,
-	}, tenantID)
+	proof, ok := ctx.Value(incidentRuleAssignmentKey{}).(incidentRuleAssignmentProof)
+	if !ok || proof.tx != tx || proof.payload.TenantID != tenantID || proof.payload.IncidentID != incident.ID || a.directory == nil {
+		return fmt.Errorf("verified incident rule assignment provenance is required")
+	}
+	p := proof.payload
+	writer := assignment.NewWriter(EnqueueWorkItemAssignment, func(ctx context.Context, client *ent.Client, cmd assignment.Command) error {
+		if client != tx.Client() || cmd.ActorID != p.ActorID || cmd.ActorTenantID != p.ActorTenantID || cmd.TenantID != p.TenantID || cmd.WorkItemID != p.WorkItemID || cmd.Source != "incident_rule" {
+			return fmt.Errorf("incident rule assignment identity mismatch")
+		}
+		directory, close, err := a.directory.Open(ctx, tx, tenantID)
+		if err != nil {
+			return err
+		}
+		actor, err := authorization.ResolveCurrentTenantUser(ctx, directory, p.ActorID, tenantID, time.Now())
+		if err == nil && actor.TenantID != p.ActorTenantID {
+			err = fmt.Errorf("incident rule actor native tenant changed")
+		}
+		if err == nil && cmd.AssigneeID > 0 {
+			_, err = authorization.ResolveCurrentTenantUser(ctx, directory, cmd.AssigneeID, tenantID, time.Now())
+		}
+		closeErr := close()
+		if err != nil {
+			return err
+		}
+		return closeErr
+	})
+	_, err := incidentService.UpdateIncidentTx(ctx, tx, incident.ID, &dto.UpdateIncidentRequest{AssigneeID: &a.AssigneeID}, tenantID, &incidentAssignmentMutation{writer: writer, command: assignment.Command{TenantID: tenantID, ActorID: p.ActorID, ActorTenantID: p.ActorTenantID, Source: "incident_rule", Reason: a.Reason}})
 
 	return err
 }
@@ -260,7 +288,7 @@ func (a *StatusChangeAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident
 
 	_, err := incidentService.UpdateIncidentTx(ctx, tx, incident.ID, &dto.UpdateIncidentRequest{
 		Status: &a.Status,
-	}, tenantID)
+	}, tenantID, nil)
 
 	return err
 }
@@ -737,6 +765,7 @@ func (e *IncidentRuleEngine) parseAssignmentAction(actionData map[string]interfa
 
 	return &AssignmentAction{
 		AssigneeID: assigneeID,
+		directory:  e.assignmentDirectory,
 		Reason:     reason,
 		client:     e.client,
 		logger:     e.logger,
@@ -869,4 +898,8 @@ func (e *IncidentRuleEngine) updateExecutionStatus(ctx context.Context, executio
 
 	_, err := updateQuery.Save(ctx)
 	return err
+}
+
+func (e *IncidentRuleEngine) SetAssignmentDirectory(directory database.DirectorySnapshot) {
+	e.assignmentDirectory = directory
 }

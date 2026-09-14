@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"itsm-backend/ent/ticket"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -13,7 +15,6 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/mspallocation"
 	"itsm-backend/ent/tenant"
-	"itsm-backend/ent/user"
 	creation "itsm-backend/handlers/common/workitemcreation"
 )
 
@@ -53,6 +54,22 @@ func (s *SessionSnapshot) ValidateMutationActor(client *ent.Client, actorID, act
 		return creation.NewPermissionDenied("active verified session mutation identity is required", nil)
 	}
 	return nil
+}
+
+// ValidateAssignmentIdentities is valid only within the verified write callback.
+// The selected target is captured privately; public projection fields cannot
+// redirect assignee authorization to another tenant.
+func (s *SessionSnapshot) ValidateAssignmentIdentities(ctx context.Context, client *ent.Client, actorID, actorTenantID, targetTenantID, assigneeID int) error {
+	if err := s.ValidateMutationActor(client, actorID, actorTenantID, targetTenantID); err != nil {
+		return err
+	}
+	if assigneeID < 0 {
+		return creation.NewPermissionDenied("invalid assignment identity", nil)
+	}
+	if assigneeID == 0 {
+		return nil
+	}
+	return s.authorizeMappedActorInTenant(ctx, assigneeID, s.mutation.tenantID)
 }
 
 // Read owns both transactions. A projection is usable only after Read succeeds,
@@ -162,14 +179,34 @@ func (s *SessionSnapshot) SelectableTenants(ctx context.Context) ([]*ent.Tenant,
 // AuthorizeMappedActor uses this same directory snapshot to validate a mapping
 // target's native identity and eligibility for the selected tenant.
 func (s *SessionSnapshot) AuthorizeMappedActor(ctx context.Context, id int) error {
-	lookup := tenantctx.SystemContext(ctx, "intake:mapping-target", "validate mapped actor for target tenant")
-	actor, err := s.directory.User.Query().Where(user.IDEQ(id), user.ActiveEQ(true)).Only(lookup)
-	if ent.IsNotFound(err) {
-		return creation.NewPermissionDenied("mapped user unavailable", nil)
-	}
-	if err != nil {
-		return creation.NewInfrastructureUnavailable("mapped user lookup unavailable", err)
-	}
-	_, err = ResolveCurrentSessionActor(ctx, s.directory, id, s.Identity.TenantID, EffectiveSessionRole(actor), s.now)
+	return s.authorizeMappedActorInTenant(ctx, id, s.Identity.TenantID)
+}
+
+func (s *SessionSnapshot) authorizeMappedActorInTenant(ctx context.Context, id, targetTenantID int) error {
+	_, err := ResolveCurrentTenantUser(ctx, s.directory, id, targetTenantID, s.now)
 	return err
+}
+
+// AuthorizeWorkItemAssignment intersects the verified actor with existing row and professional ACLs.
+func (session *SessionSnapshot) AuthorizeWorkItemAssignment(ctx context.Context, workItemID int) (*ent.Ticket, error) {
+	client := session.Tx.Client()
+	item, policy, err := ResolveWorkItemIdentity(ctx, client, workItemID, session.Identity.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	action := policy.FulfillmentAction()
+	if item.RecordClass == "generic" {
+		action = "assign"
+	}
+	if !HasResourcePermission(client, session.Identity.Role, policy.Resource, action, session.Identity.TenantID) {
+		return nil, fmt.Errorf("insufficient assignment permission")
+	}
+	visible, err := client.Ticket.Query().Where(ticket.ID(item.ID), ticket.TenantID(session.Identity.TenantID), WorkItemRowScope(session.Actor.ID, session.Identity.Role)).Exist(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !visible {
+		return nil, fmt.Errorf("insufficient WorkItem row visibility")
+	}
+	return item, nil
 }
