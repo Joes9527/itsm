@@ -2,8 +2,8 @@
 
 - 状态：draft，供复核；不写目标库。
 - 权威：固定制品 `0788a9bb` 的 `config/seed/default.json` 模板字段选项。
-- 口径：**选项集对账**。已覆盖=旧值已被 seed 选项表达；差额=需你决定新增选项/归并/排除；无落点组=未接纳。
-- 仅对**语义关联组**做精确对账（下方 §2），避免泛值误命中；其余组见 §3 未接纳。
+- 口径：**选项集对账**。已覆盖=旧值已被 seed 选项表达；差额=需决定新增选项/归并/排除；无落点组=未接纳。
+- 仅对**语义关联组**精确对账；其余见 §3 未接纳。
 - 旧字典：988 项 / 183 组；seed 含选项字段：18 个。
 
 ## 1. 权威目标字段（18 个含选项字段）
@@ -29,77 +29,77 @@
 | 安全事件上报 | `incident_type` | 事件类型 | 安全事件(security_event)；终端感染/病毒(malware)；可疑行为(suspicious)；钓鱼邮件(phishing)；数据泄漏风险(dlp)；其他(other) |
 | IT咨询请求 | `consult_type` | 咨询类型 | 业务流程咨询(process)；系统使用咨询(system_use)；操作指导(operation_guide)；服务引导/需求识别(guidance)；投诉与反馈(feedback)；其他(other) |
 
-## 2. 关联组精确对账（需你逐项决定）
+## 2. 关联组精确对账与建议去向
 
 ### 旧组「系统名称」（14 项） → 字段 `target_system`
 
-| 旧值 | 旧 code/en | 判定 | 目标/处置建议 |
+| 旧值 | 旧 code/en | 判定 | 建议去向 |
 | --- | --- | --- | --- |
 | 其他 | sysname14 | 排除 | 通用占位值 |
-| SQR系统 | sysname11 | **差额** | 新增选项 / 归并 / 排除（待定） |
-| KAMS | sysname07 | **差额** | 新增选项 / 归并 / 排除（待定） |
-| Yonyou | sysname12 | **差额** | 新增选项 / 归并 / 排除（待定） |
+| SQR系统 | sysname11 | 差额 | **新增选项**：target_system/`sqr` |
+| KAMS | sysname07 | 差额 | **新增选项**：target_system/`kams` |
+| Yonyou | sysname12 | 差额 | **新增选项**：target_system/`yonyou` |
 | KAPP | sysname05 | 已覆盖 | 命中 seed 选项 |
-| K3.5 | sysname08 | **差额** | 新增选项 / 归并 / 排除（待定） |
-| HR休假系统 | sysname13 | **差额** | 新增选项 / 归并 / 排除（待定） |
-| K3/K5 | sysname09 | **差额** | 新增选项 / 归并 / 排除（待定） |
+| K3.5 | sysname08 | 差额 | **新增选项**：target_system/`k3_5` |
+| HR休假系统 | sysname13 | 差额 | **新增选项**：target_system/`hr_leave`（若确为业务系统，否则排除） |
+| K3/K5 | sysname09 | 差额 | **归并**：target_system/`k3_5`（同族） |
 | KBMS | sysname06 | 已覆盖 | 命中 seed 选项 |
-| FLUX | sysname04 | **差额** | 新增选项 / 归并 / 排除（待定） |
-| KWMS2.0 | sysname02 | **差额** | 新增选项 / 归并 / 排除（待定） |
-| KWMS365 | sysname03 | **差额** | 新增选项 / 归并 / 排除（待定） |
-| BMS | sysname10 | **差额** | 新增选项 / 归并 / 排除（待定） |
-| KWMS1.0 | sysname01 | **差额** | 新增选项 / 归并 / 排除（待定） |
+| FLUX | sysname04 | 差额 | **新增选项**：target_system/`flux` |
+| KWMS2.0 | sysname02 | 差额 | **归并**：target_system/`kwms` |
+| KWMS365 | sysname03 | 差额 | **归并**：target_system/`kwms`（或新增 `kwms365`） |
+| BMS | sysname10 | 差额 | **新增选项**：target_system/`bms`；并须在 CMDB 业务系统清单有对应 CI |
+| KWMS1.0 | sysname01 | 差额 | **归并**：target_system/`kwms`（同仓储系统版本） |
 
 ### 旧组「请求类型」（18 项） → 字段 `operation`, `service_type`, `account_type`, `access_type`, `consult_type`
 
-| 旧值 | 旧 code/en | 判定 | 目标/处置建议 |
+| 旧值 | 旧 code/en | 判定 | 建议去向 |
 | --- | --- | --- | --- |
-| 数据修改 | shujuxiugai | **差额** | 新增选项 / 归并 / 排除（待定） |
-| 异常、中断或报错 | yichang | **差额** | 新增选项 / 归并 / 排除（待定） |
-| 信息咨询 | xxzx | **差额** | 新增选项 / 归并 / 排除（待定） |
-| 密码问题 | password | **差额** | 新增选项 / 归并 / 排除（待定） |
-| 数据导出 | export | **差额** | 新增选项 / 归并 / 排除（待定） |
-| 投诉 | tousu | **差额** | 新增选项 / 归并 / 排除（待定） |
-| 优化设置 | youhua | **差额** | 新增选项 / 归并 / 排除（待定） |
-| id增删改 | idadd | **差额** | 新增选项 / 归并 / 排除（待定） |
-| 下单 | xiadan | **差额** | 新增选项 / 归并 / 排除（待定） |
+| 数据修改 | shujuxiugai | 差额 | **归并**：业务系统服务申请/operation `data_fix` 数据修正 |
+| 异常、中断或报错 | yichang | 差额 | **排除**：属事件语义，映射 recordClass=incident/故障报修模板，不是请求选项 |
+| 信息咨询 | xxzx | 差额 | **归并**：业务系统服务申请/operation `consult` 或 IT咨询/consult_type |
+| 密码问题 | password | 差额 | **归并**：账号申请/operation `reset` 密码重置 |
+| 数据导出 | export | 差额 | **新增选项**：通用服务申请/service_type 或账号申请/operation `data_export` |
+| 投诉 | tousu | 差额 | **归并**：IT咨询请求/consult_type `feedback` 投诉与反馈 |
+| 优化设置 | youhua | 差额 | **排除**：非标准服务选项 |
+| id增删改 | idadd | 差额 | **归并**：账号申请/operation `create`/`modify`（账号增改） |
+| 下单 | xiadan | 差额 | **排除**：业务动作，非 IT 服务选项 |
 | 咨询 | zixun | 已覆盖 | 命中 seed 选项 |
-| 资产采购 | zsgc | **差额** | 新增选项 / 归并 / 排除（待定） |
+| 资产采购 | zsgc | 差额 | **新增选项**：通用服务申请/service_type `asset_purchase` |
 | 权限修改 | quanxianxiugai | 已覆盖 | 命中 seed 选项 |
-| 发布或变更请求 | fabu | **差额** | 新增选项 / 归并 / 排除（待定） |
-| 增删改查等服务请求 | zsgc | **差额** | 新增选项 / 归并 / 排除（待定） |
-| 建议 | jianyi | **差额** | 新增选项 / 归并 / 排除（待定） |
+| 发布或变更请求 | fabu | 差额 | **排除**：应映射变更 recordClass/流程，不是请求选项 |
+| 增删改查等服务请求 | zsgc | 差额 | **归并**：通用服务申请/service_type（通用）或业务系统服务申请/operation |
+| 建议 | jianyi | 差额 | **归并**：IT咨询请求/consult_type `feedback`（或新增 `suggestion`） |
 | 软件安装 | ruanjianaz | 已覆盖 | 命中 seed 选项 |
-| 派单 | paidan | **差额** | 新增选项 / 归并 / 排除（待定） |
+| 派单 | paidan | 差额 | **排除**：运维动作，非服务选项 |
 | 其它 | requestqita | 排除 | 通用占位值 |
 
 ### 旧组「邮箱申请类别」（4 项） → 字段 `operation`
 
-| 旧值 | 旧 code/en | 判定 | 目标/处置建议 |
+| 旧值 | 旧 code/en | 判定 | 建议去向 |
 | --- | --- | --- | --- |
-| 公共 | emailType02 | **差额** | 新增选项 / 归并 / 排除（待定） |
-| 群组 | emailType04 | **差额** | 新增选项 / 归并 / 排除（待定） |
-| 个人 | emailType01 | **差额** | 新增选项 / 归并 / 排除（待定） |
-| 共享 | emailType03 | **差额** | 新增选项 / 归并 / 排除（待定） |
+| 公共 | emailType02 | 差额 | **新增选项**：邮箱服务申请/operation `public_mailbox` |
+| 群组 | emailType04 | 差额 | **新增选项**：邮箱服务申请/operation `group_mailbox` |
+| 个人 | emailType01 | 差额 | **归并**：邮箱服务申请/operation `create` 邮箱开通 |
+| 共享 | emailType03 | 差额 | **归并**：邮箱服务申请/operation `shared_mailbox` 共享邮箱申请 |
 
 ### 旧组「影响范围」（8 项） → 字段 `impact`
 
-| 旧值 | 旧 code/en | 判定 | 目标/处置建议 |
+| 旧值 | 旧 code/en | 判定 | 建议去向 |
 | --- | --- | --- | --- |
-| 严重 | YZ | **差额** | 新增选项 / 归并 / 排除（待定） |
-| 无 | wu | 排除 | 通用占位值 |
-| 普通 | PT | **差额** | 新增选项 / 归并 / 排除（待定） |
-| 无 | incidence01 | 排除 | 通用占位值 |
-| 普通 | incidence03 | **差额** | 新增选项 / 归并 / 排除（待定） |
-| 轻微 | incidence02 | **差额** | 新增选项 / 归并 / 排除（待定） |
-| 轻微 | QW | **差额** | 新增选项 / 归并 / 排除（待定） |
-| 严重 | incidence04 | **差额** | 新增选项 / 归并 / 排除（待定） |
+| 严重 | YZ | 差额 | **排除**：旧为严重度；seed `impact` 是影响对象范围，语义不同，应归优先级/严重度 |
+| 无 | wu | 差额 | **排除**：通用占位/语义不同 |
+| 普通 | PT | 差额 | **排除**：同上，语义不同 |
+| 无 | incidence01 | 差额 | **排除**：通用占位/语义不同 |
+| 普通 | incidence03 | 差额 | **排除**：同上，语义不同 |
+| 轻微 | incidence02 | 差额 | **排除**：同上，语义不同 |
+| 轻微 | QW | 差额 | **排除**：同上，语义不同 |
+| 严重 | incidence04 | 差额 | **排除**：旧为严重度；seed `impact` 是影响对象范围，语义不同，应归优先级/严重度 |
 
-关联组小结：已覆盖 **5** 项，差额 **35** 项。
+关联组小结：已覆盖 **5**，差额 **37**（建议见上表）。
 
 ## 3. 未接纳组（无对应目标字段，按现状登记）
 
-共 178 组（示例≤列表）：
+共 178 组：
 
 | 旧组 | 项数 |
 | --- | ---: |
