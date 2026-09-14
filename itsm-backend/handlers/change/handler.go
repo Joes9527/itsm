@@ -300,7 +300,16 @@ func (h *Handler) GetApprovals(c *gin.Context) {
 		common.InternalError(c, "获取审批历史失败: "+err.Error())
 		return
 	}
-	common.Success(c, history)
+	result := make([]dto.ChangeApproval, 0, len(history))
+	for _, record := range history {
+		result = append(result, dto.ChangeApproval{
+			ID: record.ID, ChangeID: record.ChangeID,
+			ApproverID: record.ApproverID, ApproverName: record.ApproverName,
+			Status: dto.ChangeStatus(record.Status), Comment: record.Comment,
+			ApprovedAt: record.ApprovedAt, CreatedAt: record.CreatedAt,
+		})
+	}
+	common.Success(c, result)
 }
 
 // DeleteChange handles DELETE /api/v1/changes/:id
