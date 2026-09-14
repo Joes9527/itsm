@@ -41,6 +41,25 @@ def _cols(pairs: list[tuple[str, str]]) -> tuple[str, str]:
     return ", ".join(name for name, _ in pairs), ", ".join(value for _, value in pairs)
 
 
+def require_sql(condition: str, message: str) -> str:
+    return f"DO $guard$ BEGIN IF NOT ({condition}) THEN RAISE EXCEPTION {lit(message)}; END IF; END $guard$;"
+
+
+def category_lookup(code: str, tenant_id: int) -> str:
+    return f"SELECT id FROM ticket_categories WHERE code={lit(code)} AND tenant_id={lit(tenant_id)}"
+
+
+def category_insert(cols: list[tuple[str, str]]) -> str:
+    values_by_name = dict(cols)
+    identity = f"code={values_by_name['code']}"
+    same = ' AND '.join(f"{name} IS NOT DISTINCT FROM {value}" for name, value in cols
+                        if name not in ('created_at', 'updated_at'))
+    names, values = _cols(cols)
+    return require_sql(f"NOT EXISTS (SELECT 1 FROM ticket_categories WHERE {identity} AND NOT ({same}))",
+                       'category tenant or content conflict') + '\n' + (
+        f"INSERT INTO ticket_categories ({names}) VALUES ({values}) ON CONFLICT (code) DO NOTHING;")
+
+
 def build_sql(seed: dict[str, Any], tenant_id: int, created_by: int) -> str:
     out: list[str] = ["-- B0 seed admission (idempotent). Generated, do not hand-edit.", "BEGIN;", ""]
 
@@ -51,7 +70,9 @@ def build_sql(seed: dict[str, Any], tenant_id: int, created_by: int) -> str:
     # 1. categories, roots first then children (parent resolved by code)
     cats = sorted(seed["ticket_categories"], key=lambda c: (c.get("level") or 1, c.get("sort_order") or 0))
     for c in cats:
-        parent = f"(SELECT id FROM ticket_categories WHERE code={lit(c.get('parent_code'))})" if c.get("parent_code") else "NULL"
+        parent = f"({category_lookup(c['parent_code'], tenant_id)})" if c.get("parent_code") else "NULL"
+        if c.get('parent_code'):
+            out.append(require_sql(f"(SELECT count(*) FROM ({category_lookup(c['parent_code'], tenant_id)}) p)=1", 'category parent missing in tenant'))
         cols = [
             ("name", lit(c["name"])), ("description", lit(c.get("description"))), ("code", lit(c["code"])),
             ("level", lit(c.get("level") or 1)), ("sort_order", lit(c.get("sort_order") or 0)),
@@ -61,17 +82,16 @@ def build_sql(seed: dict[str, Any], tenant_id: int, created_by: int) -> str:
             ("is_user_facing", lit(c.get("is_user_facing", True))),
             ("created_at", "now()"), ("updated_at", "now()"), ("parent_id", parent),
         ]
-        names, values = _cols(cols)
-        out.append(
-            f"INSERT INTO ticket_categories ({names}) VALUES ({values}) ON CONFLICT (code) DO NOTHING;"
-        )
+        out.append(category_insert(cols))
     out.append("")
 
     # 2. templates + fields
     for t in seed["ticket_templates"]:
         cat_codes = t.get("category_codes") or ([t["category"]] if t.get("category") else [])
+        for code in cat_codes:
+            out.append(require_sql(f"(SELECT count(*) FROM ({category_lookup(code, tenant_id)}) c)=1", 'template category missing in tenant'))
         cat_ids = "jsonb_build_array(" + ", ".join(
-            f"(SELECT id FROM ticket_categories WHERE code={lit(code)})" for code in cat_codes
+            f"({category_lookup(code, tenant_id)})" for code in cat_codes
         ) + ")" if cat_codes else "'[]'::jsonb"
         guard = f"NOT EXISTS (SELECT 1 FROM ticket_templates WHERE tenant_id={lit(tenant_id)} AND name={lit(t['name'])})"
         insert("ticket_templates", [

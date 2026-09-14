@@ -21,7 +21,7 @@ import argparse
 import json
 from pathlib import Path
 
-from generate_seed_sql import json_lit, lit
+from generate_seed_sql import json_lit, lit, category_lookup, category_insert, require_sql
 
 SOURCE_SYSTEM = "keas-itsm-test"
 
@@ -41,14 +41,14 @@ def build_sql(assets: list[dict], tenant_id: int) -> str:
 
     # B1b: new categories (parent resolved by code)
     for c in NEW_CATEGORIES:
-        out.append(
-            "INSERT INTO ticket_categories (name, description, code, level, sort_order, is_active, "
-            "tenant_id, itsm_type, default_priority, sla_tier, is_user_facing, created_at, updated_at, parent_id) "
-            f"SELECT {lit(c['name'])}, '', {lit(c['code'])}, 3, 40, true, {lit(tenant_id)}, "
-            f"{lit(c['itsm_type'])}, {lit(c['default_priority'])}, {lit(c['sla_tier'])}, true, now(), now(), "
-            f"(SELECT id FROM ticket_categories WHERE code={lit(c['parent_code'])}) "
-            f"WHERE NOT EXISTS (SELECT 1 FROM ticket_categories WHERE code={lit(c['code'])});"
-        )
+        parent = category_lookup(c['parent_code'], tenant_id)
+        out.append(require_sql(f"(SELECT count(*) FROM ({parent}) p)=1", 'category parent missing in tenant'))
+        out.append(category_insert([
+            ('name', lit(c['name'])), ('description', "''"), ('code', lit(c['code'])),
+            ('level', '3'), ('sort_order', '40'), ('is_active', 'true'), ('tenant_id', lit(tenant_id)),
+            ('itsm_type', lit(c['itsm_type'])), ('default_priority', lit(c['default_priority'])),
+            ('sla_tier', lit(c['sla_tier'])), ('is_user_facing', 'true'),
+            ('created_at', 'now()'), ('updated_at', 'now()'), ('parent_id', f'({parent})')]))
     out.append("")
 
     # B1a/B1d: CMDB CIs, one per legacy leaf

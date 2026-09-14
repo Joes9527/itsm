@@ -36,7 +36,7 @@ test('new categories use the confirmed codes and parents', () => {
   assert.match(sql, /'COL-MAIL-004', 3, 40[^)]*'Request', 'P3', '标准服务'/);
   assert.match(sql, /'ACC-LCM-003', 3, 40[^)]*'P3', '标准服务'/);
   assert.match(sql, /'APP-GEN-SVC-001', 3, 40[^)]*'P3', '应用支持服务'/);
-  assert.match(sql, /\(SELECT id FROM ticket_categories WHERE code='COL-MAIL'\)/);
+  assert.match(sql, /\(SELECT id FROM ticket_categories WHERE code='COL-MAIL' AND tenant_id=1\)/);
 });
 
 test('CI type id is resolved by name and legacy id guards idempotency', () => {

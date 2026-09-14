@@ -85,5 +85,5 @@ test('parent categories are resolved by code and roots precede children', () => 
   const rootIdx = sql.indexOf("'L1', 1");
   const childIdx = sql.indexOf("'L1-A', 2");
   assert.ok(rootIdx > -1 && childIdx > rootIdx, 'root category must be emitted before its child');
-  assert.match(sql, /\(SELECT id FROM ticket_categories WHERE code='L1'\)/);
+  assert.match(sql, /\(SELECT id FROM ticket_categories WHERE code='L1' AND tenant_id=1\)/);
 });

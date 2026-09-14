@@ -17,7 +17,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from generate_seed_sql import json_lit, lit
+from generate_seed_sql import json_lit, lit, require_sql
 
 # (template name, field name, option label, option value) - accepted "new option" rows.
 ADDITIONS: tuple[tuple[str, str, str, str], ...] = (
@@ -55,12 +55,16 @@ ADDITIONS: tuple[tuple[str, str, str, str], ...] = (
 def build_sql(additions, tenant_id: int) -> str:
     out: list[str] = ["-- B2 dictionary option landing (idempotent).", "BEGIN;", ""]
     for template, field, label, value in additions:
+        target = (f"f.tenant_id={lit(tenant_id)} AND f.entity_type='ticket_template' AND f.name={lit(field)} "
+                  f"AND f.entity_id=(SELECT id FROM ticket_templates WHERE tenant_id={lit(tenant_id)} AND name={lit(template)})")
+        out.append(require_sql(f"(SELECT count(*) FROM field_definitions f WHERE {target})=1", 'template field missing or ambiguous'))
         option = json_lit([{"label": label, "value": value}])
         guard_present = f"f.options @> {option}"
         out.append(
             "UPDATE field_definitions f SET options = f.options || "
             f"{option}, updated_at = now() "
             f"WHERE f.tenant_id = {lit(tenant_id)} AND f.name = {lit(field)} "
+            "AND f.entity_type='ticket_template' "
             f"AND f.entity_id = (SELECT id FROM ticket_templates WHERE tenant_id = {lit(tenant_id)} "
             f"AND name = {lit(template)}) AND NOT ({guard_present});"
         )
