@@ -29,7 +29,9 @@
 | 安全事件上报 | `incident_type` | 事件类型 | 安全事件(security_event)；终端感染/病毒(malware)；可疑行为(suspicious)；钓鱼邮件(phishing)；数据泄漏风险(dlp)；其他(other) |
 | IT咨询请求 | `consult_type` | 咨询类型 | 业务流程咨询(process)；系统使用咨询(system_use)；操作指导(operation_guide)；服务引导/需求识别(guidance)；投诉与反馈(feedback)；其他(other) |
 
-## 2. 关联组精确对账与建议去向
+## 2. 关联组精确对账与建议去向（2026-09-14 用户全部采纳）
+
+> 已确认：本节“建议去向”全部采纳（归并 / 新增选项 / 排除）；新增选项须与 CMDB 业务系统清单一致。
 
 ### 旧组「系统名称」（14 项） → 字段 `target_system`
 
