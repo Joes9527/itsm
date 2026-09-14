@@ -88,3 +88,33 @@
 
 
 交付门禁：类型检查及最终生产构建通过；lint 无错误，仅 BPMNDesigner 既有未使用 eslint-disable 警告。独立复审通过，`git diff --check` 通过。最后修订仅补齐门户测试 fixture，未改变已构建和浏览器验证的生产代码。全量命令为 `npm run test:ci -- --runInBand --forceExit --reporters=default --modulePathIgnorePatterns=<rootDir>/.next/`。后续仍为三角色真实路径验收，当前结果不代表该项或整体 UI 补齐计划已经完成。
+
+
+### 三角色真实路径验收（2026-09-14，存在阻塞）
+
+本轮前端/审查工作树为 `codex/test/ui-core-journey-acceptance`，HEAD `c4b35ab7`；后端使用既有 8080 部署，运行源码 SHA 未确认。结论是**部分路径通过，三角色业务验收未通过**；上方最后一项继续保持未勾选。未修改生产代码、角色权限、目录绑定或 BPMN 定义。先检查当前部署定义，再使用现有目录 #14「内存升级更换」；没有执行 SSLVPN、KAF 授权、资源交付或真实审批决策。
+
+#### 实测结果和问题归属
+
+| 场景 | 本轮真实证据 | 结论与下一步 |
+| --- | --- | --- |
+| end user 普通求助 | 两次以新建 `end_user` 登录，从门户按钮进入 `/tickets/create?entry=help`，填写标题/描述后 POST `/tickets` 均返回 HTTP 403、code 2003、`PermissionDenied`、`permission denied for ticket:write`。真实会话有 `ticket:read/create/update`，无 `ticket:write` | **P1 核心入口阻塞**。当前统一 Intake 授权与角色/路由的操作名不一致；不是入口不可达，也没有创建成功。`authorization/work_item_creation.go` 对目标专业资源统一要求 write/read；修复须对齐后端权威授权及角色契约，不能在 UI 绕过或为验收给普通用户增加宽权限。尚不能把运行二进制对应源码提交认定为本轮 UI 回归 |
+| end user 目录申请 | 门户「申请服务」导航正常，随后直接进入现有目录 #14 申请页，提交真实表单 HTTP 201、code 0。最终运行回执 WorkItem #12 / ServiceRequest #6，`recordClass=service_request_item`、`workflowStartStatus=pending`。跳转 `/tickets/12` 并刷新后仍显示真实标题 | **创建、回执跳转与详情回读通过**。目录列表选卡到申请页的完整点击未覆盖；当前只验证目录导航和指定目录表单。早一次 #11 / SR #5 的创建同样成功，详情断言因标题含编号而失败；截图确认真实详情存在，修正断言后的 #12 路径通过 |
+| 实际 Helpdesk 处理 | 将仅本轮 #12 通过管理员分配 API 分配给临时 `l1_support`（这是测试准备，不算 UI 分配通过）。该账号在 `/workspace/tickets` 真实本人队列打开 #12 成功；输入并发送评论后 POST 返回非成功响应，界面显示「权限不足」 | **P1 协作操作阻塞**。该角色有 `service_request:read/provision` 和 `ticket:create/update`，无 `service_request:create/write`；当前共享评论路由对 Requested Item 要求 `service_request:create`，并未像 incident/problem/change 一样把 create/update 映射为 write。需要先确定共享协作动作策略，再对齐动作映射及角色定义；单补 write 或仅改变映射均不足。该次只保存了非成功断言及「权限不足」截图，没有保存评论响应的精确 HTTP 状态/原始响应体，不能将源码推断当作已捕获回执。不能从 ops_engineer 对普通工单的历史成功推导 l1_support 对 Requested Item 同样可操作。附件、状态处理和响应式步骤因前置评论失败未执行，不记通过 |
+| 管理层审批 | 临时 `dept_manager` 登录 `/approvals`，页面及任务 API HTTP 200 正常。目标 #12 实际为 `service_request_flow` 1.4.0，实例 #12 running，当前 `Activity_Accept`，任务 #16「请求受理」created、taskPurpose 为空、assignee 为申请人 #7903；实例 `approval_required=true` 且配置有部门主管/IT审批链 | **审批页面加载及任务列表读取通过，真实认领/决策未覆盖**。目标尚未进入审批节点，审批中心不应把这个普通任务展示为审批。当前源码没有 UI 调用 `BPMNWorkflowApi.completeTask`；这不代表后端没有任务命令。先核验现有受理入口/流程配置与处理人，不改 taskPurpose，不直接写状态假装推进，不新建测试审批引擎 |
+| 详情流程说明 | 在 #12 的 running 受理阶段，右侧显示「该工单未走审批流程」。`ApprovalMiniStepper` 等组件仅查询审批决策历史，空记录（或部分组件读取失败）即显示此文案 | **P2 UI 信息错误**。该次页面的决策接口原始响应未单独保存，尚不能区分正常空数组和读取失败。审批决策历史为空不能证明没有流程，应明确「暂无审批记录」，读取失败应独立展示；历史展示不能冒充当前完整流程进度。归属既有 UI/契约消费问题，后续修复仍在本轮 UI 范围内 |
+
+修复顺序据实补充：先对齐普通求助创建和 Requested Item 协作的后端权限契约；再修详情的审批记录空态/错误态；核实既有受理路径后重跑真实审批。三项使用既有 Intake、共享 WorkItem 协作和 BPMN 权威边界，不引入新 E2E 业务模型。KB/智能建单仍为 KAF backlog，团队负载继续暂缓。因运行后端源码 SHA 未确定且不更换共享 API，本轮不将源码修改或测试角色提权冒充线上问题已解决。
+
+#### 环境和清理
+
+- 前端复用前述最终 production build `TylCbDLpAzlT0CwuWFLEy`，私有 3016/3017 指向既有 8080。真实 Chromium 操作使用仓库 `auth-utils.ts`，未拦截业务 API；一次性脚本、截图和脱敏步骤记录保留在 `/tmp/core-ui-*`，不提交临时浏览器脚本。此轮是探索验收，不报告为自动化套件全部通过。
+- 初次随机密码未满足已有复杂度规则，创建用户失败；修正为随机值加必需字符类型后成功。另一次试跑把按钮误写为 link，修正选择器后再跑；这两项是验收脚本问题，不是产品缺陷。
+- 三次实际账号组 #7897–#7905 全部通过状态 API 停用，并逐一重新 GET 核对 `active=false`。没有改变已有用户、角色或全局配置。
+- 本轮只创建了目录 WorkItem #11/#12（SR #5/#6），没有普通求助工单成功创建；未取得评论创建成功回执；附件未执行。清理先转派给管理员，再走现有 DELETE，均返回 200，之后 GET 两条记录均为 404。
+- 额外清理核验发现 DELETE 后这两条记录的 BPMN 实例 #11/#12 仍 running。核对 businessKey 分别为 `service_request:11` / `service_request:12` 和流程定义后，仅终止这两个本轮实例，均返回 HTTP 200、code 0，并重新读取确认为 `terminated`；保留审计，不删除流程记录。这一清理行为不算业务审批完成，也不证明业务删除与流程终止已具备一致性。
+- 未修改共享 API、重启共享服务、执行迁移或清理既有业务记录。未运行全量 Jest/构建：本轮仓库变更仅验收文档，生产构建门禁仍引用上一节已验证结果。本轮不能覆盖所有角色、专业生命周期、跨租户负例或真实审批动作。
+
+独立只读复核已完成：普通求助的 create/write 冲突、SR 共享动作映射、审批历史假空及受理节点缺少 UI 完成入口均有源码依据；复核纠正了 SR 评论实际要求 create 而非 write。源码差异归属需与后端运行指纹分开，附件与审批决策未实测不计通过。当前仅记录验收与阻塞，不标记这些生产问题已修复。
+
+最终清理复核：任务 #15/#16 均为 `cancelled`，私有前端 3016/代理 3017 已停止并确认无监听；8080 后端二进制 SHA256 与上一节一致。`git diff --check` 通过，仓库仅此验收文档发生变更。
