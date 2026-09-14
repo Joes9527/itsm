@@ -69,6 +69,13 @@ type ValidatedRefreshToken struct {
 	identity   RefreshTokenIdentity
 }
 
+func (t *ValidatedRefreshToken) Credential() *VerifiedCredential {
+	if t == nil {
+		return nil
+	}
+	return t.credential
+}
+
 func (t *ValidatedRefreshToken) Identity() RefreshTokenIdentity {
 	if t == nil {
 		return RefreshTokenIdentity{}

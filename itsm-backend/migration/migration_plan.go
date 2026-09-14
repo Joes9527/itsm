@@ -71,6 +71,7 @@ func ControlledMigrationCatalog() []MigrationDefinition {
 	add(known[ToolExecutionAuthorizationLockVersion], StageOrdinary)
 	add(known[NotificationConnectorTargetVersion], StageOrdinary)
 	add(known[NotificationEmailTargetVersion], StageOrdinary)
+	add(known[AuthTokenStateVersion], StageOrdinary)
 	// Candidate infrastructure does not change the immutable retirement contract:
 	// old valid R receipts must remain upgradeable without a future 039 receipt.
 	catalog = append(catalog, MigrationDefinition{
@@ -175,7 +176,7 @@ func validateControlledLedger(catalog []MigrationDefinition, applied []Migration
 		seen[m.Version] = true
 	}
 	if !seen[WorkItemPrepareVersion] {
-		if seen[CandidateExecutionScopeVersion] || seen[SLAAlertNotificationVersion] || seen[ToolInvocationExecutionScopeVersion] || seen[ToolExecutionAuthorityLockVersion] || seen[ToolExecutionAuthorizationLockVersion] || seen[NotificationConnectorTargetVersion] || seen[NotificationEmailTargetVersion] {
+		if seen[CandidateExecutionScopeVersion] || seen[SLAAlertNotificationVersion] || seen[ToolInvocationExecutionScopeVersion] || seen[ToolExecutionAuthorityLockVersion] || seen[ToolExecutionAuthorizationLockVersion] || seen[NotificationConnectorTargetVersion] || seen[NotificationEmailTargetVersion] || seen[AuthTokenStateVersion] {
 			return nil, fmt.Errorf("candidate execution scope requires preparation")
 		}
 		// Never derive this order from the new active/legacy classification: removing
