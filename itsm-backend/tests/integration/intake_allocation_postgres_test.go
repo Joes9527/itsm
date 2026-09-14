@@ -59,7 +59,7 @@ func TestPostgresIntakeInsertFailureRollsBackAllocationAndReusesNumber(t *testin
 	tenant := client.Tenant.Create().SetName("Intake allocation").SetCode("allocation").SaveX(ctx)
 	actor := client.User.Create().SetTenantID(tenant.ID).SetUsername("actor").SetName("Actor").SetEmail("actor@example.test").SetPasswordHash("unused").SetActive(true).SetRole("agent").SaveX(ctx)
 	role := client.Role.Create().SetTenantID(tenant.ID).SetCode("agent").SetName("Agent").SaveX(ctx)
-	for _, action := range []string{"read", "write"} {
+	for _, action := range []string{"read", "create"} {
 		permission := client.Permission.Create().SetTenantID(tenant.ID).SetCode("ticket:" + action).SetName("Ticket " + action).SetResource("ticket").SetAction(action).SaveX(ctx)
 		client.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).SaveX(ctx)
 	}

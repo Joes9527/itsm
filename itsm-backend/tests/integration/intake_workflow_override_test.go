@@ -22,7 +22,11 @@ func restrictEntryPermissions(t *testing.T, f *unifiedIntakeFixture) {
 	ctx := context.Background()
 	f.client.RolePermission.Delete().ExecX(ctx)
 	for _, resource := range []string{"ticket", "incident", "service_request", "service_catalog"} {
-		for _, action := range []string{"read", "write", "create_on_behalf"} {
+		creationAction := "write"
+		if resource == "ticket" {
+			creationAction = "create"
+		}
+		for _, action := range []string{"read", creationAction, "create_on_behalf"} {
 			grantEntryPermission(t, f, resource, action)
 		}
 	}

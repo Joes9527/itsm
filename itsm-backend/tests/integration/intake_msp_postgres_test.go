@@ -567,7 +567,7 @@ func TestPostgresIntakeMSPEmptyDevelopmentReset(t *testing.T) {
 func TestPostgresNativeAuthorizationUsesTargetTransactionScope(t *testing.T) {
 	f := newIncidentEffectsFixture(t)
 	role := f.client.Role.Create().SetTenantID(f.tenant.ID).SetCode("agent").SetName("Agent").SaveX(f.ctx)
-	for _, action := range []string{"read", "write"} {
+	for _, action := range []string{"read", "create"} {
 		permission := f.client.Permission.Create().SetTenantID(f.tenant.ID).SetCode("ticket:" + action).SetName(action).SetResource("ticket").SetAction(action).SaveX(f.ctx)
 		f.client.RolePermission.Create().SetTenantID(f.tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).SaveX(f.ctx)
 	}

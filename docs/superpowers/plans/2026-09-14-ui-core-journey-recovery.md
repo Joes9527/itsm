@@ -118,3 +118,13 @@
 独立只读复核已完成：普通求助的 create/write 冲突、SR 共享动作映射、审批历史假空及受理节点缺少 UI 完成入口均有源码依据；复核纠正了 SR 评论实际要求 create 而非 write。源码差异归属需与后端运行指纹分开，附件与审批决策未实测不计通过。当前仅记录验收与阻塞，不标记这些生产问题已修复。
 
 最终清理复核：任务 #15/#16 均为 `cancelled`，私有前端 3016/代理 3017 已停止并确认无监听；8080 后端二进制 SHA256 与上一节一致。`git diff --check` 通过，仓库仅此验收文档发生变更。
+
+
+### 普通求助创建权限修复（源码 implemented，待部署验收）
+
+- 分支 `codex/fix/ui-core-permission-contracts`，基于 `93a5b58c`。统一 Intake 的 generic 创建改为与现有路由/角色一致的 `ticket:create` + `ticket:read`；专业域仍使用各自 write/read，保留实时事务授权、MSP/租户、代申请和流程覆盖权限检查。没有向任何角色添加宽权限。
+- 独立审查发现飞书既有映射更新复用创建授权，已在该更新分支补充事务内 `ticket:update` 检查；创建权限不再能单独授权更新已有关联工单。未调用飞书或共享环境执行同步。
+- 回归先红后绿：最小 create/read 用户创建成功；只读、update-only、write-only 不能替代 create；创建后持久化及幂等重放成功，撤权后重放拒绝且无重复记录；专业域/未支持类型保持边界。飞书 create-only 更新拒绝、授予 update 后成功、撤权再次拒绝，拒绝前后标题/版本不变。
+- 修正 MSP、流程覆盖及 PostgreSQL generic 场景的旧 write fixture，避免负例因错误缺少 create 而掩盖原本要验证的租户/流程权限。PostgreSQL 专项仅调整 fixture，未执行该数据库专项，不冒充已验证。
+- 授权与 Intake 包、完整 contract/RBAC 已通过；筛选的真实 Intake/飞书本地集成测试通过，使用隔离 fixture，无外部 provider 调用。独立复审无剩余发现。前端/API payload 未变化；共享 8080 尚未替换，当前修复不能记作开发环境普通求助已通过浏览器验收。
+- 用户确认后续服务请求协作范围：Helpdesk 仅处理本人当前已分配的服务请求，团队范围暂缓。该项另行实现，不与普通求助授权混为一项。

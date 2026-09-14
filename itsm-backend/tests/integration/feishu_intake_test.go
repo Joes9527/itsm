@@ -76,3 +76,38 @@ func TestFeishuNativeMSPCreatorUsesCanonicalRole(t *testing.T) {
 	require.Equal(t, f.identity.ActorID, item.RequesterID)
 	require.Equal(t, f.identity.TenantID, f.client.IntakeRequest.Query().OnlyX(ctx).ActorTenantID)
 }
+
+func TestFeishuCreatePermissionCannotUpdateExistingTicket(t *testing.T) {
+	f := newUnifiedIntakeFixture(t)
+	ctx := context.Background()
+	f.client.User.UpdateOneID(f.identity.ActorID).SetFeishuOpenID("create-only").ExecX(ctx)
+	f.client.RolePermission.Delete().ExecX(ctx)
+	role := f.client.Role.Query().OnlyX(ctx)
+	grant := func(action string) int {
+		p := f.client.Permission.Create().SetTenantID(f.identity.TenantID).SetCode("ticket:" + action).SetName(action).SetResource("ticket").SetAction(action).SaveX(ctx)
+		return f.client.RolePermission.Create().SetTenantID(f.identity.TenantID).SetRoleID(role.ID).SetPermissionID(p.ID).SaveX(ctx).ID
+	}
+	grant("read")
+	grant("create")
+	svc := service.NewFeishuSyncService(f.client, zap.NewNop().Sugar(), f.app)
+	task := &feishu.FeishuTask{GUID: "create-only-task", Name: "Original", CreatorID: "create-only"}
+	first, action, err := svc.SyncFeishuTaskToTicket(ctx, f.identity.TenantID, task)
+	require.NoError(t, err)
+	require.Equal(t, "created", action)
+	before := f.client.Ticket.GetX(ctx, first.TicketID)
+	task.Name = "Unauthorized update"
+	_, _, err = svc.SyncFeishuTaskToTicket(ctx, f.identity.TenantID, task)
+	require.ErrorContains(t, err, "ticket:update")
+	require.Equal(t, before.Title, f.client.Ticket.GetX(ctx, first.TicketID).Title)
+	require.Equal(t, before.Version, f.client.Ticket.GetX(ctx, first.TicketID).Version)
+	updateGrant := grant("update")
+	_, action, err = svc.SyncFeishuTaskToTicket(ctx, f.identity.TenantID, task)
+	require.NoError(t, err)
+	require.Equal(t, "updated", action)
+	require.Equal(t, task.Name, f.client.Ticket.GetX(ctx, first.TicketID).Title)
+	f.client.RolePermission.DeleteOneID(updateGrant).ExecX(ctx)
+	task.Name = "Revoked update"
+	_, _, err = svc.SyncFeishuTaskToTicket(ctx, f.identity.TenantID, task)
+	require.ErrorContains(t, err, "ticket:update")
+	require.Equal(t, "Unauthorized update", f.client.Ticket.GetX(ctx, first.TicketID).Title)
+}

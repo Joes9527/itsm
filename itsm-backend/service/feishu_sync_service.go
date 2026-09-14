@@ -192,6 +192,10 @@ func (s *FeishuSyncService) SyncFeishuTaskToTicket(ctx context.Context, tenantID
 		return nil, "", err
 	}
 	if record != nil {
+		// Existing mappings mutate a WorkItem; permission to create one is insufficient.
+		if err := authorization.RequireCurrentPermission(ctx, tx, identity, "ticket", "update"); err != nil {
+			return nil, "", err
+		}
 		item, err := s.updateTicketFromFeishuTask(ctx, tx, tenantID, record.TicketID, task)
 		if err != nil {
 			return nil, "", err
