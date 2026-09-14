@@ -227,3 +227,17 @@ M1核心交付修复与私有验证关闭；飞书完整协议按维护者指示
 - 实际RED `r4-a1-tenant-red.log`：空上下文没有带入已验签tenant、冲突tenant仍进入存储、继承system bypass未清除。现在access检查和refresh消费均从不可由包外字段构造的VerifiedCredential派生tenant，冲突/空主体/错误用途/已过期主体在存储前拒绝；修改返回claims不改变已验证身份快照。
 - `r4-a1-final-race.log`：authentication全包race PASS；`r4-a1-http-regression-race.log`：middleware及handlers/common受影响Token/Auth/Refresh/Logout/Login/Tenant测试race PASS。Redis故障日志来自私有测试主动关闭依赖的预期失败路径，无共享Redis访问。
 - 这一步不声称已解决持久撤销：Redis/内存生产实现尚存，A2/A3待替换；尚无新鉴权迁移、B配置或共享库变更。下一步A2仅实现PG存储及受限角色私有证据；现有迁移040–045均已占用，拟使用未占用046并在注册时核验。
+### 7.10 R4/A2持久存储检查点（2026-09-14 11:23 CST）
+
+提交 `d4bedf7b7da4d3a3560f93ef834c6d3f8f585c23`。新注册 `046_auth_token_state`，在045之后、手动038之前，保持037及既有前置依赖；不改旧checksum或frozen历史。新增两个空表，不自动建立authority，不迁移Redis状态，不清理任何历史数据。运行角色只获authority SELECT及状态SELECT/INSERT；RLS按已验签tenant，API无权更新/删除/截断状态、修改authority或关闭RLS。
+
+TokenStateStore接收A1的opaque VerifiedCredential；每个原事务核对authority、列/键、RLS定义、表级及列级权限和受限role，并强制synchronous_commit=on。真实RED发现列级UPDATE遗漏及校验后策略DDL窗口，已补列权限核对、在原事务持有ACCESS SHARE锁直至状态读写提交。这里不声称能检测恶意owner选择性修改状态行，仍按既有恢复设计更换authority和密钥。
+
+实际证据目录同7.3：
+- `r4-a2-migration-red.log` 为未注册新迁移的RED；`r4-a2-migration-regression.log` 复现新增版本导致旧固定数量断言差异，修复时保留原依赖/顺序断言并增加046末位断言。
+- `r4-a2-column-privilege-red.log`、`r4-a2-policy-window-red.log` 为两个实际安全断言失败。早期 `r4-a2-store-red.log` 仅新接口尚不存在的编译RED，不冒称当时已执行PG行为。
+- `r4-a2-private-final-race.log` PASS无skip：真实私有PG非owner角色、无tenant拒绝、跨tenant隔离、空authority拒绝、跨连接撤销、重复撤销、32个独立连接恰好1次刷新消费成功/31次已消费、用途/空主体拒绝、表级/列级权限异常、策略异常、缺表、关闭连接；真实提交后客户端丢确认返回不可用，独立连接仍读到撤销或已消费；策略DDL在状态事务中被阻塞。
+- `r4-a2-final-packages.jsonl` authentication/migration包退出0；有1个未配置旧独立DSN的既有opt-in skip：TestMigration021CallbackOptionalDeclaredIsIdempotent，不能把它记作通过。新046计划与本机新PG角色/结构断言已独立执行通过。
+- `r4-a2-final-build.log` 当前代码全后端构建退出0，空日志。
+
+本批约50分钟（10:35–11:23，包含M1审阅与A1/A2实施/编译）。范围没有增加飞书或新平台；新增断言均属于原R4持久状态合同。R4仍进行中：**A3生产入口尚未接入，旧Redis/内存路径仍存在，不能据A1/A2宣称注销重启安全已交付**。下一批只实施A3统一启动/登录/刷新/注销接入，之后A4真实API/PG重启与恢复、A5/M2独立审阅和R5固定候选。M3/M4仍待新版CandidateSHA、B环境交接及真实验收；未操作B配置、共享数据库、main或企业外发。
