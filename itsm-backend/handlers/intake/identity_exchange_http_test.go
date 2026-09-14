@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/http/httptest"
+	"testing"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"itsm-backend/authentication"
@@ -12,8 +15,6 @@ import (
 	"itsm-backend/ent/externalidentity"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/middleware"
-	"net/http/httptest"
-	"testing"
 )
 
 func TestIdentityExchangeRoutesScopeAndLiveMapping(t *testing.T) {
@@ -77,6 +78,7 @@ func TestIdentityExchangeRoutesScopeAndLiveMapping(t *testing.T) {
 	_, err = repo.Validate(tenantctx.WithTenantID(ctx, identity.TenantID), claims)
 	require.Error(t, err)
 }
+
 func TestIdentityExchangeRejectsRoleAndUnknownAssertionFields(t *testing.T) {
 	s, _, _ := assertionFixture()
 	r := gin.New()

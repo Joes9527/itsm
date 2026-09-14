@@ -87,6 +87,7 @@ func evaluateTicketRuleConditions(conditions []map[string]interface{}, item *ent
 	}
 	return matched, nil
 }
+
 func ticketRulePositiveID(value interface{}) (int, error) {
 	var raw string
 	switch v := value.(type) {

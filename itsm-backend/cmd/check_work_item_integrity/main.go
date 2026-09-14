@@ -138,8 +138,10 @@ func findMismatches(ctx context.Context, client *ent.Client, tenantID int) ([]mi
 			})
 		}
 		if count > 1 {
-			out = append(out, mismatch{kind: "duplicate_extension", ticketID: t.ID, tenantID: t.TenantID, recordClass: t.RecordClass,
-				detail: fmt.Sprintf("record_class=%s has %d professional extensions for WorkItem %d", t.RecordClass, count, t.ID)})
+			out = append(out, mismatch{
+				kind: "duplicate_extension", ticketID: t.ID, tenantID: t.TenantID, recordClass: t.RecordClass,
+				detail: fmt.Sprintf("record_class=%s has %d professional extensions for WorkItem %d", t.RecordClass, count, t.ID),
+			})
 		}
 	}
 

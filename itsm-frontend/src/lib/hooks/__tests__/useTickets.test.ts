@@ -122,6 +122,21 @@ describe('useTickets', () => {
     expect(result.current.pagination.pageSize).toBe(10);
   });
 
+  it('preserves the edit version and propagates conflict without automatic retry', async () => {
+    const conflict = new Error('version conflict');
+    mockTicketService.updateTicket.mockRejectedValueOnce(conflict);
+    const { result } = renderHook(() => useTickets());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    mockTicketService.listTickets.mockClear();
+    const input = { title: 'Observed edit', version: 4, operationId: 'edit-test' };
+    await act(async () => {
+      await expect(result.current.updateTicket(1, input)).rejects.toBe(conflict);
+    });
+    expect(mockTicketService.updateTicket).toHaveBeenCalledTimes(1);
+    expect(mockTicketService.updateTicket).toHaveBeenCalledWith(1, input);
+    expect(mockTicketService.listTickets).not.toHaveBeenCalled();
+  });
+
   it('should delete ticket and refresh data', async () => {
     mockTicketService.deleteTicket.mockResolvedValue(undefined as any);
 

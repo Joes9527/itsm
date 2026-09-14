@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+
 	creation "itsm-backend/handlers/common/workitemcreation"
 )
 
@@ -21,6 +22,7 @@ func catalogOptionKey(value any) (string, []byte, error) {
 	}
 	return "option:v1:" + base64.RawURLEncoding.EncodeToString(raw), raw, nil
 }
+
 func ProjectCatalogOptions(options []any) ([]creation.CatalogReadOption, error) {
 	result := make([]creation.CatalogReadOption, 0, len(options))
 	for _, raw := range options {

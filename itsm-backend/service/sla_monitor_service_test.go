@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	_ "github.com/mattn/go-sqlite3"
 
 	"itsm-backend/ent"
@@ -21,7 +23,7 @@ import (
 func setupSLAMonitorTest(t *testing.T) (*ent.Client, *SLAMonitorService, context.Context) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	logger := zaptest.NewLogger(t).Sugar()
-	service := NewSLAMonitorService(client, logger)
+	service := NewSLAMonitorService(client, logger, executionfixture.Standard())
 	ctx := context.Background()
 	return client, service, ctx
 }
@@ -243,15 +245,11 @@ func TestSLAMonitorService_CreateViolation(t *testing.T) {
 		SetTicketNumber("TKT-VIOL-001").
 		SetTenantID(testTenant.ID).
 		SetRequesterID(testUser.ID).
-		SetSLADefinitionID(slaDef.ID). // 必须设置SLA定义ID
+		SetSLADefinitionID(slaDef.ID).SetSLAResponseDeadline(time.Now().Add(-time.Hour)). // persisted deadline
 		Save(ctx)
 	require.NoError(t, err)
 
-	// 创建违规记录
-	slaDefMap := map[int]string{slaDef.ID: slaDef.Name}
-	deadline := time.Now().Add(-1 * time.Hour) // 1小时前已经过期
-
-	err = service.createViolation(ctx, ticket, "response_time", deadline, slaDefMap)
+	_, _, err = service.checkTicketViolations(ctx, ticket.ID, testTenant.ID)
 	require.NoError(t, err)
 
 	// 验证违规记录已创建
@@ -274,6 +272,65 @@ func TestMapViolationTypeToBreachType(t *testing.T) {
 		got := mapViolationTypeToBreachType(tt.input)
 		if got != tt.expected {
 			t.Errorf("mapViolationTypeToBreachType(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
+	}
+}
+
+// A persisted deadline already includes pause extension. Warning progress must
+// compare elapsed and target durations on the same active-time clock.
+func TestSLAMonitorService_WarningWithPausedCycle(t *testing.T) {
+	for _, kind := range []string{"response", "resolution"} {
+		for _, tc := range []struct {
+			name      string
+			elapsed   time.Duration
+			completed bool
+			want      bool
+		}{
+			{"before_threshold", 100 * time.Minute, false, false},
+			{"within_warning_window", 110 * time.Minute, false, true},
+			{"already_completed", 110 * time.Minute, true, false},
+			{"after_deadline", 121 * time.Minute, false, false},
+		} {
+			t.Run(kind+"/"+tc.name, func(t *testing.T) {
+				client, monitor, ctx := setupSLAMonitorTest(t)
+				defer client.Close()
+				tenant, err := createSLATestTenant(ctx, client, "paused")
+				require.NoError(t, err)
+				actor, err := createSLATestUser(ctx, client, tenant.ID, "paused")
+				require.NoError(t, err)
+				policy, err := createSLATestDefinition(ctx, client, tenant.ID, "paused")
+				require.NoError(t, err)
+				client.SLAAlertRule.Create().SetName("warning").SetTenantID(tenant.ID).SetSLADefinitionID(policy.ID).SetThresholdPercentage(20).SaveX(ctx)
+				start := time.Now().Add(-110 * time.Minute)
+				deadline := start.Add(120 * time.Minute) // 60-minute target + 60-minute applied pause.
+				create := client.Ticket.Create().SetTitle("paused cycle").SetTicketNumber("PAUSED-1").SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetSLADefinitionID(policy.ID).SetCreatedAt(start.Add(-24 * time.Hour)).SetSLACycleNumber(2).SetSLACycleStartedAt(start).SetSLAPausedMinutes(60)
+				if kind == "response" {
+					create.SetSLAResponseDeadline(deadline)
+					if tc.completed {
+						create.SetFirstResponseAt(start.Add(90 * time.Minute))
+					}
+				} else {
+					create.SetSLAResolutionDeadline(deadline)
+					if tc.completed {
+						create.SetResolvedAt(start.Add(90 * time.Minute))
+					}
+				}
+				item := create.SaveX(ctx)
+				alerts := NewSLAAlertService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
+				alerts.SetNotificationService(NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard()))
+				monitor.SetAlertService(alerts)
+				warned, err := monitor.checkAndTriggerWarning(ctx, item, start.Add(tc.elapsed))
+				require.NoError(t, err)
+				require.Equal(t, tc.want, warned, "60-minute active target must warn once 50 active minutes have elapsed")
+				histories := client.SLAAlertHistory.Query().AllX(ctx)
+				if tc.want {
+					require.Len(t, histories, 1)
+					require.Equal(t, item.ID, histories[0].TicketID)
+					require.Equal(t, tenant.ID, histories[0].TenantID)
+				} else {
+					require.Empty(t, histories)
+				}
+			})
 		}
 	}
 }

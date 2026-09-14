@@ -35,7 +35,7 @@ KAF 运行副本的 `.git` 文件指向 `/home/administrator/project/kaf/.git/wo
 
 | 应用 | 端口 | 本机只读探测 |
 |---|---|---|
-| ITSM 前端 | 3001 | `/login` |
+| ITSM 前端（生产构建运行） | 3001 | `/login` |
 | ITSM API | 8080 | `/api/v1/health` |
 | KAF 前端 | 5173 | `/` |
 | KAF API | 8000 | `/health` |
@@ -62,6 +62,14 @@ python3 "$launcher" up
 工具只提供 check/status/up；占用端口会跳过，不接管进程，不负责 stop/restart、构建、数据库或 worker。维护时先核对监听 PID、进程父子关系、cwd 和可执行文件，再停止目标应用；不能使用 `lsof ... | xargs kill` 或全局进程名批量终止。同机还有 CI 与其他服务。
 
 两个 ITSM worker 在维护前已运行，本次按 `itsm-worker-1-launch.json`、`itsm-worker-2-launch.json` 原配置恢复。恢复前检查实际进程，避免重复启动消费者。四入口 HTTP 200 和 worker 存活只证明进程/基础健康，不代表 Azure、SR、SSLVPN 或授权回收验收通过。
+
+### 2026-09-08 前端生产模式更新
+
+3001 改为运行完整 standalone 发布目录 `/home/administrator/apps/itsm-kaf/releases/itsm-web-20260908-workflow`，启动命令为 `node server.js`，环境设置 `NODE_ENV=production`、`HOSTNAME=0.0.0.0`、`PORT=3001`。既有 `itsm-web-launch.json` 已更新，因此 launcher 后续 `up` 会继续启动生产构建。生产模式仅指前端构建方式，仍连接原本机开发 API/数据库，不表示环境已转为正式生产租户。
+
+构建来源是 ITSM 修复分支 `codex/fix/workflow-menu-production`；发布目录中的 `release.json` 记录源码提交和 Next.js build ID。原运行源码副本保留作回滚，3001 不再执行其中的 `next dev`。原启动配置与菜单操作日志保存在私有目录 `/home/administrator/.local/state/itsm-workflow-production-20260908/`。回滚时核对并停止当前 3001 进程，恢复 `itsm-web-launch.before.json` 为原启动描述，再通过 launcher 启动；不得停止其他端口或全量重建 API。
+
+工作流菜单使用[运维手册的定向命令](DEVELOPMENT_GUIDE.md#前端生产模式与工作流入口维护)修复当前租户；8080 专用 API 和两个 worker 均保持原版本。
 
 ## ITSM 修复交付必须保留
 

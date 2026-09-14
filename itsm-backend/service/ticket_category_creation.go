@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticketcategory"
 	creation "itsm-backend/handlers/common/workitemcreation"
@@ -71,6 +72,9 @@ func (*TicketCategoryService) ResolveCreationClassification(ctx context.Context,
 		}
 		if level == 0 {
 			result.CategoryName = record.Name
+		}
+		if level == 1 {
+			result.TypeName = record.Name
 		}
 		parent = record.ID
 	}

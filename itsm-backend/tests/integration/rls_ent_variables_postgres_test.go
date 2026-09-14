@@ -22,7 +22,8 @@ func TestPostgresRLSEntVariables(t *testing.T) {
 	variables := entsql.WithVar(tenant, "application_name", "ent-withvar")
 	assertQuery := func(ctx context.Context, query interface {
 		Query(context.Context, string, any, any) error
-	}, want string) {
+	}, want string,
+	) {
 		rows := &entsql.Rows{}
 		require.NotPanics(t, func() {
 			err = query.Query(ctx, "SELECT current_setting('application_name'),current_setting('app.current_tenant')", []any{}, rows)

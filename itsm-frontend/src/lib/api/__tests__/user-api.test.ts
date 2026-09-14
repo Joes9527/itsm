@@ -23,11 +23,13 @@ describe('UserApi', () => {
 
   describe('getUsers', () => {
     it('should get users with params', async () => {
-      const resp = { users: [], pagination: { page: 1, pageSize: 10, total: 0, totalPage: 0 } };
+      const resp = { users: [], pagination: { page: 1, pageSize: 10, total: 0, totalPages: 0 } };
       mockGet.mockResolvedValue(resp);
       const result = await UserApi.getUsers({ page: 1, pageSize: 10 });
       expect(mockGet).toHaveBeenCalledWith('/api/v1/users', { page: 1, pageSize: 10 });
       expect(result).toEqual(resp);
+      expect(result.pagination.totalPages).toBe(0);
+      expect(result.pagination).not.toHaveProperty("totalPage");
     });
 
     it('should get users without params', async () => {

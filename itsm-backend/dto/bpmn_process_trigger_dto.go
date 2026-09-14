@@ -1,18 +1,42 @@
 package dto
 
-import "time"
+import (
+	"time"
 
-// BusinessType 业务类型枚举
+	"itsm-backend/common/workitemidentity"
+)
+
+// BusinessType 业务类型枚举。
+//
+// 按统一 WorkItem 设计 §15.2.2，流程身份是 businessType = WorkItem.recordClass：
+// 取值只来自 WorkItemRecordClasses 定义的规范词表，不存在 "ticket"/"change"/
+// "service_request" 这类 Wave-1 旧词表。以下常量只是给该词表一个有类型的名字，值全部
+// 从 recordClass 常量派生，避免两套取值。
 type BusinessType string
 
 const (
-	BusinessTypeTicket         BusinessType = "ticket"          // 工单
-	BusinessTypeChange         BusinessType = "change"          // 变更
-	BusinessTypeIncident       BusinessType = "incident"        // 事件
-	BusinessTypeServiceRequest BusinessType = "service_request" // 服务请求
-	BusinessTypeProblem        BusinessType = "problem"         // 问题
-	BusinessTypeRelease        BusinessType = "release"         // 发布
+	BusinessTypeGeneric            BusinessType = RecordClassGeneric
+	BusinessTypeServiceRequestItem BusinessType = RecordClassServiceRequestItem
+	BusinessTypeIncident           BusinessType = RecordClassIncident
+	BusinessTypeProblem            BusinessType = RecordClassProblem
+	BusinessTypeChangeRequest      BusinessType = RecordClassChangeRequest
+	BusinessTypeCatalogTask        BusinessType = RecordClassCatalogTask
+	// BusinessTypeRelease 是 Release 在完成自身 WorkItem 扩展设计前的显式遗留保留值：
+	// 它不属于规范 WorkItem 词表，也不能被映射成 Change。
+	BusinessTypeRelease BusinessType = "release"
 )
+
+// IsWorkItemBusinessType reports whether a wire business type is a canonical WorkItem
+// record class. Release is deliberately excluded: it is a non-WorkItem identity.
+func IsWorkItemBusinessType(value string) bool {
+	return workitemidentity.IsRecordClass(value)
+}
+
+// IsKnownProcessBusinessType accepts the canonical WorkItem classes plus the explicit
+// Release legacy identity, and rejects the retired Wave-1 vocabulary.
+func IsKnownProcessBusinessType(value string) bool {
+	return workitemidentity.IsKnownProcessIdentity(value)
+}
 
 // ProcessStatus 流程状态
 type ProcessStatus string

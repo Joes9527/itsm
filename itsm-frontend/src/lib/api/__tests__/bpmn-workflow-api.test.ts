@@ -54,7 +54,7 @@ describe('BPMNWorkflowApi canonical contracts', () => {
       pageSize: 10,
     });
     await BPMNWorkflowApi.claimTask(7);
-    expect(put).toHaveBeenCalledWith('/api/v1/bpmn/tasks/7/claim', {});
+    expect(put).toHaveBeenCalledWith('/api/v1/bpmn/tasks/7/claim', {}, { assertSubmissionContext: undefined });
   });
 
   it('filters active tasks by authoritative process business identity', async () => {
@@ -69,7 +69,7 @@ describe('BPMNWorkflowApi canonical contracts', () => {
   it('submits approval only through the ProcessTask decision command', async () => {
     const decision = { action: 'reject' as const, comment: 'insufficient evidence' };
     await BPMNWorkflowApi.submitApprovalDecision(7, decision);
-    expect(post).toHaveBeenCalledWith('/api/v1/bpmn/tasks/7/decisions', decision);
+    expect(post).toHaveBeenCalledWith('/api/v1/bpmn/tasks/7/decisions', decision, { assertSubmissionContext: undefined });
   });
 
   it('uses canonical version query names', async () => {
@@ -82,4 +82,12 @@ describe('BPMNWorkflowApi canonical contracts', () => {
       target_version: '2.0.0',
     });
   });
+});
+
+it('passes submission context guards to the shared client for initial send and retries', async () => {
+  const guard = jest.fn();
+  await BPMNWorkflowApi.claimTask(7, guard);
+  await BPMNWorkflowApi.submitApprovalDecision(7, { action: 'approve' }, guard);
+  expect(put).toHaveBeenCalledWith('/api/v1/bpmn/tasks/7/claim', {}, { assertSubmissionContext: guard });
+  expect(post).toHaveBeenCalledWith('/api/v1/bpmn/tasks/7/decisions', { action: 'approve' }, { assertSubmissionContext: guard });
 });

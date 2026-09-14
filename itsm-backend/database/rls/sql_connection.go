@@ -32,6 +32,7 @@ func (c rawConnection) Exec(ctx context.Context, q string, args, v any) error {
 	}
 	return nil
 }
+
 func (c rawConnection) Query(ctx context.Context, q string, args, v any) error {
 	values, ok := args.([]any)
 	if !ok {

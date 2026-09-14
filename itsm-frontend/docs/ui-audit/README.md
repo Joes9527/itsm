@@ -1,26 +1,26 @@
 # Frontend UI Audit Inventory
 
-Generated at: 2026-09-01T15:01:27.216Z
+Generated at: 2026-09-09T09:01:07.047Z
 
 ## Coverage
 
-- Total pages: 142
+- Total pages: 140
 - Batch 1 pages: 48
 - Batch 2 pages: 30
-- Batch 3 pages: 64
+- Batch 3 pages: 62
 
 ## Highest Complexity Pages
 
 | Path | Batch | Type | Lines | Issues |
 | --- | --- | --- | ---: | ---: |
-| `profile/page.tsx` | batch-3 | list | 989 | 3 |
-| `admin/service-catalogs/page.tsx` | batch-3 | admin | 934 | 2 |
-| `tickets/templates/page.tsx` | batch-1 | list | 908 | 2 |
+| `profile/page.tsx` | batch-3 | list | 987 | 3 |
+| `admin/service-catalogs/page.tsx` | batch-3 | admin | 985 | 2 |
+| `tickets/templates/page.tsx` | batch-1 | list | 941 | 2 |
+| `tickets/create/page.tsx` | batch-1 | create | 930 | 3 |
 | `tickets/prototype/page.tsx` | batch-1 | list | 874 | 1 |
 | `admin/workflows/page.tsx` | batch-3 | admin | 873 | 3 |
-| `admin/users/page.tsx` | batch-3 | admin | 843 | 3 |
-| `notifications/page.tsx` | batch-3 | list | 821 | 2 |
-| `tickets/create/page.tsx` | batch-1 | create | 750 | 4 |
+| `admin/users/page.tsx` | batch-3 | admin | 841 | 3 |
+| `notifications/page.tsx` | batch-3 | list | 832 | 2 |
 | `admin/escalation-rules/page.tsx` | batch-3 | admin | 744 | 2 |
 | `workflow/instances/page.tsx` | batch-1 | list | 734 | 3 |
 | `admin/sla-definitions/page.tsx` | batch-3 | admin | 725 | 2 |
@@ -33,9 +33,9 @@ Generated at: 2026-09-01T15:01:27.216Z
 
 | Path | Domain | Lines | Issues |
 | --- | --- | ---: | ---: |
-| `src/components/workflow/designer/WorkflowNodeInspector.tsx` | workflow | 1683 | 2 |
+| `src/components/workflow/designer/WorkflowNodeInspector.tsx` | workflow | 1681 | 2 |
 | `src/components/workflow/BPMNDesigner.tsx` | workflow | 1289 | 4 |
-| `src/components/workflow/designer/WorkflowDesigner.tsx` | workflow | 1069 | 3 |
+| `src/components/workflow/designer/WorkflowDesigner.tsx` | workflow | 1070 | 3 |
 | `src/components/workflow/designer/WorkflowAIModal.tsx` | workflow | 665 | 2 |
 | `src/components/cmdb/CSDMHub.tsx` | cmdb | 613 | 2 |
 | `src/components/cmdb/TopologyGraph.tsx` | cmdb | 537 | 2 |
@@ -44,7 +44,7 @@ Generated at: 2026-09-01T15:01:27.216Z
 | `src/components/cmdb/CIEditorForm.tsx` | cmdb | 400 | 0 |
 | `src/components/workflow/designer/WorkflowProperties.tsx` | workflow | 343 | 0 |
 | `src/components/workflow/designer/WorkflowContext.tsx` | workflow | 244 | 0 |
-| `src/components/workflow/__tests__/WorkflowNodeInspector.test.tsx` | workflow | 224 | 0 |
+| `src/components/workflow/__tests__/WorkflowNodeInspector.test.tsx` | workflow | 223 | 0 |
 | `src/components/cmdb/ci-editor-shared.ts` | cmdb | 215 | 0 |
 | `src/components/workflow/designer/WorkflowToolbar.tsx` | workflow | 197 | 0 |
 | `src/components/cmdb/ci-detail/sections/CIImpactAnalysisTab.tsx` | cmdb | 189 | 0 |

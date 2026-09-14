@@ -14,8 +14,10 @@ type BPMNAccessScope struct {
 	CanUpdateAllTasks     bool
 }
 
-type bpmnAccessScopeContextKey struct{}
-type bpmnTrustedTenantContextKey struct{}
+type (
+	bpmnAccessScopeContextKey   struct{}
+	bpmnTrustedTenantContextKey struct{}
+)
 
 func WithBPMNAccessScope(ctx context.Context, scope BPMNAccessScope) context.Context {
 	return context.WithValue(ctx, bpmnAccessScopeContextKey{}, scope)

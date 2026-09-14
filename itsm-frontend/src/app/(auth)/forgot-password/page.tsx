@@ -15,7 +15,6 @@ import {
   Divider,
   Alert,
 } from 'antd';
-import { antdTheme } from '@/lib/antd-theme';
 import { AuthService } from '@/lib/services/auth-service';
 import { logger } from '@/lib/env';
 
@@ -69,33 +68,33 @@ export default function ForgotPasswordPage() {
 
   if (submitted) {
     return (
-      <ConfigProvider theme={antdTheme}>
-        <div className="min-h-screen flex items-center justify-center p-5 bg-gradient-to-br from-gray-50 to-blue-50">
+      <ConfigProvider>
+        <div className="min-h-screen flex items-center justify-center p-5 bg-page">
           <div className="w-full max-w-[420px]">
             <Card
-              className="rounded-xl shadow-xl border-none"
-              styles={{ body: { padding: '40px' } }}
+              className="rounded-[8px] shadow-none border-none"
+              styles={{ body: { padding: '24px' } }}
             >
               <div className="text-center">
                 <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
                   <CheckCircle size={32} className="text-green-600" />
                 </div>
 
-                <Title level={3} className="!mb-2 !text-gray-900 !text-xl">
+                <Title level={3} className="!mb-2 !text-foreground !text-[15px]">
                   检查您的邮箱
                 </Title>
 
-                <Text className="!text-gray-500 !text-sm block !mb-6">
+                <Text className="!text-muted !text-[13px] block !mb-6">
                   我们已将密码重置链接发送至
                   <br />
-                  <span className="text-blue-600 font-medium">{email}</span>
+                  <span className="text-foreground font-medium">{email}</span>
                 </Text>
 
-                <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left">
-                  <Text className="!text-gray-600 !text-xs block !mb-2">
+                <div className="bg-raised rounded-[8px] p-4 mb-6 text-left">
+                  <Text className="!text-muted !text-[12px] block !mb-2">
                     没有收到邮件？请检查：
                   </Text>
-                  <ul className="!text-gray-500 !text-xs list-disc list-inside space-y-1">
+                  <ul className="!text-muted !text-[12px] list-disc list-inside space-y-1">
                     <li>垃圾邮件文件夹</li>
                     <li>邮箱地址是否正确</li>
                     <li>邮件是否被拦截</li>
@@ -113,8 +112,8 @@ export default function ForgotPasswordPage() {
 
                 <Button
                   type="primary"
-                  size="large"
-                  className="w-full h-10 rounded-md text-sm"
+                  size="middle"
+                  className="w-full h-[34px] rounded-[6px] text-[13px]"
                   loading={loading}
                   onClick={handleResend}
                 >
@@ -122,9 +121,9 @@ export default function ForgotPasswordPage() {
                 </Button>
 
                 <div className="text-center mt-4">
-                  <Text className="text-gray-400 text-xs">
+                  <Text className="text-muted text-[12px]">
                     记起密码了？{' '}
-                    <a href="/login" className="text-blue-600 hover:underline">
+                    <a href="/login" className="text-foreground hover:underline">
                       {t('auth.register.loginNow')}
                     </a>
                   </Text>
@@ -138,15 +137,15 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <ConfigProvider theme={antdTheme}>
-      <div className="min-h-screen flex items-center justify-center p-5 bg-gradient-to-br from-gray-50 to-blue-50">
+    <ConfigProvider>
+      <div className="min-h-screen flex items-center justify-center p-5 bg-page">
         <div className="w-full max-w-[420px]">
-          <Card className="rounded-xl shadow-xl border-none" styles={{ body: { padding: '40px' } }}>
+          <Card className="rounded-[8px] shadow-none border-none" styles={{ body: { padding: '24px' } }}>
             <div className="text-center mb-6">
-              <Title level={2} className="!mb-2 !text-gray-900 !text-2xl">
+              <Title level={2} className="!mb-2 !text-foreground !text-[24px]">
                 {t('auth.forgotPassword.title')}
               </Title>
-              <Text className="!text-gray-500 !text-sm">{t('auth.forgotPassword.subtitle')}</Text>
+              <Text className="!text-muted !text-[13px]">{t('auth.forgotPassword.subtitle')}</Text>
             </div>
 
             {error && (
@@ -169,9 +168,9 @@ export default function ForgotPasswordPage() {
                 ]}
               >
                 <Input
-                  prefix={<Mail size={14} className="text-gray-400" />}
+                  prefix={<Mail size={14} className="text-muted" />}
                   placeholder={t('auth.forgotPassword.emailPlaceholder')}
-                  size="large"
+                  size="middle"
                   disabled={loading}
                 />
               </Form.Item>
@@ -180,8 +179,8 @@ export default function ForgotPasswordPage() {
                 <Button
                   type="primary"
                   htmlType="submit"
-                  size="large"
-                  className="w-full h-10 rounded-md text-sm font-semibold"
+                  size="middle"
+                  className="w-full h-[34px] rounded-[6px] text-[13px] font-semibold"
                   loading={loading}
                 >
                   {loading ? t('auth.forgotPassword.sending') : t('auth.forgotPassword.sendButton')}
@@ -190,21 +189,21 @@ export default function ForgotPasswordPage() {
             </Form>
 
             <div className="text-center">
-              <Text className="text-gray-400 text-xs">
+              <Text className="text-muted text-[12px]">
                 记起密码了？{' '}
-                <a href="/login" className="text-blue-600 hover:underline">
+                <a href="/login" className="text-foreground hover:underline">
                   {t('auth.register.loginNow')}
                 </a>
               </Text>
             </div>
 
             <Divider className="my-5">
-              <Text className="text-gray-400 text-xs">{t('auth.login.or')}</Text>
+              <Text className="text-muted text-[12px]">{t('auth.login.or')}</Text>
             </Divider>
 
             <Button
               size="middle"
-              className="w-full h-10 rounded-md text-sm"
+              className="w-full h-[34px] rounded-[6px] text-[13px]"
               disabled={loading}
               icon={<Shield size={14} />}
             >

@@ -193,12 +193,12 @@ const ArticleList: React.FC<ArticleListProps> = ({ showHeader = true }) => {
   ];
 
   return (
-    <div className="p-6">
+    <div className={showHeader ? "p-[16px] md:p-[24px]" : "min-w-0"}>
       {showHeader && (
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">知识库</h1>
-            <p className="text-gray-500 mt-1">创建、维护和分享解决方案与最佳实践</p>
+            <h1 className="text-[24px] font-semibold text-foreground">知识库</h1>
+            <p className="text-muted mt-1">创建、维护和分享解决方案与最佳实践</p>
           </div>
           <Button
             type="primary"
@@ -211,13 +211,13 @@ const ArticleList: React.FC<ArticleListProps> = ({ showHeader = true }) => {
         </div>
       )}
 
-      <Card className="rounded-lg shadow-sm border border-gray-200">
+      <Card className="rounded-[8px] shadow-none border border-border">
         <Form form={form} layout="inline" className="mb-6 flex-wrap gap-y-4" onFinish={handleSearch}>
           <Form.Item name="search" className="mb-0">
             <Input
               placeholder="搜索标题/内容"
               allowClear
-              prefix={<Search className="text-gray-400" />}
+              prefix={<Search className="text-muted" />}
               className="w-64"
               aria-label="搜索知识库文章"
             />
@@ -228,7 +228,7 @@ const ArticleList: React.FC<ArticleListProps> = ({ showHeader = true }) => {
               className="w-36"
               allowClear
              
-              style={{ backgroundColor: '#fafafa', borderRadius: '6px' }}
+              style={{ backgroundColor: 'var(--color-bg-tertiary)', borderRadius: '6px' }}
              options={Array.isArray(categories) ? categories.map(c => ({ value: c, label: c })) : []} />
           </Form.Item>
           <Form.Item name="status" className="mb-0">
@@ -237,7 +237,7 @@ const ArticleList: React.FC<ArticleListProps> = ({ showHeader = true }) => {
               className="w-28"
               allowClear
              
-              style={{ backgroundColor: '#fafafa', borderRadius: '6px' }}
+              style={{ backgroundColor: 'var(--color-bg-tertiary)', borderRadius: '6px' }}
              options={[{ value: "published", label: "已发布" }, { value: "draft", label: "草稿" }]} />
           </Form.Item>
           <Form.Item className="mb-0">

@@ -53,35 +53,35 @@ import { useAuthStore } from '@/lib/store/auth-store';
 
 const { Title, Text } = Typography;
 
-// 独特的设计系统
+// Profile presentation uses shared theme surfaces; status palettes retain their meaning.
 const DESIGN = {
   colors: {
-    primary: '#0f172a',
+    primary: 'var(--color-text-primary)',
     accent: '#F06820',
     success: '#10b981',
     warning: '#f59e0b',
     danger: '#ef4444',
-    surface: '#ffffff',
-    border: '#e2e8f0',
-    text: '#1e293b',
-    textMuted: '#64748b',
-    bgSubtle: '#f8fafc',
+    surface: 'var(--color-bg-primary)',
+    border: 'var(--color-border)',
+    text: 'var(--color-text-primary)',
+    textMuted: 'var(--color-text-secondary)',
+    bgSubtle: 'var(--color-bg-secondary)',
     gradient: {
-      primary: 'linear-gradient(135deg, #F06820 0%, #B84A08 100%)',
+      primary: 'var(--color-primary)',
       success: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
       warning: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
     },
   },
   shadows: {
-    card: '0 1px 3px rgb(0 0 0 / 0.05)',
-    cardHover: '0 10px 40px -10px rgb(0 0 0 / 0.15)',
+    card: 'none',
+    cardHover: 'none',
     glow: (color: string) => `0 0 30px ${color}20`,
   },
   radius: {
     sm: '8px',
-    md: '12px',
-    lg: '16px',
-    xl: '20px',
+    md: '8px',
+    lg: '8px',
+    xl: '8px',
     full: '9999px',
   },
 };
@@ -423,7 +423,7 @@ export default function ProfilePage() {
                 </div>
 
                 <div style={{ textAlign: 'center', marginBottom: 16 }}>
-                  <Title level={4} style={{ margin: 0, marginBottom: 4 }}>
+                  <Title level={4} style={{ margin: 0, marginBottom: 4, fontSize: 15, fontWeight: 600 }}>
                     {profile?.name || profile?.username || '用户'}
                   </Title>
                   <Text style={{ color: DESIGN.colors.textMuted }}>
@@ -490,7 +490,7 @@ export default function ProfilePage() {
                 boxShadow: DESIGN.shadows.card,
               }}
             >
-              <Title level={5} style={{ marginBottom: 20 }}>
+              <Title level={5} style={{ marginBottom: 20, fontSize: 15, fontWeight: 600 }}>
                 工作统计
               </Title>
               <Row gutter={[16, 16]}>
@@ -663,7 +663,7 @@ export default function ProfilePage() {
                           timezone: 'Asia/Shanghai',
                         }}
                       >
-                        <Title level={5}>通知设置</Title>
+                        <Title level={5} style={{ fontSize: 15, fontWeight: 600 }}>通知设置</Title>
                         <Row gutter={24}>
                           <Col xs={24}>
                             <Form.Item label="语言" name="language">

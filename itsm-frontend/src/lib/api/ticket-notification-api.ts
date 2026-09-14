@@ -46,11 +46,13 @@ export interface SendTicketNotificationRequest {
 }
 
 export interface SendTicketNotificationResult {
-  effect: 'applied' | 'idempotent';
+  effect: 'queued' | 'applied' | 'idempotent';
   recipientCount: number;
   appliedCount: number;
   idempotentCount: number;
   deliveryCount: number;
+  queuedCount: number;
+  externalIntentCount: number;
 }
 
 export interface NotificationPreferenceItem {

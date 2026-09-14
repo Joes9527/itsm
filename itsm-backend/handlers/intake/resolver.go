@@ -3,6 +3,8 @@ package intake
 import (
 	"context"
 	"encoding/json"
+	"strconv"
+
 	"itsm-backend/authorization"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
@@ -10,7 +12,6 @@ import (
 	"itsm-backend/ent/tickettemplate"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service"
-	"strconv"
 )
 
 type Resolver struct {
@@ -23,6 +24,7 @@ type Resolver struct {
 func NewResolver(catalog creation.CatalogResolver, workflow creation.WorkflowResolver, cis creation.ConfigurationItemResolver, classification creation.ClassificationResolver) *Resolver {
 	return &Resolver{catalog: catalog, workflow: workflow, cis: cis, classification: classification}
 }
+
 func (r *Resolver) Resolve(ctx context.Context, tx *ent.Tx, identity creation.Identity, command creation.CreateWorkItemCommand) (*creation.ResolvedIntake, error) {
 	if r == nil || missingDependency(r.catalog) || missingDependency(r.workflow) || missingDependency(r.cis) || missingDependency(r.classification) {
 		return nil, creation.NewInternalFailure("intake resolver is not fully configured", nil)

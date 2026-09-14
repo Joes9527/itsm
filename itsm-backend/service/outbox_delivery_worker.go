@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common/executionscope"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
 
@@ -19,6 +20,13 @@ import (
 type OutboxDeliveryHandler interface {
 	EventType() string
 	Deliver(context.Context, *ent.OutboxEvent) error
+}
+
+// OrderedOutboxDeliveryHandler declares a shared target sequence. The registry
+// freezes this server-owned declaration; payload fields cannot enable or disable it.
+type OrderedOutboxDeliveryHandler interface {
+	OutboxDeliveryHandler
+	SerialByAggregate() bool
 }
 
 // ReplaySafeOutboxDeliveryHandler declares durable domain deduplication for every
@@ -86,9 +94,18 @@ func NewOutboxDeliveryWorker(
 }
 
 func (w *OutboxDeliveryWorker) DispatchOnce(ctx context.Context) error {
+	if ctx == nil {
+		return executionscope.ErrDenied
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	// The transport polls across tenants; only its separately configured repository
 	// may hold database privileges for that server-owned operation.
 	ctx = tenantctx.SystemContext(ctx, "outbox:poll", "claim and acknowledge tenant delivery events")
+	if err := w.repository.execution.RequireWorkerCapability(ctx, "outbox"); err != nil {
+		return err
+	}
 	blocked, err := w.repository.BlockUnknownPendingEventTypes(ctx, w.now().UTC(), w.config.BatchSize, w.registry.KnownTypes())
 	if err != nil {
 		return fmt.Errorf("block unknown outbox event types: %w", err)
@@ -97,7 +114,7 @@ func (w *OutboxDeliveryWorker) DispatchOnce(ctx context.Context) error {
 		w.logger.Errorw("unknown outbox event types blocked", "count", blocked)
 	}
 	for _, eventType := range w.eventTypes {
-		events, err := w.repository.ClaimDueByEventType(ctx, w.now().UTC(), w.config.BatchSize, eventType)
+		events, err := w.repository.ClaimDueByEventType(ctx, w.now().UTC(), w.config.BatchSize, eventType, w.registry.SerialByAggregate(eventType))
 		if err != nil {
 			return fmt.Errorf("claim %s outbox deliveries: %w", eventType, err)
 		}

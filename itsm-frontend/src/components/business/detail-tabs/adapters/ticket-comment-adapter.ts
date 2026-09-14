@@ -6,15 +6,24 @@ export const ticketCommentAdapter: CommentAdapter = {
     const { comments, total } = await TicketCommentApi.getComments(Number(targetId));
     return { comments: (comments || []) as unknown as CommentItem[], total };
   },
-  async create(targetId, data) {
-    const res = await TicketCommentApi.createComment(Number(targetId), data);
+  async create(targetId, data, assertSubmissionContext) {
+    const res = await TicketCommentApi.createComment(
+      Number(targetId),
+      data,
+      assertSubmissionContext
+    );
     return res as unknown as CommentItem;
   },
-  async update(targetId, commentId, data) {
-    const res = await TicketCommentApi.updateComment(Number(targetId), commentId, data);
+  async update(targetId, commentId, data, assertSubmissionContext) {
+    const res = await TicketCommentApi.updateComment(
+      Number(targetId),
+      commentId,
+      data,
+      assertSubmissionContext
+    );
     return res as unknown as CommentItem;
   },
-  async remove(targetId, commentId) {
-    await TicketCommentApi.deleteComment(Number(targetId), commentId);
+  async remove(targetId, commentId, assertSubmissionContext) {
+    await TicketCommentApi.deleteComment(Number(targetId), commentId, assertSubmissionContext);
   },
 };

@@ -148,31 +148,34 @@ type Config struct {
 
 // Manifest 连接器"自描述"，用于插件市场展示与自动装配
 type Manifest struct {
-	Name                string        `json:"name"` // 唯一 key
-	Version             string        `json:"version"`
-	Title               string        `json:"title"` // 中文显示名
-	Provider            string        `json:"provider"`
-	Type                ConnectorType `json:"type"`
-	Description         string        `json:"description"`
-	Author              string        `json:"author,omitempty"`
-	Homepage            string        `json:"homepage,omitempty"`
-	IconURL             string        `json:"icon_url,omitempty"`
-	Capabilities        []Capability  `json:"capabilities"`
-	ConfigSchema        string        `json:"config_schema,omitempty"` // JSON Schema
-	Tags                []string      `json:"tags,omitempty"`
-	MinITSMVer          string        `json:"min_itsm_ver,omitempty"`
-	Screenshots         []string      `json:"screenshots,omitempty"`          // 截图URL列表
-	Changelog           string        `json:"changelog,omitempty"`            // 版本更新日志
-	InstallCount        int           `json:"install_count,omitempty"`        // 安装次数
-	Rating              float64       `json:"rating,omitempty"`               // 评分，0-5
-	IsOfficial          bool          `json:"is_official,omitempty"`          // 是否是官方组件
-	Category            string        `json:"category,omitempty"`             // 分类
-	RequiredPermissions []string      `json:"required_permissions,omitempty"` // 需要的系统权限列表
-	Checksum            string        `json:"checksum,omitempty"`             // manifest 完整性校验和（注册时自动计算，sha256:...）
+	// InitializationBehavior describes Init itself, not delivery/polling rights.
+	// Empty or unknown behavior cannot be used for candidate target activation.
+	InitializationBehavior string        `json:"initialization_behavior,omitempty"`
+	Name                   string        `json:"name"` // 唯一 key
+	Version                string        `json:"version"`
+	Title                  string        `json:"title"` // 中文显示名
+	Provider               string        `json:"provider"`
+	Type                   ConnectorType `json:"type"`
+	Description            string        `json:"description"`
+	Author                 string        `json:"author,omitempty"`
+	Homepage               string        `json:"homepage,omitempty"`
+	IconURL                string        `json:"icon_url,omitempty"`
+	Capabilities           []Capability  `json:"capabilities"`
+	ConfigSchema           string        `json:"config_schema,omitempty"` // JSON Schema
+	Tags                   []string      `json:"tags,omitempty"`
+	MinITSMVer             string        `json:"min_itsm_ver,omitempty"`
+	Screenshots            []string      `json:"screenshots,omitempty"`          // 截图URL列表
+	Changelog              string        `json:"changelog,omitempty"`            // 版本更新日志
+	InstallCount           int           `json:"install_count,omitempty"`        // 安装次数
+	Rating                 float64       `json:"rating,omitempty"`               // 评分，0-5
+	IsOfficial             bool          `json:"is_official,omitempty"`          // 是否是官方组件
+	Category               string        `json:"category,omitempty"`             // 分类
+	RequiredPermissions    []string      `json:"required_permissions,omitempty"` // 需要的系统权限列表
+	Checksum               string        `json:"checksum,omitempty"`             // manifest 完整性校验和（注册时自动计算，sha256:...）
 }
 
 // ComputeChecksum 基于 manifest 的身份与安全关键字段计算确定性校验和。
-// 只覆盖影响运行行为的字段（name/version/provider/type/capabilities/required_permissions/min_itsm_ver），
+// 只覆盖影响运行行为的字段（name/version/provider/type/capabilities/required_permissions/min_itsm_ver/initialization_behavior），
 // 展示类字段（描述、截图、评分）变化不影响校验和。
 func (m Manifest) ComputeChecksum() string {
 	caps := make([]string, 0, len(m.Capabilities))
@@ -190,9 +193,18 @@ func (m Manifest) ComputeChecksum() string {
 		strings.Join(caps, ","),
 		strings.Join(perms, ","),
 		m.MinITSMVer,
+		m.InitializationBehavior,
 	}, "|")
 	sum := sha256.Sum256([]byte(payload))
 	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+const InitializationLocalOnly = "local_only"
+
+// DeliveryDestination exposes the immutable destination captured by Init.
+// Implementations must not derive this from mutable caller-owned settings.
+type DeliveryDestination interface {
+	DeliveryDestinationIdentity() string
 }
 
 // ValidateForRegistration 注册前的 manifest 完整性校验（fail closed）：

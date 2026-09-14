@@ -355,12 +355,12 @@ const TicketApprovalWorkflowPage = () => {
           />
 
           <div>
-            <Title level={5}>{t('workflow.processSteps')}</Title>
+            <Title className="!text-[15px] !font-semibold" level={5}>{t('workflow.processSteps')}</Title>
             <Steps direction='vertical' size='small' current={0} items={previewSteps} />
           </div>
 
           <div>
-            <Title level={5}>{t('workflow.nodeDetails')}</Title>
+            <Title className="!text-[15px] !font-semibold" level={5}>{t('workflow.nodeDetails')}</Title>
             <List
               size='small'
               dataSource={workflow.nodes || []}
@@ -376,18 +376,18 @@ const TicketApprovalWorkflowPage = () => {
                         </Tag>
                       </div>
                       {node.description && (
-                        <Text type='secondary' className='text-sm'>
+                        <Text type='secondary' className='text-[13px]'>
                           {node.description}
                         </Text>
                       )}
                       {node.type === 'approval' && node.config?.approvers && (
                         <div className='mt-1'>
-                          <Tag color='blue' className='text-xs'>
+                          <Tag color='blue' className='text-[12px]'>
                             {t('workflow.approversCount', {
                               count: node.config.approvers.value?.length || 0,
                             })}
                           </Tag>
-                          <Tag color='orange' className='text-xs'>
+                          <Tag color='orange' className='text-[12px]'>
                             {t('workflow.timeoutHours', { hours: node.config.timeout || 24 })}
                           </Tag>
                         </div>
@@ -408,16 +408,16 @@ const TicketApprovalWorkflowPage = () => {
   return (
     <div className='h-screen flex flex-col'>
       {/* 页面头部 */}
-      <div className='border-b border-gray-200 bg-white'>
-        <div className='px-6 py-4'>
-          <div className='flex items-center justify-between'>
-            <div className='flex items-center gap-4'>
+      <div className='border-b border-border bg-surface'>
+        <div className='px-[16px] md:px-[24px] py-[16px]'>
+          <div className='flex flex-wrap gap-[14px] items-center justify-between'>
+            <div className='flex items-center gap-[14px]'>
               <Button icon={<ArrowLeft className='w-4 h-4' />} onClick={handleCancel}>
                 {t('workflow.backToWorkflowList')}
               </Button>
               <Divider type='vertical' />
               <div>
-                <Title level={3} className='!mb-1'>
+                <Title level={2} className="!text-[24px] !font-semibold !mb-1">
                   <GitBranch className='inline-block w-6 h-6 mr-2' />
                   {t('workflow.ticketApprovalDesigner')}
                 </Title>
@@ -450,7 +450,7 @@ const TicketApprovalWorkflowPage = () => {
       </div>
 
       {/* BPMN 设计器区域 */}
-      <div className='flex-1 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden'>
+      <div className='flex-1 bg-surface rounded-[8px] shadow-none border border-border overflow-hidden'>
         <BPMNDesigner
           xml={currentXML}
           onSave={handleSave}
@@ -480,7 +480,7 @@ const TicketApprovalWorkflowPage = () => {
 
           {workflow && (
             <Card size='small' title={t('workflow.processStatistics')}>
-              <Row gutter={16}>
+              <Row gutter={14}>
                 <Col span={6}>
                   <Statistic
                     title={t('workflow.totalNodes')}
@@ -519,7 +519,7 @@ const TicketApprovalWorkflowPage = () => {
           )}
 
           <Form form={form} layout='vertical'>
-            <Row gutter={16}>
+            <Row gutter={14}>
               <Col span={12}>
                 <Form.Item
                   label={t('workflow.processName')}
@@ -562,7 +562,7 @@ const TicketApprovalWorkflowPage = () => {
               <Input.TextArea rows={3} placeholder={t('workflow.processDescriptionPlaceholder')} />
             </Form.Item>
 
-            <Row gutter={16}>
+            <Row gutter={14}>
               <Col span={12}>
                 <Form.Item
                   label={t('workflow.version')}

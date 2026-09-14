@@ -5,134 +5,129 @@ import { Card, Progress, Tag } from 'antd';
 import { Clock } from 'lucide-react';
 import type { WorkItemSLAState } from './WorkItemTypes';
 
-// 视觉与字段完全对齐 TicketDetail.tsx 现有的 SLA 卡片（响应/解决倒计时 + 超时高亮），
-// 不新建视觉规范——见设计文档 §5.2。
-const getSLAPercent = (total: number, remaining: number | null): number => {
-  if (!total || total <= 0 || remaining === null) return 0;
-  return Math.min(100, Math.max(0, Math.round(((total - remaining) / total) * 100)));
-};
-
-const formatHours = (minutes: number): string => (minutes / 60).toFixed(1);
+const timestamp = (value: string | null | undefined) =>
+  value ? new Date(value).toLocaleString() : '未记录';
 
 export function WorkItemSLA({ sla }: { sla?: WorkItemSLAState }) {
-  if (!sla || (!sla.responseDeadline && !sla.resolutionDeadline && sla.responseTime <= 0 && sla.resolutionTime <= 0)) {
-    return null;
-  }
-
+  if (!sla) return null;
+  const unavailable = sla.slaStatus === 'not_required' || sla.slaStatus === 'configuration_missing';
   return (
     <Card
-      size="small"
+      size='small'
       title={
-        <span className="flex items-center gap-1.5">
-          <Clock size={14} className="text-slate-500" />
+        <span className='flex items-center gap-1.5'>
+          <Clock size={14} className="text-muted" />
           SLA 时效与承诺
         </span>
       }
-      extra={<Tag color={sla.isBreached ? 'red' : 'blue'}>{sla.slaName}</Tag>}
+      extra={
+        sla.slaName ? <Tag color={sla.isBreached ? 'red' : 'blue'}>{sla.slaName}</Tag> : undefined
+      }
     >
-      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-2 text-xs">
-        {sla.responseDeadline && (
-          <div className="flex items-center justify-between">
-            <span className="text-slate-500 text-[11px]">响应截止:</span>
-            <span
-              className={`font-mono text-xs ${
-                sla.responseTimeRemaining !== null && sla.responseTimeRemaining < 0
-                  ? 'text-red-600 font-bold'
-                  : 'text-slate-800'
-              }`}
+      {sla.slaStatus === 'not_required' && <Tag>无需 SLA</Tag>}
+      {sla.slaStatus === 'configuration_missing' && <Tag color='red'>SLA 配置缺失</Tag>}
+      {!unavailable && (
+        <div className='space-y-3 text-xs'>
+          <div className='font-medium'>当前周期 #{sla.cycleNumber ?? 1}</div>
+          {sla.cycleStartedAt && <div>周期开始：{timestamp(sla.cycleStartedAt)}</div>}
+          <div>暂停累计：{sla.pausedMinutes ?? 0} 分钟</div>
+          {sla.closedAt && <div>周期已关闭：{timestamp(sla.closedAt)}</div>}
+          {sla.isBreached && <Tag color='red'>SLA 已违规</Tag>}
+          {[
+            {
+              name: '响应',
+              deadline: sla.responseDeadline,
+              completed: sla.firstResponseAt,
+              total: sla.responseTime,
+              remaining: sla.responseTimeRemaining,
+            },
+            {
+              name: '解决',
+              deadline: sla.resolutionDeadline,
+              completed: sla.resolvedAt,
+              total: sla.resolutionTime,
+              remaining: sla.resolutionTimeRemaining,
+            },
+          ].map(clock => (
+            <div
+              key={clock.name}
+              className='bg-raised p-3 rounded-[8px] border border-border space-y-2'
             >
-              {new Date(sla.responseDeadline).toLocaleString()}
-              {sla.responseTimeRemaining !== null && sla.responseTimeRemaining < 0 && ' (已超时)'}
-            </span>
-          </div>
-        )}
-
-        {sla.resolutionDeadline && (
-          <div className="flex items-center justify-between">
-            <span className="text-slate-500 text-[11px]">解决截止:</span>
-            <span
-              className={`font-mono text-xs ${
-                sla.resolutionTimeRemaining !== null && sla.resolutionTimeRemaining < 0
-                  ? 'text-red-600 font-bold'
-                  : 'text-slate-800'
-              }`}
-            >
-              {new Date(sla.resolutionDeadline).toLocaleString()}
-              {sla.resolutionTimeRemaining !== null && sla.resolutionTimeRemaining < 0 && ' (已超时)'}
-            </span>
-          </div>
-        )}
-
-        {sla.isBreached && (
-          <div className="pt-1">
-            <Tag color="red" className="w-full text-center">
-              SLA 已违规
-            </Tag>
-          </div>
-        )}
-
-        {sla.responseTime > 0 && (
-          <div className="space-y-1">
-            <div className="flex justify-between text-[11px] text-slate-500">
-              <span>响应进度</span>
-              <span>
-                {sla.responseTimeRemaining !== null ? `剩余 ${sla.responseTimeRemaining} 分钟` : '--'}
-              </span>
+              {clock.deadline && (
+                <div>
+                  <span>{clock.name}截止:</span> {timestamp(clock.deadline)}
+                  {clock.remaining !== null && clock.remaining < 0 && ' (已超时)'}
+                </div>
+              )}
+              {clock.completed ? (
+                <div>
+                  已{clock.name}：{timestamp(clock.completed)}
+                </div>
+              ) : sla.closedAt ? (
+                <div>{clock.name}计时已停止</div>
+              ) : (
+                <>
+                  <div>
+                    {clock.name}进度 ·{' '}
+                    {clock.remaining === null ? '未记录' : `剩余 ${clock.remaining} 分钟`}
+                  </div>
+                  {clock.total > 0 && (
+                    <Progress
+                      size='small'
+                      percent={
+                        clock.remaining === null
+                          ? 0
+                          : Math.min(
+                              100,
+                              Math.max(
+                                0,
+                                Math.round(((clock.total - clock.remaining) / clock.total) * 100)
+                              )
+                            )
+                      }
+                      status={
+                        clock.remaining !== null && clock.remaining < 0 ? 'exception' : 'normal'
+                      }
+                    />
+                  )}
+                </>
+              )}
+              {clock.total > 0 && <div>目标 {clock.total} 分钟</div>}
             </div>
-            <Progress
-              percent={getSLAPercent(sla.responseTime, sla.responseTimeRemaining)}
-              size="small"
-              strokeColor={
-                sla.responseTimeRemaining !== null && sla.responseTimeRemaining < 0
-                  ? '#ff4d4f'
-                  : getSLAPercent(sla.responseTime, sla.responseTimeRemaining) >= 70
-                    ? '#fa8c16'
-                    : '#52c41a'
-              }
-            />
-            <div className="flex justify-between text-[11px] text-slate-400 font-mono">
-              <span>
-                {sla.responseTimeRemaining !== null
-                  ? `剩余 ${formatHours(sla.responseTimeRemaining)} 小时`
-                  : '--'}
-              </span>
-              <span>目标 {formatHours(sla.responseTime)} 小时</span>
-            </div>
+          ))}
+        </div>
+      )}
+      {(sla.history ?? []).map(cycle => (
+        <div key={cycle.number} className='mt-3 border-t pt-3 space-y-1 text-xs'>
+          <div className='font-medium'>历史周期 #{cycle.number}</div>
+          <div>
+            {timestamp(cycle.startedAt)} — {timestamp(cycle.endedAt)}
           </div>
-        )}
-
-        {sla.resolutionTime > 0 && (
-          <div className="space-y-1">
-            <div className="flex justify-between text-[11px] text-slate-500">
-              <span>解决进度</span>
-              <span>
-                {sla.resolutionTimeRemaining !== null
-                  ? `剩余 ${sla.resolutionTimeRemaining} 分钟`
-                  : '--'}
-              </span>
-            </div>
-            <Progress
-              percent={getSLAPercent(sla.resolutionTime, sla.resolutionTimeRemaining)}
-              size="small"
-              strokeColor={
-                sla.resolutionTimeRemaining !== null && sla.resolutionTimeRemaining < 0
-                  ? '#ff4d4f'
-                  : getSLAPercent(sla.resolutionTime, sla.resolutionTimeRemaining) >= 70
-                    ? '#fa8c16'
-                    : '#52c41a'
-              }
-            />
-            <div className="flex justify-between text-[11px] text-slate-400 font-mono">
-              <span>
-                {sla.resolutionTimeRemaining !== null
-                  ? `剩余 ${formatHours(sla.resolutionTimeRemaining)} 小时`
-                  : '--'}
-              </span>
-              <span>目标 {formatHours(sla.resolutionTime)} 小时</span>
-            </div>
+          <div>策略：{cycle.policy?.name ?? '策略未记录'}</div>
+          <div>
+            响应完成：{timestamp(cycle.responseAt)} · 响应截止：{timestamp(cycle.responseDeadline)}
           </div>
-        )}
-      </div>
+          <Tag color={cycle.responseBreached ? 'red' : undefined}>
+            {cycle.responseBreached
+              ? '响应已违规'
+              : cycle.responseDeadline
+                ? '响应未违规'
+                : '响应未计时'}
+          </Tag>
+          <div>
+            解决完成：{timestamp(cycle.resolvedAt)} · 解决截止：
+            {timestamp(cycle.resolutionDeadline)}
+          </div>
+          <Tag color={cycle.resolutionBreached ? 'red' : undefined}>
+            {cycle.resolutionBreached
+              ? '解决已违规'
+              : cycle.resolutionDeadline
+                ? '解决未违规'
+                : '解决未计时'}
+          </Tag>
+          <div>暂停累计：{cycle.pausedMinutes} 分钟</div>
+        </div>
+      ))}
     </Card>
   );
 }

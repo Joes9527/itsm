@@ -2,20 +2,22 @@ package service_catalog
 
 import (
 	"context"
+	"math"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/dto"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/handlers/common/accessgrant"
 	"itsm-backend/service"
-	"math"
-	"testing"
-	"time"
 )
 
 func accessPolicyFixture() (*accessgrant.Policy, []service.FieldDefinitionInput) {
 	return &accessgrant.Policy{Provider: accessgrant.Graph, ExternalSystem: "directory-a", GroupID: "group-a", DurationField: "requested_duration", DurationOptions: []accessgrant.DurationOption{{Key: "month", Label: "一个月", Seconds: 30 * 86400}}}, []service.FieldDefinitionInput{{Name: "requested_duration", Label: "申请有效期", FieldType: "select", Required: true, Options: []any{map[string]any{"value": "month", "label": "一个月"}}}}
 }
+
 func TestAccessPolicyValidatesFiniteNamedOptions(t *testing.T) {
 	p, fields := accessPolicyFixture()
 	require.NoError(t, ValidateAccessPolicy(p, fields))

@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/authentication"
 	"itsm-backend/authorization"
 	"itsm-backend/dto"
@@ -96,11 +98,11 @@ func TestGetBPMNTenantContextBuildsTrustedScope(t *testing.T) {
 func TestStartProcessPassesAuthenticatedActorScope(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := &startContextCapturingProcessEngine{fakeProcessEngine: &fakeProcessEngine{taskSvc: &fakeTaskService{}}}
-	controller := NewBPMNWorkflowController(engine, nil)
+	controller := NewBPMNWorkflowController(engine, nil, executionfixture.Standard())
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/v1/bpmn/process-instances", strings.NewReader(`{
-		"processDefinitionKey":"flow","businessKey":"ticket:1",
+		"processDefinitionKey":"flow","businessKey":"generic:1",
 		"variables":{"triggered_by":"999"}
 	}`))
 	ctx.Request.Header.Set("Content-Type", "application/json")
@@ -247,16 +249,17 @@ func TestGetBPMNTenantContextRejectsRequestSelectedTenantForTenantlessJWT(t *tes
 	c.Set("client", client)
 
 	middleware.AuthMiddleware(jwtSecret)(c)
-	require.False(t, c.IsAborted())
-	authenticatedTenantID, ok := middleware.AuthenticatedTenantIDFromContext(c.Request.Context())
-	require.True(t, ok)
-	require.Zero(t, authenticatedTenantID)
-	middleware.TenantMiddleware(client)(c)
-	require.False(t, c.IsAborted())
-	require.Equal(t, requestTenant.ID, c.GetInt("tenant_id"))
-	require.Equal(t, "header", c.GetString("tenant_source"))
+	require.True(t, c.IsAborted(), "tenantless JWT must be rejected before request tenant selection")
+}
 
-	_, _, ok = getBPMNTenantContext(c)
+func TestGetBPMNTenantContextRejectsRequestTenantWithoutAuthenticatedTenant(t *testing.T) {
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/bpmn/tasks", nil)
+	c.Request = c.Request.WithContext(middleware.WithAuthenticatedTenantID(c.Request.Context(), 0))
+	c.Set("tenant_id", 42)
+	c.Set("tenant_source", "header")
+	c.Set("user_id", 7)
+	_, _, ok := getBPMNTenantContext(c)
 	assert.False(t, ok)
 }
 
@@ -268,7 +271,7 @@ func TestProcessInstanceListAndStatsPassWorkflowContext(t *testing.T) {
 	controller := NewBPMNWorkflowController(&fakeProcessEngine{
 		taskSvc:            &fakeTaskService{},
 		processInstanceSvc: instanceSvc,
-	}, nil)
+	}, nil, executionfixture.Standard())
 
 	for path, handler := range map[string]gin.HandlerFunc{
 		"/api/v1/bpmn/process-instances": controller.ListProcessInstances,
@@ -301,7 +304,7 @@ func TestTaskListAndStatsPassWorkflowContext(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:bpmn_controller_task_context?mode=memory&cache=shared&_fk=1")
 	t.Cleanup(func() { _ = client.Close() })
 	taskSvc := &fakeTaskService{}
-	controller := NewBPMNWorkflowController(&fakeProcessEngine{taskSvc: taskSvc}, nil)
+	controller := NewBPMNWorkflowController(&fakeProcessEngine{taskSvc: taskSvc}, nil, executionfixture.Standard())
 
 	for path, handler := range map[string]gin.HandlerFunc{
 		"/api/v1/bpmn/tasks":       controller.ListUserTasks,
@@ -396,8 +399,8 @@ func TestListUserTasksHTTPRejectsFilterOverride(t *testing.T) {
 	createTask("controller-task-mine", strconv.Itoa(actor.ID))
 	createTask("controller-task-other", strconv.Itoa(other.ID))
 
-	engine := service.NewCustomProcessEngine(client, zap.NewNop().Sugar())
-	controller := NewBPMNWorkflowController(engine, nil)
+	engine := service.NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard())
+	controller := NewBPMNWorkflowController(engine, nil, executionfixture.Standard())
 	recorder := httptest.NewRecorder()
 	ginCtx, _ := gin.CreateTestContext(recorder)
 	path := "/api/v1/bpmn/tasks?userId=" + strconv.Itoa(other.ID) + "&Assignee=" + strconv.Itoa(other.ID)
@@ -523,8 +526,8 @@ func newBPMNHTTPAuthorizationFixture(t *testing.T) *bpmnHTTPAuthorizationFixture
 		Save(dbCtx)
 	require.NoError(t, err)
 
-	engine := service.NewCustomProcessEngine(client, zap.NewNop().Sugar())
-	controller := NewBPMNWorkflowController(engine, nil)
+	engine := service.NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard())
+	controller := NewBPMNWorkflowController(engine, nil, executionfixture.Standard())
 	router := gin.New()
 	api := router.Group("/api/v1")
 	api.Use(func(ctx *gin.Context) {

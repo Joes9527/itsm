@@ -221,7 +221,7 @@ export default function KnowledgePage() {
       key: 'rank',
       width: 60,
       render: (_: any, __: any, index: number) => (
-        <span className="font-bold text-blue-500">#{index + 1}</span>
+        <span className="font-semibold text-blue-500">#{index + 1}</span>
       ),
     },
     {
@@ -269,11 +269,11 @@ export default function KnowledgePage() {
   }
 
   return (
-    <div className="p-6 min-h-screen bg-gray-50">
+    <div className="p-[16px] md:p-[24px] min-h-screen bg-page">
       {/* 页面头部 */}
-      <div className="mb-6 flex justify-between items-center">
+      <div className="mb-6 flex flex-wrap gap-[14px] justify-between items-center">
         <div>
-          <Title level={2} style={{ marginBottom: 4 }}>
+          <Title level={2} className="!text-[24px] !font-semibold" style={{ marginBottom: 4 }}>
             知识库
           </Title>
           <Text type="secondary">创建、维护和分享解决方案与最佳实践</Text>
@@ -371,19 +371,19 @@ export default function KnowledgePage() {
       )}
 
       {/* 统计卡片 */}
-      <Row gutter={[16, 16]} className="mb-6">
+      <Row gutter={[14, 14]} className="mb-6">
         <Col xs={24} sm={12} lg={6}>
-          <Card className="rounded-lg shadow-sm">
+          <Card className="rounded-[8px] shadow-none">
             <Statistic
               title="文章总数"
               value={stats.total}
               prefix={<BookOpen className="text-blue-500 mr-2" />}
-              styles={{ content: { color: '#1890ff' } }}
+              styles={{ content: { color: 'var(--color-text-primary)' } }}
             />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card className="rounded-lg shadow-sm">
+          <Card className="rounded-[8px] shadow-none">
             <Statistic
               title="已发布"
               value={stats.published}
@@ -393,7 +393,7 @@ export default function KnowledgePage() {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card className="rounded-lg shadow-sm">
+          <Card className="rounded-[8px] shadow-none">
             <Statistic
               title="草稿"
               value={stats.draft}
@@ -403,12 +403,12 @@ export default function KnowledgePage() {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card className="rounded-lg shadow-sm">
+          <Card className="rounded-[8px] shadow-none">
             <Statistic
               title="总浏览量"
               value={stats.views}
               prefix={<Eye className="text-purple-500 mr-2" />}
-              styles={{ content: { color: '#722ed1' } }}
+              styles={{ content: { color: 'var(--color-text-primary)' } }}
             />
           </Card>
         </Col>

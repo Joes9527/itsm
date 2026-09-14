@@ -3,15 +3,16 @@ package service_request
 import (
 	"context"
 	"errors"
+	"math/big"
+	"net"
+	"net/mail"
+	"time"
+
 	"itsm-backend/ent"
 	"itsm-backend/handlers/common/accessgrant"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/service"
-	"math/big"
-	"net"
-	"net/mail"
-	"time"
 )
 
 type requestCreation struct {
@@ -181,6 +182,7 @@ func (s *Service) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedI
 	plan.ProfessionalInput = requestCreation{AccessSnapshot: accessSnapshot, Input: input, ExpireAt: expire, ExpectedAt: expected, Quantity: quantity, Context: workflowContext, CIID: ciID}
 	return plan, nil
 }
+
 func (*Service) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.Ticket, plan *creation.CreationPlan) (*creation.ProfessionalReference, error) {
 	prepared, ok := plan.ProfessionalInput.(requestCreation)
 	if !ok {

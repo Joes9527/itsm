@@ -77,7 +77,7 @@ func (s *FeishuSyncService) SyncTicketToFeishu(ctx context.Context, caller Actio
 		}
 		status := "pending"
 		if event == nil {
-			if err := enqueueFeishuCreation(ctx, tx, item, actor.ID, fc.TaskDestinationIdentity(), feishuOriginManual); err != nil {
+			if err := enqueueFeishuCreation(ctx, tx, item, actor.ID, FeishuTarget{ProtocolVersion: 2, ConnectorName: "feishu", ConnectorProvider: "feishu", DestinationDigest: fc.TaskDestinationIdentity()}, feishuOriginManual); err != nil {
 				return nil, err
 			}
 			if err := tx.AuditLog.Create().SetTenantID(item.TenantID).SetUserID(actor.ID).SetResource("ticket").SetAction("feishu_sync_requested").SetPath("/feishu/tickets/sync").SetMethod("POST").SetRequestBody(fmt.Sprintf(`{"workItemId":%d}`, item.ID)).Exec(ctx); err != nil {
@@ -192,6 +192,10 @@ func (s *FeishuSyncService) SyncFeishuTaskToTicket(ctx context.Context, tenantID
 		return nil, "", err
 	}
 	if record != nil {
+		// Existing mappings mutate a WorkItem; permission to create one is insufficient.
+		if err := authorization.RequireCurrentPermission(ctx, tx, identity, "ticket", "update"); err != nil {
+			return nil, "", err
+		}
 		item, err := s.updateTicketFromFeishuTask(ctx, tx, tenantID, record.TicketID, task)
 		if err != nil {
 			return nil, "", err

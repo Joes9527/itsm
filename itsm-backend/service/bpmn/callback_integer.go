@@ -57,6 +57,7 @@ func CallbackInteger(value any) (int, error) {
 	}
 	return 0, fmt.Errorf("invalid or overflowing integer")
 }
+
 func callbackFloatInteger(value float64) (int, error) {
 	if math.IsNaN(value) || math.IsInf(value, 0) || math.Trunc(value) != value || math.Abs(value) > 9007199254740991 || value < float64(-int(^uint(0)>>1)-1) || value > float64(int(^uint(0)>>1)) {
 		return 0, fmt.Errorf("nonintegral or inexact integer")

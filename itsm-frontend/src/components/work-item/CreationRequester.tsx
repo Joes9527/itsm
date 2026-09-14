@@ -2,9 +2,12 @@
 import { useEffect, useState } from 'react';
 import { Alert, Form, Select } from 'antd';
 import { useAuthStore } from '@/lib/store/auth-store';
+import { matchesPermission } from '@/lib/permissions/utils';
 import { UserApi, type User } from '@/lib/api/user-api';
 
-export function CreationRequester() {
+type CreationResource = 'ticket' | 'incident' | 'problem' | 'change' | 'service_request';
+
+export function CreationRequester({ resource }: { resource: CreationResource }) {
   const tenantId = useAuthStore(state => state.currentTenant?.id);
   const user = useAuthStore(state => state.user);
   const [users, setUsers] = useState<User[]>([]);
@@ -12,14 +15,18 @@ export function CreationRequester() {
   const [search, setSearch] = useState('');
   const form = Form.useFormInstance();
   const required = !!user && user.actorTenantId !== tenantId;
-  const canSelect =
-    required ||
-    !!user?.mspRole ||
-    user?.permissions?.includes('user:read') ||
-    ['admin', 'super_admin'].includes(user?.role || '');
+  const permissions = new Set(user?.permissions || []);
+  const canDelegate =
+    user?.role === 'super_admin' || matchesPermission(permissions, resource, 'create_on_behalf');
+  const canReadUsers =
+    user?.role === 'super_admin' || matchesPermission(permissions, 'user', 'read');
+  const canSelect = canDelegate && canReadUsers;
+  const blockedReason = !canDelegate
+    ? `缺少代他人申请权限（${resource}:create_on_behalf）`
+    : '缺少申请人目录读取权限（user:read）';
   useEffect(() => {
     form.setFieldValue('requesterId', undefined);
-  }, [tenantId, user?.id, form]);
+  }, [tenantId, user?.id, resource, canSelect, form]);
   useEffect(() => {
     let cancelled = false;
     setUsers([]);
@@ -42,7 +49,21 @@ export function CreationRequester() {
       clearTimeout(timer);
     };
   }, [tenantId, canSelect, search]);
-  if (!canSelect) return null;
+  if (!canSelect)
+    return required ? (
+      <>
+        <Alert type='error' title={blockedReason} />
+        <Form.Item
+          name='requesterId'
+          hidden
+          rules={[{ validator: () => Promise.reject(new Error(blockedReason)) }]}
+        >
+          <Select />
+        </Form.Item>
+      </>
+    ) : (
+      <p>当前申请将以你本人作为申请人；{blockedReason}，不能选择其他申请人。</p>
+    );
   return (
     <>
       {error && <Alert type='error' title={error} />}

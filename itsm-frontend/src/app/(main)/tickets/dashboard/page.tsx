@@ -70,26 +70,32 @@ const TicketDashboardPage = () => {
     try {
       // 导出工单概览数据
       const overviewData = getOverviewData();
-      const exportData = [{
-        指标: '总工单数',
-        数值: overviewData.totalTickets,
-      }, {
-        指标: '待处理工单',
-        数值: overviewData.pendingTickets,
-      }, {
-        指标: '今日已解决',
-        数值: overviewData.resolvedTickets,
-      }, {
-        指标: '平均响应时间(分钟)',
-        数值: overviewData.avgResponseTime,
-      }, {
-        指标: '平均解决时间(分钟)',
-        数值: overviewData.avgResolutionTime,
-      }];
+      const exportData = [
+        {
+          指标: '总工单数',
+          数值: overviewData.totalTickets,
+        },
+        {
+          指标: '待处理工单',
+          数值: overviewData.pendingTickets,
+        },
+        {
+          指标: '今日已解决',
+          数值: overviewData.resolvedTickets,
+        },
+        {
+          指标: '平均响应时间(分钟)',
+          数值: overviewData.avgResponseTime,
+        },
+        {
+          指标: '平均解决时间(分钟)',
+          数值: overviewData.avgResolutionTime,
+        },
+      ];
 
       const csvContent = [
         Object.keys(exportData[0]).join(','),
-        ...exportData.map(row => Object.values(row).join(','))
+        ...exportData.map(row => Object.values(row).join(',')),
       ].join('\n');
 
       const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -160,7 +166,7 @@ const TicketDashboardPage = () => {
             <Statistic
               title="总工单数"
               value={overview.totalTickets}
-              prefix={<FileText size={16} style={{ color: '#F06820' }} />}
+              prefix={<FileText size={16} style={{ color: 'var(--color-primary)' }} />}
             />
           </Card>
         </Col>
@@ -190,7 +196,7 @@ const TicketDashboardPage = () => {
               title="SLA合规率"
               value={slaData.complianceRate}
               suffix="%"
-              prefix={<TrendingUp size={16} style={{ color: '#F06820' }} />}
+              prefix={<TrendingUp size={16} style={{ color: 'var(--color-primary)' }} />}
               styles={{
                 content: {
                   color: slaData.complianceRate >= 95 ? '#52c41a' : '#faad14',
@@ -218,7 +224,7 @@ const TicketDashboardPage = () => {
         <Col xs={24} lg={8}>
           <Card title="SLA概览" className="h-full">
             <div className="text-center mb-4">
-              <div className="text-3xl font-bold text-blue-600 mb-2">
+              <div className="text-[26px] font-bold text-blue-600 mb-2">
                 {slaData.compliantTickets}
               </div>
               <Text type="secondary">SLA合规工单数（近30天）</Text>
@@ -229,7 +235,7 @@ const TicketDashboardPage = () => {
               showInfo={false}
             />
             <div className="mt-4 space-y-2">
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-[13px]">
                 <span>总工单: {slaData.totalTickets}</span>
                 <span>已违规: {slaData.breachedTickets || 0}</span>
               </div>
@@ -293,12 +299,17 @@ const TicketDashboardPage = () => {
       <div className="mb-4">
         <Space>
           <Text>筛选团队:</Text>
-          <Select value={selectedTeam} onChange={setSelectedTeam} style={{ width: 120 }} options={[
-            { value: 'all', label: '全部' },
-            { value: 'support', label: '技术支持' },
-            { value: 'engineering', label: '工程团队' },
-            { value: 'management', label: '管理团队' },
-          ]} />
+          <Select
+            value={selectedTeam}
+            onChange={setSelectedTeam}
+            style={{ width: 120 }}
+            options={[
+              { value: 'all', label: '全部' },
+              { value: 'support', label: '技术支持' },
+              { value: 'engineering', label: '工程团队' },
+              { value: 'management', label: '管理团队' },
+            ]}
+          />
           <Button icon={<RefreshCw size={16} />} onClick={loadDashboardData}>
             刷新
           </Button>
@@ -375,14 +386,16 @@ const TicketDashboardPage = () => {
                   <div>
                     <Text strong>{activity.description || activity.type}</Text>
                     {'ticketId' in activity && activity.ticketId && (
-                      <div className="text-sm text-gray-500">
+                      <div className="text-[13px] text-muted">
                         工单 #{activity.ticketId}
                       </div>
                     )}
                   </div>
                   <div className="text-right">
-                    <div className="text-sm text-gray-500">{activity.user}</div>
-                    <div className="text-xs text-gray-400">
+                    <div className="text-[13px] text-muted">
+                      {activity.user}
+                    </div>
+                    <div className="text-[12px] text-muted">
                       {activity.timestamp
                         ? new Date(activity.timestamp).toLocaleString('zh-CN')
                         : '-'}
@@ -393,7 +406,7 @@ const TicketDashboardPage = () => {
             ))}
           </Timeline>
         ) : (
-          <div className="text-center py-8 text-gray-500">暂无最近活动</div>
+          <div className="text-center py-8 text-muted">暂无最近活动</div>
         )}
       </Card>
     );
@@ -407,11 +420,16 @@ const TicketDashboardPage = () => {
         <div className="mb-4">
           <Space>
             <Text>时间范围:</Text>
-            <Select value={timeRange} onChange={setTimeRange} style={{ width: 120 }} options={[
-              { value: '7d', label: '最近7天' },
-              { value: '30d', label: '最近30天' },
-              { value: '90d', label: '最近90天' },
-            ]} />
+            <Select
+              value={timeRange}
+              onChange={setTimeRange}
+              style={{ width: 120 }}
+              options={[
+                { value: '7d', label: '最近7天' },
+                { value: '30d', label: '最近30天' },
+                { value: '90d', label: '最近90天' },
+              ]}
+            />
           </Space>
         </div>
 
@@ -424,7 +442,7 @@ const TicketDashboardPage = () => {
                   <Text type="secondary">共 {trendData.length} 个数据点</Text>
                 </div>
               ) : (
-                <div className="h-32 flex items-center justify-center text-gray-400">
+                <div className="h-32 flex items-center justify-center text-muted">
                   暂无趋势数据
                 </div>
               )}
@@ -437,7 +455,7 @@ const TicketDashboardPage = () => {
                   <Text type="secondary">共 {trendData.length} 个数据点</Text>
                 </div>
               ) : (
-                <div className="h-32 flex items-center justify-center text-gray-400">
+                <div className="h-32 flex items-center justify-center text-muted">
                   暂无趋势数据
                 </div>
               )}
@@ -460,12 +478,12 @@ const TicketDashboardPage = () => {
           <Col xs={24} lg={8}>
             <Card title="客户满意度" size="small">
               <div className="text-center">
-                <div className="text-3xl font-bold text-blue-600 mb-2">
+                <div className="text-[26px] font-bold text-blue-600 mb-2">
                   {satisfactionData.averageRating?.toFixed(1) || 'N/A'}
                 </div>
                 <Text type="secondary">平均评分</Text>
                 <Rate disabled value={satisfactionData.averageRating || 0} className="mt-2" />
-                <div className="text-sm text-gray-500 mt-2">
+                <div className="text-[13px] text-muted mt-2">
                   共 {satisfactionData.totalRatings || 0} 条评价
                 </div>
               </div>
@@ -474,7 +492,7 @@ const TicketDashboardPage = () => {
           <Col xs={24} lg={8}>
             <Card title="团队效率" size="small">
               <div className="text-center">
-                <div className="text-3xl font-bold text-green-600 mb-2">-</div>
+                <div className="text-[26px] font-bold text-green-600 mb-2">-</div>
                 <Text type="secondary">整体效率</Text>
                 <Progress percent={0} strokeColor="#52c41a" showInfo={false} />
               </div>
@@ -502,15 +520,24 @@ const TicketDashboardPage = () => {
     <>
       <div className="mb-6 flex justify-between items-center">
         <div>
-          <Title level={2}>工单仪表盘</Title>
-          <p className="text-gray-600 mt-1">实时监控工单处理状态、SLA合规率和团队表现</p>
+          <Title level={2} style={{ fontSize: 24, fontWeight: 600 }}>
+            工单仪表盘
+          </Title>
+          <p className="text-muted mt-1">
+            实时监控工单处理状态、SLA合规率和团队表现
+          </p>
         </div>
         <Space>
-          <Select value={timeRange} onChange={setTimeRange} style={{ width: 120 }} options={[
-            { value: '7d', label: '最近7天' },
-            { value: '30d', label: '最近30天' },
-            { value: '90d', label: '最近90天' },
-          ]} />
+          <Select
+            value={timeRange}
+            onChange={setTimeRange}
+            style={{ width: 120 }}
+            options={[
+              { value: '7d', label: '最近7天' },
+              { value: '30d', label: '最近30天' },
+              { value: '90d', label: '最近90天' },
+            ]}
+          />
           <Button icon={<RefreshCw size={16} />} onClick={loadDashboardData}>
             刷新
           </Button>
@@ -523,7 +550,7 @@ const TicketDashboardPage = () => {
       {loading ? (
         <div className="text-center py-16">
           <Spin size="large" />
-          <div className="mt-4 text-gray-500">加载仪表盘数据...</div>
+          <div className="mt-4 text-muted">加载仪表盘数据...</div>
         </div>
       ) : (
         <div>

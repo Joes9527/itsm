@@ -4,11 +4,13 @@ import userEvent from '@testing-library/user-event';
 import { TicketNotificationSection } from '../TicketNotificationSection';
 import { httpClient } from '@/lib/api/http-client';
 
+const mockSuccess = jest.fn();
+
 jest.mock('antd', () => {
   const actual = jest.requireActual('antd');
   return {
     ...actual,
-    App: { useApp: () => ({ message: { success: jest.fn(), error: jest.fn() } }) },
+    App: { useApp: () => ({ message: { success: mockSuccess, error: jest.fn() } }) },
   };
 });
 
@@ -171,6 +173,22 @@ describe('TicketNotificationSection', () => {
     });
     expect(mockPost.mock.calls[0][1]).not.toHaveProperty('type');
     expect(mockPost.mock.calls[0][1]).not.toHaveProperty('channel');
+  });
+
+  it.each([
+    ['queued', '已加入发送队列'],
+    ['idempotent', '该通知已受理'],
+    ['applied', '已生成 1 条站内通知'],
+  ])('reports %s without claiming external delivery', async (effect, message) => {
+    mockGet.mockResolvedValueOnce({ notifications: [], total: 0 })
+      .mockResolvedValueOnce({ eventTypes: [{ code: 'ticket_updated', name: '工单更新' }] })
+      .mockResolvedValueOnce({ notifications: [], total: 0 });
+    mockPost.mockResolvedValue({ effect, appliedCount: 1, deliveryCount: 3, queuedCount: 2, externalIntentCount: 2 });
+    const user = userEvent.setup();
+    render(<TicketNotificationSection ticketId={10} />);
+    await fillStrictNotificationForm(user);
+    await user.click(screen.getByRole('button', { name: 'common.submit' }));
+    await waitFor(() => expect(mockSuccess).toHaveBeenCalledWith(message));
   });
 
   it('keeps persisted UI state on delivery failure and never manufactures a notification', async () => {

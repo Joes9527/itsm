@@ -3,10 +3,11 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"github.com/stretchr/testify/require"
-	creation "itsm-backend/handlers/common/workitemcreation"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	creation "itsm-backend/handlers/common/workitemcreation"
 )
 
 func TestIncidentCreationSourcePolicy(t *testing.T) {

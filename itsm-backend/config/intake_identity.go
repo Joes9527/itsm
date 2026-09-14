@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"itsm-backend/common"
 	"os"
 	"strings"
 	"time"
+
+	"itsm-backend/common"
 )
 
 type IntakeIdentityProviderConfig struct {
@@ -35,7 +36,7 @@ func loadIntakeIdentityConfig(getenv func(string) string) (IntakeIdentityConfig,
 	}
 	defer f.Close()
 	info, err := f.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
 		return result, fmt.Errorf("identity config requires a regular owner-only file")
 	}
 	raw, err := io.ReadAll(io.LimitReader(f, 64*1024+1))
@@ -94,6 +95,7 @@ func loadIntakeIdentityConfig(getenv func(string) string) (IntakeIdentityConfig,
 	}
 	return result, nil
 }
+
 func validateIdentitySecretSeparation(cfg IntakeIdentityConfig, secrets ...string) error {
 	for _, p := range cfg.Providers {
 		for _, secret := range secrets {

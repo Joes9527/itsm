@@ -3,10 +3,11 @@ package service
 import (
 	"context"
 	"fmt"
+	"strconv"
+
 	"itsm-backend/ent"
 	"itsm-backend/handlers/common/accessgrant"
 	"itsm-backend/service/bpmn"
-	"strconv"
 )
 
 // ValidateAccessPolicyBinding ties the declared capability to this Catalog's
@@ -42,7 +43,7 @@ func (*ProcessBindingService) ValidateAccessPolicyBinding(ctx context.Context, t
 				}
 				found = true
 				if policy == nil || t.CallbackConfigRef() != strconv.Itoa(policy.ID) {
-					return fmt.Errorf("grant capability must reference this catalog access policy")
+					return &bpmn.PublicationConfigurationError{Message: "grant capability must reference this catalog access policy"}
 				}
 			}
 		}

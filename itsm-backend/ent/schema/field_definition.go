@@ -1,8 +1,9 @@
 package schema
 
 import (
-	"itsm-backend/internal/jsonvalue"
 	"time"
+
+	"itsm-backend/internal/jsonvalue"
 
 	"entgo.io/ent"
 	"entgo.io/ent/schema/field"

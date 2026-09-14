@@ -2,11 +2,12 @@ package service_request
 
 import (
 	"encoding/json"
+	"strconv"
+	"time"
+
 	"itsm-backend/dto"
 	"itsm-backend/handlers/common/intakehttp"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"strconv"
-	"time"
 )
 
 // catalogCreationCommand normalizes the supported form envelope once. Definition

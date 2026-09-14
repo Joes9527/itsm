@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"itsm-backend/config"
+	"itsm-backend/migration"
 
 	"github.com/stretchr/testify/require"
 )
@@ -79,4 +80,11 @@ func TestValidateFreshTargetRejectsHostnameResolvingToSharedHost(t *testing.T) {
 	t.Setenv("ITSM_FRESH_HOST", cfg.Database.Host)
 	t.Setenv("ITSM_FRESH_PORT", "5432")
 	require.ErrorContains(t, validateFreshTarget(cfg), "resolved as")
+}
+
+func TestRollbackLastUsesDependencyOrderAfterPreparation(t *testing.T) {
+	applied := []migration.Migration{{Version: "036_intake_frozen_workflow_context"}, {Version: migration.WorkItemPrepareVersion}, {Version: "035_change_professional_evidence"}}
+	ordered := dependencyOrderedApplied(applied)
+	require.Equal(t, migration.WorkItemPrepareVersion, ordered[0].Version)
+	require.Equal(t, "036_intake_frozen_workflow_context", ordered[len(ordered)-1].Version)
 }

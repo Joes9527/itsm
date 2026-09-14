@@ -8,7 +8,10 @@ import (
 	"strconv"
 	"strings"
 
+	"go.uber.org/zap"
+
 	"itsm-backend/common"
+	"itsm-backend/common/workitemidentity"
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/incident"
@@ -77,6 +80,9 @@ func validateAndCloneBPMNParticipantVariables(variables map[string]interface{}, 
 			if rejectReserved {
 				return nil, fmt.Errorf("任务表单变量 %q 为系统保留字段", key)
 			}
+			// 剥离是 fail-closed 的动作，但不能是静默 no-op：AGENTS.md 要求被绕过的步骤
+			// 留下可观测痕迹。只记键名，不记变量内容（可能含敏感数据）。
+			zap.S().Warnw("BPMN 表单变量尝试覆盖流程保留键，已剥离", "key", key)
 			continue
 		}
 		cloned, err := cloneBPMNJSONValue(value, 0)
@@ -220,18 +226,6 @@ func callbackActionContractForHandler(handler bpmn.ServiceTaskHandlerInterface, 
 		return bpmn.CallbackActionContract{}, err
 	}
 	return contract, nil
-}
-
-func cloneBPMNCallbackPayload(payload map[string]interface{}) (map[string]interface{}, error) {
-	clonedPayload := make(map[string]interface{}, len(payload))
-	for key, value := range payload {
-		cloned, err := cloneBPMNJSONValue(value, 0)
-		if err != nil {
-			return nil, fmt.Errorf("回调字段 %q 类型无效", key)
-		}
-		clonedPayload[key] = cloned
-	}
-	return clonedPayload, nil
 }
 
 // validateBPMNCallbackActionContract ensures a handler's declared callback
@@ -485,7 +479,7 @@ func (e *CustomProcessEngine) authoritativeCallbackVariables(
 	businessType := strings.ToLower(strings.TrimSpace(instance.BusinessType))
 	workItemID := 0
 	switch businessType {
-	case "ticket", "generic":
+	case workitemidentity.RecordClassGeneric:
 		if _, err := e.client.Ticket.Query().Where(
 			ticket.ID(instance.BusinessID), ticket.TenantID(instance.TenantID),
 		).Only(ctx); err != nil {
@@ -493,7 +487,7 @@ func (e *CustomProcessEngine) authoritativeCallbackVariables(
 		}
 		workItemID = instance.BusinessID
 		variables["ticket_id"] = workItemID
-	case "change", "change_request":
+	case workitemidentity.RecordClassChangeRequest:
 		entity, err := e.client.Change.Query().Where(
 			change.WorkItemID(instance.BusinessID), change.HasWorkItemWith(ticket.TenantID(instance.TenantID), ticket.DeletedAtIsNil()),
 		).Only(ctx)
@@ -523,7 +517,7 @@ func (e *CustomProcessEngine) authoritativeCallbackVariables(
 		workItemID = instance.BusinessID
 		variables["problem_id"] = entity.ID
 		variables["ticket_id"] = workItemID
-	case "service_request", "service_request_item":
+	case workitemidentity.RecordClassServiceRequestItem:
 		entity, err := e.client.ServiceRequest.Query().Where(
 			servicerequest.TicketID(instance.BusinessID), servicerequest.HasWorkItemWith(ticket.TenantID(instance.TenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item")),
 		).Only(ctx)
@@ -541,7 +535,9 @@ func (e *CustomProcessEngine) authoritativeCallbackVariables(
 		}
 		variables["release_id"] = instance.BusinessID
 	default:
-		return nil, fmt.Errorf("不支持的权威业务类型")
+		// Wave-1 旧词表（ticket/change/service_request）与尚未定义交付映射的
+		// catalog_task 都在此失败关闭，绝不猜测或翻译成别的专业类。
+		return nil, fmt.Errorf("不支持的权威业务类型 %q", businessType)
 	}
 
 	switch handler.GetTaskType() {

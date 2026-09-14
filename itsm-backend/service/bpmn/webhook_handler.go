@@ -134,6 +134,7 @@ type bpmnWebhookEnvelope struct {
 
 func (h *WebhookHandler) callTrustedWebhook(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	if h.client == nil {
+		//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 		return nil, fmt.Errorf("Webhook 配置存储不可用")
 	}
 	tenantID, err := RequireTenantID(ctx, variables)
@@ -142,6 +143,7 @@ func (h *WebhookHandler) callTrustedWebhook(ctx context.Context, variables map[s
 	}
 	configRef := GetStringFromVars(variables, "callback_config_ref")
 	if configRef == "" {
+		//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 		return nil, fmt.Errorf("Webhook 回调缺少可信配置引用")
 	}
 	config, err := h.client.ConnectorConfig.Query().Where(
@@ -150,18 +152,22 @@ func (h *WebhookHandler) callTrustedWebhook(ctx context.Context, variables map[s
 		connectorconfig.Enabled(true),
 	).Only(ctx)
 	if err != nil {
+		//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 		return nil, fmt.Errorf("Webhook 可信配置不可用")
 	}
 	var settings trustedWebhookSettings
 	if err := json.Unmarshal([]byte(config.Settings), &settings); err != nil || settings.URL == "" {
+		//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 		return nil, fmt.Errorf("Webhook 可信配置无效")
 	}
 	if err := validateWebhookURL(settings.URL); err != nil {
+		//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 		return nil, fmt.Errorf("Webhook 可信端点不允许")
 	}
 	var credentials trustedWebhookCredentials
 	if config.Credentials != "" {
 		if err := json.Unmarshal([]byte(config.Credentials), &credentials); err != nil {
+			//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 			return nil, fmt.Errorf("Webhook 凭据配置无效")
 		}
 	}
@@ -187,6 +193,7 @@ func (h *WebhookHandler) callTrustedWebhook(ctx context.Context, variables map[s
 	if executionKey, ok := BPMNCallbackExecutionKey(ctx); ok {
 		req.Header.Set("Idempotency-Key", executionKey)
 	} else {
+		//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 		return nil, fmt.Errorf("Webhook 回调缺少幂等执行键")
 	}
 	if credentials.Secret != "" {
@@ -213,10 +220,12 @@ func (h *WebhookHandler) callTrustedWebhook(ctx context.Context, variables map[s
 	defer resp.Body.Close()
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		h.logger.Warnw("Webhook target rejected callback", "status_code", resp.StatusCode)
+		//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 		return nil, fmt.Errorf("Webhook 目标返回非成功状态")
 	}
 	h.logger.Infow("Webhook called successfully", "status_code", resp.StatusCode)
-	return &CallbackEffect{Status: CallbackEffectApplied,
+	return &CallbackEffect{
+		Status:     CallbackEffectApplied,
 		Message:    fmt.Sprintf("Webhook调用成功，状态码: %d", resp.StatusCode),
 		OutputVars: map[string]interface{}{"status_code": resp.StatusCode},
 	}, nil

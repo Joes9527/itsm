@@ -4,14 +4,15 @@ package service_request_test
 
 import (
 	"context"
+	"os"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/config"
 	"itsm-backend/database"
 	"itsm-backend/ent"
 	"itsm-backend/internal/bootstrap"
-	"os"
-	"testing"
 )
 
 // A fresh named database is created/removed by the owned runner; no shared reset.
@@ -45,11 +46,13 @@ func TestC3PostgresPreclaimedFailureRetry(t *testing.T) {
 	fx, task, _, req := verifiedAccessFixture(t, client)
 	assertC3PreclaimedFailure(t, fx, task, req, "retry")
 }
+
 func TestC3PostgresPreclaimedFailureResume(t *testing.T) {
 	client := initializeC3Postgres(t)
 	fx, task, _, req := verifiedAccessFixture(t, client)
 	assertC3PreclaimedFailure(t, fx, task, req, "resume")
 }
+
 func TestC3PostgresPreclaimedFailureAfterSuccess(t *testing.T) {
 	client := initializeC3Postgres(t)
 	fx, task, _, req := verifiedAccessFixture(t, client)

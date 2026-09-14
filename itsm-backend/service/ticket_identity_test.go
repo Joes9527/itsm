@@ -2,9 +2,10 @@ package service
 
 import (
 	"context"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/ent"
-	"testing"
 )
 
 func TestSearchTicketIdentityProjectionUsesRecordClass(t *testing.T) {

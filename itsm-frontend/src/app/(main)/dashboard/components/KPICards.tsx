@@ -29,7 +29,7 @@ const EnterpriseKPICard: React.FC<{ metric: KPIMetric }> = React.memo(({ metric 
       case 'down':
         return <ArrowDown className="w-4 h-4 text-red-500" />;
       default:
-        return <Minus className="w-4 h-4 text-gray-400" />;
+        return <Minus className="w-4 h-4 text-muted" />;
     }
   };
 
@@ -68,7 +68,7 @@ const EnterpriseKPICard: React.FC<{ metric: KPIMetric }> = React.memo(({ metric 
   return (
     <Col xs={24} sm={12} md={12} lg={8} xl={6} xxl={6}>
       <Card
-        className="h-full transition-all duration-200 hover:border-blue-500 hover:shadow-md group rounded-lg bg-white shadow-sm border border-gray-200"
+        className="h-full transition-all duration-200 hover:border-blue-500 shadow-none group rounded-[8px] bg-surface shadow-none border border-border"
        
         styles={{
           body: {
@@ -86,7 +86,7 @@ const EnterpriseKPICard: React.FC<{ metric: KPIMetric }> = React.memo(({ metric 
           <div className="flex items-start justify-between mb-4">
             {/* 简化图标容器：去除渐变和缩放动画 */}
             <div
-              className="w-12 h-12 rounded-lg flex items-center justify-center transition-colors duration-200"
+              className="w-12 h-12 rounded-[8px] flex items-center justify-center transition-colors duration-200"
               style={{
                 backgroundColor: `${metric.color}15`,
               }}
@@ -97,13 +97,13 @@ const EnterpriseKPICard: React.FC<{ metric: KPIMetric }> = React.memo(({ metric 
             {/* 简化趋势指示器 */}
             {metric.change !== undefined && (
               <div
-                className={`text-sm font-semibold flex items-center gap-1 ${
+                className={`text-[13px] font-semibold flex items-center gap-1 ${
                   // Added flex items-center gap-1
                   metric.trend === 'up'
                     ? 'text-green-500' // antdTheme.token.colorSuccess
                     : metric.trend === 'down'
                       ? 'text-red-500' // antdTheme.token.colorError
-                      : 'text-gray-500' // antdTheme.token.colorTextSecondary
+                      : 'text-muted' // antdTheme.token.colorTextSecondary
                 }`}
               >
                 {getTrendIcon()}
@@ -116,7 +116,7 @@ const EnterpriseKPICard: React.FC<{ metric: KPIMetric }> = React.memo(({ metric 
           {/* 标题 */}
           <div className="mb-3">
             <Tooltip title={metric.description || metric.title}>
-              <h3 className="text-base font-semibold text-gray-800 leading-tight line-clamp-2">
+              <h3 className="text-[15px] font-semibold text-foreground leading-tight line-clamp-2">
                 {' '}
                 {/* Changed text size and color */}
                 {metric.title}
@@ -128,21 +128,21 @@ const EnterpriseKPICard: React.FC<{ metric: KPIMetric }> = React.memo(({ metric 
           <div className="flex-1 flex flex-col justify-center mb-3">
             <div className="flex items-baseline gap-2">
               <span
-                className="text-4xl font-bold leading-none" // Removed tracking-tight
+                className="text-[26px] font-semibold leading-none" // Removed tracking-tight
                 style={{ color: metric.color }}
               >
                 {typeof metric.value === 'number' ? metric.value.toLocaleString() : metric.value}
               </span>
               {metric.unit && (
-                <span className="text-base font-medium text-gray-500">{metric.unit}</span>
+                <span className="text-[13px] font-medium text-muted">{metric.unit}</span>
               )}
             </div>
           </div>
 
           {/* 简化底部：去除装饰性进度条 */}
           {metric.change !== undefined && (
-            <div className="mt-auto pt-3 border-t border-gray-100">
-              <span className="text-xs text-gray-500">
+            <div className="mt-auto pt-3 border-t border-border">
+              <span className="text-[12px] text-muted">
                 相比上期
                 <span
                   className="ml-2 font-semibold"
@@ -152,7 +152,7 @@ const EnterpriseKPICard: React.FC<{ metric: KPIMetric }> = React.memo(({ metric 
                         ? '#10b981' // antdTheme.token.colorSuccess
                         : metric.changeType === 'decrease'
                           ? '#ef4444' // antdTheme.token.colorError
-                          : '#6b7280', // antdTheme.token.colorTextSecondary
+                          : 'var(--color-text-secondary)',
                   }}
                 >
                   {metric.changeType === 'increase'
@@ -182,13 +182,13 @@ export const KPICards: React.FC<KPICardsProps> = React.memo(({ metrics, loading 
           {Array.from({ length: 6 }).map((_, index) => (
             <Col key={index} xs={24} sm={12} md={12} lg={8} xl={6} xxl={4}>
               <Card
-                className="h-44 rounded-lg shadow-sm border border-gray-200"
+                className="h-44 rounded-[8px] shadow-none border border-border"
                
               >
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
                     <Spin size="large" />
-                    <p className="text-xs text-gray-400 mt-3">加载中...</p>
+                    <p className="text-[12px] text-muted mt-3">加载中...</p>
                   </div>
                 </div>
               </Card>
@@ -203,15 +203,15 @@ export const KPICards: React.FC<KPICardsProps> = React.memo(({ metrics, loading 
     return (
       <div className="mb-6">
         <Card
-          className="text-center py-12 rounded-lg bg-gray-50 border border-dashed border-gray-300"
+          className="text-center py-12 rounded-[8px] bg-raised border border-dashed border-border"
          
         >
-          <div className="text-gray-500">
-            <div className="w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center mx-auto mb-4">
-              <LayoutDashboard className="text-3xl text-gray-400" />
+          <div className="text-muted">
+            <div className="w-16 h-16 rounded-[8px] bg-raised flex items-center justify-center mx-auto mb-4">
+              <LayoutDashboard className="text-[24px] text-muted" />
             </div>
-            <p className="text-base font-medium text-gray-700 mb-1">暂无KPI数据</p>
-            <p className="text-sm text-gray-500">系统正在收集数据，请稍后查看</p>
+            <p className="text-[13px] font-medium text-foreground mb-1">暂无KPI数据</p>
+            <p className="text-[13px] text-muted">系统正在收集数据，请稍后查看</p>
           </div>
         </Card>
       </div>

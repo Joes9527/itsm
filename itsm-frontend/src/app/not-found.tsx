@@ -15,10 +15,10 @@ export default function NotFound() {
   const router = useRouter();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-page">
       <Result
         status="404"
-        title="404"
+        title={<span className="text-[24px] font-semibold">404</span>}
         subTitle="抱歉，您访问的页面不存在。"
         extra={[
           <Button

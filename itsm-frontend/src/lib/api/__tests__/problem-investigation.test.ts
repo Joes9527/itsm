@@ -27,19 +27,19 @@ describe('ProblemInvestigationAPI', () => {
 
   describe('createInvestigation', () => {
     it('should create investigation', async () => {
-      mockPost.mockResolvedValue({ investigation: { id: 1, problemId: 1, status: 'not_started' } });
-      const result = await ProblemInvestigationAPI.createInvestigation({ problemId: 1 });
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/problem-investigation/investigations', { problemId: 1 });
-      expect(result.id).toBe(1);
+      mockPost.mockResolvedValue({ workItemId: 1, version: 2, status: 'investigating', replayed: false });
+      const result = await ProblemInvestigationAPI.createInvestigation({ problemId: 1, version: 1, operationId: 'start-1' });
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/problem-investigation/investigations', { problemId: 1, version: 1, operationId: 'start-1' });
+      expect(result.workItemId).toBe(1);
     });
   });
 
   describe('updateInvestigation', () => {
     it('should update investigation', async () => {
-      mockPut.mockResolvedValue({ investigation: { id: 1, status: 'in_progress' } });
-      const result = await ProblemInvestigationAPI.updateInvestigation(1, { status: 'in_progress' });
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/problem-investigation/investigations/1', { status: 'in_progress' });
-      expect(result.status).toBe('in_progress');
+      mockPut.mockResolvedValue({workItemId:91,version:8,status:"investigating",replayed:false});
+      const result = await ProblemInvestigationAPI.updateInvestigation(1, { problemId:4, version:7, operationId:'evidence-1', status: 'in_progress' });
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/problem-investigation/investigations/1', { problemId:4, version:7, operationId:'evidence-1', status: 'in_progress' });
+      expect(result.workItemId).toBe(91);
     });
   });
 
@@ -60,25 +60,25 @@ describe('ProblemInvestigationAPI', () => {
 
   describe('createStep', () => {
     it('should create step', async () => {
-      mockPost.mockResolvedValue({ step: { id: 1, stepTitle: 'Step 1' } });
-      const result = await ProblemInvestigationAPI.createStep({ investigationId: 1, stepNumber: 1, stepTitle: 'Step 1', stepDescription: 'desc' });
+      mockPost.mockResolvedValue({workItemId:91,version:8,status:"investigating",replayed:false});
+      const result = await ProblemInvestigationAPI.createStep({ problemId:4, version:7, operationId:"evidence-1", investigationId: 1, stepNumber: 1, stepTitle: 'Step 1', stepDescription: 'desc' });
       expect(mockPost).toHaveBeenCalledWith('/api/v1/problem-investigation/steps', expect.any(Object));
-      expect(result.stepTitle).toBe('Step 1');
+      expect(result.workItemId).toBe(91);
     });
   });
 
   describe('updateStep', () => {
     it('should update step', async () => {
-      mockPut.mockResolvedValue({ step: { id: 1, status: 'completed' } });
-      const result = await ProblemInvestigationAPI.updateStep(1, { status: 'completed' });
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/problem-investigation/steps/1', { status: 'completed' });
-      expect(result.status).toBe('completed');
+      mockPut.mockResolvedValue({workItemId:91,version:8,status:"investigating",replayed:false});
+      const result = await ProblemInvestigationAPI.updateStep(1, { problemId:4, version:7, operationId:'evidence-1', status: 'completed' });
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/problem-investigation/steps/1', { problemId:4, version:7, operationId:'evidence-1', status: 'completed' });
+      expect(result.workItemId).toBe(91);
     });
   });
 
   describe('createRootCause', () => {
     it('should create root cause', async () => {
-      const data = { problemId: 1, analysisMethod: '5-why', rootCauseDescription: 'server config', confidenceLevel: 'high' as const };
+      const data = { problemId: 1, version: 7, operationId: 'rca-create', analysisMethod: '5-why', rootCauseDescription: 'server config', confidenceLevel: 'high' as const };
       mockPost.mockResolvedValue({ analysis: { id: 1, ...data } });
       const result = await ProblemInvestigationAPI.createRootCause(data);
       expect(mockPost).toHaveBeenCalledWith('/api/v1/problem-investigation/root-cause-analysis', data);
@@ -89,8 +89,8 @@ describe('ProblemInvestigationAPI', () => {
   describe('updateRootCause', () => {
     it('should update root cause', async () => {
       mockPut.mockResolvedValue({ analysis: { id: 1, confidenceLevel: 'medium' } });
-      const result = await ProblemInvestigationAPI.updateRootCause(1, { confidenceLevel: 'medium' });
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/problem-investigation/root-cause-analysis/1', { confidenceLevel: 'medium' });
+      const result = await ProblemInvestigationAPI.updateRootCause(1, { confidenceLevel: 'medium', version: 8, operationId: 'rca-update' });
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/problem-investigation/root-cause-analysis/1', { confidenceLevel: 'medium', version: 8, operationId: 'rca-update' });
       expect(result.confidenceLevel).toBe('medium');
     });
   });
@@ -112,20 +112,20 @@ describe('ProblemInvestigationAPI', () => {
 
   describe('createSolution', () => {
     it('should create solution', async () => {
-      const data = { problemId: 1, solutionType: 'fix' as const, solutionDescription: 'patch', priority: 'high' };
-      mockPost.mockResolvedValue({ solution: { id: 1, ...data } });
+      const data = { problemId: 4, version:7, operationId:"evidence-1", solutionType: 'fix' as const, solutionDescription: 'patch', priority: 'high' };
+      mockPost.mockResolvedValue({workItemId:91,version:8,status:"investigating",replayed:false});
       const result = await ProblemInvestigationAPI.createSolution(data);
       expect(mockPost).toHaveBeenCalledWith('/api/v1/problem-investigation/solutions', data);
-      expect(result.solutionType).toBe('fix');
+      expect(result.workItemId).toBe(91);
     });
   });
 
   describe('updateSolution', () => {
     it('should update solution', async () => {
-      mockPut.mockResolvedValue({ solution: { id: 1, status: 'approved' } });
-      const result = await ProblemInvestigationAPI.updateSolution(1, { status: 'approved' });
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/problem-investigation/solutions/1', { status: 'approved' });
-      expect(result.status).toBe('approved');
+      mockPut.mockResolvedValue({workItemId:91,version:8,status:"investigating",replayed:false});
+      const result = await ProblemInvestigationAPI.updateSolution(1, { problemId:4, version:7, operationId:'evidence-1', status: 'approved' });
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/problem-investigation/solutions/1', { problemId:4, version:7, operationId:'evidence-1', status: 'approved' });
+      expect(result.workItemId).toBe(91);
     });
   });
 

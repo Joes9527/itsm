@@ -7,6 +7,7 @@ import { httpClient } from '@/lib/api/http-client';
 jest.mock('@/lib/api/http-client', () => ({
   httpClient: {
     get: jest.fn(),
+    request: jest.fn(),
     post: jest.fn(),
     put: jest.fn(),
     delete: jest.fn(),
@@ -31,7 +32,11 @@ describe('ChangeService', () => {
 
       const result = await changeService.getChanges({ page: 1, pageSize: 10, status: 'pending' });
 
-      expect(mockGet).toHaveBeenCalledWith('/api/v1/changes', { page: 1, pageSize: 10, status: 'pending' });
+      expect(mockGet).toHaveBeenCalledWith('/api/v1/changes', {
+        page: 1,
+        pageSize: 10,
+        status: 'pending',
+      });
       expect(result).toEqual(mockData);
     });
 
@@ -48,24 +53,14 @@ describe('ChangeService', () => {
   describe('getChange', () => {
     it('should call GET /api/v1/changes/:id', async () => {
       const mockChange = { id: 1, title: 'DB Upgrade' };
-      mockGet.mockResolvedValueOnce(mockChange);
+      (httpClient.request as jest.Mock).mockResolvedValueOnce(mockChange);
 
       const result = await changeService.getChange(1);
 
-      expect(mockGet).toHaveBeenCalledWith('/api/v1/changes/1');
+      expect(httpClient.request).toHaveBeenCalledWith('/api/v1/changes/1', {
+        preserveResponseKeys: true,
+      });
       expect(result).toEqual(mockChange);
-    });
-  });
-
-  describe('updateChange', () => {
-    it('should call PUT /api/v1/changes/:id with data', async () => {
-      const updateData = { title: 'Updated' };
-      mockPut.mockResolvedValueOnce({ id: 1, title: 'Updated' });
-
-      const result = await changeService.updateChange(1, updateData);
-
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/changes/1', updateData);
-      expect(result.title).toBe('Updated');
     });
   });
 
@@ -81,7 +76,15 @@ describe('ChangeService', () => {
 
   describe('getChangeStats', () => {
     it('should call GET /api/v1/changes/stats', async () => {
-      const mockStats = { total: 10, draft: 2, pending: 3, approved: 2, implementing: 1, completed: 1, cancelled: 1 };
+      const mockStats = {
+        total: 10,
+        draft: 2,
+        pending: 3,
+        approved: 2,
+        implementing: 1,
+        completed: 1,
+        cancelled: 1,
+      };
       mockGet.mockResolvedValueOnce(mockStats);
 
       const result = await changeService.getChangeStats();

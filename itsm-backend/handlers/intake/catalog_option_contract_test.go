@@ -5,6 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http/httptest"
+	"testing"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -16,9 +20,6 @@ import (
 	creation "itsm-backend/handlers/common/workitemcreation"
 	catalog "itsm-backend/handlers/service_catalog"
 	"itsm-backend/service"
-	"net/http/httptest"
-	"testing"
-	"time"
 )
 
 func TestIdentityCatalogOptionPublishedRoundTripAndStableReplay(t *testing.T) {
@@ -27,7 +28,7 @@ func TestIdentityCatalogOptionPublishedRoundTripAndStableReplay(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 	app.registry = NewCreatorRegistry()
 	require.NoError(t, app.registry.Register(service.NewTicketServiceForTest(client, logger)))
-	client.ProcessBinding.Create().SetTenantID(i.TenantID).SetBusinessType("ticket").SetProcessDefinitionKey("none").SetIsDefault(true).SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
+	client.ProcessBinding.Create().SetTenantID(i.TenantID).SetBusinessType("generic").SetProcessDefinitionKey("none").SetIsDefault(true).SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
 	owner := catalog.NewService(catalog.NewEntRepository(client), client, logger, sameTransactionDirectory{})
 	owner.SetCreatorRegistry(app.registry)
 	options := []any{map[string]any{"label": "Text", "value": "east"}, map[string]any{"label": "Same spelling text", "value": "9007199254740993"}, map[string]any{"label": "Exact integer", "value": json.Number("9007199254740993")}, map[string]any{"label": "Adjacent integer", "value": json.Number("9007199254740992")}}
@@ -38,7 +39,7 @@ func TestIdentityCatalogOptionPublishedRoundTripAndStableReplay(t *testing.T) {
 	m := client.ExternalIdentity.Create().SetTenantID(i.TenantID).SetUserID(i.ActorID).SetProvider(a.Provider).SetWorkspace(a.Workspace).SetSubject(a.Subject).SaveX(ctx)
 	sessions := authorization.NewSessionReader(client, sameTransactionDirectory{})
 	h := NewHandler(NewIdentityExchangeService(cfg.config, n, NewIdentityRepository(client, client, sessions), "test-jwt"), app)
-	h.SetReaders(NewReadService(sessions, owner, "test-cursor"))
+	h.SetReaders(NewReadService(sessions, owner, "test-cursor", ReferenceReadOptions{FrontendURL: "https://support.example.test", PageSize: 50, Lifecycle: NewRequesterLifecycleReader(referenceLifecycleOwners())}))
 	r := gin.New()
 	h.RegisterRoutes(r.Group("/api/v1"))
 	token := func(scopes []string) string {

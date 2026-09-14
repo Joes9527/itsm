@@ -8,6 +8,7 @@ import (
 type ErrorCode string
 
 const (
+	SourceVersionConflict     ErrorCode = "SourceVersionConflict"
 	CatalogVersionConflict    ErrorCode = "CatalogVersionConflict"
 	InvalidCommand            ErrorCode = "InvalidCommand"
 	AuthenticationRequired    ErrorCode = "AuthenticationRequired"
@@ -22,6 +23,7 @@ const (
 )
 
 var (
+	ErrSourceVersionConflict     = errors.New("intake source version conflict")
 	ErrCatalogVersionConflict    = errors.New("intake catalog version conflict")
 	ErrInvalidCommand            = errors.New("invalid intake command")
 	ErrAuthenticationRequired    = errors.New("intake authentication required")
@@ -129,6 +131,8 @@ func NewWorkflowBindingRequired(message string, cause error) *IntakeError {
 
 func sentinelForCode(code ErrorCode) error {
 	switch code {
+	case SourceVersionConflict:
+		return ErrSourceVersionConflict
 	case CatalogVersionConflict:
 		return ErrCatalogVersionConflict
 	case InvalidCommand:
@@ -166,7 +170,7 @@ func errorPolicy(code ErrorCode) (status int, retryable bool, known bool) {
 		return 403, false, true
 	case ReferenceNotFound:
 		return 404, false, true
-	case IdempotencyConflict, CatalogVersionConflict:
+	case IdempotencyConflict, CatalogVersionConflict, SourceVersionConflict:
 		return 409, false, true
 	case DomainValidationFailed, UnsupportedRecordClass, WorkflowBindingRequired:
 		return 400, false, true

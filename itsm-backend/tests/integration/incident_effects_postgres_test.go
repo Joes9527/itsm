@@ -8,12 +8,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -41,15 +42,11 @@ type incidentEffectsFixture struct {
 
 func newIncidentEffectsFixture(t *testing.T) *incidentEffectsFixture {
 	t.Helper()
-	dsn := os.Getenv("INTAKE_POSTGRES_TEST_DSN")
-	require.NotEmpty(t, dsn, "explicit disposable DB required")
-	parsed, err := url.Parse(dsn)
-	require.NoError(t, err)
-	require.Equal(t, "/sslvpn_test", parsed.Path)
-	require.Equal(t, "127.0.0.1:36444", parsed.Host)
+	parsed := migrationEntryTarget(t)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	t.Cleanup(cancel)
-	db, err := sql.Open("postgres", dsn)
+	db, err := sql.Open("postgres", parsed.String())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	schema := fmt.Sprintf("a4_incident_effects_%d", time.Now().UnixNano())
@@ -69,10 +66,12 @@ func newIncidentEffectsFixture(t *testing.T) *incidentEffectsFixture {
 	client, err := ent.Open("postgres", parsed.String())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, client.Close()) })
-	require.NoError(t, client.Schema.Create(ctx))
+
 	scopedDB, err := sql.Open("postgres", parsed.String())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, scopedDB.Close()) })
+	require.NoError(t, migration.NewMigrator(scopedDB, zap.NewNop().Sugar()).EnsureMigrationsTable(ctx))
+	require.NoError(t, client.Schema.Create(ctx))
 	_, err = scopedDB.ExecContext(ctx, migration.GetMigrationSQL("009_enable_rls_tenant_isolation"))
 	require.NoError(t, err)
 	_, err = scopedDB.ExecContext(ctx, migration.GetMigrationSQL("024_incident_rule_action_receipts"))
@@ -86,14 +85,16 @@ func newIncidentEffectsFixture(t *testing.T) *incidentEffectsFixture {
 	payload, err := json.Marshal(map[string]interface{}{"tenantId": tenant.ID, "incidentId": inc.ID, "workItemId": item.ID, "actorId": actor.ID, "channel": "api"})
 	require.NoError(t, err)
 	event := client.OutboxEvent.Create().SetTenantID(tenant.ID).SetEventID(fmt.Sprintf("incident-created:%d", item.ID)).SetEventType("incident.created").SetAggregateType("work_item").SetAggregateID(fmt.Sprint(item.ID)).SetPayload(payload).SaveX(ctx)
-	svc := service.NewIncidentService(client, zap.NewNop().Sugar())
+	svc := service.NewIncidentService(client, zap.NewNop().Sugar(), executionfixture.Standard())
 	svc.RuleEngine().SetActorDirectory(client)
-	svc.SetAlertCreator(service.NewIncidentAlertingService(client, zap.NewNop().Sugar()))
+	svc.SetAlertCreator(service.NewIncidentAlertingService(client, zap.NewNop().Sugar(), executionfixture.Standard()))
 	return &incidentEffectsFixture{scopedDB, client, ctx, svc.RuleEngine(), svc, event, inc, actor, tenant}
 }
+
 func (f *incidentEffectsFixture) rule(actions ...map[string]interface{}) *ent.IncidentRule {
 	return f.client.IncidentRule.Create().SetTenantID(f.tenant.ID).SetName("effects").SetRuleType("automation").SetConditions(map[string]interface{}{}).SetActions(actions).SaveX(f.ctx)
 }
+
 func metricAction(name string) map[string]interface{} {
 	return map[string]interface{}{"type": "collect_metric", "metric_type": "automation", "metric_name": name, "metric_value": 1.0}
 }
@@ -133,6 +134,7 @@ func TestPostgresIncidentEffectsReceiptFaultRollsBackActualMutation(t *testing.T
 		})
 	}
 }
+
 func TestPostgresIncidentEffectsResumeFrozenActionsAndCandidateSet(t *testing.T) {
 	f := newIncidentEffectsFixture(t)
 	rule := f.rule(metricAction("first"), metricAction("second"))
@@ -156,7 +158,7 @@ func TestPostgresIncidentEffectsResumeFrozenActionsAndCandidateSet(t *testing.T)
 	rule.Update().SetConditions(map[string]interface{}{"priority": []string{"low"}}).SetActions([]map[string]interface{}{metricAction("edited")}).SetIsActive(false).SaveX(f.ctx)
 	f.rule(metricAction("new-policy"))
 	fail.Store(false)
-	restarted := service.NewIncidentRuleEngine(f.client, zap.NewNop().Sugar())
+	restarted := service.NewIncidentRuleEngine(f.client, zap.NewNop().Sugar(), executionfixture.Standard())
 	restarted.SetActorDirectory(f.client)
 	require.NoError(t, restarted.Deliver(f.ctx, f.event))
 	require.NoError(t, restarted.Deliver(f.ctx, f.event))
@@ -167,6 +169,7 @@ func TestPostgresIncidentEffectsResumeFrozenActionsAndCandidateSet(t *testing.T)
 	require.Equal(t, 2, f.client.IncidentRuleActionReceipt.Query().CountX(f.ctx))
 	require.Equal(t, 1, f.client.IncidentRule.GetX(f.ctx, rule.ID).ExecutionCount)
 }
+
 func TestPostgresIncidentEffectsConcurrentReplayAndWorkerFencing(t *testing.T) {
 	f := newIncidentEffectsFixture(t)
 	f.rule(metricAction("once"), map[string]interface{}{"type": "escalate", "level": 1, "reason": "threshold", "notify_users": []int{f.actor.ID}})
@@ -195,7 +198,7 @@ func TestPostgresIncidentEffectsWorkerAcknowledgmentLossAndFencing(t *testing.T)
 	f.rule(metricAction("once"), map[string]interface{}{"type": "escalate", "level": 1, "reason": "threshold", "notify_users": []int{f.actor.ID}})
 	registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{f.engine}, "incident_alert_delivery")
 	require.NoError(t, err)
-	repo := service.NewOutboxEventRepository(f.client)
+	repo := service.NewOutboxEventRepository(f.client, executionfixture.Standard())
 	worker, err := service.NewOutboxDeliveryWorker(repo, service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 10 * time.Second, MaxAttempts: 5}, zap.NewNop().Sugar(), registry)
 	require.NoError(t, err)
 	var loseAck atomic.Bool
@@ -224,6 +227,7 @@ func TestPostgresIncidentEffectsWorkerAcknowledgmentLossAndFencing(t *testing.T)
 	delivery := f.client.OutboxEvent.Query().Where(outboxevent.EventType("incident_alert_delivery")).OnlyX(f.ctx)
 	require.Equal(t, "pending", delivery.Status, "external send is not performed in action transaction")
 }
+
 func TestPostgresIncidentEffectsFreezeNoMatchingRules(t *testing.T) {
 	for _, empty := range []bool{true, false} {
 		t.Run(fmt.Sprint(empty), func(t *testing.T) {
@@ -239,6 +243,7 @@ func TestPostgresIncidentEffectsFreezeNoMatchingRules(t *testing.T) {
 		})
 	}
 }
+
 func TestPostgresIncidentEffectsConfiguredRecipientsAndPlaceholderFailures(t *testing.T) {
 	for _, name := range []string{"unknown", "missing", "foreign", "inactive", "auto_assign", "fractional", "invalid_status", "optional"} {
 		t.Run(name, func(t *testing.T) {
@@ -274,6 +279,7 @@ func TestPostgresIncidentEffectsConfiguredRecipientsAndPlaceholderFailures(t *te
 		})
 	}
 }
+
 func TestPostgresIncidentEffectsUpdateAndNotificationGraphRollback(t *testing.T) {
 	for _, target := range []string{"timeline", "alert", "in_app", "outbox", "audit"} {
 		t.Run(target, func(t *testing.T) {
@@ -311,8 +317,14 @@ func TestPostgresIncidentEffectsUpdateAndNotificationGraphRollback(t *testing.T)
 		})
 	}
 }
+
 func TestPostgresIncidentEffectsLifecycleOwnership(t *testing.T) {
 	f := newIncidentEffectsFixture(t)
+	for _, name := range []string{"032_workitem_sla_cycle", "033_incident_status_events"} {
+		_, err := f.db.ExecContext(f.ctx, migration.GetMigrationSQL(name))
+		require.NoError(t, err)
+	}
+	f.actor.Update().SetRole("super_admin").ExecX(f.ctx)
 	f.rule(map[string]interface{}{"type": "assign", "assignee_id": f.actor.ID}, map[string]interface{}{"type": "change_status", "status": "in_progress"})
 	require.NoError(t, f.engine.Deliver(f.ctx, f.event))
 	item := f.client.Ticket.GetX(f.ctx, f.inc.WorkItemID)
@@ -528,7 +540,7 @@ func TestPostgresIncidentEffectsWorkerClassifiesActionFailures(t *testing.T) {
 			}
 			registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{f.engine})
 			require.NoError(t, err)
-			worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(f.client), service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 10 * time.Second, MaxAttempts: 5}, zap.NewNop().Sugar(), registry)
+			worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(f.client, executionfixture.Standard()), service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 10 * time.Second, MaxAttempts: 5}, zap.NewNop().Sugar(), registry)
 			require.NoError(t, err)
 			require.NoError(t, worker.DispatchOnce(f.ctx))
 			event := f.client.OutboxEvent.GetX(f.ctx, f.event.ID)

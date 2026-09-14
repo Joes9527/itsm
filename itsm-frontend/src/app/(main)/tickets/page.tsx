@@ -141,22 +141,22 @@ function TicketsPageContent() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-w-0 bg-page text-[13px] text-foreground">
       {/* 页面头部 */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="w-full px-6 py-4">
-          <div className="flex items-center justify-between">
+      <div className="border-b border-border">
+        <div className="w-full px-[16px] md:px-[24px] py-4">
+          <div className="flex flex-wrap gap-3 items-center justify-between">
             <div>
-              <Title level={2} style={{ marginBottom: 0 }}>
+              <Title level={2} style={{ fontSize: 24, fontWeight: 600, marginBottom: 0 }}>
                 工单管理
               </Title>
               <Text type="secondary">
                 统一的工单处理平台，支持多维度视图切换、全生命周期管理、SLA 监控与智能分派
               </Text>
             </div>
-            <Space>
+            <Space wrap>
               <Button
-                icon={<Search />}
+                icon={<Search size={16} />}
                 onClick={() => {
                   const newShow = !showAdvancedSearch;
                   setShowAdvancedSearch(newShow);
@@ -173,7 +173,7 @@ function TicketsPageContent() {
               </Button>
               <Badge count={ticketStats.overdue} size="small">
                 <Button
-                  icon={<Bell />}
+                  icon={<Bell size={16} />}
                   onClick={() => {
                     setActiveTab('list');
                     router.push('/tickets?tab=list', { scroll: false });
@@ -183,7 +183,7 @@ function TicketsPageContent() {
                 </Button>
               </Badge>
               <Link href="/tickets/create">
-                <Button type="primary" icon={<Plus />}>
+                <Button type="primary" icon={<Plus size={16} />}>
                   新建工单
                 </Button>
               </Link>
@@ -192,40 +192,46 @@ function TicketsPageContent() {
 
           {/* 统计数据栏 */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
-            <Card size="small" className="rounded-lg shadow-sm">
+            <Card size="small" className="rounded-[8px] shadow-none">
               <div className="flex items-center justify-between">
                 <div>
                   <Text type="secondary">总工单</Text>
-                  <div className="text-2xl font-bold">{ticketStats.total}</div>
+                  <div className="text-[26px] font-semibold">{ticketStats.total}</div>
                 </div>
-                <Table className="text-2xl text-blue-500" />
+                <Table className="text-[24px] text-blue-500" />
               </div>
             </Card>
-            <Card size="small" className="rounded-lg shadow-sm">
+            <Card size="small" className="rounded-[8px] shadow-none">
               <div className="flex items-center justify-between">
                 <div>
                   <Text type="secondary">待处理</Text>
-                  <div className="text-2xl font-bold text-orange-500">{ticketStats.open}</div>
+                  <div className="text-[26px] font-semibold text-orange-500">
+                    {ticketStats.open}
+                  </div>
                 </div>
-                <Bell className="text-2xl text-orange-500" />
+                <Bell className="text-[24px] text-orange-500" />
               </div>
             </Card>
-            <Card size="small" className="rounded-lg shadow-sm">
+            <Card size="small" className="rounded-[8px] shadow-none">
               <div className="flex items-center justify-between">
                 <div>
                   <Text type="secondary">超时工单</Text>
-                  <div className="text-2xl font-bold text-red-500">{ticketStats.overdue}</div>
+                  <div className="text-[26px] font-semibold text-red-500">
+                    {ticketStats.overdue}
+                  </div>
                 </div>
-                <Bell className="text-2xl text-red-500" />
+                <Bell className="text-[24px] text-red-500" />
               </div>
             </Card>
-            <Card size="small" className="rounded-lg shadow-sm">
+            <Card size="small" className="rounded-[8px] shadow-none">
               <div className="flex items-center justify-between">
                 <div>
                   <Text type="secondary">今日新增</Text>
-                  <div className="text-2xl font-bold text-green-500">{ticketStats.today}</div>
+                  <div className="text-[26px] font-semibold text-green-500">
+                    {ticketStats.today}
+                  </div>
                 </div>
-                <Plus className="text-2xl text-green-500" />
+                <Plus className="text-[24px] text-green-500" />
               </div>
             </Card>
           </div>
@@ -234,27 +240,27 @@ function TicketsPageContent() {
 
       {/* 高级搜索面板 */}
       {showAdvancedSearch && (
-        <div className="bg-gray-50 border-b border-gray-200">
-          <div className="w-full px-6 py-4">
+        <div className="bg-raised border-b border-border">
+          <div className="w-full px-[16px] md:px-[24px] py-4">
             <TicketAdvancedSearch onSearch={handleAdvancedSearch} onReset={handleSearchReset} />
           </div>
         </div>
       )}
 
       {/* 主内容区域 */}
-      <div className="w-full px-6 py-6">
+      <div className="w-full px-[16px] md:px-[24px] py-6">
         {/* 标签页导航 */}
         <Tabs
           activeKey={activeTab}
           onChange={handleTabChange}
-          size="large"
-          className="mb-6"
+          size="middle"
+          className="mb-4"
           items={[
             {
               key: 'list',
               label: (
                 <span className="flex items-center gap-2">
-                  <Table />
+                  <Table size={16} />
                   列表视图
                 </span>
               ),
@@ -263,7 +269,7 @@ function TicketsPageContent() {
               key: 'kanban',
               label: (
                 <span className="flex items-center gap-2">
-                  <LayoutGrid />
+                  <LayoutGrid size={16} />
                   看板视图
                 </span>
               ),
@@ -288,7 +294,7 @@ function TicketsPageContent() {
             type="primary"
             shape="circle"
             size="large"
-            icon={<Plus />}
+            icon={<Plus size={16} />}
             onClick={() => router.push('/tickets/create')}
             className="shadow-lg hover:scale-110 transition-transform"
           />
@@ -301,7 +307,7 @@ function TicketsPageContent() {
 // Loading fallback 组件
 function TicketsPageSkeleton() {
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-w-0 bg-page text-[13px] text-foreground p-6">
       <Card className="mb-6">
         <Skeleton active paragraph={{ rows: 2 }} />
       </Card>

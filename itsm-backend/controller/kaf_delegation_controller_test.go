@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
@@ -47,6 +49,7 @@ func (h *failingKafCallbackHandler) GetHandlerID() string { return "failing_kaf_
 func (h *failingKafCallbackHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
 	return bpmn.CallbackActionContract{}, true
 }
+
 func (h *failingKafCallbackHandler) Execute(context.Context, *ent.ProcessTask, map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	return nil, h.err
 }
@@ -117,11 +120,11 @@ func newKafDelegationHTTPFixture(t *testing.T, fixture kafHTTPFixture) (*gin.Eng
 		require.NoError(t, err)
 	}
 
-	engine := service.NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar()).(*service.CustomProcessEngine)
+	engine := service.NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard()).(*service.CustomProcessEngine)
 	if fixture.failingCompletionError != "" {
 		engine.CallbackRegistry().RegisterHandler(&failingKafCallbackHandler{err: errors.New(fixture.failingCompletionError)})
 	}
-	controller := NewKafDelegationController(client, engine)
+	controller := NewKafDelegationController(client, engine, executionfixture.Standard())
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		c.Set("tenant_id", requestTenantID)
@@ -307,7 +310,7 @@ func TestKafAction_IdempotentReplayRejectsValidKafActorWithDifferentRequestTenan
 	require.NoError(t, err)
 	workflowCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, task.TenantID)
 	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNUserIDContextKey, actor.ID)
-	_, err = service.NewKafDelegationService(client).ExecuteAction(workflowCtx, taskID, service.KafActionRequest{
+	_, err = service.NewKafDelegationService(client, executionfixture.Standard()).ExecuteAction(workflowCtx, taskID, service.KafActionRequest{
 		Action: "update_progress", ExpectedVersion: 3,
 		Execution: service.KafActionExecution{RunID: "run-1", StepID: "progress", IdempotencyKey: kafActionKey(t, client, taskID, "run-1", "progress"), CorrelationID: "corr-kaf-http", ProcedureRef: "vpn-grant", ProcedureVersion: "1"},
 		Payload:   service.KafActionPayload{ResultSummary: "queued"},

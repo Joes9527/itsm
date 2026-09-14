@@ -4,6 +4,11 @@ package integration
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,10 +23,6 @@ import (
 	authcommon "itsm-backend/handlers/common"
 	approuter "itsm-backend/router"
 	"itsm-backend/service"
-	"net/http"
-	"net/http/httptest"
-	"testing"
-	"time"
 )
 
 func TestPostgresBrowserSessionProjection(t *testing.T) {
@@ -227,5 +228,4 @@ func TestPostgresBrowserSessionProjection(t *testing.T) {
 	_, err = clients.System.Menu.Query().All(f.ctx)
 	require.ErrorContains(t, err, "permission denied")
 	t.Log("signed registered HTTP proves native actor/selected tenant projection, live revocations, bounded authorized tenant candidates, target-only menus, snapshot consistency and directory failure cleanup")
-
 }

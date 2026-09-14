@@ -193,9 +193,11 @@ func TestClient_PollDelta_FollowsNextLinkUntilDeltaLink(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"@odata.nextLink": pageTwoURL,
 			"value": []map[string]interface{}{
-				{"id": "msg-1", "internetMessageId": "<p1@contoso.com>", "subject": "Page 1",
+				{
+					"id": "msg-1", "internetMessageId": "<p1@contoso.com>", "subject": "Page 1",
 					"from": map[string]interface{}{"emailAddress": map[string]interface{}{"address": "a@contoso.com"}},
-					"body": map[string]interface{}{"contentType": "text", "content": "p1"}},
+					"body": map[string]interface{}{"contentType": "text", "content": "p1"},
+				},
 			},
 		})
 	})
@@ -204,9 +206,11 @@ func TestClient_PollDelta_FollowsNextLinkUntilDeltaLink(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"@odata.deltaLink": "https://graph.example/delta-link-final",
 			"value": []map[string]interface{}{
-				{"id": "msg-2", "internetMessageId": "<p2@contoso.com>", "subject": "Page 2",
+				{
+					"id": "msg-2", "internetMessageId": "<p2@contoso.com>", "subject": "Page 2",
 					"from": map[string]interface{}{"emailAddress": map[string]interface{}{"address": "b@contoso.com"}},
-					"body": map[string]interface{}{"contentType": "text", "content": "p2"}},
+					"body": map[string]interface{}{"contentType": "text", "content": "p2"},
+				},
 			},
 		})
 	})

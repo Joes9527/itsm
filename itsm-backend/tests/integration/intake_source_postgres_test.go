@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -45,9 +47,9 @@ func TestPostgresRequestedItemTrustedSourceAndReplay(t *testing.T) {
 	mapping := f.client.ExternalIdentity.Create().SetTenantID(f.tenant.ID).SetUserID(f.actor.ID).SetProvider("kaf").SetWorkspace("source-workspace").SetSubject("source-subject").SaveX(f.ctx)
 	identity := creation.Identity{TenantID: f.tenant.ID, ActorID: f.actor.ID, RequesterID: f.actor.ID, Role: "agent", Channel: "http"}
 	registry := intake.NewCreatorRegistry()
-	require.NoError(t, registry.Register(requestdomain.NewService(nil, f.client, logger, service.NewApprovalChainResolver(f.client, logger))))
+	require.NoError(t, registry.Register(requestdomain.NewService(nil, f.client, logger, service.NewApprovalChainResolver(f.client, logger), executionfixture.Standard())))
 	resolver := intake.NewResolver(catalogdomain.NewService(nil, f.client, logger, nil), service.NewProcessBindingService(f.client), service.NewConfigurationItemService(f.client, logger, nil, nil), service.NewTicketCategoryService(f.client))
-	app := intake.NewService(f.client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})
+	app := intake.NewService(f.client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard())
 	uf := &unifiedIntakeFixture{client: f.client, app: app, identity: identity, command: creation.CreateWorkItemCommand{Confirmation: "confirmed", Title: "Requested item origin", IdempotencyKey: "trusted-source"}}
 	entryDefinition(t, uf, "source-process", f.tenant.ID, "")
 	command := entryCatalogCommand(t, uf, "service_request_item", "source-process")

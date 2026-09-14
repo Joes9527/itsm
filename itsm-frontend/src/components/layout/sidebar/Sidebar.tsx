@@ -112,6 +112,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, mobile 
     }
     try {
       router.push(key);
+      if (mobile) onCollapse(true);
     } catch (error) {
       console.error('Menu navigation error:', error);
       message.error('导航失败，请稍后重试');
@@ -144,6 +145,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, mobile 
 
   return (
     <Sider
+      id='primary-navigation'
+      role='navigation'
+      aria-label='主导航'
+      aria-hidden={collapsed ? true : undefined}
+      inert={collapsed ? true : undefined}
       trigger={null}
       collapsible
       collapsed={collapsed}
@@ -153,15 +159,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, mobile 
       width={LAYOUT_CONFIG.sider.width}
       className={`${styles.sider} ${collapsed ? styles.siderCollapsed : ''}`}
       style={{
-        background: '#2A2A2A',
-        borderRight: 'none',
         zIndex: LAYOUT_CONFIG.zIndex.sider,
         transition: 'width 250ms cubic-bezier(0.4, 0, 0.2, 1), opacity 200ms',
       }}
     >
       {/* Logo 区域 */}
       <div className={`${styles.logoArea} ${collapsed ? styles.logoAreaCollapsed : ''}`}>
-        <img src="/kln-logo.png" alt="Kerry Logistics" className={styles.logoImg} />
+        <img src='/kln-logo.png' alt='Kerry Logistics' className={styles.logoImg} />
         {!collapsed && (
           <div className={styles.logoTextContainer}>
             <div className={styles.logoText}>ITSM</div>

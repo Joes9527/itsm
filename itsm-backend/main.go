@@ -8,6 +8,7 @@
 package main
 
 import (
+	"log"
 	"os"
 
 	boot "itsm-backend/internal/bootstrap"
@@ -27,5 +28,8 @@ func main() {
 	}
 
 	app := boot.NewApplication()
-	app.Run()
+	if err := app.Run(); err != nil {
+		log.Printf("application stopped: %v", err)
+		os.Exit(1)
+	}
 }

@@ -20,6 +20,7 @@ import (
 	"itsm-backend/ent/tickettag"
 	"itsm-backend/ent/ticketworkflowrecord"
 	"itsm-backend/ent/user"
+	"itsm-backend/handlers/shared/slacontract"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -409,6 +410,80 @@ func (_u *TicketUpdate) AddParentTicketID(v int) *TicketUpdate {
 // ClearParentTicketID clears the value of the "parent_ticket_id" field.
 func (_u *TicketUpdate) ClearParentTicketID() *TicketUpdate {
 	_u.mutation.ClearParentTicketID()
+	return _u
+}
+
+// SetSLACycleNumber sets the "sla_cycle_number" field.
+func (_u *TicketUpdate) SetSLACycleNumber(v int) *TicketUpdate {
+	_u.mutation.ResetSLACycleNumber()
+	_u.mutation.SetSLACycleNumber(v)
+	return _u
+}
+
+// SetNillableSLACycleNumber sets the "sla_cycle_number" field if the given value is not nil.
+func (_u *TicketUpdate) SetNillableSLACycleNumber(v *int) *TicketUpdate {
+	if v != nil {
+		_u.SetSLACycleNumber(*v)
+	}
+	return _u
+}
+
+// AddSLACycleNumber adds value to the "sla_cycle_number" field.
+func (_u *TicketUpdate) AddSLACycleNumber(v int) *TicketUpdate {
+	_u.mutation.AddSLACycleNumber(v)
+	return _u
+}
+
+// SetSLACycleStartedAt sets the "sla_cycle_started_at" field.
+func (_u *TicketUpdate) SetSLACycleStartedAt(v time.Time) *TicketUpdate {
+	_u.mutation.SetSLACycleStartedAt(v)
+	return _u
+}
+
+// SetNillableSLACycleStartedAt sets the "sla_cycle_started_at" field if the given value is not nil.
+func (_u *TicketUpdate) SetNillableSLACycleStartedAt(v *time.Time) *TicketUpdate {
+	if v != nil {
+		_u.SetSLACycleStartedAt(*v)
+	}
+	return _u
+}
+
+// ClearSLACycleStartedAt clears the value of the "sla_cycle_started_at" field.
+func (_u *TicketUpdate) ClearSLACycleStartedAt() *TicketUpdate {
+	_u.mutation.ClearSLACycleStartedAt()
+	return _u
+}
+
+// SetSLAPausedMinutes sets the "sla_paused_minutes" field.
+func (_u *TicketUpdate) SetSLAPausedMinutes(v int) *TicketUpdate {
+	_u.mutation.ResetSLAPausedMinutes()
+	_u.mutation.SetSLAPausedMinutes(v)
+	return _u
+}
+
+// SetNillableSLAPausedMinutes sets the "sla_paused_minutes" field if the given value is not nil.
+func (_u *TicketUpdate) SetNillableSLAPausedMinutes(v *int) *TicketUpdate {
+	if v != nil {
+		_u.SetSLAPausedMinutes(*v)
+	}
+	return _u
+}
+
+// AddSLAPausedMinutes adds value to the "sla_paused_minutes" field.
+func (_u *TicketUpdate) AddSLAPausedMinutes(v int) *TicketUpdate {
+	_u.mutation.AddSLAPausedMinutes(v)
+	return _u
+}
+
+// SetAppliedSLAPolicy sets the "applied_sla_policy" field.
+func (_u *TicketUpdate) SetAppliedSLAPolicy(v *slacontract.Policy) *TicketUpdate {
+	_u.mutation.SetAppliedSLAPolicy(v)
+	return _u
+}
+
+// ClearAppliedSLAPolicy clears the value of the "applied_sla_policy" field.
+func (_u *TicketUpdate) ClearAppliedSLAPolicy() *TicketUpdate {
+	_u.mutation.ClearAppliedSLAPolicy()
 	return _u
 }
 
@@ -1321,6 +1396,16 @@ func (_u *TicketUpdate) check() error {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "Ticket.tenant_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.SLACycleNumber(); ok {
+		if err := ticket.SLACycleNumberValidator(v); err != nil {
+			return &ValidationError{Name: "sla_cycle_number", err: fmt.Errorf(`ent: validator failed for field "Ticket.sla_cycle_number": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.SLAPausedMinutes(); ok {
+		if err := ticket.SLAPausedMinutesValidator(v); err != nil {
+			return &ValidationError{Name: "sla_paused_minutes", err: fmt.Errorf(`ent: validator failed for field "Ticket.sla_paused_minutes": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Rating(); ok {
 		if err := ticket.RatingValidator(v); err != nil {
 			return &ValidationError{Name: "rating", err: fmt.Errorf(`ent: validator failed for field "Ticket.rating": %w`, err)}
@@ -1444,6 +1529,30 @@ func (_u *TicketUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.ParentTicketIDCleared() {
 		_spec.ClearField(ticket.FieldParentTicketID, field.TypeInt)
+	}
+	if value, ok := _u.mutation.SLACycleNumber(); ok {
+		_spec.SetField(ticket.FieldSLACycleNumber, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedSLACycleNumber(); ok {
+		_spec.AddField(ticket.FieldSLACycleNumber, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.SLACycleStartedAt(); ok {
+		_spec.SetField(ticket.FieldSLACycleStartedAt, field.TypeTime, value)
+	}
+	if _u.mutation.SLACycleStartedAtCleared() {
+		_spec.ClearField(ticket.FieldSLACycleStartedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.SLAPausedMinutes(); ok {
+		_spec.SetField(ticket.FieldSLAPausedMinutes, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedSLAPausedMinutes(); ok {
+		_spec.AddField(ticket.FieldSLAPausedMinutes, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AppliedSLAPolicy(); ok {
+		_spec.SetField(ticket.FieldAppliedSLAPolicy, field.TypeJSON, value)
+	}
+	if _u.mutation.AppliedSLAPolicyCleared() {
+		_spec.ClearField(ticket.FieldAppliedSLAPolicy, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.SLADefinitionID(); ok {
 		_spec.SetField(ticket.FieldSLADefinitionID, field.TypeInt, value)
@@ -2551,6 +2660,80 @@ func (_u *TicketUpdateOne) ClearParentTicketID() *TicketUpdateOne {
 	return _u
 }
 
+// SetSLACycleNumber sets the "sla_cycle_number" field.
+func (_u *TicketUpdateOne) SetSLACycleNumber(v int) *TicketUpdateOne {
+	_u.mutation.ResetSLACycleNumber()
+	_u.mutation.SetSLACycleNumber(v)
+	return _u
+}
+
+// SetNillableSLACycleNumber sets the "sla_cycle_number" field if the given value is not nil.
+func (_u *TicketUpdateOne) SetNillableSLACycleNumber(v *int) *TicketUpdateOne {
+	if v != nil {
+		_u.SetSLACycleNumber(*v)
+	}
+	return _u
+}
+
+// AddSLACycleNumber adds value to the "sla_cycle_number" field.
+func (_u *TicketUpdateOne) AddSLACycleNumber(v int) *TicketUpdateOne {
+	_u.mutation.AddSLACycleNumber(v)
+	return _u
+}
+
+// SetSLACycleStartedAt sets the "sla_cycle_started_at" field.
+func (_u *TicketUpdateOne) SetSLACycleStartedAt(v time.Time) *TicketUpdateOne {
+	_u.mutation.SetSLACycleStartedAt(v)
+	return _u
+}
+
+// SetNillableSLACycleStartedAt sets the "sla_cycle_started_at" field if the given value is not nil.
+func (_u *TicketUpdateOne) SetNillableSLACycleStartedAt(v *time.Time) *TicketUpdateOne {
+	if v != nil {
+		_u.SetSLACycleStartedAt(*v)
+	}
+	return _u
+}
+
+// ClearSLACycleStartedAt clears the value of the "sla_cycle_started_at" field.
+func (_u *TicketUpdateOne) ClearSLACycleStartedAt() *TicketUpdateOne {
+	_u.mutation.ClearSLACycleStartedAt()
+	return _u
+}
+
+// SetSLAPausedMinutes sets the "sla_paused_minutes" field.
+func (_u *TicketUpdateOne) SetSLAPausedMinutes(v int) *TicketUpdateOne {
+	_u.mutation.ResetSLAPausedMinutes()
+	_u.mutation.SetSLAPausedMinutes(v)
+	return _u
+}
+
+// SetNillableSLAPausedMinutes sets the "sla_paused_minutes" field if the given value is not nil.
+func (_u *TicketUpdateOne) SetNillableSLAPausedMinutes(v *int) *TicketUpdateOne {
+	if v != nil {
+		_u.SetSLAPausedMinutes(*v)
+	}
+	return _u
+}
+
+// AddSLAPausedMinutes adds value to the "sla_paused_minutes" field.
+func (_u *TicketUpdateOne) AddSLAPausedMinutes(v int) *TicketUpdateOne {
+	_u.mutation.AddSLAPausedMinutes(v)
+	return _u
+}
+
+// SetAppliedSLAPolicy sets the "applied_sla_policy" field.
+func (_u *TicketUpdateOne) SetAppliedSLAPolicy(v *slacontract.Policy) *TicketUpdateOne {
+	_u.mutation.SetAppliedSLAPolicy(v)
+	return _u
+}
+
+// ClearAppliedSLAPolicy clears the value of the "applied_sla_policy" field.
+func (_u *TicketUpdateOne) ClearAppliedSLAPolicy() *TicketUpdateOne {
+	_u.mutation.ClearAppliedSLAPolicy()
+	return _u
+}
+
 // SetSLADefinitionID sets the "sla_definition_id" field.
 func (_u *TicketUpdateOne) SetSLADefinitionID(v int) *TicketUpdateOne {
 	_u.mutation.ResetSLADefinitionID()
@@ -3473,6 +3656,16 @@ func (_u *TicketUpdateOne) check() error {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "Ticket.tenant_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.SLACycleNumber(); ok {
+		if err := ticket.SLACycleNumberValidator(v); err != nil {
+			return &ValidationError{Name: "sla_cycle_number", err: fmt.Errorf(`ent: validator failed for field "Ticket.sla_cycle_number": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.SLAPausedMinutes(); ok {
+		if err := ticket.SLAPausedMinutesValidator(v); err != nil {
+			return &ValidationError{Name: "sla_paused_minutes", err: fmt.Errorf(`ent: validator failed for field "Ticket.sla_paused_minutes": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Rating(); ok {
 		if err := ticket.RatingValidator(v); err != nil {
 			return &ValidationError{Name: "rating", err: fmt.Errorf(`ent: validator failed for field "Ticket.rating": %w`, err)}
@@ -3613,6 +3806,30 @@ func (_u *TicketUpdateOne) sqlSave(ctx context.Context) (_node *Ticket, err erro
 	}
 	if _u.mutation.ParentTicketIDCleared() {
 		_spec.ClearField(ticket.FieldParentTicketID, field.TypeInt)
+	}
+	if value, ok := _u.mutation.SLACycleNumber(); ok {
+		_spec.SetField(ticket.FieldSLACycleNumber, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedSLACycleNumber(); ok {
+		_spec.AddField(ticket.FieldSLACycleNumber, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.SLACycleStartedAt(); ok {
+		_spec.SetField(ticket.FieldSLACycleStartedAt, field.TypeTime, value)
+	}
+	if _u.mutation.SLACycleStartedAtCleared() {
+		_spec.ClearField(ticket.FieldSLACycleStartedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.SLAPausedMinutes(); ok {
+		_spec.SetField(ticket.FieldSLAPausedMinutes, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedSLAPausedMinutes(); ok {
+		_spec.AddField(ticket.FieldSLAPausedMinutes, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AppliedSLAPolicy(); ok {
+		_spec.SetField(ticket.FieldAppliedSLAPolicy, field.TypeJSON, value)
+	}
+	if _u.mutation.AppliedSLAPolicyCleared() {
+		_spec.ClearField(ticket.FieldAppliedSLAPolicy, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.SLADefinitionID(); ok {
 		_spec.SetField(ticket.FieldSLADefinitionID, field.TypeInt, value)

@@ -46,6 +46,10 @@ const (
 	FieldWorkflowDefinitionKey = "workflow_definition_key"
 	// FieldWorkflowDefinitionVersion holds the string denoting the workflow_definition_version field in the database.
 	FieldWorkflowDefinitionVersion = "workflow_definition_version"
+	// FieldWorkflowDefinitionDigest holds the string denoting the workflow_definition_digest field in the database.
+	FieldWorkflowDefinitionDigest = "workflow_definition_digest"
+	// FieldWorkflowVariables holds the string denoting the workflow_variables field in the database.
+	FieldWorkflowVariables = "workflow_variables"
 	// FieldNoProcess holds the string denoting the no_process field in the database.
 	FieldNoProcess = "no_process"
 	// FieldSLADefinitionID holds the string denoting the sla_definition_id field in the database.
@@ -97,6 +101,8 @@ var Columns = []string{
 	FieldWorkflowDefinitionID,
 	FieldWorkflowDefinitionKey,
 	FieldWorkflowDefinitionVersion,
+	FieldWorkflowDefinitionDigest,
+	FieldWorkflowVariables,
 	FieldNoProcess,
 	FieldSLADefinitionID,
 	FieldResolverVersion,
@@ -219,6 +225,11 @@ func ByWorkflowDefinitionKey(opts ...sql.OrderTermOption) OrderOption {
 // ByWorkflowDefinitionVersion orders the results by the workflow_definition_version field.
 func ByWorkflowDefinitionVersion(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWorkflowDefinitionVersion, opts...).ToFunc()
+}
+
+// ByWorkflowDefinitionDigest orders the results by the workflow_definition_digest field.
+func ByWorkflowDefinitionDigest(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWorkflowDefinitionDigest, opts...).ToFunc()
 }
 
 // ByNoProcess orders the results by the no_process field.

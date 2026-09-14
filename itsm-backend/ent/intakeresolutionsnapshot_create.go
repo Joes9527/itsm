@@ -185,6 +185,26 @@ func (_c *IntakeResolutionSnapshotCreate) SetNillableWorkflowDefinitionVersion(v
 	return _c
 }
 
+// SetWorkflowDefinitionDigest sets the "workflow_definition_digest" field.
+func (_c *IntakeResolutionSnapshotCreate) SetWorkflowDefinitionDigest(v string) *IntakeResolutionSnapshotCreate {
+	_c.mutation.SetWorkflowDefinitionDigest(v)
+	return _c
+}
+
+// SetNillableWorkflowDefinitionDigest sets the "workflow_definition_digest" field if the given value is not nil.
+func (_c *IntakeResolutionSnapshotCreate) SetNillableWorkflowDefinitionDigest(v *string) *IntakeResolutionSnapshotCreate {
+	if v != nil {
+		_c.SetWorkflowDefinitionDigest(*v)
+	}
+	return _c
+}
+
+// SetWorkflowVariables sets the "workflow_variables" field.
+func (_c *IntakeResolutionSnapshotCreate) SetWorkflowVariables(v json.RawMessage) *IntakeResolutionSnapshotCreate {
+	_c.mutation.SetWorkflowVariables(v)
+	return _c
+}
+
 // SetNoProcess sets the "no_process" field.
 func (_c *IntakeResolutionSnapshotCreate) SetNoProcess(v bool) *IntakeResolutionSnapshotCreate {
 	_c.mutation.SetNoProcess(v)
@@ -478,6 +498,14 @@ func (_c *IntakeResolutionSnapshotCreate) createSpec() (*IntakeResolutionSnapsho
 		_spec.SetField(intakeresolutionsnapshot.FieldWorkflowDefinitionVersion, field.TypeString, value)
 		_node.WorkflowDefinitionVersion = value
 	}
+	if value, ok := _c.mutation.WorkflowDefinitionDigest(); ok {
+		_spec.SetField(intakeresolutionsnapshot.FieldWorkflowDefinitionDigest, field.TypeString, value)
+		_node.WorkflowDefinitionDigest = value
+	}
+	if value, ok := _c.mutation.WorkflowVariables(); ok {
+		_spec.SetField(intakeresolutionsnapshot.FieldWorkflowVariables, field.TypeJSON, value)
+		_node.WorkflowVariables = value
+	}
 	if value, ok := _c.mutation.NoProcess(); ok {
 		_spec.SetField(intakeresolutionsnapshot.FieldNoProcess, field.TypeBool, value)
 		_node.NoProcess = value
@@ -642,6 +670,12 @@ func (u *IntakeResolutionSnapshotUpsertOne) UpdateNewValues() *IntakeResolutionS
 		}
 		if _, exists := u.create.mutation.WorkflowDefinitionVersion(); exists {
 			s.SetIgnore(intakeresolutionsnapshot.FieldWorkflowDefinitionVersion)
+		}
+		if _, exists := u.create.mutation.WorkflowDefinitionDigest(); exists {
+			s.SetIgnore(intakeresolutionsnapshot.FieldWorkflowDefinitionDigest)
+		}
+		if _, exists := u.create.mutation.WorkflowVariables(); exists {
+			s.SetIgnore(intakeresolutionsnapshot.FieldWorkflowVariables)
 		}
 		if _, exists := u.create.mutation.NoProcess(); exists {
 			s.SetIgnore(intakeresolutionsnapshot.FieldNoProcess)
@@ -912,6 +946,12 @@ func (u *IntakeResolutionSnapshotUpsertBulk) UpdateNewValues() *IntakeResolution
 			}
 			if _, exists := b.mutation.WorkflowDefinitionVersion(); exists {
 				s.SetIgnore(intakeresolutionsnapshot.FieldWorkflowDefinitionVersion)
+			}
+			if _, exists := b.mutation.WorkflowDefinitionDigest(); exists {
+				s.SetIgnore(intakeresolutionsnapshot.FieldWorkflowDefinitionDigest)
+			}
+			if _, exists := b.mutation.WorkflowVariables(); exists {
+				s.SetIgnore(intakeresolutionsnapshot.FieldWorkflowVariables)
 			}
 			if _, exists := b.mutation.NoProcess(); exists {
 				s.SetIgnore(intakeresolutionsnapshot.FieldNoProcess)

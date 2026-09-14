@@ -49,12 +49,14 @@ export default function ServiceDetailPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-[16px] md:p-[24px]">
       <Card>
         <Descriptions title={service.name} bordered column={2}>
           <Descriptions.Item label={t('service.category')}>{service.category}</Descriptions.Item>
           <Descriptions.Item label={t('service.status')}>
-            <Tag color={serviceStatusMap[service.status]?.color || 'default'}>{serviceStatusMap[service.status]?.text || service.status}</Tag>
+            <Tag color={serviceStatusMap[service.status]?.color || 'default'}>
+              {serviceStatusMap[service.status]?.text || service.status}
+            </Tag>
           </Descriptions.Item>
           <Descriptions.Item label={t('service.description')} span={2}>
             {service.shortDescription || service.fullDescription}

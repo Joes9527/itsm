@@ -2,19 +2,14 @@
 
 import type { ReactNode } from 'react';
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { ConfigProvider, theme } from 'antd';
-import { colors, darkColors } from '@/lib/design-system/colors';
-import {
-  spacing,
-  borderRadius,
-  boxShadow,
-  fontSize,
-  lineHeight,
-  fontWeight,
-} from '@/lib/design-system/spacing';
+import { theme } from 'antd';
+import { parseThemeMode, resolveIsDark, THEME_STORAGE_KEY } from './theme-preference';
+import type { ThemeMode } from './theme-preference';
+export type { ThemeMode } from './theme-preference';
+import tokens from '@/design-system/theme-tokens.json';
+import { expandThemeTokens } from '@/design-system/expand-theme-tokens.mjs';
 
 // 主题类型
-export type ThemeMode = 'light' | 'dark' | 'system';
 
 // 主题上下文类型
 interface ThemeContextType {
@@ -37,86 +32,62 @@ interface ThemeProviderProps {
 // 主题提供者组件
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({
   children,
-  defaultMode = 'system',
-  storageKey = 'itsm-theme',
+  defaultMode = 'light',
+  storageKey = THEME_STORAGE_KEY,
 }) => {
   const [mode, setMode] = useState<ThemeMode>(defaultMode);
-  const [isDark, setIsDark] = useState(false);
+  const [systemDark, setSystemDark] = useState(false);
+  const [restored, setRestored] = useState(false);
 
-  // 从本地存储加载主题
   useEffect(() => {
-    const savedMode = localStorage.getItem(storageKey) as ThemeMode;
-    if (savedMode) {
-      setMode(savedMode);
+    let nextMode = defaultMode;
+    try {
+      const stored = window.localStorage.getItem(storageKey);
+      nextMode = stored === null ? defaultMode : parseThemeMode(stored);
+    } catch {
+      /* Storage denial must not disable in-session switching. */
     }
-  }, [storageKey]);
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)');
+    const updateSystem = () => setSystemDark(media?.matches ?? false);
+    updateSystem();
+    media?.addEventListener('change', updateSystem);
+    setMode(nextMode);
+    setRestored(true);
+    return () => media?.removeEventListener('change', updateSystem);
+  }, [defaultMode, storageKey]);
 
-  // 监听系统主题变化
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-
-    const handleChange = () => {
-      if (mode === 'system') {
-        setIsDark(mediaQuery.matches);
-      }
-    };
-
-    mediaQuery.addEventListener('change', handleChange);
-    handleChange(); // 初始检查
-
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [mode]);
-
-  // 更新暗色状态
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    if (mode === 'dark') {
-      setIsDark(true);
-    } else if (mode === 'light') {
-      setIsDark(false);
-    } else {
-      // system mode
-      setIsDark(window.matchMedia('(prefers-color-scheme: dark)').matches);
+    if (!restored) return;
+    try {
+      window.localStorage.setItem(storageKey, mode);
+    } catch {
+      /* Session-only preference. */
     }
-  }, [mode]);
+  }, [mode, restored, storageKey]);
 
-  // 保存主题到本地存储
-  useEffect(() => {
-    localStorage.setItem(storageKey, mode);
-  }, [mode, storageKey]);
-
-  // 切换主题
-  const toggleTheme = () => {
-    setMode(prev => {
-      switch (prev) {
-        case 'light':
-          return 'dark';
-        case 'dark':
-          return 'system';
-        case 'system':
-          return 'light';
-        default:
-          return 'light';
-      }
-    });
-  };
-
-  // 设置主题
-  const handleSetMode = (newMode: ThemeMode) => {
-    setMode(newMode);
-  };
-
+  const isDark = resolveIsDark(mode, systemDark);
   const contextValue: ThemeContextType = {
     mode,
-    setMode: handleSetMode,
+    setMode,
     isDark,
-    toggleTheme,
+    toggleTheme: () =>
+      setMode(previous => (resolveIsDark(previous, systemDark) ? 'light' : 'dark')),
   };
 
-  return <ThemeContext.Provider value={contextValue}>{children}</ThemeContext.Provider>;
+  // Identical server/client structure until restoration, styled by pre-paint root variables.
+  return (
+    <ThemeContext.Provider value={contextValue}>
+      {restored ? (
+        children
+      ) : (
+        <div
+          aria-busy='true'
+          aria-label='正在恢复主题'
+          style={{ minHeight: '100vh', background: 'var(--color-bg-secondary)' }}
+        />
+      )}
+    </ThemeContext.Provider>
+  );
 };
 
 // 使用主题钩子
@@ -130,147 +101,124 @@ export const useTheme = (): ThemeContextType => {
 
 // Ant Design 主题配置
 export const getAntdTheme = (isDark: boolean) => {
-  const colorPalette = isDark ? darkColors : colors;
-  const spacingValue = (value: string) => parseInt(value, 10);
-  const fontSizeValue = (value: string) => parseInt(value, 10);
-  const borderRadiusValue = (value: string) => parseInt(value, 10);
-  const lineHeightValue = (value: string) => parseFloat(value);
-  const fontWeightValue = (value: string) => parseInt(value, 10);
-
+  const baseAlgorithm = isDark ? theme.darkAlgorithm : theme.defaultAlgorithm;
+  // Ant Design removes seed keys from final overrides. Preserve the brand after
+  // palette derivation while retaining every other token produced by the algorithm.
+  const algorithm: typeof theme.darkAlgorithm = (seed, mapToken) => ({
+    ...baseAlgorithm(seed, mapToken),
+    colorPrimary: seed.colorPrimary,
+  });
+  const palette = tokens.themes[isDark ? 'dark' : 'light'];
+  const primary = tokens.brand.palette[500];
+  const foreground = tokens.common['--color-primary-foreground'];
+  const surface = palette['--color-bg-primary'];
+  const raised = palette['--color-bg-tertiary'];
+  const text = palette['--color-text-primary'];
+  const selected = palette['--color-selected-bg'];
+  const selectedText = palette['--color-selected-text'];
+  const control = {
+    controlHeight: tokens.sizes.button,
+    controlHeightSM: tokens.sizes.buttonSmall,
+    borderRadius: tokens.sizes.buttonRadius,
+    fontSize: parseInt(tokens.typography.fontSize.base, 10),
+  };
   return {
-    algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
+    algorithm,
     token: {
-      // 颜色配置
-      colorPrimary: colorPalette.primary[500],
-      colorSuccess: '#22c55e',
-      colorWarning: '#f59e0b',
-      colorError: '#ef4444',
-      colorInfo: '#0ea5e9',
-
-      // 背景色
-      colorBgContainer: colorPalette.functional.background.primary,
-      colorBgLayout: colorPalette.functional.background.secondary,
-      colorBgElevated: colorPalette.functional.background.elevated,
-
-      // 文本色
-      colorText: colorPalette.functional.text.primary,
-      colorTextSecondary: colorPalette.functional.text.secondary,
-      colorTextTertiary: colorPalette.functional.text.tertiary,
-      colorTextQuaternary: colorPalette.functional.text.disabled,
-
-      // 边框色
-      colorBorder: colorPalette.functional.border.primary,
-      colorBorderSecondary: colorPalette.functional.border.secondary,
-
-      // 圆角
-      borderRadius: borderRadiusValue(borderRadius.lg),
-      borderRadiusLG: borderRadiusValue(borderRadius.xl),
-      borderRadiusSM: borderRadiusValue(borderRadius.md),
-
-      // 阴影
-      boxShadow: boxShadow.md,
-      boxShadowSecondary: boxShadow.lg,
-      boxShadowTertiary: boxShadow.xl,
-
-      // 字体
-      fontSize: fontSizeValue(fontSize.sm),
-      fontSizeLG: fontSizeValue(fontSize.base),
-      fontSizeSM: fontSizeValue(fontSize.xs),
-      fontSizeXL: fontSizeValue(fontSize.lg),
-
-      // 行高
-      lineHeight: lineHeightValue(lineHeight.normal),
-      lineHeightLG: lineHeightValue(lineHeight.relaxed),
-      lineHeightSM: lineHeightValue(lineHeight.snug),
-
-      // 字重
-      fontWeight: 400,
-      fontWeightStrong: 700,
-
-      // 间距
-      padding: spacingValue(spacing[4]),
-      paddingLG: spacingValue(spacing[6]),
-      paddingSM: spacingValue(spacing[2]),
-      paddingXL: spacingValue(spacing[8]),
-
-      margin: spacingValue(spacing[4]),
-      marginLG: spacingValue(spacing[6]),
-      marginSM: spacingValue(spacing[2]),
-      marginXL: spacingValue(spacing[8]),
-
-      // 控件高度
-      controlHeight: 32,
-      controlHeightLG: 40,
-      controlHeightSM: 24,
-
-      // 动画
-      motionDurationSlow: '0.3s',
-      motionDurationMid: '0.2s',
-      motionDurationFast: '0.1s',
+      ...control,
+      colorPrimary: primary,
+      colorPrimaryHover: tokens.common['--color-primary-hover'],
+      colorPrimaryActive: primary,
+      colorPrimaryBg: selected,
+      colorPrimaryBgHover: selected,
+      colorPrimaryText: selectedText,
+      colorPrimaryTextHover: text,
+      colorTextLightSolid: foreground,
+      colorSuccess: tokens.common['--color-success'],
+      colorWarning: tokens.common['--color-warning'],
+      colorError: tokens.common['--color-error'],
+      colorInfo: tokens.common['--color-info'],
+      colorBgContainer: surface,
+      colorBgLayout: palette['--color-bg-secondary'],
+      colorBgElevated: surface,
+      colorText: text,
+      colorTextSecondary: palette['--color-text-secondary'],
+      colorTextTertiary: palette['--color-text-secondary'],
+      colorTextQuaternary: palette['--color-text-disabled'],
+      colorTextDisabled: palette['--color-text-disabled'],
+      colorBorder: palette['--color-border'],
+      colorBorderSecondary: palette['--color-border'],
+      colorLink: selectedText,
+      colorLinkHover: text,
+      colorLinkActive: text,
+      colorFillAlter: raised,
+      borderRadiusLG: tokens.sizes.cardRadius,
+      fontFamily: tokens.typography.fontFamily,
+      fontSizeSM: parseInt(tokens.typography.fontSize.xs, 10),
+      fontSizeLG: parseInt(tokens.typography.fontSize.lg, 10),
+      fontSizeHeading1: parseInt(tokens.typography.pageTitle, 10),
+      fontSizeHeading2: parseInt(tokens.typography.pageTitle, 10),
+      fontSizeHeading3: parseInt(tokens.typography.cardTitle, 10),
+      fontWeightStrong: tokens.typography.strong,
+      lineHeight: 1.5,
+      controlOutline: selected,
+      controlOutlineWidth: 2,
     },
     components: {
-      // 按钮组件
       Button: {
-        borderRadius: borderRadiusValue(borderRadius.lg),
-        controlHeight: 36,
-        controlHeightLG: 40,
-        controlHeightSM: 28,
-        fontWeight: fontWeightValue(fontWeight.medium),
-        fontSize: fontSizeValue(fontSize.sm),
+        ...control,
+        controlHeightLG: tokens.sizes.button,
+        contentFontSizeLG: control.fontSize,
+        contentFontSizeSM: parseInt(tokens.typography.fontSize.xs, 10),
+        borderRadiusLG: tokens.sizes.buttonRadius,
+        borderRadiusSM: tokens.sizes.buttonRadius,
+        primaryColor: foreground,
+        primaryShadow: 'none',
+        defaultShadow: 'none',
+        fontWeight: 400,
       },
-
-      // 输入框组件
-      Input: {
-        borderRadius: borderRadiusValue(borderRadius.lg),
-        controlHeight: 36,
-        controlHeightLG: 40,
-        controlHeightSM: 28,
-        fontSize: fontSizeValue(fontSize.sm),
-      },
-
-      // 选择器组件
+      Input: control,
       Select: {
-        borderRadius: borderRadiusValue(borderRadius.lg),
-        controlHeight: 36,
-        controlHeightLG: 40,
-        controlHeightSM: 28,
-        fontSize: fontSizeValue(fontSize.sm),
+        ...control,
+        optionSelectedBg: selected,
+        optionSelectedColor: selectedText,
+        optionActiveBg: raised,
       },
-
-      // 日期选择组件
-      DatePicker: {
-        borderRadius: borderRadiusValue(borderRadius.lg),
-        controlHeight: 36,
-        controlHeightLG: 40,
-        controlHeightSM: 28,
-        fontSize: fontSizeValue(fontSize.sm),
-      },
-
-      // 卡片组件
+      DatePicker: control,
       Card: {
-        borderRadius: borderRadiusValue(borderRadius.lg),
-        boxShadow: boxShadow.md,
+        borderRadiusLG: tokens.sizes.cardRadius,
+        headerFontSize: parseInt(tokens.typography.cardTitle, 10),
+        bodyPadding: tokens.sizes.cardPadding,
+        headerBg: surface,
+        boxShadow: 'none',
       },
-
-      // 模态框组件
-      Modal: {
-        borderRadius: borderRadiusValue(borderRadius.xl),
-        boxShadow: boxShadow.xl,
+      Table: {
+        headerBg: raised,
+        headerColor: palette['--color-text-secondary'],
+        rowHoverBg: raised,
+        rowSelectedBg: selected,
+        rowSelectedHoverBg: selected,
+        borderColor: palette['--color-border'],
+        cellFontSize: control.fontSize,
+        cellPaddingBlock: 14,
       },
-
-      // 抽屉组件
-      Drawer: {
-        borderRadius: borderRadiusValue(borderRadius.xl),
+      Dropdown: {
+        colorBgElevated: surface,
+        controlItemBgHover: raised,
+        controlItemBgActive: selected,
+        colorText: text,
       },
-
-      // 消息组件
-      Message: {
-        borderRadius: borderRadiusValue(borderRadius.lg),
-      },
-
-      // 通知组件
-      Notification: {
-        borderRadius: borderRadiusValue(borderRadius.lg),
+      Modal: { contentBg: surface, headerBg: surface, titleColor: text },
+      Drawer: { colorBgElevated: surface, colorText: text },
+      Typography: { titleMarginTop: 0, titleMarginBottom: 12 },
+      Statistic: { contentFontSize: parseInt(tokens.typography.statistic, 10) },
+      Menu: {
+        itemBg: surface,
+        subMenuItemBg: surface,
+        itemSelectedBg: selected,
+        itemSelectedColor: selectedText,
+        itemHoverBg: raised,
+        itemColor: text,
       },
     },
   };
@@ -289,99 +237,8 @@ export const ThemeConfig: React.FC<ThemeConfigProps> = ({ children }) => {
 };
 
 // CSS 变量生成器
-export const generateCSSVariables = (isDark: boolean) => {
-  const colorPalette = isDark ? darkColors : colors;
-
-  return {
-    // 主色调
-    '--color-primary-50': colorPalette.primary[50],
-    '--color-primary-100': colorPalette.primary[100],
-    '--color-primary-200': colorPalette.primary[200],
-    '--color-primary-300': colorPalette.primary[300],
-    '--color-primary-400': colorPalette.primary[400],
-    '--color-primary-500': colorPalette.primary[500],
-    '--color-primary-600': colorPalette.primary[600],
-    '--color-primary-700': colorPalette.primary[700],
-    '--color-primary-800': colorPalette.primary[800],
-    '--color-primary-900': colorPalette.primary[900],
-
-    // 中性色
-    '--color-neutral-50': colorPalette.neutral[50],
-    '--color-neutral-100': colorPalette.neutral[100],
-    '--color-neutral-200': colorPalette.neutral[200],
-    '--color-neutral-300': colorPalette.neutral[300],
-    '--color-neutral-400': colorPalette.neutral[400],
-    '--color-neutral-500': colorPalette.neutral[500],
-    '--color-neutral-600': colorPalette.neutral[600],
-    '--color-neutral-700': colorPalette.neutral[700],
-    '--color-neutral-800': colorPalette.neutral[800],
-    '--color-neutral-900': colorPalette.neutral[900],
-
-    // 功能色
-    '--color-background-primary': colorPalette.functional.background.primary,
-    '--color-background-secondary': colorPalette.functional.background.secondary,
-    '--color-background-tertiary': colorPalette.functional.background.tertiary,
-    '--color-surface-primary': colorPalette.functional.surface.primary,
-    '--color-surface-secondary': colorPalette.functional.surface.secondary,
-    '--color-border-primary': colorPalette.functional.border.primary,
-    '--color-border-secondary': colorPalette.functional.border.secondary,
-    '--color-text-primary': colorPalette.functional.text.primary,
-    '--color-text-secondary': colorPalette.functional.text.secondary,
-    '--color-text-tertiary': colorPalette.functional.text.tertiary,
-
-    // 语义色
-    '--color-success': '#22c55e',
-    '--color-warning': '#f59e0b',
-    '--color-error': '#ef4444',
-    '--color-info': '#0ea5e9',
-
-    // 间距
-    '--spacing-xs': spacing[1],
-    '--spacing-sm': spacing[2],
-    '--spacing-md': spacing[4],
-    '--spacing-lg': spacing[6],
-    '--spacing-xl': spacing[8],
-    '--spacing-2xl': spacing[12],
-    '--spacing-3xl': spacing[16],
-
-    // 圆角
-    '--border-radius-sm': borderRadius.sm,
-    '--border-radius-md': borderRadius.md,
-    '--border-radius-lg': borderRadius.lg,
-    '--border-radius-xl': borderRadius.xl,
-
-    // 阴影
-    '--box-shadow-sm': boxShadow.sm,
-    '--box-shadow-md': boxShadow.md,
-    '--box-shadow-lg': boxShadow.lg,
-    '--box-shadow-xl': boxShadow.xl,
-
-    // 字体
-    '--font-family-base': '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", "Helvetica", "Arial", sans-serif',
-    '--font-family-sans': 'var(--font-family-base)',
-    '--font-size-xs': fontSize.xs,
-    '--font-size-sm': fontSize.sm,
-    '--font-size-base': fontSize.base,
-    '--font-size-lg': fontSize.lg,
-    '--font-size-xl': fontSize.xl,
-    '--font-size-2xl': fontSize['2xl'],
-    '--font-size-3xl': fontSize['3xl'],
-    '--font-size-4xl': fontSize['4xl'],
-    '--font-size-5xl': fontSize['5xl'],
-
-    // 行高
-    '--line-height-tight': lineHeight.tight,
-    '--line-height-snug': lineHeight.snug,
-    '--line-height-normal': lineHeight.normal,
-    '--line-height-relaxed': lineHeight.relaxed,
-    '--line-height-loose': lineHeight.loose,
-
-    // 字重
-    '--font-weight-normal': fontWeight.normal,
-    '--font-weight-medium': fontWeight.medium,
-    '--font-weight-semibold': fontWeight.semibold,
-    '--font-weight-bold': fontWeight.bold,
-  };
+export const generateCSSVariables = (isDark: boolean): Record<string, string> => {
+  return expandThemeTokens(tokens, isDark);
 };
 
 // 应用 CSS 变量到文档
@@ -396,6 +253,7 @@ export const applyCSSVariables = (isDark: boolean) => {
   // 添加主题类名
   root.classList.toggle('dark', isDark);
   root.classList.toggle('light', !isDark);
+  root.style.colorScheme = isDark ? 'dark' : 'light';
 };
 
 export default ThemeProvider;

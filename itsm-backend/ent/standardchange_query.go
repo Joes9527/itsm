@@ -413,7 +413,9 @@ func (_q *StandardChangeQuery) loadChanges(ctx context.Context, query *ChangeQue
 			init(nodes[i])
 		}
 	}
-	query.withFKs = true
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(change.FieldStandardTemplateID)
+	}
 	query.Where(predicate.Change(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(standardchange.ChangesColumn), fks...))
 	}))
@@ -422,13 +424,10 @@ func (_q *StandardChangeQuery) loadChanges(ctx context.Context, query *ChangeQue
 		return err
 	}
 	for _, n := range neighbors {
-		fk := n.standard_change_changes
-		if fk == nil {
-			return fmt.Errorf(`foreign-key "standard_change_changes" is nil for node %v`, n.ID)
-		}
-		node, ok := nodeids[*fk]
+		fk := n.StandardTemplateID
+		node, ok := nodeids[fk]
 		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "standard_change_changes" returned %v for node %v`, *fk, n.ID)
+			return fmt.Errorf(`unexpected referenced foreign-key "standard_template_id" returned %v for node %v`, fk, n.ID)
 		}
 		assign(node, n)
 	}

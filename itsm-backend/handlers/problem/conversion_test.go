@@ -10,6 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/common"
+	"itsm-backend/handlers/shared/workitemmutation"
+	relationService "itsm-backend/service"
+
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -166,17 +170,12 @@ func TestCreateFromIncidentCreatesWorkItemsRelationAndAuditAtomically(t *testing
 	assert.NotContains(t, *audit.RequestBody, req.Description)
 	assert.NotContains(t, *audit.RequestBody, req.RootCause)
 
-	incidentEnt, err := f.client.Incident.Get(f.ctx, f.incidentID)
+	// Old-only SQL fixture below independently verifies retired storage exclusion.
+	withAssociations, err := f.service.Get(f.ctx, created.ID, workitemmutation.Meta{TenantID: f.tenantID, ActorID: f.actorID, Source: "http"})
 	require.NoError(t, err)
-	legacyProblems, err := f.client.Incident.QueryProblems(incidentEnt).Count(f.ctx)
-	require.NoError(t, err)
-	assert.Zero(t, legacyProblems, "conversion must not write the legacy Problem-Incident edge")
-
-	withAssociations, err := f.service.GetWithAssociations(f.ctx, created.ID, f.tenantID)
-	require.NoError(t, err)
-	require.Len(t, withAssociations.Incidents, 1, "converted Problem must expose its source Incident")
-	assert.Equal(t, f.incidentID, withAssociations.Incidents[0].ID)
-	assert.Equal(t, "CONV-SRC-"+strings.NewReplacer("/", "-", " ", "-").Replace(t.Name()), withAssociations.Incidents[0].Number)
+	require.Len(t, withAssociations.Relations, 1, "converted Problem must expose its source Incident")
+	assert.Equal(t, f.incidentWorkItem, withAssociations.Relations[0].Source.WorkItemID)
+	assert.Equal(t, "CONV-SRC-"+strings.NewReplacer("/", "-", " ", "-").Replace(t.Name()), withAssociations.Relations[0].Source.Number)
 }
 
 func TestGetWithAssociationsOmitsDeletedConvertedIncident(t *testing.T) {
@@ -190,9 +189,9 @@ func TestGetWithAssociationsOmitsDeletedConvertedIncident(t *testing.T) {
 	_, err = f.client.Ticket.UpdateOneID(f.incidentWorkItem).SetDeletedAt(time.Now()).Save(f.ctx)
 	require.NoError(t, err)
 
-	withAssociations, err := f.service.GetWithAssociations(f.ctx, created.ID, f.tenantID)
-	require.NoError(t, err)
-	assert.Empty(t, withAssociations.Incidents)
+	withAssociations, err := f.service.Get(f.ctx, created.ID, workitemmutation.Meta{TenantID: f.tenantID, ActorID: f.actorID, Source: "http"})
+	require.Error(t, err, "active relation with deleted endpoint must fail closed")
+	require.Nil(t, withAssociations)
 }
 
 func TestGetWithAssociationsOmitsDeletedLegacyIncident(t *testing.T) {
@@ -201,16 +200,21 @@ func TestGetWithAssociationsOmitsDeletedLegacyIncident(t *testing.T) {
 		Title: "Legacy association", Priority: "medium", CreatedBy: f.actorID,
 	})
 	require.NoError(t, err)
-	require.NoError(t, f.service.AddAssociations(
-		f.ctx, f.tenantID, created.ID, f.actorID, "incident", []int{f.incidentID},
-	))
+
+	tx, err := f.client.Tx(f.ctx)
+	require.NoError(t, err)
+	_, err = tx.ExecContext(f.ctx, "CREATE TABLE IF NOT EXISTS problem_incidents (problem_id integer, incident_id integer)")
+	require.NoError(t, err)
+	_, err = tx.ExecContext(f.ctx, "INSERT INTO problem_incidents (problem_id,incident_id) VALUES (?,?)", created.ID, f.incidentID)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
 
 	_, err = f.client.Ticket.UpdateOneID(f.incidentWorkItem).SetDeletedAt(time.Now()).Save(f.ctx)
 	require.NoError(t, err)
 
-	withAssociations, err := f.service.GetWithAssociations(f.ctx, created.ID, f.tenantID)
+	withAssociations, err := f.service.Get(f.ctx, created.ID, workitemmutation.Meta{TenantID: f.tenantID, ActorID: f.actorID, Source: "http"})
 	require.NoError(t, err)
-	assert.Empty(t, withAssociations.Incidents)
+	assert.Empty(t, withAssociations.Relations)
 }
 
 func TestCreateFromIncidentRejectsIneligibleSourceWithoutWrites(t *testing.T) {
@@ -267,7 +271,7 @@ func TestCreateFromIncidentRejectsIneligibleSourceWithoutWrites(t *testing.T) {
 	})
 }
 
-func TestDeleteConvertedProblemSoftDeletesInvestigationRelation(t *testing.T) {
+func TestDeleteConvertedProblemRequiresExplicitRelationRemoval(t *testing.T) {
 	f := newConversionFixture(t, "new", true)
 	created, err := f.service.SubmitIncidentConversion(
 		f.ctx, f.tenantID, f.incidentID, f.actorID,
@@ -276,7 +280,14 @@ func TestDeleteConvertedProblemSoftDeletesInvestigationRelation(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, created.WorkItemID)
 
-	require.NoError(t, f.service.Delete(f.ctx, created.ID, f.tenantID))
+	meta := workitemmutation.Meta{TenantID: f.tenantID, ActorID: f.actorID, Source: "http", OperationID: "explicit-unlink", ExpectedVersion: f.client.Ticket.GetX(f.ctx, f.incidentWorkItem).Version}
+	err = f.service.Delete(f.ctx, created.ID, meta)
+	app, ok := common.AsAppError(err)
+	require.True(t, ok)
+	require.Equal(t, common.ErrCodeConflict, app.Code)
+	_, err = relationService.NewWorkItemRelationService(f.client, sameTransactionDirectory{}).Apply(f.ctx, relationService.RelationCommand{Meta: meta, SourceID: f.incidentWorkItem, TargetID: *created.WorkItemID, Type: "investigated_by"}, true)
+	require.NoError(t, err)
+	require.NoError(t, f.service.Delete(f.ctx, created.ID, meta))
 	live, err := f.client.WorkItemRelation.Query().Where(
 		workitemrelation.TenantID(f.tenantID),
 		workitemrelation.SourceWorkItemID(f.incidentWorkItem),
@@ -351,7 +362,7 @@ func TestCreateFromIncidentConcurrentRequestsCreateOneProblem(t *testing.T) {
 	assert.Equal(t, before.problems+1, after.problems)
 	assert.Equal(t, before.relations+1, after.relations)
 	assert.Equal(t, before.events+1, after.events)
-	assert.Equal(t, before.audits+2, after.audits, "one conversion audit plus one Intake creation audit")
+	assert.Equal(t, before.audits+3, after.audits, "conversion, source relation receipt and Intake creation audit")
 }
 
 func TestCreateFromIncidentRollsBackOnSideEffectFailure(t *testing.T) {

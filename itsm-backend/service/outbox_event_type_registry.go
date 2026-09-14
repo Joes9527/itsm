@@ -11,10 +11,11 @@ import (
 type OutboxEventTypeRegistry struct {
 	handlers map[string]OutboxDeliveryHandler
 	reserved map[string]struct{}
+	serial   map[string]bool
 }
 
 func NewOutboxEventTypeRegistry(handlers []OutboxDeliveryHandler, reserved ...string) (*OutboxEventTypeRegistry, error) {
-	r := &OutboxEventTypeRegistry{handlers: make(map[string]OutboxDeliveryHandler), reserved: make(map[string]struct{})}
+	r := &OutboxEventTypeRegistry{handlers: make(map[string]OutboxDeliveryHandler), reserved: make(map[string]struct{}), serial: make(map[string]bool)}
 	for _, eventType := range reserved {
 		eventType = strings.TrimSpace(eventType)
 		if eventType == "" {
@@ -40,6 +41,9 @@ func NewOutboxEventTypeRegistry(handlers []OutboxDeliveryHandler, reserved ...st
 			return nil, fmt.Errorf("duplicate outbox delivery handler: %s", eventType)
 		}
 		r.handlers[eventType] = handler
+		if ordered, ok := handler.(OrderedOutboxDeliveryHandler); ok {
+			r.serial[eventType] = ordered.SerialByAggregate()
+		}
 	}
 	if len(r.handlers) == 0 {
 		return nil, fmt.Errorf("at least one outbox delivery handler is required")
@@ -67,4 +71,9 @@ func (r *OutboxEventTypeRegistry) KnownTypes() []string {
 
 func (r *OutboxEventTypeRegistry) Handler(eventType string) OutboxDeliveryHandler {
 	return r.handlers[eventType]
+}
+
+// SerialByAggregate returns the immutable declaration captured at registration.
+func (r *OutboxEventTypeRegistry) SerialByAggregate(eventType string) bool {
+	return r.serial[eventType]
 }

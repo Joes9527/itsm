@@ -31,13 +31,13 @@ func buildWorkItemTestRouter(client *ent.Client, tenantID int, role string) *gin
 	r.GET("/api/v1/tickets/:id/comments", RequireWorkItemRecordClassPermission("read"), func(c *gin.Context) {
 		common.Success(c, gin.H{"ok": true})
 	})
-	// 形状与 router.go 的 tickets.POST("/:id/comments", ..., RequireWorkItemRecordClassPermission("create"), ...)
-	// 和 tickets.PUT("/:id/comments/:comment_id", ..., RequireWorkItemRecordClassPermission("update"), ...)
+	// 形状与 router.go 的 tickets.POST("/:id/comments", ..., RequireWorkItemCollaborationPermission("create"), ...)
+	// 和 tickets.PUT("/:id/comments/:comment_id", ..., RequireWorkItemCollaborationPermission("update"), ...)
 	// 完全一致，用于验证 Fix 1 的 create/update → write 归一化在真实路由匹配链路里同样生效。
-	r.POST("/api/v1/tickets/:id/comments", RequireWorkItemRecordClassPermission("create"), func(c *gin.Context) {
+	r.POST("/api/v1/tickets/:id/comments", RequireWorkItemCollaborationPermission("create"), func(c *gin.Context) {
 		common.Success(c, gin.H{"ok": true})
 	})
-	r.PUT("/api/v1/tickets/:id/comments/:comment_id", RequireWorkItemRecordClassPermission("update"), func(c *gin.Context) {
+	r.PUT("/api/v1/tickets/:id/comments/:comment_id", RequireWorkItemCollaborationPermission("update"), func(c *gin.Context) {
 		common.Success(c, gin.H{"ok": true})
 	})
 	return r

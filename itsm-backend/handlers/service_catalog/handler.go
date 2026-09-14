@@ -3,10 +3,12 @@ package service_catalog
 import (
 	"encoding/json"
 	"errors"
-	"github.com/gin-gonic/gin/binding"
 	"io"
-	creation "itsm-backend/handlers/common/workitemcreation"
 	"strconv"
+
+	"github.com/gin-gonic/gin/binding"
+
+	creation "itsm-backend/handlers/common/workitemcreation"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
@@ -277,7 +279,8 @@ func (h *Handler) toDTO(c *ServiceCatalog) dto.ServiceCatalogResponse {
 			"required": d.Required, "options": d.Options, "sortOrder": d.SortOrder,
 		})
 	}
-	return dto.ServiceCatalogResponse{AccessPolicy: c.AccessPolicy,
+	return dto.ServiceCatalogResponse{
+		AccessPolicy:   c.AccessPolicy,
 		CatalogVersion: c.CatalogVersion, FormSchemaVersion: c.FormSchemaVersion,
 		ID:                   c.ID,
 		Name:                 c.Name,

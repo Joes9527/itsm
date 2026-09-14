@@ -24,10 +24,9 @@ import type {
   AssignmentRule,
   ConditionConfig,
   CreateAssignmentRuleRequest,
-  UpdateAssignmentRuleRequest} from '@/lib/api/ticket-assignment-api';
-import {
-  TicketAssignmentApi
+  UpdateAssignmentRuleRequest,
 } from '@/lib/api/ticket-assignment-api';
+import { TicketAssignmentApi } from '@/lib/api/ticket-assignment-api';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -137,7 +136,11 @@ export default function AssignmentRulesPage() {
     try {
       const values = await form.validateFields();
       const conditions = parseJsonField<ConditionConfig[]>(values.conditions, [], '匹配条件');
-      const actions = parseJsonField<ActionConfig>(values.actions, { type: 'user', value: 1 }, '分配动作');
+      const actions = parseJsonField<ActionConfig>(
+        values.actions,
+        { type: 'user', value: 1 },
+        '分配动作'
+      );
       const payload: CreateAssignmentRuleRequest | UpdateAssignmentRuleRequest = {
         name: values.name,
         description: values.description,
@@ -221,7 +224,7 @@ export default function AssignmentRulesPage() {
       render: (name: string, record) => (
         <div>
           <Text strong>{name}</Text>
-          <div className="text-xs text-gray-500">{record.description || '未填写描述'}</div>
+          <div className="text-[12px] text-muted">{record.description || '未填写描述'}</div>
         </div>
       ),
     },
@@ -247,15 +250,15 @@ export default function AssignmentRulesPage() {
     },
     {
       title: '执行次数',
-      dataIndex:'executionCount',
-      key:'executionCount',
+      dataIndex: 'executionCount',
+      key: 'executionCount',
       width: 100,
       render: (count: number) => count || 0,
     },
     {
       title: '最近执行',
-      dataIndex:'lastExecutedAt',
-      key:'lastExecutedAt',
+      dataIndex: 'lastExecutedAt',
+      key: 'lastExecutedAt',
       width: 180,
       render: formatDate,
     },
@@ -280,7 +283,11 @@ export default function AssignmentRulesPage() {
       render: (_, record) => (
         <div className="flex items-center gap-2">
           <Tooltip title="测试">
-            <Button size="small" icon={<FlaskConical size={14} />} onClick={() => openTestModal(record)} />
+            <Button
+              size="small"
+              icon={<FlaskConical size={14} />}
+              onClick={() => openTestModal(record)}
+            />
           </Tooltip>
           <Tooltip title="编辑">
             <Button size="small" icon={<Edit size={14} />} onClick={() => openEditModal(record)} />
@@ -306,7 +313,7 @@ export default function AssignmentRulesPage() {
       <Card>
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <Title level={3} style={{ marginBottom: 4 }}>
+            <Title level={2} style={{ marginBottom: 4 }}>
               工单分配规则
             </Title>
             <Text type="secondary">按条件自动选择处理人，支撑工单进入可运营的分派流程。</Text>
@@ -351,7 +358,11 @@ export default function AssignmentRulesPage() {
         destroyOnHidden
       >
         <Form form={form} layout="vertical">
-          <Form.Item name="name" label="规则名称" rules={[{ required: true, message: '请输入规则名称' }]}>
+          <Form.Item
+            name="name"
+            label="规则名称"
+            rules={[{ required: true, message: '请输入规则名称' }]}
+          >
             <Input placeholder="例如：高优先级工单分配给一线负责人" />
           </Form.Item>
           <Form.Item name="description" label="规则描述">
@@ -393,14 +404,24 @@ export default function AssignmentRulesPage() {
         destroyOnHidden
       >
         <Form form={testForm} layout="vertical">
-          <Form.Item name="ruleId" label="规则 ID" rules={[{ required: true, message: '请选择规则' }]}>
+          <Form.Item
+            name="ruleId"
+            label="规则 ID"
+            rules={[{ required: true, message: '请选择规则' }]}
+          >
             <InputNumber disabled style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="ticketId" label="工单 ID" rules={[{ required: true, message: '请输入工单 ID' }]}>
+          <Form.Item
+            name="ticketId"
+            label="工单 ID"
+            rules={[{ required: true, message: '请输入工单 ID' }]}
+          >
             <InputNumber min={1} style={{ width: '100%' }} />
           </Form.Item>
         </Form>
-        {testResult ? <Alert className="mt-3" type="success" showIcon message={testResult} /> : null}
+        {testResult ? (
+          <Alert className="mt-3" type="success" showIcon message={testResult} />
+        ) : null}
       </Modal>
     </div>
   );

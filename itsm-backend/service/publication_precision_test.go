@@ -3,10 +3,11 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/ent/enttest"
-	"testing"
 )
 
 func TestPublicationPersistedNumericOptionsAndRouting(t *testing.T) {
@@ -20,14 +21,14 @@ func TestPublicationPersistedNumericOptionsAndRouting(t *testing.T) {
 	require.NoError(t, validator.ValidateCreationValues(ctx, tx, 1, "service_catalog", field.EntityID, map[string]any{"quota": json.Number("9007199254740993")}))
 	require.Error(t, validator.ValidateCreationValues(ctx, tx, 1, "service_catalog", field.EntityID, map[string]any{"quota": json.Number("9007199254740992")}))
 	require.NoError(t, tx.Rollback())
-	client.ProcessBinding.Create().SetTenantID(1).SetBusinessType("ticket").SetProcessDefinitionKey("exact").SetPriority(10).SetConditions(map[string]any{"amount": map[string]any{"gte": json.Number("9007199254740993.125")}}).SaveX(ctx)
-	client.ProcessBinding.Create().SetTenantID(1).SetBusinessType("ticket").SetProcessDefinitionKey("fallback").SetIsDefault(true).SaveX(ctx)
+	client.ProcessBinding.Create().SetTenantID(1).SetBusinessType("generic").SetProcessDefinitionKey("exact").SetPriority(10).SetConditions(map[string]any{"amount": map[string]any{"gte": json.Number("9007199254740993.125")}}).SaveX(ctx)
+	client.ProcessBinding.Create().SetTenantID(1).SetBusinessType("generic").SetProcessDefinitionKey("fallback").SetIsDefault(true).SaveX(ctx)
 	router := NewProcessRoutingService(client, zap.NewNop().Sugar())
 	tx, err = client.Tx(ctx)
 	require.NoError(t, err)
 	defer tx.Rollback()
 	for _, tc := range []struct{ amount, key string }{{"9007199254740993.125", "exact"}, {"9007199254740993.124", "fallback"}} {
-		route, err := router.FindBestRouteTx(ctx, tx, &RoutingContext{TenantID: 1, BusinessType: "ticket", Variables: map[string]any{"amount": json.Number(tc.amount)}})
+		route, err := router.FindBestRouteTx(ctx, tx, &RoutingContext{TenantID: 1, BusinessType: "generic", Variables: map[string]any{"amount": json.Number(tc.amount)}})
 		require.NoError(t, err)
 		require.NotNil(t, route)
 		require.Equal(t, tc.key, route.ProcessDefinitionKey)

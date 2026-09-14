@@ -159,8 +159,8 @@ const MarketplacePage = () => {
     <div className="container mx-auto px-4 py-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">应用市场</h1>
-          <p className="text-gray-500 mt-1">发现和安装连接器、AI技能和扩展插件，提升IT服务管理效率</p>
+          <h1 className="text-[24px] font-semibold tracking-tight">应用市场</h1>
+          <p className="mt-1 text-[12px] text-muted">发现和安装连接器、AI技能和扩展插件，提升IT服务管理效率</p>
         </div>
         <Link href="/installations">
           <Button variant="default">
@@ -171,11 +171,11 @@ const MarketplacePage = () => {
       </div>
 
       {/* 搜索和过滤区 */}
-      <div className="bg-white rounded-lg shadow-sm p-4 mb-6 space-y-4">
+      <div className="mb-6 space-y-4 rounded-[8px] border border-border bg-surface p-[16px] shadow-none">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted" />
               <Input
                 placeholder="搜索应用名称、描述或标签..."
                 value={search}
@@ -225,11 +225,11 @@ const MarketplacePage = () => {
       {/* 应用列表 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filteredItems.map(item => (
-          <Card key={item.id} className="hover:shadow-md transition-shadow">
-            <CardHeader className="pb-2">
+          <Card key={item.id} className="rounded-[8px] border border-border bg-surface text-[13px] text-foreground shadow-none transition-colors hover:border-[var(--color-primary)]">
+            <CardHeader className="p-[16px] pb-[8px]">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-md overflow-hidden bg-gray-100 flex items-center justify-center">
+                  <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-[6px] bg-raised">
                     {item.iconUrl ? (
                       <img src={item.iconUrl} alt={item.title} className="w-full h-full object-cover" />
                     ) : (
@@ -237,13 +237,13 @@ const MarketplacePage = () => {
                     )}
                   </div>
                   <div>
-                    <CardTitle className="text-lg">{item.title}</CardTitle>
+                    <CardTitle className="text-[15px] font-semibold">{item.title}</CardTitle>
                     <CardDescription className="flex items-center gap-2 mt-1">
-                      <Badge variant="secondary" className="text-xs">
+                      <Badge variant="secondary" className="text-[11px]">
                         {typeNames[item.type]}
                       </Badge>
                       {item.isOfficial && (
-                        <Badge variant="default" className="bg-blue-100 text-blue-800 hover:bg-blue-200 text-xs">
+                        <Badge variant="default" className="bg-blue-100 text-[11px] text-blue-800 hover:bg-blue-200">
                           官方
                         </Badge>
                       )}
@@ -252,23 +252,23 @@ const MarketplacePage = () => {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="pb-2">
-              <p className="text-sm text-gray-600 line-clamp-2 h-10">
+            <CardContent className="px-[16px] pb-[8px]">
+              <p className="h-10 line-clamp-2 text-[13px] text-muted">
                 {item.description}
               </p>
               <div className="flex flex-wrap gap-1 mt-2">
                 {item.tags.slice(0, 3).map(tag => (
-                  <Badge key={tag} variant="outline" className="text-xs">
+                  <Badge key={tag} variant="outline" className="text-[11px]">
                     {tag}
                   </Badge>
                 ))}
                 {item.tags.length > 3 && (
-                  <span className="text-xs text-gray-500">+{item.tags.length - 3}</span>
+                  <span className="text-[12px] text-muted">+{item.tags.length - 3}</span>
                 )}
               </div>
             </CardContent>
-            <CardFooter className="flex items-center justify-between pt-2 border-t">
-              <div className="flex items-center gap-3 text-sm text-gray-500">
+            <CardFooter className="flex items-center justify-between border-t border-border p-[16px] pt-[8px]">
+              <div className="flex items-center gap-3 text-[13px] text-muted">
                 <div className="flex items-center gap-1">
                   <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                   <span>{item.rating.toFixed(1)}</span>
@@ -277,7 +277,7 @@ const MarketplacePage = () => {
                   <Download className="h-4 w-4" />
                   <span>{item.installCount}</span>
                 </div>
-                <div className="text-xs text-gray-400">
+                <div className="text-[12px] text-muted">
                   v{item.latestVersion}
                 </div>
               </div>
@@ -290,11 +290,11 @@ const MarketplacePage = () => {
       </div>
 
       {filteredItems.length === 0 && (
-        <div className="bg-white rounded-lg shadow-sm p-10 text-center">
+        <div className="rounded-[8px] border border-border bg-surface p-[24px] text-center shadow-none">
           <div className="flex flex-col items-center justify-center">
-            <Search className="h-12 w-12 text-gray-300 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">没有找到匹配的应用</h3>
-            <p className="text-gray-500">尝试调整搜索条件或过滤选项</p>
+            <Search className="mb-4 h-12 w-12 text-muted" />
+            <h3 className="mb-2 text-[15px] font-semibold text-foreground">没有找到匹配的应用</h3>
+            <p className="text-[12px] text-muted">尝试调整搜索条件或过滤选项</p>
           </div>
         </div>
       )}

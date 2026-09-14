@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/authentication"
 
 	"entgo.io/ent/dialect"
@@ -119,7 +121,7 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 	require.NoError(t, err)
 
 	// Initialize BPMN Engine & Trigger Service
-	engine := service.NewCustomProcessEngine(client, logger)
+	engine := service.NewCustomProcessEngine(client, logger, executionfixture.Standard())
 	triggerSvc := service.NewProcessTriggerService(client, engine)
 	slaSvc := service.NewTicketSLAService(client, logger)
 
@@ -137,14 +139,14 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 	// Initialize Controllers & Handlers
 	ticketController := controller.NewTicketController(ticketSvc, nil, nil, client, logger)
 	versionSvc := service.NewBPMNVersionService(client, logger)
-	bpmnController := controller.NewBPMNWorkflowController(engine, versionSvc)
+	bpmnController := controller.NewBPMNWorkflowController(engine, versionSvc, executionfixture.Standard())
 
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, logger, sameTransactionDirectory{})
 	scHandler := service_catalog.NewHandler(scService)
 
-	srRepo := service_request.NewEntRepository(client)
-	srService := service_request.NewService(srRepo, client, logger, service.NewApprovalChainResolver(client, logger))
+	srRepo := service_request.NewEntRepository(client, executionfixture.Standard())
+	srService := service_request.NewService(srRepo, client, logger, service.NewApprovalChainResolver(client, logger), executionfixture.Standard())
 	srHandler := service_request.NewHandler(srService)
 
 	// Wire the real shared Intake application, mirroring production bootstrap:
@@ -156,15 +158,15 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 	registry := intake.NewCreatorRegistry()
 	for _, owner := range []creation.ProfessionalCreator{
 		ticketSvc,
-		service.NewIncidentService(client, logger),
-		problemdomain.NewService(nil, logger),
-		changedomain.NewService(nil, client, logger),
+		service.NewIncidentService(client, logger, executionfixture.Standard()),
+		problemdomain.NewService(nil, logger, executionfixture.Standard()),
+		changedomain.NewService(nil, client, logger, executionfixture.Standard()),
 		srService,
 	} {
 		require.NoError(t, registry.Register(owner))
 	}
 	resolver := intake.NewResolver(scService, service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
-	creationApp := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(numberAllocator), sameTransactionDirectory{})
+	creationApp := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(numberAllocator), sameTransactionDirectory{}, executionfixture.Standard())
 	ticketController.SetCreationApplication(creationApp)
 	srHandler.SetCreationApplication(creationApp)
 
@@ -381,7 +383,7 @@ func TestSSLVPNScenarioE2E(t *testing.T) {
 	require.Len(t, startEvents, 1, "exactly one durable workflow start event must be recorded for the created work item")
 	require.NoError(t, service.NewWorkflowStartOutboxHandler(h.client, h.engine.(*service.CustomProcessEngine), h.client).Deliver(ctx, startEvents[0]))
 
-	businessKey := fmt.Sprintf("service_request:%d", ticketID)
+	businessKey := fmt.Sprintf("service_request_item:%d", ticketID)
 	var processInst *ent.ProcessInstance
 	require.Eventually(t, func() bool {
 		pi, qErr := h.client.ProcessInstance.Query().

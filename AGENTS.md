@@ -60,6 +60,14 @@ When making architecture choices, prefer enterprise correctness, auditability, t
 
 ## Architecture Principles
 
+### Runtime lifecycle and candidate execution
+
+- Service construction must not start consumers, deploy default workflows, create storage resources, or initialize schema. Runtime startup is explicit; cancellation and worker completion precede dependency shutdown.
+- Candidate execution scope is an additional deployment restriction, never a replacement for tenant/RBAC or professional lifecycle authorization. Only new WorkItems may be enrolled in their creation transaction; historical records must not be enrolled, claimed, acknowledged, or rewritten to enable acceptance.
+- Execution configuration and database role bindings must agree. Unknown capabilities fail closed; disabled required journeys remain unvalidated. A configured attachment backend must not silently fall back to another storage location.
+
+### General design rules
+
 - Prefer architectural refactoring over compatibility layers, wrappers, bridge services, temporary fallbacks, or parallel implementations. When a new path replaces an old path, remove the old path in the same change unless backward compatibility is an explicit requirement.
 - Keep one authoritative source for each business concept and field. Do not maintain long-term dual reads, dual writes, duplicated queries, duplicated abstractions, or JSON fields alongside structured relations.
 - Prefer configuration-driven, registry-based, policy-based, and strategy-based behavior over hardcoded routing, tenant data, business vocabulary, thresholds, or keyword heuristics. Put variable product behavior in configuration or domain metadata.
@@ -103,6 +111,20 @@ For new work, align with the roadmap rather than creating parallel mechanisms. I
 
 ## Unified Work Item Domain Contract
 
+Runtime controlled-migration admission uses an independently configured, read-only inspection identity bound to the same database/schema/deployment, with ledger/evidence SELECT only; the business identity receives no global evidence access. Runtime structural admission is distinct from full privileged P/R data verification and business acceptance. Existing targets advance through the canonical migration stream without Ent overlays.
+
+
+> Accepted controlled retirement design (code and isolated validation implemented; Tasks 1–6 reviewed; final scoped rereview completed as a successor review (PASS, not an independent third-party review); I2 deferred as BL-WI-PROCESS-AUDIT-CONTINUITY, so general pre-P active-process retirement remains unaccepted; current-HEAD isolated full-flow rerun workitem-v1-e27375881582 passed 27/27 covering observation, R(038), recovery and business V1; a shared itsm-postgres-dev dedicated-database run completed real CLI admission/P/ordinary migration and was cleaned up; real target deployment/retirement remains unauthorized and unexecuted): [design](docs/superpowers/specs/2026-09-11-workitem-controlled-retirement-design.md); [plan](docs/superpowers/plans/2026-09-11-workitem-controlled-retirement.md). Preserve historical SQL/checksums and truthful receipts. Separate transactional structure preparation from later full business acceptance and controlled retirement. All migration write paths, including rollback/reset, enforce stage dependencies; read-only classification precedes any bootstrap writes. Environment deployment and deletion require their own authorization.
+
+
+> Accepted convergence design: [WorkItem convergence](docs/superpowers/specs/2026-09-09-workitem-convergence-design.md); [implementation plan](docs/superpowers/plans/2026-09-09-workitem-convergence.md). Incident recovery is independent of Problem completion. Problem resolution requires a verified permanent fix. Authorized reopen starts a zeroed SLA cycle while preserving prior results and original creation time. For this convergence only, historical business data is not migrated; schema changes remain required. Retire old structures after sole-path cutover, validation and observation. No parallel lifecycle, relationship, SLA or approval implementation is permitted.
+
+> Confirmed cross-domain development input: [WorkItem next development input](docs/superpowers/specs/2026-09-11-workitem-convergence-development-input.md). It covers Incident, Problem, Change and shared capabilities; the accepted Incident decision below is only one sub-decision. Open questions are not approved implementation requirements.
+
+> Confirmed follow-up decisions (code and isolated validation implemented; target deployment pending): Change reassignment preserves stage and approval results without replacing task actors; Problem reassignment preserves progress and evidence. Every reassignment requires a reason and audit. Change multi-WorkOrder execution is backlog BL-CHG-WO-01. See the [decision record](docs/superpowers/specs/2026-09-11-workitem-convergence-development-input.md). The [next-stage design](docs/superpowers/specs/2026-09-11-workitem-convergence-next-stage-design.md) is accepted; use the [next-stage implementation plan](docs/superpowers/plans/2026-09-11-workitem-next-stage.md) to track remaining work. Code and isolated validation are recorded in the implementation plan; candidate integration and target deployment require their own current-version evidence.
+
+> Accepted Incident assignment decision (code and isolated validation implemented; target deployment pending): [assignment convergence](docs/superpowers/specs/2026-09-11-workitem-incident-assignment-convergence-design.md). First assignment of a new Incident moves it to assigned; later reassignment preserves its current allowed nonterminal state. Starting work does not require a prior acknowledge action; acknowledge remains optional. All entrypoints share Incident domain rules and versioned transactional receipts. First-response measurement is backlog BL-RESP-01: do not change existing response recording or implicitly mark assignment/start as a response. Existing SLA cycle and reopen guarantees remain required.
+
 The unified Work Item model is the shared business language for Ticket, Service Catalog, Service Request, Incident, Problem, Known Error, Change, and fulfillment work. The detailed design is maintained in `docs/superpowers/specs/2026-08-26-unified-work-item-model-design.md`; this section is the implementation contract for all coding agents.
 
 ### Business Vocabulary
@@ -131,15 +153,16 @@ The unified Work Item model is the shared business language for Ticket, Service 
 - A relationship is not a lifecycle conversion. Incident does not become Problem by changing a type, and Problem does not become Change. Create the target WorkItem and an explicit relation while preserving the source record and history.
 - Known Error and Catalog Item remain separate concepts: knowledge record and service definition respectively, not WorkItems.
 - One authoritative field has one write location. Do not maintain duplicate public fields, long-term dual writes, or JSON relationship fields alongside structured relations.
+- Process identity is recordClass. At every BPMN boundary the business type **is** the WorkItem record class and the business key is `{recordClass}:{workItemId}` carrying a WorkItem ID. The legacy wire vocabulary (`ticket`/`change`/`service_request`) is retired: it must neither be written nor re-interpreted. Keep one definition of that vocabulary and key format (currently `common/workitemidentity`) — a second mapping table that translates recordClass back to a legacy value is precisely the dual interpretation this contract forbids. Release keeps its explicit legacy identity `release` and is not a WorkItem.
 
 ### Professional Lifecycle Ownership
 
 - WorkItem provides shared operations such as assignment, comments, attachments, followers, SLA projection, workflow references, activity timeline, and audit.
 - `IncidentService` owns acknowledge, resolve, close, reopen, pending, cancellation, and major-incident rules.
 - `ProblemService` owns assessment, investigation, root cause, workaround, known-error, resolve, close, and reopen rules.
+- Problem root-cause text has one authoritative write location: `problems.root_cause`. RCA records own analysis metadata (method, evidence, confidence, reviewer), and expose the Problem root cause as a projection. RCA mutations update the Problem text and analysis metadata atomically; Known Error creation reads that same Problem text. Do not restore a second RCA root-cause text column or dual writes.
 - `ChangeService` owns assessment, authorization, scheduling, implementation, review, rollback, closure, risk, CAB, and implementation-window rules.
 - `ServiceRequestService` owns catalog validation, approval, fulfillment, delivery, and Requested Item lifecycle rules.
 - Do not create a giant service or `switch recordClass` that implements every professional state machine. Shared services coordinate common behavior; professional services validate professional transitions and side effects.
 
 Operational commands, testing procedures, naming details, DTO examples, deployment operations, and troubleshooting belong in [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md).
-

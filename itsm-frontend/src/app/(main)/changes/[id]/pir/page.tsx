@@ -9,7 +9,7 @@ import {
   DatePicker,
   Button,
   Space,
-  message,
+  App,
   Divider,
   Tag,
   Descriptions,
@@ -23,6 +23,7 @@ import { PageContainer } from '@/components/layout/PageContainer';
 import {
   ChangeApi,
   type PIRResponse,
+  type Change,
   type CreatePIRRequest,
   type UpdatePIRRequest,
   type PIROverallResult,
@@ -30,10 +31,16 @@ import {
 import { useI18n } from '@/lib/i18n/useI18n';
 import dayjs from 'dayjs';
 
+import { useChangeOperation } from '@/components/change/useChangeOperation';
+
 const { TextArea } = Input;
 const { Text } = Typography;
 
 export default function PIRPage() {
+  const { message } = App.useApp();
+  const operation = useChangeOperation();
+  const [change, setChange] = useState<Change | null>(null);
+  const [error, setError] = useState('');
   const params = useParams();
   const router = useRouter();
   const { t } = useI18n();
@@ -50,7 +57,12 @@ export default function PIRPage() {
   const fetchPIR = useCallback(async () => {
     setLoading(true);
     try {
-      const pirData = await ChangeApi.getPIR(changeId);
+      const [pirData, detail] = await Promise.all([
+        ChangeApi.getPIR(changeId),
+        ChangeApi.getChange(changeId),
+      ]);
+      setChange(detail);
+      setError('');
       setPIR(pirData);
       setExistingPIR(!!pirData);
       if (pirData) {
@@ -68,20 +80,22 @@ export default function PIRPage() {
         });
       }
     } catch (error) {
-      console.error('Failed to fetch PIR:', error);
+      setError(error instanceof Error ? error.message : 'PIR 加载失败');
+      throw error;
     } finally {
       setLoading(false);
     }
   }, [changeId, form]);
 
   useEffect(() => {
-    fetchPIR();
+    void fetchPIR().catch(() => {});
   }, [fetchPIR]);
 
   const handleSubmit = async (values: any) => {
+    if (!change) return;
     setSubmitting(true);
     try {
-      const request: CreatePIRRequest = {
+      const request: Omit<CreatePIRRequest, 'expectedVersion' | 'operationId'> = {
         overallResult: values.overallResult as PIROverallResult,
         objectivesAchieved: values.objectivesAchieved,
         successSummary: values.successSummary,
@@ -96,7 +110,8 @@ export default function PIRPage() {
 
       if (existingPIR && pir) {
         // Update existing PIR
-        const updateRequest: UpdatePIRRequest = {
+        const updateRequest: Omit<UpdatePIRRequest, 'expectedVersion' | 'operationId'> = {
+          changeId,
           overallResult: values.overallResult,
           objectivesAchieved: values.objectivesAchieved,
           successSummary: values.successSummary,
@@ -104,14 +119,21 @@ export default function PIRPage() {
           lessonsLearned: values.lessonsLearned,
           improvementRecommendations: values.improvementRecommendations,
         };
-        const updated = await ChangeApi.updatePIR(pir.id, updateRequest);
-        setPIR(updated);
+        await ChangeApi.updatePIR(pir.id, {
+          ...updateRequest,
+          ...operation.identity(`${changeId}/pir/${pir.id}/update`, updateRequest, change.version),
+        });
+        operation.clear();
+        await fetchPIR();
         message.success('PIR已更新');
       } else {
         // Create new PIR
-        const created = await ChangeApi.createPIR(changeId, request);
-        setPIR(created);
-        setExistingPIR(true);
+        await ChangeApi.createPIR(changeId, {
+          ...request,
+          ...operation.identity(`${changeId}/pir/create`, request, change.version),
+        });
+        operation.clear();
+        await fetchPIR();
         message.success('PIR已创建');
       }
     } catch (error: any) {
@@ -122,10 +144,15 @@ export default function PIRPage() {
   };
 
   const handleDelete = async () => {
-    if (!pir) return;
+    if (!pir || !change) return;
     setDeleting(true);
     try {
-      await ChangeApi.deletePIR(pir.id);
+      await ChangeApi.deletePIR(pir.id, {
+        changeId,
+        ...operation.identity(`${changeId}/pir/${pir.id}/delete`, { changeId }, change.version),
+      });
+      operation.clear();
+      await fetchPIR();
       message.success('PIR已删除');
       setPIR(null);
       setExistingPIR(false);
@@ -142,19 +169,19 @@ export default function PIRPage() {
     switch (result) {
       case 'successful':
         return (
-          <Tag icon={<CheckCircle />} color="success">
+          <Tag icon={<CheckCircle />} color='success'>
             成功
           </Tag>
         );
       case 'partially_successful':
         return (
-          <Tag icon={<AlertTriangle />} color="warning">
+          <Tag icon={<AlertTriangle />} color='warning'>
             部分成功
           </Tag>
         );
       case 'failed':
         return (
-          <Tag icon={<XCircle />} color="error">
+          <Tag icon={<XCircle />} color='error'>
             失败
           </Tag>
         );
@@ -165,35 +192,51 @@ export default function PIRPage() {
 
   return (
     <PageContainer
-      title="实施后审查 (PIR)"
-      description="评估变更实施结果，总结经验教训"
+      title='实施后审查 (PIR)'
+      description='评估变更实施结果，总结经验教训'
       extra={<Button onClick={() => router.push(`/changes/${changeId}`)}>返回变更详情</Button>}
     >
-      <div className="space-y-6">
+      <div className='space-y-6'>
+        {error && (
+          <Alert
+            type='error'
+            title={error}
+            action={
+              <Button onClick={() => void fetchPIR().catch(() => {})}>重新加载 PIR 与版本</Button>
+            }
+          />
+        )}
+        {change && (
+          <Alert
+            type='info'
+            title={`当前变更版本 ${change.version}；实施结果：${change.outcome || '尚未记录'}`}
+          />
+        )}
         {pir && (
-          <Card title="PIR概览" className="shadow-sm rounded-lg">
+          <Card title='PIR概览' className='shadow-sm rounded-lg'>
             <Descriptions column={2} bordered>
-              <Descriptions.Item label="变更ID">{pir.changeId}</Descriptions.Item>
-              <Descriptions.Item label="审查人">{pir.reviewerName}</Descriptions.Item>
-              <Descriptions.Item label="审查日期">
+              <Descriptions.Item label='PIR ID'>{pir.id}</Descriptions.Item>
+              <Descriptions.Item label='变更ID'>{pir.changeId}</Descriptions.Item>
+              <Descriptions.Item label='审查人'>{pir.reviewerName}</Descriptions.Item>
+              <Descriptions.Item label='审查日期'>
                 {dayjs(pir.reviewDate).format('YYYY-MM-DD HH:mm')}
               </Descriptions.Item>
-              <Descriptions.Item label="总体结果">
+              <Descriptions.Item label='总体结果'>
                 {getResultTag(pir.overallResult as PIROverallResult)}
               </Descriptions.Item>
-              <Descriptions.Item label="目标达成">
+              <Descriptions.Item label='目标达成'>
                 {pir.objectivesAchieved ? (
-                  <Tag color="success">是</Tag>
+                  <Tag color='success'>是</Tag>
                 ) : (
-                  <Tag color="error">否</Tag>
+                  <Tag color='error'>否</Tag>
                 )}
               </Descriptions.Item>
-              <Descriptions.Item label="实际持续时间">
+              <Descriptions.Item label='实际持续时间'>
                 {pir.actualDurationMinutes} 分钟
               </Descriptions.Item>
               {pir.rollbackPerformed && (
-                <Descriptions.Item label="回滚">
-                  <Tag icon={<Undo />} color="warning">
+                <Descriptions.Item label='回滚'>
+                  <Tag icon={<Undo />} color='warning'>
                     已回滚
                   </Tag>
                 </Descriptions.Item>
@@ -204,20 +247,20 @@ export default function PIRPage() {
 
         <Card
           title={existingPIR ? '编辑实施后审查' : '创建实施后审查'}
-          className="shadow-sm rounded-lg"
+          className='shadow-sm rounded-lg'
         >
           <Alert
-            type="info"
+            type='info'
             showIcon
-            className="mb-5"
-            message="按结果、问题、经验和改进建议四部分填写即可，不必每项都写很长。"
+            className='mb-5'
+            title='按结果、问题、经验和改进建议四部分填写即可，不必每项都写很长。'
           />
           <Form
+            disabled={loading || submitting || deleting || !change || !!error}
             form={form}
-            layout="vertical"
+            layout='vertical'
             onFinish={handleSubmit}
             initialValues={{
-              overallResult: 'successful',
               objectivesAchieved: false,
               rollbackPerformed: false,
             }}
@@ -225,24 +268,25 @@ export default function PIRPage() {
             <Divider>基本评估</Divider>
 
             <Form.Item
-              name="overallResult"
-              label="总体结果"
+              name='overallResult'
+              label='总体结果'
               rules={[{ required: true, message: '请选择总体结果' }]}
             >
-              <Select placeholder="选择实施结果">
-                <Select.Option value="successful">
+              <Select placeholder='选择实施结果'>
+                <Select.Option value='rolled_back'>已回滚</Select.Option>
+                <Select.Option value='successful'>
                   <Space>
                     <CheckCircle style={{ color: '#52c41a' }} />
                     成功 - 变更完全按计划实施，达到预期目标
                   </Space>
                 </Select.Option>
-                <Select.Option value="partially_successful">
+                <Select.Option value='partially_successful'>
                   <Space>
                     <AlertTriangle style={{ color: '#faad14' }} />
                     部分成功 - 变更实施但存在一些问题
                   </Space>
                 </Select.Option>
-                <Select.Option value="failed">
+                <Select.Option value='failed'>
                   <Space>
                     <XCircle style={{ color: '#ff4d4f' }} />
                     失败 - 变更未能达到预期目标或需要回滚
@@ -251,9 +295,9 @@ export default function PIRPage() {
               </Select>
             </Form.Item>
 
-            <Form.Item name="objectivesAchieved" label="目标是否达成">
+            <Form.Item name='objectivesAchieved' label='目标是否达成'>
               <Select
-                placeholder="选择是否达成"
+                placeholder='选择是否达成'
                 options={[
                   { label: '是', value: true },
                   { label: '否', value: false },
@@ -263,53 +307,53 @@ export default function PIRPage() {
 
             <Divider>详细评估</Divider>
 
-            <div className="mb-4">
-              <Text type="secondary">建议每项控制在 1 到 3 句话，优先描述事实和影响。</Text>
+            <div className='mb-4'>
+              <Text type='secondary'>建议每项控制在 1 到 3 句话，优先描述事实和影响。</Text>
             </div>
 
-            <Form.Item name="successSummary" label="成功总结">
+            <Form.Item name='successSummary' label='成功总结'>
               <TextArea
                 rows={4}
-                placeholder="哪些做法有效，为什么有效？"
+                placeholder='哪些做法有效，为什么有效？'
                 showCount
                 maxLength={300}
               />
             </Form.Item>
 
-            <Form.Item name="issuesEncountered" label="遇到的问题">
-              <TextArea rows={4} placeholder="实施中遇到了什么阻碍？" showCount maxLength={300} />
+            <Form.Item name='issuesEncountered' label='遇到的问题'>
+              <TextArea rows={4} placeholder='实施中遇到了什么阻碍？' showCount maxLength={300} />
             </Form.Item>
 
-            <Form.Item name="lessonsLearned" label="经验教训">
+            <Form.Item name='lessonsLearned' label='经验教训'>
               <TextArea
                 rows={4}
-                placeholder="这次最值得复用或避免的经验是什么？"
+                placeholder='这次最值得复用或避免的经验是什么？'
                 showCount
                 maxLength={300}
               />
             </Form.Item>
 
-            <Form.Item name="improvementRecommendations" label="改进建议">
-              <TextArea rows={4} placeholder="下次如何做得更稳、更快？" showCount maxLength={300} />
+            <Form.Item name='improvementRecommendations' label='改进建议'>
+              <TextArea rows={4} placeholder='下次如何做得更稳、更快？' showCount maxLength={300} />
             </Form.Item>
 
             <Divider>实施时间</Divider>
 
-            <Space size="large" wrap>
-              <Form.Item name="actualStartTime" label="实际开始时间">
-                <DatePicker showTime format="YYYY-MM-DD HH:mm" />
+            <Space size='large' wrap>
+              <Form.Item name='actualStartTime' label='实际开始时间'>
+                <DatePicker showTime format='YYYY-MM-DD HH:mm' />
               </Form.Item>
 
-              <Form.Item name="actualEndTime" label="实际结束时间">
-                <DatePicker showTime format="YYYY-MM-DD HH:mm" />
+              <Form.Item name='actualEndTime' label='实际结束时间'>
+                <DatePicker showTime format='YYYY-MM-DD HH:mm' />
               </Form.Item>
             </Space>
 
             <Divider>回滚信息</Divider>
 
-            <Form.Item name="rollbackPerformed" label="是否执行了回滚">
+            <Form.Item name='rollbackPerformed' label='是否执行了回滚'>
               <Select
-                placeholder="选择是否回滚"
+                placeholder='选择是否回滚'
                 options={[
                   { label: '是', value: true },
                   { label: '否', value: false },
@@ -318,14 +362,14 @@ export default function PIRPage() {
             </Form.Item>
 
             <Form.Item
-              name="rollbackReason"
-              label="回滚原因"
+              name='rollbackReason'
+              label='回滚原因'
               dependencies={['rollbackPerformed']}
               hidden={!form.getFieldValue('rollbackPerformed')}
             >
               <TextArea
                 rows={3}
-                placeholder="如果执行了回滚，请说明触发原因和处置结果。"
+                placeholder='如果执行了回滚，请说明触发原因和处置结果。'
                 showCount
                 maxLength={240}
               />
@@ -335,7 +379,7 @@ export default function PIRPage() {
 
             <Form.Item>
               <Space>
-                <Button type="primary" htmlType="submit" loading={submitting}>
+                <Button type='primary' htmlType='submit' loading={submitting}>
                   {existingPIR ? '更新 PIR' : '创建 PIR'}
                 </Button>
                 <Button onClick={() => router.push(`/changes/${changeId}`)}>取消</Button>
@@ -360,9 +404,9 @@ export default function PIRPage() {
         open={deleteModalVisible}
         onOk={handleDelete}
         onCancel={() => setDeleteModalVisible(false)}
-        okText="删除"
+        okText='删除'
         okButtonProps={{ danger: true, loading: deleting }}
-        cancelText="取消"
+        cancelText='取消'
       >
         <p>确定要删除这个实施后审查记录吗？此操作不可撤销。</p>
       </Modal>

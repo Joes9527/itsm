@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/predicate"
@@ -63,4 +64,18 @@ func resolveIncidentCategory(ctx context.Context, client *ent.Client, tenantID i
 		return nil, fmt.Errorf("resolve ticket category: %w", err)
 	}
 	return &category.ID, nil
+}
+
+// UpdateClassification owns the existing name-based classification endpoint.
+// General incident edits use CategoryID directly and never resolve display labels.
+func (s *IncidentService) UpdateClassification(ctx context.Context, id, tenantID, version int, category, subcategory string) (*dto.IncidentResponse, error) {
+	categoryID, err := resolveIncidentCategory(ctx, s.client, tenantID, category, subcategory)
+	if err != nil {
+		return nil, err
+	}
+	if categoryID == nil {
+		zero := 0
+		categoryID = &zero
+	}
+	return s.UpdateIncident(ctx, id, &dto.UpdateIncidentRequest{CategoryID: categoryID, Version: version}, tenantID)
 }

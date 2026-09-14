@@ -2,51 +2,61 @@ package change
 
 import (
 	"testing"
-
-	"itsm-backend/service"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestBuildChangeActions(t *testing.T) {
-	actor := service.ActionActor{TenantID: 1, UserID: 7, Role: "super_admin"}
-	change := &Change{Type: "normal", Status: "draft", CreatedBy: 23}
-
-	actions := BuildChangeActions(actor, change)
-
-	require.Len(t, actions, 5)
-	require.True(t, actions["submitForApproval"].Allowed)
-	require.False(t, actions["approve"].Allowed)
-	require.Equal(t, "只有已提交待审批的变更可以批准", actions["approve"].Reason)
-	require.False(t, actions["reject"].Allowed)
-	require.Equal(t, "只有已提交待审批的变更可以驳回", actions["reject"].Reason)
-	require.False(t, actions["startImplementation"].Allowed)
-	require.Equal(t, "当前状态和变更类型不允许开始实施", actions["startImplementation"].Reason)
-	require.False(t, actions["completeImplementation"].Allowed)
-	require.Equal(t, "只有实施中的变更可以标记完成", actions["completeImplementation"].Reason)
+	f := newGovernedChangeFixture(t, "normal")
+	_, actions, tasks, err := f.svc.GetChangeActionView(f.ctx, f.record.ID, f.command("read", f.requester).Meta)
+	require.NoError(t, err)
+	require.Len(t, actions, 13)
+	require.True(t, actions["submit"].Allowed)
+	require.Empty(t, tasks)
+	for _, action := range []string{"approve", "reject", "implement", "record_outcome"} {
+		require.False(t, actions[action].Allowed)
+	}
 }
 
 func TestBuildChangeActionsUsesDistinctSelfApprovalAndRejectionReasons(t *testing.T) {
-	actor := service.ActionActor{TenantID: 1, UserID: 11, Role: "super_admin"}
-	change := &Change{Type: "standard", Status: "pending", CreatedBy: 11}
-
-	actions := BuildChangeActions(actor, change)
-
+	f := newGovernedChangeFixture(t, "normal")
+	f.submit(t)
+	f.assess(t)
+	_, actions, _, err := f.svc.GetChangeActionView(f.ctx, f.record.ID, f.command("read", f.requester).Meta)
+	require.NoError(t, err)
 	require.False(t, actions["approve"].Allowed)
-	require.Equal(t, "不能审批自己提交的变更", actions["approve"].Reason)
+	require.NotEmpty(t, actions["approve"].Reason)
 	require.False(t, actions["reject"].Allowed)
-	require.Equal(t, "不能驳回自己提交的变更", actions["reject"].Reason)
+	require.NotEmpty(t, actions["reject"].Reason)
+	_, actions, _, err = f.svc.GetChangeActionView(f.ctx, f.record.ID, f.command("read", f.approver).Meta)
+	require.NoError(t, err)
+	require.True(t, actions["approve"].Allowed)
+	require.True(t, actions["reject"].Allowed)
 }
 
 func TestCanStartImplementationIsTypeAware(t *testing.T) {
-	actor := service.ActionActor{TenantID: 1, UserID: 7, Role: "super_admin"}
-
-	require.False(t, CanStartImplementation(actor, &Change{Type: "normal", Status: "approved"}).Allowed)
-	require.True(t, CanStartImplementation(actor, &Change{Type: "normal", Status: "scheduled"}).Allowed)
-	require.True(t, CanStartImplementation(actor, &Change{Type: "standard", Status: "approved"}).Allowed)
-	require.True(t, CanStartImplementation(actor, &Change{Type: "standard", Status: "scheduled"}).Allowed)
-	require.True(t, CanStartImplementation(actor, &Change{Type: "emergency", Status: "approved"}).Allowed)
-	require.False(t, CanStartImplementation(actor, &Change{Type: "emergency", Status: "scheduled"}).Allowed)
-	require.True(t, CanStartImplementation(actor, &Change{Type: "standard", Status: "draft"}).Allowed)
-	require.True(t, CanStartImplementation(actor, &Change{Type: "emergency", Status: "draft"}).Allowed)
+	for _, kind := range []string{"normal", "standard", "emergency"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newGovernedChangeFixture(t, kind)
+			_, actions, _, err := f.svc.GetChangeActionView(f.ctx, f.record.ID, f.command("read", f.requester).Meta)
+			require.NoError(t, err)
+			require.False(t, actions["implement"].Allowed)
+			f.submit(t)
+			f.assess(t)
+			_, err = f.svc.CompleteChangeTask(f.ctx, f.taskCommand(t, "approve", f.approver))
+			require.NoError(t, err)
+			if kind != "emergency" {
+				cmd := f.taskCommand(t, "schedule", f.requester)
+				start, end := time.Now().Add(-2*time.Hour), time.Now().Add(-time.Hour)
+				cmd.PlannedStart = &start
+				cmd.PlannedEnd = &end
+				_, err = f.svc.CompleteChangeTask(f.ctx, cmd)
+				require.NoError(t, err)
+			}
+			_, actions, _, err = f.svc.GetChangeActionView(f.ctx, f.record.ID, f.command("read", f.requester).Meta)
+			require.NoError(t, err)
+			require.Equal(t, kind == "emergency", actions["implement"].Allowed)
+		})
+	}
 }

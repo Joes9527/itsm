@@ -13,6 +13,10 @@ const (
 	Label = "process_callback_outbox"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldActorID holds the string denoting the actor_id field in the database.
+	FieldActorID = "actor_id"
+	// FieldActorSource holds the string denoting the actor_source field in the database.
+	FieldActorSource = "actor_source"
 	// FieldExecutionKey holds the string denoting the execution_key field in the database.
 	FieldExecutionKey = "execution_key"
 	// FieldTenantID holds the string denoting the tenant_id field in the database.
@@ -64,6 +68,8 @@ const (
 // Columns holds all SQL columns for processcallbackoutbox fields.
 var Columns = []string{
 	FieldID,
+	FieldActorID,
+	FieldActorSource,
 	FieldExecutionKey,
 	FieldTenantID,
 	FieldProcessInstanceID,
@@ -99,6 +105,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// ActorIDValidator is a validator for the "actor_id" field. It is called by the builders before save.
+	ActorIDValidator func(int) error
 	// ExecutionKeyValidator is a validator for the "execution_key" field. It is called by the builders before save.
 	ExecutionKeyValidator func(string) error
 	// TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
@@ -141,6 +149,16 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByActorID orders the results by the actor_id field.
+func ByActorID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldActorID, opts...).ToFunc()
+}
+
+// ByActorSource orders the results by the actor_source field.
+func ByActorSource(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldActorSource, opts...).ToFunc()
 }
 
 // ByExecutionKey orders the results by the execution_key field.

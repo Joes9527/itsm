@@ -208,26 +208,6 @@ func (s *TicketAssignmentRuleService) matchRule(
 	return matched, "条件已评估"
 }
 
-// compareValue 比较值
-func (s *TicketAssignmentRuleService) compareValue(actual interface{}, operator string, expected interface{}) bool {
-	switch operator {
-	case "equals":
-		return actual == expected
-	case "not_equals":
-		return actual != expected
-	case "contains":
-		actualStr := fmt.Sprintf("%v", actual)
-		expectedStr := fmt.Sprintf("%v", expected)
-		return containsStringInRule(actualStr, expectedStr)
-	case "greater_than":
-		return compareNumbers(actual, expected) > 0
-	case "less_than":
-		return compareNumbers(actual, expected) < 0
-	default:
-		return false
-	}
-}
-
 // ExecuteRuleAction 执行规则动作（公开方法）
 func (s *TicketAssignmentRuleService) ExecuteRuleAction(
 	ctx context.Context,
@@ -317,49 +297,4 @@ func (s *TicketAssignmentRuleService) toAssignmentRuleResponse(rule *ent.TicketA
 	}
 
 	return resp
-}
-
-// 辅助函数
-func containsStringInRule(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || containsHelperInRule(s, substr))
-}
-
-func containsHelperInRule(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
-
-func compareNumbers(a, b interface{}) int {
-	af, ok1 := toFloat64(a)
-	bf, ok2 := toFloat64(b)
-	if !ok1 || !ok2 {
-		return 0
-	}
-	if af > bf {
-		return 1
-	} else if af < bf {
-		return -1
-	}
-	return 0
-}
-
-func toFloat64(v interface{}) (float64, bool) {
-	switch val := v.(type) {
-	case float64:
-		return val, true
-	case float32:
-		return float64(val), true
-	case int:
-		return float64(val), true
-	case int32:
-		return float64(val), true
-	case int64:
-		return float64(val), true
-	default:
-		return 0, false
-	}
 }

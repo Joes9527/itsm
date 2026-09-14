@@ -7,12 +7,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"github.com/stretchr/testify/require"
 	"os"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 type identityTestNonces struct {
@@ -32,11 +33,13 @@ func (n *identityTestNonces) Claim(_ context.Context, k string, ttl time.Duratio
 	n.keys[k] = true
 	return true, nil
 }
+
 func assertionTestSignature(a IdentityAssertion) string {
 	m := hmac.New(sha256.New, []byte("test-only-key"))
 	m.Write([]byte(strings.Join([]string{strconv.Itoa(a.Version), a.Audience, a.Purpose, a.Provider, a.Workspace, a.Subject, a.Channel, a.EventID, strconv.FormatInt(a.IssuedAt, 10), a.Nonce}, "\n")))
 	return hex.EncodeToString(m.Sum(nil))
 }
+
 func assertionFixture() (*IdentityExchangeService, IdentityAssertion, *identityTestNonces) {
 	n := &identityTestNonces{keys: map[string]bool{}}
 	s := &IdentityExchangeService{config: IdentityExchangeConfig{Providers: map[string]IdentityProvider{"kaf": {Secret: "test-only-key", Channels: []string{"kaf_web"}, Purposes: []string{"create", "read"}}}, MaxAge: time.Minute, FutureSkew: 5 * time.Second, TokenTTL: 5 * time.Minute}, nonces: n, now: func() time.Time { return time.Unix(1788566400, 500000000) }}
@@ -44,6 +47,7 @@ func assertionFixture() (*IdentityExchangeService, IdentityAssertion, *identityT
 	a.Signature = assertionTestSignature(a)
 	return s, a, n
 }
+
 func TestIdentityAssertionAcceptsV2AndRejectsReplayAcrossPurposes(t *testing.T) {
 	s, a, n := assertionFixture()
 	require.NoError(t, s.verify(context.Background(), a, "create"))
@@ -53,6 +57,7 @@ func TestIdentityAssertionAcceptsV2AndRejectsReplayAcrossPurposes(t *testing.T) 
 	a.Signature = assertionTestSignature(a)
 	require.Error(t, s.verify(context.Background(), a, "read"))
 }
+
 func TestIdentityAssertionRejectsAmbiguityAndUntrustedFields(t *testing.T) {
 	cases := map[string]func(*IdentityAssertion){"version": func(a *IdentityAssertion) { a.Version = 1 }, "audience": func(a *IdentityAssertion) { a.Audience = "other" }, "purpose": func(a *IdentityAssertion) { a.Purpose = "read" }, "provider": func(a *IdentityAssertion) { a.Provider = "other" }, "channel": func(a *IdentityAssertion) { a.Channel = "other" }, "newline": func(a *IdentityAssertion) { a.Subject = "sub\nject" }, "cr": func(a *IdentityAssertion) { a.EventID = "event\rtest" }, "space": func(a *IdentityAssertion) { a.Workspace = " workspace" }, "future": func(a *IdentityAssertion) { a.IssuedAt += 6 }, "deadline": func(a *IdentityAssertion) { a.IssuedAt -= 60 }}
 	for name, change := range cases {
@@ -73,6 +78,7 @@ func TestIdentityAssertionRejectsAmbiguityAndUntrustedFields(t *testing.T) {
 	require.Error(t, s.verify(context.Background(), a, "create"))
 	require.Empty(t, n.keys)
 }
+
 func TestIdentityAssertionFutureTTLAndUnavailableNonce(t *testing.T) {
 	s, a, n := assertionFixture()
 	a.IssuedAt += 5

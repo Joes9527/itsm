@@ -1,15 +1,16 @@
 package config
 
 import (
-	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestIdentityConfigRequiresRoleLimitedSeparateSecrets(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "identity.json")
-	require.NoError(t, os.WriteFile(file, []byte(`{"providers":{"kaf":{"secret":"test-only-key","channels":["kaf_web"],"purposes":["create","read"]}},"maxAge":"60s","futureSkew":"5s","tokenTTL":"5m"}`), 0600))
+	require.NoError(t, os.WriteFile(file, []byte(`{"providers":{"kaf":{"secret":"test-only-key","channels":["kaf_web"],"purposes":["create","read"]}},"maxAge":"60s","futureSkew":"5s","tokenTTL":"5m"}`), 0o600))
 	getenv := func(key string) string {
 		if key == "INTAKE_IDENTITY_CONFIG_FILE" {
 			return file
@@ -19,10 +20,11 @@ func TestIdentityConfigRequiresRoleLimitedSeparateSecrets(t *testing.T) {
 	cfg, err := loadIntakeIdentityConfig(getenv)
 	require.NoError(t, err)
 	require.Contains(t, cfg.Providers, "kaf")
-	require.NoError(t, os.Chmod(file, 0644))
+	require.NoError(t, os.Chmod(file, 0o644))
 	_, err = loadIntakeIdentityConfig(getenv)
 	require.Error(t, err)
 }
+
 func TestIdentityConfigMissingIsExplicitlyDisabled(t *testing.T) {
 	cfg, err := loadIntakeIdentityConfig(func(string) string { return "" })
 	require.NoError(t, err)
@@ -38,11 +40,12 @@ func TestIdentityConfigRejectsInvalidProviderAndWindow(t *testing.T) {
 		`{"maxAge":"0s"}`, `{"futureSkew":"31s"}`, `{"tokenTTL":"16m"}`, `{"maxAge":"1.5s"}`, `{"providers":{},"providers":{}}`,
 	} {
 		file := filepath.Join(t.TempDir(), "identity.json")
-		require.NoError(t, os.WriteFile(file, []byte(raw), 0600))
+		require.NoError(t, os.WriteFile(file, []byte(raw), 0o600))
 		_, err := loadIntakeIdentityConfig(func(string) string { return file })
 		require.Error(t, err)
 	}
 }
+
 func TestIdentityConfigRejectsOtherCredentialReuse(t *testing.T) {
 	cfg := IntakeIdentityConfig{Providers: map[string]IntakeIdentityProviderConfig{"kaf": {Secret: "test-exchange"}}}
 	require.Error(t, validateIdentitySecretSeparation(cfg, "test-exchange", "different"))

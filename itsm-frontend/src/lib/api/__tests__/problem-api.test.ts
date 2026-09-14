@@ -17,7 +17,6 @@ const mockGet = httpClient.get as jest.Mock;
 const mockPost = httpClient.post as jest.Mock;
 const mockPut = httpClient.put as jest.Mock;
 const mockDelete = httpClient.delete as jest.Mock;
-const mockRequest = (httpClient as any).request as jest.Mock;
 
 describe('ProblemApi', () => {
   beforeEach(() => { jest.clearAllMocks(); });
@@ -52,8 +51,8 @@ describe('ProblemApi', () => {
   describe('updateProblem', () => {
     it('should update a problem', async () => {
       mockPut.mockResolvedValue({ id: 1, title: 'Updated' });
-      const result = await ProblemApi.updateProblem(1, { title: 'Updated' });
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/problems/1', { title: 'Updated' });
+      const result = await ProblemApi.updateProblem(1, { title: 'Updated', version: 1, operationId: 'edit-once' });
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/problems/1', { title: 'Updated', version: 1, operationId: 'edit-once' });
       expect(result.title).toBe('Updated');
     });
   });
@@ -94,30 +93,6 @@ describe('ProblemApi', () => {
     });
   });
 
-  describe('getAssociations', () => {
-    it('should get associations', async () => {
-      mockGet.mockResolvedValue({ tickets: [], incidents: [], changes: [] });
-      const result = await ProblemApi.getAssociations(1);
-      expect(mockGet).toHaveBeenCalledWith('/api/v1/problems/1/associations');
-    });
-  });
-
-  describe('addAssociation', () => {
-    it('should add association', async () => {
-      mockPost.mockResolvedValue(undefined);
-      await ProblemApi.addAssociation(1, { relatedType: 'ticket', relatedIds: [2, 3] });
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/problems/1/associations', { relatedType: 'ticket', relatedIds: [2, 3] });
-    });
-  });
-
-  describe('removeAssociation', () => {
-    it('should remove association', async () => {
-      mockRequest.mockResolvedValue(undefined);
-      await ProblemApi.removeAssociation(1, { relatedType: 'ticket', relatedId: 2 });
-      expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({ method: 'DELETE', url: '/api/v1/problems/1/associations' }));
-    });
-  });
-
   describe('getProblemSLA', () => {
     it('should get problem SLA', async () => {
       mockGet.mockResolvedValue({ slaStatus: 'ok', responseBreached: false, resolutionBreached: false, responseTimeUsed: 10, resolutionTimeUsed: 20 });
@@ -127,18 +102,11 @@ describe('ProblemApi', () => {
     });
   });
 
-  describe('stub methods', () => {
-    it('investigateProblem should throw', async () => {
-      await expect(ProblemApi.investigateProblem(1, {})).rejects.toThrow();
-    });
-    it('recordRootCause should throw', async () => {
-      await expect(ProblemApi.recordRootCause(1, 'cause')).rejects.toThrow();
-    });
-    it('provideSolution should throw', async () => {
-      await expect(ProblemApi.provideSolution(1, 'sol')).rejects.toThrow();
-    });
-    it('closeProblem should throw', async () => {
-      await expect(ProblemApi.closeProblem(1, 'done')).rejects.toThrow();
+  describe('domain commands', () => {
+    it('sends explicit version and operation identity', async () => {
+      const request = { version: 7, operationId: 'resolve-7' };
+      await ProblemApi.command(1, 'resolve', request);
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/problems/1/resolve', request);
     });
   });
 });

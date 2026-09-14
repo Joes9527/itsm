@@ -3,6 +3,7 @@ package bpmn
 // CallbackActionContract is the handler-owned allowlist for one declared
 // callback action. Only these fields may cross the durable callback boundary.
 type CallbackActionContract struct {
+	LifecycleRecordClass  string
 	CreatedRecordClass    string
 	PayloadFields         []string
 	PositiveIntegerFields []string
@@ -25,15 +26,18 @@ func callbackActionContract(payload, required []string) CallbackActionContract {
 
 func (h *ChangeServiceTaskHandler) CallbackContract(action string) (CallbackActionContract, bool) {
 	payload := map[string][]string{
-		"create_change":       {"title", "description", "type", "priority", "created_by", "justification", "impact_scope", "risk_level", "planned_start_date", "planned_end_date", "implementation_plan", "rollback_plan", "affected_cis", "related_tickets", "related_ticket_numbers", "assignee_id", "ci_ids", "template_id", "parent_ticket_id", "tag_ids", "workflow_definition_key", "form_values"},
-		"update_change":       {"title", "description", "status"},
-		"approve_change":      nil,
-		"reject_change":       nil,
-		"schedule_change":     {"planned_start_date", "planned_end_date"},
-		"implement_change":    nil,
-		"verify_change":       {"verification_result"},
-		"close_change":        {"feedback"},
-		"assess_risk":         nil,
+		"create_change":       {"title", "description", "type", "priority", "created_by", "justification", "impact_scope", "risk_level", "planned_start_date", "planned_end_date", "implementation_plan", "rollback_plan", "affected_cis", "source_relations", "assignee_id", "ci_ids", "template_id", "parent_ticket_id", "tag_ids", "workflow_definition_key", "form_values"},
+		"update_change":       {"title", "description", "status", "version"},
+		"approve_change":      {"version", "evidence"},
+		"authorize_change":    {"version", "evidence"},
+		"review_change":       {"version", "evidence", "pir_id"},
+		"cancel_change":       {"version", "evidence"},
+		"reject_change":       {"version", "evidence"},
+		"schedule_change":     {"version", "planned_start_date", "planned_end_date"},
+		"implement_change":    {"version"},
+		"verify_change":       {"version", "outcome", "evidence", "actual_end_date"},
+		"close_change":        {"version", "evidence", "pir_id"},
+		"assess_risk":         {"version", "evidence"},
 		"notify_stakeholders": {"notification_type"},
 	}
 	fields, ok := payload[action]
@@ -41,24 +45,34 @@ func (h *ChangeServiceTaskHandler) CallbackContract(action string) (CallbackActi
 	if action == "create_change" {
 		contract.CreatedRecordClass = "change_request"
 	}
+	switch action {
+	case "update_change", "assess_risk", "approve_change", "authorize_change", "reject_change", "schedule_change", "implement_change", "verify_change", "review_change", "close_change", "cancel_change":
+		contract.LifecycleRecordClass = "change_request"
+	}
 	return contract, ok
 }
 
 func (h *IncidentServiceTaskHandler) CallbackContract(action string) (CallbackActionContract, bool) {
 	payload := map[string][]string{
 		"create_incident":      {"title", "description", "type", "priority", "severity", "reporter_id", "impact", "urgency", "category", "subcategory", "detected_at", "impact_analysis", "metadata", "source", "assignee_id", "ci_ids", "template_id", "parent_ticket_id", "tag_ids", "workflow_definition_key", "form_values"},
-		"assign_incident":      {"assignee_id"},
-		"escalate_incident":    {"escalation_level", "escalation_reason"},
-		"resolve_incident":     {"resolution"},
-		"close_incident":       {"feedback"},
-		"update_incident":      {"title", "description", "priority", "severity", "status"},
-		"acknowledge_incident": nil,
-		"categorize_incident":  {"category", "subcategory"},
+		"assign_incident":      {"assignee_id", "version", "reason"},
+		"escalate_incident":    {"escalation_level", "escalation_reason", "version"},
+		"resolve_incident":     {"resolution", "version"},
+		"start_incident":       {"version"},
+		"close_incident":       {"feedback", "reason", "version"},
+		"reopen_incident":      {"reason", "version"},
+		"update_incident":      {"title", "description", "priority", "severity", "status", "version"},
+		"acknowledge_incident": {"version"},
+		"categorize_incident":  {"category", "subcategory", "version"},
 	}
 	fields, ok := payload[action]
 	contract := callbackActionContract(fields, nil)
 	if action == "create_incident" {
 		contract.CreatedRecordClass = "incident"
+	}
+	switch action {
+	case "acknowledge_incident", "start_incident", "resolve_incident", "close_incident", "reopen_incident", "assign_incident", "escalate_incident":
+		contract.LifecycleRecordClass = "incident"
 	}
 	if action == "assign_incident" {
 		contract.PositiveIntegerFields = []string{"assignee_id"}
@@ -71,11 +85,15 @@ func (h *TicketServiceTaskHandler) CallbackContract(action string) (CallbackActi
 		"update_status":    {"new_status"},
 		"notify_requester": {"notification_type", "content"},
 		"notify_handler":   {"notification_type", "content"},
-		"escalate":         {"escalate_to", "escalation_reason", "notify_admin_ids"},
+		"escalate":         {"escalate_to", "escalation_reason", "notify_admin_ids", "version"},
 		"assign":           {"assignee_id", "notify_content"},
 	}
 	fields, ok := payload[action]
 	contract := callbackActionContract(fields, nil)
+	if action == "escalate" {
+		contract.LifecycleRecordClass = "generic"
+		contract.PositiveIntegerFields = []string{"version"}
+	}
 	if action == "assign" {
 		contract.PositiveIntegerFields = []string{"assignee_id"}
 	}

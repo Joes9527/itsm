@@ -2,6 +2,8 @@ package integration
 
 import (
 	"context"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/dto"
@@ -9,7 +11,7 @@ import (
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/intake"
 	catalogdomain "itsm-backend/handlers/service_catalog"
-	"testing"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 )
 
 func TestCatalogPublicationTypedChangeInputs(t *testing.T) {
@@ -17,7 +19,7 @@ func TestCatalogPublicationTypedChangeInputs(t *testing.T) {
 	ctx := context.Background()
 	logger := zap.NewNop().Sugar()
 	registry := intake.NewCreatorRegistry()
-	require.NoError(t, registry.Register(changedomain.NewService(nil, f.client, logger)))
+	require.NoError(t, registry.Register(changedomain.NewService(nil, f.client, logger, executionfixture.Standard())))
 	catalogs := catalogdomain.NewService(catalogdomain.NewEntRepository(f.client), f.client, logger, sameTransactionDirectory{})
 	catalogs.SetCreatorRegistry(registry)
 	catalog, err := catalogs.Create(ctx, f.identity.TenantID, dto.CreateServiceCatalogRequest{Name: "Maintenance", Category: "IT", TargetClass: "change_request", Status: "enabled"})

@@ -72,7 +72,7 @@ func TestSeedDefaultTenantPrivateMode(t *testing.T) {
 func TestProductSeedDoesNotCreateSampleMSPCustomers(t *testing.T) {
 	seeder, ctx := newTestSeeder(t, tenantmode.DeploymentModeSaaSMSP)
 
-	seeder.SeedAll(ctx)
+	require.NoError(t, seeder.SeedAll(ctx))
 
 	for _, code := range []string{"customer-a", "customer-b"} {
 		exists, err := seeder.client.Tenant.Query().Where(tenant.CodeEQ(code)).Exist(ctx)
@@ -87,7 +87,7 @@ func TestProductSeedDoesNotCreateSampleMSPCustomers(t *testing.T) {
 func TestSeedAllSaaSModeCreatesPlatformTenantAndAdmin(t *testing.T) {
 	seeder, ctx := newTestSeeder(t, tenantmode.DeploymentModeSaaS)
 
-	seeder.SeedAll(ctx)
+	require.NoError(t, seeder.SeedAll(ctx))
 
 	rootTenant, err := seeder.client.Tenant.Query().Where(tenant.CodeEQ("default")).Only(ctx)
 	require.NoError(t, err)
@@ -104,7 +104,7 @@ func TestSeedAllSaaSModeCreatesPlatformTenantAndAdmin(t *testing.T) {
 func TestSeedAllSaaSMSPModeCreatesOnlyProviderTenant(t *testing.T) {
 	seeder, ctx := newTestSeeder(t, tenantmode.DeploymentModeSaaSMSP)
 
-	seeder.SeedAll(ctx)
+	require.NoError(t, seeder.SeedAll(ctx))
 
 	rootTenant, err := seeder.client.Tenant.Query().Where(tenant.CodeEQ("default")).Only(ctx)
 	require.NoError(t, err)
@@ -130,7 +130,7 @@ func TestSeedAllSaaSMSPModeCreatesOnlyProviderTenant(t *testing.T) {
 func TestSeedAllProductDefaultsDoNotCreateBusinessSamples(t *testing.T) {
 	seeder, ctx := newTestSeeder(t, tenantmode.DeploymentModePrivate)
 
-	seeder.SeedAll(ctx)
+	require.NoError(t, seeder.SeedAll(ctx))
 
 	incidentCount, err := seeder.client.Incident.Query().Count(ctx)
 	require.NoError(t, err)
@@ -204,7 +204,7 @@ func TestSeedAllProductDefaultsDoNotCreateBusinessSamples(t *testing.T) {
 func TestSeedAllDoesNotCreateTestTenantOrFixedPasswordAccounts(t *testing.T) {
 	seeder, ctx := newTestSeeder(t, tenantmode.DeploymentModePrivate)
 
-	seeder.SeedAll(ctx)
+	require.NoError(t, seeder.SeedAll(ctx))
 
 	exists, err := seeder.client.Tenant.Query().Where(tenant.CodeEQ("tenant_test")).Exist(ctx)
 	require.NoError(t, err)

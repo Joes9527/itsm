@@ -145,7 +145,7 @@ export const useUpdateTicketMutation = () => {
       message.success('Ticket updated successfully');
 
       // 更新缓存中的工单详情
-      queryClient.setQueryData(ticketKeys.detail(variables.id), data);
+      queryClient.invalidateQueries({ queryKey: ticketKeys.detail(variables.id) });
 
       // 使列表查询失效
       queryClient.invalidateQueries({ queryKey: ticketKeys.lists() });

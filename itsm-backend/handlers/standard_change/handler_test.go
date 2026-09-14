@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -56,7 +58,7 @@ func setupInstantiationRouter(t *testing.T, client *ent.Client, userID, tenantID
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	logger := zaptest.NewLogger(t).Sugar()
-	changeService := changedomain.NewService(nil, client, logger)
+	changeService := changedomain.NewService(nil, client, logger, executionfixture.Standard())
 	registry := intake.NewCreatorRegistry()
 	require.NoError(t, registry.Register(changeService))
 	resolver := intake.NewResolver(
@@ -66,7 +68,7 @@ func setupInstantiationRouter(t *testing.T, client *ent.Client, userID, tenantID
 		service.NewTicketCategoryService(client),
 	)
 	h := NewHandler(client, logger)
-	h.SetCreationApplication(intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}))
+	h.SetCreationApplication(intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard()))
 	return setupRouterForHandler(t, h, userID, tenantID)
 }
 
@@ -158,7 +160,7 @@ func createInstantiationIdentity(t *testing.T, client *ent.Client, suffix string
 }
 
 func configureInstantiationWorkflow(client *ent.Client, tenantID int) {
-	client.ProcessBinding.Create().SetTenantID(tenantID).SetBusinessType("change").SetIsDefault(true).
+	client.ProcessBinding.Create().SetTenantID(tenantID).SetBusinessType("change_request").SetIsDefault(true).
 		SetProcessDefinitionKey("none").SetConditions(map[string]interface{}{"no_process": true}).SaveX(context.Background())
 }
 

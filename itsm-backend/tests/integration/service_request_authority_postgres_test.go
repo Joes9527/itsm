@@ -5,6 +5,11 @@ package integration
 import (
 	"context"
 	"fmt"
+	"os"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	"itsm-backend/common/tenantctx"
@@ -13,10 +18,7 @@ import (
 	sr "itsm-backend/handlers/service_request"
 	"itsm-backend/handlers/shared/workflowcallback"
 	"itsm-backend/migration"
-	"os"
-	"sync"
-	"testing"
-	"time"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 )
 
 const srAuthorityVersion = "028_service_request_work_item_authority"
@@ -35,6 +37,7 @@ func consistentLegacyAuthority(t *testing.T, f *incidentEffectsFixture) {
  UPDATE service_requests sr SET tenant_id=w.tenant_id, requester_id=w.requester_id, processor_id=w.assignee_id, version=w.version, created_at=w.created_at, updated_at=w.updated_at, deleted_at=w.deleted_at FROM tickets w WHERE w.id=sr.ticket_id;`)
 	require.NoError(t, err)
 }
+
 func TestPostgresServiceRequestAuthorityRejectsSharedConflicts(t *testing.T) {
 	for _, col := range []string{"tenant_id", "requester_id", "processor_id", "version", "created_at", "updated_at", "deleted_at"} {
 		t.Run(col, func(t *testing.T) {
@@ -58,6 +61,7 @@ func TestPostgresServiceRequestAuthorityRejectsSharedConflicts(t *testing.T) {
 		})
 	}
 }
+
 func TestPostgresServiceRequestAuthorityApplyReapplyEntAndTenantScope(t *testing.T) {
 	f := newIncidentEffectsFixture(t)
 	wi, request := authorityRequest(t, f)
@@ -76,7 +80,7 @@ func TestPostgresServiceRequestAuthorityApplyReapplyEntAndTenantScope(t *testing
 		_, err = f.db.ExecContext(f.ctx, migration.GetMigrationSQL(srAuthorityVersion))
 		require.NoError(t, err)
 	}
-	repo := sr.NewEntRepository(f.client)
+	repo := sr.NewEntRepository(f.client, executionfixture.Standard())
 	got, err := repo.Get(f.ctx, request.ID, f.tenant.ID)
 	require.NoError(t, err)
 	require.Equal(t, wi.Version, got.Version)
@@ -170,7 +174,7 @@ func TestPostgresServiceRequestCompletionAndExtensionUpdateUseWorkItemLockOrder(
 			return value, err
 		})
 	})
-	repo := sr.NewEntRepository(f.client)
+	repo := sr.NewEntRepository(f.client, executionfixture.Standard())
 	input, err := repo.Get(ctx, request.ID, f.tenant.ID)
 	require.NoError(t, err)
 	input.CostCenter = "concurrent update"
@@ -181,7 +185,7 @@ func TestPostgresServiceRequestCompletionAndExtensionUpdateUseWorkItemLockOrder(
 	case <-ctx.Done():
 		t.Fatal("extension update did not acquire WorkItem lock: ", ctx.Err())
 	}
-	service := sr.NewService(repo, f.client, zaptest.NewLogger(t).Sugar(), nil)
+	service := sr.NewService(repo, f.client, zaptest.NewLogger(t).Sugar(), nil, executionfixture.Standard())
 	type callbackOutcome struct {
 		result workflowcallback.Result
 		err    error

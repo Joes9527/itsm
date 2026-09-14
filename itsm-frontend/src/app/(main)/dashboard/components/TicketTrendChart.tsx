@@ -1,6 +1,8 @@
 'use client';
 
 import React from 'react';
+import { useTheme } from '@/lib/design-system/theme';
+import { theme } from 'antd';
 import { Badge } from 'antd';
 import { Line } from '@ant-design/charts';
 import { LineChart } from 'lucide-react'; // Import Lucide LineChart
@@ -9,7 +11,10 @@ import { DashboardChartCard } from './DashboardChartCard'; // Import from new fi
 
 // 工单趋势图
 const TicketTrendChart: React.FC<{ data: TicketTrendData[] }> = React.memo(({ data }) => {
+  const { isDark } = useTheme();
+  const { token } = theme.useToken();
   const config = {
+    theme: isDark ? 'classicDark' : 'classic',
     data: data.flatMap(item => [
       { date: item.date, type: '待处理', value: item.open },
       { date: item.date, type: '处理中', value: item.inProgress },
@@ -33,8 +38,8 @@ const TicketTrendChart: React.FC<{ data: TicketTrendData[] }> = React.memo(({ da
       size: 5,
       shape: 'circle',
       style: {
-        fill: '#fff',
-        stroke: '#000',
+        fill: token.colorBgContainer,
+        stroke: token.colorText,
         lineWidth: 2,
       },
     },

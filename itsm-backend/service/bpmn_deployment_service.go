@@ -147,12 +147,12 @@ func (s *BPMNDeploymentService) generateNextVersion(currentVersion string) strin
 	}
 	major, err1 := strconv.Atoi(parts[0])
 	minor, err2 := strconv.Atoi(parts[1])
-	patch, err3 := strconv.Atoi(parts[2])
+	_, err3 := strconv.Atoi(parts[2])
 	if err1 != nil || err2 != nil || err3 != nil {
 		return "1.0.0"
 	}
 	minor++
-	patch = 0
+	patch := 0
 	return fmt.Sprintf("%d.%d.%d", major, minor, patch)
 }
 

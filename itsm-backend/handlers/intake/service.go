@@ -5,21 +5,28 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"itsm-backend/handlers/common/workitemcreation"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
+	"itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/handlers/shared/workitemmutation"
+
 	"itsm-backend/authorization"
+	"itsm-backend/common"
+	"itsm-backend/common/executionscope"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/database"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/intakeresolutionsnapshot"
 	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/problem"
+	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/ticket"
 	itsmservice "itsm-backend/service"
@@ -81,14 +88,15 @@ type Service struct {
 	audits      auditWriter
 	outbox      outboxWriter
 	metrics     *Metrics
+	execution   *database.ExecutionPolicy
 }
 
-func NewService(client *ent.Client, resolver referenceResolver, registry *CreatorRegistry, workItems workItemWriter, directory database.DirectorySnapshot) *Service {
+func NewService(client *ent.Client, resolver referenceResolver, registry *CreatorRegistry, workItems workItemWriter, directory database.DirectorySnapshot, execution *database.ExecutionPolicy) *Service {
 	return &Service{
 		client: client, directory: directory, resolver: resolver, receipts: NewIdempotencyRepository(), registry: registry, workItems: workItems,
 		fieldValues: itsmservice.NewFieldValueService(client), snapshots: NewSnapshotRepository(),
-		audits: NewAuditRepository(), outbox: itsmservice.NewOutboxEventRepository(client),
-		metrics: defaultMetrics,
+		audits: NewAuditRepository(), outbox: itsmservice.NewOutboxEventRepository(client, execution),
+		metrics: defaultMetrics, execution: execution,
 	}
 }
 
@@ -104,7 +112,7 @@ func (s *Service) Create(ctx context.Context, identity workitemcreation.Identity
 			s.metrics.ObserveWorkflowStart(identity.Channel, result.RecordClass, "pending")
 		}
 	}()
-	if s == nil || s.client == nil || missingDependency(s.resolver) || missingDependency(s.receipts) || s.registry == nil || missingDependency(s.workItems) || missingDependency(s.fieldValues) || missingDependency(s.snapshots) || missingDependency(s.audits) || missingDependency(s.outbox) {
+	if s == nil || s.client == nil || s.execution == nil || missingDependency(s.resolver) || missingDependency(s.receipts) || s.registry == nil || missingDependency(s.workItems) || missingDependency(s.fieldValues) || missingDependency(s.snapshots) || missingDependency(s.audits) || missingDependency(s.outbox) {
 		return nil, workitemcreation.NewInternalFailure("intake service is not fully configured", nil)
 	}
 	if scope, ok := tenantctx.TenantID(ctx); tenantctx.IsSystemBypass(ctx) || (ok && scope != identity.TenantID) {
@@ -140,6 +148,9 @@ func (s *Service) Create(ctx context.Context, identity workitemcreation.Identity
 	for attempt := 0; attempt < 3; attempt++ {
 		result, retry, attemptErr := s.createAttempt(ctx, identity, normalized, digest)
 		if !retry && !retryableTransactionConflict(attemptErr) {
+			if len(normalized.SourceRelations) > 0 {
+				attemptErr = relationCreationError(attemptErr)
+			}
 			return result, attemptErr
 		}
 		lastErr = attemptErr
@@ -183,16 +194,46 @@ func (s *Service) createAttempt(ctx context.Context, identity workitemcreation.I
 		return nil, false, authErr
 	}
 	identity = authorized.Identity()
+	if err := s.execution.BindEnt(ctx, tx, identity.TenantID); err != nil {
+		return nil, false, executionScopeFailure("creation execution scope denied", err)
+	}
+
+	if err := itsmservice.RequireToolCreationAuthority(ctx, tx, s.execution, identity, command); err != nil {
+		var typed *workitemcreation.IntakeError
+		if errors.As(err, &typed) {
+			return nil, false, err
+		}
+		return nil, false, executionScopeFailure("tool creation source denied", err)
+	}
 
 	receipt, outcome, err := s.receipts.Claim(ctx, tx, identity, command.IdempotencyKey, digest, workitemcreation.CanonicalDigestVersion)
 	if err != nil {
 		return nil, errors.Is(err, errIdempotencyOwnerInProgress), err
 	}
+	relations := itsmservice.NewWorkItemRelationService(s.client, s.directory)
+	relationCommands := make([]itsmservice.RelationCommand, 0, len(command.SourceRelations))
+	for _, input := range command.SourceRelations {
+		relationCommands = append(relationCommands, itsmservice.RelationCommand{Meta: workitemmutation.Meta{TenantID: identity.TenantID, ActorID: identity.ActorID, ExpectedVersion: input.ExpectedVersion, Source: identity.Channel, OperationID: fmt.Sprintf("intake:%d:source:%d", receipt.ID, input.SourceWorkItemID), CorrelationID: auditRequestID(ctx, identity, digest)}, SourceID: input.SourceWorkItemID, Type: input.RelationType, Required: input.Metadata.Required})
+	}
 	if outcome == ClaimReplay {
+		for _, cmd := range relationCommands {
+			cmd.TargetID = *receipt.WorkItemID
+			if _, err := relations.ReplayTx(ctx, tx, cmd); err != nil {
+				return nil, false, err
+			}
+		}
 		result, loadErr := s.loadResult(ctx, tx, identity.TenantID, *receipt.WorkItemID, true)
 		return result, false, loadErr
 	}
 
+	for _, cmd := range relationCommands {
+		if err := s.execution.RequireEntMembers(ctx, tx, identity.TenantID, cmd.SourceID); err != nil {
+			return nil, false, executionScopeFailure("source relation execution scope denied", err)
+		}
+		if err := relations.PrepareSourceTx(ctx, tx, cmd, command.RecordClass); err != nil {
+			return nil, false, err
+		}
+	}
 	resolved, err := s.resolver.Resolve(ctx, tx, identity, command)
 	if err != nil {
 		return nil, false, err
@@ -215,9 +256,17 @@ func (s *Service) createAttempt(ctx context.Context, identity workitemcreation.I
 		return nil, false, err
 	}
 	resolved = &plan.Resolved
+	if parentID := plan.WorkItem.ParentTicketID; parentID != nil {
+		if err := s.execution.RequireEntMembers(ctx, tx, identity.TenantID, *parentID); err != nil {
+			return nil, false, executionScopeFailure("parent execution scope denied", err)
+		}
+	}
 	workItem, err := s.workItems.CreateBase(ctx, tx, plan, authorized)
 	if err != nil {
 		return nil, false, err
+	}
+	if err := s.execution.RequireEntMembers(ctx, tx, identity.TenantID, workItem.ID); err != nil {
+		return nil, false, executionScopeFailure("new work item execution membership missing", err)
 	}
 	professional, err := creator.CreateExtension(ctx, tx, workItem, plan)
 	if err != nil {
@@ -226,13 +275,25 @@ func (s *Service) createAttempt(ctx context.Context, identity workitemcreation.I
 	if err := validateProfessional(ctx, tx, workItem, professional); err != nil {
 		return nil, false, err
 	}
+	for _, cmd := range relationCommands {
+		cmd.TargetID = workItem.ID
+		if err := relations.AddTx(ctx, tx, cmd); err != nil {
+			return nil, false, err
+		}
+	}
 	if err := itsmservice.NewTicketSLAService(tx.Client(), nil).ApplyCreationSLA(ctx, tx, workItem, plan.WorkItem.SLADefinitionID); err != nil {
 		return nil, false, err
 	}
 	if err := s.writeFieldValues(ctx, tx, resolved, workItem.ID, professional); err != nil {
 		return nil, false, err
 	}
-	if _, err := s.snapshots.Create(ctx, tx, buildSnapshot(receipt.ID, workItem.ID, digest, resolved)); err != nil {
+	snapshotInput := buildSnapshot(receipt.ID, workItem.ID, digest, resolved)
+	snapshotInput.WorkflowDefinitionDigest = resolved.Workflow.DefinitionDigest
+	snapshotInput.WorkflowVariables, err = json.Marshal(workflowStartVariables(workItem, identity, plan))
+	if err != nil {
+		return nil, false, workitemcreation.NewInternalFailure("could not freeze workflow variables", err)
+	}
+	if _, err := s.snapshots.Create(ctx, tx, snapshotInput); err != nil {
 		return nil, false, err
 	}
 	if err := s.audits.RecordCreated(ctx, tx, CreatedAuditInput{
@@ -243,11 +304,22 @@ func (s *Service) createAttempt(ctx context.Context, identity workitemcreation.I
 		return nil, false, err
 	}
 	workflowStatus := "not_required"
+	policy, err := authorization.ResolveWorkItemPolicy(resolved.RecordClass)
+	if err != nil {
+		return nil, false, err
+	}
 	if !resolved.Workflow.NoProcess {
-		if err := s.enqueueWorkflowStart(ctx, tx, receipt.ID, workItem, identity, plan); err != nil {
-			return nil, false, err
+		switch policy.WorkflowStartTiming {
+		case authorization.WorkflowStartOnSubmit:
+			workflowStatus = "awaiting_submit"
+		case authorization.WorkflowStartOnCreation:
+			if err := s.enqueueWorkflowStart(ctx, tx, receipt.ID, workItem, identity, plan); err != nil {
+				return nil, false, err
+			}
+			workflowStatus = "pending"
+		default:
+			return nil, false, workitemcreation.NewInternalFailure("unsupported workflow start timing", nil)
 		}
-		workflowStatus = "pending"
 	}
 	if err := s.receipts.Complete(ctx, tx, identity.TenantID, receipt.ID, workItem.ID); err != nil {
 		return nil, false, err
@@ -347,12 +419,7 @@ func auditRequestID(ctx context.Context, identity workitemcreation.Identity, dig
 	return "intake-" + digest
 }
 
-func (s *Service) enqueueWorkflowStart(ctx context.Context, tx *ent.Tx, receiptID int, item *ent.Ticket, identity workitemcreation.Identity, plan *workitemcreation.CreationPlan) error {
-	resolved := &plan.Resolved
-	workItemID := item.ID
-	if resolved.Workflow.DefinitionID == nil {
-		return workitemcreation.NewWorkflowBindingRequired("workflow definition is required for process start", nil)
-	}
+func workflowStartVariables(item *ent.Ticket, identity workitemcreation.Identity, plan *workitemcreation.CreationPlan) map[string]any {
 	variables := make(map[string]any, len(plan.WorkflowVariables)+12)
 	for key, value := range plan.WorkflowVariables {
 		variables[key] = value
@@ -364,6 +431,16 @@ func (s *Service) enqueueWorkflowStart(ctx context.Context, tx *ent.Tx, receiptI
 	if item.AssigneeID > 0 {
 		variables["assignee_id"] = item.AssigneeID
 	}
+	return variables
+}
+
+func (s *Service) enqueueWorkflowStart(ctx context.Context, tx *ent.Tx, receiptID int, item *ent.Ticket, identity workitemcreation.Identity, plan *workitemcreation.CreationPlan) error {
+	resolved := &plan.Resolved
+	workItemID := item.ID
+	if resolved.Workflow.DefinitionID == nil {
+		return workitemcreation.NewWorkflowBindingRequired("workflow definition is required for process start", nil)
+	}
+	variables := workflowStartVariables(item, identity, plan)
 	eventID := workflowStartEventID(workItemID, *resolved.Workflow.DefinitionID)
 	payload, err := json.Marshal(map[string]any{
 		"tenantId": identity.TenantID, "workItemId": workItemID, "recordClass": resolved.RecordClass,
@@ -375,7 +452,8 @@ func (s *Service) enqueueWorkflowStart(ctx context.Context, tx *ent.Tx, receiptI
 		return workitemcreation.NewInternalFailure("could not encode workflow start event", err)
 	}
 	_, err = s.outbox.Enqueue(ctx, tx, itsmservice.NewOutboxEvent{
-		EventID: eventID, EventType: workflowStartEventType, TenantID: identity.TenantID,
+		ExecutionWorkItemID: workItemID,
+		EventID:             eventID, EventType: workflowStartEventType, TenantID: identity.TenantID,
 		AggregateType: "work_item", AggregateID: strconv.Itoa(workItemID), Payload: payload,
 	})
 	if err != nil {
@@ -449,6 +527,29 @@ func (s *Service) loadResult(ctx context.Context, tx *ent.Tx, tenantID, workItem
 	if snapshot.NoProcess {
 		result.WorkflowStartStatus = "not_required"
 		return result, nil
+	}
+	policy, policyErr := authorization.ResolveWorkItemPolicy(workItem.RecordClass)
+	if policyErr != nil {
+		return nil, policyErr
+	}
+	switch policy.WorkflowStartTiming {
+	case authorization.WorkflowStartOnSubmit:
+		result.WorkflowStartStatus = "awaiting_submit"
+		businessKey, keyErr := dto.WorkItemBusinessKey(workItem.RecordClass, workItem.ID)
+		if keyErr != nil {
+			return nil, keyErr
+		}
+		started, startErr := tx.ProcessInstance.Query().Where(processinstance.TenantID(tenantID), processinstance.BusinessKey(businessKey)).Exist(ctx)
+		if startErr != nil {
+			return nil, workitemcreation.NewInfrastructureUnavailable("could not project professional workflow start", startErr)
+		}
+		if started {
+			result.WorkflowStartStatus = "active"
+		}
+		return result, nil
+	case authorization.WorkflowStartOnCreation:
+	default:
+		return nil, workitemcreation.NewInternalFailure("unsupported workflow start timing", nil)
 	}
 	if snapshot.WorkflowDefinitionID == nil {
 		return nil, workitemcreation.NewInternalFailure("intake snapshot is missing its workflow definition", nil)
@@ -554,4 +655,47 @@ func retryableTransactionConflict(err error) bool {
 		return false
 	}
 	return state.SQLState() == "40001" || state.SQLState() == "40P01"
+}
+
+// Translate owning relation errors into the existing intake transport contract;
+// never expose database/operation details in a public creation error.
+func relationCreationError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var intakeErr *workitemcreation.IntakeError
+	if errors.As(err, &intakeErr) {
+		return err
+	}
+	var version *common.VersionConflictError
+	if errors.As(err, &version) {
+		return workitemcreation.NewIntakeError(workitemcreation.SourceVersionConflict, "source work item version changed", err)
+	}
+	var operation *workitemmutation.OperationConflictError
+	if errors.As(err, &operation) {
+		return workitemcreation.NewIdempotencyConflict("relation operation identity conflict", err)
+	}
+	var app *common.AppError
+	if errors.As(err, &app) {
+		switch app.Code {
+		case common.ErrCodeNotFound:
+			return workitemcreation.NewReferenceNotFound("source or target work item is unavailable", err)
+		case common.ErrCodeForbidden:
+			return workitemcreation.NewPermissionDenied("source relation permission denied", err)
+		case common.ErrCodeValidation:
+			return workitemcreation.NewDomainValidationFailed(app.Message, err)
+		case common.ErrCodeInternal:
+			return workitemcreation.NewInternalFailure("source relation operation failed", err)
+		}
+	}
+	return workitemcreation.NewInfrastructureUnavailable("could not apply intake operation", err)
+}
+
+// Deployment denial and infrastructure failure retain distinct transport and
+// retry semantics. Preserve the cause so serialization/deadlock retries survive.
+func executionScopeFailure(message string, err error) error {
+	if errors.Is(err, executionscope.ErrDenied) {
+		return workitemcreation.NewPermissionDenied(message, err)
+	}
+	return workitemcreation.NewInfrastructureUnavailable("could not verify creation execution scope", err)
 }

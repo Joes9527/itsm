@@ -35,6 +35,10 @@ jobs:
     timeout-minutes: 25
     env:
       DEPLOYMENT_MODE: private
+      ITSM_FRONTEND_URL: http://localhost:3010
+      # Compose interpolates inactive worker profiles; this job never starts it.
+      KAF_WEBHOOK_URL: http://127.0.0.1:9/disabled-ci-worker
+      KAF_WEBHOOK_SECRET: ci-only-unused-worker-secret-not-a-credential
       MAX_RETRIES: '120'
       RETRY_INTERVAL: '3'
     steps:
@@ -53,7 +57,7 @@ jobs:
         run: |
           for attempt in $(seq 1 60); do
             backend_status=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8090/api/v1/health || true)
-            frontend_status=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/health || true)
+            frontend_status=$(curl -s -o /dev/null -w '%{http_code}' "$ITSM_FRONTEND_URL/api/health" || true)
             if [ "$backend_status" = '200' ] && [ "$frontend_status" = '200' ]; then
               echo "Core stack ready after ${attempt} attempts"
               exit 0

@@ -1,4 +1,6 @@
 'use client';
+import { WorkItemClassificationSelect } from '@/components/work-item/WorkItemClassificationSelect';
+import { classificationInput, classificationPath } from '@/components/work-item/classification';
 
 import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
 import { CreationAttempts } from '@/components/work-item/CreationAttempts';
@@ -7,13 +9,27 @@ import { CreationRequester } from '@/components/work-item/CreationRequester';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  Card, Form, Input, Select, Button, Space, Typography, App, Tag,
-  Row, Col, Spin, Alert, DatePicker, Tree, Empty, Divider, Collapse,
+  Card,
+  Form,
+  Input,
+  Select,
+  Button,
+  Space,
+  Typography,
+  App,
+  Tag,
+  Row,
+  Col,
+  Spin,
+  Alert,
+  DatePicker,
+  Tree,
+  Empty,
+  Divider,
+  Collapse,
 } from 'antd';
 import type { TreeDataNode } from 'antd';
-import {
-  ArrowLeft, FileText, ChevronRight, Sparkles, FolderOpen,
-} from 'lucide-react';
+import { ArrowLeft, FileText, ChevronRight, Sparkles, FolderOpen } from 'lucide-react';
 import { TicketApi } from '@/lib/api/ticket-api';
 import { buildTicketFormFields } from './ticket-form-fields';
 import { TicketCategoryApi, type TicketCategory } from '@/lib/api/ticket-category-api';
@@ -145,6 +161,7 @@ export default function CreateTicketPage() {
   const creation = useWorkItemCreation();
   const [genericChosen, setGenericChosen] = useState(false);
   const searchParams = useSearchParams();
+  const helpEntry = searchParams.get('entry') === 'help';
   const { message } = App.useApp();
   const { t } = useI18n();
   const [form] = Form.useForm();
@@ -171,17 +188,20 @@ export default function CreateTicketPage() {
 
   // AI
   const [aiSuggestions, setAiSuggestions] = useState<{
-    category?: string; priority?: string; confidence?: number; reasoning?: string;
+    category?: string;
+    priority?: string;
+    confidence?: number;
+    reasoning?: string;
   } | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
   // --- 数据加载 ---
   useEffect(() => {
     // 加载分类树
-    TicketCategoryApi.getCategories({ pageSize: 200 })
-      .then(res => {
-        const cats = res.categories || res.items || [];
-        setCategories(cats);
+    TicketCategoryApi.getCategoryTree()
+      .then(roots => {
+        const flatten = (nodes: TicketCategory[], depth = 0): TicketCategory[] => nodes.filter(node => node.isActive).flatMap(node => [node, ...(depth < 2 ? flatten(node.children || [], depth + 1) : [])]);
+        setCategories(flatten(roots));
       })
       .catch(err => console.warn('Failed to load categories:', err))
       .finally(() => setCategoriesLoading(false));
@@ -219,7 +239,7 @@ export default function CreateTicketPage() {
     if (cat) {
       setSelectedCategoryKeys([`cat-${cat.id}`]);
       setSelectedCategoryCode(cat.code);
-      form.setFieldValue('category', cat.code);
+      form.setFieldValue('classification', classificationPath(cat.id, categories));
       if (urlItem) form.setFieldValue('title', urlItem);
     }
   }, [urlCategory, categories]);
@@ -227,17 +247,7 @@ export default function CreateTicketPage() {
   // --- 分类树 ---
   const categoryTree = useMemo(() => buildCategoryTree(categories), [categories]);
 
-  // L1 domains for category dropdown
-  const domainOptions = useMemo(() => {
-    const domainNames: Record<string, string> = {
-      ACC: '账号与访问服务', EUC: '终端与办公支持', COL: '邮箱与M365协作',
-      NET: '网络与远程访问', INF: '平台与基础设施', APP: '业务系统支持',
-      SEC: '安全与合规支持', ADV: '咨询与服务引导',
-    };
-    return categories
-      .filter(c => c.level === 1)
-      .map(c => ({ label: `${c.name} (${c.code})`, value: c.code }));
-  }, [categories]);
+
 
   // 根据选中的分类节点（ID）精确匹配模板的 categoryIds
   const filteredTemplates = useMemo(() => {
@@ -265,6 +275,7 @@ export default function CreateTicketPage() {
     if (keys.length === 0) {
       setSelectedCategoryKeys([]);
       setSelectedCategoryCode(null);
+      form.setFieldValue('classification', undefined);
       return;
     }
     const key = keys[0];
@@ -284,7 +295,8 @@ export default function CreateTicketPage() {
     const node = findNode(categoryTree);
     if (node) {
       setSelectedCategoryCode(node.code);
-      form.setFieldValue('category', node.code);
+      const selected = categories.find(category => category.code === node.code);
+      form.setFieldValue('classification', classificationPath(selected?.id, categories));
     }
   };
 
@@ -353,7 +365,9 @@ export default function CreateTicketPage() {
       }
 
       const title = values.title || (activeSelection ? `${activeSelection.name}请求` : '新建工单');
-      const priority = normalizePriority(values.priority || (activeSelection ? activeSelection.priority : 'medium'));
+      const priority = normalizePriority(
+        values.priority || (activeSelection ? activeSelection.priority : 'medium')
+      );
 
       const customFieldValues: Array<{ name: string; value: unknown }> = [];
       if (activeFields.length > 0) {
@@ -373,7 +387,7 @@ export default function CreateTicketPage() {
         priority,
         type: 'ticket',
         requesterId: values.requesterId,
-        category: values.category || selectedCategoryCode || (activeSelection ? (selectedTemplate?.category || selectedPreset?.category) : undefined),
+        cti: classificationInput(values.classification),
         templateId,
         formFields: activeSelection
           ? buildTicketFormFields(activeFields, customFieldValues, templateId)
@@ -400,13 +414,17 @@ export default function CreateTicketPage() {
       }
       setAiLoading(true);
       const response = await httpClient.post<any>('/api/v1/ai/triage', {
-        title, description: values.description || '',
-        category: values.category, priority: values.priority,
+        title,
+        description: values.description || '',
+        category: values.category,
+        priority: values.priority,
       });
       if (response?.suggestions) {
         setAiSuggestions(response.suggestions);
-        if (response.suggestions.category) form.setFieldValue('category', response.suggestions.category);
-        if (response.suggestions.priority) form.setFieldValue('priority', response.suggestions.priority);
+        if (response.suggestions.category)
+          form.setFieldValue('category', response.suggestions.category);
+        if (response.suggestions.priority)
+          form.setFieldValue('priority', response.suggestions.priority);
         message.success('AI 分类建议已应用');
       }
     } catch {
@@ -419,7 +437,7 @@ export default function CreateTicketPage() {
   // --- 渲染 ---
   const isLoading = categoriesLoading || templatesLoading;
 
-  if (!genericChosen) return <Card className="m-6" title="选择创建目标">
+  if (!genericChosen && !helpEntry) return <Card className="m-6" title="选择创建目标">
     <p className="mb-4">先选择工作类型，再填写对应表单。模板名称和分类不会决定专业类型。</p>
     <Space wrap>
       <Button onClick={() => setGenericChosen(true)}>普通工单</Button>
@@ -431,29 +449,40 @@ export default function CreateTicketPage() {
   </Card>;
 
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-6" role="main" aria-label="创建工单页面">
-      <Alert type="info" title="当前目标：普通工单" description="模板提供普通工单字段；专业工作请返回创建入口重新选择。" />
+    <div className="max-w-7xl mx-auto p-[16px] md:p-[24px]" role="main" aria-label="创建工单页面">
+      <Alert type="info" title={helpEntry ? "提交问题 / 寻求帮助" : "当前目标：普通工单"} description={helpEntry ? "描述您遇到的问题，服务台将协助分类和处理。" : "模板提供普通工单字段；专业工作请返回创建入口重新选择。"} />
       <CreationAttempts creation={creation} />
       <Space orientation="vertical" size={16} style={{ width: '100%' }}>
         {/* 页面头部 */}
         <Card>
           <Space align="center" style={{ width: '100%' }}>
-            <Button icon={<ArrowLeft className="w-4 h-4" />} onClick={() => router.back()}>返回</Button>
+            <Button icon={<ArrowLeft className="w-4 h-4" />} onClick={() => router.back()}>
+              返回
+            </Button>
             <div style={{ flex: 1 }}>
-              <Title level={4} style={{ marginBottom: 4 }}>新建工单</Title>
-              <Text type="secondary">选择服务分类 → 选择模板 → 填写信息 → 提交</Text>
+              <Title level={4} style={{ fontSize: 24, fontWeight: 600, marginBottom: 4 }}>新建工单</Title>
+              <Text type="secondary">{helpEntry ? "填写问题描述并提交，分类和模板可选。" : "选择服务分类 → 选择模板 → 填写信息 → 提交"}</Text>
             </div>
           </Space>
         </Card>
 
         {isLoading ? (
-          <Card><div className="text-center py-12"><Spin size="large" tip="加载服务目录..." /></div></Card>
+          <Card>
+            <div className="text-center py-12">
+              <Spin size="large" tip="加载服务目录..." />
+            </div>
+          </Card>
         ) : (
           <Row gutter={[16, 16]}>
             {/* 左侧：服务分类树 */}
             <Col xs={24} md={8} lg={7}>
               <Card
-                title={<Space><FolderOpen className="w-4 h-4" /><span>服务分类</span></Space>}
+                title={
+                  <Space>
+                    <FolderOpen className="w-4 h-4" />
+                    <span>服务分类</span>
+                  </Space>
+                }
                 styles={{ body: { padding: '8px', maxHeight: 560, overflowY: 'auto' } }}
               >
                 {categoryTree.length > 0 ? (
@@ -477,7 +506,12 @@ export default function CreateTicketPage() {
               {/* 模板列表（当选中分类时显示） */}
               {selectedCategoryCode && !activeSelection && (
                 <Card
-                  title={<Space><FolderOpen className="w-4 h-4" /><span>可用模板</span></Space>}
+                  title={
+                    <Space>
+                      <FolderOpen className="w-4 h-4" />
+                      <span>可用模板</span>
+                    </Space>
+                  }
                   styles={{ body: { padding: '12px' } }}
                   style={{ marginBottom: 16 }}
                 >
@@ -495,7 +529,9 @@ export default function CreateTicketPage() {
                             <FileText className="w-5 h-5 text-blue-500" />
                             <div style={{ flex: 1 }}>
                               <div className="font-medium">{tmpl.name}</div>
-                              <Text type="secondary" className="text-xs">{tmpl.description}</Text>
+                              <Text type="secondary" className="text-[12px]">
+                                {tmpl.description}
+                              </Text>
                             </div>
                             <Tag>{tmpl.priority}</Tag>
                           </div>
@@ -503,7 +539,10 @@ export default function CreateTicketPage() {
                       ))}
                     </Space>
                   ) : (
-                    <Empty description="该分类下暂无模板，请选择其他分类" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                    <Empty
+                      description="该分类下暂无模板，请选择其他分类"
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    />
                   )}
                 </Card>
               )}
@@ -511,7 +550,13 @@ export default function CreateTicketPage() {
               {/* 无分类选中时显示所有模板 */}
               {!selectedCategoryCode && !activeSelection && (
                 <Card
-                  title={<Space><FolderOpen className="w-4 h-4" /><span>全部模板</span><Tag>{dbTemplates.length}</Tag></Space>}
+                  title={
+                    <Space>
+                      <FolderOpen className="w-4 h-4" />
+                      <span>全部模板</span>
+                      <Tag>{dbTemplates.length}</Tag>
+                    </Space>
+                  }
                   styles={{ body: { padding: '12px' } }}
                   style={{ marginBottom: 16 }}
                 >
@@ -528,8 +573,10 @@ export default function CreateTicketPage() {
                             <div className="flex items-center gap-2">
                               <FileText className="w-4 h-4 text-blue-500" />
                               <div style={{ flex: 1 }}>
-                                <div className="font-medium text-sm">{tmpl.name}</div>
-                                <Text type="secondary" className="text-xs">{tmpl.description}</Text>
+                                <div className="font-medium text-[13px]">{tmpl.name}</div>
+                                <Text type="secondary" className="text-[12px]">
+                                  {tmpl.description}
+                                </Text>
                               </div>
                               <Tag color="blue">{tmpl.category}</Tag>
                             </div>
@@ -548,8 +595,8 @@ export default function CreateTicketPage() {
                 <Card
                   style={{
                     marginBottom: 16,
-                    borderColor: '#F06820',
-                    background: '#F0682008',
+                    borderColor: 'var(--color-primary)',
+                    background: 'var(--color-selected-bg)',
                   }}
                 >
                   <Space orientation="vertical" style={{ width: '100%' }}>
@@ -557,10 +604,20 @@ export default function CreateTicketPage() {
                       <FileText className="w-5 h-5 text-blue-500" />
                       <div style={{ flex: 1 }}>
                         <div className="font-medium">{activeSelection.name}</div>
-                        <Text type="secondary">{'description' in activeSelection ? (activeSelection as DbTemplate).description : (activeSelection as TicketTypePreset).description}</Text>
+                        <Text type="secondary">
+                          {'description' in activeSelection
+                            ? (activeSelection as DbTemplate).description
+                            : (activeSelection as TicketTypePreset).description}
+                        </Text>
                       </div>
-                      <Tag color="blue">{'category' in activeSelection ? (activeSelection as DbTemplate).category : (activeSelection as TicketTypePreset).category}</Tag>
-                      <Button type="link" size="small" onClick={handleClearSelection}>更换</Button>
+                      <Tag color="blue">
+                        {'category' in activeSelection
+                          ? (activeSelection as DbTemplate).category
+                          : (activeSelection as TicketTypePreset).category}
+                      </Tag>
+                      <Button type="link" size="small" onClick={handleClearSelection}>
+                        更换
+                      </Button>
                     </Space>
                   </Space>
                 </Card>
@@ -568,25 +625,39 @@ export default function CreateTicketPage() {
 
               {/* 表单 */}
               <Form form={form} layout="vertical" requiredMark="optional">
-                <CreationRequester />
+                <CreationRequester resource="ticket" />
                 <Card title="工单信息" style={{ marginBottom: 16 }}>
                   <Alert
                     type="info" showIcon className="mb-4"
                     message={activeSelection
                       ? '标题/描述留空将根据所选模板自动生成。'
-                      : '请先从左侧选择服务分类，或直接选择模板开始。'}
+                      : helpEntry ? '直接填写标题与描述即可，分类和模板可选。' : '请先从左侧选择服务分类，或直接选择模板开始。'}
                   />
 
                   <Form.Item
-                    name="title" label="标题"
-                    rules={activeSelection ? [{ min: 2, message: '标题至少2个字符' }] : [{ required: true, message: '请输入标题' }, { min: 2 }]}
+                    name="title"
+                    label="标题"
+                    rules={
+                      activeSelection
+                        ? [{ min: 2, message: '标题至少2个字符' }]
+                        : [{ required: true, message: '请输入标题' }, { min: 2 }]
+                    }
                   >
-                    <Input placeholder={activeSelection ? `例如：${activeSelection.name}请求` : '简要描述您的请求'} />
+                    <Input
+                      placeholder={
+                        activeSelection ? `例如：${activeSelection.name}请求` : '简要描述您的请求'
+                      }
+                    />
                   </Form.Item>
 
                   <Form.Item
-                    name="description" label="详细描述"
-                    rules={activeSelection ? [{ min: 10, message: '至少10个字符' }] : [{ required: true, message: '请输入描述' }, { min: 10 }]}
+                    name="description"
+                    label="详细描述"
+                    rules={
+                      activeSelection
+                        ? [{ min: 10, message: '至少10个字符' }]
+                        : [{ required: true, message: '请输入描述' }, { min: 10 }]
+                    }
                     extra="建议写清现象、影响范围和期望结果。"
                   >
                     <TextArea rows={4} placeholder="请详细描述问题/需求与影响范围..." />
@@ -594,7 +665,12 @@ export default function CreateTicketPage() {
 
                   <Row gutter={[16, 16]}>
                     <Col xs={24} sm={12}>
-                      <Form.Item name="priority" label="优先级" initialValue="medium" rules={[{ required: true }]}>
+                      <Form.Item
+                        name="priority"
+                        label="优先级"
+                        initialValue="medium"
+                        rules={[{ required: true }]}
+                      >
                         <Select<Priority>
                           options={[
                             { label: '低', value: 'low' },
@@ -606,31 +682,8 @@ export default function CreateTicketPage() {
                       </Form.Item>
                     </Col>
                     <Col xs={24} sm={12}>
-                      {selectedCategoryCode ? (
-                        <div style={{ paddingTop: 4 }}>
-                          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>服务分类</Text>
-                          <Space>
-                            <Tag color="blue">{selectedCategoryCode}</Tag>
-                            <Button type="link" size="small" onClick={() => {
-                              setSelectedCategoryKeys([]);
-                              setSelectedCategoryCode(null);
-                              form.setFieldValue('category', undefined);
-                            }}>清除</Button>
-                          </Space>
-                        </div>
-                      ) : (
-                        <Form.Item name="category" label="服务分类（可选）">
-                          <Select
-                            allowClear showSearch
-                            options={domainOptions}
-                            placeholder="未选分类树？在此快速选择"
-                            optionFilterProp="label"
-                          />
-                        </Form.Item>
-                      )}
-                      {/* 隐藏字段，确保分类值提交 */}
-                      <Form.Item name="category" hidden>
-                        <Input />
+                      <Form.Item name="classification" label="工单分类（可选）">
+                        <WorkItemClassificationSelect />
                       </Form.Item>
                     </Col>
                   </Row>
@@ -638,25 +691,41 @@ export default function CreateTicketPage() {
 
                 {/* 自定义字段 */}
                 {activeFields.length > 0 && (
-                  <Card title={`${activeSelection?.name || ''} - 补充信息`} style={{ marginBottom: 16 }}>
+                  <Card
+                    title={`${activeSelection?.name || ''} - 补充信息`}
+                    style={{ marginBottom: 16 }}
+                  >
                     <Row gutter={[16, 0]}>
                       {activeFields.map(field => (
                         <Col span={24} key={field.name}>
                           <Form.Item
                             name={field.name}
                             label={field.label}
-                            rules={field.required ? [{ required: true, message: `请填写${field.label}` }] : []}
+                            rules={
+                              field.required
+                                ? [{ required: true, message: `请填写${field.label}` }]
+                                : []
+                            }
                           >
                             {field.type === 'textarea' ? (
                               <TextArea rows={3} placeholder={`请输入${field.label}`} />
                             ) : field.type === 'select' ? (
-                              <Select placeholder={`请选择${field.label}`} options={field.options} />
+                              <Select
+                                placeholder={`请选择${field.label}`}
+                                options={field.options}
+                              />
                             ) : field.type === 'number' ? (
                               <Input type="number" placeholder={`请输入${field.label}`} />
                             ) : field.type === 'date' ? (
-                              <DatePicker style={{ width: '100%' }} placeholder={`请选择${field.label}`} />
+                              <DatePicker
+                                style={{ width: '100%' }}
+                                placeholder={`请选择${field.label}`}
+                              />
                             ) : field.type === 'file' ? (
-                              <Input placeholder={`${field.label}（提交后可在工单详情中上传）`} disabled />
+                              <Input
+                                placeholder={`${field.label}（提交后可在工单详情中上传）`}
+                                disabled
+                              />
                             ) : (
                               <Input placeholder={`请输入${field.label}`} />
                             )}
@@ -669,69 +738,114 @@ export default function CreateTicketPage() {
 
                 {/* 操作按钮 */}
                 <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-                  <Button type="primary" onClick={handleSubmit} loading={loading} size="large" block>
+                  <Button
+                    type="primary"
+                    onClick={handleSubmit}
+                    loading={loading}
+                    size="large"
+                    block
+                  >
                     创建工单
                   </Button>
-                  <Button onClick={() => router.push('/tickets')} size="large" block>取消</Button>
+                  <Button onClick={() => router.push('/tickets')} size="large" block>
+                    取消
+                  </Button>
                 </Space>
 
                 {/* AI 智能分类 */}
-                <Card size="small" className="mt-4"
+                {!helpEntry && <Card size="small" className="mt-4"
                   title={<span className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-yellow-500" />AI 智能分类</span>}
                 >
                   <Spin spinning={aiLoading}>
                     {aiSuggestions ? (
                       <div className="space-y-2">
                         <div className="flex flex-wrap gap-2">
-                          {aiSuggestions.category && <Tag color="blue">分类: {aiSuggestions.category}</Tag>}
-                          {aiSuggestions.priority && <Tag color="orange">优先级: {aiSuggestions.priority}</Tag>}
+                          {aiSuggestions.category && (
+                            <Tag color="blue">分类: {aiSuggestions.category}</Tag>
+                          )}
+                          {aiSuggestions.priority && (
+                            <Tag color="orange">优先级: {aiSuggestions.priority}</Tag>
+                          )}
                         </div>
-                        {aiSuggestions.reasoning && <Text type="secondary" className="text-sm">{aiSuggestions.reasoning}</Text>}
-                        {aiSuggestions.confidence && <Text type="secondary" className="text-xs">置信度: {Math.round(aiSuggestions.confidence * 100)}%</Text>}
+                        {aiSuggestions.reasoning && (
+                          <Text type="secondary" className="text-[13px]">
+                            {aiSuggestions.reasoning}
+                          </Text>
+                        )}
+                        {aiSuggestions.confidence && (
+                          <Text type="secondary" className="text-[12px]">
+                            置信度: {Math.round(aiSuggestions.confidence * 100)}%
+                          </Text>
+                        )}
                       </div>
-                    ) : <Text type="secondary">点击获取 AI 智能分类建议</Text>}
+                    ) : (
+                      <Text type="secondary">点击获取 AI 智能分类建议</Text>
+                    )}
                   </Spin>
-                  <Button type="default" icon={<Sparkles className="w-4 h-4" />} onClick={handleAITriage} loading={aiLoading} className="mt-2" block>
+                  <Button
+                    type="default"
+                    icon={<Sparkles className="w-4 h-4" />}
+                    onClick={handleAITriage}
+                    loading={aiLoading}
+                    className="mt-2"
+                    block
+                  >
                     获取 AI 建议
                   </Button>
-                </Card>
+                </Card>}
 
                 {/* Cloud Ops 预设（折叠，不干扰主流程） */}
                 <Collapse
                   className="mt-4"
-                  items={[{
-                    key: 'cloud-ops',
-                    label: <span className="text-gray-400 text-sm">运维操作类型（Cloud Ops / DevOps 场景）</span>,
-                    children: (
-                      <Space orientation="vertical" style={{ width: '100%' }} size={8}>
-                        <Text type="secondary" className="text-xs">以下为云平台运维场景的预设类型，不作为 Helpdesk 主要入口。</Text>
-                        <Row gutter={[8, 8]}>
-                          {cloudOpsPresets.map(preset => (
-                            <Col xs={24} sm={12} key={preset.id}>
-                              <Card
-                                size="small"
-                                hoverable
-                                onClick={() => handleSelectPreset(preset)}
-                                style={{
-                                  cursor: 'pointer',
-                                  borderColor: selectedPreset?.id === preset.id ? preset.color : '#d9d9d9',
-                                  backgroundColor: selectedPreset?.id === preset.id ? `${preset.color}10` : '#fff',
-                                }}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <div style={{ color: preset.color }}>{iconMap[preset.icon] || <FileText className="w-4 h-4" />}</div>
-                                  <div style={{ flex: 1 }}>
-                                    <div className="font-medium text-sm">{preset.name}</div>
-                                    <Text type="secondary" className="text-xs">{preset.description}</Text>
+                  items={[
+                    {
+                      key: 'cloud-ops',
+                      label: (
+                        <span className="text-muted text-[13px]">
+                          运维操作类型（Cloud Ops / DevOps 场景）
+                        </span>
+                      ),
+                      children: (
+                        <Space orientation="vertical" style={{ width: '100%' }} size={8}>
+                          <Text type="secondary" className="text-[12px]">
+                            以下为云平台运维场景的预设类型，不作为 Helpdesk 主要入口。
+                          </Text>
+                          <Row gutter={[8, 8]}>
+                            {cloudOpsPresets.map(preset => (
+                              <Col xs={24} sm={12} key={preset.id}>
+                                <Card
+                                  size="small"
+                                  hoverable
+                                  onClick={() => handleSelectPreset(preset)}
+                                  style={{
+                                    cursor: 'pointer',
+                                    borderColor:
+                                      selectedPreset?.id === preset.id ? preset.color : '#d9d9d9',
+                                    backgroundColor:
+                                      selectedPreset?.id === preset.id
+                                        ? `${preset.color}10`
+                                        : 'var(--color-bg-primary)',
+                                  }}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <div style={{ color: preset.color }}>
+                                      {iconMap[preset.icon] || <FileText className="w-4 h-4" />}
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                      <div className="font-medium text-[13px]">{preset.name}</div>
+                                      <Text type="secondary" className="text-[12px]">
+                                        {preset.description}
+                                      </Text>
+                                    </div>
                                   </div>
-                                </div>
-                              </Card>
-                            </Col>
-                          ))}
-                        </Row>
-                      </Space>
-                    ),
-                  }]}
+                                </Card>
+                              </Col>
+                            ))}
+                          </Row>
+                        </Space>
+                      ),
+                    },
+                  ]}
                 />
               </Form>
             </Col>

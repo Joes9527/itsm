@@ -6,16 +6,18 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"net/url"
+	"strconv"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/ent"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/handlers/common/accessgrant"
 	"itsm-backend/handlers/common/intakehttp"
 	creation "itsm-backend/handlers/common/workitemcreation"
-
-	"strconv"
-	"strings"
 )
 
 type CatalogReader interface {
@@ -25,7 +27,14 @@ type CatalogReader interface {
 type FulfillmentReader interface {
 	ReadFulfillment(context.Context, *ent.Client, *ent.Ticket) (accessgrant.Fulfillment, error)
 }
+type ReferenceReadOptions struct {
+	FrontendURL string
+	PageSize    int
+	Lifecycle   authorization.WorkItemLifecycleReader
+}
+
 type ReadService struct {
+	references   ReferenceReadOptions
 	fulfillment  FulfillmentReader
 	sessions     *authorization.SessionReader
 	catalog      CatalogReader
@@ -34,8 +43,8 @@ type ReadService struct {
 
 func (s *ReadService) SetFulfillmentReader(owner FulfillmentReader) { s.fulfillment = owner }
 
-func NewReadService(sessions *authorization.SessionReader, c CatalogReader, secret string) *ReadService {
-	return &ReadService{sessions: sessions, catalog: c, cursorSecret: secret}
+func NewReadService(sessions *authorization.SessionReader, c CatalogReader, secret string, references ReferenceReadOptions) *ReadService {
+	return &ReadService{sessions: sessions, catalog: c, cursorSecret: secret, references: references}
 }
 
 type CatalogSummary struct {
@@ -88,6 +97,7 @@ func (s *ReadService) encodeCursor(value catalogCursor) string {
 	mac.Write(append([]byte("intake-catalog-cursor-v1\x00"), raw...))
 	return base64.RawURLEncoding.EncodeToString(raw) + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
+
 func (s *ReadService) decodeCursor(cursor string, i creation.Identity, q string) (int, error) {
 	invalid := creation.NewInvalidCommand("invalid catalog cursor", creation.FieldError{Field: "cursor", Message: "cursor is invalid for this query"}, nil)
 	if len(cursor) > 4096 {
@@ -110,6 +120,7 @@ func (s *ReadService) decodeCursor(cursor string, i creation.Identity, q string)
 	}
 	return value.After, nil
 }
+
 func (s *ReadService) List(ctx context.Context, i creation.Identity, q, cursor string) (*CatalogPage, error) {
 	if s == nil || s.sessions == nil || s.catalog == nil || s.cursorSecret == "" {
 		return nil, creation.NewInfrastructureUnavailable("catalog reader unavailable", nil)
@@ -143,6 +154,7 @@ func (s *ReadService) List(ctx context.Context, i creation.Identity, q, cursor s
 	})
 	return result, err
 }
+
 func (s *ReadService) Detail(ctx context.Context, i creation.Identity, id int) (*CatalogContract, error) {
 	if s == nil || s.sessions == nil || s.catalog == nil {
 		return nil, creation.NewInfrastructureUnavailable("catalog reader unavailable", nil)
@@ -168,6 +180,7 @@ func (s *ReadService) Detail(ctx context.Context, i creation.Identity, id int) (
 	})
 	return result, err
 }
+
 func (s *ReadService) WorkItem(ctx context.Context, i creation.Identity, id int) (*WorkItemView, error) {
 	if s == nil || s.sessions == nil {
 		return nil, creation.NewInfrastructureUnavailable("work item reader unavailable", nil)
@@ -209,6 +222,7 @@ func (s *ReadService) WorkItem(ctx context.Context, i creation.Identity, id int)
 	})
 	return result, err
 }
+
 func (h *Handler) CatalogPage(c *gin.Context) {
 	for k, v := range c.Request.URL.Query() {
 		if (k != "q" && k != "cursor") || len(v) != 1 {
@@ -223,6 +237,7 @@ func (h *Handler) CatalogPage(c *gin.Context) {
 	}
 	common.Success(c, result)
 }
+
 func (h *Handler) CatalogDetail(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
@@ -236,6 +251,7 @@ func (h *Handler) CatalogDetail(c *gin.Context) {
 	}
 	common.Success(c, result)
 }
+
 func (h *Handler) WorkItem(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
@@ -243,6 +259,189 @@ func (h *Handler) WorkItem(c *gin.Context) {
 		return
 	}
 	result, err := h.readers.WorkItem(c.Request.Context(), c.MustGet("intake_identity").(creation.Identity), id)
+	if err != nil {
+		intakehttp.Fail(c, err)
+		return
+	}
+	common.Success(c, result)
+}
+
+// Reference queries use the same current session snapshot for scope, ACL and
+// lifecycle projections. A reference never grants write authority.
+func (s *ReadService) validateReferences() error {
+	if s == nil || s.sessions == nil || s.cursorSecret == "" || s.references.PageSize < 1 || missingDependency(s.references.Lifecycle) {
+		return creation.NewInfrastructureUnavailable("work item reference reader unavailable", nil)
+	}
+	if _, err := ticketReferenceURL(s.references.FrontendURL, 1); err != nil {
+		return creation.NewInfrastructureUnavailable("work item reference URL unavailable", err)
+	}
+	return nil
+}
+
+type referenceCursor struct {
+	TenantID int    `json:"tenantId"`
+	ActorID  int    `json:"actorId"`
+	Mode     string `json:"mode"`
+	After    int    `json:"after"`
+}
+
+func (s *ReadService) encodeReferenceCursor(value referenceCursor) string {
+	raw, _ := json.Marshal(value)
+	mac := hmac.New(sha256.New, []byte(s.cursorSecret))
+	mac.Write(append([]byte("intake-work-item-reference-cursor-v1\x00"), raw...))
+	return base64.RawURLEncoding.EncodeToString(raw) + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func (s *ReadService) decodeReferenceCursor(cursor string, i creation.Identity) (int, error) {
+	invalid := creation.NewInvalidCommand("invalid work item reference cursor", creation.FieldError{Field: "cursor", Message: "cursor is invalid for this query"}, nil)
+	if len(cursor) > 4096 {
+		return 0, invalid
+	}
+	parts := strings.Split(cursor, ".")
+	if len(parts) != 2 {
+		return 0, invalid
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return 0, invalid
+	}
+	var value referenceCursor
+	if json.Unmarshal(raw, &value) != nil || value.After < 1 || value.TenantID != i.TenantID || value.ActorID != i.ActorID || value.Mode != "unfinished" {
+		return 0, invalid
+	}
+	if !hmac.Equal([]byte(cursor), []byte(s.encodeReferenceCursor(value))) {
+		return 0, invalid
+	}
+	return value.After, nil
+}
+
+func referenceReadable(snapshot *authorization.SessionSnapshot, item *ent.Ticket) (bool, error) {
+	policy, err := authorization.ResolveWorkItemPolicy(item.RecordClass)
+	if err != nil {
+		return false, creation.NewInfrastructureUnavailable("work item policy unavailable", err)
+	}
+	return authorization.CheckPermissionMatch(snapshot.Permissions, policy.Resource, policy.ResolveAction("read")), nil
+}
+
+func (s *ReadService) ReferenceByNumber(ctx context.Context, i creation.Identity, number string) (*WorkItemReference, error) {
+	if err := s.validateReferences(); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(number) == "" {
+		return nil, creation.NewInvalidCommand("number is required", creation.FieldError{Field: "number", Message: "number must not be blank"}, nil)
+	}
+	var result *WorkItemReference
+	err := s.sessions.Read(ctx, i, func(snapshot *authorization.SessionSnapshot) error {
+		item, err := snapshot.Tx.Client().Ticket.Query().Where(ticket.TenantIDEQ(i.TenantID), ticket.RequesterIDEQ(i.ActorID), ticket.DeletedAtIsNil(), ticket.TicketNumberEQ(number)).Only(ctx)
+		if ent.IsNotFound(err) {
+			return creation.NewReferenceNotFound("work item unavailable", nil)
+		}
+		if err != nil {
+			return creation.NewInfrastructureUnavailable("work item lookup unavailable", err)
+		}
+		readable, err := referenceReadable(snapshot, item)
+		if err != nil {
+			return err
+		}
+		if !readable {
+			return creation.NewReferenceNotFound("work item unavailable", nil)
+		}
+		reference, err := projectWorkItemReference(s.references.FrontendURL, item)
+		if err != nil {
+			return creation.NewInfrastructureUnavailable("work item reference unavailable", err)
+		}
+		result = &reference
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (s *ReadService) UnfinishedReferences(ctx context.Context, i creation.Identity, cursor string) (*WorkItemReferencePage, error) {
+	if err := s.validateReferences(); err != nil {
+		return nil, err
+	}
+	after := 0
+	if cursor != "" {
+		var err error
+		after, err = s.decodeReferenceCursor(cursor, i)
+		if err != nil {
+			return nil, err
+		}
+	}
+	result := &WorkItemReferencePage{Items: []WorkItemReference{}}
+	err := s.sessions.Read(ctx, i, func(snapshot *authorization.SessionSnapshot) error {
+		client := snapshot.Tx.Client()
+		for {
+			rows, err := client.Ticket.Query().Where(ticket.TenantIDEQ(i.TenantID), ticket.RequesterIDEQ(i.ActorID), ticket.DeletedAtIsNil(), ticket.IDGT(after)).Order(ent.Asc(ticket.FieldID)).Limit(s.references.PageSize).All(ctx)
+			if err != nil {
+				return creation.NewInfrastructureUnavailable("work item list unavailable", err)
+			}
+			for _, item := range rows {
+				readable, err := referenceReadable(snapshot, item)
+				if err != nil {
+					return err
+				}
+				if readable {
+					unfinished, err := s.references.Lifecycle.IsUnfinished(ctx, client, item)
+					if err != nil {
+						return creation.NewInfrastructureUnavailable("work item lifecycle unavailable", err)
+					}
+					if unfinished {
+						// Look ahead until another visible unfinished record exists. Keep the
+						// cursor before that record so the next page cannot lose it.
+						if len(result.Items) == s.references.PageSize {
+							value := s.encodeReferenceCursor(referenceCursor{TenantID: i.TenantID, ActorID: i.ActorID, Mode: "unfinished", After: after})
+							result.NextCursor = &value
+							return nil
+						}
+						reference, err := projectWorkItemReference(s.references.FrontendURL, item)
+						if err != nil {
+							return creation.NewInfrastructureUnavailable("work item reference unavailable", err)
+						}
+						result.Items = append(result.Items, reference)
+					}
+				}
+				after = item.ID
+			}
+			if len(rows) < s.references.PageSize {
+				return nil
+			}
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (h *Handler) WorkItemReferences(c *gin.Context) {
+	query, err := url.ParseQuery(c.Request.URL.RawQuery)
+	if err != nil {
+		intakehttp.Fail(c, creation.NewInvalidCommand("invalid query parameters", creation.FieldError{}, nil))
+		return
+	}
+	for key, values := range query {
+		if (key != "number" && key != "cursor") || len(values) != 1 {
+			intakehttp.Fail(c, creation.NewInvalidCommand("invalid query parameter", creation.FieldError{}, nil))
+			return
+		}
+	}
+	_, hasNumber := query["number"]
+	_, hasCursor := query["cursor"]
+	if hasNumber && hasCursor {
+		intakehttp.Fail(c, creation.NewInvalidCommand("number and cursor cannot be combined", creation.FieldError{}, nil))
+		return
+	}
+	identity := c.MustGet("intake_identity").(creation.Identity)
+	var result any
+	if hasNumber {
+		result, err = h.readers.ReferenceByNumber(c.Request.Context(), identity, query.Get("number"))
+	} else {
+		result, err = h.readers.UnfinishedReferences(c.Request.Context(), identity, query.Get("cursor"))
+	}
 	if err != nil {
 		intakehttp.Fail(c, err)
 		return

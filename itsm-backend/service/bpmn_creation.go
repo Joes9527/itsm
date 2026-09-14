@@ -3,13 +3,15 @@ package service
 import (
 	"context"
 	"errors"
-	"go.uber.org/zap"
-	"itsm-backend/ent"
-	"itsm-backend/ent/user"
-	creation "itsm-backend/handlers/common/workitemcreation"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"go.uber.org/zap"
+	"itsm-backend/common/workitemidentity"
+	"itsm-backend/ent"
+	"itsm-backend/ent/user"
+	creation "itsm-backend/handlers/common/workitemcreation"
 )
 
 // ResolveCreationWorkflow freezes the owning process service's creation binding.
@@ -25,8 +27,11 @@ func (s *ProcessBindingService) ResolveCreationWorkflow(ctx context.Context, tx 
 	version := 0
 	key = strings.TrimSpace(key)
 	if key == "" {
-		business := map[string]string{"generic": "ticket", "incident": "incident", "problem": "problem", "change_request": "change", "service_request_item": "service_request"}[in.RecordClass]
-		if business == "" {
+		// 路由词表就是 recordClass：流程身份的唯一定义在 common/workitemidentity。
+		// 这里曾经把 recordClass 再翻回 Wave-1 旧词表（change_request -> change、
+		// generic -> ticket），那会让绑定匹配与实例身份各用一套词表。
+		business := in.RecordClass
+		if !workitemidentity.IsRecordClass(business) {
 			return result, nil, creation.NewUnsupportedRecordClass("unsupported workflow creation class", nil)
 		}
 		subtype := plan.BusinessSubtype

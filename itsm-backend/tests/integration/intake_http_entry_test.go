@@ -4,6 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http/httptest"
+	"strconv"
+	"strings"
+	"testing"
+
 	"itsm-backend/controller"
 	"itsm-backend/ent"
 	changedomain "itsm-backend/handlers/change"
@@ -13,10 +18,6 @@ import (
 	requestdomain "itsm-backend/handlers/service_request"
 	standarddomain "itsm-backend/handlers/standard_change"
 	"itsm-backend/middleware"
-	"net/http/httptest"
-	"strconv"
-	"strings"
-	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -41,19 +42,21 @@ func intakeHTTP(t *testing.T, f *unifiedIntakeFixture, handle gin.HandlerFunc, b
 	_ = json.Unmarshal(w.Body.Bytes(), &envelope)
 	return w, envelope.Data
 }
+
 func TestIntakeHTTPProblemAndIncidentEntry(t *testing.T) {
 	f := newUnifiedIntakeFixture(t)
 	ctx := context.Background()
-	f.client.TicketCategory.Create().SetTenantID(f.identity.TenantID).SetName("network").SetCode("network").SaveX(ctx)
+	category := f.client.TicketCategory.Create().SetTenantID(f.identity.TenantID).SetName("network").SetCode("network").SaveX(ctx)
 	problem := problemdomain.NewHandler(nil, f.client)
 	problem.SetCreationApplication(f.app)
-	body := `{"title":"Root cause investigation","description":"Investigate service degradation","priority":"high","category":"network","rootCause":"packet loss","impact":"regional"}`
+	body := `{"title":"Root cause investigation","description":"Investigate service degradation","priority":"high","cti":{"categoryId":` + strconv.Itoa(category.ID) + `},"rootCause":"packet loss","impact":"regional"}`
 	w, result := intakeHTTP(t, f, problem.Create, body, "problem-http", nil)
 	require.Equal(t, 201, w.Code, w.Body.String())
 	require.Equal(t, "problem", result.RecordClass)
 	require.Positive(t, result.ProfessionalReference.ID)
 	p := f.client.Problem.GetX(ctx, result.ProfessionalReference.ID)
 	require.Equal(t, "packet loss", p.RootCause)
+	require.Equal(t, category.ID, f.client.Ticket.GetX(ctx, result.WorkItemID).CategoryID)
 	w, replay := intakeHTTP(t, f, problem.Create, body, "problem-http", nil)
 	require.Equal(t, 200, w.Code, w.Body.String())
 	require.True(t, replay.Replayed)
@@ -61,6 +64,9 @@ func TestIntakeHTTPProblemAndIncidentEntry(t *testing.T) {
 	w, _ = intakeHTTP(t, f, problem.Create, strings.TrimSuffix(body, "}")+`,"impactScope":"ignored"}`, "bad", nil)
 	require.Equal(t, 400, w.Code, w.Body.String())
 	require.Contains(t, w.Body.String(), "impactScope")
+	w, _ = intakeHTTP(t, f, problem.Create, strings.TrimSuffix(body, "}")+`,"category":"network"}`, "legacy-category", nil)
+	require.Equal(t, 400, w.Code, w.Body.String())
+	require.Contains(t, w.Body.String(), `unknown member \"category\"`)
 	incident := controller.NewIncidentController(nil, nil, nil, nil, nil, zap.NewNop().Sugar())
 	incident.SetCreationApplication(f.app)
 	incidentBody := `{"title":"Service unavailable","description":"Detailed service failure","priority":"critical","severity":"high","impact":"high","urgency":"high","type":"alert","source":"manual","impactAnalysis":{"businessImpact":{"revenueImpact":9007199254740993.125}},"detectedAt":"2026-09-05T08:00:00+08:00"}`
@@ -82,7 +88,7 @@ func TestIntakeHTTPChangeReferencesAndStandardTemplate(t *testing.T) {
 	require.NoError(t, err)
 	handler := changedomain.NewHandler(nil)
 	handler.SetCreationApplication(f.app)
-	body := `{"title":"Change service configuration","description":"Change description","justification":"service reliability","type":"normal","priority":"high","riskLevel":"low","impactScope":"medium","implementationPlan":"apply configuration","rollbackPlan":"restore configuration","plannedStartDate":"2026-09-06T08:00:00+08:00","plannedEndDate":"2026-09-06T09:00:00+08:00","relatedTickets":["` + source.Number + `"]}`
+	body := `{"title":"Change service configuration","description":"Change description","justification":"service reliability","type":"normal","priority":"high","riskLevel":"low","impactScope":"medium","implementationPlan":"apply configuration","rollbackPlan":"restore configuration","plannedStartDate":"2026-09-06T08:00:00+08:00","plannedEndDate":"2026-09-06T09:00:00+08:00","sourceRelations":[{"sourceWorkItemId":` + strconv.Itoa(source.WorkItemID) + `,"relationType":"related_to","expectedVersion":1,"metadata":{"required":false}}]}`
 	w, result := intakeHTTP(t, f, handler.CreateChange, body, "change-http", nil)
 	require.Equal(t, 201, w.Code, w.Body.String())
 	require.Equal(t, "change_request", result.RecordClass)

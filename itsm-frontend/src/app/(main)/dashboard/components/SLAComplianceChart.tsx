@@ -116,7 +116,7 @@ const SLAComplianceChart: React.FC<{ data: SLAData[]; overallValue?: number }> =
               alignItems: 'center',
               justifyContent: 'center',
               height: '100%',
-              color: '#999',
+              color: 'var(--color-text-secondary)',
             }}
           >
             暂无数据
@@ -132,7 +132,7 @@ const SLAComplianceChart: React.FC<{ data: SLAData[]; overallValue?: number }> =
             const target = typeof item.target === 'number' && !isNaN(item.target) ? item.target : 0;
             return (
               <div key={index} className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 font-medium">
+                <span className="text-[13px] text-muted font-medium">
                   {item.service || '未知服务'}
                 </span>
                 <div className="flex items-center gap-3">
@@ -143,7 +143,7 @@ const SLAComplianceChart: React.FC<{ data: SLAData[]; overallValue?: number }> =
                     style={{ width: 120 }}
                     format={percent => `${percent?.toFixed(1) || 0}%`}
                   />
-                  <span className="text-xs text-gray-500 w-12 text-right">目标{target}%</span>
+                  <span className="text-[12px] text-muted w-12 text-right">目标{target}%</span>
                 </div>
               </div>
             );

@@ -40,6 +40,7 @@ func (ServiceRequest) Fields() []ent.Field {
 		// 时间戳
 	}
 }
+
 func (ServiceRequest) Edges() []ent.Edge {
 	return []ent.Edge{edge.To("work_item", Ticket.Type).Field("ticket_id").Unique().Required().StorageKey(edge.Symbol("service_requests_work_item_fk"))}
 }

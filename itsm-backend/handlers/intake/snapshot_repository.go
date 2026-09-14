@@ -3,8 +3,9 @@ package intake
 import (
 	"context"
 	"encoding/json"
-	"itsm-backend/handlers/common/workitemcreation"
 	"strings"
+
+	"itsm-backend/handlers/common/workitemcreation"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/configurationitem"
@@ -33,6 +34,8 @@ type SnapshotInput struct {
 	WorkflowDefinitionID      *int
 	WorkflowDefinitionKey     string
 	WorkflowDefinitionVersion string
+	WorkflowDefinitionDigest  string
+	WorkflowVariables         json.RawMessage
 	NoProcess                 bool
 	SLADefinitionID           *int
 	ResolverVersion           string
@@ -169,6 +172,12 @@ func (r *SnapshotRepository) Create(ctx context.Context, tx *ent.Tx, input Snaps
 	}
 	if input.WorkflowDefinitionVersion != "" {
 		create.SetWorkflowDefinitionVersion(input.WorkflowDefinitionVersion)
+	}
+	if input.WorkflowDefinitionDigest != "" {
+		create.SetWorkflowDefinitionDigest(input.WorkflowDefinitionDigest)
+	}
+	if len(input.WorkflowVariables) > 0 {
+		create.SetWorkflowVariables(input.WorkflowVariables)
 	}
 	if input.SLADefinitionID != nil {
 		create.SetSLADefinitionID(*input.SLADefinitionID)

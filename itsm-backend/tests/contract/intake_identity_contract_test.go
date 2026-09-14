@@ -6,18 +6,19 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
-	"gopkg.in/yaml.v3"
-	"itsm-backend/handlers/intake"
-	"itsm-backend/router"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
+	"itsm-backend/handlers/intake"
+	"itsm-backend/router"
 )
 
 func TestIdentityRoutesAreRegisteredWithScopedAuthentication(t *testing.T) {
@@ -33,6 +34,7 @@ func TestIdentityRoutesAreRegisteredWithScopedAuthentication(t *testing.T) {
 		require.Equal(t, tc.status, w.Code, tc.path+" "+w.Body.String())
 	}
 }
+
 func TestIdentityAssertionSharedCrossLanguageFixture(t *testing.T) {
 	raw, err := os.ReadFile("../../../docs/contracts/fixtures/intake-identity-signature.json")
 	require.NoError(t, err)

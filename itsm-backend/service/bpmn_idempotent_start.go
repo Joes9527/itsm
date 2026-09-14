@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -55,9 +56,6 @@ func (e *CustomProcessEngine) StartProcessByDefinitionID(ctx context.Context, de
 	if actor, ok := ctx.Value(intakeStartActorKey{}).(intakeStartActor); ok && (actor.targetTenantID != tenantID || actor.workItemID != businessID) {
 		return nil, fmt.Errorf("intake start business identity mismatch")
 	}
-	if _, _, err = resolveBPMNProcessStartActor(ctx, e.client, tenantID, variables); err != nil {
-		return nil, err
-	}
 	encoded, err := json.Marshal(struct {
 		Definition                           ProcessDefinitionIdentity
 		TenantID                             int
@@ -85,19 +83,28 @@ func (e *CustomProcessEngine) StartProcessByDefinitionID(ctx context.Context, de
 	}
 	identity := fmt.Sprintf("PI-start-%x", sha256.Sum256([]byte(fmt.Sprintf("%d:%s", tenantID, startKey))))
 	load := func() (*ent.ProcessInstance, error) {
-		existing, err := e.client.ProcessInstance.Query().Where(processinstance.ProcessInstanceID(identity), processinstance.TenantID(tenantID)).Only(ctx)
+		tx, err := e.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+		if err != nil {
+			return nil, err
+		}
+		defer tx.Rollback()
+		if _, _, err := e.forClient(tx.Client(), nil, tx).resolveBPMNProcessStartActor(ctx, tx.Client(), tenantID, variables); err != nil {
+			return nil, err
+		}
+		existing, err := tx.ProcessInstance.Query().Where(processinstance.ProcessInstanceID(identity), processinstance.TenantID(tenantID)).Only(ctx)
 		if err != nil {
 			return nil, err
 		}
 		if existing.StartRequestDigest == "" || existing.StartRequestDigest != digest || existing.ProcessDefinitionID != definition.ID || existing.BusinessKey != businessKey || existing.BusinessType != businessType || existing.BusinessID != businessID || existing.Initiator != resolveProcessInitiator(ctx, variables) {
 			return nil, &processStartConflictError{}
 		}
+		existing.Unwrap()
 		return existing, nil
 	}
 	if existing, err := load(); !ent.IsNotFound(err) {
 		return existing, err
 	}
-	tx, err := e.client.Tx(ctx)
+	tx, err := e.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +120,7 @@ func (e *CustomProcessEngine) StartProcessByDefinitionID(ctx context.Context, de
 		return nil, &processStartDefinitionError{}
 	}
 	keys := make([]string, 0)
-	txEngine := e.forClient(tx.Client(), &keys)
+	txEngine := e.forClient(tx.Client(), &keys, tx)
 	instance, err := txEngine.startResolvedProcess(ctx, resolved, businessKey, businessType, businessID, variables, identity, digest)
 	if err != nil {
 		_ = tx.Rollback()

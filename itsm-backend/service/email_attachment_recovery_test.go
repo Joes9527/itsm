@@ -31,6 +31,7 @@ func (s *recoveryStorage) Save(_ context.Context, key string, r io.Reader, _ int
 	}
 	return e
 }
+
 func (s *recoveryStorage) Open(_ context.Context, key string) (io.ReadCloser, int64, error) {
 	b, ok := s.objects[key]
 	if !ok {
@@ -38,6 +39,7 @@ func (s *recoveryStorage) Open(_ context.Context, key string) (io.ReadCloser, in
 	}
 	return io.NopCloser(bytes.NewReader(b)), int64(len(b)), nil
 }
+
 func (s *recoveryStorage) Delete(_ context.Context, key string) error {
 	delete(s.objects, key)
 	return nil

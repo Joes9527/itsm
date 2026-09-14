@@ -4,14 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/dto"
 	"itsm-backend/ent/enttest"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service"
-	"testing"
-	"time"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 )
 
 func TestPublicationDraftRepairVersionAndRollback(t *testing.T) {
@@ -36,7 +38,7 @@ func TestPublicationDraftRepairVersionAndRollback(t *testing.T) {
 	_, err = svc.Update(ctx, tenant.ID, draft.ID, dto.UpdateServiceCatalogRequest{ExpectedCatalogVersion: draft.CatalogVersion, Status: scPtr("enabled")})
 	require.Error(t, err)
 	require.Equal(t, "disabled", client.ServiceCatalog.GetX(ctx, draft.ID).Status)
-	client.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType("ticket").SetProcessDefinitionKey("none").SetConditions(map[string]interface{}{"no_process": true}).SaveX(ctx)
+	client.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType("generic").SetProcessDefinitionKey("none").SetConditions(map[string]interface{}{"no_process": true}).SaveX(ctx)
 	published, err := svc.Update(ctx, tenant.ID, draft.ID, dto.UpdateServiceCatalogRequest{ExpectedCatalogVersion: draft.CatalogVersion, TargetClass: scPtr("generic"), Status: scPtr("enabled")})
 	require.NoError(t, err)
 	require.Equal(t, "generic", published.TargetClass)
@@ -74,7 +76,7 @@ func TestPublicationDeclaredWorkflowValidation(t *testing.T) {
 			xml := `<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><process id="flow" isExecutable="true"><startEvent id="start"/>` + tc.xml + `<endEvent id="end"/><sequenceFlow id="a" sourceRef="start" targetRef="task"/><sequenceFlow id="b" sourceRef="task" targetRef="end"/></process></definitions>`
 			definition := client.ProcessDefinition.Create().SetTenantID(1).SetDeploymentID(dep.ID).SetKey("flow").SetName("Publication").SetVersion("1.2.0").SetIsLatest(true).SetIsActive(true).SetBpmnXML([]byte(xml)).SaveX(ctx)
 			svc := newCatalogPublisher(NewEntRepository(client), client, zap.NewNop().Sugar(), nil)
-			svc.SetPublicationEngine(service.NewCustomProcessEngine(client, zap.NewNop().Sugar()).(*service.CustomProcessEngine))
+			svc.SetPublicationEngine(service.NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard()).(*service.CustomProcessEngine))
 			input := dto.CreateServiceCatalogRequest{Name: "Consultation", Category: "IT", Status: "enabled", TargetClass: "generic", ProcessDefinitionKey: "flow", RequiresApproval: tc.approval}
 			catalog, err := svc.Create(ctx, 1, input)
 			if !tc.ok {
@@ -96,7 +98,7 @@ func TestPublicationSLAOwnershipAndUnrelatedRevision(t *testing.T) {
 	ctx := context.Background()
 	client := enttest.Open(t, "sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
-	binding := client.ProcessBinding.Create().SetTenantID(1).SetBusinessType("ticket").SetProcessDefinitionKey("none").SetConditions(map[string]interface{}{"no_process": true}).SaveX(ctx)
+	binding := client.ProcessBinding.Create().SetTenantID(1).SetBusinessType("generic").SetProcessDefinitionKey("none").SetConditions(map[string]interface{}{"no_process": true}).SaveX(ctx)
 	svc := newCatalogPublisher(NewEntRepository(client), client, zap.NewNop().Sugar(), nil)
 	catalog, err := svc.Create(ctx, 1, dto.CreateServiceCatalogRequest{Name: "Hardware", Category: "IT", Status: "enabled", TargetClass: "generic"})
 	require.NoError(t, err)

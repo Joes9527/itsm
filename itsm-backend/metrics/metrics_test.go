@@ -19,7 +19,8 @@ func TestRecordBPMNCallbackEffectUsesOnlyDeclaredEffectValues(t *testing.T) {
 
 func prometheusCounterValue(t *testing.T, metric interface {
 	Write(*io_prometheus_client.Metric) error
-}) float64 {
+},
+) float64 {
 	t.Helper()
 	payload := &io_prometheus_client.Metric{}
 	require.NoError(t, metric.Write(payload))

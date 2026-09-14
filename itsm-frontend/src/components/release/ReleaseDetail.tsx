@@ -191,7 +191,7 @@ const ReleaseDetail: React.FC = () => {
             style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}
           >
             <div>
-              <Title level={3} style={{ marginBottom: 8 }}>
+              <Title level={2} style={{ marginBottom: 8, fontSize: 24, fontWeight: 600 }}>
                 {release.title}
               </Title>
               <Text type="secondary">发布编号: {release.releaseNumber}</Text>

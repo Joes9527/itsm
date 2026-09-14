@@ -68,7 +68,8 @@ export function AISuggestionPanel({
   initialSuggestion,
 }: AISuggestionPanelProps) {
   const hasPermission = useAuthStore(state => state.hasPermission);
-  const canUseAI = hasPermission('ai:use') || hasPermission('ai:read') || hasPermission('ticket:write');
+  const canUseAI =
+    hasPermission('ai:use') || hasPermission('ai:read') || hasPermission('ticket:write');
 
   const [loading, setLoading] = useState(false);
   const [suggestion, setSuggestion] = useState<TriageResult | null>(initialSuggestion ?? null);
@@ -123,13 +124,13 @@ export function AISuggestionPanel({
     return (
       <Card
         size="small"
-        className="border-dashed border-2 border-gray-300 bg-gray-50"
+        className="border-dashed border-2 border-border bg-raised"
         styles={{ body: { padding: '12px' } }}
       >
         <div className="flex items-center justify-between">
           <Space>
-            <Sparkles className="w-4 h-4 text-gray-400" />
-            <Text type="secondary" className="text-sm">
+            <Sparkles className="w-4 h-4 text-muted" />
+            <Text type="secondary" className="text-[13px]">
               AI建议已忽略
             </Text>
           </Space>
@@ -157,8 +158,8 @@ export function AISuggestionPanel({
         <div className="flex items-center gap-3">
           <Spin size="small" />
           <div>
-            <Text className="text-sm font-medium text-orange-900">AI智能分析中...</Text>
-            <Paragraph type="secondary" className="text-xs mb-0">
+            <Text className="text-[13px] font-medium text-orange-900">AI智能分析中...</Text>
+            <Paragraph type="secondary" className="text-[12px] mb-0">
               基于标题和描述分析工单分类
             </Paragraph>
           </div>
@@ -172,13 +173,13 @@ export function AISuggestionPanel({
     return (
       <Card
         size="small"
-        className="bg-gray-50 border-gray-200"
+        className="bg-raised border-border"
         styles={{ body: { padding: '12px' } }}
       >
         <div className="flex items-center justify-between">
           <Space>
-            <AlertCircle className="w-4 h-4 text-gray-400" />
-            <Text type="secondary" className="text-sm">
+            <AlertCircle className="w-4 h-4 text-muted" />
+            <Text type="secondary" className="text-[13px]">
               AI分析暂不可用
             </Text>
           </Space>
@@ -225,7 +226,7 @@ export function AISuggestionPanel({
       }
     >
       {collapsed ? (
-        <Text type="secondary" className="text-xs">
+        <Text type="secondary" className="text-[12px]">
           点击展开查看AI分析详情
         </Text>
       ) : (
@@ -233,27 +234,27 @@ export function AISuggestionPanel({
           <div className="grid grid-cols-3 gap-3 mb-3">
             {/* Category */}
             <div className="text-center">
-              <Text type="secondary" className="text-xs block mb-1">
+              <Text type="secondary" className="text-[12px] block mb-1">
                 建议分类
               </Text>
-              <Tag color={categoryColors[suggestion.category] || 'default'} className="text-sm">
+              <Tag color={categoryColors[suggestion.category] || 'default'} className="text-[13px]">
                 {categoryLabels[suggestion.category] || suggestion.category}
               </Tag>
             </div>
 
             {/* Priority */}
             <div className="text-center">
-              <Text type="secondary" className="text-xs block mb-1">
+              <Text type="secondary" className="text-[12px] block mb-1">
                 建议优先级
               </Text>
-              <Tag color={priorityColors[suggestion.priority] || 'default'} className="text-sm">
+              <Tag color={priorityColors[suggestion.priority] || 'default'} className="text-[13px]">
                 {priorityLabels[suggestion.priority] || suggestion.priority}
               </Tag>
             </div>
 
             {/* Confidence */}
             <div className="text-center">
-              <Text type="secondary" className="text-xs block mb-1">
+              <Text type="secondary" className="text-[12px] block mb-1">
                 置信度
               </Text>
               <Progress
@@ -274,7 +275,10 @@ export function AISuggestionPanel({
 
           {/* Explanation */}
           {suggestion.explanation && (
-            <Paragraph type="secondary" className="text-xs mb-3 bg-white/50 rounded p-2">
+            <Paragraph
+              type="secondary"
+              className="text-[12px] mb-3 bg-surface rounded p-2"
+            >
               {suggestion.explanation}
             </Paragraph>
           )}

@@ -8,8 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common/executionscope"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/connector"
+	"itsm-backend/database"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
@@ -17,6 +19,7 @@ import (
 	"itsm-backend/ent/user"
 	"itsm-backend/service/bpmn"
 
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -33,6 +36,7 @@ func ticketNotificationStringPtr(s string) *string {
 
 type TicketNotificationService struct {
 	queueClient      *ent.Client
+	execution        *database.ExecutionPolicy
 	client           *ent.Client
 	logger           *zap.SugaredLogger
 	connectorManager *connector.Manager
@@ -44,11 +48,12 @@ type TicketNotificationService struct {
 }
 
 // NewTicketNotificationService 创建通知服务
-func NewTicketNotificationService(client *ent.Client, logger *zap.SugaredLogger) *TicketNotificationService {
+func NewTicketNotificationService(client *ent.Client, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) *TicketNotificationService {
 	return &TicketNotificationService{
-		client: client,
-		logger: logger,
-		now:    time.Now,
+		execution: execution,
+		client:    client,
+		logger:    logger,
+		now:       time.Now,
 	}
 }
 
@@ -83,8 +88,18 @@ func (s *TicketNotificationService) ProcessPendingDeliveries(ctx context.Context
 		return 0, nil
 	}
 
+	ctx = tenantctx.SystemContext(ctx, "notification:poll", "claim and acknowledge scoped ticket notifications")
 	now := s.clock()
-	candidates, err := s.queueClient.TicketNotification.Query().
+	scanTx, err := s.queueClient.Tx(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer scanTx.Rollback()
+	scope, err := s.execution.WorkerPredicate(ctx, scanTx, ticketnotification.FieldTenantID, ticketnotification.FieldTicketID)
+	if err != nil {
+		return 0, err
+	}
+	candidates, err := scanTx.TicketNotification.Query().Where(scope).
 		Where(
 			ticketnotification.DeliveryKeyNotNil(),
 			ticketnotification.ChannelNEQ("in_app"),
@@ -106,19 +121,30 @@ func (s *TicketNotificationService) ProcessPendingDeliveries(ctx context.Context
 		return 0, fmt.Errorf("ticket notification candidate scan failed")
 	}
 
+	if err := scanTx.Rollback(); err != nil {
+		return 0, err
+	}
 	completed := 0
 	failed := false
+	var causes []error
 	for _, row := range candidates {
+		rowCtx := tenantctx.WithTenantID(ctx, row.TenantID)
+		if err := s.execution.RequireCapability(rowCtx, row.TenantID, "notification"); err != nil {
+			causes = append(causes, err)
+			failed = true
+			continue
+		}
 		if row.Status == ticketNotificationStatusProcessing {
-			changed, err := s.queueClient.TicketNotification.Update().Where(ticketnotification.IDEQ(row.ID), ticketnotification.TenantIDEQ(row.TenantID), ticketnotification.StatusEQ(ticketNotificationStatusProcessing), ticketnotification.LeaseExpiresAtLT(now)).SetStatus(ticketNotificationStatusFailed).SetLastErrorClass("delivery_unknown").ClearLeaseOwner().ClearLeaseExpiresAt().Save(ctx)
+			changed, err := s.recoverExpiredDelivery(ctx, row, now)
 			if err != nil || changed > 0 {
+				causes = append(causes, err)
 				failed = true
 			}
 			continue
 		}
-		rowCtx := tenantctx.WithTenantID(ctx, row.TenantID)
 		claimed, claimErr := s.claimDelivery(ctx, workerID, row)
 		if claimErr != nil {
+			causes = append(causes, claimErr)
 			failed = true
 			continue
 		}
@@ -131,25 +157,27 @@ func (s *TicketNotificationService) ProcessPendingDeliveries(ctx context.Context
 		claimedRow.AttemptCount++
 		claimedRow.LeaseOwner = workerID
 		claimedRow.LeaseExpiresAt = s.clock().Add(ticketNotificationLeaseDuration)
-		errorClass := s.dispatchClaimedDelivery(rowCtx, &claimedRow)
+		errorClass, dispatchErr := s.dispatchClaimedDelivery(rowCtx, &claimedRow)
+		causes = append(causes, dispatchErr)
 		if errorClass != "" {
 			failed = true
 			if isTicketNotificationPermanentErrorClass(errorClass) {
-				_ = s.failDelivery(ctx, workerID, &claimedRow, errorClass)
+				causes = append(causes, s.failDelivery(ctx, workerID, &claimedRow, errorClass))
 			} else {
-				_ = s.retryDelivery(ctx, workerID, &claimedRow, errorClass)
+				causes = append(causes, s.retryDelivery(ctx, workerID, &claimedRow, errorClass))
 			}
 			continue
 		}
 		completedRow, completeErr := s.completeDelivery(ctx, workerID, &claimedRow)
 		if completeErr != nil || !completedRow {
+			causes = append(causes, completeErr)
 			failed = true
 			continue
 		}
 		completed++
 	}
 	if failed {
-		return completed, fmt.Errorf("one or more ticket notifications were not completed")
+		return completed, errors.Join(fmt.Errorf("one or more ticket notifications were not completed"), errors.Join(causes...))
 	}
 	return completed, nil
 }
@@ -189,7 +217,16 @@ func (s *TicketNotificationService) claimDelivery(ctx context.Context, workerID 
 		return false, fmt.Errorf("ticket notification row is missing tenant")
 	}
 	now := s.clock()
-	affected, err := s.queueClient.TicketNotification.Update().
+	tx, err := s.queueClient.Tx(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	scope, err := s.execution.WorkerPredicate(ctx, tx, ticketnotification.FieldTenantID, ticketnotification.FieldTicketID)
+	if err != nil {
+		return false, err
+	}
+	affected, err := tx.TicketNotification.Update().Where(scope).
 		Where(
 			ticketnotification.ID(row.ID),
 			ticketnotification.TenantID(row.TenantID),
@@ -204,11 +241,23 @@ func (s *TicketNotificationService) claimDelivery(ctx context.Context, workerID 
 	if err != nil {
 		return false, fmt.Errorf("ticket notification claim failed")
 	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
 	return affected == 1, nil
 }
 
 func (s *TicketNotificationService) completeDelivery(ctx context.Context, workerID string, row *ent.TicketNotification) (bool, error) {
-	affected, err := s.queueClient.TicketNotification.Update().
+	tx, err := s.queueClient.Tx(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	scope, err := s.execution.WorkerPredicate(ctx, tx, ticketnotification.FieldTenantID, ticketnotification.FieldTicketID)
+	if err != nil {
+		return false, err
+	}
+	affected, err := tx.TicketNotification.Update().Where(scope).
 		Where(
 			ticketnotification.ID(row.ID),
 			ticketnotification.TenantID(row.TenantID),
@@ -222,7 +271,10 @@ func (s *TicketNotificationService) completeDelivery(ctx context.Context, worker
 		ClearLastErrorClass().
 		Save(ctx)
 	if err != nil {
-		return false, fmt.Errorf("ticket notification completion failed")
+		return false, fmt.Errorf("ticket notification completion failed: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
 	}
 	return affected == 1, nil
 }
@@ -231,7 +283,16 @@ func (s *TicketNotificationService) retryDelivery(ctx context.Context, workerID 
 	if !isTicketNotificationErrorClass(errorClass) {
 		errorClass = "unknown_error"
 	}
-	affected, err := s.queueClient.TicketNotification.Update().
+	tx, err := s.queueClient.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	scope, err := s.execution.WorkerPredicate(ctx, tx, ticketnotification.FieldTenantID, ticketnotification.FieldTicketID)
+	if err != nil {
+		return err
+	}
+	affected, err := tx.TicketNotification.Update().Where(scope).
 		Where(
 			ticketnotification.ID(row.ID),
 			ticketnotification.TenantID(row.TenantID),
@@ -245,19 +306,28 @@ func (s *TicketNotificationService) retryDelivery(ctx context.Context, workerID 
 		ClearLeaseExpiresAt().
 		Save(ctx)
 	if err != nil {
-		return fmt.Errorf("ticket notification retry scheduling failed")
+		return fmt.Errorf("ticket notification retry scheduling failed: %w", err)
 	}
 	if affected != 1 {
 		return fmt.Errorf("ticket notification lease lost")
 	}
-	return nil
+	return tx.Commit()
 }
 
 func (s *TicketNotificationService) failDelivery(ctx context.Context, workerID string, row *ent.TicketNotification, errorClass string) error {
 	if !isTicketNotificationPermanentErrorClass(errorClass) {
 		errorClass = "unknown_error"
 	}
-	affected, err := s.queueClient.TicketNotification.Update().
+	tx, err := s.queueClient.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	scope, err := s.execution.WorkerPredicate(ctx, tx, ticketnotification.FieldTenantID, ticketnotification.FieldTicketID)
+	if err != nil {
+		return err
+	}
+	affected, err := tx.TicketNotification.Update().Where(scope).
 		Where(
 			ticketnotification.ID(row.ID),
 			ticketnotification.TenantID(row.TenantID),
@@ -270,63 +340,82 @@ func (s *TicketNotificationService) failDelivery(ctx context.Context, workerID s
 		ClearLeaseExpiresAt().
 		Save(ctx)
 	if err != nil {
-		return fmt.Errorf("ticket notification terminal failure update failed")
+		return fmt.Errorf("ticket notification terminal failure update failed: %w", err)
 	}
 	if affected != 1 {
 		return fmt.Errorf("ticket notification lease lost")
 	}
-	return nil
+	return tx.Commit()
 }
 
-func (s *TicketNotificationService) dispatchClaimedDelivery(ctx context.Context, row *ent.TicketNotification) string {
+func (s *TicketNotificationService) dispatchClaimedDelivery(ctx context.Context, row *ent.TicketNotification) (string, error) {
 	ticketEntity, err := s.client.Ticket.Query().Where(ticket.ID(row.TicketID), ticket.TenantID(row.TenantID)).Only(ctx)
 	if err != nil {
-		return "delivery_target_invalid"
+		return "delivery_target_invalid", nil
 	}
 	userEntity, err := s.client.User.Query().Where(user.ID(row.UserID), user.TenantID(row.TenantID), user.Active(true)).Only(ctx)
 	if err != nil {
-		return "delivery_target_invalid"
+		return "delivery_target_invalid", nil
 	}
 	deliveryKey := ""
 	if row.DeliveryKey != nil {
 		deliveryKey = strings.TrimSpace(*row.DeliveryKey)
 	}
 	if deliveryKey == "" {
-		return "delivery_target_invalid"
+		return "delivery_target_invalid", nil
 	}
 	if row.Channel == "email" {
+		target, targetErr := notificationEmailTarget(row)
+		if targetErr != nil {
+			return "delivery_target_invalid", targetErr
+		}
 		if s.emailService == nil || strings.TrimSpace(userEntity.Email) == "" {
-			return "delivery_target_invalid"
+			return "delivery_target_invalid", nil
 		}
 		if _, err := mail.ParseAddress(userEntity.Email); err != nil {
-			return "delivery_target_invalid"
+			return "delivery_target_invalid", nil
 		}
 		// Content and recipient identity are durable queue facts. Resolve only
 		// the current address of that same active recipient at delivery time.
 		message := &EmailMessage{To: []string{userEntity.Email}, Subject: fmt.Sprintf("[ITSM] 工单 %s - %s", ticketEntity.TicketNumber, row.Type), BodyText: row.Content, DeliveryID: deliveryKey, DisableProviderFallback: true}
-		if err := s.emailService.SendForTenant(ctx, row.TenantID, message); err != nil {
+		if err := s.emailService.SendToTarget(ctx, row.TenantID, "notification", target, message); err != nil {
 			if emailTransportOutcomeOf(err) == emailAcceptanceUnknown {
-				return "delivery_unknown"
+				return "delivery_unknown", err
 			}
-			return "connector_send"
+			if errors.Is(err, executionscope.ErrDenied) {
+				return "delivery_target_invalid", err
+			}
+			return "connector_send", err
 		}
-		return ""
+		return "", nil
 	}
 	if row.Channel == "push" {
 		if s.wsService == nil {
-			return "connector_unavailable"
+			return "connector_unavailable", nil
 		}
-		s.wsService.GetHub().SendToUser(row.UserID, WebSocketMessage{Type: row.Type, Payload: map[string]interface{}{"ticket_id": row.TicketID, "content": row.Content}})
-		return ""
+		if err := s.wsService.GetHub().DeliverToUser(ctx, row.TenantID, row.UserID, WebSocketMessage{Type: row.Type, Payload: map[string]interface{}{"ticket_id": row.TicketID, "content": row.Content}}); err != nil {
+			if errors.Is(err, errPushNotAccepted) {
+				return "connector_unavailable", err
+			}
+			return "delivery_unknown", err
+		}
+		return "", nil
 	}
 	if s.connectorManager == nil {
-		return "connector_unavailable"
+		return "connector_unavailable", nil
 	}
 	target := ticketNotificationTarget(row.Channel, userEntity)
 	if target == "" {
-		return "delivery_target_invalid"
+		return "delivery_target_invalid", nil
 	}
-	if err := s.connectorManager.Send(ctx, row.TenantID, row.Channel, &connector.Message{
+	bound, generation, err := s.resolveNotificationConnectorTarget(ctx, row)
+	if err != nil {
+		if errors.Is(err, executionscope.ErrDenied) {
+			return "delivery_target_invalid", err
+		}
+		return "connector_unavailable", err
+	}
+	if err := bound.Send(ctx, &connector.Message{
 		ID:      deliveryKey,
 		Channel: target,
 		Type:    "text",
@@ -341,11 +430,15 @@ func (s *TicketNotificationService) dispatchClaimedDelivery(ctx context.Context,
 		},
 	}); err != nil {
 		if emailTransportOutcomeOf(err) == emailNotAccepted {
-			return "connector_send"
+			return "connector_send", nil
 		}
-		return "delivery_unknown"
+		return "delivery_unknown", nil
 	}
-	return ""
+	_, currentGeneration, err := s.resolveNotificationConnectorTarget(ctx, row)
+	if err != nil || currentGeneration != generation {
+		return "delivery_unknown", nil
+	}
+	return "", nil
 }
 
 func ticketNotificationTarget(channel string, recipient *ent.User) string {
@@ -431,168 +524,34 @@ func (s *TicketNotificationService) SendNotification(
 	req *dto.SendTicketNotificationRequest,
 	tenantID int,
 ) (*dto.SendTicketNotificationResult, error) {
-	if req == nil || s.client == nil {
+	if s == nil || req == nil || s.client == nil {
 		return nil, fmt.Errorf("ticket notification request and client are required")
 	}
-	userIDs := uniqueTicketNotificationUserIDs(req.UserIDs)
-	if len(req.UserIDs) == 0 {
+	request := *req
+	request.UserIDs = uniqueTicketNotificationUserIDs(req.UserIDs)
+	if len(request.UserIDs) == 0 {
 		return blockedTicketNotificationResult(0, bpmn.CallbackBlockRecipientEmpty), nil
 	}
-	if len(userIDs) == 0 {
-		return blockedTicketNotificationResult(len(req.UserIDs), bpmn.CallbackBlockRecipientMissing), nil
+	// This identity belongs to this invocation only; it is not HTTP retry deduplication.
+	if request.DeliveryKey == "" {
+		request.DeliveryKey = "notification:" + uuid.NewString()
 	}
-	ticketEntity, err := s.client.Ticket.Query().Where(ticket.ID(ticketID), ticket.TenantID(tenantID)).Only(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("ticket notification target lookup failed: %w", err)
-	}
-
-	type recipientPlan struct {
-		user       *ent.User
-		prefs      *dto.NotificationPreferenceResponse
-		idempotent bool
-	}
-	recipients := make(map[int]*ent.User, len(userIDs))
-	for _, userID := range userIDs {
-		if userID <= 0 {
-			return blockedTicketNotificationResult(len(userIDs), bpmn.CallbackBlockRecipientMissing), nil
-		}
-		recipient, err := s.client.User.Query().Where(user.ID(userID), user.TenantID(tenantID), user.Active(true)).Only(ctx)
-		if err != nil {
-			if ent.IsNotFound(err) {
-				return blockedTicketNotificationResult(len(userIDs), bpmn.CallbackBlockRecipientMissing), nil
-			}
-			return nil, fmt.Errorf("ticket notification recipient lookup failed: %w", err)
-		}
-		recipients[userID] = recipient
-	}
-	plans := make([]recipientPlan, 0, len(userIDs))
-	plannedDeliveries := 0
-	for _, userID := range userIDs {
-		recipient := recipients[userID]
-		prefs, err := s.resolvePreferences(ctx, userID, tenantID, req.EventType)
-		if err != nil {
-			return nil, err
-		}
-		if req.InAppOnly {
-			prefs = &dto.NotificationPreferenceResponse{InAppEnabled: prefs.InAppEnabled}
-		}
-		plan := recipientPlan{user: recipient, prefs: prefs}
-		if req.DeliveryKey != "" {
-			exists, err := s.client.TicketNotification.Query().Where(ticketnotification.TenantID(tenantID), ticketnotification.TicketID(ticketID), ticketnotification.UserID(userID), ticketnotification.DeliveryKey(req.DeliveryKey)).Exist(ctx)
-			if err != nil {
-				return nil, fmt.Errorf("ticket notification idempotency lookup failed: %w", err)
-			}
-			if exists {
-				plan.idempotent = true
-				plannedDeliveries++
-				plans = append(plans, plan)
-				continue
-			}
-		}
-		if prefs.InAppEnabled {
-			plannedDeliveries++
-		}
-		if prefs.EmailEnabled {
-			if s.emailService == nil || strings.TrimSpace(recipient.Email) == "" {
-				return nil, fmt.Errorf("ticket email notification provider or recipient is unavailable")
-			}
-			if _, err := mail.ParseAddress(recipient.Email); err != nil {
-				return nil, fmt.Errorf("ticket email notification recipient is invalid")
-			}
-			plannedDeliveries++
-		}
-		if prefs.SmsEnabled {
-			if s.smsService == nil || strings.TrimSpace(recipient.Phone) == "" {
-				return nil, fmt.Errorf("ticket SMS notification provider or recipient is unavailable")
-			}
-			plannedDeliveries++
-		}
-		if prefs.PushEnabled {
-			if s.wsService == nil {
-				return nil, fmt.Errorf("ticket push notification provider is unavailable")
-			}
-			plannedDeliveries++
-		}
-		plans = append(plans, plan)
-	}
-	if plannedDeliveries == 0 {
-		return blockedTicketNotificationResult(len(userIDs), bpmn.CallbackBlockDeliveryNotCreated), nil
-	}
-	result := &dto.SendTicketNotificationResult{RecipientCount: len(userIDs)}
-	for _, plan := range plans {
-		if plan.idempotent {
-			result.IdempotentCount++
-			result.DeliveryCount++
-		}
-	}
-
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("ticket notification transaction begin failed: %w", err)
 	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
-		}
-	}()
-	now := s.clock()
-	for _, plan := range plans {
-		if plan.idempotent || !plan.prefs.InAppEnabled {
-			continue
-		}
-		if err := createInAppNotificationPair(ctx, tx.Client(), ticketID, plan.user.ID, req, tenantID, now); err != nil {
-			return nil, err
-		}
-		result.DeliveryCount++
+	defer tx.Rollback()
+	result, err := s.enqueueNotificationResultTx(ctx, tx, ticketID, tenantID, &request, nil)
+	if errors.Is(err, errNotificationRecipientMissing) {
+		return blockedTicketNotificationResult(len(request.UserIDs), bpmn.CallbackBlockRecipientMissing), nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("ticket notification transaction commit failed: %w", err)
 	}
-	committed = true
-	for _, plan := range plans {
-		if plan.idempotent {
-			continue
-		}
-		applied := plan.prefs.InAppEnabled
-		if plan.prefs.EmailEnabled {
-			if err := s.emailService.SendTicketNotificationForTenant(ctx, tenantID, []string{plan.user.Email}, ticketEntity.TicketNumber, ticketEntity.Title, req.EventType, req.Content); err != nil {
-				if s.logger != nil {
-					s.logger.Warnw("ticket email notification delivery failed", "error_class", "email_delivery_failed")
-				}
-				return nil, fmt.Errorf("ticket email notification delivery failed: %w", err)
-			}
-			applied = true
-			result.DeliveryCount++
-		}
-		if plan.prefs.SmsEnabled {
-			if err := s.smsService.SendTicketNotification(ctx, []string{plan.user.Phone}, ticketEntity.TicketNumber, req.EventType); err != nil {
-				if s.logger != nil {
-					s.logger.Warnw("ticket SMS notification delivery failed", "error_class", "sms_delivery_failed")
-				}
-				return nil, fmt.Errorf("ticket SMS notification delivery failed: %w", err)
-			}
-			applied = true
-			result.DeliveryCount++
-		}
-		if plan.prefs.PushEnabled {
-			s.wsService.GetHub().SendToUser(plan.user.ID, WebSocketMessage{Type: req.EventType, Payload: map[string]interface{}{"ticket_id": ticketID, "content": req.Content}})
-			applied = true
-			result.DeliveryCount++
-		}
-		if applied {
-			result.AppliedCount++
-		}
-	}
-	if result.AppliedCount > 0 {
-		result.Effect = dto.TicketNotificationEffectApplied
-		return result, nil
-	}
-	if result.IdempotentCount > 0 {
-		result.Effect = dto.TicketNotificationEffectIdempotent
-		return result, nil
-	}
-	return blockedTicketNotificationResult(len(userIDs), bpmn.CallbackBlockDeliveryNotCreated), nil
+	return result, nil
 }
 
 func uniqueTicketNotificationUserIDs(userIDs []int) []int {
@@ -618,7 +577,7 @@ func ticketNotificationDeliveryError(result *dto.SendTicketNotificationResult, e
 	if result == nil {
 		return fmt.Errorf("ticket notification result is missing")
 	}
-	if result.Effect == dto.TicketNotificationEffectApplied || result.Effect == dto.TicketNotificationEffectIdempotent {
+	if result.Effect == dto.TicketNotificationEffectQueued || result.Effect == dto.TicketNotificationEffectApplied || result.Effect == dto.TicketNotificationEffectIdempotent {
 		return nil
 	}
 	if result.Effect == dto.TicketNotificationEffectBlocked && bpmn.IsAllowedCallbackBlockCode(bpmn.CallbackBlockCode(result.BlockCode)) {
@@ -654,6 +613,7 @@ func createInAppNotificationPair(
 	req *dto.SendTicketNotificationRequest, tenantID int, now time.Time,
 ) error {
 	create := client.TicketNotification.Create().
+		SetNillableSLAAlertHistoryID(req.SLAAlertHistoryID).
 		SetTicketID(ticketID).
 		SetUserID(userID).
 		SetType(req.EventType).
@@ -882,73 +842,39 @@ func (s *TicketNotificationService) NotifySLAWarning(
 	return ticketNotificationDeliveryError(result, err)
 }
 
-// NotifySLABreached SLA违规时发送通知
-func (s *TicketNotificationService) NotifySLABreached(
-	ctx context.Context,
-	ticketID int,
-	violationType string, // response_time, resolution_time
-	exceededMinutes float64,
-	tenantID int,
-) error {
-	ticket, err := s.client.Ticket.Get(ctx, ticketID)
-	if err != nil {
-		return fmt.Errorf("failed to get ticket: %w", err)
+// EnqueueSLABreachedTx records breach notifications with their owning violation.
+func (s *TicketNotificationService) EnqueueSLABreachedTx(ctx context.Context, tx *ent.Tx, item *ent.Ticket, violationID int, violationType string, exceededMinutes float64) error {
+	slaType := map[string]string{"response_time": "响应时间", "resolution_time": "解决时间"}[violationType]
+	if slaType == "" || violationID <= 0 {
+		return fmt.Errorf("invalid SLA violation notification")
 	}
-
-	slaType := map[string]string{
-		"response_time":   "响应时间",
-		"resolution_time": "解决时间",
-	}[violationType]
-
-	content := fmt.Sprintf("【SLA违规】工单 #%s 的%s已违反SLA，超时 %.1f 分钟",
-		ticket.TicketNumber, slaType, exceededMinutes)
-
-	// 获取需要通知的用户列表（创建人、处理人、相关经理）
-	userIDs := []int{ticket.RequesterID}
-	if ticket.AssigneeID > 0 {
-		userIDs = append(userIDs, ticket.AssigneeID)
+	users := []int{item.RequesterID}
+	if item.AssigneeID > 0 {
+		users = append(users, item.AssigneeID)
 	}
-
-	result, err := s.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-		UserIDs:   userIDs,
-		EventType: "sla_violated",
-		Content:   content,
-	}, tenantID)
-	return ticketNotificationDeliveryError(result, err)
+	return s.EnqueueNotificationTx(ctx, tx, item.ID, item.TenantID, &dto.SendTicketNotificationRequest{
+		UserIDs: users, EventType: "sla_violated", DeliveryKey: fmt.Sprintf("sla-violation:%d", violationID),
+		Content: fmt.Sprintf("【SLA违规】工单 #%s 的%s已违反SLA，超时 %.1f 分钟", item.TicketNumber, slaType, exceededMinutes),
+	})
 }
 
-// NotifySLAAlertLevelChanged SLA预警级别变更时发送通知
-func (s *TicketNotificationService) NotifySLAAlertLevelChanged(
-	ctx context.Context,
-	ticketID int,
-	alertLevel string, // warning, critical
-	percentage float64,
-	tenantID int,
-) error {
-	ticket, err := s.client.Ticket.Get(ctx, ticketID)
-	if err != nil {
-		return fmt.Errorf("failed to get ticket: %w", err)
+// EnqueueSLAAlertTx honors the rule's declared channels and user preferences.
+func (s *TicketNotificationService) EnqueueSLAAlertTx(ctx context.Context, tx *ent.Tx, item *ent.Ticket, history *ent.SLAAlertHistory, channels []string) error {
+	if err := validateIncidentAlertChannels(channels); err != nil {
+		return err
 	}
-
-	levelText := map[string]string{
-		"warning":  "警告",
-		"critical": "严重",
-	}[alertLevel]
-
-	content := fmt.Sprintf("【SLA%s】工单 #%s 剩余时间不足 %.1f%%，请及时处理！",
-		levelText, ticket.TicketNumber, percentage)
-
-	userIDs := []int{ticket.RequesterID}
-	if ticket.AssigneeID > 0 {
-		userIDs = append(userIDs, ticket.AssigneeID)
+	selected := make(map[string]bool, len(channels))
+	for _, channel := range channels {
+		selected[channel] = true
 	}
-
-	result, err := s.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-		UserIDs:   userIDs,
-		EventType: "sla_violated",
-		Content:   content,
-	}, tenantID)
-	return ticketNotificationDeliveryError(result, err)
+	users := []int{item.RequesterID}
+	if item.AssigneeID > 0 {
+		users = append(users, item.AssigneeID)
+	}
+	return s.enqueueNotificationTx(ctx, tx, item.ID, item.TenantID, &dto.SendTicketNotificationRequest{
+		UserIDs: users, EventType: "sla_violated", DeliveryKey: fmt.Sprintf("sla-alert:%d", history.ID), SLAAlertHistoryID: &history.ID,
+		Content: fmt.Sprintf("【SLA预警 %s】工单 #%s 剩余时间 %.1f%%，请及时处理！", history.AlertLevel, item.TicketNumber, history.ActualPercentage),
+	}, selected)
 }
 
 // ListTicketNotifications 获取工单通知列表
@@ -1195,4 +1121,24 @@ func (s *TicketNotificationService) resolveTenantID(ctx context.Context, ticketI
 		return 0
 	}
 	return ticketEntity.TenantID
+}
+
+func (s *TicketNotificationService) recoverExpiredDelivery(ctx context.Context, row *ent.TicketNotification, now time.Time) (int, error) {
+	tx, err := s.queueClient.Tx(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	scope, err := s.execution.WorkerPredicate(ctx, tx, ticketnotification.FieldTenantID, ticketnotification.FieldTicketID)
+	if err != nil {
+		return 0, err
+	}
+	changed, err := tx.TicketNotification.Update().Where(scope).Where(ticketnotification.IDEQ(row.ID), ticketnotification.TenantIDEQ(row.TenantID), ticketnotification.StatusEQ(ticketNotificationStatusProcessing), ticketnotification.LeaseExpiresAtLT(now)).SetStatus(ticketNotificationStatusFailed).SetLastErrorClass("delivery_unknown").ClearLeaseOwner().ClearLeaseExpiresAt().Save(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return changed, nil
 }

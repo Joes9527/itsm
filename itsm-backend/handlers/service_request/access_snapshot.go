@@ -3,6 +3,7 @@ package service_request
 import (
 	"context"
 	"fmt"
+
 	"itsm-backend/ent"
 	"itsm-backend/ent/externalidentity"
 	"itsm-backend/ent/servicerequest"
@@ -49,6 +50,7 @@ func prepareAccessSnapshot(ctx context.Context, tx *ent.Tx, in creation.Resolved
 	}
 	return &accessgrant.ApprovalSnapshot{PolicyID: p.ID, PolicyVersion: p.Version, Provider: p.Provider, ExternalSystem: p.ExternalSystem, SubjectID: mapping.Subject, GroupID: p.GroupID, DurationKey: key, DurationSeconds: seconds}, nil
 }
+
 func saveAccessSnapshot(ctx context.Context, tx *ent.Tx, itemID int, p *accessgrant.ApprovalSnapshot) error {
 	if p == nil {
 		return nil
@@ -56,6 +58,7 @@ func saveAccessSnapshot(ctx context.Context, tx *ent.Tx, itemID int, p *accessgr
 	_, err := tx.ServiceRequestAccessSnapshot.Create().SetWorkItemID(itemID).SetPolicyID(p.PolicyID).SetPolicyVersion(p.PolicyVersion).SetProvider(servicerequestaccesssnapshot.Provider(p.Provider)).SetExternalSystem(p.ExternalSystem).SetSubjectID(p.SubjectID).SetGroupID(p.GroupID).SetDurationKey(p.DurationKey).SetDurationSeconds(p.DurationSeconds).Save(ctx)
 	return err
 }
+
 func (s *Service) ReadAccessSnapshot(ctx context.Context, client *ent.Client, tenantID, itemID int) (*accessgrant.ApprovalSnapshot, error) {
 	row, err := client.ServiceRequestAccessSnapshot.Query().Where(servicerequestaccesssnapshot.WorkItemIDEQ(itemID), servicerequestaccesssnapshot.HasWorkItemWith(ticket.TenantIDEQ(tenantID), ticket.RecordClassEQ(creation.RecordClassServiceRequestItem), ticket.DeletedAtIsNil())).Only(ctx)
 	if ent.IsNotFound(err) {
@@ -66,6 +69,7 @@ func (s *Service) ReadAccessSnapshot(ctx context.Context, client *ent.Client, te
 	}
 	return &accessgrant.ApprovalSnapshot{PolicyID: row.PolicyID, PolicyVersion: row.PolicyVersion, Provider: accessgrant.Provider(row.Provider), ExternalSystem: row.ExternalSystem, SubjectID: row.SubjectID, GroupID: row.GroupID, DurationKey: row.DurationKey, DurationSeconds: row.DurationSeconds}, nil
 }
+
 func (s *Service) ReadApprovedAccess(ctx context.Context, client *ent.Client, tenantID, itemID int, task *ent.ProcessTask) (*accessgrant.ApprovedContext, error) {
 	return s.readApprovedAccess(ctx, client, tenantID, itemID, task, false)
 }

@@ -2,7 +2,17 @@
 
 import React from 'react';
 import { Card, Col, Row, Statistic, Typography, theme, Avatar, Progress } from 'antd';
-import { Users, Workflow, BookOpen, AlertCircle, TrendingUp, BarChart3, Activity, Shield, Zap } from 'lucide-react';
+import {
+  Users,
+  Workflow,
+  BookOpen,
+  AlertCircle,
+  TrendingUp,
+  BarChart3,
+  Activity,
+  Shield,
+  Zap,
+} from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import type { AdminStats } from '../hooks/useAdminData';
 
@@ -11,23 +21,23 @@ const { Paragraph, Title, Text } = Typography;
 // 增强的设计系统 - 独特的企业仪表盘美学
 const DESIGN_SYSTEM = {
   colors: {
-    primary: '#0f172a', // 深海军蓝
+    primary: 'var(--color-text-primary)', // 深海军蓝
     accent: '#F06820', // 明亮蓝
     success: '#10b981', // 翠绿
     warning: '#f59e0b', // 琥珀
     danger: '#ef4444', // 珊瑚红
-    surface: '#ffffff',
-    surfaceAlt: '#f8fafc',
-    border: '#e2e8f0',
-    textPrimary: '#1e293b',
-    textSecondary: '#64748b',
+    surface: 'var(--color-bg-primary)',
+    surfaceAlt: 'var(--color-bg-tertiary)',
+    border: 'var(--color-border)',
+    textPrimary: 'var(--color-text-primary)',
+    textSecondary: 'var(--color-text-secondary)',
     gradient: {
-      card: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+      card: 'var(--color-bg-primary)',
       accent: 'linear-gradient(135deg, #F06820 0%, #B84A08 100%)',
       success: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
       warning: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
       danger: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-    }
+    },
   },
   shadows: {
     card: '0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05)',
@@ -36,14 +46,14 @@ const DESIGN_SYSTEM = {
   },
   borderRadius: {
     sm: '8px',
-    md: '12px',
-    lg: '16px',
+    md: '8px',
+    lg: '8px',
     xl: '24px',
   },
   fonts: {
-    display: 'system-ui, -apple-system, sans-serif',
-    body: 'system-ui, -apple-system, sans-serif',
-  }
+    display: 'var(--font-family-base)',
+    body: 'var(--font-family-base)',
+  },
 };
 
 interface SystemOverviewProps {
@@ -135,7 +145,7 @@ export const SystemOverview: React.FC<SystemOverviewProps> = ({ stats, loading }
           position: 'relative',
         }}
         styles={{
-          body: { padding: '24px' }
+          body: { padding: '16px' },
         }}
         className="animate-fade-in"
       >
@@ -186,7 +196,9 @@ export const SystemOverview: React.FC<SystemOverviewProps> = ({ stats, loading }
               gap: 6,
               padding: '4px 10px',
               borderRadius: 20,
-              background: isPositive ? `${DESIGN_SYSTEM.colors.success}15` : `${DESIGN_SYSTEM.colors.danger}15`,
+              background: isPositive
+                ? `${DESIGN_SYSTEM.colors.success}15`
+                : `${DESIGN_SYSTEM.colors.danger}15`,
               color: isPositive ? DESIGN_SYSTEM.colors.success : DESIGN_SYSTEM.colors.danger,
               fontSize: 13,
               fontWeight: 600,
@@ -199,16 +211,20 @@ export const SystemOverview: React.FC<SystemOverviewProps> = ({ stats, loading }
 
         {/* 统计数字 */}
         <div style={{ marginBottom: 8 }}>
-          <Text style={{ color: DESIGN_SYSTEM.colors.textSecondary, fontSize: 14, fontWeight: 500 }}>
+          <Text
+            style={{ color: DESIGN_SYSTEM.colors.textSecondary, fontSize: 13, fontWeight: 500 }}
+          >
             {stat.title}
           </Text>
         </div>
 
         <div
           style={{
-            fontSize: 32,
-            fontWeight: 700,
-            color: stat.placeholder ? DESIGN_SYSTEM.colors.textSecondary : DESIGN_SYSTEM.colors.textPrimary,
+            fontSize: 26,
+            fontWeight: 600,
+            color: stat.placeholder
+              ? DESIGN_SYSTEM.colors.textSecondary
+              : DESIGN_SYSTEM.colors.textPrimary,
             lineHeight: 1.2,
             marginBottom: 12,
             fontFamily: DESIGN_SYSTEM.fonts.display,
@@ -234,7 +250,7 @@ export const SystemOverview: React.FC<SystemOverviewProps> = ({ stats, loading }
             style={{
               height: 6,
               borderRadius: 3,
-              background: '#f1f5f9',
+              background: 'var(--color-bg-tertiary)',
               overflow: 'hidden',
               opacity: stat.placeholder ? 0.5 : 1,
             }}
@@ -284,8 +300,8 @@ export const SystemOverview: React.FC<SystemOverviewProps> = ({ stats, loading }
             level={3}
             style={{
               margin: 0,
-              fontSize: 22,
-              fontWeight: 700,
+              fontSize: 15,
+              fontWeight: 600,
               color: DESIGN_SYSTEM.colors.textPrimary,
               letterSpacing: '-0.02em',
             }}
@@ -293,13 +309,13 @@ export const SystemOverview: React.FC<SystemOverviewProps> = ({ stats, loading }
             系统概览
           </Title>
         </div>
-        <Text style={{ color: DESIGN_SYSTEM.colors.textSecondary, fontSize: 14 }}>
+        <Text style={{ color: DESIGN_SYSTEM.colors.textSecondary, fontSize: 13 }}>
           实时监控系统关键指标和业务健康状态
         </Text>
       </div>
 
       {/* 统计卡片网格 */}
-      <Row gutter={[20, 20]}>
+      <Row gutter={[14, 14]}>
         {systemStats.map((stat, index) => (
           <Col xs={24} sm={12} lg={6} key={index}>
             <EnhancedStatCard stat={stat} index={index} />

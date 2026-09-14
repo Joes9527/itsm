@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	"itsm-backend/ent"
 )
 
@@ -16,14 +15,13 @@ type creationNotificationWriter interface {
 func TestTicketCreationNotificationPersistsOnlyInOwningTransaction(t *testing.T) {
 	f := newDurableNotificationFixture(t, "creation-intent")
 	graph := &durableNotificationGraphSender{}
-	mail := NewEmailService(EmailConfig{}, zap.NewNop().Sugar())
-	mail.SetGraphProvider(func(int) (GraphMailSender, string, bool) { return graph, "support@example.test", true })
-	f.notifications.SetEmailService(mail)
+	configureDurableGraphQueue(t, f, graph)
 	writer, ok := any(f.notifications).(creationNotificationWriter)
 	require.True(t, ok, "creation requires an owning transactional notification port")
 	for _, commit := range []bool{false, true} {
 		tx, err := f.client.Tx(f.ctx)
 		require.NoError(t, err)
+		defer tx.Rollback()
 		require.NoError(t, writer.EnqueueCreationTx(f.ctx, tx, f.ticket, f.operator.ID, "ticket_created", "Frozen original content", "creation:one", []int{f.recipient.ID}))
 		require.Empty(t, graph.sentCalls())
 		if commit {

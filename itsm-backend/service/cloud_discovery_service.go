@@ -8,6 +8,8 @@ import (
 
 	"go.uber.org/zap"
 
+	"itsm-backend/common/executionscope"
+	"itsm-backend/database"
 	"itsm-backend/ent"
 	"itsm-backend/ent/citype"
 	"itsm-backend/ent/cloudaccount"
@@ -19,15 +21,17 @@ import (
 
 // CloudDiscoveryService 云资源发现服务
 type CloudDiscoveryService struct {
-	client *ent.Client
-	logger *zap.SugaredLogger
+	execution *database.ExecutionPolicy
+	client    *ent.Client
+	logger    *zap.SugaredLogger
 }
 
 // NewCloudDiscoveryService 创建云资源发现服务
-func NewCloudDiscoveryService(client *ent.Client, logger *zap.SugaredLogger) *CloudDiscoveryService {
+func NewCloudDiscoveryService(client *ent.Client, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) *CloudDiscoveryService {
 	return &CloudDiscoveryService{
-		client: client,
-		logger: logger,
+		client:    client,
+		execution: execution,
+		logger:    logger,
 	}
 }
 
@@ -175,12 +179,21 @@ func cloudProfile(provider, serviceType string) cloudResourceProfile {
 
 // DiscoverAll 执行全量云资源发现（委托给 Runner）
 func (s *CloudDiscoveryService) DiscoverAll(ctx context.Context, tenantID int) error {
-	runner := cloud.NewRunner(s.client, s.logger)
+	if err := s.execution.RequireCapability(ctx, tenantID, "cloud_discovery"); err != nil {
+		return err
+	}
+	runner := cloud.NewRunner(s.client, s.logger, s.execution)
 	return runner.RunAll(ctx, tenantID, cloud.WithReconcilePolicy(cloud.ReconcileDiscoveredWins))
 }
 
 // DiscoverAccount 发现单个云账号的资源
 func (s *CloudDiscoveryService) DiscoverAccount(ctx context.Context, account *ent.CloudAccount) error {
+	if account == nil || account.ID <= 0 {
+		return executionscope.ErrDenied
+	}
+	if err := s.execution.RequireCapability(ctx, account.TenantID, "cloud_discovery"); err != nil {
+		return err
+	}
 	provider := normalizeCloudProvider(account.Provider)
 	s.logger.Infow("Discovering resources for account", "accountID", account.ID, "provider", provider)
 

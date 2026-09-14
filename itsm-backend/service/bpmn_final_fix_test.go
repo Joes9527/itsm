@@ -94,6 +94,7 @@ func configureStartProcessDefinition(t *testing.T, f *bpmnAuthorizationFixture, 
 func startProcessContext(f *bpmnAuthorizationFixture) context.Context {
 	ctx := context.WithValue(f.userCtx, bpmn.BPMNTenantIDContextKey, f.tenant.ID)
 	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, f.actor.ID)
+	//lint:ignore SA1029 Deliberately supplies a legacy raw key to verify typed authorization boundaries.
 	ctx = context.WithValue(ctx, "user", f.actor)
 	return WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: f.actor.ID, TenantID: f.tenant.ID})
 }
@@ -126,7 +127,7 @@ func TestStartProcessAuditFailureRollsBackAllRecoverableState(t *testing.T) {
 	forcedErr := errors.New("forced process started audit failure")
 	failProcessAuditCreation(f.client, forcedErr)
 
-	_, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, "start-audit-rollback", "ticket", 101, map[string]interface{}{})
+	_, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, "start-audit-rollback", "generic", f.workItem(t, 101).ID, map[string]interface{}{})
 	require.ErrorIs(t, err, forcedErr)
 	assertNoStartedProcessState(t, f)
 }
@@ -139,7 +140,7 @@ func TestStartProcessAuditFailureRollsBackInitialCallbackOutbox(t *testing.T) {
 	forcedErr := errors.New("forced process started audit failure after enqueue")
 	failProcessAuditCreation(f.client, forcedErr)
 
-	_, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, "start-audit-outbox-rollback", "ticket", 105, map[string]interface{}{})
+	_, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, "start-audit-outbox-rollback", "generic", f.workItem(t, 105).ID, map[string]interface{}{})
 	require.ErrorIs(t, err, forcedErr)
 	assertNoStartedProcessState(t, f)
 	assert.Zero(t, handler.AttemptCount())
@@ -152,7 +153,7 @@ func TestStartProcessOutboxFailureRollsBackAllRecoverableState(t *testing.T) {
 	configureStartProcessDefinition(t, f, startProcessServiceTaskXML(handler.GetTaskType()))
 	failProcessCallbackOutboxCreation(f.client, errors.New("forced initial callback outbox failure"))
 
-	_, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, "start-outbox-rollback", "ticket", 102, map[string]interface{}{})
+	_, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, "start-outbox-rollback", "generic", f.workItem(t, 102).ID, map[string]interface{}{})
 	require.Error(t, err)
 	assertNoStartedProcessState(t, f)
 	assert.Zero(t, handler.AttemptCount())
@@ -162,7 +163,7 @@ func TestStartProcessMissingDeclaredServiceTaskHandlerRollsBackScheduling(t *tes
 	f := newBPMNAuthorizationFixture(t)
 	configureStartProcessDefinition(t, f, startProcessServiceTaskXML("missing_declared_handler"))
 
-	_, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, "start-missing-handler", "ticket", 103, map[string]interface{}{})
+	_, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, "start-missing-handler", "generic", f.workItem(t, 103).ID, map[string]interface{}{})
 	require.Error(t, err)
 	assertNoStartedProcessState(t, f)
 }
@@ -171,7 +172,7 @@ func TestStartProcessMissingLegacyServiceTaskHandlerRollsBackScheduling(t *testi
 	f := newBPMNAuthorizationFixture(t)
 	configureStartProcessDefinition(t, f, startProcessLegacyServiceTaskXML("missing_legacy_handler"))
 
-	_, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, "start-missing-legacy-handler", "ticket", 108, map[string]interface{}{})
+	_, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, "start-missing-legacy-handler", "generic", f.workItem(t, 108).ID, map[string]interface{}{})
 	require.Error(t, err)
 	assertNoStartedProcessState(t, f)
 }
@@ -184,7 +185,7 @@ func TestStartProcessRunsInitialCallbackOnlyAfterAtomicCommit(t *testing.T) {
 	f.engine.CallbackRegistry().RegisterHandler(handler)
 	configureStartProcessDefinition(t, f, startProcessServiceTaskXML(handler.GetTaskType()))
 
-	instance, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, handler.businessKey, "ticket", 104, map[string]interface{}{})
+	instance, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, handler.businessKey, "generic", f.workItem(t, 104).ID, map[string]interface{}{})
 	require.NoError(t, err)
 	assert.True(t, handler.observedCommittedState)
 	assert.Equal(t, common.ProcessTaskStatusCompleted, f.client.ProcessInstance.GetX(f.userCtx, instance.ID).Status)
@@ -198,7 +199,7 @@ func TestStartProcessReturnsSuccessWhenInlineCallbackAttemptFails(t *testing.T) 
 	f.engine.CallbackRegistry().RegisterHandler(handler)
 	configureStartProcessDefinition(t, f, startProcessServiceTaskXML(handler.GetTaskType()))
 
-	instance, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, "start-inline-failure", "ticket", 106, map[string]interface{}{})
+	instance, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, "start-inline-failure", "generic", f.workItem(t, 106).ID, map[string]interface{}{})
 	require.NoError(t, err)
 	row := callbackRowForInstance(t, f, instance.ID)
 	assert.Equal(t, bpmnCallbackStatusPending, row.Status)
@@ -217,7 +218,7 @@ func TestStartProcessNormalizesPersistedTaskTypeWhenDefinitionUsesHandlerID(t *t
 	f.engine.CallbackRegistry().RegisterHandler(handler)
 	configureStartProcessDefinition(t, f, startProcessServiceTaskXML(handler.GetHandlerID()))
 
-	instance, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, "start-handler-id", "ticket", 107, map[string]interface{}{})
+	instance, err := f.engine.StartProcess(startProcessContext(f), f.definition.Key, "start-handler-id", "generic", f.workItem(t, 107).ID, map[string]interface{}{})
 	require.NoError(t, err)
 	row := callbackRowForInstance(t, f, instance.ID)
 	assert.Equal(t, handler.GetHandlerID(), row.HandlerID)
@@ -238,9 +239,11 @@ func (h *startProcessCommitProbeHandler) EffectCount() int { return h.effectCoun
 
 func (h *startProcessCommitProbeHandler) GetTaskType() string  { return "start_commit_probe" }
 func (h *startProcessCommitProbeHandler) GetHandlerID() string { return "start_commit_probe_handler" }
+
 func (h *startProcessCommitProbeHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
 	return bpmn.CallbackActionContract{}, true
 }
+
 func (h *startProcessCommitProbeHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	h.effectCount++
 	instance, err := h.client.ProcessInstance.Query().Where(
@@ -620,6 +623,7 @@ func (h *postCommitProbeHandler) IsAsync() bool        { return false }
 func (h *postCommitProbeHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
 	return bpmn.CallbackActionContract{}, true
 }
+
 func (h *postCommitProbeHandler) Execute(ctx context.Context, callbackTask *ent.ProcessTask, _ map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	if callbackTask == nil {
 		return nil, fmt.Errorf("callback task is required")

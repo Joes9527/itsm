@@ -4,6 +4,9 @@ import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
 import { CreationAttempts } from '@/components/work-item/CreationAttempts';
 import { CreationRequester } from '@/components/work-item/CreationRequester';
 
+import { WorkItemClassificationSelect } from '@/components/work-item/WorkItemClassificationSelect';
+import { classificationInput } from '@/components/work-item/classification';
+
 import React, { useState, useEffect } from 'react';
 import { Button, Card, Form, Input, Select, Space, Row, Col, message, Tabs, Typography, Divider, Tag, Spin } from 'antd';
 import { ArrowLeft, Search, X } from 'lucide-react';
@@ -34,7 +37,7 @@ interface IncidentFormValues {
   source: 'manual' | 'user';
   requesterId?: number;
   type: 'incident' | 'service_request' | 'security_event' | 'alert';
-  category?: string;
+  classification?: number[];
   impact?: 'critical' | 'high' | 'medium' | 'low';
   urgency?: 'critical' | 'high' | 'medium' | 'low';
   assignedTo?: number;
@@ -121,7 +124,7 @@ export default function CreateIncidentPage() {
         priority: values.priority,
         source: values.source || 'manual',
         type: values.type || 'incident',
-        category: values.category,
+        cti: classificationInput(values.classification),
         impact: values.impact,
         urgency: values.urgency,
         assigneeId: values.assignedTo,
@@ -135,7 +138,7 @@ export default function CreateIncidentPage() {
   };
 
   return (
-    <div className="p-6 min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-page p-[16px] text-[13px] text-foreground md:p-[24px]">
       {/* 返回按钮 */}
       <div className="mb-6">
         <Button
@@ -172,7 +175,7 @@ export default function CreateIncidentPage() {
                 type: 'incident',
               }}
             >
-              <CreationRequester />
+              <CreationRequester resource="incident" />
               <Tabs
                 activeKey={activeTab}
                 onChange={setActiveTab}
@@ -247,16 +250,10 @@ export default function CreateIncidentPage() {
                         <Row gutter={16}>
                           <Col span={12}>
                             <Form.Item
-                              name="category"
+                              name="classification"
                               label="事件分类"
                             >
-                              <Select placeholder="选择分类" options={[
-                                { value: 'hardware', label: '硬件故障' },
-                                { value: 'software', label: '软件故障' },
-                                { value: 'network', label: '网络问题' },
-                                { value: 'security', label: '安全问题' },
-                                { value: 'other', label: '其他' },
-                              ]} />
+                              <WorkItemClassificationSelect />
                             </Form.Item>
                           </Col>
                           <Col span={12}>
@@ -310,16 +307,16 @@ export default function CreateIncidentPage() {
 
                               {/* 搜索结果下拉 */}
                               {ciSearchResults.length > 0 && (
-                                <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
+                                <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-[6px] border border-border bg-surface shadow-lg">
                                   {ciSearchResults.map(ci => (
                                     <div
                                       key={ci.id}
-                                      className="px-3 py-2 hover:bg-gray-50 cursor-pointer flex justify-between items-center"
+                                      className="px-3 py-2 hover:bg-raised cursor-pointer flex justify-between items-center"
                                       onClick={() => handleAddCI(ci)}
                                     >
                                       <div>
                                         <div className="font-medium">{ci.name}</div>
-										<div className="text-xs text-gray-500">{ci.type || 'CI'} - {ciStatusNameMap[ci.status] || ci.status}</div>
+										<div className="text-xs text-muted">{ci.type || 'CI'} - {ciStatusNameMap[ci.status] || ci.status}</div>
                                       </div>
                                       {selectedCIs.find(item => item.id === ci.id) && (
                                         <Tag color="green">已选择</Tag>
@@ -406,7 +403,7 @@ export default function CreateIncidentPage() {
             <Space orientation="vertical" className="w-full">
               <div>
                 <Text strong>优先级说明</Text>
-                <ul className="mt-2 text-sm text-gray-600">
+                <ul className="mt-2 text-sm text-muted">
                   <li>🔴 紧急：系统完全不可用</li>
                   <li>🟠 高：核心功能受影响</li>
                   <li>🔵 中：非核心功能受影响</li>
@@ -416,7 +413,7 @@ export default function CreateIncidentPage() {
               <Divider className="!my-2" />
               <div>
                 <Text strong>紧急联系方式</Text>
-                <ul className="mt-2 text-sm text-gray-600">
+                <ul className="mt-2 text-sm text-muted">
                   <li>电话：400-XXX-XXXX</li>
                   <li>邮箱：support@example.com</li>
                 </ul>

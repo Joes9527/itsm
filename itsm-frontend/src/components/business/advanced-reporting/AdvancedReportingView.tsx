@@ -44,7 +44,7 @@ export function AdvancedReportingView({
           {reports.map(report => (
             <div
               key={report.id}
-              className="flex items-center justify-between border-b border-gray-100 py-3 last:border-b-0"
+              className="flex items-center justify-between border-b border-border py-3 last:border-b-0"
             >
               <div>
                 <Typography.Text strong>{report.name}</Typography.Text>

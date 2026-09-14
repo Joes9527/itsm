@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -213,6 +214,7 @@ func TestCCTaskHandlerRejectsUnknownNotifyChannelsBeforeEffects(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			fixture := newCCHandlerRecipientFixture(t, "cc-notify-"+strconv.Itoa(len(tt.name)))
+			fixture.handler.SetNotificationTargetBinder(ccNotificationTargetOwnerTest{t: t, tenantID: fixture.tenant.ID})
 			variables := fixture.variables("user")
 			variables["ccUserIds"] = strconv.Itoa(fixture.recipient.ID)
 			if tt.channels != nil {
@@ -386,4 +388,21 @@ func TestCCTaskHandlerValidatesTenantOwnedGroupAndRoleSelectors(t *testing.T) {
 			})
 		}
 	}
+}
+
+// A unit-level owner double checks transaction ownership for channel parsing;
+// real notification-owner binding is exercised by service/integration tests.
+type ccNotificationTargetOwnerTest struct {
+	t        *testing.T
+	tenantID int
+}
+
+func (b ccNotificationTargetOwnerTest) BindNotificationTargetTx(ctx context.Context, tx *ent.Tx, tenantID int, channel string, create *ent.TicketNotificationCreate) error {
+	require.NotNil(b.t, tx)
+	require.Equal(b.t, b.tenantID, tenantID)
+	require.Equal(b.t, "email", channel)
+	// CC association is created earlier in this same, still uncommitted transaction.
+	require.Positive(b.t, tx.TicketCC.Query().CountX(ctx))
+	create.SetTargetProtocolVersion(2).SetTargetTransport("smtp").SetTargetDestinationDigest(strings.Repeat("a", 64))
+	return nil
 }

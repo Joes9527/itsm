@@ -59,12 +59,14 @@ type RoutingResult struct {
 func (s *ProcessRoutingService) FindBestRoute(ctx context.Context, reqCtx *RoutingContext) (*RoutingResult, error) {
 	return s.findBestRoute(ctx, s.client, reqCtx)
 }
+
 func (s *ProcessRoutingService) FindBestRouteTx(ctx context.Context, tx *ent.Tx, reqCtx *RoutingContext) (*RoutingResult, error) {
 	if tx == nil {
 		return nil, fmt.Errorf("routing transaction is required")
 	}
 	return s.findBestRoute(ctx, tx.Client(), reqCtx)
 }
+
 func (s *ProcessRoutingService) findBestRoute(ctx context.Context, client *ent.Client, reqCtx *RoutingContext) (*RoutingResult, error) {
 	s.logger.Infow(
 		"Finding best route",
@@ -368,6 +370,7 @@ func routingValueToRational(value interface{}) (*big.Rat, bool) {
 	}
 	return new(big.Rat).SetString(text)
 }
+
 func validateRoutingConditions(conditions map[string]interface{}) error {
 	for key, value := range conditions {
 		if key == "no_process" {
@@ -405,32 +408,6 @@ func validateRoutingConditions(conditions map[string]interface{}) error {
 		}
 	}
 	return nil
-}
-
-// CreateBinding creates a new process binding
-func (s *ProcessRoutingService) CreateBinding(ctx context.Context, binding *ent.ProcessBinding) (*ent.ProcessBinding, error) {
-	created, err := s.client.ProcessBinding.Create().
-		SetBusinessType(binding.BusinessType).
-		SetNillableBusinessSubType(&binding.BusinessSubType).
-		SetProcessDefinitionKey(binding.ProcessDefinitionKey).
-		SetProcessVersion(binding.ProcessVersion).
-		SetIsDefault(binding.IsDefault).
-		SetPriority(binding.Priority).
-		SetIsActive(binding.IsActive).
-		SetDepartmentID(binding.DepartmentID).
-		SetTeamID(binding.TeamID).
-		SetNillableScenario(&binding.Scenario).
-		SetNillableCategory(&binding.Category).
-		SetConditions(binding.Conditions).
-		SetNillableApprovalChainID(&binding.ApprovalChainID).
-		SetNillableSLAPolicyID(&binding.SLAPolicyID).
-		SetOverrides(binding.Overrides).
-		SetTenantID(binding.TenantID).
-		Save(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create process binding: %w", err)
-	}
-	return created, nil
 }
 
 // UpdateBinding updates an existing process binding
