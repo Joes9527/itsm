@@ -14,6 +14,21 @@
 | exclude | 4 | 排除 |
 | infra_ci | 4 | CMDB CI（infra） |
 
+## 服务分类节点决策（第 1 项，已确认）
+
+| 旧节点 | 旧 ctiId | 决策 | 目标 | 说明 |
+| --- | --- | --- | --- | --- |
+| K3.5数据变更 | `5be4d09ae4e344e38305f6d008405139` | **映射** | `APP-IL-DAT-002` | 业务系统支持/IL业务线支持/IL主数据变更申请（用户示例确认） |
+| OA申请 | `6217e2ebb22b4ef890d0af9af31c8f7a` | **删除** | `—` | 父容器，排除不迁目标（用户确认删除，已记录；不改旧源） |
+| OA申请 / AD账户申请（Windows账户） | `8c81b8d98ed5470db217389d8436f66c` | **映射** | `ACC-AD-001` | 账号与访问服务/AD与基础账号/AD账号新建 |
+| OA申请 / O365邮箱导出申请 | `5df87242c8594dfa903290bbde570438` | **新建** | `COL-MAIL-*（待定）` | 在 COL-MAIL 下新建“邮箱导出申请”，code/priority/sla_tier 待确认 |
+| OA申请 / O365邮箱账户申请 | `f01241a4136d455680999c8759e94283` | **映射** | `COL-MAIL-001` | 邮箱与Microsoft 365协作服务/邮箱账号与基础配置/邮箱开通 |
+| OA申请 / SSLVPN账号申请 | `05fae6bef2aa40ba90218daaf33ebd43` | **映射** | `NET-VPN-001` | 网络与远程访问服务/VPN与远程连接/VPN开通申请 |
+| OA申请 / 业务系统服务申请 | `253c64968ab046a0bf85799df965147c` | **新建** | `APP-*（待定）` | 在 APP 下新建“业务系统服务申请” |
+| OA申请 / 业务系统账号申请 | `b95693094805482da65f0bcf51133806` | **新建** | `ACC-LCM-* 或 APP-*（待定）` | 新建“业务系统账号申请”，父分类待确认 |
+
+> **删除记录**：OA申请（`OA申请` 父容器）自迁移范围删除/排除，不写入目标；**不改动旧源数据**。该删除在此登记，后续批次不得再纳入。
+
 ## 逐节点映射工作表
 
 | 旧路径 | 旧 ctiId | 节点类型 | 路由引用 | 目标 | 相似度 | 你的确认 |
@@ -21,7 +36,7 @@
 | BMS系统 | `3fb52530b83c4ba99871d12978ce510a` | business_system | 0 | 建 CMDB `business_system` CI：BMS系统 |  |  |
 | CL-BI系统 | `d3193d15744647499ccba0c200b62314` | business_system | 0 | 建 CMDB `business_system` CI：CL-BI系统 |  |  |
 | HR-BI | `0084f6701c1642b786d6b84bbaa054ef` | business_system | 0 | 建 CMDB `business_system` CI：HR-BI |  |  |
-| K3.5数据变更 | `5be4d09ae4e344e38305f6d008405139` | ticket_category | 0 | 业务系统支持 / IL业务线支持 / IL主数据变更申请 / `APP-IL-DAT-002` | 0.5 |  |
+| K3.5数据变更 | `5be4d09ae4e344e38305f6d008405139` | ticket_category | 0 | [映射] `APP-IL-DAT-002` |  |  |
 | K3.5系统 | `6d09df4b7f574608b85e5e903ae52c6b` | business_system | 0 | 建 CMDB `business_system` CI：K3.5系统 |  |  |
 | KAPP&KOMS系统 | `d21b8854d32a40b9905355fe739a60e8` | business_system | 1 | 建 CMDB `business_system` CI：KAPP&KOMS系统 |  |  |
 | KAPP系统 | `43844d678b9541108a217353ea97e38b` | business_system | 0 | 建 CMDB `business_system` CI：KAPP系统 |  |  |
@@ -37,13 +52,13 @@
 | Ksmart系统 | `cdb8ca38cfbb4df38f08b10fb8fe0c93` | business_system | 0 | 建 CMDB `business_system` CI：Ksmart系统 |  |  |
 | Ksmart系统_ | `9a1c1940a851422fadc3707cb636eac3` | business_system | 0 | 建 CMDB `business_system` CI：Ksmart系统_ |  |  |
 | LTL-BI系统 | `2e8509e420b14f24ba3d56e7953a3e22` | business_system | 3 | 建 CMDB `business_system` CI：LTL-BI系统 |  |  |
-| OA申请 | `6217e2ebb22b4ef890d0af9af31c8f7a` | ticket_category | 0 | _（无候选，需补建/排除）_ |  |  |
-| OA申请 / AD账户申请（Windows账户） | `8c81b8d98ed5470db217389d8436f66c` | ticket_category | 6 | _（无候选，需补建/排除）_ |  |  |
-| OA申请 / O365邮箱导出申请 | `5df87242c8594dfa903290bbde570438` | ticket_category | 1 | 邮箱与Microsoft 365协作服务 / 共享资源与协作空间 / 共享邮箱申请 / `COL-SHR-001` | 0.5 |  |
-| OA申请 / O365邮箱账户申请 | `f01241a4136d455680999c8759e94283` | ticket_category | 6 | 邮箱与Microsoft 365协作服务 / 共享资源与协作空间 / 共享邮箱申请 / `COL-SHR-001` | 0.5 |  |
-| OA申请 / SSLVPN账号申请 | `05fae6bef2aa40ba90218daaf33ebd43` | ticket_category | 1 | 网络与远程访问服务 / VPN与远程连接 / VPN开通申请 / `NET-VPN-001` | 0.59 |  |
-| OA申请 / 业务系统服务申请 | `253c64968ab046a0bf85799df965147c` | ticket_category | 0 | 业务系统支持 / `APP` | 0.57 |  |
-| OA申请 / 业务系统账号申请 | `b95693094805482da65f0bcf51133806` | ticket_category | 0 | 账号与访问服务 / 特权与临时权限 / 特权账号申请 / `ACC-PRV-001` | 0.57 |  |
+| OA申请 | `6217e2ebb22b4ef890d0af9af31c8f7a` | ticket_category | 0 | [删除] `—` |  |  |
+| OA申请 / AD账户申请（Windows账户） | `8c81b8d98ed5470db217389d8436f66c` | ticket_category | 6 | [映射] `ACC-AD-001` |  |  |
+| OA申请 / O365邮箱导出申请 | `5df87242c8594dfa903290bbde570438` | ticket_category | 1 | [新建] `COL-MAIL-*（待定）` |  |  |
+| OA申请 / O365邮箱账户申请 | `f01241a4136d455680999c8759e94283` | ticket_category | 6 | [映射] `COL-MAIL-001` |  |  |
+| OA申请 / SSLVPN账号申请 | `05fae6bef2aa40ba90218daaf33ebd43` | ticket_category | 1 | [映射] `NET-VPN-001` |  |  |
+| OA申请 / 业务系统服务申请 | `253c64968ab046a0bf85799df965147c` | ticket_category | 0 | [新建] `APP-*（待定）` |  |  |
+| OA申请 / 业务系统账号申请 | `b95693094805482da65f0bcf51133806` | ticket_category | 0 | [新建] `ACC-LCM-* 或 APP-*（待定）` |  |  |
 | OA系统 | `d75f90ea58824c76be4dd82efb09cee6` | business_system | 0 | 建 CMDB `business_system` CI：OA系统 |  |  |
 | test | `9cd71e9b23db47c786a1aca485906bf1` | exclude | 0 | 排除 |  |  |
 | test2 | `70d24d24c5054103b950ba10b9f0d1c2` | exclude | 0 | 排除 |  |  |
