@@ -2,10 +2,11 @@ package workitemcreation
 
 import (
 	"encoding/json"
-	"github.com/stretchr/testify/require"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestStrictWireFixtures(t *testing.T) {
@@ -36,6 +37,7 @@ func TestStrictWireFixtures(t *testing.T) {
 		})
 	}
 }
+
 func TestExactProfessionalAndDynamicNumbers(t *testing.T) {
 	for _, field := range []string{"revenueImpact", "serviceAvailability", "dynamic"} {
 		t.Run(field, func(t *testing.T) {
@@ -65,6 +67,7 @@ func TestExactProfessionalAndDynamicNumbers(t *testing.T) {
 		})
 	}
 }
+
 func TestUnicodeCharacterBoundaries(t *testing.T) {
 	for field, limit := range map[string]int{"title": 500, "description": 20000, "idempotencyKey": 200} {
 		for _, length := range []int{200, limit, limit + 1} {

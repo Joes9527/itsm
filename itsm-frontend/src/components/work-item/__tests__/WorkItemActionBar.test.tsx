@@ -5,6 +5,7 @@ import { WorkItemProvider } from '../WorkItemContext';
 import type { WorkItemCommon } from '../WorkItemTypes';
 
 const workItem: WorkItemCommon = {
+  version: 1,
   id: 1,
   number: 'X-1',
   recordClass: 'incident',

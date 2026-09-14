@@ -33,7 +33,7 @@ func AuthorizeTenantSession(ctx context.Context, client *ent.Client, actor *ent.
 		if ent.IsNotFound(err) {
 			return nil, ErrTenantAccessDenied
 		}
-		return nil, fmt.Errorf("%w: load target tenant: %v", ErrTenantAuthorizationUnavailable, err)
+		return nil, fmt.Errorf("%w: load target tenant: %w", ErrTenantAuthorizationUnavailable, err)
 	}
 
 	allowed := actor.TenantID == targetTenantID || actor.Role == "super_admin"
@@ -41,7 +41,7 @@ func AuthorizeTenantSession(ctx context.Context, client *ent.Client, actor *ent.
 		origin, originErr := client.Tenant.Get(ctx, actor.TenantID)
 		if originErr != nil {
 			if !ent.IsNotFound(originErr) {
-				return nil, fmt.Errorf("%w: load actor tenant: %v", ErrTenantAuthorizationUnavailable, originErr)
+				return nil, fmt.Errorf("%w: load actor tenant: %w", ErrTenantAuthorizationUnavailable, originErr)
 			}
 		} else if tenantmode.IsMSPProviderTenantType(string(origin.Type)) && tenantmode.IsCustomerTenantType(string(target.Type)) {
 			allocated, allocationErr := client.MSPAllocation.Query().
@@ -52,7 +52,7 @@ func AuthorizeTenantSession(ctx context.Context, client *ent.Client, actor *ent.
 				).
 				Exist(ctx)
 			if allocationErr != nil {
-				return nil, fmt.Errorf("%w: query MSP allocation: %v", ErrTenantAuthorizationUnavailable, allocationErr)
+				return nil, fmt.Errorf("%w: query MSP allocation: %w", ErrTenantAuthorizationUnavailable, allocationErr)
 			}
 			allowed = allocated
 		}

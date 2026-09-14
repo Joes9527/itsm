@@ -3,16 +3,18 @@ package intake
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/gin-gonic/gin"
 	"io"
+	"net/http"
+	"reflect"
+	"strings"
+
+	"github.com/gin-gonic/gin"
+
 	"itsm-backend/authentication"
 	"itsm-backend/common"
 	"itsm-backend/handlers/common/intakehttp"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/middleware"
-	"net/http"
-	"reflect"
-	"strings"
 )
 
 type Handler struct {
@@ -37,8 +39,10 @@ func (h *Handler) RegisterRoutes(group *gin.RouterGroup) {
 	group.POST("/intake/work-items", middleware.IntakeAuthMiddleware(secret, "intake:create", h.exchange.ValidateCredential), h.CreateWorkItem)
 	group.GET("/intake/catalog-items", middleware.IntakeAuthMiddleware(secret, "intake:catalog:read", h.exchange.ValidateCredential), h.CatalogPage)
 	group.GET("/intake/catalog-items/:id", middleware.IntakeAuthMiddleware(secret, "intake:catalog:read", h.exchange.ValidateCredential), h.CatalogDetail)
+	group.GET("/intake/work-item-references", middleware.IntakeAuthMiddleware(secret, "intake:workitem:read", h.exchange.ValidateCredential), h.WorkItemReferences)
 	group.GET("/intake/work-items/:id", middleware.IntakeAuthMiddleware(secret, "intake:workitem:read", h.exchange.ValidateCredential), h.WorkItem)
 }
+
 func decodeIdentityBody(c *gin.Context, target any) error {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 32*1024)
 	raw, err := io.ReadAll(c.Request.Body)
@@ -67,6 +71,7 @@ func decodeIdentityBody(c *gin.Context, target any) error {
 	}
 	return nil
 }
+
 func (h *Handler) exchangeHandler(purpose string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var a IdentityAssertion
@@ -82,6 +87,7 @@ func (h *Handler) exchangeHandler(purpose string) gin.HandlerFunc {
 		common.Success(c, result)
 	}
 }
+
 func (h *Handler) CreateWorkItem(c *gin.Context) {
 	identity := c.MustGet("intake_identity").(creation.Identity)
 	identity.CatalogOptionKeys = true

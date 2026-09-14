@@ -78,7 +78,7 @@ func (d *KafOutboxDispatcher) DispatchOnce(ctx context.Context) error {
 	// This dedicated process transports already-authorized cross-tenant intents;
 	// it performs no tenant business action and retains the queue role capability.
 	ctx = tenantctx.SystemContext(ctx, "kaf:outbox_transport", "claim and acknowledge authorized delegation messages")
-	events, err := d.repository.ClaimDueByEventType(ctx, d.now().UTC(), d.config.BatchSize, KafDelegateRequestedEventType)
+	events, err := d.repository.ClaimDueByEventType(ctx, d.now().UTC(), d.config.BatchSize, KafDelegateRequestedEventType, false)
 	if err != nil {
 		return err
 	}

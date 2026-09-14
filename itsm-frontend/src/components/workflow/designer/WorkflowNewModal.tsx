@@ -86,15 +86,15 @@ export default function WorkflowNewModal({
       </div>
 
       <div
-        className="grid grid-cols-2 md:grid-cols-3 gap-4"
+        className="grid grid-cols-2 md:grid-cols-3 gap-[14px]"
         style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}
       >
         {WORKFLOW_TEMPLATES.map(template => (
           <div
             key={template.id}
-            className="border rounded-lg p-4 cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-all"
+            className="border rounded-[8px] p-[16px] cursor-pointer hover:border-primary hover:bg-raised transition-all"
             style={{
-              border: '1px solid #d9d9d9',
+              border: '1px solid var(--color-border)',
               borderRadius: '8px',
               padding: '16px',
               cursor: 'pointer',
@@ -103,26 +103,26 @@ export default function WorkflowNewModal({
             onClick={() => handleSelectTemplate(template)}
           >
             <div className="flex items-center mb-2">
-              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center mr-3">
+              <div className="w-10 h-10 rounded-[8px] bg-raised flex items-center justify-center mr-3">
                 <FileText className="w-5 h-5 text-blue-600" />
               </div>
               <div>
                 <div className="font-medium">{template.name}</div>
-                <div className="text-xs text-gray-500">
+                <div className="text-[12px] text-muted">
                   {TEMPLATE_CATEGORIES.find(c => c.key === template.category)?.name ||
                     template.category}
                 </div>
               </div>
             </div>
-            <div className="text-xs text-gray-500 mt-2">{template.description}</div>
+            <div className="text-[12px] text-muted mt-2">{template.description}</div>
           </div>
         ))}
       </div>
 
       <div className="mt-6 border-t pt-4">
-        <div className="text-sm text-gray-500 mb-3">或者自定义创建</div>
+        <div className="text-[13px] text-muted mb-3">或者自定义创建</div>
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
-          <div className="flex gap-4">
+          <div className="flex gap-[14px]">
             <Form.Item
               label="工作流名称"
               name="name"

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"itsm-backend/common/executionscope"
+
 	"itsm-backend/ent"
 	"itsm-backend/ent/marketplaceitem"
 	"itsm-backend/ent/predicate"
@@ -20,6 +22,20 @@ import (
 type Service struct {
 	db     *ent.Client
 	logger *zap.SugaredLogger
+	gate   IntegrationManagementGate
+}
+
+type IntegrationManagementGate interface {
+	RequireIntegrationManagement(context.Context, int) error
+}
+
+// RequireIntegrationManagement checks deployment restrictions before configuration I/O.
+// It does not replace actor authorization or callback protocol verification.
+func (s *Service) RequireIntegrationManagement(ctx context.Context, tenantID int) error {
+	if s == nil || s.gate == nil {
+		return executionscope.ErrDenied
+	}
+	return s.gate.RequireIntegrationManagement(ctx, tenantID)
 }
 
 var (
@@ -30,10 +46,11 @@ var (
 )
 
 // NewService 创建市场服务
-func NewService(db *ent.Client, logger *zap.SugaredLogger) *Service {
+func NewService(db *ent.Client, logger *zap.SugaredLogger, gate IntegrationManagementGate) *Service {
 	return &Service{
 		db:     db,
 		logger: logger,
+		gate:   gate,
 	}
 }
 
@@ -154,6 +171,9 @@ func (s *Service) reactivateUninstalledInstallation(
 
 // InstallItem 租户安装商品
 func (s *Service) InstallItem(ctx context.Context, tenantID, itemID int, installedBy string) (*ent.TenantInstallation, error) {
+	if err := s.RequireIntegrationManagement(ctx, tenantID); err != nil {
+		return nil, err
+	}
 	// P2-04 修复：业务保护四道闸
 	// 1) 商品必须存在
 	item, err := s.db.MarketplaceItem.Get(ctx, itemID)
@@ -229,6 +249,9 @@ func (s *Service) InstallItem(ctx context.Context, tenantID, itemID int, install
 
 // UninstallItem 租户卸载商品
 func (s *Service) UninstallItem(ctx context.Context, tenantID, itemID int) error {
+	if err := s.RequireIntegrationManagement(ctx, tenantID); err != nil {
+		return err
+	}
 	// 查找安装记录
 	installation, err := s.db.TenantInstallation.Query().
 		Where(
@@ -306,6 +329,9 @@ func (s *Service) ListInstallations(ctx context.Context, tenantID int, status st
 
 // UpdateInstallationConfig 更新组件配置
 func (s *Service) UpdateInstallationConfig(ctx context.Context, tenantID, itemID int, config map[string]interface{}) (*ent.TenantInstallation, error) {
+	if err := s.RequireIntegrationManagement(ctx, tenantID); err != nil {
+		return nil, err
+	}
 	installation, err := s.GetInstallation(ctx, tenantID, itemID)
 	if err != nil {
 		return nil, err
@@ -355,6 +381,9 @@ func (s *Service) GetConnectorInstallation(ctx context.Context, tenantID int, co
 
 // MergeConnectorInstallationConfig merges a partial connector config into the tenant installation.
 func (s *Service) MergeConnectorInstallationConfig(ctx context.Context, tenantID int, connectorName string, patch map[string]interface{}) (*ent.TenantInstallation, error) {
+	if err := s.RequireIntegrationManagement(ctx, tenantID); err != nil {
+		return nil, err
+	}
 	installation, err := s.GetConnectorInstallation(ctx, tenantID, connectorName)
 	if err != nil {
 		return nil, err

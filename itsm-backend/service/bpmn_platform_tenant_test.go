@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"testing"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/service/bpmn"
@@ -32,8 +34,7 @@ func setupPlatformTenantEnv(t *testing.T) (*ent.Client, ProcessEngine, context.C
 		Save(ctx)
 	require.NoError(t, err)
 
-	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar())
-	injectEngineChangeCallbackTestService(t, engine, client)
+	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard())
 	_, err = NewBPMNTemplateService(client).LoadAndDeployTemplates(ctx, tenant.ID)
 	require.NoError(t, err)
 
@@ -43,7 +44,7 @@ func setupPlatformTenantEnv(t *testing.T) (*ent.Client, ProcessEngine, context.C
 	// "incident service 未注入" 硬失败。
 	if cpe, ok := engine.(*CustomProcessEngine); ok {
 		if h, ok := cpe.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler); ok {
-			h.SetIncidentService(NewIncidentService(client, zap.NewNop().Sugar()))
+			h.SetIncidentService(NewIncidentService(client, zap.NewNop().Sugar(), executionfixture.Standard()))
 		}
 	}
 
@@ -55,7 +56,7 @@ func TestStartProcess_TrustedTenant_ServiceTaskUsesInstanceIdentity(t *testing.T
 
 	assignee, err := client.User.Create().
 		SetUsername("platform-assignee").SetEmail("platform-assignee@test.com").SetPasswordHash("x").
-		SetName("处理人").SetTenantID(tenantID).SetActive(true).
+		SetName("处理人").SetTenantID(tenantID).SetActive(true).SetRole("super_admin").
 		Save(platformCtx)
 	require.NoError(t, err)
 
@@ -74,6 +75,7 @@ func TestStartProcess_TrustedTenant_ServiceTaskUsesInstanceIdentity(t *testing.T
 
 	trustedCtx := WithTrustedBPMNTenantContext(platformCtx, tenantID)
 	instance, err := engine.StartProcess(trustedCtx, "incident_emergency_flow", "incident:platform-1", "incident", workItem.ID, map[string]interface{}{
+		"version":      workItem.Version,
 		"assignee_id":  assignee.ID,
 		"requester_id": assignee.ID,
 		"triggered_by": strconv.Itoa(assignee.ID),
@@ -90,100 +92,6 @@ func TestStartProcess_TrustedTenant_ServiceTaskUsesInstanceIdentity(t *testing.T
 	assert.Equal(t, "Activity_ManagerApproval", started.CurrentActivityID, "流程应推进到第一个用户任务")
 }
 
-func TestCompleteTask_TypedScope_CallbackUsesAuthoritativeBusinessIdentity(t *testing.T) {
-	client, engine, platformCtx, tenantID := setupPlatformTenantEnv(t)
+// TestCompleteTask_TypedScope_CallbackUsesAuthoritativeBusinessIdentity moved to tests/integration/workitem_change_consumers_postgres_test.go.
 
-	actor := client.User.Create().
-		SetUsername("platform-change-actor").SetEmail("platform-change-actor@test.com").SetPasswordHash("x").
-		SetName("变更处理人").SetTenantID(tenantID).SetActive(true).
-		SaveX(platformCtx)
-	workItem := client.Ticket.Create().
-		SetTitle("平台回调测试变更").
-		SetTicketNumber("T-PLATFORM-CHANGE-1").
-		SetRecordClass("change_request").
-		SetRequesterID(actor.ID).
-		SetTenantID(tenantID).
-		SaveX(platformCtx)
-	ch := client.Change.Create().
-		SetWorkItemID(workItem.ID).
-		SaveX(platformCtx)
-
-	trustedCtx := WithTrustedBPMNTenantContext(platformCtx, tenantID)
-	instance, err := engine.StartProcess(trustedCtx, "change_normal_flow", "change:platform-1", "change", workItem.ID, map[string]interface{}{
-		"approval_required": true,
-		"requester_id":      actor.ID,
-		"triggered_by":      strconv.Itoa(actor.ID),
-	})
-	require.NoError(t, err)
-
-	task := findTaskByDefinitionKey(t, client, platformCtx, instance.ID, "Activity_Assessment")
-	actorCtx := WithBPMNAccessScope(platformCtx, BPMNAccessScope{
-		UserID: actor.ID, TenantID: tenantID, CanUpdateAllTasks: true,
-	})
-	require.NoError(t, engine.CompleteTask(actorCtx, task.TaskID, map[string]interface{}{
-		"title": "平台改过的标题",
-	}))
-
-	updated, err := client.Change.Get(platformCtx, ch.ID)
-	require.NoError(t, err)
-	assert.Equal(t, "平台改过的标题", requireChangeWorkItem(t, client, updated).Title, "平台完成任务的 update_change 副作用应以实例租户执行")
-
-	advanced, err := client.ProcessInstance.Get(platformCtx, instance.ID)
-	require.NoError(t, err)
-	assert.Equal(t, "Activity_CABApproval", advanced.CurrentActivityID, "流程应正常推进到 CAB 审批")
-}
-
-func TestCompleteTask_ParticipantBusinessIDCannotRetargetCallback(t *testing.T) {
-	client, engine, platformCtx, tenantID := setupPlatformTenantEnv(t)
-
-	otherTenant, err := client.Tenant.Create().
-		SetName("Other Tenant").SetCode("platform-other").SetDomain("other.example.com").SetStatus("active").
-		Save(platformCtx)
-	require.NoError(t, err)
-
-	otherActor := client.User.Create().
-		SetUsername("platform-other-actor").SetEmail("platform-other-actor@test.com").SetPasswordHash("x").
-		SetName("其他租户处理人").SetTenantID(otherTenant.ID).SetActive(true).
-		SaveX(platformCtx)
-	otherWorkItem := client.Ticket.Create().
-		SetTitle("别家租户的变更").SetTicketNumber("T-PLATFORM-OTHER-CHANGE-1").
-		SetRecordClass("change_request").SetRequesterID(otherActor.ID).
-		SetTenantID(otherTenant.ID).SaveX(platformCtx)
-	otherChange := client.Change.Create().
-		SetWorkItemID(otherWorkItem.ID).
-		SaveX(platformCtx)
-
-	actor := client.User.Create().
-		SetUsername("platform-own-actor").SetEmail("platform-own-actor@test.com").SetPasswordHash("x").
-		SetName("本租户处理人").SetTenantID(tenantID).SetActive(true).
-		SaveX(platformCtx)
-	workItem := client.Ticket.Create().
-		SetTitle("本租户变更").SetTicketNumber("T-PLATFORM-OWN-CHANGE-1").
-		SetRecordClass("change_request").SetRequesterID(actor.ID).
-		SetTenantID(tenantID).SaveX(platformCtx)
-	ch := client.Change.Create().
-		SetWorkItemID(workItem.ID).
-		SaveX(platformCtx)
-
-	trustedCtx := WithTrustedBPMNTenantContext(platformCtx, tenantID)
-	instance, err := engine.StartProcess(trustedCtx, "change_normal_flow", "change:platform-2", "change", workItem.ID, map[string]interface{}{
-		"approval_required": true,
-		"requester_id":      actor.ID,
-		"triggered_by":      strconv.Itoa(actor.ID),
-	})
-	require.NoError(t, err)
-
-	task := findTaskByDefinitionKey(t, client, platformCtx, instance.ID, "Activity_Assessment")
-	actorCtx := WithBPMNAccessScope(platformCtx, BPMNAccessScope{
-		UserID: actor.ID, TenantID: tenantID, CanUpdateAllTasks: true,
-	})
-	require.NoError(t, engine.CompleteTask(actorCtx, task.TaskID, map[string]interface{}{
-		"change_id": otherChange.ID,
-		"title":     "越权尝试",
-	}))
-
-	after, err := client.Change.Get(platformCtx, otherChange.ID)
-	require.NoError(t, err)
-	assert.Equal(t, "别家租户的变更", requireChangeWorkItem(t, client, after).Title, "跨租户伪造 change_id 不得写入别家租户数据")
-	assert.Equal(t, "越权尝试", requireChangeWorkItem(t, client, client.Change.GetX(platformCtx, ch.ID)).Title, "回调只能写权威流程目标")
-}
+// TestCompleteTask_ParticipantBusinessIDCannotRetargetCallback moved to tests/integration/workitem_change_consumers_postgres_test.go.

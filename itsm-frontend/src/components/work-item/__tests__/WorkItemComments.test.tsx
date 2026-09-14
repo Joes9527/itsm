@@ -16,6 +16,7 @@ jest.mock('@/lib/store/auth-store', () => ({
 }));
 
 const workItem: WorkItemCommon = {
+  version: 1,
   id: 7,
   number: 'PRB-1',
   recordClass: 'problem',

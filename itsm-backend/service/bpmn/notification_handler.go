@@ -116,7 +116,8 @@ func (h *NotificationHandler) sendInAppNotification(ctx context.Context, variabl
 
 	h.logger.Infow("In-app notification persisted via BPMN", "user_id", userIDs, "tenant_id", tenantID)
 
-	return &CallbackEffect{Status: CallbackEffectApplied,
+	return &CallbackEffect{
+		Status:  CallbackEffectApplied,
 		Message: fmt.Sprintf("应用内通知已发送给用户 %d", userIDs),
 	}, nil
 }

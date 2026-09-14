@@ -407,12 +407,12 @@ func (_q *ProcessInstanceQuery) WithDefinition(opts ...func(*ProcessDefinitionQu
 // Example:
 //
 //	var v []struct {
-//		ProcessInstanceID string `json:"process_instance_id,omitempty"`
+//		ExecutionWorkItemID int `json:"execution_work_item_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.ProcessInstance.Query().
-//		GroupBy(processinstance.FieldProcessInstanceID).
+//		GroupBy(processinstance.FieldExecutionWorkItemID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *ProcessInstanceQuery) GroupBy(field string, fields ...string) *ProcessInstanceGroupBy {
@@ -430,11 +430,11 @@ func (_q *ProcessInstanceQuery) GroupBy(field string, fields ...string) *Process
 // Example:
 //
 //	var v []struct {
-//		ProcessInstanceID string `json:"process_instance_id,omitempty"`
+//		ExecutionWorkItemID int `json:"execution_work_item_id,omitempty"`
 //	}
 //
 //	client.ProcessInstance.Query().
-//		Select(processinstance.FieldProcessInstanceID).
+//		Select(processinstance.FieldExecutionWorkItemID).
 //		Scan(ctx, &v)
 func (_q *ProcessInstanceQuery) Select(fields ...string) *ProcessInstanceSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

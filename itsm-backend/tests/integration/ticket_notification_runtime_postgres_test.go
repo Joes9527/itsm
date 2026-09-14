@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/common/tenantctx"
@@ -33,6 +35,7 @@ func (g *notificationRuntimeGraph) SendMail(ctx context.Context, _ string, _ str
 	g.body = body
 	return g.err
 }
+
 func TestPostgresTicketNotificationRuntimeUsesQueueAndTenantCapabilities(t *testing.T) {
 	f := newIncidentEffectsFixture(t)
 	runtime, _ := runtimeClients(t, f)
@@ -42,7 +45,7 @@ func TestPostgresTicketNotificationRuntimeUsesQueueAndTenantCapabilities(t *test
 		require.Equal(t, f.tenant.ID, tenantID)
 		return graph, "support@example.test", true
 	})
-	owner := service.NewTicketNotificationService(runtime.Tenant, zap.NewNop().Sugar())
+	owner := service.NewTicketNotificationService(runtime.Tenant, zap.NewNop().Sugar(), executionfixture.Standard())
 	owner.SetDeliveryQueueClient(runtime.System)
 	owner.SetEmailService(email)
 	enqueue := func(key string) *ent.TicketNotification {

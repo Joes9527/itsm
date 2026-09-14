@@ -25,6 +25,7 @@ func (CatalogAccessPolicy) Fields() []ent.Field {
 		field.JSON("duration_options", []accessgrant.DurationOption{}),
 	}
 }
+
 func (CatalogAccessPolicy) Edges() []ent.Edge {
 	return []ent.Edge{edge.To("catalog", ServiceCatalog.Type).Field("catalog_id").Required().Unique().Immutable()}
 }

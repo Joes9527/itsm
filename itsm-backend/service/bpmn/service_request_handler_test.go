@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	servicerequesthandler "itsm-backend/handlers/service_request"
@@ -58,7 +60,7 @@ func setupServiceRequestHandlerFixture(t *testing.T) (*ent.Client, *ServiceReque
 
 	logger := zaptest.NewLogger(t).Sugar()
 	handler := NewServiceRequestServiceTaskHandler(client, logger)
-	handler.SetServiceRequestService(servicerequesthandler.NewService(nil, client, logger, nil))
+	handler.SetServiceRequestService(servicerequesthandler.NewService(nil, client, logger, nil, executionfixture.Standard()))
 	return client, handler, tenant.ID, tkt, sr
 }
 

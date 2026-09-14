@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"testing"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/ent/intakerequest"
@@ -46,7 +48,7 @@ func TestIntakeCreationDurableStartPreservesActorAndCanonicalIdentity(t *testing
 			requester := f.client.User.Create().SetTenantID(f.identity.TenantID).SetUsername("requested-for").SetName("Requested For").SetEmail("requested@example.test").SetPasswordHash("unused").SetRole("requester").SaveX(ctx)
 			actor := f.client.User.GetX(ctx, f.identity.ActorID)
 			f.identity.RequesterID = requester.ID
-			business := map[string]string{"generic": "ticket", "incident": "incident", "service_request_item": "service_request"}[class]
+			business := class // 绑定词表即 recordClass，与实例身份同源
 			entryDefinition(t, f, "configured", f.identity.TenantID, "")
 			command := f.command
 			command.RecordClass, command.IntakeKind, command.IdempotencyKey = class, class, "actor-creation"
@@ -97,7 +99,7 @@ func TestIntakeCreationDurableStartPreservesActorAndCanonicalIdentity(t *testing
 			require.NoError(t, err)
 			require.True(t, replay.Replayed)
 			require.Equal(t, result.WorkItemID, replay.WorkItemID)
-			engine := service.NewCustomProcessEngine(f.client, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
+			engine := service.NewCustomProcessEngine(f.client, zap.NewNop().Sugar(), executionfixture.Standard()).(*service.CustomProcessEngine)
 			handler := service.NewWorkflowStartOutboxHandler(f.client, engine, f.client)
 			require.NoError(t, handler.Deliver(ctx, event))
 			require.NoError(t, handler.Deliver(ctx, event))

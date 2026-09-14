@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/migrate"
@@ -377,9 +379,9 @@ func TestTicketNotificationWorkerPostgresCASAndExpiredLeaseRecovery(t *testing.T
 
 	_, workerClientOne := openPostgresEntClientInSchema(t, dsn, schemaName, false)
 	_, workerClientTwo := openPostgresEntClientInSchema(t, dsn, schemaName, false)
-	workerOne := NewTicketNotificationService(workerClientOne, zap.NewNop().Sugar())
+	workerOne := NewTicketNotificationService(workerClientOne, zap.NewNop().Sugar(), executionfixture.Standard())
 	workerOne.SetDeliveryQueueClient(workerClientOne)
-	workerTwo := NewTicketNotificationService(workerClientTwo, zap.NewNop().Sugar())
+	workerTwo := NewTicketNotificationService(workerClientTwo, zap.NewNop().Sugar(), executionfixture.Standard())
 	workerTwo.SetDeliveryQueueClient(workerClientTwo)
 	release := make(chan struct{})
 	fake := &durableNotificationConnector{entered: make(chan struct{}, 1), release: release}
@@ -538,8 +540,8 @@ func TestBPMNCallbackOutboxLeaseRecoveryPostgres(t *testing.T) {
 	receiver := &postgresIdempotentCallbackReceiver{effects: make(map[string]int)}
 	workerIDs := [2]string{"outbox-worker-a-" + namespace, "outbox-worker-b-" + namespace}
 	workers := [2]*bpmnCallbackOutbox{
-		{client: clientA, executor: receiver, now: func() time.Time { return now }},
-		{client: clientB, executor: receiver, now: func() time.Time { return now }},
+		{client: clientA, execution: executionfixture.Standard(), executor: receiver, now: func() time.Time { return now }},
+		{client: clientB, execution: executionfixture.Standard(), executor: receiver, now: func() time.Time { return now }},
 	}
 	barrier := &postgresOutboxLoadBarrier{
 		rowID: row.ID, arrived: make(chan postgresOutboxLoad, 2), release: make(chan struct{}),

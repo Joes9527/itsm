@@ -1,13 +1,16 @@
 'use client';
+import { WorkItemClassificationSelect } from '@/components/work-item/WorkItemClassificationSelect';
+import { classificationInput, classificationUpdate } from '@/components/work-item/classification';
+
 
 import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
 import { CreationAttempts } from '@/components/work-item/CreationAttempts';
 import { CreationRequester } from '@/components/work-item/CreationRequester';
 
-import React, { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import React, { useState, Suspense } from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
-import { Form, Input, Select, Button, Card, message, Alert, Spin } from 'antd';
+import { Form, Input, Select, Button, Card, message, Spin } from 'antd';
 import { ProblemApi } from '@/lib/api/problem-api';
 import { ProblemPriority } from '@/constants/problem';
 import { useI18n } from '@/lib/i18n';
@@ -18,24 +21,9 @@ const CreateProblemPageContent = () => {
   const router = useRouter();
   const creation = useWorkItemCreation();
   const { t } = useI18n();
-  const searchParams = useSearchParams();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const incidentId = searchParams.get('fromIncidentId');
-    const incidentTitle = searchParams.get('incidentTitle');
-    const incidentDescription = searchParams.get('incidentDescription');
-
-    if (incidentId) {
-      form.setFieldsValue({
-        title: `由事件 ${incidentId} 引起的问题: ${incidentTitle || ''}`,
-        description: `此问题由以下事件引发：\n事件ID: ${incidentId}\n事件标题: ${
-          incidentTitle || ''
-        }\n事件描述: ${incidentDescription || ''}\n\n请在此处填写问题的详细描述和根本原因分析...`,
-      });
-    }
-  }, [searchParams, form]);
 
   const handleSubmit = async (values: any) => {
     setLoading(true);
@@ -44,7 +32,7 @@ const CreateProblemPageContent = () => {
         title: values.title,
         description: values.description,
         priority: values.priority,
-        category: values.category,
+        cti: classificationInput(values.classification),
         rootCause: values.rootCause,
         impact: values.impact,
         requesterId: values.requesterId,
@@ -64,18 +52,9 @@ const CreateProblemPageContent = () => {
     { value: ProblemPriority.CRITICAL, label: '紧急' },
   ];
 
-  const categoryOptions = [
-    { value: '系统问题', label: '系统问题' },
-    { value: '网络问题', label: '网络问题' },
-    { value: '数据库问题', label: '数据库问题' },
-    { value: '应用问题', label: '应用问题' },
-    { value: '安全问题', label: '安全问题' },
-    { value: '硬件问题', label: '硬件问题' },
-    { value: '其他', label: '其他' },
-  ];
 
   return (
-    <div className="p-10 bg-gray-50 min-h-full">
+    <div className="min-h-full bg-page p-[16px] text-[13px] text-foreground md:p-[24px]">
       <header className="mb-8">
         <button
           onClick={() => router.back()}
@@ -85,8 +64,8 @@ const CreateProblemPageContent = () => {
           <ArrowLeft className="w-5 h-5 mr-2" />
           返回问题列表
         </button>
-        <h2 className="text-4xl font-bold text-gray-800">新建问题</h2>
-        <p className="text-gray-500 mt-1">识别、分析和解决IT服务的根本原因</p>
+        <h2 className="text-[24px] font-semibold text-foreground">新建问题</h2>
+        <p className="mt-1 text-[12px] text-muted">识别、分析和解决IT服务的根本原因</p>
       </header>
 
       <CreationAttempts creation={creation} />
@@ -97,18 +76,10 @@ const CreateProblemPageContent = () => {
           onFinish={handleSubmit}
           initialValues={{
             priority: ProblemPriority.MEDIUM,
-            category: '系统问题',
           }}
         >
-          <CreationRequester />
-          {searchParams.get('fromIncidentId') && (
-            <Alert
-              message={`此问题由事件 ${searchParams.get('fromIncidentId')} 触发`}
-              type="info"
-              showIcon
-              className="mb-6"
-            />
-          )}
+          <CreationRequester resource="problem" />
+
 
           <Form.Item
             label="问题标题"
@@ -145,10 +116,10 @@ const CreateProblemPageContent = () => {
 
           <Form.Item
             label="分类"
-            name="category"
+            name="classification"
             rules={[{ required: true, message: '请选择分类' }]}
           >
-            <Select placeholder="选择分类" options={categoryOptions} />
+            <WorkItemClassificationSelect />
           </Form.Item>
 
           <Form.Item

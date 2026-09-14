@@ -4,7 +4,11 @@ package integration
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,12 +26,19 @@ import (
 // The explicit DSN check and schema/migration owner are supplied by the fixture.
 func runtimeClients(t *testing.T, f *incidentEffectsFixture) (*database.RuntimeClients, config.DatabaseConfig) {
 	t.Helper()
+	target := migrationEntryTarget(t)
+	port, err := strconv.Atoi(target.Port())
+	require.NoError(t, err)
 	var schema string
 	require.NoError(t, f.db.QueryRowContext(f.ctx, "SELECT current_schema()").Scan(&schema))
 	suffix := fmt.Sprint(time.Now().UnixNano())
+	var secret [24]byte
+	_, err = rand.Read(secret[:])
+	require.NoError(t, err)
+	password := hex.EncodeToString(secret[:])
 	runtimeRole, systemRole := "entry_app_"+suffix, "entry_system_"+suffix
 	for _, spec := range []struct{ name, attributes string }{{runtimeRole, "NOBYPASSRLS"}, {systemRole, "BYPASSRLS"}} {
-		_, err := f.db.ExecContext(f.ctx, "CREATE ROLE "+spec.name+" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT "+spec.attributes)
+		_, err := f.db.ExecContext(f.ctx, "CREATE ROLE "+spec.name+" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT "+spec.attributes+" PASSWORD '"+password+"'")
 		require.NoError(t, err)
 		role := spec.name
 		t.Cleanup(func() {
@@ -62,7 +73,7 @@ func runtimeClients(t *testing.T, f *incidentEffectsFixture) (*database.RuntimeC
 		_, err := f.db.ExecContext(f.ctx, "GRANT "+grant+" TO "+systemRole)
 		require.NoError(t, err)
 	}
-	cfg := config.DatabaseConfig{Host: "127.0.0.1", Port: 36444, DBName: "sslvpn_test", SSLMode: "disable", Schema: schema, User: runtimeRole, SystemRoleUser: systemRole}
+	cfg := config.DatabaseConfig{Host: target.Hostname(), Port: port, DBName: strings.TrimPrefix(target.Path, "/"), SSLMode: "disable", Schema: schema, User: runtimeRole, SystemRoleUser: systemRole, Password: password, SystemRolePassword: password}
 	clients, err := database.InitRuntimeDatabases(&cfg, &config.RLSConfig{Mode: "enforce"}, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, clients.Close()) })
@@ -111,7 +122,9 @@ func TestPostgresRLSSystemCapabilityConstruction(t *testing.T) {
 	_, err = database.InitRuntimeDatabases(&missing, &config.RLSConfig{Mode: "enforce"}, nil)
 	require.ErrorContains(t, err, "DB_SYSTEM_ROLE_USER")
 	broad := cfg
-	broad.SystemRoleUser = "postgres"
+	ownerDSN := migrationEntryTarget(t)
+	broad.SystemRoleUser = ownerDSN.User.Username()
+	broad.SystemRolePassword, _ = ownerDSN.User.Password()
 	_, err = database.InitRuntimeDatabases(&broad, &config.RLSConfig{Mode: "enforce"}, nil)
 	require.ErrorContains(t, err, "NOSUPERUSER")
 	_, err = f.db.ExecContext(f.ctx, "GRANT SELECT ON tickets TO "+cfg.SystemRoleUser)
@@ -149,7 +162,6 @@ func TestPostgresRLSSystemCapabilityConstruction(t *testing.T) {
 	require.ErrorContains(t, err, "non-owner")
 	_, err = f.db.ExecContext(f.ctx, "ALTER TABLE tickets OWNER TO postgres")
 	require.NoError(t, err)
-
 }
 
 func TestPostgresRLSRuntimeConnectorRestore(t *testing.T) {
@@ -161,13 +173,15 @@ func TestPostgresRLSRuntimeConnectorRestore(t *testing.T) {
 	clients, _ := runtimeClients(t, f)
 	registry := connector.NewRegistry()
 	registry.Register(func() connector.Connector { return webhook.New() })
-	manager := connector.NewManager(registry, zap.NewNop().Sugar())
+	policy, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "restore-test", Capabilities: map[string]string{"connector_poll": "enabled"}})
+	require.NoError(t, err)
+	manager := connector.NewManager(registry, zap.NewNop().Sugar(), policy)
 	owner := controller.NewConnectorController(manager, registry, nil, zap.NewNop().Sugar(), clients.Tenant, clients.System)
 	require.NoError(t, owner.LoadAll(tenantctx.SystemContext(f.ctx, "test:restore", "restore persisted connectors")))
 	for _, id := range []int{f.tenant.ID, other.ID} {
 		_, ok := manager.Get(id, "webhook")
 		require.True(t, ok)
 	}
-	_, err := clients.System.ConnectorConfig.Delete().Exec(f.ctx)
+	_, err = clients.System.ConnectorConfig.Delete().Exec(f.ctx)
 	require.ErrorContains(t, err, "permission denied")
 }

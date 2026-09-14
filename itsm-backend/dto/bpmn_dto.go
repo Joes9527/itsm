@@ -8,22 +8,22 @@ import (
 
 // ProcessDefinitionResponse 流程定义响应（camelCase）
 type ProcessDefinitionResponse struct {
-	ID                int                    `json:"id"`
-	Key               string                 `json:"key"`
-	Name              string                 `json:"name"`
-	Description       string                 `json:"description,omitempty"`
-	Version           string                 `json:"version"`
-	Category          string                 `json:"category"`
-	BpmnXml           string                 `json:"bpmnXml,omitempty"`
-	ProcessVariables  map[string]interface{} `json:"processVariables,omitempty"`
-	IsActive          bool                   `json:"isActive"`
-	IsLatest          bool                   `json:"isLatest"`
-	DeploymentID      int                    `json:"deploymentId"`
-	DeploymentName    string                 `json:"deploymentName,omitempty"`
-	DeployedAt        *time.Time             `json:"deployedAt,omitempty"`
-	TenantID          int                    `json:"tenantId"`
-	CreatedAt         time.Time              `json:"createdAt"`
-	UpdatedAt         time.Time              `json:"updatedAt"`
+	ID               int                    `json:"id"`
+	Key              string                 `json:"key"`
+	Name             string                 `json:"name"`
+	Description      string                 `json:"description,omitempty"`
+	Version          string                 `json:"version"`
+	Category         string                 `json:"category"`
+	BpmnXml          string                 `json:"bpmnXml,omitempty"`
+	ProcessVariables map[string]interface{} `json:"processVariables,omitempty"`
+	IsActive         bool                   `json:"isActive"`
+	IsLatest         bool                   `json:"isLatest"`
+	DeploymentID     int                    `json:"deploymentId"`
+	DeploymentName   string                 `json:"deploymentName,omitempty"`
+	DeployedAt       *time.Time             `json:"deployedAt,omitempty"`
+	TenantID         int                    `json:"tenantId"`
+	CreatedAt        time.Time              `json:"createdAt"`
+	UpdatedAt        time.Time              `json:"updatedAt"`
 }
 
 // ProcessInstanceResponse 流程实例响应（camelCase）
@@ -47,20 +47,20 @@ type ProcessInstanceResponse struct {
 
 // ProcessTaskResponse 流程任务响应（camelCase）
 type ProcessTaskResponse struct {
-	ID                  int        `json:"id"`
-	TaskID              string     `json:"taskId"`
-	TaskName            string     `json:"taskName"`
-	TaskDefinitionKey   string     `json:"taskDefinitionKey"`
-	TaskType            string     `json:"taskType,omitempty"`
-	ProcessInstanceID   int        `json:"processInstanceId"`
-	ProcessDefinitionKey string    `json:"processDefinitionKey"`
-	Assignee            string     `json:"assignee,omitempty"`
-	CandidateUsers      string     `json:"candidateUsers,omitempty"`
-	Status              string     `json:"status"`
-	DueDate             *time.Time `json:"dueDate,omitempty"`
-	TenantID            int        `json:"tenantId"`
-	CreatedAt           time.Time  `json:"createdAt"`
-	UpdatedAt           time.Time  `json:"updatedAt"`
+	ID                   int        `json:"id"`
+	TaskID               string     `json:"taskId"`
+	TaskName             string     `json:"taskName"`
+	TaskDefinitionKey    string     `json:"taskDefinitionKey"`
+	TaskType             string     `json:"taskType,omitempty"`
+	ProcessInstanceID    int        `json:"processInstanceId"`
+	ProcessDefinitionKey string     `json:"processDefinitionKey"`
+	Assignee             string     `json:"assignee,omitempty"`
+	CandidateUsers       string     `json:"candidateUsers,omitempty"`
+	Status               string     `json:"status"`
+	DueDate              *time.Time `json:"dueDate,omitempty"`
+	TenantID             int        `json:"tenantId"`
+	CreatedAt            time.Time  `json:"createdAt"`
+	UpdatedAt            time.Time  `json:"updatedAt"`
 }
 
 // ToProcessDefinitionResponse 转换流程定义 Ent → DTO
@@ -146,17 +146,17 @@ func ToProcessTaskResponse(task *ent.ProcessTask) *ProcessTaskResponse {
 		return nil
 	}
 	dto := &ProcessTaskResponse{
-		ID:                  task.ID,
-		TaskID:              task.TaskID,
-		TaskName:            task.TaskName,
-		TaskDefinitionKey:   task.TaskDefinitionKey,
-		TaskType:            task.TaskType,
-		ProcessInstanceID:   task.ProcessInstanceID,
+		ID:                   task.ID,
+		TaskID:               task.TaskID,
+		TaskName:             task.TaskName,
+		TaskDefinitionKey:    task.TaskDefinitionKey,
+		TaskType:             task.TaskType,
+		ProcessInstanceID:    task.ProcessInstanceID,
 		ProcessDefinitionKey: task.ProcessDefinitionKey,
-		Status:              task.Status,
-		TenantID:            task.TenantID,
-		CreatedAt:           task.CreatedAt,
-		UpdatedAt:           task.UpdatedAt,
+		Status:               task.Status,
+		TenantID:             task.TenantID,
+		CreatedAt:            task.CreatedAt,
+		UpdatedAt:            task.UpdatedAt,
 	}
 	if task.Assignee != "" {
 		dto.Assignee = task.Assignee

@@ -54,10 +54,10 @@ export class TicketCommentApi {
     const rawData = ((response as { data?: unknown })?.data ?? response) as
       | { comments?: TicketComment[]; total?: number }
       | TicketComment[];
-    
+
     let comments: TicketComment[] = [];
     let total: number = 0;
-    
+
     if (Array.isArray(rawData)) {
       comments = rawData;
       total = rawData.length;
@@ -65,7 +65,7 @@ export class TicketCommentApi {
       comments = Array.isArray(rawData?.comments) ? rawData.comments : [];
       total = typeof rawData?.total === 'number' ? rawData.total : comments.length;
     }
-    
+
     return { comments, total };
   }
 
@@ -74,9 +74,12 @@ export class TicketCommentApi {
    */
   static async createComment(
     ticketId: number,
-    data: CreateTicketCommentRequest
+    data: CreateTicketCommentRequest,
+    assertSubmissionContext?: () => void
   ): Promise<TicketComment> {
-    return httpClient.post<TicketComment>(`/api/v1/tickets/${ticketId}/comments`, data);
+    return httpClient.post<TicketComment>(`/api/v1/tickets/${ticketId}/comments`, data, {
+      assertSubmissionContext,
+    });
   }
 
   /**
@@ -85,15 +88,26 @@ export class TicketCommentApi {
   static async updateComment(
     ticketId: number,
     commentId: number,
-    data: UpdateTicketCommentRequest
+    data: UpdateTicketCommentRequest,
+    assertSubmissionContext?: () => void
   ): Promise<TicketComment> {
-    return httpClient.put<TicketComment>(`/api/v1/tickets/${ticketId}/comments/${commentId}`, data);
+    return httpClient.put<TicketComment>(
+      `/api/v1/tickets/${ticketId}/comments/${commentId}`,
+      data,
+      { assertSubmissionContext }
+    );
   }
 
   /**
    * 删除工单评论
    */
-  static async deleteComment(ticketId: number, commentId: number): Promise<void> {
-    return httpClient.delete(`/api/v1/tickets/${ticketId}/comments/${commentId}`);
+  static async deleteComment(
+    ticketId: number,
+    commentId: number,
+    assertSubmissionContext?: () => void
+  ): Promise<void> {
+    return httpClient.delete(`/api/v1/tickets/${ticketId}/comments/${commentId}`, undefined, {
+      assertSubmissionContext,
+    });
   }
 }

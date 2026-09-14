@@ -21,19 +21,21 @@ export const AdminHeader: React.FC = () => {
   return (
     <Card
       style={{
-        background: `linear-gradient(135deg, ${token.colorPrimary} 0%, #722ed1 100%)`,
+        background: token.colorBgContainer,
         marginBottom: token.marginLG,
         border: 'none',
       }}
-      styles={{ body: { padding: token.paddingLG } }}
+      styles={{ body: { padding: 16 } }}
     >
       <Row justify="space-between" align="middle">
         <Col>
           <Title
             level={1}
             style={{
-              color: 'white',
+              color: token.colorText,
               margin: 0,
+              fontSize: 24,
+              fontWeight: 600,
               marginBottom: token.marginSM,
             }}
           >
@@ -41,8 +43,8 @@ export const AdminHeader: React.FC = () => {
           </Title>
           <Text
             style={{
-              color: 'rgba(255,255,255,0.9)',
-              fontSize: token.fontSizeLG,
+              color: token.colorTextSecondary,
+              fontSize: token.fontSize,
             }}
           >
             {t('admin.welcome')}
@@ -50,7 +52,7 @@ export const AdminHeader: React.FC = () => {
           <br />
           <Text
             style={{
-              color: 'rgba(255,255,255,0.7)',
+              color: token.colorTextSecondary,
               fontSize: token.fontSizeSM,
               marginTop: token.marginXS,
             }}
@@ -61,7 +63,7 @@ export const AdminHeader: React.FC = () => {
         <Col style={{ textAlign: 'right' }}>
           <div
             style={{
-              color: 'white',
+              color: token.colorText,
               fontSize: 24,
               fontFamily: 'monospace',
               marginBottom: 4,
@@ -71,7 +73,7 @@ export const AdminHeader: React.FC = () => {
           </div>
           <Text
             style={{
-              color: 'rgba(255,255,255,0.7)',
+              color: token.colorTextSecondary,
               fontSize: token.fontSizeSM,
             }}
           >

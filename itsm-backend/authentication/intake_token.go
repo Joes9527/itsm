@@ -2,9 +2,10 @@ package authentication
 
 import (
 	"errors"
+	"time"
+
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"time"
 )
 
 // IntakeClaims are accepted only at explicit Intake capability routes.
@@ -29,6 +30,7 @@ func GenerateIntakeToken(claims IntakeClaims, secret string, ttl time.Duration) 
 	claims.RegisteredClaims = jwt.RegisteredClaims{Audience: jwt.ClaimStrings{"itsm-intake"}, IssuedAt: jwt.NewNumericDate(time.Now()), ExpiresAt: jwt.NewNumericDate(time.Now().Add(ttl)), ID: uuid.NewString()}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
 }
+
 func ValidateIntakeToken(raw, secret string) (*IntakeClaims, error) {
 	if secret == "" {
 		return nil, errors.New("intake signing unavailable")

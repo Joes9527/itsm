@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/outboxevent"
 	entticket "itsm-backend/ent/ticket"
+	creation "itsm-backend/handlers/common/workitemcreation"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,8 +26,9 @@ func TestIncidentService_CreateIncident_Success(t *testing.T) {
 
 	testUser, err := createIncidentTestUser(ctx, client, testTenant.ID, "create")
 	require.NoError(t, err)
-	_, err = client.TicketCategory.Create().SetName("performance").SetCode("performance").SetTenantID(testTenant.ID).Save(ctx)
+	category, err := client.TicketCategory.Create().SetName("performance").SetCode("performance").SetTenantID(testTenant.ID).Save(ctx)
 	require.NoError(t, err)
+	client.TicketCategory.Create().SetName("performance").SetCode("duplicate-name").SetTenantID(testTenant.ID).SaveX(ctx)
 
 	// 测试创建事件
 	req := &dto.CreateIncidentRequest{
@@ -34,7 +36,7 @@ func TestIncidentService_CreateIncident_Success(t *testing.T) {
 		Description: "这是一个测试事件的描述",
 		Priority:    "high",
 		Severity:    "medium",
-		Category:    "performance",
+		CTI:         &creation.CTIInput{CategoryID: &category.ID},
 		Source:      "manual",
 	}
 
@@ -44,6 +46,7 @@ func TestIncidentService_CreateIncident_Success(t *testing.T) {
 	assert.Equal(t, req.Title, response.Title)
 	assert.Equal(t, req.Priority, response.Priority)
 	assert.Equal(t, req.Severity, response.Severity)
+	require.Equal(t, category.ID, client.Ticket.Query().OnlyX(ctx).CategoryID)
 	assert.Equal(t, "new", response.Status)
 	assert.Nil(t, response.AssigneeID)
 	assert.Nil(t, response.ConfigurationItemID)
@@ -51,6 +54,7 @@ func TestIncidentService_CreateIncident_Success(t *testing.T) {
 	assert.Regexp(t, `^TKT-[0-9]{6}-[0-9]{6}$`, response.IncidentNumber)
 	assert.Equal(t, testTenant.ID, response.TenantID)
 }
+
 func TestIncidentService_CreationReturnsDurablePendingWorkflow(t *testing.T) {
 	client, owner, ctx := setupIncidentTest(t)
 	defer client.Close()
@@ -80,7 +84,7 @@ func TestIncidentService_CreateIncident_WithOptionalFields(t *testing.T) {
 	require.NoError(t, err)
 	parent, err := client.TicketCategory.Create().SetName("security").SetCode("security").SetTenantID(testTenant.ID).Save(ctx)
 	require.NoError(t, err)
-	_, err = client.TicketCategory.Create().SetName("intrusion").SetCode("intrusion").SetTenantID(testTenant.ID).SetParentID(parent.ID).Save(ctx)
+	child, err := client.TicketCategory.Create().SetName("intrusion").SetCode("intrusion").SetTenantID(testTenant.ID).SetParentID(parent.ID).Save(ctx)
 	require.NoError(t, err)
 
 	detectedAt := time.Now().Add(-1 * time.Hour)
@@ -90,8 +94,7 @@ func TestIncidentService_CreateIncident_WithOptionalFields(t *testing.T) {
 		Description: "描述",
 		Priority:    "critical",
 		Severity:    "high",
-		Category:    "security",
-		Subcategory: "intrusion",
+		CTI:         &creation.CTIInput{CategoryID: &parent.ID, TypeID: &child.ID},
 		AssigneeID:  &assignee.ID,
 		Source:      "user",
 		DetectedAt:  &detectedAt,
@@ -109,6 +112,7 @@ func TestIncidentService_CreateIncident_WithOptionalFields(t *testing.T) {
 	assert.NotNil(t, response.AssigneeID)
 	assert.Equal(t, assignee.ID, *response.AssigneeID)
 }
+
 func TestIncidentService_CreateIncidentRejectsCrossTenantAssigneeAtomically(t *testing.T) {
 	client, service, ctx := setupIncidentTest(t)
 	defer client.Close()
@@ -176,6 +180,7 @@ func TestIncidentService_CreateIncident_CreatesWorkItemInSameTransaction(t *test
 	require.NoError(t, err)
 	assert.Equal(t, workItem.ID, persistedIncident.WorkItemID, "incidents.work_item_id 必须指回新建的 WorkItem")
 }
+
 func TestIncidentService_CreateIncidentAllocatesSequentialWorkItemNumbers(t *testing.T) {
 	client, service, ctx := setupIncidentTest(t)
 	defer client.Close()
@@ -271,4 +276,34 @@ func TestIncidentService_CreateIncident_TenantIsolation_FailClosed(t *testing.T)
 		Only(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "incident", workItem.RecordClass)
+}
+
+func TestIncidentCreationCTIRejectsInvalidReferencesAtomically(t *testing.T) {
+	for _, scenario := range []string{"inactive", "foreign", "hierarchy", "missing-parent"} {
+		t.Run(scenario, func(t *testing.T) {
+			client, owner, ctx := setupIncidentTest(t)
+			defer client.Close()
+			tenant, err := createIncidentTestTenant(ctx, client, "cti-"+scenario)
+			require.NoError(t, err)
+			actor, err := createIncidentTestUser(ctx, client, tenant.ID, "cti-"+scenario)
+			require.NoError(t, err)
+			root := client.TicketCategory.Create().SetName("业务系统").SetCode("root").SetTenantID(tenant.ID).SaveX(ctx)
+			child := client.TicketCategory.Create().SetName("故障").SetCode("child").SetTenantID(tenant.ID).SetParentID(root.ID).SaveX(ctx)
+			cti := &creation.CTIInput{CategoryID: &root.ID, TypeID: &child.ID}
+			switch scenario {
+			case "inactive":
+				child.Update().SetIsActive(false).SaveX(ctx)
+			case "foreign":
+				child.Update().SetTenantID(tenant.ID + 999).SaveX(ctx)
+			case "hierarchy":
+				child.Update().ClearParentID().SaveX(ctx)
+			case "missing-parent":
+				cti.CategoryID = nil
+			}
+			_, err = owner.SubmitCreation(ctx, &dto.CreateIncidentRequest{Title: "CTI validation", CTI: cti}, tenant.ID, actor.ID)
+			require.Error(t, err)
+			require.Zero(t, client.Incident.Query().CountX(ctx))
+			require.Zero(t, client.Ticket.Query().CountX(ctx))
+		})
+	}
 }

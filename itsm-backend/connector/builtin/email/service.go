@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
 	"itsm-backend/connector"
 	"itsm-backend/ent"
 	"itsm-backend/ent/tickettemplate"
-	"go.uber.org/zap"
 )
 
 // TicketCreator abstracts ticket creation for the email connector.
@@ -111,14 +111,28 @@ func (s *Service) MatchTemplate(ctx context.Context, subject, body string, tenan
 	// Ordered by specificity: more specific keywords first
 	type kwEntry struct{ keyword, category string }
 	keywordList := []kwEntry{
-		{"钓鱼", "SEC"}, {"病毒", "SEC"}, {"安全事件", "SEC"},
-		{"打印机", "EUC"}, {"电脑", "EUC"}, {"开机", "EUC"}, {"软件安装", "EUC"},
-		{"故障", "EUC"}, {"报修", "EUC"},
-		{"服务器", "INF"}, {"虚拟机", "INF"}, {"存储", "INF"},
-		{"VPN", "ACC"}, {"AD", "ACC"}, {"密码", "ACC"}, {"重置", "ACC"},
+		{"钓鱼", "SEC"},
+		{"病毒", "SEC"},
+		{"安全事件", "SEC"},
+		{"打印机", "EUC"},
+		{"电脑", "EUC"},
+		{"开机", "EUC"},
+		{"软件安装", "EUC"},
+		{"故障", "EUC"},
+		{"报修", "EUC"},
+		{"服务器", "INF"},
+		{"虚拟机", "INF"},
+		{"存储", "INF"},
+		{"VPN", "ACC"},
+		{"AD", "ACC"},
+		{"密码", "ACC"},
+		{"重置", "ACC"},
 		{"账号", "ACC"},
-		{"邮箱", "COL"}, {"邮件", "COL"}, {"Teams", "COL"},
-		{"网络", "NET"}, {"上网", "NET"},
+		{"邮箱", "COL"},
+		{"邮件", "COL"},
+		{"Teams", "COL"},
+		{"网络", "NET"},
+		{"上网", "NET"},
 	}
 
 	for _, kw := range keywordList {

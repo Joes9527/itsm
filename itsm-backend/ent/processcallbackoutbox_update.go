@@ -497,6 +497,12 @@ func (_u *ProcessCallbackOutboxUpdate) sqlSave(ctx context.Context) (_node int, 
 			}
 		}
 	}
+	if _u.mutation.ActorIDCleared() {
+		_spec.ClearField(processcallbackoutbox.FieldActorID, field.TypeInt)
+	}
+	if _u.mutation.ActorSourceCleared() {
+		_spec.ClearField(processcallbackoutbox.FieldActorSource, field.TypeString)
+	}
 	if value, ok := _u.mutation.ExecutionKey(); ok {
 		_spec.SetField(processcallbackoutbox.FieldExecutionKey, field.TypeString, value)
 	}
@@ -1116,6 +1122,12 @@ func (_u *ProcessCallbackOutboxUpdateOne) sqlSave(ctx context.Context) (_node *P
 				ps[i](selector)
 			}
 		}
+	}
+	if _u.mutation.ActorIDCleared() {
+		_spec.ClearField(processcallbackoutbox.FieldActorID, field.TypeInt)
+	}
+	if _u.mutation.ActorSourceCleared() {
+		_spec.ClearField(processcallbackoutbox.FieldActorSource, field.TypeString)
 	}
 	if value, ok := _u.mutation.ExecutionKey(); ok {
 		_spec.SetField(processcallbackoutbox.FieldExecutionKey, field.TypeString, value)

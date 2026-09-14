@@ -262,12 +262,12 @@ func (_q *ProcessCallbackOutboxQuery) Clone() *ProcessCallbackOutboxQuery {
 // Example:
 //
 //	var v []struct {
-//		ExecutionKey string `json:"execution_key,omitempty"`
+//		ActorID int `json:"actor_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.ProcessCallbackOutbox.Query().
-//		GroupBy(processcallbackoutbox.FieldExecutionKey).
+//		GroupBy(processcallbackoutbox.FieldActorID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *ProcessCallbackOutboxQuery) GroupBy(field string, fields ...string) *ProcessCallbackOutboxGroupBy {
@@ -285,11 +285,11 @@ func (_q *ProcessCallbackOutboxQuery) GroupBy(field string, fields ...string) *P
 // Example:
 //
 //	var v []struct {
-//		ExecutionKey string `json:"execution_key,omitempty"`
+//		ActorID int `json:"actor_id,omitempty"`
 //	}
 //
 //	client.ProcessCallbackOutbox.Query().
-//		Select(processcallbackoutbox.FieldExecutionKey).
+//		Select(processcallbackoutbox.FieldActorID).
 //		Scan(ctx, &v)
 func (_q *ProcessCallbackOutboxQuery) Select(fields ...string) *ProcessCallbackOutboxSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

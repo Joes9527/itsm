@@ -63,7 +63,7 @@ describe('ApprovalMiniStepper', () => {
     render(<ApprovalMiniStepper ticketId={202} />);
 
     await waitFor(() => {
-      expect(screen.getByText('该工单未走审批流程')).toBeInTheDocument();
+      expect(screen.getByText('暂无审批决策记录')).toBeInTheDocument();
     });
   });
 });

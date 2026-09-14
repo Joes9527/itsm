@@ -183,8 +183,11 @@ func TestCreateTicketToolPublishesItsExactExecutableContract(t *testing.T) {
 
 	update := NewToolRegistry(nil, nil, nil, nil).GetTool("update_ticket")
 	require.NotNil(t, update)
-	require.Nil(t, update.ArgsSchema)
-	require.Nil(t, update.ResultSchema)
+	require.NotNil(t, update.ArgsSchema)
+	require.NotNil(t, update.ResultSchema)
+	require.Equal(t, []string{"ticket_id", "expectedVersion"}, update.ArgsSchema["required"])
+	require.Equal(t, false, update.ArgsSchema["additionalProperties"])
+	require.Equal(t, []string{"workItemId", "version", "status", "replayed"}, update.ResultSchema["required"])
 }
 
 func TestCreateTicketToolArgumentsMatchPublishedContract(t *testing.T) {

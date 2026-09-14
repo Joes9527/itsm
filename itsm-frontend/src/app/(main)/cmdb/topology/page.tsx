@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import type { Node, Edge, NodeTypes} from 'reactflow';
 import ReactFlow, { Controls, Background, useNodesState, useEdgesState, MarkerType, BackgroundVariant, Handle, Position } from 'reactflow';
 import 'reactflow/dist/style.css';
+import graphStyles from '@/components/cmdb/TopologyGraph.module.css';
 import dagre from 'dagre';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { CMDBApi } from '@/lib/api/cmdb-api';
@@ -79,10 +80,10 @@ const CINode = ({ data }: { data: TopologyNode & { selected?: boolean; dimmed?: 
   const icon = ciTypeIcons[data.type?.toLowerCase()] || ciTypeIcons.default;
   const color = ciTypeColors[data.type?.toLowerCase()] || ciTypeColors.default;
   return (
-    <div style={{ padding: '12px 16px', borderRadius: 8, background: '#fff', border: data.selected ? '2px solid ' + color : '2px solid ' + color + '40', boxShadow: data.selected ? '0 4px 12px rgba(0,0,0,0.2)' : '0 2px 8px rgba(0,0,0,0.1)', minWidth: 140, textAlign: 'center', opacity: data.dimmed ? 0.3 : 1, transition: 'opacity 0.2s' }}>
+    <div style={{ padding: '12px 16px', borderRadius: 8, background: 'var(--color-bg-primary)', border: data.selected ? '2px solid ' + color : '2px solid ' + color + '40', boxShadow: data.selected ? '0 4px 12px rgba(0,0,0,0.2)' : '0 2px 8px rgba(0,0,0,0.1)', minWidth: 140, textAlign: 'center', opacity: data.dimmed ? 0.3 : 1, transition: 'opacity 0.2s' }}>
       <Handle type="target" position={Position.Top} style={{ background: color }} />
       <div style={{ fontSize: 24 }}>{icon}</div>
-      <div style={{ fontWeight: 600, marginTop: 4, color: '#333' }}>{data.name}</div>
+      <div style={{ fontWeight: 600, marginTop: 4, color: 'var(--color-text-primary)' }}>{data.name}</div>
       <Tag color={color} style={{ marginTop: 4 }}>{ciTypeNameMap[data.type?.toLowerCase()] || data.typeName || data.type}</Tag>
       {data.status && <Tag color={data.status === 'active' ? 'green' : 'default'} style={{ marginTop: 2 }}>{ciStatusNameMap[data.status] || data.status}</Tag>}
       <Handle type="source" position={Position.Bottom} style={{ background: color }} />
@@ -192,7 +193,7 @@ export default function TopologyPage() {
 
   return (
     <PageContainer title="CMDB 拓扑图" description="可视化配置项之间的依赖关系">
-      <Card className="shadow-sm rounded-lg mb-4">
+      <Card className="shadow-none rounded-[8px] mb-4">
         <Space wrap>
           <Select placeholder="选择根配置项" showSearch style={{ width: 300 }} value={selectedCI} onChange={setSelectedCI}
             options={ciList.map(ci => ({ value: ci.id, label: ci.name + ' (' + ci.type + ')' }))} allowClear />
@@ -202,10 +203,14 @@ export default function TopologyPage() {
           {highlightNodeId && <Tag color="blue" closable onClose={() => setHighlightNodeId(null)}>已高亮直接上下游（点击空白处取消）</Tag>}
         </Space>
       </Card>
-      <Card className="shadow-sm rounded-lg" style={{ height: 'calc(100vh - 250px)' }}>
+      <Card
+        className="shadow-none rounded-[8px] overflow-hidden"
+        style={{ height: 'calc(100vh - 250px)' }}
+        styles={{ body: { height: '100%', padding: 0 } }}
+      >
         {loading ? <div style={{ textAlign: 'center', padding: 100 }}><Spin size="large" /><div style={{ marginTop: 16 }}>加载拓扑图中...</div></div>
-        : selectedCI ? <div style={{ height: '100%' }}><ReactFlow nodes={displayNodes} edges={displayEdges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onNodeClick={onNodeClick} onPaneClick={onPaneClick}
-            nodeTypes={nodeTypes} fitView fitViewOptions={{ padding: 0.2 }} attributionPosition="bottom-left"><Controls /><Background variant={BackgroundVariant.Dots} gap={20} size={1} /></ReactFlow></div>
+        : selectedCI ? <div style={{ height: '100%' }}><ReactFlow className={graphStyles.host} nodes={displayNodes} edges={displayEdges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onNodeClick={onNodeClick} onPaneClick={onPaneClick}
+            nodeTypes={nodeTypes} fitView fitViewOptions={{ padding: 0.2 }} attributionPosition="bottom-left"><Controls /><Background color="var(--color-border)" variant={BackgroundVariant.Dots} gap={20} size={1} /></ReactFlow></div>
         : <Empty description="请选择一个配置项查看其拓扑关系" style={{ paddingTop: 100 }} />}
       </Card>
       <Drawer

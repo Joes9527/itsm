@@ -1,9 +1,10 @@
+import type { RelationView } from './workitem-relations';
 export interface CreateProblemRequest {
   requesterId?: number;
   title: string;
   description: string;
   priority: string;
-  category?: string;
+  cti?: { categoryId: number; typeId?: number; itemId?: number };
   rootCause?: string;
   impact?: string;
   impactScope?: string;
@@ -61,6 +62,12 @@ export interface ProblemHotspotsData {
 }
 
 export interface Problem {
+  number: string;
+  relations?: RelationView[];
+  version: number;
+  verifiedVersion?: number;
+  verificationNote?: string;
+  categoryId?: number;
   id: number;
   title: string;
   description: string;
@@ -79,8 +86,6 @@ export interface Problem {
   rootCause?: string;
   workaround?: string;
   resolution?: string;
-  affectedIncidents?: number[];
-  relatedChanges?: number[];
   createdAt: string;
   updatedAt: string;
   slaStatus?: 'ok' | 'warning' | 'breached';
@@ -98,35 +103,6 @@ export interface ProblemListResponse {
   total: number;
   page: number;
   pageSize: number;
-}
-
-// ==================== 问题关联 ====================
-
-export type RelatedType = 'ticket' | 'incident' | 'change';
-
-export interface AssociatedItem {
-  id: number;
-  type: RelatedType;
-  title: string;
-  status: string;
-  number?: string;
-  createdAt?: string;
-}
-
-export interface ProblemAssociations {
-  tickets: AssociatedItem[];
-  incidents: AssociatedItem[];
-  changes: AssociatedItem[];
-}
-
-export interface ProblemAssociationRequest {
-  relatedType: RelatedType;
-  relatedIds: number[];
-}
-
-export interface ProblemRemoveAssociationRequest {
-  relatedType: RelatedType;
-  relatedId: number;
 }
 
 export class ProblemApi {
@@ -154,7 +130,7 @@ export class ProblemApi {
   /**
    * 更新问题
    */
-  static async updateProblem(id: number, data: Partial<Problem>): Promise<Problem> {
+  static async updateProblem(id: number, data: Omit<Partial<Problem>, "status"> & { version: number; operationId: string; assignmentReason?: string }): Promise<Problem> {
     return httpClient.put(`/api/v1/problems/${id}`, data);
   }
 
@@ -172,32 +148,8 @@ export class ProblemApi {
     return httpClient.get('/api/v1/problems/stats', params);
   }
 
-  /**
-   * 调查问题
-   */
-  static async investigateProblem(_id: number, _data: unknown): Promise<Problem> {
-    throw new Error('功能开发中');
-  }
-
-  /**
-   * 记录根本原因
-   */
-  static async recordRootCause(_id: number, _rootCause: string): Promise<Problem> {
-    throw new Error('功能开发中');
-  }
-
-  /**
-   * 提供解决方案
-   */
-  static async provideSolution(_id: number, _solution: string): Promise<Problem> {
-    throw new Error('功能开发中');
-  }
-
-  /**
-   * 关闭问题
-   */
-  static async closeProblem(_id: number, _resolution: string): Promise<Problem> {
-    throw new Error('功能开发中');
+  static async command(id: number, action: ProblemAction, data: ProblemCommandRequest): Promise<ProblemCommandResult> {
+    return httpClient.post(`/api/v1/problems/${id}/${action}`, data);
   }
 
   // ==================== 趋势分析 ====================
@@ -215,33 +167,6 @@ export class ProblemApi {
    */
   static async getHotspots(params: ProblemTrendRequest): Promise<ProblemHotspotsData> {
     return httpClient.get<ProblemHotspotsData>('/api/v1/problems/hotspots', params);
-  }
-
-  // ==================== 关联管理（P0 修复暴露的 TS 错误） ====================
-
-  /**
-   * 获取问题关联（工单/事件/变更）
-   */
-  static async getAssociations(problemId: number): Promise<ProblemAssociations> {
-    return httpClient.get<ProblemAssociations>(`/api/v1/problems/${problemId}/associations`);
-  }
-
-  /**
-   * 添加问题关联
-   */
-  static async addAssociation(problemId: number, req: ProblemAssociationRequest): Promise<void> {
-    return httpClient.post(`/api/v1/problems/${problemId}/associations`, req);
-  }
-
-  /**
-   * 移除问题关联
-   */
-  static async removeAssociation(problemId: number, req: ProblemRemoveAssociationRequest): Promise<void> {
-    return httpClient.request({
-      method: 'DELETE',
-      url: `/api/v1/problems/${problemId}/associations`,
-      data: req,
-    });
   }
 
   // ==================== SLA（P0 修复暴露的 TS 错误） ====================
@@ -263,3 +188,7 @@ export class ProblemApi {
 }
 
 export default ProblemApi;
+
+export type ProblemAction = 'investigate' | 'verify-resolution' | 'resolve' | 'close' | 'reopen' | 'select-resolution';
+export interface ProblemCommandRequest { version: number; operationId: string; reason?: string; verificationNote?: string; solutionId?: number; }
+export interface ProblemCommandResult { workItemId: number; version: number; status: string; replayed: boolean; }

@@ -2,6 +2,10 @@ package dto
 
 import (
 	"time"
+
+	creation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/handlers/shared/slacontract"
+	"itsm-backend/handlers/shared/workitemmutation"
 )
 
 // UserBasicInfo 用户基本信息
@@ -16,6 +20,7 @@ type UserBasicInfo struct {
 
 // CreateTicketRequest 创建工单请求
 type CreateTicketRequest struct {
+	CTI                   *creation.CTIInput     `json:"cti,omitempty"`
 	Title                 string                 `json:"title" binding:"required,min=2,max=200"`
 	Description           string                 `json:"description" binding:"required,min=0,max=5000"`
 	Priority              string                 `json:"priority" binding:"required,oneof=low medium high critical urgent"`
@@ -40,7 +45,7 @@ type CreateTicketRequest struct {
 }
 
 // UpdateTicketRequest 更新工单请求
-type UpdateTicketRequest struct {
+type TicketEditFields struct {
 	Title       string                 `json:"title" binding:"omitempty,min=2,max=200"`
 	Description string                 `json:"description" binding:"omitempty,min=10,max=5000"`
 	Priority    string                 `json:"priority" binding:"omitempty,oneof=low medium high critical"`
@@ -53,9 +58,21 @@ type UpdateTicketRequest struct {
 	Tags        []string               `json:"tags"`
 	Resolution  string                 `json:"resolution" binding:"omitempty"`
 	FormFields  map[string]interface{} `json:"formFields"`
-	UserID      int                    `json:"userId" binding:"omitempty"` // 操作用户ID (后端自动填充)
-	Version     int                    `json:"version"`                    // 版本号（乐观锁）
-	Force       bool                   `json:"-"`                          // 仅限内部受信调用，禁止客户端绕过乐观锁
+}
+
+// UpdateTicketRequest is the untrusted HTTP payload; identity is supplied by the boundary.
+type UpdateTicketRequest struct {
+	TicketEditFields
+	Version     int    `json:"version" binding:"required,gt=0"`
+	OperationID string `json:"operationId" binding:"required,max=200"`
+}
+
+// TicketEditCommand carries trusted identity and route metadata separately from fields.
+type TicketEditCommand struct {
+	WorkItemID       int
+	ExpectedParentID int
+	Fields           TicketEditFields
+	Meta             workitemmutation.Meta
 }
 
 // ListTicketsRequest 获取工单列表请求
@@ -276,7 +293,16 @@ type AssignTicketRequest struct {
 
 // EscalateTicketRequest 升级工单请求
 type EscalateTicketRequest struct {
-	Reason string `json:"reason" binding:"required"`
+	Reason      string `json:"reason" binding:"required,max=4000"`
+	Version     int    `json:"version" binding:"required,gt=0"`
+	OperationID string `json:"operationId" binding:"required,max=200"`
+}
+
+// Trusted command metadata is constructed by the authenticated boundary.
+type TicketEscalationCommand struct {
+	Meta       workitemmutation.Meta
+	WorkItemID int
+	Reason     string
 }
 
 // ResolveTicketRequest 解决工单请求
@@ -334,4 +360,47 @@ type ActivityUser struct {
 	ID       int    `json:"id"`
 	Username string `json:"username,omitempty"`
 	Name     string `json:"name,omitempty"`
+}
+
+// SLACycleResult is the immutable historical result projected from audit facts.
+type SLACycleResult struct {
+	Number             int                 `json:"number"`
+	StartedAt          *time.Time          `json:"startedAt"`
+	EndedAt            time.Time           `json:"endedAt"`
+	ResponseAt         *time.Time          `json:"responseAt"`
+	ResolvedAt         *time.Time          `json:"resolvedAt"`
+	ResponseDeadline   *time.Time          `json:"responseDeadline"`
+	ResolutionDeadline *time.Time          `json:"resolutionDeadline"`
+	PausedMinutes      int                 `json:"pausedMinutes"`
+	ResponseBreached   bool                `json:"responseBreached"`
+	ResolutionBreached bool                `json:"resolutionBreached"`
+	Policy             *slacontract.Policy `json:"policy"`
+	ActorID            int                 `json:"actorId"`
+	Source             string              `json:"source"`
+	CorrelationID      string              `json:"correlationId"`
+}
+
+type TicketSLAInfo struct {
+	ClosedAt                *time.Time          `json:"closedAt"`
+	CycleNumber             int                 `json:"cycleNumber"`
+	CycleStartedAt          *time.Time          `json:"cycleStartedAt"`
+	PausedMinutes           int                 `json:"pausedMinutes"`
+	AppliedPolicy           *slacontract.Policy `json:"appliedPolicy"`
+	History                 []SLACycleResult    `json:"history"`
+	TicketID                int                 `json:"ticketId"`
+	TicketNumber            string              `json:"ticketNumber"`
+	Priority                string              `json:"priority"`
+	SLADefinitionID         int                 `json:"slaDefinitionId"`
+	SlaName                 string              `json:"slaName"`
+	ServiceType             string              `json:"serviceType"`
+	ResponseTime            int                 `json:"responseTime"`
+	ResolutionTime          int                 `json:"resolutionTime"`
+	ResponseDeadline        *time.Time          `json:"responseDeadline"`
+	ResolutionDeadline      *time.Time          `json:"resolutionDeadline"`
+	IsBreached              bool                `json:"isBreached"`
+	SlaStatus               string              `json:"slaStatus"` // ok | warning | breached | not_required | configuration_missing
+	ResponseTimeRemaining   *int                `json:"responseTimeRemaining"`
+	ResolutionTimeRemaining *int                `json:"resolutionTimeRemaining"`
+	FirstResponseAt         *time.Time          `json:"firstResponseAt,omitempty"`
+	ResolvedAt              *time.Time          `json:"resolvedAt,omitempty"`
 }

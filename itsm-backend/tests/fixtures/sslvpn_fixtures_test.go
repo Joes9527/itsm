@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"testing"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/fielddefinition"
 	"itsm-backend/ent/processdefinition"
@@ -102,7 +104,7 @@ func TestEnsureSSLVPNMetadata(t *testing.T) {
 
 	// 3. 验证通过 CustomProcessEngine 能够成功启动 sslvpn_approval_flow 流程
 	logger := zaptest.NewLogger(t).Sugar()
-	engineIface := service.NewCustomProcessEngine(client, logger)
+	engineIface := service.NewCustomProcessEngine(client, logger, executionfixture.Standard())
 	engine, ok := engineIface.(*service.CustomProcessEngine)
 	require.True(t, ok)
 

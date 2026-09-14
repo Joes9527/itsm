@@ -142,7 +142,9 @@ export function ApprovalChainModal({
     return (
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <Title level={5}>审批步骤配置</Title>
+          <Title style={{ fontSize: 15, fontWeight: 600 }} level={5}>
+            审批步骤配置
+          </Title>
           <Button type="dashed" icon={<Plus className="w-4 h-4" />} onClick={handleAddStep}>
             添加步骤
           </Button>
@@ -223,7 +225,7 @@ export function ApprovalChainModal({
         ))}
 
         {steps.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-muted">
             <Text>暂无审批步骤，请添加步骤</Text>
           </div>
         )}
@@ -293,7 +295,16 @@ export function ApprovalChainModal({
             initialValue="ticket"
             rules={[{ required: true, message: '请选择适用对象' }]}
           >
-            <Select placeholder="请选择适用对象" options={[{ value: 'ticket', label: '工单' }, { value: 'service_request', label: '服务请求' }, { value: 'incident', label: '事件' }, { value: 'problem', label: '问题' }, { value: 'change', label: '变更' }]} />
+            <Select
+              placeholder="请选择适用对象"
+              options={[
+                { value: 'ticket', label: '工单' },
+                { value: 'service_request', label: '服务请求' },
+                { value: 'incident', label: '事件' },
+                { value: 'problem', label: '问题' },
+                { value: 'change', label: '变更' },
+              ]}
+            />
           </Form.Item>
 
           <Form.Item name="isActive" label="状态" valuePropName="checked" initialValue={true}>

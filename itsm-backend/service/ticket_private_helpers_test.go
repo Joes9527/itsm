@@ -26,26 +26,15 @@ func TestMapProcessStatusToDTO(t *testing.T) {
 		})
 	}
 }
+
 func TestGetEscalatedPriority(t *testing.T) {
-	tests := []struct {
-		currentPriority string
-		expectedNotSame bool
-	}{
-		{"low", true},
-		{"medium", true},
-		{"high", true},
-		{"urgent", false}, // 已是最高之一，升级后仍是 urgent
-		{"critical", false},
+	for _, tc := range []struct{ current, want string }{{"low", "medium"}, {"medium", "high"}, {"high", "critical"}, {"critical", "critical"}} {
+		got, err := escalatedTicketPriority(tc.current)
+		assert.NoError(t, err)
+		assert.Equal(t, tc.want, got)
 	}
-	for _, tt := range tests {
-		t.Run(tt.currentPriority, func(t *testing.T) {
-			svc := &TicketService{} // 不需要依赖
-			escalated := svc.getEscalatedPriority(tt.currentPriority)
-			if tt.expectedNotSame {
-				assert.NotEqual(t, tt.currentPriority, escalated,
-					"升级后优先级应变化")
-			}
-			assert.NotEmpty(t, escalated)
-		})
+	for _, invalid := range []string{"urgent", "unknown", ""} {
+		_, err := escalatedTicketPriority(invalid)
+		assert.Error(t, err)
 	}
 }

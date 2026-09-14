@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/migrate"
@@ -375,8 +377,8 @@ func TestClaimTaskConcurrentCASPostgres(t *testing.T) {
 	clientA.ProcessTask.Intercept(barrier.interceptor("claim-worker-a"))
 	clientB.ProcessTask.Intercept(barrier.interceptor("claim-worker-b"))
 	engines := [2]*CustomProcessEngine{
-		NewCustomProcessEngine(clientA, zap.NewNop().Sugar()).(*CustomProcessEngine),
-		NewCustomProcessEngine(clientB, zap.NewNop().Sugar()).(*CustomProcessEngine),
+		NewCustomProcessEngine(clientA, zap.NewNop().Sugar(), executionfixture.Standard()).(*CustomProcessEngine),
+		NewCustomProcessEngine(clientB, zap.NewNop().Sugar(), executionfixture.Standard()).(*CustomProcessEngine),
 	}
 
 	results := make(chan postgresClaimResult, 2)
@@ -535,8 +537,8 @@ func TestBPMNTaskTerminalCommandsRaceWithCompletionPostgres(t *testing.T) {
 			}
 			clientA.ProcessTask.Intercept(barrier.interceptor("complete"))
 			clientB.ProcessTask.Intercept(barrier.interceptor(string(tt.command)))
-			completeEngine := NewCustomProcessEngine(clientA, zap.NewNop().Sugar()).(*CustomProcessEngine)
-			mutationEngine := NewCustomProcessEngine(clientB, zap.NewNop().Sugar()).(*CustomProcessEngine)
+			completeEngine := NewCustomProcessEngine(clientA, zap.NewNop().Sugar(), executionfixture.Standard()).(*CustomProcessEngine)
+			mutationEngine := NewCustomProcessEngine(clientB, zap.NewNop().Sugar(), executionfixture.Standard()).(*CustomProcessEngine)
 			completeCtx := WithBPMNAccessScope(context.Background(), BPMNAccessScope{
 				UserID: fixture.actorIDs[0], TenantID: fixture.tenantID, CanUpdateAllTasks: true,
 			})
@@ -635,8 +637,8 @@ func TestBPMNParticipantCompletionCASLoserAuditsAfterReassignmentPostgres(t *tes
 	assignmentClient, _ := openBPMNPostgresIntegrationClient(t)
 	barrier := &postgresTaskMutationBarrier{arrived: make(chan struct{}), release: make(chan struct{})}
 	completionClient.ProcessTask.Use(barrier.hook())
-	completionEngine := NewCustomProcessEngine(completionClient, zap.NewNop().Sugar()).(*CustomProcessEngine)
-	assignmentEngine := NewCustomProcessEngine(assignmentClient, zap.NewNop().Sugar()).(*CustomProcessEngine)
+	completionEngine := NewCustomProcessEngine(completionClient, zap.NewNop().Sugar(), executionfixture.Standard()).(*CustomProcessEngine)
+	assignmentEngine := NewCustomProcessEngine(assignmentClient, zap.NewNop().Sugar(), executionfixture.Standard()).(*CustomProcessEngine)
 	participantCtx := WithBPMNAccessScope(context.Background(), BPMNAccessScope{
 		UserID: fixture.actorIDs[0], TenantID: fixture.tenantID,
 	})
@@ -708,7 +710,7 @@ func TestBPMNProcessInstanceVariablesConcurrentCASPostgres(t *testing.T) {
 		clients[i].ProcessInstance.Intercept((&postgresProcessInstanceLoadBarrier{
 			instanceID: fixture.instanceID, worker: worker, arrived: arrived, release: release,
 		}).interceptor())
-		engines[i] = NewCustomProcessEngine(clients[i], zap.NewNop().Sugar()).(*CustomProcessEngine)
+		engines[i] = NewCustomProcessEngine(clients[i], zap.NewNop().Sugar(), executionfixture.Standard()).(*CustomProcessEngine)
 	}
 
 	results := make(chan postgresProcessVariableRaceResult, 2)

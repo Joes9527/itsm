@@ -3,6 +3,8 @@ package workflowcallback
 import (
 	"context"
 	"time"
+
+	"itsm-backend/handlers/shared/workitemmutation"
 )
 
 type Status string
@@ -14,10 +16,11 @@ const (
 )
 
 type Result struct {
-	Status    Status
-	BlockCode string
-	Message   string
-	Output    map[string]interface{}
+	LifecycleResult *workitemmutation.Result
+	Status          Status
+	BlockCode       string
+	Message         string
+	Output          map[string]interface{}
 }
 
 type ServiceRequestCommand struct {
@@ -37,6 +40,12 @@ type ServiceRequestCommand struct {
 }
 
 type ChangeCommand struct {
+	Meta               workitemmutation.Meta
+	Evidence           string
+	Outcome            string
+	ActualEnd          *time.Time
+	PIRID              int
+	ApprovalDecisionID int
 	Action             string
 	ChangeID           int
 	TenantID           int
@@ -44,7 +53,6 @@ type ChangeCommand struct {
 	Description        *string
 	PlannedStart       *time.Time
 	PlannedEnd         *time.Time
-	VerificationResult string
 }
 
 type ServiceRequestService interface {

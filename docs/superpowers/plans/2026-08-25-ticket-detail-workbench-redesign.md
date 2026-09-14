@@ -71,3 +71,12 @@ Expected: PASS (Exit code 0)
 
 Run: `cd /home/administrator/project/itsm/itsm-frontend && npm run type-check && npm test -- --testPathPattern=ticket`
 Expected: PASS
+
+
+## 2026-09-14 后续修复与验收边界
+
+状态：accepted（历史设计目标保留；后续修复按已批准的新计划执行）。
+
+本计划的“业务操作零丢失”目标在后续审查中发现附件、错误提示和分配搜索回归，修复及验收证据集中维护在 [UI Workbench 1A 实施计划](2026-09-14-ui-workbench-1a-recovery.md)。本轮验证共享附件上传、删除确认、受保护预览/下载、评论与数量刷新、人员搜索以及身份失效保护。
+
+这里原有的 RelationPanel/审批组件名称不能作为恢复旧业务路径的依据：关系 CRUD 在基线缺少后端端点，统一关系领域依赖和 1B 接入仍未完成。新 [设计第 4.5 节](../specs/2026-09-14-ui-workbench-completion-design.md) 是后续关系工作的权威边界，不将本历史计划整体勾选为完成。

@@ -1,11 +1,14 @@
 'use client';
+import { WorkItemClassificationSelect } from '@/components/work-item/WorkItemClassificationSelect';
+import { classificationInput, classificationUpdate } from '@/components/work-item/classification';
+
 
 import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
 import { CreationAttempts } from '@/components/work-item/CreationAttempts';
 import { CreationRequester } from '@/components/work-item/CreationRequester';
 
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { IncidentAPI, type Incident, type ListIncidentsRequest } from '@/lib/api/incident-api';
 import {
   Card,
@@ -1055,13 +1058,12 @@ const IncidentFormModal: React.FC<{
 
   useEffect(() => {
     if (visible && incident) {
+      form.resetFields();
       form.setFieldsValue({
         title: incident.title,
         description: incident.description,
         priority: incident.priority,
         severity: incident.severity,
-        category: incident.category,
-        subcategory: incident.subcategory,
       });
     } else if (visible) {
       form.resetFields();
@@ -1072,9 +1074,11 @@ const IncidentFormModal: React.FC<{
     setLoading(true);
     try {
       if (incident) {
-        await IncidentAPI.updateIncident(incident.id, values);
+        const { classification, ...payload } = values;
+        await IncidentAPI.updateIncident(incident.id, { ...payload, version: incident.version, ...classificationUpdate(classification, form.isFieldTouched('classification')) });
       } else {
-        await creation.submit({ ...values, source: 'manual', type: 'incident' }, IncidentAPI.createIncident, onSuccess);
+        const { classification, ...payload } = values;
+        await creation.submit({ ...payload, cti: classificationInput(classification), source: 'manual', type: 'incident' }, IncidentAPI.createIncident, onSuccess);
         return;
       }
 
@@ -1098,7 +1102,7 @@ const IncidentFormModal: React.FC<{
     >
       <CreationAttempts creation={creation} />
       <Form form={form} layout="vertical" onFinish={handleSubmit}>
-        {!incident && <CreationRequester />}
+        {!incident && <CreationRequester resource="incident" />}
         <Form.Item
           name="title"
           label="事件标题"
@@ -1134,14 +1138,12 @@ const IncidentFormModal: React.FC<{
 
         <Row gutter={16}>
           <Col span={12}>
-            <Form.Item name="category" label="分类">
-              <Select placeholder="请选择分类" options={[{ value: "performance", label: "性能" }, { value: "connectivity", label: "连接" }, { value: "security", label: "安全" }, { value: "storage", label: "存储" }, { value: "network", label: "网络" }]} />
+            <Form.Item name="classification" label="分类">
+              <WorkItemClassificationSelect initialCategoryId={incident?.categoryId} />
             </Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item name="subcategory" label="子分类">
-              <Input placeholder="请输入子分类" />
-            </Form.Item>
+
           </Col>
         </Row>
       </Form>
@@ -1285,15 +1287,23 @@ const AssignIncidentModal: React.FC<{
 }> = ({ incident, visible, onClose, onAssigned }) => {
   const [assigning, setAssigning] = useState(false);
   const [assignUserIds, setAssignUserIds] = useState<number[]>([]);
+  const [assignReason, setAssignReason] = useState('');
+  const assignAttempts = useRef(new Map<string, string>());
 
   const handleAssign = async () => {
     const assignUserId = assignUserIds[0];
     if (!assignUserId || !incident) return;
     setAssigning(true);
     try {
-      await IncidentAPI.assignIncident(incident.id, assignUserId);
+      if (!incident.version) throw new Error('请刷新事件以获取当前版本');
+      if (incident.assigneeId && !assignReason.trim()) throw new Error('请填写转派原因');
+      const key = JSON.stringify([incident.id, incident.version, assignUserId, assignReason.trim()]);
+      let operationId = assignAttempts.current.get(key);
+      if (!operationId) { operationId = crypto.randomUUID(); assignAttempts.current.set(key, operationId); }
+      await IncidentAPI.assignIncident(incident.id, { assigneeId: assignUserId, version: incident.version, operationId, reason: assignReason.trim() });
       message.success('分配成功');
       setAssignUserIds([]);
+      setAssignReason('');
       onAssigned();
       onClose();
     } catch {
@@ -1307,7 +1317,7 @@ const AssignIncidentModal: React.FC<{
     <Modal
       title={`分配事件 ${incident?.incidentNumber || ''}`}
       open={visible}
-      onCancel={() => { onClose(); setAssignUserIds([]); }}
+      onCancel={() => { onClose(); setAssignUserIds([]); setAssignReason(''); }}
       onOk={handleAssign}
       confirmLoading={assigning}
       okText="确认分配"
@@ -1320,6 +1330,9 @@ const AssignIncidentModal: React.FC<{
             onChange={value => setAssignUserIds(value.slice(-1))}
             placeholder="请选择处理人"
           />
+        </Form.Item>
+        <Form.Item label="转派原因" required={!!incident?.assigneeId}>
+          <Input.TextArea value={assignReason} onChange={event => setAssignReason(event.target.value)} rows={3} />
         </Form.Item>
       </Form>
     </Modal>

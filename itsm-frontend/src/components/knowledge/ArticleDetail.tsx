@@ -230,7 +230,7 @@ const ArticleDetail: React.FC = () => {
             </Space>
           </div>
 
-          <Title level={2}>{article.title}</Title>
+          <Title level={2} className="!text-[24px] !font-semibold">{article.title}</Title>
 
           <Space split={<Divider type="vertical" />} wrap>
             <Space>
@@ -275,7 +275,7 @@ const ArticleDetail: React.FC = () => {
                   </Paragraph>
                   {/* Helpfulness Feedback */}
                   <Divider />
-                  <div style={{ padding: '16px 0', background: '#f9f9f9', borderRadius: 8, textAlign: 'center' }}>
+                  <div style={{ padding: '16px 0', background: 'var(--color-bg-tertiary)', borderRadius: 8, textAlign: 'center' }}>
                     {feedbackSubmitted ? (
                       <div>
                         <Text type="secondary">感谢您的反馈！</Text>

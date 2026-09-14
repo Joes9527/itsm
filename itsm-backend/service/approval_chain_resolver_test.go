@@ -94,8 +94,8 @@ func TestApprovalChainResolver_TenantIsolation(t *testing.T) {
 	_, err = client.ApprovalChain.Create().
 		SetName("TenantA Chain").SetEntityType("service_request").
 		SetTenantID(tenantA.ID).SetChain([]schema.ApprovalChainStep{
-			{Level: 1, Name: "TenantA审批", Role: "manager", ApprovalType: "serial", IsRequired: true},
-		}).SetStatus("active").
+		{Level: 1, Name: "TenantA审批", Role: "manager", ApprovalType: "serial", IsRequired: true},
+	}).SetStatus("active").
 		Save(ctx)
 	require.NoError(t, err)
 

@@ -3,9 +3,10 @@ package service
 import (
 	"context"
 	"errors"
-	"itsm-backend/infrastructure/cloud"
 	"strconv"
 	"testing"
+
+	"itsm-backend/infrastructure/cloud"
 
 	"itsm-backend/authorization"
 	"itsm-backend/ent"
@@ -102,7 +103,8 @@ func TestCreateTaskFromServiceRequest_RejectsWithoutApprovalDecision(t *testing.
 }
 
 // TestCreateTaskFromServiceRequest_SucceedsWithApprovalDecision proves provisioning starts once a
-// matching process_approval_decision row exists (business_type=ticket, business_id=<ticket ID>,
+// matching process_approval_decision row exists (business_type=<WorkItem record class>,
+// business_id=<WorkItem ID>,
 // decision=approved, same tenant) — the success path this precondition change had never been
 // exercised by an automated test for (only the rejection path had manual verification).
 func TestCreateTaskFromServiceRequest_SucceedsWithApprovalDecision(t *testing.T) {
@@ -120,7 +122,7 @@ func TestCreateTaskFromServiceRequest_SucceedsWithApprovalDecision(t *testing.T)
 		SetTaskID("TASK-1").
 		SetProcessDefinitionKey("ticket_general_flow").
 		SetNodeKey("approval").
-		SetBusinessType("ticket").
+		SetBusinessType("service_request_item").
 		SetBusinessID(strconv.Itoa(ticket.ID)).
 		SetActorID(1).
 		SetAction("approve").
@@ -166,7 +168,7 @@ func TestCreateTaskFromServiceRequest_CrossTenantApprovalDoesNotUnlock(t *testin
 		SetTaskID("TASK-B").
 		SetProcessDefinitionKey("ticket_general_flow").
 		SetNodeKey("approval").
-		SetBusinessType("ticket").
+		SetBusinessType("service_request_item").
 		SetBusinessID(strconv.Itoa(ticketA.ID)).
 		SetActorID(1).
 		SetAction("approve").
@@ -195,6 +197,7 @@ func (p authorityFailureProvider) Execute(context.Context, map[string]any) (*clo
 	}
 	return nil, errors.New("provider refused request")
 }
+
 func TestProvisioningFailureUsesWorkItemVersionTransaction(t *testing.T) {
 	for _, conflict := range []bool{false, true} {
 		t.Run(strconv.FormatBool(conflict), func(t *testing.T) {
@@ -239,6 +242,7 @@ func (g *provisioningAccessGuard) ValidateManualProvisioning(ctx context.Context
 	}
 	return nil
 }
+
 func TestManagedAccessManualProvisioningBlocked(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
@@ -249,7 +253,7 @@ func TestManagedAccessManualProvisioningBlocked(t *testing.T) {
 	svc := NewProvisioningService(client, zaptest.NewLogger(t).Sugar())
 	svc.SetManualProvisioningGuard(guard)
 	// Even a legacy generic approval cannot override the domain owner.
-	client.ProcessApprovalDecision.Create().SetProcessInstanceID(1).SetProcessTaskID(1).SetProcessInstanceKey("PI-1").SetTaskID("TASK-1").SetProcessDefinitionKey("generic").SetNodeKey("approve").SetBusinessType("ticket").SetBusinessID(strconv.Itoa(wi.ID)).SetActorID(1).SetAction("approve").SetDecision("approved").SetTenantID(wi.TenantID).SaveX(ctx)
+	client.ProcessApprovalDecision.Create().SetProcessInstanceID(1).SetProcessTaskID(1).SetProcessInstanceKey("PI-1").SetTaskID("TASK-1").SetProcessDefinitionKey("generic").SetNodeKey("approve").SetBusinessType("service_request_item").SetBusinessID(strconv.Itoa(wi.ID)).SetActorID(1).SetAction("approve").SetDecision("approved").SetTenantID(wi.TenantID).SaveX(ctx)
 	_, err := svc.CreateTaskFromServiceRequest(ctx, sr.ID, wi.TenantID, provisioningTestActorID, provisioningTestRole)
 	require.ErrorContains(t, err, "managed_access_requires_verified_delegation")
 	require.Zero(t, client.ProvisioningTask.Query().CountX(ctx))

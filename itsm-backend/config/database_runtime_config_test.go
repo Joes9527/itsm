@@ -13,14 +13,14 @@ func TestLoadConfigKeepsSystemCredentialIndependent(t *testing.T) {
 	t.Chdir(dir)
 	viper.Reset()
 	t.Cleanup(viper.Reset)
-	require.NoError(t, os.WriteFile("config.yaml", []byte("database:\n  user: runtime\n  password: runtime-test\n  admin_role_user: migration\n  admin_role_password: migration-test\n"), 0600))
+	require.NoError(t, os.WriteFile("config.yaml", []byte("database:\n  user: runtime\n  password: runtime-test\n  admin_role_user: migration\n  admin_role_password: migration-test\n"), 0o600))
 	for _, name := range []string{"DB_SYSTEM_ROLE_PASSWORD", "ITSM_DB_SYSTEM_ROLE_PASSWORD", "DB_SYSTEM_ROLE_PASSWORD_FILE", "ITSM_DB_SYSTEM_ROLE_PASSWORD_FILE", "DB_PASSWORD", "DB_PASSWORD_FILE", "ITSM_DB_PASSWORD", "ITSM_DB_PASSWORD_FILE", "DB_APP_ROLE_USER", "DB_ADMIN_ROLE_USER", "DB_ADMIN_ROLE_PASSWORD"} {
 		t.Setenv(name, "")
 	}
 	t.Setenv("DB_SYSTEM_ROLE_USER", "restricted-system")
 	t.Setenv("DB_SCHEMA", "application_schema")
 	file := dir + "/system-password"
-	require.NoError(t, os.WriteFile(file, []byte("system-test\n"), 0600))
+	require.NoError(t, os.WriteFile(file, []byte("system-test\n"), 0o600))
 	t.Setenv("DB_SYSTEM_ROLE_PASSWORD_FILE", file)
 	cfg, err := LoadConfig()
 	require.NoError(t, err)

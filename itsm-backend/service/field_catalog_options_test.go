@@ -2,9 +2,10 @@ package service
 
 import (
 	"encoding/json"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"testing"
 )
 
 func TestCatalogOptionKeysPreserveTypesAndDetachNestedInput(t *testing.T) {

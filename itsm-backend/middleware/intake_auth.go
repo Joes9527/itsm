@@ -3,12 +3,13 @@ package middleware
 import (
 	"context"
 	"errors"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"itsm-backend/authentication"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/handlers/common/intakehttp"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"strings"
 )
 
 type IntakeIdentityValidator func(context.Context, *authentication.IntakeClaims) (creation.Identity, error)

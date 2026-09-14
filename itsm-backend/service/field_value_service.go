@@ -37,11 +37,11 @@ func NewFieldValueService(client *ent.Client) *FieldValueService {
 func validateFieldValue(def *ent.FieldDefinition, raw interface{}) error {
 	switch def.FieldType {
 	case "number":
-		switch raw.(type) {
+		switch raw := raw.(type) {
 		case float64, int, int64, json.Number:
 			return nil
 		case string:
-			if _, err := strconv.ParseFloat(raw.(string), 64); err == nil {
+			if _, err := strconv.ParseFloat(raw, 64); err == nil {
 				return nil
 			}
 		}

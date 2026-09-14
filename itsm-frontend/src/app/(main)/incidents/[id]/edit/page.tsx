@@ -1,4 +1,7 @@
 'use client';
+import { WorkItemClassificationSelect } from '@/components/work-item/WorkItemClassificationSelect';
+import { classificationInput, classificationUpdate } from '@/components/work-item/classification';
+
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
@@ -32,14 +35,12 @@ export default function IncidentEditPage() {
         if (!isMounted) return;
         const data = resp as any;
         setIncidentData(data);
+        form.resetFields();
         form.setFieldsValue({
           title: data.title,
           description: data.description,
           priority: data.priority,
           severity: data.severity,
-          category: data.category,
-          subcategory: data.subcategory,
-          status: data.status,
         });
       } catch (error) {
         if (isMounted) {
@@ -60,11 +61,12 @@ export default function IncidentEditPage() {
   }, [id, form, router]);
 
   const handleSubmit = async (values: any) => {
-    if (!id) return;
+    if (!id || !incidentData) return;
 
     setLoading(true);
     try {
-      await IncidentAPI.updateIncident(Number(id), values);
+      const { classification, status: _status, ...payload } = values;
+      await IncidentAPI.updateIncident(Number(id), { ...payload, version: incidentData.version, ...classificationUpdate(classification, form.isFieldTouched('classification')) });
       message.success(t('incidents.updateSuccess'));
       router.push(`/incidents/${id}`);
     } catch (error) {
@@ -79,13 +81,13 @@ export default function IncidentEditPage() {
   };
 
   return (
-    <div className="p-6 min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-page p-[16px] text-[13px] text-foreground md:p-[24px]">
       <div className="mb-6">
         <Button
           type="link"
           icon={<ArrowLeft />}
           onClick={() => router.back()}
-          style={{ paddingLeft: 0, color: '#666' }}
+          style={{ paddingLeft: 0, color: 'var(--color-text-secondary)' }}
         >
           返回
         </Button>
@@ -122,20 +124,6 @@ export default function IncidentEditPage() {
           <Row gutter={24}>
             <Col span={12}>
               <Form.Item
-                name="status"
-                label="状态"
-                rules={[{ required: true, message: '请选择状态' }]}
-              >
-                <Select placeholder="请选择状态" options={[
-                  { value: 'new', label: '新建' },
-                  { value: 'in_progress', label: '进行中' },
-                  { value: 'resolved', label: '已解决' },
-                  { value: 'closed', label: '已关闭' },
-                ]} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
                 name="priority"
                 label="优先级"
                 rules={[{ required: true, message: '请选择优先级' }]}
@@ -166,27 +154,14 @@ export default function IncidentEditPage() {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="category" label="分类">
-                <Select placeholder="请选择分类" allowClear options={[
-                  { value: 'performance', label: '性能' },
-                  { value: 'connectivity', label: '连接' },
-                  { value: 'security', label: '安全' },
-                  { value: 'storage', label: '存储' },
-                  { value: 'network', label: '网络' },
-                  { value: 'application', label: '应用' },
-                  { value: 'database', label: '数据库' },
-                  { value: 'other', label: '其他' },
-                ]} />
+              <Form.Item name="classification" label="分类">
+                <WorkItemClassificationSelect initialCategoryId={incidentData?.categoryId} />
               </Form.Item>
             </Col>
           </Row>
 
           <Row gutter={24}>
-            <Col span={12}>
-              <Form.Item name="subcategory" label="子分类">
-                <Input placeholder="请输入子分类" />
-              </Form.Item>
-            </Col>
+
             <Col span={12}>
               <Form.Item name="source" label="来源">
                 <Select placeholder="请选择来源" allowClear options={[

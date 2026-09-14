@@ -27,6 +27,7 @@ func (variableConn) Begin() (driver.Tx, error)           { return variableTx{}, 
 func (variableConn) ExecContext(context.Context, string, []driver.NamedValue) (driver.Result, error) {
 	return driver.RowsAffected(1), nil
 }
+
 func (variableConn) QueryContext(context.Context, string, []driver.NamedValue) (driver.Rows, error) {
 	return &variableRows{}, nil
 }

@@ -8,6 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/common/executionscope"
+	"itsm-backend/config"
+	"itsm-backend/database"
+	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/outboxevent"
 
@@ -23,7 +27,7 @@ type recordingIncidentAlertEmailSender struct {
 
 type blockingIncidentAlertEmailSender struct{}
 
-func (blockingIncidentAlertEmailSender) SendForTenant(ctx context.Context, _ int, _ *EmailMessage) error {
+func (blockingIncidentAlertEmailSender) SendToTarget(ctx context.Context, _ int, _ string, _ EmailTarget, _ *EmailMessage) error {
 	<-ctx.Done()
 	return newEmailTransportError("smtp", "before_send", emailNotAccepted, ctx.Err())
 }
@@ -35,12 +39,41 @@ type incidentAlertEmailDelivery struct {
 
 func testOutboxRegistry(t *testing.T, sender incidentAlertEmailSender) *OutboxEventTypeRegistry {
 	t.Helper()
-	registry, err := NewOutboxEventTypeRegistry([]OutboxDeliveryHandler{NewIncidentAlertDeliveryHandler(sender)}, KafDelegateRequestedEventType)
+	registry, err := NewOutboxEventTypeRegistry([]OutboxDeliveryHandler{outboxWorkerEmailDomainDouble{sender: sender}}, KafDelegateRequestedEventType)
 	require.NoError(t, err)
 	return registry
 }
 
-func (s *recordingIncidentAlertEmailSender) SendForTenant(_ context.Context, tenantID int, message *EmailMessage) error {
+// These SQLite tests exercise the shared worker's retry/terminal/recovery
+// policy through an explicit domain double. Real Incident source, row locks,
+// target binding and receipts are tested in incident_email_target_postgres_test.go.
+type outboxWorkerEmailDomainDouble struct{ sender incidentAlertEmailSender }
+
+func (outboxWorkerEmailDomainDouble) EventType() string { return incidentAlertDeliveryEventType }
+func (h outboxWorkerEmailDomainDouble) Deliver(ctx context.Context, event *ent.OutboxEvent) error {
+	var fixture incidentAlertDeliveryPayload
+	if err := json.Unmarshal(event.Payload, &fixture); err != nil {
+		return blockOutboxDelivery("invalid worker fixture")
+	}
+	if fixture.Channel != "email" {
+		return blockOutboxDelivery("unsupported incident alert delivery channel")
+	}
+	message := &EmailMessage{To: fixture.Recipients, Subject: "[ITSM Alert] " + fixture.Subject, BodyText: fixture.Message, DeliveryID: event.EventID, DisableProviderFallback: true}
+	var err error
+	if transport, ok := h.sender.(*EmailService); ok {
+		// A transport-only worker test has no domain source fixture. Target/source
+		// validation is covered by the separate real PostgreSQL owner/worker tests.
+		err = transport.SendForTenant(ctx, fixture.TenantID, message)
+	} else {
+		err = h.sender.SendToTarget(ctx, fixture.TenantID, "outbox", fixture.Target, message)
+	}
+	if err != nil && emailTransportOutcomeOf(err) == emailAcceptanceUnknown {
+		return blockOutboxDelivery("delivery_unknown: email transport result is ambiguous")
+	}
+	return err
+}
+
+func (s *recordingIncidentAlertEmailSender) SendToTarget(_ context.Context, tenantID int, _ string, _ EmailTarget, message *EmailMessage) error {
 	if s.failuresRemaining > 0 {
 		s.failuresRemaining--
 		return newEmailTransportError("smtp", "dial", emailNotAccepted, errors.New("temporary email route failure"))
@@ -89,7 +122,7 @@ func TestOutboxDeliveryWorkerReclaimsExpiredDeliveryAfterRestart(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	eventID := enqueueIncidentAlertDeliveryForWorker(t, repository, now)
-	claimed, err := repository.ClaimDueByEventType(ctx, now, 1, incidentAlertDeliveryEventType)
+	claimed, err := repository.ClaimDueByEventType(ctx, now, 1, incidentAlertDeliveryEventType, false)
 	require.NoError(t, err)
 	require.Len(t, claimed, 1)
 
@@ -141,7 +174,7 @@ func TestOutboxDeliveryWorkerDoesNotResendAmbiguousExpiredAttempt(t *testing.T) 
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	eventID := enqueueIncidentAlertDeliveryForWorker(t, repository, now)
-	claimed, err := repository.ClaimDueByEventType(ctx, now, 1, incidentAlertDeliveryEventType)
+	claimed, err := repository.ClaimDueByEventType(ctx, now, 1, incidentAlertDeliveryEventType, false)
 	require.NoError(t, err)
 	require.Len(t, claimed, 1)
 	repository.clock = func() time.Time { return now }
@@ -303,5 +336,68 @@ func validIncidentAlertDeliveryPayload(eventID string) incidentAlertDeliveryPayl
 		Version: 1, EventID: eventID, TenantID: 7, AlertID: 42, Channel: "email",
 		Recipients: []string{"operator@example.com"}, Subject: "CPU high", Message: "CPU exceeded threshold",
 		ActorID: 9, Source: "user", CorrelationID: "request-42",
+	}
+}
+
+func TestOutboxDeliveryWorkerDisabledPreservesEveryQueueState(t *testing.T) {
+	for _, mode := range []string{"standard", "candidate"} {
+		t.Run(mode, func(t *testing.T) {
+			_, client, db := newOutboxRepositoryWithDriver(t, "sqlite3")
+			ctx := context.Background()
+			for _, state := range []string{"pending", "unknown", "expired"} {
+				kind := incidentAlertDeliveryEventType
+				if state == "unknown" {
+					kind = "unregistered-private-event"
+				}
+				row := client.OutboxEvent.Create().SetEventID("disabled-" + state).SetEventType(kind).SetTenantID(1).SetAggregateType("incident_alert").SetAggregateID("1").SetPayload(json.RawMessage(`{"private":"original"}`)).SetNextAttemptAt(time.Now().Add(-time.Hour))
+				if state == "expired" {
+					row.SetStatus("publishing").SetClaimToken("original-claim").SetClaimExpiresAt(time.Now().Add(-time.Minute)).SetLastError("delivery_attempt_started:disabled-expired")
+				}
+				row.SaveX(ctx)
+			}
+			snapshot := func(query string) [][]any {
+				rows, err := db.QueryContext(ctx, query)
+				require.NoError(t, err)
+				defer rows.Close()
+				columns, err := rows.Columns()
+				require.NoError(t, err)
+				var result [][]any
+				for rows.Next() {
+					values := make([]any, len(columns))
+					pointers := make([]any, len(columns))
+					for i := range values {
+						pointers[i] = &values[i]
+					}
+					require.NoError(t, rows.Scan(pointers...))
+					for i, value := range values {
+						if bytes, ok := value.([]byte); ok {
+							values[i] = append([]byte(nil), bytes...)
+						}
+					}
+					result = append(result, values)
+				}
+				require.NoError(t, rows.Err())
+				return result
+			}
+			before, audits := snapshot("SELECT * FROM outbox_events ORDER BY id"), snapshot("SELECT * FROM audit_logs ORDER BY id")
+			cfg := config.ExecutionConfig{Mode: mode, DeploymentID: "disabled-worker"}
+			if mode == "candidate" {
+				cfg.Scopes = []config.ExecutionScopeConfig{{TenantID: 1, ScopeID: "149ff1af-a27c-47c7-827f-103271130bb9"}}
+			}
+			policy, err := database.NewExecutionPolicy(cfg)
+			require.NoError(t, err)
+			sender := &recordingIncidentAlertEmailSender{}
+			worker, err := NewOutboxDeliveryWorker(NewOutboxEventRepository(client, policy), OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: time.Second, MaxAttempts: 3}, zaptest.NewLogger(t).Sugar(), testOutboxRegistry(t, sender))
+			require.NoError(t, err)
+			require.ErrorIs(t, worker.DispatchOnce(ctx), executionscope.ErrDenied)
+			//lint:ignore SA1012 Deliberately verifies nil-context rejection.
+			require.ErrorIs(t, worker.DispatchOnce(nil), executionscope.ErrDenied)
+			cancelled, cancel := context.WithCancel(ctx)
+			cancel()
+			require.ErrorIs(t, worker.DispatchOnce(cancelled), context.Canceled)
+			require.Equal(t, before, snapshot("SELECT * FROM outbox_events ORDER BY id"))
+			require.Equal(t, audits, snapshot("SELECT * FROM audit_logs ORDER BY id"))
+			require.Empty(t, sender.deliveries)
+		})
 	}
 }

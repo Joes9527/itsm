@@ -7,6 +7,7 @@ import "time"
 type Provider string
 
 const Graph Provider = "graph"
+
 const Capability = "external_group_grant"
 
 type DurationOption struct {

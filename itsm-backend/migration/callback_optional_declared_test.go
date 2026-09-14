@@ -87,7 +87,7 @@ func TestMigration021CallbackOptionalDeclaredIsRegisteredBetweenWorkItemMigratio
 	require.Equal(t, []string{
 		"020_work_item_number_allocator",
 		"021_add_callback_optional_declared",
-		"022_drop_professional_extension_shared_fields",
+		WorkItemPrepareVersion,
 	}, versions[12:15])
 }
 

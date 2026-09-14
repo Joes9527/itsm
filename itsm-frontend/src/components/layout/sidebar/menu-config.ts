@@ -159,17 +159,10 @@ export function getMenuConfig(): MenuConfig {
             permission: 'knowledge:read',
           },
           {
-            key: '/knowledge/articles',
-            icon: getIconByName('FileText')!,
-            label: '文章管理',
-            path: '/knowledge/articles',
-            permission: 'knowledge:write',
-          },
-          {
-            key: '/knowledge/articles/create',
+            key: '/knowledge/articles/new',
             icon: getIconByName('Plus')!,
             label: '新建文章',
-            path: '/knowledge/articles/create',
+            path: '/knowledge/articles/new',
             permission: 'knowledge:write',
           },
         ],
@@ -322,10 +315,17 @@ export function getMenuConfig(): MenuConfig {
         key: '/workflow',
         icon: getIconByName('GitMerge')!,
         label: '工作流',
-        path: '/workflow/designer',
+        path: '/workflow',
         permission: 'workflow:read',
         description: '工作流自动化',
         children: [
+          {
+            key: '/admin/workflows',
+            icon: getIconByName('Workflow')!,
+            label: '工作流管理',
+            path: '/admin/workflows',
+            permission: 'workflow:read',
+          },
           {
             key: '/workflow/designer',
             icon: getIconByName('Edit')!,
@@ -504,7 +504,7 @@ export function getMenuConfig(): MenuConfig {
             icon: getIconByName('Tag')!,
             label: '工单分类',
             path: '/admin/ticket-categories',
-            permission: 'ticket:category:manage',
+            permission: 'ticket_category:read',
           },
           {
             key: '/tickets/templates',
@@ -525,7 +525,7 @@ export function getMenuConfig(): MenuConfig {
             icon: getIconByName('Zap')!,
             label: '自动化规则',
             path: '/admin/tickets/automation-rules',
-            permission: 'ticket:manage',
+            permission: 'automation_rule:read',
           },
           {
             key: '/admin/approval-chains',
@@ -586,9 +586,9 @@ export function getMenuConfig(): MenuConfig {
           {
             key: '/admin/service-catalogs',
             icon: getIconByName('Boxes')!,
-            label: '服务目录',
+            label: '服务目录管理',
             path: '/admin/service-catalogs',
-            permission: 'catalog:manage',
+            permission: 'service_catalog:read',
           },
           {
             key: '/admin/sla-definitions',
@@ -596,13 +596,6 @@ export function getMenuConfig(): MenuConfig {
             label: 'SLA 定义',
             path: '/admin/sla-definitions',
             permission: 'sla:manage',
-          },
-          {
-            key: '/admin/workflows',
-            icon: getIconByName('GitBranch')!,
-            label: '工作流',
-            path: '/admin/workflows',
-            permission: 'workflow:manage',
           },
         ],
       },

@@ -3,12 +3,13 @@ package intakehttp
 import (
 	"context"
 	"encoding/json"
-	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/require"
-	creation "itsm-backend/handlers/common/workitemcreation"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
+	creation "itsm-backend/handlers/common/workitemcreation"
 )
 
 type captureApplication struct {
@@ -25,6 +26,7 @@ func (a *captureApplication) Create(_ context.Context, i creation.Identity, c cr
 	a.command = c
 	return a.result, a.err
 }
+
 func contextFor(body, key string) (*gin.Context, *httptest.ResponseRecorder) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -34,6 +36,7 @@ func contextFor(body, key string) (*gin.Context, *httptest.ResponseRecorder) {
 	c.Set("role", "agent")
 	return c, w
 }
+
 func TestExecuteHTTPIdentityAndResult(t *testing.T) {
 	for _, replayed := range []bool{false, true} {
 		a := &captureApplication{result: &creation.CreateWorkItemResult{WorkItemID: 12, Number: "WI-12", RecordClass: "generic", Replayed: replayed}}
@@ -51,6 +54,7 @@ func TestExecuteHTTPIdentityAndResult(t *testing.T) {
 		require.Contains(t, w.Body.String(), `"workItemId":12`)
 	}
 }
+
 func TestExecuteMissingKeyAndClassifiedFailure(t *testing.T) {
 	a := &captureApplication{}
 	c, w := contextFor("", "")
@@ -64,6 +68,7 @@ func TestExecuteMissingKeyAndClassifiedFailure(t *testing.T) {
 	require.Equal(t, 403, w.Code)
 	require.Contains(t, w.Body.String(), `"retryable":false`)
 }
+
 func TestBindPreservesNumbersAndRejectsAmbiguity(t *testing.T) {
 	type body struct {
 		Values map[string]any `json:"values"`

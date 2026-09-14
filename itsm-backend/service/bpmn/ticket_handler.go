@@ -9,6 +9,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/handlers/shared/workitemmutation"
 
 	"go.uber.org/zap"
 )
@@ -26,7 +27,16 @@ type TicketStatusServiceInterface interface {
 }
 
 // TicketServiceTaskHandler 工单服务任务处理器
+type TicketWorkflowEscalationService interface {
+	ApplyTicketWorkflowEscalation(context.Context) (workitemmutation.Result, error)
+}
+
+func (h *TicketServiceTaskHandler) SetEscalationService(svc TicketWorkflowEscalationService) {
+	h.escalationService = svc
+}
+
 type TicketServiceTaskHandler struct {
+	escalationService TicketWorkflowEscalationService
 	HandlerBase
 	client              *ent.Client
 	logger              *zap.SugaredLogger
@@ -67,10 +77,12 @@ func (h *TicketServiceTaskHandler) sendNotification(ctx context.Context, ticketI
 		return nil, fmt.Errorf("ticket notification result is missing")
 	}
 	switch result.Effect {
+	case dto.TicketNotificationEffectQueued:
+		return AppliedEffect("ticket notification queued", map[string]interface{}{"notification_effect": result.Effect, "queued_count": result.QueuedCount}), nil
 	case dto.TicketNotificationEffectApplied:
-		return AppliedEffect("ticket notification delivered", nil), nil
+		return AppliedEffect("ticket notification accepted", map[string]interface{}{"notification_effect": result.Effect, "applied_count": result.AppliedCount, "external_intent_count": result.ExternalIntentCount}), nil
 	case dto.TicketNotificationEffectIdempotent:
-		return IdempotentEffect("ticket notification already delivered", nil), nil
+		return IdempotentEffect("ticket notification already accepted", map[string]interface{}{"external_intent_count": result.ExternalIntentCount}), nil
 	case dto.TicketNotificationEffectBlocked:
 		code := CallbackBlockCode(result.BlockCode)
 		if !IsAllowedCallbackBlockCode(code) {
@@ -172,6 +184,9 @@ func (h *TicketServiceTaskHandler) updateTicketStatus(ctx context.Context, ticke
 	if err != nil {
 		return nil, fmt.Errorf("工单不存在: %w", err)
 	}
+	if err := rejectProfessionalTicketTaskMutation(current.RecordClass); err != nil {
+		return nil, err
+	}
 	if current.Status == newStatus {
 		return IdempotentEffect(fmt.Sprintf("工单 %d 已处于 %s", ticketID, newStatus), additionalData), nil
 	}
@@ -184,7 +199,8 @@ func (h *TicketServiceTaskHandler) updateTicketStatus(ctx context.Context, ticke
 
 	h.logger.Infow("Ticket status updated via BPMN", "ticket_id", ticketID, "new_status", newStatus)
 
-	return &CallbackEffect{Status: CallbackEffectApplied,
+	return &CallbackEffect{
+		Status:      CallbackEffectApplied,
 		Message:     fmt.Sprintf("工单 %d 状态已更新为 %s", ticketID, newStatus),
 		UpdatedData: additionalData,
 	}, nil
@@ -282,63 +298,18 @@ func (h *TicketServiceTaskHandler) notifyHandler(ctx context.Context, ticketID i
 
 // escalateTicket 升级工单
 func (h *TicketServiceTaskHandler) escalateTicket(ctx context.Context, ticketID int, variables map[string]interface{}) (*CallbackEffect, error) {
-	// 获取升级优先级
-	escalateTo, _ := variables["escalate_to"].(string)
-	if escalateTo == "" {
-		escalateTo = "high"
+	if h.escalationService == nil {
+		return nil, fmt.Errorf("workflow escalation service unavailable")
 	}
-	escalationReason, _ := variables["escalation_reason"].(string)
-
-	// 获取工单信息
-	tenantID, err := h.getTenantID(ctx, variables)
+	result, err := h.escalationService.ApplyTicketWorkflowEscalation(ctx)
 	if err != nil {
 		return nil, err
 	}
-	ticketEntity, err := h.getTicket(ctx, ticketID, tenantID)
-	if err != nil {
-		return nil, fmt.Errorf("工单不存在: %w", err)
+	effect := &CallbackEffect{Status: CallbackEffectApplied, Message: "workflow escalation applied", LifecycleResult: &result}
+	if result.Replayed {
+		effect.Status = CallbackEffectIdempotent
 	}
-
-	if ticketEntity.Priority == escalateTo && ticketEntity.Status == "escalated" {
-		return IdempotentEffect(fmt.Sprintf("工单 %d 已升级为 %s", ticketID, escalateTo), nil), nil
-	}
-
-	// 通知管理员或升级处理人
-	adminIDs := GetIntSliceFromVars(variables, "notify_admin_ids")
-	if len(adminIDs) > 0 {
-		content := fmt.Sprintf("工单 %s (#%s) 已升级，原因：%s", ticketEntity.Title, ticketEntity.TicketNumber, escalationReason)
-		for _, adminID := range adminIDs {
-			effect, err := h.sendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-				UserIDs:   []int{adminID},
-				EventType: "ticket_updated",
-				Content:   content,
-			}, ticketEntity.TenantID)
-			if err != nil {
-				h.logger.Warnw("failed to send escalation notification", "error_class", "notification_delivery", "ticket_id", ticketID, "admin_id", adminID)
-				return nil, fmt.Errorf("升级通知失败")
-			}
-			if effect.Status == CallbackEffectBlocked {
-				return effect, nil
-			}
-		}
-	}
-
-	// Notify first. A stable delivery key deduplicates a retry if the state write
-	// fails after notification persistence.
-	_, err = h.client.Ticket.UpdateOneID(ticketID).Where(ticket.TenantID(tenantID)).
-		SetPriority(escalateTo).
-		SetStatus("escalated").
-		SetUpdatedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("升级工单失败: %w", err)
-	}
-
-	h.logger.Infow("Ticket escalated via BPMN", "ticket_id", ticketID, "escalated_to", escalateTo, "reason", escalationReason)
-
-	return &CallbackEffect{Status: CallbackEffectApplied,
-		Message: fmt.Sprintf("工单 %d 已升级为 %s", ticketID, escalateTo),
-	}, nil
+	return effect, nil
 }
 
 // assignTicket 分配工单
@@ -357,6 +328,10 @@ func (h *TicketServiceTaskHandler) assignTicket(ctx context.Context, ticketID in
 	ticketEntity, err := h.getTicket(ctx, ticketID, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("工单不存在: %w", err)
+	}
+
+	if err := rejectProfessionalTicketTaskMutation(ticketEntity.RecordClass); err != nil {
+		return nil, err
 	}
 
 	if ticketEntity.AssigneeID == assigneeID && ticketEntity.Status == common.TicketStatusAssigned {
@@ -381,7 +356,7 @@ func (h *TicketServiceTaskHandler) assignTicket(ctx context.Context, ticketID in
 		return effect, nil
 	}
 
-	_, err = h.client.Ticket.UpdateOneID(ticketID).Where(ticket.TenantID(tenantID)).
+	_, err = h.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).Where(ticket.TenantID(tenantID)).
 		SetAssigneeID(assigneeID).
 		SetStatus(common.TicketStatusAssigned).
 		SetUpdatedAt(time.Now()).
@@ -392,7 +367,8 @@ func (h *TicketServiceTaskHandler) assignTicket(ctx context.Context, ticketID in
 
 	h.logger.Infow("Ticket assigned via BPMN", "ticket_id", ticketID, "assignee_id", assigneeID)
 
-	return &CallbackEffect{Status: CallbackEffectApplied,
+	return &CallbackEffect{
+		Status:  CallbackEffectApplied,
 		Message: fmt.Sprintf("工单 %d 已分配给用户 %d", ticketID, assigneeID),
 	}, nil
 }
@@ -410,4 +386,12 @@ func mapBPMNNotificationType(notificationType string) string {
 	default:
 		return "ticket_updated"
 	}
+}
+
+func rejectProfessionalTicketTaskMutation(recordClass string) error {
+	switch recordClass {
+	case dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest:
+		return common.NewValidationError(fmt.Sprintf("%s writes require the owning domain command", recordClass), nil)
+	}
+	return nil
 }

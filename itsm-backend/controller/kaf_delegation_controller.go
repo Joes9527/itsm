@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"itsm-backend/database"
+
 	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/service"
@@ -22,9 +24,9 @@ type KafDelegationController struct {
 	processEngine service.ProcessEngine
 }
 
-func NewKafDelegationController(client *ent.Client, processEngine service.ProcessEngine) *KafDelegationController {
+func NewKafDelegationController(client *ent.Client, processEngine service.ProcessEngine, execution *database.ExecutionPolicy) *KafDelegationController {
 	return &KafDelegationController{
-		service:       service.NewKafDelegationService(client),
+		service:       service.NewKafDelegationService(client, execution),
 		processEngine: processEngine,
 	}
 }

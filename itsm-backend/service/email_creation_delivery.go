@@ -36,6 +36,7 @@ type EmailAttachmentsDeliveryHandler struct {
 func NewEmailAttachmentsDeliveryHandler(client *ent.Client, attachments *TicketAttachmentService, provider GraphInboundProvider) *EmailAttachmentsDeliveryHandler {
 	return &EmailAttachmentsDeliveryHandler{client, attachments, provider}
 }
+
 func (*EmailAttachmentsDeliveryHandler) EventType() string { return EmailAttachmentsRequestedEventType }
 func (*EmailAttachmentsDeliveryHandler) ReplaySafe() bool  { return true }
 func (h *EmailAttachmentsDeliveryHandler) Deliver(ctx context.Context, event *ent.OutboxEvent) error {
@@ -85,9 +86,11 @@ type EmailConfirmationDeliveryHandler struct {
 func NewEmailConfirmationDeliveryHandler(client *ent.Client, provider GraphInboundProvider) *EmailConfirmationDeliveryHandler {
 	return &EmailConfirmationDeliveryHandler{client, provider}
 }
+
 func (*EmailConfirmationDeliveryHandler) EventType() string {
 	return EmailConfirmationRequestedEventType
 }
+
 func (h *EmailConfirmationDeliveryHandler) Deliver(ctx context.Context, event *ent.OutboxEvent) error {
 	payload, _, err := loadEmailCreationDelivery(ctx, h.client, event, EmailConfirmationRequestedEventType)
 	if err != nil {

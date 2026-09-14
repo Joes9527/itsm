@@ -147,7 +147,7 @@ export default function EscalationMatricesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Title level={3} style={{ marginBottom: 4 }}>
+        <Title level={2} style={{ marginBottom: 4 }}>
           <AlertTriangle style={{ marginRight: 8 }} />
           SLA 升级矩阵
         </Title>
@@ -171,7 +171,12 @@ export default function EscalationMatricesPage() {
         </Col>
         <Col xs={24} sm={8}>
           <Card>
-            <Statistic title="升级级别总数" value={stats.totalLevels} suffix="级" valueStyle={{ color: '#F06820' }} />
+            <Statistic
+              title="升级级别总数"
+              value={stats.totalLevels}
+              suffix="级"
+              valueStyle={{ color: '#F06820' }}
+            />
           </Card>
         </Col>
         <Col xs={24} sm={8}>
@@ -180,7 +185,7 @@ export default function EscalationMatricesPage() {
               title="通知目标数"
               value={stats.totalTargets}
               suffix="个"
-              valueStyle={{ color: '#722ed1' }}
+              valueStyle={{ color: 'var(--color-text-primary)' }}
             />
           </Card>
         </Col>
@@ -218,7 +223,7 @@ export default function EscalationMatricesPage() {
                     key={level.level}
                     style={{
                       padding: '8px 0',
-                      borderBottom: '1px dashed #f0f0f0',
+                      borderBottom: '1px dashed var(--color-border)',
                     }}
                   >
                     <Space size="small" wrap>

@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/changepir"
-	"itsm-backend/ent/problem"
+	"itsm-backend/ent/standardchange"
 	"itsm-backend/ent/ticket"
 	"time"
 
@@ -23,6 +23,166 @@ type ChangeCreate struct {
 	mutation *ChangeMutation
 	hooks    []Hook
 	conflict []sql.ConflictOption
+}
+
+// SetOutcome sets the "outcome" field.
+func (_c *ChangeCreate) SetOutcome(v string) *ChangeCreate {
+	_c.mutation.SetOutcome(v)
+	return _c
+}
+
+// SetNillableOutcome sets the "outcome" field if the given value is not nil.
+func (_c *ChangeCreate) SetNillableOutcome(v *string) *ChangeCreate {
+	if v != nil {
+		_c.SetOutcome(*v)
+	}
+	return _c
+}
+
+// SetOutcomeEvidence sets the "outcome_evidence" field.
+func (_c *ChangeCreate) SetOutcomeEvidence(v string) *ChangeCreate {
+	_c.mutation.SetOutcomeEvidence(v)
+	return _c
+}
+
+// SetNillableOutcomeEvidence sets the "outcome_evidence" field if the given value is not nil.
+func (_c *ChangeCreate) SetNillableOutcomeEvidence(v *string) *ChangeCreate {
+	if v != nil {
+		_c.SetOutcomeEvidence(*v)
+	}
+	return _c
+}
+
+// SetAssessmentEvidence sets the "assessment_evidence" field.
+func (_c *ChangeCreate) SetAssessmentEvidence(v string) *ChangeCreate {
+	_c.mutation.SetAssessmentEvidence(v)
+	return _c
+}
+
+// SetNillableAssessmentEvidence sets the "assessment_evidence" field if the given value is not nil.
+func (_c *ChangeCreate) SetNillableAssessmentEvidence(v *string) *ChangeCreate {
+	if v != nil {
+		_c.SetAssessmentEvidence(*v)
+	}
+	return _c
+}
+
+// SetAssessmentDigest sets the "assessment_digest" field.
+func (_c *ChangeCreate) SetAssessmentDigest(v string) *ChangeCreate {
+	_c.mutation.SetAssessmentDigest(v)
+	return _c
+}
+
+// SetNillableAssessmentDigest sets the "assessment_digest" field if the given value is not nil.
+func (_c *ChangeCreate) SetNillableAssessmentDigest(v *string) *ChangeCreate {
+	if v != nil {
+		_c.SetAssessmentDigest(*v)
+	}
+	return _c
+}
+
+// SetAssessedBy sets the "assessed_by" field.
+func (_c *ChangeCreate) SetAssessedBy(v int) *ChangeCreate {
+	_c.mutation.SetAssessedBy(v)
+	return _c
+}
+
+// SetNillableAssessedBy sets the "assessed_by" field if the given value is not nil.
+func (_c *ChangeCreate) SetNillableAssessedBy(v *int) *ChangeCreate {
+	if v != nil {
+		_c.SetAssessedBy(*v)
+	}
+	return _c
+}
+
+// SetAssessedAt sets the "assessed_at" field.
+func (_c *ChangeCreate) SetAssessedAt(v time.Time) *ChangeCreate {
+	_c.mutation.SetAssessedAt(v)
+	return _c
+}
+
+// SetNillableAssessedAt sets the "assessed_at" field if the given value is not nil.
+func (_c *ChangeCreate) SetNillableAssessedAt(v *time.Time) *ChangeCreate {
+	if v != nil {
+		_c.SetAssessedAt(*v)
+	}
+	return _c
+}
+
+// SetReviewedBy sets the "reviewed_by" field.
+func (_c *ChangeCreate) SetReviewedBy(v int) *ChangeCreate {
+	_c.mutation.SetReviewedBy(v)
+	return _c
+}
+
+// SetNillableReviewedBy sets the "reviewed_by" field if the given value is not nil.
+func (_c *ChangeCreate) SetNillableReviewedBy(v *int) *ChangeCreate {
+	if v != nil {
+		_c.SetReviewedBy(*v)
+	}
+	return _c
+}
+
+// SetReviewedAt sets the "reviewed_at" field.
+func (_c *ChangeCreate) SetReviewedAt(v time.Time) *ChangeCreate {
+	_c.mutation.SetReviewedAt(v)
+	return _c
+}
+
+// SetNillableReviewedAt sets the "reviewed_at" field if the given value is not nil.
+func (_c *ChangeCreate) SetNillableReviewedAt(v *time.Time) *ChangeCreate {
+	if v != nil {
+		_c.SetReviewedAt(*v)
+	}
+	return _c
+}
+
+// SetReviewEvidence sets the "review_evidence" field.
+func (_c *ChangeCreate) SetReviewEvidence(v string) *ChangeCreate {
+	_c.mutation.SetReviewEvidence(v)
+	return _c
+}
+
+// SetNillableReviewEvidence sets the "review_evidence" field if the given value is not nil.
+func (_c *ChangeCreate) SetNillableReviewEvidence(v *string) *ChangeCreate {
+	if v != nil {
+		_c.SetReviewEvidence(*v)
+	}
+	return _c
+}
+
+// SetReviewDigest sets the "review_digest" field.
+func (_c *ChangeCreate) SetReviewDigest(v string) *ChangeCreate {
+	_c.mutation.SetReviewDigest(v)
+	return _c
+}
+
+// SetNillableReviewDigest sets the "review_digest" field if the given value is not nil.
+func (_c *ChangeCreate) SetNillableReviewDigest(v *string) *ChangeCreate {
+	if v != nil {
+		_c.SetReviewDigest(*v)
+	}
+	return _c
+}
+
+// SetStandardTemplateID sets the "standard_template_id" field.
+func (_c *ChangeCreate) SetStandardTemplateID(v int) *ChangeCreate {
+	_c.mutation.SetStandardTemplateID(v)
+	return _c
+}
+
+// SetNillableStandardTemplateID sets the "standard_template_id" field if the given value is not nil.
+func (_c *ChangeCreate) SetNillableStandardTemplateID(v *int) *ChangeCreate {
+	if v != nil {
+		_c.SetStandardTemplateID(*v)
+	}
+	return _c
+}
+
+// SetStandardPolicy sets the "standard_policy" field.
+func (_c *ChangeCreate) SetStandardPolicy(v map[string]interface{}) *ChangeCreate {
+	_c.mutation.SetStandardPolicy(v)
+	return _c
 }
 
 // SetJustification sets the "justification" field.
@@ -177,24 +337,14 @@ func (_c *ChangeCreate) SetAffectedCis(v []string) *ChangeCreate {
 	return _c
 }
 
+// SetStandardTemplate sets the "standard_template" edge to the StandardChange entity.
+func (_c *ChangeCreate) SetStandardTemplate(v *StandardChange) *ChangeCreate {
+	return _c.SetStandardTemplateID(v.ID)
+}
+
 // SetWorkItem sets the "work_item" edge to the Ticket entity.
 func (_c *ChangeCreate) SetWorkItem(v *Ticket) *ChangeCreate {
 	return _c.SetWorkItemID(v.ID)
-}
-
-// AddProblemIDs adds the "problems" edge to the Problem entity by IDs.
-func (_c *ChangeCreate) AddProblemIDs(ids ...int) *ChangeCreate {
-	_c.mutation.AddProblemIDs(ids...)
-	return _c
-}
-
-// AddProblems adds the "problems" edges to the Problem entity.
-func (_c *ChangeCreate) AddProblems(v ...*Problem) *ChangeCreate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _c.AddProblemIDs(ids...)
 }
 
 // AddPirIDs adds the "pir" edge to the ChangePIR entity by IDs.
@@ -305,6 +455,50 @@ func (_c *ChangeCreate) createSpec() (*Change, *sqlgraph.CreateSpec) {
 		_spec = sqlgraph.NewCreateSpec(change.Table, sqlgraph.NewFieldSpec(change.FieldID, field.TypeInt))
 	)
 	_spec.OnConflict = _c.conflict
+	if value, ok := _c.mutation.Outcome(); ok {
+		_spec.SetField(change.FieldOutcome, field.TypeString, value)
+		_node.Outcome = value
+	}
+	if value, ok := _c.mutation.OutcomeEvidence(); ok {
+		_spec.SetField(change.FieldOutcomeEvidence, field.TypeString, value)
+		_node.OutcomeEvidence = value
+	}
+	if value, ok := _c.mutation.AssessmentEvidence(); ok {
+		_spec.SetField(change.FieldAssessmentEvidence, field.TypeString, value)
+		_node.AssessmentEvidence = value
+	}
+	if value, ok := _c.mutation.AssessmentDigest(); ok {
+		_spec.SetField(change.FieldAssessmentDigest, field.TypeString, value)
+		_node.AssessmentDigest = value
+	}
+	if value, ok := _c.mutation.AssessedBy(); ok {
+		_spec.SetField(change.FieldAssessedBy, field.TypeInt, value)
+		_node.AssessedBy = value
+	}
+	if value, ok := _c.mutation.AssessedAt(); ok {
+		_spec.SetField(change.FieldAssessedAt, field.TypeTime, value)
+		_node.AssessedAt = value
+	}
+	if value, ok := _c.mutation.ReviewedBy(); ok {
+		_spec.SetField(change.FieldReviewedBy, field.TypeInt, value)
+		_node.ReviewedBy = value
+	}
+	if value, ok := _c.mutation.ReviewedAt(); ok {
+		_spec.SetField(change.FieldReviewedAt, field.TypeTime, value)
+		_node.ReviewedAt = value
+	}
+	if value, ok := _c.mutation.ReviewEvidence(); ok {
+		_spec.SetField(change.FieldReviewEvidence, field.TypeString, value)
+		_node.ReviewEvidence = value
+	}
+	if value, ok := _c.mutation.ReviewDigest(); ok {
+		_spec.SetField(change.FieldReviewDigest, field.TypeString, value)
+		_node.ReviewDigest = value
+	}
+	if value, ok := _c.mutation.StandardPolicy(); ok {
+		_spec.SetField(change.FieldStandardPolicy, field.TypeJSON, value)
+		_node.StandardPolicy = value
+	}
 	if value, ok := _c.mutation.Justification(); ok {
 		_spec.SetField(change.FieldJustification, field.TypeString, value)
 		_node.Justification = value
@@ -349,6 +543,23 @@ func (_c *ChangeCreate) createSpec() (*Change, *sqlgraph.CreateSpec) {
 		_spec.SetField(change.FieldAffectedCis, field.TypeJSON, value)
 		_node.AffectedCis = value
 	}
+	if nodes := _c.mutation.StandardTemplateIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   change.StandardTemplateTable,
+			Columns: []string{change.StandardTemplateColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(standardchange.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.StandardTemplateID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
 	if nodes := _c.mutation.WorkItemIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -364,22 +575,6 @@ func (_c *ChangeCreate) createSpec() (*Change, *sqlgraph.CreateSpec) {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.WorkItemID = nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := _c.mutation.ProblemsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: true,
-			Table:   change.ProblemsTable,
-			Columns: change.ProblemsPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(problem.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := _c.mutation.PirIDs(); len(nodes) > 0 {
@@ -405,7 +600,7 @@ func (_c *ChangeCreate) createSpec() (*Change, *sqlgraph.CreateSpec) {
 // of the `INSERT` statement. For example:
 //
 //	client.Change.Create().
-//		SetJustification(v).
+//		SetOutcome(v).
 //		OnConflict(
 //			// Update the row with the new values
 //			// the was proposed for insertion.
@@ -414,7 +609,7 @@ func (_c *ChangeCreate) createSpec() (*Change, *sqlgraph.CreateSpec) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.ChangeUpsert) {
-//			SetJustification(v+v).
+//			SetOutcome(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *ChangeCreate) OnConflict(opts ...sql.ConflictOption) *ChangeUpsertOne {
@@ -449,6 +644,198 @@ type (
 		*sql.UpdateSet
 	}
 )
+
+// SetOutcome sets the "outcome" field.
+func (u *ChangeUpsert) SetOutcome(v string) *ChangeUpsert {
+	u.Set(change.FieldOutcome, v)
+	return u
+}
+
+// UpdateOutcome sets the "outcome" field to the value that was provided on create.
+func (u *ChangeUpsert) UpdateOutcome() *ChangeUpsert {
+	u.SetExcluded(change.FieldOutcome)
+	return u
+}
+
+// ClearOutcome clears the value of the "outcome" field.
+func (u *ChangeUpsert) ClearOutcome() *ChangeUpsert {
+	u.SetNull(change.FieldOutcome)
+	return u
+}
+
+// SetOutcomeEvidence sets the "outcome_evidence" field.
+func (u *ChangeUpsert) SetOutcomeEvidence(v string) *ChangeUpsert {
+	u.Set(change.FieldOutcomeEvidence, v)
+	return u
+}
+
+// UpdateOutcomeEvidence sets the "outcome_evidence" field to the value that was provided on create.
+func (u *ChangeUpsert) UpdateOutcomeEvidence() *ChangeUpsert {
+	u.SetExcluded(change.FieldOutcomeEvidence)
+	return u
+}
+
+// ClearOutcomeEvidence clears the value of the "outcome_evidence" field.
+func (u *ChangeUpsert) ClearOutcomeEvidence() *ChangeUpsert {
+	u.SetNull(change.FieldOutcomeEvidence)
+	return u
+}
+
+// SetAssessmentEvidence sets the "assessment_evidence" field.
+func (u *ChangeUpsert) SetAssessmentEvidence(v string) *ChangeUpsert {
+	u.Set(change.FieldAssessmentEvidence, v)
+	return u
+}
+
+// UpdateAssessmentEvidence sets the "assessment_evidence" field to the value that was provided on create.
+func (u *ChangeUpsert) UpdateAssessmentEvidence() *ChangeUpsert {
+	u.SetExcluded(change.FieldAssessmentEvidence)
+	return u
+}
+
+// ClearAssessmentEvidence clears the value of the "assessment_evidence" field.
+func (u *ChangeUpsert) ClearAssessmentEvidence() *ChangeUpsert {
+	u.SetNull(change.FieldAssessmentEvidence)
+	return u
+}
+
+// SetAssessmentDigest sets the "assessment_digest" field.
+func (u *ChangeUpsert) SetAssessmentDigest(v string) *ChangeUpsert {
+	u.Set(change.FieldAssessmentDigest, v)
+	return u
+}
+
+// UpdateAssessmentDigest sets the "assessment_digest" field to the value that was provided on create.
+func (u *ChangeUpsert) UpdateAssessmentDigest() *ChangeUpsert {
+	u.SetExcluded(change.FieldAssessmentDigest)
+	return u
+}
+
+// ClearAssessmentDigest clears the value of the "assessment_digest" field.
+func (u *ChangeUpsert) ClearAssessmentDigest() *ChangeUpsert {
+	u.SetNull(change.FieldAssessmentDigest)
+	return u
+}
+
+// SetAssessedBy sets the "assessed_by" field.
+func (u *ChangeUpsert) SetAssessedBy(v int) *ChangeUpsert {
+	u.Set(change.FieldAssessedBy, v)
+	return u
+}
+
+// UpdateAssessedBy sets the "assessed_by" field to the value that was provided on create.
+func (u *ChangeUpsert) UpdateAssessedBy() *ChangeUpsert {
+	u.SetExcluded(change.FieldAssessedBy)
+	return u
+}
+
+// AddAssessedBy adds v to the "assessed_by" field.
+func (u *ChangeUpsert) AddAssessedBy(v int) *ChangeUpsert {
+	u.Add(change.FieldAssessedBy, v)
+	return u
+}
+
+// ClearAssessedBy clears the value of the "assessed_by" field.
+func (u *ChangeUpsert) ClearAssessedBy() *ChangeUpsert {
+	u.SetNull(change.FieldAssessedBy)
+	return u
+}
+
+// SetAssessedAt sets the "assessed_at" field.
+func (u *ChangeUpsert) SetAssessedAt(v time.Time) *ChangeUpsert {
+	u.Set(change.FieldAssessedAt, v)
+	return u
+}
+
+// UpdateAssessedAt sets the "assessed_at" field to the value that was provided on create.
+func (u *ChangeUpsert) UpdateAssessedAt() *ChangeUpsert {
+	u.SetExcluded(change.FieldAssessedAt)
+	return u
+}
+
+// ClearAssessedAt clears the value of the "assessed_at" field.
+func (u *ChangeUpsert) ClearAssessedAt() *ChangeUpsert {
+	u.SetNull(change.FieldAssessedAt)
+	return u
+}
+
+// SetReviewedBy sets the "reviewed_by" field.
+func (u *ChangeUpsert) SetReviewedBy(v int) *ChangeUpsert {
+	u.Set(change.FieldReviewedBy, v)
+	return u
+}
+
+// UpdateReviewedBy sets the "reviewed_by" field to the value that was provided on create.
+func (u *ChangeUpsert) UpdateReviewedBy() *ChangeUpsert {
+	u.SetExcluded(change.FieldReviewedBy)
+	return u
+}
+
+// AddReviewedBy adds v to the "reviewed_by" field.
+func (u *ChangeUpsert) AddReviewedBy(v int) *ChangeUpsert {
+	u.Add(change.FieldReviewedBy, v)
+	return u
+}
+
+// ClearReviewedBy clears the value of the "reviewed_by" field.
+func (u *ChangeUpsert) ClearReviewedBy() *ChangeUpsert {
+	u.SetNull(change.FieldReviewedBy)
+	return u
+}
+
+// SetReviewedAt sets the "reviewed_at" field.
+func (u *ChangeUpsert) SetReviewedAt(v time.Time) *ChangeUpsert {
+	u.Set(change.FieldReviewedAt, v)
+	return u
+}
+
+// UpdateReviewedAt sets the "reviewed_at" field to the value that was provided on create.
+func (u *ChangeUpsert) UpdateReviewedAt() *ChangeUpsert {
+	u.SetExcluded(change.FieldReviewedAt)
+	return u
+}
+
+// ClearReviewedAt clears the value of the "reviewed_at" field.
+func (u *ChangeUpsert) ClearReviewedAt() *ChangeUpsert {
+	u.SetNull(change.FieldReviewedAt)
+	return u
+}
+
+// SetReviewEvidence sets the "review_evidence" field.
+func (u *ChangeUpsert) SetReviewEvidence(v string) *ChangeUpsert {
+	u.Set(change.FieldReviewEvidence, v)
+	return u
+}
+
+// UpdateReviewEvidence sets the "review_evidence" field to the value that was provided on create.
+func (u *ChangeUpsert) UpdateReviewEvidence() *ChangeUpsert {
+	u.SetExcluded(change.FieldReviewEvidence)
+	return u
+}
+
+// ClearReviewEvidence clears the value of the "review_evidence" field.
+func (u *ChangeUpsert) ClearReviewEvidence() *ChangeUpsert {
+	u.SetNull(change.FieldReviewEvidence)
+	return u
+}
+
+// SetReviewDigest sets the "review_digest" field.
+func (u *ChangeUpsert) SetReviewDigest(v string) *ChangeUpsert {
+	u.Set(change.FieldReviewDigest, v)
+	return u
+}
+
+// UpdateReviewDigest sets the "review_digest" field to the value that was provided on create.
+func (u *ChangeUpsert) UpdateReviewDigest() *ChangeUpsert {
+	u.SetExcluded(change.FieldReviewDigest)
+	return u
+}
+
+// ClearReviewDigest clears the value of the "review_digest" field.
+func (u *ChangeUpsert) ClearReviewDigest() *ChangeUpsert {
+	u.SetNull(change.FieldReviewDigest)
+	return u
+}
 
 // SetJustification sets the "justification" field.
 func (u *ChangeUpsert) SetJustification(v string) *ChangeUpsert {
@@ -652,6 +1039,14 @@ func (u *ChangeUpsert) ClearAffectedCis() *ChangeUpsert {
 //		Exec(ctx)
 func (u *ChangeUpsertOne) UpdateNewValues() *ChangeUpsertOne {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.StandardTemplateID(); exists {
+			s.SetIgnore(change.FieldStandardTemplateID)
+		}
+		if _, exists := u.create.mutation.StandardPolicy(); exists {
+			s.SetIgnore(change.FieldStandardPolicy)
+		}
+	}))
 	return u
 }
 
@@ -680,6 +1075,230 @@ func (u *ChangeUpsertOne) Update(set func(*ChangeUpsert)) *ChangeUpsertOne {
 		set(&ChangeUpsert{UpdateSet: update})
 	}))
 	return u
+}
+
+// SetOutcome sets the "outcome" field.
+func (u *ChangeUpsertOne) SetOutcome(v string) *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.SetOutcome(v)
+	})
+}
+
+// UpdateOutcome sets the "outcome" field to the value that was provided on create.
+func (u *ChangeUpsertOne) UpdateOutcome() *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.UpdateOutcome()
+	})
+}
+
+// ClearOutcome clears the value of the "outcome" field.
+func (u *ChangeUpsertOne) ClearOutcome() *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.ClearOutcome()
+	})
+}
+
+// SetOutcomeEvidence sets the "outcome_evidence" field.
+func (u *ChangeUpsertOne) SetOutcomeEvidence(v string) *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.SetOutcomeEvidence(v)
+	})
+}
+
+// UpdateOutcomeEvidence sets the "outcome_evidence" field to the value that was provided on create.
+func (u *ChangeUpsertOne) UpdateOutcomeEvidence() *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.UpdateOutcomeEvidence()
+	})
+}
+
+// ClearOutcomeEvidence clears the value of the "outcome_evidence" field.
+func (u *ChangeUpsertOne) ClearOutcomeEvidence() *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.ClearOutcomeEvidence()
+	})
+}
+
+// SetAssessmentEvidence sets the "assessment_evidence" field.
+func (u *ChangeUpsertOne) SetAssessmentEvidence(v string) *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.SetAssessmentEvidence(v)
+	})
+}
+
+// UpdateAssessmentEvidence sets the "assessment_evidence" field to the value that was provided on create.
+func (u *ChangeUpsertOne) UpdateAssessmentEvidence() *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.UpdateAssessmentEvidence()
+	})
+}
+
+// ClearAssessmentEvidence clears the value of the "assessment_evidence" field.
+func (u *ChangeUpsertOne) ClearAssessmentEvidence() *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.ClearAssessmentEvidence()
+	})
+}
+
+// SetAssessmentDigest sets the "assessment_digest" field.
+func (u *ChangeUpsertOne) SetAssessmentDigest(v string) *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.SetAssessmentDigest(v)
+	})
+}
+
+// UpdateAssessmentDigest sets the "assessment_digest" field to the value that was provided on create.
+func (u *ChangeUpsertOne) UpdateAssessmentDigest() *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.UpdateAssessmentDigest()
+	})
+}
+
+// ClearAssessmentDigest clears the value of the "assessment_digest" field.
+func (u *ChangeUpsertOne) ClearAssessmentDigest() *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.ClearAssessmentDigest()
+	})
+}
+
+// SetAssessedBy sets the "assessed_by" field.
+func (u *ChangeUpsertOne) SetAssessedBy(v int) *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.SetAssessedBy(v)
+	})
+}
+
+// AddAssessedBy adds v to the "assessed_by" field.
+func (u *ChangeUpsertOne) AddAssessedBy(v int) *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.AddAssessedBy(v)
+	})
+}
+
+// UpdateAssessedBy sets the "assessed_by" field to the value that was provided on create.
+func (u *ChangeUpsertOne) UpdateAssessedBy() *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.UpdateAssessedBy()
+	})
+}
+
+// ClearAssessedBy clears the value of the "assessed_by" field.
+func (u *ChangeUpsertOne) ClearAssessedBy() *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.ClearAssessedBy()
+	})
+}
+
+// SetAssessedAt sets the "assessed_at" field.
+func (u *ChangeUpsertOne) SetAssessedAt(v time.Time) *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.SetAssessedAt(v)
+	})
+}
+
+// UpdateAssessedAt sets the "assessed_at" field to the value that was provided on create.
+func (u *ChangeUpsertOne) UpdateAssessedAt() *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.UpdateAssessedAt()
+	})
+}
+
+// ClearAssessedAt clears the value of the "assessed_at" field.
+func (u *ChangeUpsertOne) ClearAssessedAt() *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.ClearAssessedAt()
+	})
+}
+
+// SetReviewedBy sets the "reviewed_by" field.
+func (u *ChangeUpsertOne) SetReviewedBy(v int) *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.SetReviewedBy(v)
+	})
+}
+
+// AddReviewedBy adds v to the "reviewed_by" field.
+func (u *ChangeUpsertOne) AddReviewedBy(v int) *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.AddReviewedBy(v)
+	})
+}
+
+// UpdateReviewedBy sets the "reviewed_by" field to the value that was provided on create.
+func (u *ChangeUpsertOne) UpdateReviewedBy() *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.UpdateReviewedBy()
+	})
+}
+
+// ClearReviewedBy clears the value of the "reviewed_by" field.
+func (u *ChangeUpsertOne) ClearReviewedBy() *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.ClearReviewedBy()
+	})
+}
+
+// SetReviewedAt sets the "reviewed_at" field.
+func (u *ChangeUpsertOne) SetReviewedAt(v time.Time) *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.SetReviewedAt(v)
+	})
+}
+
+// UpdateReviewedAt sets the "reviewed_at" field to the value that was provided on create.
+func (u *ChangeUpsertOne) UpdateReviewedAt() *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.UpdateReviewedAt()
+	})
+}
+
+// ClearReviewedAt clears the value of the "reviewed_at" field.
+func (u *ChangeUpsertOne) ClearReviewedAt() *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.ClearReviewedAt()
+	})
+}
+
+// SetReviewEvidence sets the "review_evidence" field.
+func (u *ChangeUpsertOne) SetReviewEvidence(v string) *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.SetReviewEvidence(v)
+	})
+}
+
+// UpdateReviewEvidence sets the "review_evidence" field to the value that was provided on create.
+func (u *ChangeUpsertOne) UpdateReviewEvidence() *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.UpdateReviewEvidence()
+	})
+}
+
+// ClearReviewEvidence clears the value of the "review_evidence" field.
+func (u *ChangeUpsertOne) ClearReviewEvidence() *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.ClearReviewEvidence()
+	})
+}
+
+// SetReviewDigest sets the "review_digest" field.
+func (u *ChangeUpsertOne) SetReviewDigest(v string) *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.SetReviewDigest(v)
+	})
+}
+
+// UpdateReviewDigest sets the "review_digest" field to the value that was provided on create.
+func (u *ChangeUpsertOne) UpdateReviewDigest() *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.UpdateReviewDigest()
+	})
+}
+
+// ClearReviewDigest clears the value of the "review_digest" field.
+func (u *ChangeUpsertOne) ClearReviewDigest() *ChangeUpsertOne {
+	return u.Update(func(s *ChangeUpsert) {
+		s.ClearReviewDigest()
+	})
 }
 
 // SetJustification sets the "justification" field.
@@ -1041,7 +1660,7 @@ func (_c *ChangeCreateBulk) ExecX(ctx context.Context) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.ChangeUpsert) {
-//			SetJustification(v+v).
+//			SetOutcome(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *ChangeCreateBulk) OnConflict(opts ...sql.ConflictOption) *ChangeUpsertBulk {
@@ -1080,6 +1699,16 @@ type ChangeUpsertBulk struct {
 //		Exec(ctx)
 func (u *ChangeUpsertBulk) UpdateNewValues() *ChangeUpsertBulk {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		for _, b := range u.create.builders {
+			if _, exists := b.mutation.StandardTemplateID(); exists {
+				s.SetIgnore(change.FieldStandardTemplateID)
+			}
+			if _, exists := b.mutation.StandardPolicy(); exists {
+				s.SetIgnore(change.FieldStandardPolicy)
+			}
+		}
+	}))
 	return u
 }
 
@@ -1108,6 +1737,230 @@ func (u *ChangeUpsertBulk) Update(set func(*ChangeUpsert)) *ChangeUpsertBulk {
 		set(&ChangeUpsert{UpdateSet: update})
 	}))
 	return u
+}
+
+// SetOutcome sets the "outcome" field.
+func (u *ChangeUpsertBulk) SetOutcome(v string) *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.SetOutcome(v)
+	})
+}
+
+// UpdateOutcome sets the "outcome" field to the value that was provided on create.
+func (u *ChangeUpsertBulk) UpdateOutcome() *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.UpdateOutcome()
+	})
+}
+
+// ClearOutcome clears the value of the "outcome" field.
+func (u *ChangeUpsertBulk) ClearOutcome() *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.ClearOutcome()
+	})
+}
+
+// SetOutcomeEvidence sets the "outcome_evidence" field.
+func (u *ChangeUpsertBulk) SetOutcomeEvidence(v string) *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.SetOutcomeEvidence(v)
+	})
+}
+
+// UpdateOutcomeEvidence sets the "outcome_evidence" field to the value that was provided on create.
+func (u *ChangeUpsertBulk) UpdateOutcomeEvidence() *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.UpdateOutcomeEvidence()
+	})
+}
+
+// ClearOutcomeEvidence clears the value of the "outcome_evidence" field.
+func (u *ChangeUpsertBulk) ClearOutcomeEvidence() *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.ClearOutcomeEvidence()
+	})
+}
+
+// SetAssessmentEvidence sets the "assessment_evidence" field.
+func (u *ChangeUpsertBulk) SetAssessmentEvidence(v string) *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.SetAssessmentEvidence(v)
+	})
+}
+
+// UpdateAssessmentEvidence sets the "assessment_evidence" field to the value that was provided on create.
+func (u *ChangeUpsertBulk) UpdateAssessmentEvidence() *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.UpdateAssessmentEvidence()
+	})
+}
+
+// ClearAssessmentEvidence clears the value of the "assessment_evidence" field.
+func (u *ChangeUpsertBulk) ClearAssessmentEvidence() *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.ClearAssessmentEvidence()
+	})
+}
+
+// SetAssessmentDigest sets the "assessment_digest" field.
+func (u *ChangeUpsertBulk) SetAssessmentDigest(v string) *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.SetAssessmentDigest(v)
+	})
+}
+
+// UpdateAssessmentDigest sets the "assessment_digest" field to the value that was provided on create.
+func (u *ChangeUpsertBulk) UpdateAssessmentDigest() *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.UpdateAssessmentDigest()
+	})
+}
+
+// ClearAssessmentDigest clears the value of the "assessment_digest" field.
+func (u *ChangeUpsertBulk) ClearAssessmentDigest() *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.ClearAssessmentDigest()
+	})
+}
+
+// SetAssessedBy sets the "assessed_by" field.
+func (u *ChangeUpsertBulk) SetAssessedBy(v int) *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.SetAssessedBy(v)
+	})
+}
+
+// AddAssessedBy adds v to the "assessed_by" field.
+func (u *ChangeUpsertBulk) AddAssessedBy(v int) *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.AddAssessedBy(v)
+	})
+}
+
+// UpdateAssessedBy sets the "assessed_by" field to the value that was provided on create.
+func (u *ChangeUpsertBulk) UpdateAssessedBy() *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.UpdateAssessedBy()
+	})
+}
+
+// ClearAssessedBy clears the value of the "assessed_by" field.
+func (u *ChangeUpsertBulk) ClearAssessedBy() *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.ClearAssessedBy()
+	})
+}
+
+// SetAssessedAt sets the "assessed_at" field.
+func (u *ChangeUpsertBulk) SetAssessedAt(v time.Time) *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.SetAssessedAt(v)
+	})
+}
+
+// UpdateAssessedAt sets the "assessed_at" field to the value that was provided on create.
+func (u *ChangeUpsertBulk) UpdateAssessedAt() *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.UpdateAssessedAt()
+	})
+}
+
+// ClearAssessedAt clears the value of the "assessed_at" field.
+func (u *ChangeUpsertBulk) ClearAssessedAt() *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.ClearAssessedAt()
+	})
+}
+
+// SetReviewedBy sets the "reviewed_by" field.
+func (u *ChangeUpsertBulk) SetReviewedBy(v int) *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.SetReviewedBy(v)
+	})
+}
+
+// AddReviewedBy adds v to the "reviewed_by" field.
+func (u *ChangeUpsertBulk) AddReviewedBy(v int) *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.AddReviewedBy(v)
+	})
+}
+
+// UpdateReviewedBy sets the "reviewed_by" field to the value that was provided on create.
+func (u *ChangeUpsertBulk) UpdateReviewedBy() *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.UpdateReviewedBy()
+	})
+}
+
+// ClearReviewedBy clears the value of the "reviewed_by" field.
+func (u *ChangeUpsertBulk) ClearReviewedBy() *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.ClearReviewedBy()
+	})
+}
+
+// SetReviewedAt sets the "reviewed_at" field.
+func (u *ChangeUpsertBulk) SetReviewedAt(v time.Time) *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.SetReviewedAt(v)
+	})
+}
+
+// UpdateReviewedAt sets the "reviewed_at" field to the value that was provided on create.
+func (u *ChangeUpsertBulk) UpdateReviewedAt() *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.UpdateReviewedAt()
+	})
+}
+
+// ClearReviewedAt clears the value of the "reviewed_at" field.
+func (u *ChangeUpsertBulk) ClearReviewedAt() *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.ClearReviewedAt()
+	})
+}
+
+// SetReviewEvidence sets the "review_evidence" field.
+func (u *ChangeUpsertBulk) SetReviewEvidence(v string) *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.SetReviewEvidence(v)
+	})
+}
+
+// UpdateReviewEvidence sets the "review_evidence" field to the value that was provided on create.
+func (u *ChangeUpsertBulk) UpdateReviewEvidence() *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.UpdateReviewEvidence()
+	})
+}
+
+// ClearReviewEvidence clears the value of the "review_evidence" field.
+func (u *ChangeUpsertBulk) ClearReviewEvidence() *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.ClearReviewEvidence()
+	})
+}
+
+// SetReviewDigest sets the "review_digest" field.
+func (u *ChangeUpsertBulk) SetReviewDigest(v string) *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.SetReviewDigest(v)
+	})
+}
+
+// UpdateReviewDigest sets the "review_digest" field to the value that was provided on create.
+func (u *ChangeUpsertBulk) UpdateReviewDigest() *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.UpdateReviewDigest()
+	})
+}
+
+// ClearReviewDigest clears the value of the "review_digest" field.
+func (u *ChangeUpsertBulk) ClearReviewDigest() *ChangeUpsertBulk {
+	return u.Update(func(s *ChangeUpsert) {
+		s.ClearReviewDigest()
+	})
 }
 
 // SetJustification sets the "justification" field.

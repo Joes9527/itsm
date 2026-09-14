@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"testing"
 
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processinstance"
@@ -14,28 +13,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-type processStartTriggerCapture struct {
-	ctx context.Context
-	req *dto.ProcessTriggerRequest
-}
-
-func (c *processStartTriggerCapture) TriggerProcess(ctx context.Context, req *dto.ProcessTriggerRequest) (*dto.ProcessTriggerResponse, error) {
-	c.ctx = ctx
-	c.req = req
-	return &dto.ProcessTriggerResponse{}, nil
-}
-
-func (c *processStartTriggerCapture) TriggerByBusinessType(context.Context, dto.BusinessType, int, map[string]interface{}, string, int) (*dto.ProcessTriggerResponse, error) {
-	return nil, nil
-}
-
-func (c *processStartTriggerCapture) CancelProcess(context.Context, int, string) error  { return nil }
-func (c *processStartTriggerCapture) SuspendProcess(context.Context, int, string) error { return nil }
-func (c *processStartTriggerCapture) ResumeProcess(context.Context, int) error          { return nil }
-func (c *processStartTriggerCapture) GetProcessStatus(context.Context, int) (*dto.ProcessTriggerResponse, error) {
-	return nil, nil
-}
 
 func processStartAudit(t *testing.T, f *bpmnAuthorizationFixture, instance *ent.ProcessInstance) *ent.ProcessAuditLog {
 	t.Helper()
@@ -52,7 +29,7 @@ func TestStartProcessAuditUsesAuthenticatedScopeActor(t *testing.T) {
 		f.definition.Key,
 		"ticket:scope-actor",
 		"generic",
-		91,
+		f.workItem(t, 91).ID,
 		map[string]interface{}{
 			"requester_id": f.outsider.ID,
 			"triggered_by": strconv.Itoa(f.otherActor.ID), // HTTP/body input must not replace the scoped actor.
@@ -69,7 +46,7 @@ func TestStartProcessAuditUsesTypedContextActor(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	ctx := WithTrustedBPMNTenantContext(context.Background(), f.tenant.ID)
 	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, f.actor.ID)
-	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket:typed-actor", "generic", 92, map[string]interface{}{
+	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket:typed-actor", "generic", f.workItem(t, 92).ID, map[string]interface{}{
 		"triggered_by": "system",
 	})
 	require.NoError(t, err)
@@ -82,7 +59,7 @@ func TestStartProcessAuditUsesTypedContextActor(t *testing.T) {
 func TestStartProcessAuditUsesTrustedTriggerActor(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	ctx := WithTrustedBPMNTenantContext(context.Background(), f.tenant.ID)
-	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket:trusted-trigger", "generic", 93, map[string]interface{}{
+	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket:trusted-trigger", "generic", f.workItem(t, 93).ID, map[string]interface{}{
 		"triggered_by": strconv.Itoa(f.outsider.ID),
 	})
 	require.NoError(t, err)
@@ -95,7 +72,7 @@ func TestStartProcessAuditUsesTrustedTriggerActor(t *testing.T) {
 func TestStartProcessAuditUsesExplicitTrustedSystemActor(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	ctx := WithTrustedBPMNTenantContext(context.Background(), f.tenant.ID)
-	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket:trusted-system", "generic", 94, map[string]interface{}{
+	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket:trusted-system", "generic", f.workItem(t, 94).ID, map[string]interface{}{
 		"triggered_by": "system",
 	})
 	require.NoError(t, err)
@@ -123,7 +100,7 @@ func TestStartProcessRejectsWrongTenantOrInactiveAuditActor(t *testing.T) {
 		t.Run(strconv.Itoa(actorID), func(t *testing.T) {
 			businessKey := "ticket:bad-audit-actor-" + strconv.Itoa(actorID)
 			ctx := WithTrustedBPMNTenantContext(context.Background(), f.tenant.ID)
-			_, err := f.engine.StartProcess(ctx, f.definition.Key, businessKey, "generic", 95, map[string]interface{}{
+			_, err := f.engine.StartProcess(ctx, f.definition.Key, businessKey, "generic", f.workItem(t, 95).ID, map[string]interface{}{
 				"triggered_by": strconv.Itoa(actorID),
 			})
 			require.Error(t, err)

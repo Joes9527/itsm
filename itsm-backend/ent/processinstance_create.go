@@ -27,6 +27,20 @@ type ProcessInstanceCreate struct {
 	conflict []sql.ConflictOption
 }
 
+// SetExecutionWorkItemID sets the "execution_work_item_id" field.
+func (_c *ProcessInstanceCreate) SetExecutionWorkItemID(v int) *ProcessInstanceCreate {
+	_c.mutation.SetExecutionWorkItemID(v)
+	return _c
+}
+
+// SetNillableExecutionWorkItemID sets the "execution_work_item_id" field if the given value is not nil.
+func (_c *ProcessInstanceCreate) SetNillableExecutionWorkItemID(v *int) *ProcessInstanceCreate {
+	if v != nil {
+		_c.SetExecutionWorkItemID(*v)
+	}
+	return _c
+}
+
 // SetProcessInstanceID sets the "process_instance_id" field.
 func (_c *ProcessInstanceCreate) SetProcessInstanceID(v string) *ProcessInstanceCreate {
 	_c.mutation.SetProcessInstanceID(v)
@@ -416,6 +430,11 @@ func (_c *ProcessInstanceCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *ProcessInstanceCreate) check() error {
+	if v, ok := _c.mutation.ExecutionWorkItemID(); ok {
+		if err := processinstance.ExecutionWorkItemIDValidator(v); err != nil {
+			return &ValidationError{Name: "execution_work_item_id", err: fmt.Errorf(`ent: validator failed for field "ProcessInstance.execution_work_item_id": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.ProcessInstanceID(); !ok {
 		return &ValidationError{Name: "process_instance_id", err: errors.New(`ent: missing required field "ProcessInstance.process_instance_id"`)}
 	}
@@ -493,6 +512,10 @@ func (_c *ProcessInstanceCreate) createSpec() (*ProcessInstance, *sqlgraph.Creat
 		_spec = sqlgraph.NewCreateSpec(processinstance.Table, sqlgraph.NewFieldSpec(processinstance.FieldID, field.TypeInt))
 	)
 	_spec.OnConflict = _c.conflict
+	if value, ok := _c.mutation.ExecutionWorkItemID(); ok {
+		_spec.SetField(processinstance.FieldExecutionWorkItemID, field.TypeInt, value)
+		_node.ExecutionWorkItemID = &value
+	}
 	if value, ok := _c.mutation.ProcessInstanceID(); ok {
 		_spec.SetField(processinstance.FieldProcessInstanceID, field.TypeString, value)
 		_node.ProcessInstanceID = value
@@ -653,7 +676,7 @@ func (_c *ProcessInstanceCreate) createSpec() (*ProcessInstance, *sqlgraph.Creat
 // of the `INSERT` statement. For example:
 //
 //	client.ProcessInstance.Create().
-//		SetProcessInstanceID(v).
+//		SetExecutionWorkItemID(v).
 //		OnConflict(
 //			// Update the row with the new values
 //			// the was proposed for insertion.
@@ -662,7 +685,7 @@ func (_c *ProcessInstanceCreate) createSpec() (*ProcessInstance, *sqlgraph.Creat
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.ProcessInstanceUpsert) {
-//			SetProcessInstanceID(v+v).
+//			SetExecutionWorkItemID(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *ProcessInstanceCreate) OnConflict(opts ...sql.ConflictOption) *ProcessInstanceUpsertOne {
@@ -1069,6 +1092,9 @@ func (u *ProcessInstanceUpsert) UpdateUpdatedAt() *ProcessInstanceUpsert {
 func (u *ProcessInstanceUpsertOne) UpdateNewValues() *ProcessInstanceUpsertOne {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
 	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.ExecutionWorkItemID(); exists {
+			s.SetIgnore(processinstance.FieldExecutionWorkItemID)
+		}
 		if _, exists := u.create.mutation.StartRequestDigest(); exists {
 			s.SetIgnore(processinstance.FieldStartRequestDigest)
 		}
@@ -1658,7 +1684,7 @@ func (_c *ProcessInstanceCreateBulk) ExecX(ctx context.Context) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.ProcessInstanceUpsert) {
-//			SetProcessInstanceID(v+v).
+//			SetExecutionWorkItemID(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *ProcessInstanceCreateBulk) OnConflict(opts ...sql.ConflictOption) *ProcessInstanceUpsertBulk {
@@ -1699,6 +1725,9 @@ func (u *ProcessInstanceUpsertBulk) UpdateNewValues() *ProcessInstanceUpsertBulk
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
 	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
 		for _, b := range u.create.builders {
+			if _, exists := b.mutation.ExecutionWorkItemID(); exists {
+				s.SetIgnore(processinstance.FieldExecutionWorkItemID)
+			}
 			if _, exists := b.mutation.StartRequestDigest(); exists {
 				s.SetIgnore(processinstance.FieldStartRequestDigest)
 			}

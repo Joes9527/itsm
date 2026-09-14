@@ -4,7 +4,6 @@ import { IncidentAPI } from '@/lib/api/incident-api';
 export const fetchIncidents = IncidentAPI.listIncidents;
 export const getIncident = IncidentAPI.getIncident;
 export const updateIncident = IncidentAPI.updateIncident;
-export const updateIncidentStatus = IncidentAPI.updateIncidentStatus;
 export const getIncidentMetrics = IncidentAPI.getIncidentMetrics;
 
 // 导出常量和类型

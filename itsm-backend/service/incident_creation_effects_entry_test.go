@@ -1,9 +1,10 @@
 package service_test
 
 import (
-	"itsm-backend/ent/outboxevent"
 	"strconv"
 	"testing"
+
+	"itsm-backend/ent/outboxevent"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent/incidentmetric"
@@ -48,6 +49,7 @@ func TestIncidentCreationUsesFormalRuleEngine(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "completed", execution.Status)
 }
+
 func TestIncidentCreationUnknownRuleActionNeverCompletes(t *testing.T) {
 	client, incidentService, ctx := setupIncidentTest(t)
 	defer client.Close()

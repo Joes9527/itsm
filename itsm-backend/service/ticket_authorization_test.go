@@ -145,7 +145,7 @@ func TestCanDelete_BlockedByRunningProcessInstance(t *testing.T) {
 
 	_, err = client.ProcessInstance.Create().
 		SetProcessInstanceID("proc-1").
-		SetBusinessKey("ticket:7").
+		SetBusinessKey("generic:7").
 		SetProcessDefinitionKey("ticket_general_flow").
 		SetProcessDefinitionID(def.ID).
 		SetStatus("running").
@@ -154,7 +154,8 @@ func TestCanDelete_BlockedByRunningProcessInstance(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	tk := &ticket.Ticket{ID: 7, RequesterID: 42, Status: ticket.StatusOpen}
+	// 实例身份是 generic:7，工单必须声明同一个 recordClass 才构成一致身份。
+	tk := &ticket.Ticket{ID: 7, RequesterID: 42, Status: ticket.StatusOpen, RecordClass: "generic"}
 	actor := ActionActor{Client: client, TenantID: tenant.ID, UserID: 99, Role: "sysadmin_test"}
 
 	perm := CanDelete(ctx, actor, tk)
@@ -204,4 +205,49 @@ func TestCanProvision_DeniedForEndUserEvenNotRequester(t *testing.T) {
 	perm := CanProvision(client, tenant.ID, 99, "end_user", 42)
 	require.False(t, perm.Allowed)
 	require.Equal(t, "无交付权限", perm.Reason)
+}
+
+// 非 generic 的 WorkItem 同样受运行中流程保护：守卫曾硬编码 generic，于是
+// incident/problem/change/service_request_item 带活跃流程时可以被误删。
+func TestCanDelete_BlockedByRunningProcessInstanceForNonGenericWorkItem(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", testDSN())
+	defer client.Close()
+	authorization.InvalidateAllPermissionCaches()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().SetName("t2").SetCode("t2").SetDomain("t2.com").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	seedRolePermission(t, client, tenant.ID, "sysadmin_test", "ticket", "delete")
+
+	deployment, err := client.ProcessDeployment.Create().
+		SetDeploymentID("deploy-non-generic").
+		SetDeploymentName("测试部署").
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+	def, err := client.ProcessDefinition.Create().
+		SetKey("incident_emergency_flow").
+		SetName("事件应急流程").
+		SetBpmnXML([]byte("<bpmn/>")).
+		SetDeploymentID(deployment.ID).
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+	_, err = client.ProcessInstance.Create().
+		SetProcessInstanceID("proc-incident").
+		SetBusinessKey("incident:7").
+		SetProcessDefinitionKey("incident_emergency_flow").
+		SetProcessDefinitionID(def.ID).
+		SetStatus("running").
+		SetTenantID(tenant.ID).
+		SetStartTime(time.Now()).
+		Save(ctx)
+	require.NoError(t, err)
+
+	tk := &ticket.Ticket{ID: 7, RequesterID: 42, Status: ticket.StatusOpen, RecordClass: "incident"}
+	actor := ActionActor{Client: client, TenantID: tenant.ID, UserID: 99, Role: "sysadmin_test"}
+
+	perm := CanDelete(ctx, actor, tk)
+	require.False(t, perm.Allowed)
+	require.Equal(t, "工单流程流转中，不可删除", perm.Reason)
 }

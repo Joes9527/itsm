@@ -54,6 +54,11 @@ func IDLTE(id int) predicate.OutboxEvent {
 	return predicate.OutboxEvent(sql.FieldLTE(FieldID, id))
 }
 
+// ExecutionWorkItemID applies equality check predicate on the "execution_work_item_id" field. It's identical to ExecutionWorkItemIDEQ.
+func ExecutionWorkItemID(v int) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldEQ(FieldExecutionWorkItemID, v))
+}
+
 // EventID applies equality check predicate on the "event_id" field. It's identical to EventIDEQ.
 func EventID(v string) predicate.OutboxEvent {
 	return predicate.OutboxEvent(sql.FieldEQ(FieldEventID, v))
@@ -122,6 +127,56 @@ func CreatedAt(v time.Time) predicate.OutboxEvent {
 // UpdatedAt applies equality check predicate on the "updated_at" field. It's identical to UpdatedAtEQ.
 func UpdatedAt(v time.Time) predicate.OutboxEvent {
 	return predicate.OutboxEvent(sql.FieldEQ(FieldUpdatedAt, v))
+}
+
+// ExecutionWorkItemIDEQ applies the EQ predicate on the "execution_work_item_id" field.
+func ExecutionWorkItemIDEQ(v int) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldEQ(FieldExecutionWorkItemID, v))
+}
+
+// ExecutionWorkItemIDNEQ applies the NEQ predicate on the "execution_work_item_id" field.
+func ExecutionWorkItemIDNEQ(v int) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldNEQ(FieldExecutionWorkItemID, v))
+}
+
+// ExecutionWorkItemIDIn applies the In predicate on the "execution_work_item_id" field.
+func ExecutionWorkItemIDIn(vs ...int) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldIn(FieldExecutionWorkItemID, vs...))
+}
+
+// ExecutionWorkItemIDNotIn applies the NotIn predicate on the "execution_work_item_id" field.
+func ExecutionWorkItemIDNotIn(vs ...int) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldNotIn(FieldExecutionWorkItemID, vs...))
+}
+
+// ExecutionWorkItemIDGT applies the GT predicate on the "execution_work_item_id" field.
+func ExecutionWorkItemIDGT(v int) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldGT(FieldExecutionWorkItemID, v))
+}
+
+// ExecutionWorkItemIDGTE applies the GTE predicate on the "execution_work_item_id" field.
+func ExecutionWorkItemIDGTE(v int) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldGTE(FieldExecutionWorkItemID, v))
+}
+
+// ExecutionWorkItemIDLT applies the LT predicate on the "execution_work_item_id" field.
+func ExecutionWorkItemIDLT(v int) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldLT(FieldExecutionWorkItemID, v))
+}
+
+// ExecutionWorkItemIDLTE applies the LTE predicate on the "execution_work_item_id" field.
+func ExecutionWorkItemIDLTE(v int) predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldLTE(FieldExecutionWorkItemID, v))
+}
+
+// ExecutionWorkItemIDIsNil applies the IsNil predicate on the "execution_work_item_id" field.
+func ExecutionWorkItemIDIsNil() predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldIsNull(FieldExecutionWorkItemID))
+}
+
+// ExecutionWorkItemIDNotNil applies the NotNil predicate on the "execution_work_item_id" field.
+func ExecutionWorkItemIDNotNil() predicate.OutboxEvent {
+	return predicate.OutboxEvent(sql.FieldNotNull(FieldExecutionWorkItemID))
 }
 
 // EventIDEQ applies the EQ predicate on the "event_id" field.

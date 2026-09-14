@@ -4,11 +4,12 @@ package integration
 
 import (
 	"fmt"
-	"itsm-backend/common/tenantctx"
-	"itsm-backend/ent"
 	"os"
 	"strings"
 	"testing"
+
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/ent"
 
 	"github.com/stretchr/testify/require"
 	"itsm-backend/migration"
@@ -63,5 +64,4 @@ func TestPostgresEmailAttachmentSourceMigration(t *testing.T) {
 	require.NoError(t, err)
 	_, err = f.db.ExecContext(f.ctx, string(verify))
 	require.NoError(t, err)
-
 }

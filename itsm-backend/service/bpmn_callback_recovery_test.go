@@ -86,7 +86,7 @@ func TestCCCallbackOutboxVariableRecipientsUseAuthoritativeInitiator(t *testing.
 		SetStatus("running").
 		SetCurrentActivityID("cc-callback").
 		SetCurrentActivityName("CC callback").
-		SetBusinessType("ticket").
+		SetBusinessType("generic").
 		SetBusinessID(ticket.ID).
 		SetInitiator(strconv.Itoa(f.actor.ID)).
 		SetVariables(map[string]interface{}{
@@ -103,6 +103,7 @@ func TestCCCallbackOutboxVariableRecipientsUseAuthoritativeInitiator(t *testing.
 	serviceTask := definitions.Processes[0].ServiceTasks[0]
 	handler := f.engine.findHandlerByTaskType(serviceTask.ServiceTaskType())
 	require.NotNil(t, handler)
+	handler.(*bpmn.CCTaskHandler).SetNotificationTargetBinder(newQueuedNotificationTestService(f.client, zap.NewNop().Sugar(), standardNotificationPolicy(t)))
 
 	executionKeys := make([]string, 0, 1)
 	scheduler := f.engine.forClient(f.client, &executionKeys)
@@ -144,6 +145,14 @@ func TestCCCallbackOutboxVariableRecipientsUseAuthoritativeInitiator(t *testing.
 	channels := make([]string, 0, len(notifications))
 	for _, notification := range notifications {
 		channels = append(channels, notification.Channel)
+		if notification.Channel == "email" {
+			require.NotNil(t, notification.TargetProtocolVersion)
+			require.Equal(t, 2, *notification.TargetProtocolVersion)
+			require.NotNil(t, notification.TargetTransport)
+			require.Equal(t, "smtp", *notification.TargetTransport)
+			require.NotNil(t, notification.TargetDestinationDigest)
+			require.Len(t, *notification.TargetDestinationDigest, 64)
+		}
 	}
 	assert.ElementsMatch(t, []string{"in_app", "email", "in_app", "email"}, channels)
 }
@@ -160,6 +169,7 @@ func (h *countingIdempotentCallbackHandler) GetHandlerID() string { return h.han
 func (h *countingIdempotentCallbackHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
 	return bpmn.CallbackActionContract{PayloadFields: append([]string(nil), h.callbackFields...)}, true
 }
+
 func (h *countingIdempotentCallbackHandler) Execute(ctx context.Context, task *ent.ProcessTask, _ map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	key, ok := bpmn.BPMNCallbackExecutionKey(ctx)
 	if !ok || key == "" {
@@ -298,7 +308,7 @@ func seedDurableCCUserCallbackTask(
 		SaveX(f.userCtx)
 	instance := f.client.ProcessInstance.GetX(f.userCtx, task.ProcessInstanceID)
 	instance, err = f.client.ProcessInstance.UpdateOne(instance).
-		SetBusinessType("ticket").
+		SetBusinessType("generic").
 		SetBusinessID(ticket.ID).
 		SetInitiator(strconv.Itoa(f.actor.ID)).
 		Save(f.userCtx)
@@ -437,76 +447,7 @@ func TestCallbackHandlerSuccessThenAdvanceFailureRetriesAndCompletesToken(t *tes
 	assert.Equal(t, []string{row.ExecutionKey, row.ExecutionKey}, handler.ExecutionKeys())
 }
 
-func TestChangeCallbackBusinessEffectSurvivesAdvanceFailureWithoutReplay(t *testing.T) {
-	f := newBPMNAuthorizationFixture(t)
-	now := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
-	setCallbackTestClock(f.engine, &now)
-
-	workItem := f.client.Ticket.Create().
-		SetTitle("Durable callback change").
-		SetStatus("pending").
-		SetRecordClass("change_request").
-		SetPriority("medium").
-		SetTicketNumber("BPMN-CALLBACK-CHANGE-1").
-		SetRequesterID(f.actor.ID).
-		SetTenantID(f.tenant.ID).
-		SaveX(f.userCtx)
-	changeEntity := f.client.Change.Create().
-		SetType("normal").
-		SetRiskLevel("medium").
-		SetImpactScope("low").
-		SetWorkItemID(workItem.ID).
-		SaveX(f.userCtx)
-
-	task := f.seedNonParticipantApprovalTask(t, "real-change-advance-retry")
-	task = f.client.ProcessTask.UpdateOne(task).
-		SetCandidateUsers(f.actor.Email).
-		SaveX(f.userCtx)
-	instance := f.client.ProcessInstance.GetX(f.userCtx, task.ProcessInstanceID)
-	instance = f.client.ProcessInstance.UpdateOne(instance).
-		SetBusinessKey(fmt.Sprintf("change:%d", workItem.ID)).
-		SetBusinessType("change").
-		SetBusinessID(workItem.ID).
-		SaveX(f.userCtx)
-	definition := f.client.ProcessDefinition.GetX(f.userCtx, instance.ProcessDefinitionID)
-	definitionXML := `<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="http://bpmn.io/schema/bpmn">
-  <bpmn:process id="durable-change" isExecutable="true">
-    <bpmn:startEvent id="start" />
-    <bpmn:userTask id="approval" name="Approval" />
-    <bpmn:serviceTask id="callback" name="Schedule change">
-      <bpmn:extensionElements>
-        <bpmn:metaData name="service_task_type">change_task</bpmn:metaData>
-        <bpmn:metaData name="action">schedule_change</bpmn:metaData>
-      </bpmn:extensionElements>
-    </bpmn:serviceTask>
-    <bpmn:endEvent id="end" />
-    <bpmn:sequenceFlow id="to-approval" sourceRef="start" targetRef="approval" />
-    <bpmn:sequenceFlow id="to-callback" sourceRef="approval" targetRef="callback" />
-    <bpmn:sequenceFlow id="to-end" sourceRef="callback" targetRef="end" />
-  </bpmn:process>
-</bpmn:definitions>`
-	f.client.ProcessDefinition.UpdateOne(definition).SetBpmnXML([]byte(definitionXML)).ExecX(f.userCtx)
-	failNextCallbackTokenAdvance(f.client, "end", errors.New("forced process token advancement rollback"))
-
-	require.NoError(t, f.engine.CompleteTask(f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, nil))
-	firstEffect := f.client.Change.GetX(f.userCtx, changeEntity.ID)
-	require.Equal(t, "scheduled", requireChangeWorkItem(t, f.client, firstEffect).Status)
-	row := callbackRowForInstance(t, f, instance.ID)
-	require.Equal(t, bpmnCallbackStatusPending, row.Status)
-	require.Equal(t, "advance_error", row.LastErrorClass)
-
-	now = now.Add(time.Second)
-	completed, err := f.engine.ProcessPendingCallbacks(context.Background(), "real-change-retry-worker", 50)
-	require.NoError(t, err)
-	require.Equal(t, 1, completed)
-	afterRetry := f.client.Change.GetX(f.userCtx, changeEntity.ID)
-	assert.Equal(t, "scheduled", requireChangeWorkItem(t, f.client, afterRetry).Status)
-	assert.Equal(t, firstEffect.PlannedStartDate, afterRetry.PlannedStartDate)
-	assert.Equal(t, firstEffect.PlannedEndDate, afterRetry.PlannedEndDate)
-	assert.Equal(t, bpmnCallbackStatusCompleted, callbackRowForInstance(t, f, instance.ID).Status)
-	assert.Equal(t, "completed", f.client.ProcessInstance.GetX(f.userCtx, instance.ID).Status)
-}
+// TestChangeCallbackBusinessEffectSurvivesAdvanceFailureWithoutReplay moved to tests/integration/workitem_change_consumers_postgres_test.go.
 
 func TestCallbackCompletionAndTokenAdvanceRollbackTogether(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)

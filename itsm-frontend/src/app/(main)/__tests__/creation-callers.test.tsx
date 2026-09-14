@@ -16,6 +16,7 @@ import { TicketApi } from '@/lib/api/ticket-api';
 import { StandardChangeApi } from '@/lib/api/standard-change-api';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { creationReceipt } from '@/lib/api/creation.test-utils';
+jest.mock('@/lib/api/ticket-category-api', () => ({ TicketCategoryApi: { getCategoryTree: jest.fn().mockResolvedValue([{id: 81, name: '租户应用支持', parentId: null, isActive:true, children:[]}]) } }));
 jest.unmock('dayjs');
 const push = jest.fn();
 jest.mock('next/navigation', () => ({
@@ -80,10 +81,14 @@ it('Problem page preserves root cause/impact and does not imply unsupported assi
   fill('详细描述', '生产服务连接数据库出现持续错误');
   fill('根本原因分析 (RCA)', '数据库连接池资源长期未能释放');
   fill('影响范围', '影响当前全部生产系统的业务请求');
+  await userEvent.click(screen.getByLabelText('分类'));
+  await userEvent.click(await screen.findByText('租户应用支持'));
+
   fireEvent.click(screen.getByRole('button', { name: '创建问题' }));
   await waitFor(() => expect(push).toHaveBeenCalledWith('/problems'));
   expect(ProblemApi.createProblem).toHaveBeenCalledWith(
     expect.objectContaining({
+      cti: { categoryId: 81 },
       rootCause: '数据库连接池资源长期未能释放',
       impact: '影响当前全部生产系统的业务请求',
     }),
@@ -110,7 +115,6 @@ it('Change page preserves the complete professional input and reports manual int
       rollbackPlan: '回退数据库并恢复备份',
       type: 'normal',
       affectedCis: [],
-      relatedTickets: [],
     }),
     expect.anything()
   );

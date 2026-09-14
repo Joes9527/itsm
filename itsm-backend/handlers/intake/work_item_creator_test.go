@@ -2,10 +2,11 @@ package intake
 
 import (
 	"context"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/authorization"
 	"itsm-backend/handlers/common/workitemcreation"
-	"testing"
 )
 
 func TestBaseWriterSupportsPreparedClassesWithoutLifecycleDefaults(t *testing.T) {

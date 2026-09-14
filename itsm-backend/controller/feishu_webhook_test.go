@@ -6,33 +6,38 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	"io"
-	"itsm-backend/common"
-	"itsm-backend/connector"
-	feishu "itsm-backend/connector/builtin/feishu"
-	"itsm-backend/dto"
-	"itsm-backend/service"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+
+	"itsm-backend/common"
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/connector"
+	feishu "itsm-backend/connector/builtin/feishu"
+	"itsm-backend/dto"
+	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 )
 
 func webhookFixture(t *testing.T) (*FeishuController, *gin.Engine) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	manager := connector.NewManager(nil, zap.NewNop().Sugar())
-	require.NoError(t, manager.Provision(context.Background(), connector.Config{Name: "feishu", TenantID: 17, Enabled: true, Credentials: map[string]string{"app_id": "test-app", "app_secret": "test-secret", "encrypt_key": "test-key", "verification_token": "test-token"}, Settings: map[string]interface{}{"callbackInstanceId": "c83503e86cc5468aaab482cd204f30fa"}}))
+	manager := connector.NewManager(nil, zap.NewNop().Sugar(), executionfixture.Standard())
+	require.NoError(t, manager.Provision(tenantctx.WithTenantID(context.Background(), 17), connector.Config{Name: "feishu", TenantID: 17, Enabled: true, Credentials: map[string]string{"app_id": "test-app", "app_secret": "test-secret", "encrypt_key": "test-key", "verification_token": "test-token"}, Settings: map[string]interface{}{"callbackInstanceId": "c83503e86cc5468aaab482cd204f30fa"}}))
 	c := NewFeishuController(manager, nil, nil, zap.NewNop().Sugar())
 	r := gin.New()
 	r.POST("/api/v1/feishu/webhook/:instance_id", c.Webhook)
 	return c, r
 }
+
 func signedWebhook(body string) *http.Request {
 	req := httptest.NewRequest("POST", "/api/v1/feishu/webhook/c83503e86cc5468aaab482cd204f30fa", strings.NewReader(body))
 	ts := strconv.FormatInt(time.Now().Unix(), 10)
@@ -42,6 +47,7 @@ func signedWebhook(body string) *http.Request {
 	req.Header.Set("X-Lark-Signature", hex.EncodeToString(sum[:]))
 	return req
 }
+
 func TestFeishuWebhookRejectsAmbiguousJSONBeforeChallenge(t *testing.T) {
 	for name, body := range map[string]string{
 		"type":         `{"type":"event_callback","type":"url_verification","token":"test-token","challenge":"x"}`,
@@ -62,6 +68,7 @@ func TestFeishuWebhookRejectsAmbiguousJSONBeforeChallenge(t *testing.T) {
 		})
 	}
 }
+
 func TestFeishuWebhookUnknownEventFailsClosed(t *testing.T) {
 	_, r := webhookFixture(t)
 	w := httptest.NewRecorder()
@@ -82,6 +89,7 @@ func TestFeishuWebhookBodyReadFailure(t *testing.T) {
 	require.Equal(t, 400, w.Code)
 	require.Empty(t, c.replayed)
 }
+
 func TestFeishuWebhookVerifiedChallengeAndOriginalSignature(t *testing.T) {
 	body := "{ \n  \"type\": \"url_verification\", \"token\": \"test-token\", \"challenge\": \"quote\\\"value\", \"vendor_extra\": 9007199254740993 }"
 	_, r := webhookFixture(t)
@@ -123,6 +131,7 @@ type webhookTaskService struct {
 func (s *webhookTaskService) SyncTicketToFeishu(context.Context, service.ActionActor, int, *feishu.Feishu) (*dto.FeishuTicketSyncResponse, error) {
 	return nil, errors.New("unexpected outbound sync")
 }
+
 func (s *webhookTaskService) HandleTaskEvent(_ context.Context, tenantID int, fc *feishu.Feishu, eventType string, data map[string]interface{}) (*dto.FeishuWebhookResponse, error) {
 	s.calls++
 	s.tenantID = tenantID
@@ -130,6 +139,7 @@ func (s *webhookTaskService) HandleTaskEvent(_ context.Context, tenantID int, fc
 	s.taskData = data
 	return &dto.FeishuWebhookResponse{EventType: eventType, Action: "created"}, s.failure
 }
+
 func TestFeishuWebhookSignedTaskDispatchAndReplay(t *testing.T) {
 	c, r := webhookFixture(t)
 	sideEffects := &webhookTaskService{}
@@ -151,6 +161,7 @@ func TestFeishuWebhookSignedTaskDispatchAndReplay(t *testing.T) {
 	require.Equal(t, 403, w.Code)
 	require.Equal(t, 1, sideEffects.calls)
 }
+
 func TestFeishuWebhookDispatchFailureIsVisible(t *testing.T) {
 	c, r := webhookFixture(t)
 	sideEffects := &webhookTaskService{failure: errors.New("application rejected event")}
@@ -160,6 +171,7 @@ func TestFeishuWebhookDispatchFailureIsVisible(t *testing.T) {
 	require.Equal(t, 500, w.Code)
 	require.Equal(t, 1, sideEffects.calls)
 }
+
 func TestFeishuWebhookAmbiguousTaskNeverDispatches(t *testing.T) {
 	c, r := webhookFixture(t)
 	sideEffects := &webhookTaskService{}
@@ -168,4 +180,25 @@ func TestFeishuWebhookAmbiguousTaskNeverDispatches(t *testing.T) {
 	r.ServeHTTP(w, signedWebhook(`{"header":{"event_type":"task.created"},"event":{"task_guid":"first","task_guid":"second"}}`))
 	require.Equal(t, 400, w.Code)
 	require.Zero(t, sideEffects.calls)
+}
+
+func TestUnconfiguredFeishuRoutesDoNotReachSyncOwner(t *testing.T) {
+	manager := connector.NewManager(connector.NewRegistry(), zap.NewNop().Sugar(), executionfixture.Standard())
+	defer manager.CloseAll()
+	c := NewFeishuController(manager, nil, nil, zap.NewNop().Sugar())
+	// A missing side-effect owner would panic if either route dispatched.
+	r := gin.New()
+	r.Use(func(ctx *gin.Context) { ctx.Set("tenant_id", 17); ctx.Set("user_id", 23); ctx.Next() })
+	r.POST("/sync/:ticket_id", c.SyncTicketToFeishu)
+	r.POST("/webhook/:instance_id", c.Webhook)
+	for _, path := range []string{"/sync/1", "/webhook/unconfigured-instance"} {
+		t.Run(path, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			require.NotPanics(t, func() { r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))) })
+			var response common.Response
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+			require.NotEqual(t, common.SuccessCode, response.Code)
+		})
+	}
+	require.Empty(t, manager.ListByTenant(17))
 }

@@ -6,6 +6,10 @@ import (
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
+	"itsm-backend/common/executionscope"
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/config"
+	"itsm-backend/database"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/marketplaceitem"
@@ -20,8 +24,8 @@ func TestService_InstallItem_IsIdempotentForExistingInstallation(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:marketplace_idempotent?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 
-	svc := NewService(client, zaptest.NewLogger(t).Sugar())
-	ctx := context.Background()
+	svc := NewService(client, zaptest.NewLogger(t).Sugar(), standardMarketplacePolicy(t))
+	ctx := tenantctx.WithTenantID(context.Background(), 1)
 
 	item := createPublishedMarketplaceItem(t, ctx, client, "feishu")
 
@@ -44,8 +48,8 @@ func TestService_UninstallItem_ReturnsNotFoundForMissingInstallation(t *testing.
 	client := enttest.Open(t, "sqlite3", "file:marketplace_uninstall_missing?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 
-	svc := NewService(client, zaptest.NewLogger(t).Sugar())
-	ctx := context.Background()
+	svc := NewService(client, zaptest.NewLogger(t).Sugar(), standardMarketplacePolicy(t))
+	ctx := tenantctx.WithTenantID(context.Background(), 1)
 
 	item := createPublishedMarketplaceItem(t, ctx, client, "wecom")
 
@@ -58,8 +62,8 @@ func TestService_InstallItem_ReactivatesUninstalledHistory(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:marketplace_reactivate?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 
-	svc := NewService(client, zaptest.NewLogger(t).Sugar())
-	ctx := context.Background()
+	svc := NewService(client, zaptest.NewLogger(t).Sugar(), standardMarketplacePolicy(t))
+	ctx := tenantctx.WithTenantID(context.Background(), 1)
 
 	item := createPublishedMarketplaceItem(t, ctx, client, "dingtalk")
 
@@ -93,4 +97,23 @@ func createPublishedMarketplaceItem(t *testing.T, ctx context.Context, client *e
 		Save(ctx)
 	require.NoError(t, err)
 	return item
+}
+
+func standardMarketplacePolicy(t *testing.T) *database.ExecutionPolicy {
+	t.Helper()
+	policy, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "marketplace-test"})
+	require.NoError(t, err)
+	return policy
+}
+
+func TestService_MissingManagementPolicyRejectsBeforeDatabase(t *testing.T) {
+	svc := NewService(nil, nil, nil)
+	ctx := tenantctx.WithTenantID(context.Background(), 1)
+	_, err := svc.InstallItem(ctx, 1, 1, "fixture")
+	require.ErrorIs(t, err, executionscope.ErrDenied)
+	_, err = svc.UpdateInstallationConfig(ctx, 1, 1, nil)
+	require.ErrorIs(t, err, executionscope.ErrDenied)
+	require.ErrorIs(t, svc.UninstallItem(ctx, 1, 1), executionscope.ErrDenied)
+	_, err = svc.MergeConnectorInstallationConfig(ctx, 1, "feishu", nil)
+	require.ErrorIs(t, err, executionscope.ErrDenied)
 }

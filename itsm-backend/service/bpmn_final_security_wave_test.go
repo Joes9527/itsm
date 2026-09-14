@@ -5,10 +5,8 @@ import (
 	"encoding/json"
 	"strconv"
 	"testing"
-	"time"
 
 	"itsm-backend/common"
-	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processcallbackoutbox"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/service/bpmn"
@@ -25,8 +23,8 @@ func TestStartProcessRejectsMissingTypedOrTrustedTenantScope(t *testing.T) {
 		context.Background(),
 		f.definition.Key,
 		"unscoped-start",
-		"ticket",
-		101,
+		"generic",
+		f.workItem(t, 101).ID,
 		map[string]interface{}{},
 	)
 
@@ -295,8 +293,8 @@ func TestCallbackOutboxDoesNotPersistArbitraryOrSensitiveProcessVariables(t *tes
 		startProcessContext(f),
 		f.definition.Key,
 		"allowlist-probe",
-		"ticket",
-		321,
+		"generic",
+		f.workItem(t, 321).ID,
 		map[string]interface{}{
 			"safe_form_value": "not declared by the handler",
 			"password":        "must-not-persist",
@@ -404,56 +402,6 @@ func TestCallbackPayloadNormalizerUndeclaredFieldCreatesDurableBlockedGate(t *te
 	assert.Equal(t, bpmnCallbackStatusBlocked, blocked.Status)
 	assert.Equal(t, string(bpmn.CallbackBlockHandlerContract), blocked.LastErrorClass)
 	assert.Empty(t, blocked.Variables)
-}
-
-type ccCompletionMutationSnapshot struct {
-	taskStatus           string
-	taskCompletedTime    time.Time
-	taskVariables        map[string]interface{}
-	callbackHandlerID    string
-	callbackTaskType     string
-	callbackAction       string
-	callbackConfigRef    string
-	instanceVersion      int
-	instanceStatus       string
-	instanceActivityID   string
-	instanceActivityName string
-	instanceVariables    map[string]interface{}
-	processAuditLogCount int
-	processCallbackCount int
-}
-
-func snapshotCCCompletionMutationState(
-	t *testing.T,
-	f *bpmnAuthorizationFixture,
-	taskID int,
-	instanceID int,
-) ccCompletionMutationSnapshot {
-	t.Helper()
-	task := f.client.ProcessTask.GetX(f.userCtx, taskID)
-	instance := f.client.ProcessInstance.GetX(f.userCtx, instanceID)
-	return ccCompletionMutationSnapshot{
-		taskStatus:           task.Status,
-		taskCompletedTime:    task.CompletedTime,
-		taskVariables:        task.TaskVariables,
-		callbackHandlerID:    task.CallbackHandlerID,
-		callbackTaskType:     task.CallbackTaskType,
-		callbackAction:       task.CallbackAction,
-		callbackConfigRef:    task.CallbackConfigRef,
-		instanceVersion:      instance.Version,
-		instanceStatus:       instance.Status,
-		instanceActivityID:   instance.CurrentActivityID,
-		instanceActivityName: instance.CurrentActivityName,
-		instanceVariables:    instance.Variables,
-		processAuditLogCount: f.client.ProcessAuditLog.Query().Where(
-			processauditlog.TenantID(f.tenant.ID),
-			processauditlog.ProcessInstanceID(instanceID),
-		).CountX(f.userCtx),
-		processCallbackCount: f.client.ProcessCallbackOutbox.Query().Where(
-			processcallbackoutbox.TenantID(f.tenant.ID),
-			processcallbackoutbox.ProcessTaskID(taskID),
-		).CountX(f.userCtx),
-	}
 }
 
 func TestCompleteTaskBlocksInvalidCCChannelDurably(t *testing.T) {
@@ -594,7 +542,7 @@ func TestCCCallbackAuthoritativeVariablesRequireValidInitiator(t *testing.T) {
 		SaveX(f.userCtx)
 	instance := f.createProcessInstance(t, f.tenant, "cc-callback-attribution")
 	instance = f.client.ProcessInstance.UpdateOne(instance).
-		SetBusinessType("ticket").
+		SetBusinessType("generic").
 		SetBusinessID(ticket.ID).
 		SetInitiator(strconv.Itoa(f.actor.ID)).
 		SaveX(f.userCtx)

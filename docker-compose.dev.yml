@@ -44,7 +44,7 @@ services:
 
   # MinIO 对象存储（开发环境，可选）
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     container_name: itsm-minio-dev
     hostname: minio
     command: server /data --console-address ":9001"
@@ -181,7 +181,7 @@ services:
       - LLM_PROVIDER=openai
       - LLM_BASE_URL=https://api.deepseek.com/v1
       - LLM_ENDPOINT=https://api.deepseek.com/v1
-      - LLM_API_KEY=sk-f06badc392ec4d5797288736d5e5c040
+      - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_MODEL=deepseek-v4-pro
 
       # 监控配置

@@ -3,7 +3,6 @@ package service_catalog
 import (
 	"context"
 	"database/sql"
-
 	"errors"
 	"strings"
 	"time"
@@ -96,6 +95,7 @@ func (s *Service) projectCreationCatalog(ctx context.Context, tx *ent.Tx, identi
 	}
 	return result, definitions, fields, nil
 }
+
 func creationRevision(value any) (string, error) {
 	return creation.ConfigurationRevision("catalog-v1", value)
 }

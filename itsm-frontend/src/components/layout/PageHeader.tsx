@@ -29,7 +29,7 @@ export function PageHeader({ title, description, extra, showBackButton = false }
       style={{
         marginBottom: 24,
         paddingBottom: 16,
-        borderBottom: '1px solid #e5e7eb',
+        borderBottom: '1px solid var(--color-border)',
       }}
     >
       {/* 返回按钮 */}
@@ -41,15 +41,15 @@ export function PageHeader({ title, description, extra, showBackButton = false }
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
         {/* 标题和描述 */}
         <div style={{ flex: 1 }}>
           {title && (
             <h1
               style={{
-                fontSize: 20,
+                fontSize: 24,
                 fontWeight: '600',
-                color: '#1f2937',
+                color: 'var(--color-text-primary)',
                 margin: 0,
                 marginBottom: description ? 8 : 0,
               }}
@@ -60,8 +60,8 @@ export function PageHeader({ title, description, extra, showBackButton = false }
           {description && (
             <p
               style={{
-                fontSize: 14,
-                color: '#6b7280',
+                fontSize: 12,
+                color: 'var(--color-text-secondary)',
                 margin: 0,
                 lineHeight: '1.5',
               }}

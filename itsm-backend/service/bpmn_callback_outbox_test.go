@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/processauditlog"
@@ -50,9 +52,10 @@ func openBPMNCallbackOutboxClient(t *testing.T) *ent.Client {
 
 func newBPMNCallbackOutboxForTest(client *ent.Client, executor bpmnCallbackExecutor, now time.Time) *bpmnCallbackOutbox {
 	return &bpmnCallbackOutbox{
-		client:   client,
-		executor: executor,
-		now:      func() time.Time { return now },
+		execution: executionfixture.Standard(),
+		client:    client,
+		executor:  executor,
+		now:       func() time.Time { return now },
 	}
 }
 
@@ -87,7 +90,7 @@ func enqueueBPMNCallbackOutboxForTest(t *testing.T, outbox *bpmnCallbackOutbox, 
 		TaskType:          "fake_task",
 		ElementID:         "Activity_Notify",
 		Variables:         map[string]interface{}{"bpmn_callback_execution_key": "client-value"},
-	})
+	}, nil)
 	require.NoError(t, err)
 	return row
 }
@@ -150,7 +153,8 @@ func TestBPMNCallbackOutboxTerminalMetricIsNotRepeatedAfterRestart(t *testing.T)
 
 func bpmnCallbackMetricValue(t *testing.T, metric interface {
 	Write(*io_prometheus_client.Metric) error
-}) float64 {
+},
+) float64 {
 	t.Helper()
 	payload := &io_prometheus_client.Metric{}
 	require.NoError(t, metric.Write(payload))

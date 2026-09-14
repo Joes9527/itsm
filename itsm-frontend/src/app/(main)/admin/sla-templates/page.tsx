@@ -34,7 +34,11 @@ import {
 } from 'antd';
 import { Download, Eye, CheckCircle, Rocket } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { SLATemplateApi, type SLATemplate, type TemplateInstallResult } from '@/lib/api/sla-template-api';
+import {
+  SLATemplateApi,
+  type SLATemplate,
+  type TemplateInstallResult,
+} from '@/lib/api/sla-template-api';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -72,7 +76,6 @@ export default function SLATemplatesPage() {
       const data = await SLATemplateApi.listTemplates();
       setTemplates(data);
     } catch (err) {
-       
       console.error(err);
       message.error('加载 SLA 模板失败');
       setTemplates([]);
@@ -105,7 +108,6 @@ export default function SLATemplatesPage() {
         message.info(`模板「${key}」已存在，未重复安装`);
       }
     } catch (err) {
-       
       console.error(err);
       message.error(`安装模板「${key}」失败`);
     } finally {
@@ -128,7 +130,6 @@ export default function SLATemplatesPage() {
       setInstallResults(prev => ({ ...prev, ...map }));
       message.success(`批量安装完成：新增 ${createdCount} 个，已存在 ${existingCount} 个`);
     } catch (err) {
-       
       console.error(err);
       message.error('批量安装失败');
     } finally {
@@ -196,7 +197,12 @@ export default function SLATemplatesPage() {
       render: (_: unknown, t: SLATemplate) => {
         const r = installResults[t.key];
         if (!r) return <Text type="secondary">未安装</Text>;
-        if (r.created) return <Tag color="green" icon={<CheckCircle />}>已安装（新建）</Tag>;
+        if (r.created)
+          return (
+            <Tag color="green" icon={<CheckCircle />}>
+              已安装（新建）
+            </Tag>
+          );
         if (r.wasAlreadyExist) return <Tag color="blue">已存在</Tag>;
         return <Tag color="default">-</Tag>;
       },
@@ -234,12 +240,13 @@ export default function SLATemplatesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Title level={3} style={{ marginBottom: 4 }}>
+        <Title level={2} style={{ marginBottom: 4 }}>
           <Rocket style={{ marginRight: 8 }} />
           SLA 模板
         </Title>
         <Paragraph type="secondary">
-          开箱即用的 SLA 模板，按行业（事件 / 变更 / 服务请求）和优先级预置。一键安装到当前租户即可生效，无需手工配置。
+          开箱即用的 SLA 模板，按行业（事件 / 变更 /
+          服务请求）和优先级预置。一键安装到当前租户即可生效，无需手工配置。
         </Paragraph>
       </div>
 
@@ -251,7 +258,12 @@ export default function SLATemplatesPage() {
         </Col>
         <Col xs={24} sm={8}>
           <Card>
-            <Statistic title="推荐模板" value={stats.recommended} suffix="个" valueStyle={{ color: '#52c41a' }} />
+            <Statistic
+              title="推荐模板"
+              value={stats.recommended}
+              suffix="个"
+              valueStyle={{ color: '#52c41a' }}
+            />
           </Card>
         </Col>
         <Col xs={24} sm={8}>
@@ -334,8 +346,12 @@ export default function SLATemplatesPage() {
             <Descriptions.Item label="优先级">
               <Tag color={priorityColorMap[detail.priority] ?? 'default'}>{detail.priority}</Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="响应时间">{formatMinutes(detail.responseTime)}</Descriptions.Item>
-            <Descriptions.Item label="解决时间">{formatMinutes(detail.resolutionTime)}</Descriptions.Item>
+            <Descriptions.Item label="响应时间">
+              {formatMinutes(detail.responseTime)}
+            </Descriptions.Item>
+            <Descriptions.Item label="解决时间">
+              {formatMinutes(detail.resolutionTime)}
+            </Descriptions.Item>
             <Descriptions.Item label="推荐模板" span={2}>
               {detail.recommended ? <Tag color="green">是</Tag> : <Tag>否</Tag>}
             </Descriptions.Item>
@@ -343,12 +359,26 @@ export default function SLATemplatesPage() {
               {detail.description}
             </Descriptions.Item>
             <Descriptions.Item label="升级规则" span={2}>
-              <pre style={{ background: '#f5f5f5', padding: 8, borderRadius: 4, margin: 0 }}>
+              <pre
+                style={{
+                  background: 'var(--color-bg-tertiary)',
+                  padding: 8,
+                  borderRadius: 4,
+                  margin: 0,
+                }}
+              >
                 {JSON.stringify(detail.escalationRules, null, 2)}
               </pre>
             </Descriptions.Item>
             <Descriptions.Item label="适用条件" span={2}>
-              <pre style={{ background: '#f5f5f5', padding: 8, borderRadius: 4, margin: 0 }}>
+              <pre
+                style={{
+                  background: 'var(--color-bg-tertiary)',
+                  padding: 8,
+                  borderRadius: 4,
+                  margin: 0,
+                }}
+              >
                 {JSON.stringify(detail.conditions, null, 2)}
               </pre>
             </Descriptions.Item>

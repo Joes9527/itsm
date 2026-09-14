@@ -136,12 +136,13 @@ export default function SystemConfiguration() {
           (status.startedAt as string);
         const uptime = (status.uptime as string) || (status.upTime as string);
         setSystemStats({
-          uptime: typeof uptime === 'string' ? uptime : calculateUptime(startTime ? parseInt(startTime, 10) : undefined),
+          uptime:
+            typeof uptime === 'string'
+              ? uptime
+              : calculateUptime(startTime ? parseInt(startTime, 10) : undefined),
           goroutines: (status.goroutines as number) || 0,
           cpuCores: cpu.cores || (status.cpuCores as number) || 0,
-          memoryUsagePercent: Math.round(
-            memory.usagePercent || memory.usage || 0
-          ),
+          memoryUsagePercent: Math.round(memory.usagePercent || memory.usage || 0),
         });
       } catch (error) {
         console.error('Failed to fetch system status:', error);
@@ -204,7 +205,7 @@ export default function SystemConfiguration() {
   const GeneralSettings = () => (
     <div className="space-y-6">
       <div>
-        <Title level={5} className="!mb-4">
+        <Title style={{ fontSize: 15, fontWeight: 600 }} level={5} className="!mb-4">
           基础设置
         </Title>
         <Row gutter={[16, 16]}>
@@ -238,7 +239,15 @@ export default function SystemConfiguration() {
               name="timezone"
               rules={[{ required: true, message: '请选择时区' }]}
             >
-              <Select placeholder="请选择时区" options={[{ value: "Asia/Shanghai", label: "亚洲/上海" }, { value: "Asia/Tokyo", label: "亚洲/东京" }, { value: "Europe/London", label: "欧洲/伦敦" }, { value: "America/New_York", label: "美洲/纽约" }]} />
+              <Select
+                placeholder="请选择时区"
+                options={[
+                  { value: 'Asia/Shanghai', label: '亚洲/上海' },
+                  { value: 'Asia/Tokyo', label: '亚洲/东京' },
+                  { value: 'Europe/London', label: '欧洲/伦敦' },
+                  { value: 'America/New_York', label: '美洲/纽约' },
+                ]}
+              />
             </Form.Item>
           </Col>
           <Col span={12}>
@@ -247,7 +256,14 @@ export default function SystemConfiguration() {
               name="language"
               rules={[{ required: true, message: '请选择语言' }]}
             >
-              <Select placeholder="请选择语言" options={[{ value: "zh-CN", label: "简体中文" }, { value: "en-US", label: "English" }, { value: "ja-JP", label: "日本語" }]} />
+              <Select
+                placeholder="请选择语言"
+                options={[
+                  { value: 'zh-CN', label: '简体中文' },
+                  { value: 'en-US', label: 'English' },
+                  { value: 'ja-JP', label: '日本語' },
+                ]}
+              />
             </Form.Item>
           </Col>
         </Row>
@@ -259,7 +275,14 @@ export default function SystemConfiguration() {
               name="dateFormat"
               rules={[{ required: true, message: '请选择日期格式' }]}
             >
-              <Select placeholder="请选择日期格式" options={[{ value: "YYYY-MM-DD", label: "YYYY-MM-DD" }, { value: "DD/MM/YYYY", label: "DD/MM/YYYY" }, { value: "MM/DD/YYYY", label: "MM/DD/YYYY" }]} />
+              <Select
+                placeholder="请选择日期格式"
+                options={[
+                  { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD' },
+                  { value: 'DD/MM/YYYY', label: 'DD/MM/YYYY' },
+                  { value: 'MM/DD/YYYY', label: 'MM/DD/YYYY' },
+                ]}
+              />
             </Form.Item>
           </Col>
           <Col span={12}>
@@ -268,7 +291,13 @@ export default function SystemConfiguration() {
               name="timeFormat"
               rules={[{ required: true, message: '请选择时间格式' }]}
             >
-              <Select placeholder="请选择时间格式" options={[{ value: "24h", label: "24小时制" }, { value: "12h", label: "12小时制" }]} />
+              <Select
+                placeholder="请选择时间格式"
+                options={[
+                  { value: '24h', label: '24小时制' },
+                  { value: '12h', label: '12小时制' },
+                ]}
+              />
             </Form.Item>
           </Col>
         </Row>
@@ -277,7 +306,7 @@ export default function SystemConfiguration() {
       <Divider />
 
       <div>
-        <Title level={5} className="!mb-4">
+        <Title style={{ fontSize: 15, fontWeight: 600 }} level={5} className="!mb-4">
           会话设置
         </Title>
         <Row gutter={[16, 16]}>
@@ -316,7 +345,7 @@ export default function SystemConfiguration() {
   const SecuritySettings = () => (
     <div className="space-y-6">
       <div>
-        <Title level={5} className="!mb-4">
+        <Title style={{ fontSize: 15, fontWeight: 600 }} level={5} className="!mb-4">
           密码策略
         </Title>
         <Row gutter={[16, 16]}>
@@ -365,7 +394,7 @@ export default function SystemConfiguration() {
       <Divider />
 
       <div>
-        <Title level={5} className="!mb-4">
+        <Title style={{ fontSize: 15, fontWeight: 600 }} level={5} className="!mb-4">
           账户安全
         </Title>
         <Row gutter={[16, 16]}>
@@ -400,7 +429,7 @@ export default function SystemConfiguration() {
   const EmailSettings = () => (
     <div className="space-y-6">
       <div>
-        <Title level={5} className="!mb-4">
+        <Title style={{ fontSize: 15, fontWeight: 600 }} level={5} className="!mb-4">
           SMTP设置
         </Title>
         <Row gutter={[16, 16]}>
@@ -449,7 +478,7 @@ export default function SystemConfiguration() {
       <Divider />
 
       <div>
-        <Title level={5} className="!mb-4">
+        <Title style={{ fontSize: 15, fontWeight: 600 }} level={5} className="!mb-4">
           邮件模板
         </Title>
         <Form.Item
@@ -495,7 +524,7 @@ export default function SystemConfiguration() {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <Title level={2} className="!mb-2 !text-gray-900">
+        <Title level={2} className="!mb-2 !text-foreground">
           <Settings className="inline-block w-6 h-6 mr-2" />
           系统配置
         </Title>
@@ -505,7 +534,7 @@ export default function SystemConfiguration() {
       {/* 系统状态统计 */}
       <Row gutter={[16, 16]} className="mb-6">
         <Col xs={24} sm={12} lg={6}>
-          <Card className="rounded-lg shadow-sm border border-gray-200">
+          <Card className="rounded-[8px] shadow-sm border border-border">
             <Statistic
               title="系统运行时间"
               value={systemStats.uptime}
@@ -515,7 +544,7 @@ export default function SystemConfiguration() {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card className="rounded-lg shadow-sm border border-gray-200">
+          <Card className="rounded-[8px] shadow-sm border border-border">
             <Statistic
               title="Goroutine 数"
               value={systemStats.goroutines}
@@ -525,7 +554,7 @@ export default function SystemConfiguration() {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card className="rounded-lg shadow-sm border border-gray-200">
+          <Card className="rounded-[8px] shadow-sm border border-border">
             <Statistic
               title="CPU 核心数"
               value={systemStats.cpuCores}
@@ -535,15 +564,15 @@ export default function SystemConfiguration() {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card className="rounded-lg shadow-sm border border-gray-200">
+          <Card className="rounded-[8px] shadow-sm border border-border">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm text-gray-500">内存使用率</div>
-                <div className="text-2xl font-bold text-purple-600">
+                <div className="text-[13px] text-muted">内存使用率</div>
+                <div className="text-[26px] font-semibold text-foreground">
                   {systemStats.memoryUsagePercent}%
                 </div>
               </div>
-              <MemoryStick className="w-8 h-8 text-purple-600" />
+              <MemoryStick className="w-8 h-8 text-muted" />
             </div>
             <Progress percent={systemStats.memoryUsagePercent} size="small" strokeColor="#722ed1" />
           </Card>
@@ -563,7 +592,7 @@ export default function SystemConfiguration() {
       )}
 
       {/* 配置表单 */}
-      <Card className="rounded-lg shadow-sm border border-gray-200">
+      <Card className="rounded-[8px] shadow-sm border border-border">
         <Form
           form={form}
           layout="vertical"
@@ -571,7 +600,9 @@ export default function SystemConfiguration() {
           onValuesChange={handleFormChange}
         >
           <div className="mb-4 flex justify-between items-center">
-            <Title level={4}>配置管理</Title>
+            <Title style={{ fontSize: 15, fontWeight: 600 }} level={4}>
+              配置管理
+            </Title>
             <Space>
               <Button icon={<RefreshCw className="w-4 h-4" />} onClick={handleReset}>
                 重置

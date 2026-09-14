@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/kaftaskactionledger"
 	"itsm-backend/ent/processapprovaldecision"
@@ -21,7 +23,7 @@ type WorkflowFulfillment struct {
 // Process/transport completion never establishes verified external fulfillment.
 func ReadWorkflowFulfillment(ctx context.Context, client *ent.Client, tenantID, itemID int) (WorkflowFulfillment, error) {
 	result := WorkflowFulfillment{State: "unknown"}
-	instances, err := client.ProcessInstance.Query().Where(processinstance.TenantIDEQ(tenantID), processinstance.BusinessTypeEQ("service_request"), processinstance.BusinessIDEQ(itemID)).All(ctx)
+	instances, err := client.ProcessInstance.Query().Where(processinstance.TenantIDEQ(tenantID), processinstance.BusinessTypeEQ(string(dto.BusinessTypeServiceRequestItem)), processinstance.BusinessIDEQ(itemID)).All(ctx)
 	if err != nil {
 		return result, err
 	}

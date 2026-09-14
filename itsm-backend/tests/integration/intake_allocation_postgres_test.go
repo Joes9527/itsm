@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -59,16 +61,16 @@ func TestPostgresIntakeInsertFailureRollsBackAllocationAndReusesNumber(t *testin
 	tenant := client.Tenant.Create().SetName("Intake allocation").SetCode("allocation").SaveX(ctx)
 	actor := client.User.Create().SetTenantID(tenant.ID).SetUsername("actor").SetName("Actor").SetEmail("actor@example.test").SetPasswordHash("unused").SetActive(true).SetRole("agent").SaveX(ctx)
 	role := client.Role.Create().SetTenantID(tenant.ID).SetCode("agent").SetName("Agent").SaveX(ctx)
-	for _, action := range []string{"read", "write"} {
+	for _, action := range []string{"read", "create"} {
 		permission := client.Permission.Create().SetTenantID(tenant.ID).SetCode("ticket:" + action).SetName("Ticket " + action).SetResource("ticket").SetAction(action).SaveX(ctx)
 		client.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).SaveX(ctx)
 	}
-	client.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType("ticket").SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
+	client.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType("generic").SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
 	logger := zap.NewNop().Sugar()
 	registry := intake.NewCreatorRegistry()
 	require.NoError(t, registry.Register(&service.TicketService{}))
 	resolver := intake.NewResolver(catalogdomain.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
-	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})
+	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard())
 	identity := creation.Identity{TenantID: tenant.ID, ActorID: actor.ID, RequesterID: actor.ID, Role: actor.Role, Channel: "itsm_web"}
 	command := creation.CreateWorkItemCommand{RecordClass: "generic", IntakeKind: "generic", Confirmation: "confirmed", IdempotencyKey: "collision", Title: "Fails after number allocation", Description: "The existing first number forces a real PostgreSQL unique violation"}
 	period := time.Now().UTC().Format("200601")

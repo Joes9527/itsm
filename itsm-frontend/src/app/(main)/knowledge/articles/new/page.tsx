@@ -67,7 +67,7 @@ export default function NewKnowledgeArticlePage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
+    <div className="max-w-4xl mx-auto p-[16px] md:p-[24px]">
       <Breadcrumb
         items={[{ title: '知识库', href: '/knowledge' }, { title: '新建文章' }]}
         className="mb-4"
@@ -77,7 +77,7 @@ export default function NewKnowledgeArticlePage() {
           <Button icon={<ArrowLeft />} onClick={() => router.push('/knowledge')}>
             返回
           </Button>
-          <Title level={3} style={{ margin: 0 }}>
+          <Title level={2} className="!text-[24px] !font-semibold" style={{ margin: 0 }}>
             新建知识库文章
           </Title>
         </Space>

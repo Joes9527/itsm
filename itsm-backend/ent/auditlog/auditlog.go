@@ -13,6 +13,14 @@ const (
 	Label = "audit_log"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldOperationID holds the string denoting the operation_id field in the database.
+	FieldOperationID = "operation_id"
+	// FieldRequestDigest holds the string denoting the request_digest field in the database.
+	FieldRequestDigest = "request_digest"
+	// FieldResultVersion holds the string denoting the result_version field in the database.
+	FieldResultVersion = "result_version"
+	// FieldResultStatus holds the string denoting the result_status field in the database.
+	FieldResultStatus = "result_status"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldTenantID holds the string denoting the tenant_id field in the database.
@@ -42,6 +50,10 @@ const (
 // Columns holds all SQL columns for auditlog fields.
 var Columns = []string{
 	FieldID,
+	FieldOperationID,
+	FieldRequestDigest,
+	FieldResultVersion,
+	FieldResultStatus,
 	FieldCreatedAt,
 	FieldTenantID,
 	FieldUserID,
@@ -84,6 +96,26 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByOperationID orders the results by the operation_id field.
+func ByOperationID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOperationID, opts...).ToFunc()
+}
+
+// ByRequestDigest orders the results by the request_digest field.
+func ByRequestDigest(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRequestDigest, opts...).ToFunc()
+}
+
+// ByResultVersion orders the results by the result_version field.
+func ByResultVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldResultVersion, opts...).ToFunc()
+}
+
+// ByResultStatus orders the results by the result_status field.
+func ByResultStatus(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldResultStatus, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

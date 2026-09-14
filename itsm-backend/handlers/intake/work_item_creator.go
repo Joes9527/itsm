@@ -3,9 +3,10 @@ package intake
 import (
 	"context"
 	"fmt"
-	"itsm-backend/handlers/common/workitemcreation"
 	"strings"
 	"time"
+
+	"itsm-backend/handlers/common/workitemcreation"
 
 	"itsm-backend/authorization"
 	"itsm-backend/ent"

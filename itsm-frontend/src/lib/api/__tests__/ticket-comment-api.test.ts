@@ -41,7 +41,7 @@ describe('TicketCommentApi', () => {
       const payload = { content: 'Hello', isInternal: false };
       mockPost.mockResolvedValue({ id: 1, ...payload });
       const result = await TicketCommentApi.createComment(5, payload);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/tickets/5/comments', payload);
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/tickets/5/comments', payload, { assertSubmissionContext: undefined });
       expect(result.content).toBe('Hello');
     });
   });
@@ -51,7 +51,7 @@ describe('TicketCommentApi', () => {
       const payload = { content: 'Updated' };
       mockPut.mockResolvedValue({ id: 2, content: 'Updated' });
       const result = await TicketCommentApi.updateComment(5, 2, payload);
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/tickets/5/comments/2', payload);
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/tickets/5/comments/2', payload, { assertSubmissionContext: undefined });
       expect(result.content).toBe('Updated');
     });
   });
@@ -60,7 +60,7 @@ describe('TicketCommentApi', () => {
     it('should delete a comment', async () => {
       mockDelete.mockResolvedValue(undefined);
       await TicketCommentApi.deleteComment(5, 2);
-      expect(mockDelete).toHaveBeenCalledWith('/api/v1/tickets/5/comments/2');
+      expect(mockDelete).toHaveBeenCalledWith('/api/v1/tickets/5/comments/2', undefined, { assertSubmissionContext: undefined });
     });
   });
 });

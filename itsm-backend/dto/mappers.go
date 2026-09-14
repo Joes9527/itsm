@@ -98,6 +98,7 @@ func ToIncidentResponse(incident *ent.Incident, workItem *ent.Ticket) *IncidentR
 
 	response := &IncidentResponse{
 		ID:              incident.ID,
+		CategoryID:      workItem.CategoryID,
 		Title:           workItem.Title,
 		Description:     workItem.Description,
 		Status:          workItem.Status,
@@ -106,6 +107,7 @@ func ToIncidentResponse(incident *ent.Incident, workItem *ent.Ticket) *IncidentR
 		Impact:          incident.Impact,
 		Urgency:         incident.Urgency,
 		IncidentNumber:  workItem.TicketNumber,
+		Number:          workItem.TicketNumber,
 		ReporterID:      workItem.RequesterID,
 		ImpactAnalysis:  impactAnalysis,
 		RootCause:       rootCause,

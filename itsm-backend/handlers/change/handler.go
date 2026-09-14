@@ -1,16 +1,19 @@
 package change
 
 import (
+	"errors"
 	"strconv"
 	"strings"
+	"time"
+
+	"itsm-backend/ent"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/handlers/common/intakehttp"
 	creation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/middleware"
-	"itsm-backend/service"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -32,13 +35,22 @@ func resolveChangeTenantID(c *gin.Context) (int, bool) {
 	return tenantID, true
 }
 
+func optionalChangeDate(value *time.Time) *time.Time {
+	if value == nil || value.IsZero() {
+		return nil
+	}
+	return value
+}
+
 // Map domain to DTO
 func toDTO(c *Change) *dto.ChangeResponse {
 	if c == nil {
 		return nil
 	}
 	res := &dto.ChangeResponse{
-		ID:                 c.ID,
+		Number:  c.Number,
+		ID:      c.ID,
+		Version: c.Version, Outcome: c.Outcome, OutcomeEvidence: c.OutcomeEvidence, ReviewEvidence: c.ReviewEvidence, ReviewedBy: c.ReviewedBy, StandardTemplateID: c.StandardTemplateID,
 		Title:              c.Title,
 		Description:        c.Description,
 		Justification:      c.Justification,
@@ -50,17 +62,20 @@ func toDTO(c *Change) *dto.ChangeResponse {
 		AssigneeID:         c.AssigneeID,
 		CreatedBy:          c.CreatedBy,
 		TenantID:           c.TenantID,
-		PlannedStartDate:   c.PlannedStartDate,
-		PlannedEndDate:     c.PlannedEndDate,
-		ActualStartDate:    c.ActualStartDate,
-		ActualEndDate:      c.ActualEndDate,
+		PlannedStartDate:   optionalChangeDate(c.PlannedStartDate),
+		PlannedEndDate:     optionalChangeDate(c.PlannedEndDate),
+		ActualStartDate:    optionalChangeDate(c.ActualStartDate),
+		ActualEndDate:      optionalChangeDate(c.ActualEndDate),
 		ImplementationPlan: c.ImplementationPlan,
 		RollbackPlan:       c.RollbackPlan,
 		AffectedCIs:        c.AffectedCIs,
-		RelatedTickets:     c.RelatedTickets,
+		Relations:          c.Relations,
 		CreatedAt:          c.CreatedAt,
 		UpdatedAt:          c.UpdatedAt,
 		WorkItemID:         c.WorkItemID,
+	}
+	if !c.ReviewedAt.IsZero() {
+		res.ReviewedAt = &c.ReviewedAt
 	}
 	if c.Assignee != nil {
 		res.AssigneeName = &c.Assignee.Name
@@ -73,6 +88,17 @@ func toDTO(c *Change) *dto.ChangeResponse {
 
 // CreateChange handles POST /api/v1/changes
 func (h *Handler) SetCreationApplication(app creation.Application) { h.creationApplication = app }
+
+// CreateChange API contract.
+// @Summary CreateChange
+// @Description Source relations use observed WorkItem versions and typed metadata; target, extension, links, audit and receipt commit atomically. Idempotency-Key required; replay HTTP 200.
+// @Tags changes
+// @Accept json
+// @Produce json
+// @Param body body dto.CreateChangeRequest true "Request"
+// @Success 201 {object} common.Response{data=creation.CreateWorkItemResult}
+// @Success 200 {object} common.Response{data=creation.CreateWorkItemResult} "Replay"
+// @Router /api/v1/changes [post]
 func (h *Handler) CreateChange(c *gin.Context) {
 	var req dto.CreateChangeRequest
 	if !intakehttp.Bind(c, &req) {
@@ -93,49 +119,33 @@ func (h *Handler) CreateChange(c *gin.Context) {
 	if req.RequesterID != nil {
 		requesterID = *req.RequesterID
 	}
-	intakehttp.Execute(c, h.creationApplication, tenantID, requesterID, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassChangeRequest, IntakeKind: creation.IntakeKindChangeRequest, Title: req.Title, Description: req.Description, Priority: req.Priority, Change: &creation.ChangeInput{Justification: req.Justification, Type: req.Type, ImpactScope: req.ImpactScope, RiskLevel: req.RiskLevel, PlannedStartDate: start, PlannedEndDate: end, ImplementationPlan: req.ImplementationPlan, RollbackPlan: req.RollbackPlan, AffectedCIs: req.AffectedCIs, RelatedTicketNumbers: req.RelatedTickets}})
+	intakehttp.Execute(c, h.creationApplication, tenantID, requesterID, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassChangeRequest, IntakeKind: creation.IntakeKindChangeRequest, Title: req.Title, Description: req.Description, Priority: req.Priority, SourceRelations: req.SourceRelations, Change: &creation.ChangeInput{Justification: req.Justification, Type: req.Type, ImpactScope: req.ImpactScope, RiskLevel: req.RiskLevel, PlannedStartDate: start, PlannedEndDate: end, ImplementationPlan: req.ImplementationPlan, RollbackPlan: req.RollbackPlan, AffectedCIs: req.AffectedCIs}})
 }
 
 // GetChange handles GET /api/v1/changes/:id
+// GetChange API contract.
+// @Summary GetChange
+// @Description Current actor RR detail and relation endpoint projection.
+// @Tags changes
+// @Accept json
+// @Produce json
+// @Param id path int true "Professional extension ID"
+// @Success 200 {object} common.Response{data=dto.ChangeResponse}
+// @Router /api/v1/changes/{id} [get]
 func (h *Handler) GetChange(c *gin.Context) {
-	id, ok := common.ParsePositiveID(c, "id")
+	id, meta, ok := changeHTTPIdentity(c)
 	if !ok {
 		return
 	}
-	tenantID, ok := resolveChangeTenantID(c)
-	if !ok {
-		return
-	}
-	actor, ok := h.actionActor(c, tenantID)
-	if !ok {
-		return
-	}
-
-	res, err := h.svc.GetChange(c.Request.Context(), id, actor.TenantID)
+	result, actions, tasks, err := h.svc.GetChangeActionView(c.Request.Context(), id, meta)
 	if err != nil {
-		common.NotFound(c, "Change not found")
+		respondPIRMutationError(c, err)
 		return
 	}
-
-	resp := toDTO(res)
-	resp.Actions = BuildChangeActions(actor, res)
-	common.Success(c, resp)
-}
-
-func (h *Handler) actionActor(c *gin.Context, tenantID int) (service.ActionActor, bool) {
-	userIDVal, userOK := c.Get("user_id")
-	userID, userTypeOK := userIDVal.(int)
-	role := strings.TrimSpace(c.GetString("role"))
-	if !userOK || !userTypeOK || tenantID <= 0 || userID <= 0 || role == "" {
-		common.AuthFailed(c, "认证信息缺失")
-		return service.ActionActor{}, false
-	}
-	return service.ActionActor{
-		Client:   h.svc.entClient,
-		TenantID: tenantID,
-		UserID:   userID,
-		Role:     role,
-	}, true
+	response := toDTO(result)
+	response.Actions = actions
+	response.CurrentTasks = tasks
+	common.Success(c, response)
 }
 
 // GetRiskAssessment handles GET /api/v1/changes/:id/risk-assessment
@@ -175,57 +185,6 @@ func (h *Handler) GetRiskAssessment(c *gin.Context) {
 	})
 }
 
-// UpdateRisk handles PUT /api/v1/changes/:id/risk
-func (h *Handler) UpdateRisk(c *gin.Context) {
-	id, ok := common.ParsePositiveID(c, "id")
-	if !ok {
-		return
-	}
-	var req dto.ChangeRiskAssessment
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.ParamError(c, "Invalid request body: "+err.Error())
-		return
-	}
-	if req.RiskLevel != dto.ChangeRiskLow &&
-		req.RiskLevel != dto.ChangeRiskMedium &&
-		req.RiskLevel != dto.ChangeRiskHigh {
-		common.ParamError(c, "Invalid risk level")
-		return
-	}
-	tenantID, ok := resolveChangeTenantID(c)
-	if !ok {
-		return
-	}
-	assessment, err := h.svc.UpdateRisk(c.Request.Context(), &RiskAssessment{
-		ChangeID:           id,
-		TenantID:           tenantID,
-		RiskLevel:          string(req.RiskLevel),
-		RiskDescription:    req.RiskDescription,
-		ImpactAnalysis:     req.ImpactAnalysis,
-		MitigationMeasures: req.MitigationMeasures,
-		ContingencyPlan:    req.ContingencyPlan,
-		RiskOwner:          req.RiskOwner,
-		RiskReviewDate:     req.RiskReviewDate,
-	})
-	if err != nil {
-		common.InternalError(c, "更新风险评估失败: "+err.Error())
-		return
-	}
-	common.Success(c, dto.ChangeRiskAssessment{
-		ID:                 assessment.ID,
-		ChangeID:           assessment.ChangeID,
-		RiskLevel:          dto.ChangeRisk(assessment.RiskLevel),
-		RiskDescription:    assessment.RiskDescription,
-		ImpactAnalysis:     assessment.ImpactAnalysis,
-		MitigationMeasures: assessment.MitigationMeasures,
-		ContingencyPlan:    assessment.ContingencyPlan,
-		RiskOwner:          assessment.RiskOwner,
-		RiskReviewDate:     assessment.RiskReviewDate,
-		CreatedAt:          assessment.CreatedAt,
-		UpdatedAt:          assessment.UpdatedAt,
-	})
-}
-
 // GetCMDBImpactSummary handles GET /api/v1/changes/:id/cmdb-impact
 func (h *Handler) GetCMDBImpactSummary(c *gin.Context) {
 	id, ok := common.ParsePositiveID(c, "id")
@@ -248,6 +207,14 @@ func (h *Handler) GetCMDBImpactSummary(c *gin.Context) {
 }
 
 // ListChanges handles GET /api/v1/changes
+// ListChanges API contract.
+// @Summary ListChanges
+// @Description Current base read scope before pagination/count; relations use current actor RR projection.
+// @Tags changes
+// @Accept json
+// @Produce json
+// @Success 200 {object} common.Response{data=dto.ChangeListResponse}
+// @Router /api/v1/changes [get]
 func (h *Handler) ListChanges(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "10"))
@@ -263,9 +230,9 @@ func (h *Handler) ListChanges(c *gin.Context) {
 		return
 	}
 
-	list, total, err := h.svc.ListChanges(c.Request.Context(), tenantID, page, pageSize, status, search, riskLevel)
+	list, total, err := h.svc.ListChanges(c.Request.Context(), workitemmutation.Meta{TenantID: tenantID, ActorID: c.GetInt("user_id"), Source: "http"}, page, pageSize, status, search, riskLevel)
 	if err != nil {
-		common.InternalError(c, "查询变更列表失败: "+err.Error())
+		respondPIRMutationError(c, err)
 		return
 	}
 
@@ -280,108 +247,6 @@ func (h *Handler) ListChanges(c *gin.Context) {
 		"page":     page,
 		"pageSize": pageSize,
 	})
-}
-
-// UpdateChange handles PUT /api/v1/changes/:id
-func (h *Handler) UpdateChange(c *gin.Context) {
-	id, ok := common.ParsePositiveID(c, "id")
-	if !ok {
-		return
-	}
-	tenantID, ok := resolveChangeTenantID(c)
-	if !ok {
-		return
-	}
-
-	var req dto.UpdateChangeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.ParamError(c, "Invalid request body: "+err.Error())
-		return
-	}
-
-	// First get existing
-	existing, err := h.svc.GetChange(c.Request.Context(), id, tenantID)
-	if err != nil {
-		common.NotFound(c, "Change not found")
-		return
-	}
-
-	// Update fields if present in request
-	if req.Title != nil {
-		existing.Title = *req.Title
-	}
-	if req.Description != nil {
-		existing.Description = *req.Description
-	}
-	if req.Justification != nil {
-		existing.Justification = *req.Justification
-	}
-	if req.Type != nil {
-		existing.Type = string(*req.Type)
-	}
-	if req.Priority != nil {
-		existing.Priority = string(*req.Priority)
-	}
-	if req.ImpactScope != nil {
-		existing.ImpactScope = string(*req.ImpactScope)
-	}
-	if req.RiskLevel != nil {
-		existing.RiskLevel = string(*req.RiskLevel)
-	}
-	if req.PlannedStartDate != nil {
-		existing.PlannedStartDate = req.PlannedStartDate
-	}
-	if req.PlannedEndDate != nil {
-		existing.PlannedEndDate = req.PlannedEndDate
-	}
-	if req.ImplementationPlan != nil {
-		existing.ImplementationPlan = *req.ImplementationPlan
-	}
-	if req.RollbackPlan != nil {
-		existing.RollbackPlan = *req.RollbackPlan
-	}
-	if req.AffectedCIs != nil {
-		existing.AffectedCIs = req.AffectedCIs
-	}
-	if req.RelatedTickets != nil {
-		existing.RelatedTickets = req.RelatedTickets
-	}
-
-	res, err := h.svc.UpdateChange(c.Request.Context(), existing)
-	if err != nil {
-		common.InternalError(c, "更新变更失败: "+err.Error())
-		return
-	}
-
-	common.Success(c, toDTO(res))
-}
-
-// SubmitChange handles POST /api/v1/changes/:id/submit
-func (h *Handler) SubmitChange(c *gin.Context) {
-	changeID, ok := common.ParsePositiveID(c, "id")
-	if !ok {
-		return
-	}
-	tenantID, ok := resolveChangeTenantID(c)
-	if !ok {
-		return
-	}
-	userIDVal, _ := c.Get("user_id")
-	userID := userIDVal.(int)
-
-	var req dto.SubmitChangeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.ParamError(c, "Invalid request body: "+err.Error())
-		return
-	}
-
-	res, err := h.svc.SubmitChange(c.Request.Context(), changeID, tenantID, userID, &req)
-	if err != nil {
-		common.InternalError(c, "提交变更失败: "+err.Error())
-		return
-	}
-
-	common.Success(c, toDTO(res))
 }
 
 // GetStats handles GET /api/v1/changes/stats
@@ -406,6 +271,7 @@ func toStatsDTO(s *Stats) *dto.ChangeStatsResponse {
 		return &dto.ChangeStatsResponse{}
 	}
 	return &dto.ChangeStatsResponse{
+		Draft: s.Draft, SuccessfulOutcomes: s.SuccessfulOutcomes, FailedOutcomes: s.FailedOutcomes, RolledBackOutcomes: s.RolledBackOutcomes,
 		Total:      s.Total,
 		Pending:    s.Pending,
 		Approved:   s.Approved,
@@ -417,90 +283,6 @@ func toStatsDTO(s *Stats) *dto.ChangeStatsResponse {
 		Rejected:   s.Rejected,
 		Cancelled:  s.Cancelled,
 	}
-}
-
-// TransitionStatus handles status transition actions
-// POST /api/v1/changes/:id/approve|reject|start|complete|rollback|cancel
-func (h *Handler) TransitionStatus(c *gin.Context) {
-	id, ok := common.ParsePositiveID(c, "id")
-	if !ok {
-		return
-	}
-	tenantID, ok := resolveChangeTenantID(c)
-	if !ok {
-		return
-	}
-	userIDVal, _ := c.Get("user_id")
-	userID := userIDVal.(int)
-
-	// Determine target status from the last path segment
-	path := c.FullPath() // e.g. /api/v1/changes/:id/approve
-	parts := strings.Split(path, "/")
-	action := parts[len(parts)-1]
-	statusMap := map[string]string{
-		"approve":  "approved",
-		"reject":   "rejected",
-		"start":    "in_progress",
-		"complete": "completed",
-		"rollback": "rolled_back",
-		"cancel":   "cancelled",
-	}
-	targetStatus, ok := statusMap[action]
-	if !ok {
-		common.ParamError(c, "Unknown action: "+action)
-		return
-	}
-
-	var body struct {
-		Comment string `json:"comment"`
-		Reason  string `json:"reason"`
-	}
-	_ = c.ShouldBindJSON(&body)
-
-	comment := strings.TrimSpace(body.Comment)
-	if comment == "" {
-		comment = strings.TrimSpace(body.Reason)
-	}
-
-	res, err := h.svc.TransitionStatus(c.Request.Context(), id, tenantID, userID, targetStatus, comment)
-	if err != nil {
-		common.InternalError(c, "状态转换失败: "+err.Error())
-		return
-	}
-	common.Success(c, toDTO(res))
-}
-
-// AssignChange handles POST /api/v1/changes/:id/assign
-func (h *Handler) AssignChange(c *gin.Context) {
-	id, ok := common.ParsePositiveID(c, "id")
-	if !ok {
-		return
-	}
-	tenantID, ok := resolveChangeTenantID(c)
-	if !ok {
-		return
-	}
-
-	var req struct {
-		AssigneeID int `json:"assigneeId" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.ParamError(c, "assignee_id is required")
-		return
-	}
-
-	existing, err := h.svc.GetChange(c.Request.Context(), id, tenantID)
-	if err != nil {
-		common.NotFound(c, "Change not found")
-		return
-	}
-	existing.AssigneeID = &req.AssigneeID
-	res, err := h.svc.UpdateChange(c.Request.Context(), existing)
-	if err != nil {
-		common.InternalError(c, "分配变更失败: "+err.Error())
-		return
-	}
-	common.Success(c, toDTO(res))
 }
 
 // GetApprovals handles GET /api/v1/changes/:id/approvals
@@ -518,7 +300,16 @@ func (h *Handler) GetApprovals(c *gin.Context) {
 		common.InternalError(c, "获取审批历史失败: "+err.Error())
 		return
 	}
-	common.Success(c, history)
+	result := make([]dto.ChangeApproval, 0, len(history))
+	for _, record := range history {
+		result = append(result, dto.ChangeApproval{
+			ID: record.ID, ChangeID: record.ChangeID,
+			ApproverID: record.ApproverID, ApproverName: record.ApproverName,
+			Status: dto.ChangeStatus(record.Status), Comment: record.Comment,
+			ApprovedAt: record.ApprovedAt, CreatedAt: record.CreatedAt,
+		})
+	}
+	common.Success(c, result)
 }
 
 // DeleteChange handles DELETE /api/v1/changes/:id
@@ -532,8 +323,13 @@ func (h *Handler) DeleteChange(c *gin.Context) {
 		return
 	}
 
-	if err := h.svc.DeleteChange(c.Request.Context(), id, tenantID); err != nil {
-		common.InternalError(c, "删除变更失败: "+err.Error())
+	actorID := c.GetInt("user_id")
+	if actorID <= 0 {
+		common.Fail(c, common.AuthErrorCode, "authenticated actor required")
+		return
+	}
+	if err := h.svc.DeleteChange(c.Request.Context(), id, workitemmutation.Meta{TenantID: tenantID, ActorID: actorID, Source: "http"}); err != nil {
+		respondPIRMutationError(c, err)
 		return
 	}
 	common.Success(c, gin.H{"message": "deleted"})
@@ -575,22 +371,21 @@ func (h *Handler) CreatePIR(c *gin.Context) {
 		return
 	}
 	userIDVal, _ := c.Get("user_id")
-	userID := userIDVal.(int)
+	userID, _ := userIDVal.(int)
 
 	var req dto.CreateChangePIRRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.ParamError(c, "Invalid request body: "+err.Error())
+	if !bindChangeMutation(c, &req) {
+		return
+	}
+	if req.ChangeID != 0 && req.ChangeID != changeID {
+		common.ParamError(c, "changeId must match route")
 		return
 	}
 	req.ChangeID = changeID
 
-	pir, err := h.svc.CreatePIR(c.Request.Context(), &req, userID, tenantID)
+	pir, err := h.svc.CreatePIR(c.Request.Context(), &req, workitemmutation.Meta{ActorID: userID, TenantID: tenantID, ExpectedVersion: req.ExpectedVersion, OperationID: req.OperationID, Source: "http"})
 	if err != nil {
-		if strings.Contains(err.Error(), "已存在") {
-			common.Conflict(c, err.Error(), nil)
-			return
-		}
-		common.InternalError(c, err.Error())
+		respondPIRMutationError(c, err)
 		return
 	}
 
@@ -655,18 +450,13 @@ func (h *Handler) UpdatePIR(c *gin.Context) {
 	}
 
 	var req dto.UpdateChangePIRRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.ParamError(c, "Invalid request body: "+err.Error())
+	if !bindChangeMutation(c, &req) {
 		return
 	}
 
-	pir, err := h.svc.UpdatePIR(c.Request.Context(), pirID, &req, tenantID)
+	pir, err := h.svc.UpdatePIR(c.Request.Context(), pirID, &req, workitemmutation.Meta{ActorID: c.GetInt("user_id"), TenantID: tenantID, ExpectedVersion: req.ExpectedVersion, OperationID: req.OperationID, Source: "http"})
 	if err != nil {
-		if strings.Contains(err.Error(), "不存在") {
-			common.NotFound(c, err.Error())
-			return
-		}
-		common.InternalError(c, err.Error())
+		respondPIRMutationError(c, err)
 		return
 	}
 
@@ -685,14 +475,65 @@ func (h *Handler) DeletePIR(c *gin.Context) {
 		return
 	}
 
-	if err := h.svc.DeletePIR(c.Request.Context(), pirID, tenantID); err != nil {
-		if strings.Contains(err.Error(), "不存在") {
-			common.NotFound(c, err.Error())
-			return
-		}
-		common.InternalError(c, err.Error())
+	var req dto.DeleteChangePIRRequest
+	if !bindChangeMutation(c, &req) {
+		return
+	}
+	result, err := h.svc.DeletePIR(c.Request.Context(), pirID, &req, workitemmutation.Meta{ActorID: c.GetInt("user_id"), TenantID: tenantID, ExpectedVersion: req.ExpectedVersion, OperationID: req.OperationID, Source: "http"})
+	if err != nil {
+		respondPIRMutationError(c, err)
 		return
 	}
 
-	common.Success(c, gin.H{"message": "PIR deleted"})
+	common.Success(c, result)
+}
+
+func respondPIRMutationError(c *gin.Context, err error) {
+	if ent.IsNotFound(err) {
+		common.NotFound(c, "Change not found")
+		return
+	}
+	var intake *creation.IntakeError
+	if errors.As(err, &intake) {
+		switch intake.HTTPStatus {
+		case 400:
+			common.ParamError(c, intake.Message)
+		case 401:
+			common.AuthFailed(c, intake.Message)
+		case 403:
+			common.Forbidden(c, intake.Message)
+		case 404:
+			common.NotFound(c, intake.Message)
+		case 409:
+			common.Conflict(c, intake.Message, nil)
+		default:
+			common.InternalError(c, "Change mutation failed")
+		}
+		return
+	}
+
+	var conflict *workitemmutation.OperationConflictError
+	var state interface{ SQLState() string }
+	if common.IsVersionConflictError(err) || errors.As(err, &conflict) || (errors.As(err, &state) && (state.SQLState() == "40001" || state.SQLState() == "40P01")) {
+		common.Conflict(c, "Change mutation conflicts with current state", nil)
+		return
+	}
+	if app, ok := common.AsAppError(err); ok {
+		switch app.Code {
+		case common.ErrCodeValidation, common.ErrCodeBadRequest:
+			common.ParamError(c, app.Message)
+		case common.ErrCodeUnauthorized:
+			common.Fail(c, common.AuthFailedCode, app.Message)
+		case common.ErrCodeForbidden:
+			common.Forbidden(c, app.Message)
+		case common.ErrCodeNotFound:
+			common.NotFound(c, app.Message)
+		case common.ErrCodeConflict:
+			common.Conflict(c, app.Message, nil)
+		default:
+			common.InternalError(c, "Change mutation failed")
+		}
+		return
+	}
+	common.InternalError(c, "Change mutation failed")
 }

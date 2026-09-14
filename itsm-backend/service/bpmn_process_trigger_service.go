@@ -44,6 +44,11 @@ func (s *ProcessTriggerService) TriggerProcess(ctx context.Context, req *dto.Pro
 	if err := s.validateTriggerRequest(req); err != nil {
 		return nil, err
 	}
+	for key := range req.Variables {
+		if isReservedBPMNParticipantVariableKey(key) {
+			return nil, fmt.Errorf("process variable %q is reserved", key)
+		}
+	}
 	if _, present := bpmnAccessScopeValue(ctx); present {
 		scope, err := BPMNAccessScopeFromContext(ctx)
 		if err != nil || scope.TenantID != req.TenantID {

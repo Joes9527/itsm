@@ -35,6 +35,8 @@ func (IntakeResolutionSnapshot) Fields() []ent.Field {
 		field.Int("workflow_definition_id").Optional().Nillable().Positive().Immutable(),
 		field.String("workflow_definition_key").Optional().Immutable(),
 		field.String("workflow_definition_version").Optional().Immutable(),
+		field.String("workflow_definition_digest").Optional().Immutable(),
+		field.JSON("workflow_variables", json.RawMessage{}).Optional().Sensitive().Immutable(),
 		field.Bool("no_process").Default(false).Immutable(),
 		field.Int("sla_definition_id").Optional().Nillable().Positive().Immutable(),
 		field.String("resolver_version").Immutable().NotEmpty(),

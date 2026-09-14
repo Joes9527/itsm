@@ -1,3 +1,5 @@
+import tokens from '@/design-system/theme-tokens.json';
+
 /**
  * 设计系统间距和网格配置
  * 提供统一的间距、网格和布局系统
@@ -154,19 +156,19 @@ export const layout = {
   // 侧边栏
   sidebar: {
     width: {
-      sm: '240px',
-      md: '280px',
-      lg: '320px',
+      sm: `${tokens.sizes.sidebar}px`,
+      md: `${tokens.sizes.sidebar}px`,
+      lg: `${tokens.sizes.sidebar}px`,
     },
-    collapsedWidth: '64px',
+    collapsedWidth: `${tokens.sizes.sidebarCollapsed}px`,
   },
 
   // 头部
   header: {
     height: {
-      sm: '56px',
-      md: '64px',
-      lg: '72px',
+      sm: `${tokens.sizes.header}px`,
+      md: `${tokens.sizes.header}px`,
+      lg: `${tokens.sizes.header}px`,
     },
   },
 
@@ -204,21 +206,7 @@ export const boxShadow = {
 } as const;
 
 // 字体大小系统
-export const fontSize = {
-  xs: '12px',
-  sm: '14px',
-  base: '16px',
-  lg: '18px',
-  xl: '20px',
-  '2xl': '24px',
-  '3xl': '30px',
-  '4xl': '36px',
-  '5xl': '48px',
-  '6xl': '60px',
-  '7xl': '72px',
-  '8xl': '96px',
-  '9xl': '128px',
-} as const;
+export const fontSize = tokens.typography.fontSize;
 
 // 行高系统
 export const lineHeight = {

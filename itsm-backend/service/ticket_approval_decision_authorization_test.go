@@ -54,17 +54,16 @@ func TestTicketWorkflowServiceGetApprovalDecisionsUsesRecordClassReadPolicy(t *t
 	workflowService := NewTicketWorkflowService(client, zaptest.NewLogger(t).Sugar())
 
 	tests := []struct {
-		name         string
-		recordClass  string
-		resource     string
-		businessType string
+		name        string
+		recordClass string
+		resource    string
 	}{
-		{name: "generic", recordClass: "generic", resource: "ticket", businessType: "ticket"},
-		{name: "incident", recordClass: "incident", resource: "incident", businessType: "incident"},
-		{name: "problem", recordClass: "problem", resource: "problem", businessType: "problem"},
-		{name: "change request", recordClass: "change_request", resource: "change", businessType: "change"},
-		{name: "service request item", recordClass: "service_request_item", resource: "service_request", businessType: "service_request"},
-		{name: "catalog task", recordClass: "catalog_task", resource: "service_request", businessType: "service_request"},
+		{name: "generic", recordClass: "generic", resource: "ticket"},
+		{name: "incident", recordClass: "incident", resource: "incident"},
+		{name: "problem", recordClass: "problem", resource: "problem"},
+		{name: "change request", recordClass: "change_request", resource: "change"},
+		{name: "service request item", recordClass: "service_request_item", resource: "service_request"},
+		{name: "catalog task", recordClass: "catalog_task", resource: "service_request"},
 	}
 
 	for index, test := range tests {
@@ -79,7 +78,7 @@ func TestTicketWorkflowServiceGetApprovalDecisionsUsesRecordClassReadPolicy(t *t
 				SetTaskID(fmt.Sprintf("TASK-%d", index)).
 				SetProcessDefinitionKey("approval-history-test").
 				SetNodeKey("manager-approval").
-				SetBusinessType(test.businessType).
+				SetBusinessType(test.recordClass).
 				SetBusinessID(fmt.Sprintf("%d", workItem.ID)).
 				SetActorID(requester.ID).
 				SetAction("approve").

@@ -9,8 +9,10 @@ import (
 	creation "itsm-backend/handlers/common/workitemcreation"
 )
 
-const EmailAttachmentsRequestedEventType = "email.attachments.requested"
-const EmailConfirmationRequestedEventType = "email.confirmation.requested"
+const (
+	EmailAttachmentsRequestedEventType  = "email.attachments.requested"
+	EmailConfirmationRequestedEventType = "email.confirmation.requested"
+)
 
 type emailCreationDelivery struct {
 	Number            string `json:"number"`
@@ -40,7 +42,7 @@ func writeEmailCreationSource(ctx context.Context, tx *ent.Tx, item *ent.Ticket,
 		eventTypes = append(eventTypes, EmailAttachmentsRequestedEventType)
 	}
 	for _, eventType := range eventTypes {
-		_, err := NewOutboxEventRepository(tx.Client()).Enqueue(ctx, tx, NewOutboxEvent{TenantID: item.TenantID, EventID: fmt.Sprintf("%s:%d", eventType, item.ID), EventType: eventType, AggregateType: "work_item", AggregateID: fmt.Sprint(item.ID), Payload: payload})
+		_, err := enqueueOutboxEvent(ctx, tx.Client(), tx, NewOutboxEvent{ExecutionWorkItemID: item.ID, TenantID: item.TenantID, EventID: fmt.Sprintf("%s:%d", eventType, item.ID), EventType: eventType, AggregateType: "work_item", AggregateID: fmt.Sprint(item.ID), Payload: payload})
 		if err != nil {
 			return creation.NewInfrastructureUnavailable("could not enqueue recoverable email source delivery", err)
 		}

@@ -127,9 +127,9 @@ export default function WorkflowProperties({
   return (
     <div className="h-full">
       {/* 版本历史内容 */}
-      <Card className="rounded-lg shadow-sm border border-gray-200">
+      <Card className="rounded-[8px] shadow-none border border-border">
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-base font-semibold mb-0">版本历史</h3>
+          <h3 className="text-[15px] font-semibold mb-0">版本历史</h3>
           <Button
             type="primary"
             icon={<GitBranch className="w-4 h-4" />}
@@ -153,8 +153,8 @@ export default function WorkflowProperties({
               <div className="flex justify-between items-center ml-2">
                 <div>
                   <Text strong>版本 {version.version}</Text>
-                  <div className="text-sm text-gray-500 mt-1">{version.changeLog}</div>
-                  <div className="text-xs text-gray-400 mt-1">
+                  <div className="text-[13px] text-muted mt-1">{version.changeLog}</div>
+                  <div className="text-[12px] text-muted mt-1">
                     {new Date(version.createdAt).toLocaleString()} - {version.createdBy}
                   </div>
                 </div>
@@ -183,11 +183,11 @@ export default function WorkflowProperties({
       </Card>
 
       {/* 流程配置内容 */}
-      <Row gutter={[24, 24]} className="mt-4">
+      <Row gutter={[14, 14]} className="mt-4">
         <Col span={12}>
           <Card
             title="审批配置"
-            className="h-full rounded-lg shadow-sm border border-gray-200"
+            className="h-full rounded-[8px] shadow-none border border-border"
            
           >
             <div className="space-y-6">
@@ -206,7 +206,7 @@ export default function WorkflowProperties({
                         </div>
                       }
                     >
-                      <Info className="text-gray-400 cursor-help" />
+                      <Info className="text-muted cursor-help" />
                     </Tooltip>
                   </Space>
                 </Text>
@@ -234,18 +234,18 @@ export default function WorkflowProperties({
               </div>
 
               {/* 审批组说明（节点级） */}
-              <div className="p-3 border border-dashed border-gray-300 rounded-md bg-gray-50">
+              <div className="p-3 border border-dashed border-border rounded-md bg-raised">
                 <div className="flex items-center mb-1">
-                  <Users className="w-4 h-4 mr-1 text-gray-500" />
+                  <Users className="w-4 h-4 mr-1 text-muted" />
                   <Text strong>审批组</Text>
-                  <Text type="secondary" className="ml-auto text-xs">
+                  <Text type="secondary" className="ml-auto text-[12px]">
                     节点级配置
                   </Text>
                 </div>
-                <Text type="secondary" className="text-xs block">
+                <Text type="secondary" className="text-[12px] block">
                   审批组是节点级的，需在画布上选中某个
                   <b>审批节点</b>后，在右侧「节点属性」面板的 <b>「候选组」</b> 字段中选择。
-                  选中的组会写入 BPMN XML 的 <code className="text-xs">candidateGroups</code> 属性，
+                  选中的组会写入 BPMN XML 的 <code className="text-[12px]">candidateGroups</code> 属性，
                   后端引擎会在任务创建时按组成员自动展开为具体审批人。
                 </Text>
               </div>
@@ -271,7 +271,7 @@ export default function WorkflowProperties({
         <Col span={12}>
           <Card
             title="SLA配置"
-            className="h-full rounded-lg shadow-sm border border-gray-200"
+            className="h-full rounded-[8px] shadow-none border border-border"
            
           >
             <div className="space-y-6">

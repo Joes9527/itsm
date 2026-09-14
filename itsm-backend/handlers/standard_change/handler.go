@@ -388,6 +388,18 @@ func (h *Handler) GetCategories(c *gin.Context) {
 // InstantiateStandardChange handles POST /api/v1/standard-changes/:id/instantiate
 // Creates a new Change from a standard change template
 func (h *Handler) SetCreationApplication(app creation.Application) { h.creationApplication = app }
+
+// InstantiateStandardChange API contract.
+// @Summary InstantiateStandardChange
+// @Description Uses frozen approved template and observed sourceRelations; Idempotency-Key required; replay HTTP 200 returns original receipt.
+// @Tags changes
+// @Accept json
+// @Produce json
+// @Param id path int true "Professional extension ID"
+// @Param body body dto.InstantiateStandardChangeRequest true "Request"
+// @Success 201 {object} common.Response{data=creation.CreateWorkItemResult}
+// @Success 200 {object} common.Response{data=creation.CreateWorkItemResult} "Replay"
+// @Router /api/v1/standard-changes/{id}/instantiate [post]
 func (h *Handler) InstantiateStandardChange(c *gin.Context) {
 	id, ok := common.ParsePositiveID(c, "id")
 	if !ok {
@@ -412,7 +424,7 @@ func (h *Handler) InstantiateStandardChange(c *gin.Context) {
 	if req.RequesterID != nil {
 		requesterID = *req.RequesterID
 	}
-	intakehttp.Execute(c, h.creationApplication, tenantID, requesterID, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassChangeRequest, IntakeKind: creation.IntakeKindChangeRequest, Title: req.Title, Change: &creation.ChangeInput{StandardTemplateID: &id, AffectedCIs: req.AffectedCis, PlannedStartDate: start, PlannedEndDate: end}})
+	intakehttp.Execute(c, h.creationApplication, tenantID, requesterID, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassChangeRequest, IntakeKind: creation.IntakeKindChangeRequest, Title: req.Title, SourceRelations: req.SourceRelations, Change: &creation.ChangeInput{StandardTemplateID: &id, AffectedCIs: req.AffectedCis, PlannedStartDate: start, PlannedEndDate: end}})
 }
 
 // RegisterRoutes registers the standard change routes

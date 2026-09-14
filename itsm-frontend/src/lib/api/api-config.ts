@@ -213,6 +213,7 @@ export interface TicketListResponse {
 }
 
 export interface CreateTicketRequest {
+  cti?: { categoryId: number; typeId?: number; itemId?: number };
   requesterId?: number;
   title: string;
   description: string;
@@ -231,6 +232,7 @@ export interface UpdateStatusRequest {
 }
 
 export interface GetTicketsParams {
+  assigneeId?: number;
   page?: number;
   pageSize?: number;
   size?: number;

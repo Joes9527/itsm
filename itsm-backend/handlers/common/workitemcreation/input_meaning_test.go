@@ -20,6 +20,7 @@ func TestInputMeaningChangeCategoryWireAndDigest(t *testing.T) {
 	require.Equal(t, digests[0], digests[1])
 	require.NotEqual(t, digests[0], digests[2])
 }
+
 func TestInputMeaningRejectsRemovedPresetInstruction(t *testing.T) {
 	_, err := DecodeCreateWorkItemCommand(strings.NewReader(`{"formPresetId":"static-vpn"}`))
 	require.Error(t, err)

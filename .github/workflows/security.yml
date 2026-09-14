@@ -37,8 +37,13 @@ jobs:
 
       - name: Run gosec
         uses: securego/gosec@master
+        env:
+          # Bound analyzer/package-loader memory after repeated runner shutdowns.
+          GOMAXPROCS: '2'
+          GOMEMLIMIT: 2GiB
+          GOFLAGS: -p=2
         with:
-          args: '-no-fail -fmt sarif -out gosec-results.sarif ./itsm-backend/...'
+          args: '-concurrency 2 -no-fail -fmt sarif -out gosec-results.sarif ./itsm-backend/...'
 
       - name: Upload gosec results
         uses: github/codeql-action/upload-sarif@v3
@@ -99,7 +104,7 @@ jobs:
           cache-dependency-path: itsm-backend/go.sum
 
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
 
       - name: Run govulncheck
         working-directory: itsm-backend
@@ -148,7 +153,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Run TruffleHog
-        uses: trufflesecurity/trufflehog@main
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
         with:
-          path: ./
+          node-version: '22'
+
+      - name: Verify fail-closed fixture handling
+        run: node --test scripts/__tests__/secret-scan.test.js
+
+      - name: Run TruffleHog with exact synthetic fixture review
+        run: node scripts/secret-scan.js

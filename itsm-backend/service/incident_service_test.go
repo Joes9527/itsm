@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	_ "github.com/mattn/go-sqlite3"
 
 	"itsm-backend/common"
@@ -16,7 +18,7 @@ import (
 	"itsm-backend/ent/incidentalert"
 	"itsm-backend/ent/incidentevent"
 	"itsm-backend/ent/incidentmetric"
-	"itsm-backend/service/bpmn"
+	"itsm-backend/handlers/shared/workitemmutation"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,7 +30,7 @@ import (
 func setupIncidentTest(t *testing.T) (*ent.Client, *IncidentService, context.Context) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	logger := zaptest.NewLogger(t).Sugar()
-	service := NewIncidentService(client, logger)
+	service := NewIncidentService(client, logger, executionfixture.Standard())
 	service.RuleEngine().SetActorDirectory(client)
 	ctx := context.Background()
 	return client, service, ctx
@@ -64,25 +66,6 @@ func createIncidentTestWorkItem(t *testing.T, ctx context.Context, client *ent.C
 		SetRequesterID(requesterID).SetTenantID(tenantID).Save(ctx)
 	require.NoError(t, err)
 	return workItem
-}
-
-func setIncidentFixtureWorkItemFields(t *testing.T, ctx context.Context, client *ent.Client, entity *ent.Incident, title, description, status, priority string) {
-	t.Helper()
-	_, err := client.Ticket.UpdateOneID(entity.WorkItemID).
-		SetTitle(title).SetDescription(description).SetStatus(status).SetPriority(priority).Save(ctx)
-	require.NoError(t, err)
-}
-
-type blockingIncidentProcessTrigger struct {
-	ProcessTriggerServiceInterface
-	entered chan struct{}
-	release chan struct{}
-}
-
-func (f *blockingIncidentProcessTrigger) TriggerProcess(context.Context, *dto.ProcessTriggerRequest) (*dto.ProcessTriggerResponse, error) {
-	close(f.entered)
-	<-f.release
-	return &dto.ProcessTriggerResponse{ProcessInstanceID: 1}, nil
 }
 
 // ==================== 创建事件测试 ====================
@@ -180,7 +163,7 @@ func TestIncidentService_AssignIncident_ValidatesAssigneeAndReturnsUpdatedIncide
 	_, err = client.Ticket.UpdateOneID(workItem.ID).SetDescription("desc").Save(ctx)
 	require.NoError(t, err)
 
-	response, err := incidentService.AssignIncident(ctx, incidentEntity.ID, assignee.ID, tenant.ID)
+	response, err := assignIncidentForTest(t, incidentService, ctx, incidentEntity.ID, assignee.ID, tenant.ID)
 	require.NoError(t, err)
 	require.NotNil(t, response.AssigneeID)
 	assert.Equal(t, assignee.ID, *response.AssigneeID)
@@ -190,14 +173,14 @@ func TestIncidentService_AssignIncident_ValidatesAssigneeAndReturnsUpdatedIncide
 	require.NoError(t, err)
 	otherUser, err := createIncidentTestUser(ctx, client, otherTenant.ID, "assign-other")
 	require.NoError(t, err)
-	_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, otherUser.ID, tenant.ID)
+	_, err = assignIncidentForTest(t, incidentService, ctx, incidentEntity.ID, otherUser.ID, tenant.ID)
 	require.ErrorContains(t, err, "assignee not found or inactive")
 
 	inactive, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-inactive")
 	require.NoError(t, err)
 	_, err = inactive.Update().SetActive(false).Save(ctx)
 	require.NoError(t, err)
-	_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, inactive.ID, tenant.ID)
+	_, err = assignIncidentForTest(t, incidentService, ctx, incidentEntity.ID, inactive.ID, tenant.ID)
 	require.ErrorContains(t, err, "assignee not found or inactive")
 }
 
@@ -218,7 +201,7 @@ func TestAssignIncidentRejectsTerminalStatuses(t *testing.T) {
 				Save(ctx)
 			require.NoError(t, err)
 
-			_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, assignee.ID, tenant.ID)
+			_, err = assignIncidentForTest(t, incidentService, ctx, incidentEntity.ID, assignee.ID, tenant.ID)
 			require.ErrorContains(t, err, "cannot be reassigned")
 
 			persisted, err := client.Ticket.Get(ctx, workItem.ID)
@@ -228,7 +211,7 @@ func TestAssignIncidentRejectsTerminalStatuses(t *testing.T) {
 	}
 }
 
-func TestAssignIncidentRejectsConcurrentSnapshotChange(t *testing.T) {
+func TestAssignIncidentRejectsStaleSnapshot(t *testing.T) {
 	for _, testCase := range []struct {
 		name       string
 		mutateRace func(context.Context, *ent.Client, int) error
@@ -244,7 +227,7 @@ func TestAssignIncidentRejectsConcurrentSnapshotChange(t *testing.T) {
 				return racer.Ticket.UpdateOneID(entity.WorkItemID).SetStatus(common.IncidentStatusResolved).Exec(ctx)
 			},
 			assertErr: func(t *testing.T, err error) {
-				require.ErrorContains(t, err, "resolved or closed incidents cannot be reassigned")
+				require.ErrorContains(t, err, "cannot be reassigned")
 			},
 		},
 		{
@@ -282,22 +265,20 @@ func TestAssignIncidentRejectsConcurrentSnapshotChange(t *testing.T) {
 				Save(ctx)
 			require.NoError(t, err)
 
-			raced := false
-			client.Ticket.Use(func(next ent.Mutator) ent.Mutator {
-				return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
-					if !raced {
-						raced = true
-						require.NoError(t, testCase.mutateRace(ctx, racer, incidentEntity.ID))
-					}
-					return next.Mutate(ctx, mutation)
-				})
+			// The caller observed this version before another writer changed it.
+			// Actual overlapping transactions are verified by PostgreSQL tests.
+			reporter.Update().SetRole("super_admin").ExecX(ctx)
+			require.NoError(t, testCase.mutateRace(ctx, racer, incidentEntity.ID))
+			incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
+			_, err = incidentService.ApplyIncidentCommand(ctx, dto.IncidentCommand{
+				IncidentID: incidentEntity.ID, Action: "assign", AssigneeID: assignee.ID,
+				Meta: workitemmutation.Meta{
+					TenantID: tenant.ID, ActorID: reporter.ID,
+					ExpectedVersion: workItem.Version, Source: "http", OperationID: "stale-assign",
+				},
 			})
-
-			incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar())
-			_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, assignee.ID, tenant.ID)
 			require.Error(t, err)
 			testCase.assertErr(t, err)
-			require.True(t, raced)
 
 			persisted, err := client.Ticket.Get(ctx, workItem.ID)
 			require.NoError(t, err)
@@ -342,7 +323,7 @@ func TestGetIncidentWithActionsUsesOneEntitySnapshot(t *testing.T) {
 	require.NoError(t, err)
 
 	incidentSelects = 0
-	incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar())
+	incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	response, err := incidentService.GetIncidentWithActions(ctx, incidentEntity.ID, ActionActor{
 		Client: client, TenantID: tenant.ID, UserID: reporter.ID, Role: "super_admin",
 	})
@@ -517,7 +498,7 @@ func TestIncidentService_UpdateIncident_Success(t *testing.T) {
 	response, err := service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
 		Title:    &newTitle,
 		Priority: &newPriority,
-		Version:  0, // 跳过版本检查
+		Version:  1, // expected version
 	}, testTenant.ID)
 
 	require.NoError(t, err)
@@ -581,28 +562,26 @@ func TestIncidentService_UpdateIncident_VersionControl(t *testing.T) {
 		assert.Equal(t, 2, conflictErr.ServerVersion)
 	})
 
-	t.Run("Force=true 忽略版本检查", func(t *testing.T) {
+	t.Run("Force=true 被拒绝", func(t *testing.T) {
 		newTitle := "Force Update"
-		response, err := service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
+		_, err := service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
 			Title:   &newTitle,
 			Version: 1,    // 旧版本号
 			Force:   true, // 强制更新
 		}, testTenant.ID)
 
-		require.NoError(t, err)
-		assert.Equal(t, newTitle, response.Title)
+		require.Error(t, err)
 	})
 
-	t.Run("Version=0 跳过版本检查", func(t *testing.T) {
+	t.Run("Version=0 被拒绝", func(t *testing.T) {
 		newTitle := "No Version Check"
-		response, err := service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
+		_, err := service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
 			Title:   &newTitle,
 			Version: 0, // 跳过版本检查
 			Force:   false,
 		}, testTenant.ID)
 
-		require.NoError(t, err)
-		assert.Equal(t, newTitle, response.Title)
+		require.Error(t, err)
 	})
 }
 
@@ -628,13 +607,12 @@ func TestIncidentService_UpdateIncident_StatusTransition(t *testing.T) {
 		require.NoError(t, err)
 
 		newStatus := "in_progress"
-		response, err := service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
+		_, err = service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
 			Status:  &newStatus,
-			Version: 0,
+			Version: 1,
 		}, testTenant.ID)
 
-		require.NoError(t, err)
-		assert.Equal(t, newStatus, response.Status)
+		require.ErrorContains(t, err, "Incident command")
 	})
 
 	// resolved/closed 不能再通过通用 UpdateIncident 直接设置——必须走 ResolveIncident/
@@ -653,11 +631,11 @@ func TestIncidentService_UpdateIncident_StatusTransition(t *testing.T) {
 		newStatus := "resolved"
 		_, err = service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
 			Status:  &newStatus,
-			Version: 0,
+			Version: 1,
 		}, testTenant.ID)
 
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "dedicated resolve or close action")
+		assert.Contains(t, err.Error(), "Incident command")
 	})
 
 	t.Run("通用更新拒绝直接转到 closed，必须走专用动作", func(t *testing.T) {
@@ -675,11 +653,11 @@ func TestIncidentService_UpdateIncident_StatusTransition(t *testing.T) {
 		newStatus := "closed"
 		_, err = service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
 			Status:  &newStatus,
-			Version: 0,
+			Version: 1,
 		}, testTenant.ID)
 
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "dedicated resolve or close action")
+		assert.Contains(t, err.Error(), "Incident command")
 	})
 
 	t.Run("无效状态转换", func(t *testing.T) {
@@ -694,69 +672,12 @@ func TestIncidentService_UpdateIncident_StatusTransition(t *testing.T) {
 		newStatus := "closed" // new 不能直接到 closed
 		_, err = service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
 			Status:  &newStatus,
-			Version: 0,
+			Version: 1,
 		}, testTenant.ID)
 
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid status transition")
+		assert.Contains(t, err.Error(), "Incident command")
 	})
-}
-
-func TestIncidentService_DedicatedLifecyclePersistsAuditAndTimestamps(t *testing.T) {
-	client, service, ctx := setupIncidentTest(t)
-	defer client.Close()
-	tenant, err := createIncidentTestTenant(ctx, client, "dedicated-lifecycle")
-	require.NoError(t, err)
-	user, err := createIncidentTestUser(ctx, client, tenant.ID, "dedicated-lifecycle")
-	require.NoError(t, err)
-	workItem := createIncidentTestWorkItem(t, ctx, client, tenant.ID, user.ID, "lifecycle", common.IncidentStatusInProgress, "high")
-	entity, err := client.Incident.Create().
-		SetSeverity("high").
-		SetWorkItemID(workItem.ID).
-		SetDetectedAt(time.Now().Add(-time.Hour)).
-		Save(ctx)
-	require.NoError(t, err)
-
-	require.NoError(t, service.ResolveIncident(ctx, entity.ID, user.ID, tenant.ID, "Restarted affected service", "Memory leak"))
-	resolved, err := client.Incident.Get(ctx, entity.ID)
-	require.NoError(t, err)
-	resolvedWorkItem := requireIncidentWorkItem(t, client, resolved)
-	assert.Equal(t, "resolved", resolvedWorkItem.Status)
-	assert.NotNil(t, resolvedWorkItem.ResolvedAt)
-	assert.Equal(t, "Memory leak", resolved.RootCause["rootCause"])
-	require.NotEmpty(t, resolved.ResolutionSteps)
-	assert.Equal(t, workItem.Version+1, resolvedWorkItem.Version)
-
-	require.NoError(t, service.CloseIncident(ctx, entity.ID, user.ID, tenant.ID, "Observed stable for 30 minutes"))
-	closed, err := client.Incident.Get(ctx, entity.ID)
-	require.NoError(t, err)
-	closedWorkItem := requireIncidentWorkItem(t, client, closed)
-	assert.Equal(t, "closed", closedWorkItem.Status)
-	assert.NotNil(t, closedWorkItem.ClosedAt)
-	assert.Equal(t, resolvedWorkItem.Version+1, closedWorkItem.Version)
-	events, err := client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).All(ctx)
-	require.NoError(t, err)
-	assert.Len(t, events, 2)
-}
-
-func TestIncidentService_ResolveRequiresResolutionAndStatusMachineFailsClosed(t *testing.T) {
-	client, service, ctx := setupIncidentTest(t)
-	defer client.Close()
-	tenant, err := createIncidentTestTenant(ctx, client, "resolution-required")
-	require.NoError(t, err)
-	user, err := createIncidentTestUser(ctx, client, tenant.ID, "resolution-required")
-	require.NoError(t, err)
-	workItem := createIncidentTestWorkItem(t, ctx, client, tenant.ID, user.ID, "resolution required", "new", "medium")
-	entity, err := client.Incident.Create().
-		SetSeverity("medium").
-		SetWorkItemID(workItem.ID).
-		Save(ctx)
-	require.NoError(t, err)
-
-	err = service.ResolveIncident(ctx, entity.ID, user.ID, tenant.ID, "  ", "")
-	require.ErrorContains(t, err, "resolution is required")
-	assert.False(t, isValidIncidentStatusTransition("legacy", "resolved"))
-	assert.False(t, isValidIncidentStatusTransition("in_progress", "closed"))
 }
 
 // ==================== BPMN 工作流专用写入方法测试 ====================
@@ -778,252 +699,6 @@ func newLifecycleIncidentFixture(t *testing.T, client *ent.Client, ctx context.C
 	return entity
 }
 
-func TestIncidentService_EscalateIncidentLevel_AutoIncrementsAndAudits(t *testing.T) {
-	client, service, ctx := setupIncidentTest(t)
-	defer client.Close()
-	tenant, err := createIncidentTestTenant(ctx, client, "wf-escalate")
-	require.NoError(t, err)
-	user, err := createIncidentTestUser(ctx, client, tenant.ID, "wf-escalate")
-	require.NoError(t, err)
-	entity := newLifecycleIncidentFixture(t, client, ctx, tenant.ID, user.ID, "INC-WF-ESCALATE-1")
-
-	resp, err := service.EscalateIncidentLevel(ctx, entity.ID, tenant.ID, 0)
-	require.NoError(t, err)
-	assert.Equal(t, 1, resp.Incident.EscalationLevel)
-
-	after, err := client.Incident.Get(ctx, entity.ID)
-	require.NoError(t, err)
-	assert.Equal(t, 1, after.EscalationLevel)
-	assert.Equal(t, common.IncidentStatusEscalated, requireIncidentWorkItem(t, client, after).Status)
-	assert.False(t, after.EscalatedAt.IsZero())
-
-	events, err := client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).All(ctx)
-	require.NoError(t, err)
-	require.Len(t, events, 1)
-	assert.Equal(t, "escalation", events[0].EventType)
-
-	// 显式指定级别时不再自动递增。
-	resp2, err := service.EscalateIncidentLevel(ctx, entity.ID, tenant.ID, 3)
-	require.NoError(t, err)
-	assert.Equal(t, 3, resp2.Incident.EscalationLevel)
-}
-
-func TestIncidentService_ResolveIncidentForWorkflow_SetsStatusAndAudits(t *testing.T) {
-	client, service, ctx := setupIncidentTest(t)
-	defer client.Close()
-	tenant, err := createIncidentTestTenant(ctx, client, "wf-resolve")
-	require.NoError(t, err)
-	user, err := createIncidentTestUser(ctx, client, tenant.ID, "wf-resolve")
-	require.NoError(t, err)
-	entity := newLifecycleIncidentFixture(t, client, ctx, tenant.ID, user.ID, "INC-WF-RESOLVE-1")
-
-	_, err = service.ResolveIncidentForWorkflow(ctx, entity.ID, tenant.ID, "自动诊断已恢复")
-	require.NoError(t, err)
-
-	after, err := client.Incident.Get(ctx, entity.ID)
-	require.NoError(t, err)
-	assert.Equal(t, common.IncidentStatusResolved, requireIncidentWorkItem(t, client, after).Status)
-	assert.NotNil(t, requireIncidentWorkItem(t, client, after).ResolvedAt)
-
-	events, err := client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).All(ctx)
-	require.NoError(t, err)
-	require.Len(t, events, 1)
-	assert.Equal(t, "resolution", events[0].EventType)
-}
-
-func TestIncidentService_CloseIncidentForWorkflow_SetsStatusAndAudits(t *testing.T) {
-	client, service, ctx := setupIncidentTest(t)
-	defer client.Close()
-	tenant, err := createIncidentTestTenant(ctx, client, "wf-close")
-	require.NoError(t, err)
-	user, err := createIncidentTestUser(ctx, client, tenant.ID, "wf-close")
-	require.NoError(t, err)
-	entity := newLifecycleIncidentFixture(t, client, ctx, tenant.ID, user.ID, "INC-WF-CLOSE-1")
-
-	_, err = service.CloseIncidentForWorkflow(ctx, entity.ID, tenant.ID, "流程自动关闭")
-	require.NoError(t, err)
-
-	after, err := client.Incident.Get(ctx, entity.ID)
-	require.NoError(t, err)
-	assert.Equal(t, common.IncidentStatusClosed, requireIncidentWorkItem(t, client, after).Status)
-	assert.NotNil(t, requireIncidentWorkItem(t, client, after).ClosedAt)
-
-	events, err := client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).All(ctx)
-	require.NoError(t, err)
-	require.Len(t, events, 1)
-	assert.Equal(t, "closure", events[0].EventType)
-}
-
-func TestIncidentService_AcknowledgeIncidentForWorkflow_SetsStatusAndAudits(t *testing.T) {
-	client, service, ctx := setupIncidentTest(t)
-	defer client.Close()
-	tenant, err := createIncidentTestTenant(ctx, client, "wf-ack")
-	require.NoError(t, err)
-	user, err := createIncidentTestUser(ctx, client, tenant.ID, "wf-ack")
-	require.NoError(t, err)
-	entity := newLifecycleIncidentFixture(t, client, ctx, tenant.ID, user.ID, "INC-WF-ACK-1")
-
-	_, err = service.AcknowledgeIncidentForWorkflow(ctx, entity.ID, tenant.ID)
-	require.NoError(t, err)
-
-	after, err := client.Incident.Get(ctx, entity.ID)
-	require.NoError(t, err)
-	assert.Equal(t, common.IncidentStatusAcknowledged, requireIncidentWorkItem(t, client, after).Status)
-
-	events, err := client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).All(ctx)
-	require.NoError(t, err)
-	require.Len(t, events, 1)
-	assert.Equal(t, "acknowledgement", events[0].EventType)
-}
-
-func TestIncidentService_UpdateIncidentForWorkflow_PartialUpdateDoesNotTouchOtherFields(t *testing.T) {
-	client, service, ctx := setupIncidentTest(t)
-	defer client.Close()
-	tenant, err := createIncidentTestTenant(ctx, client, "wf-update")
-	require.NoError(t, err)
-	user, err := createIncidentTestUser(ctx, client, tenant.ID, "wf-update")
-	require.NoError(t, err)
-	entity := newLifecycleIncidentFixture(t, client, ctx, tenant.ID, user.ID, "INC-WF-UPDATE-1")
-
-	// 只提交 title，其它字段留空——空字符串表示"不修改"，不能被误当成"清空该字段"。
-	_, err = service.UpdateIncidentForWorkflow(ctx, entity.ID, tenant.ID, "初步诊断：数据库连接超时", "", "", "", "")
-	require.NoError(t, err)
-
-	after, err := client.Incident.Get(ctx, entity.ID)
-	require.NoError(t, err)
-	assert.Equal(t, "初步诊断：数据库连接超时", requireIncidentWorkItem(t, client, after).Title)
-	assert.Equal(t, "new", requireIncidentWorkItem(t, client, after).Status, "update 只提交 title 时不得改状态")
-	assert.Equal(t, "medium", requireIncidentWorkItem(t, client, after).Priority, "未提交的字段不应该被清空/改变")
-}
-
-func TestIncidentService_CategorizeIncidentForWorkflow_SetsTriagedAndAudits(t *testing.T) {
-	client, service, ctx := setupIncidentTest(t)
-	defer client.Close()
-	tenant, err := createIncidentTestTenant(ctx, client, "wf-categorize")
-	require.NoError(t, err)
-	user, err := createIncidentTestUser(ctx, client, tenant.ID, "wf-categorize")
-	require.NoError(t, err)
-	parent, err := client.TicketCategory.Create().SetName("network").SetCode("network").SetTenantID(tenant.ID).Save(ctx)
-	require.NoError(t, err)
-	_, err = client.TicketCategory.Create().SetName("dns").SetCode("dns").SetTenantID(tenant.ID).SetParentID(parent.ID).Save(ctx)
-	require.NoError(t, err)
-	entity := newLifecycleIncidentFixture(t, client, ctx, tenant.ID, user.ID, "INC-WF-CATEGORIZE-1")
-
-	_, err = service.CategorizeIncidentForWorkflow(ctx, entity.ID, tenant.ID, "network", "dns")
-	require.NoError(t, err)
-
-	after, err := client.Incident.Get(ctx, entity.ID)
-	require.NoError(t, err)
-	workItem := requireIncidentWorkItem(t, client, after)
-	assert.Equal(t, common.IncidentStatusTriaged, workItem.Status)
-	categoryEntity, err := workItem.QueryCategory().WithParent().Only(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, "network", categoryEntity.Edges.Parent.Name)
-	assert.Equal(t, "dns", categoryEntity.Name)
-
-	events, err := client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).All(ctx)
-	require.NoError(t, err)
-	require.Len(t, events, 1)
-	assert.Equal(t, "categorization", events[0].EventType)
-}
-
-func TestIncidentService_WorkflowRetryPreservesFirstBusinessEffect(t *testing.T) {
-	client, incidentService, ctx := setupIncidentTest(t)
-	defer client.Close()
-	tenant, err := createIncidentTestTenant(ctx, client, "wf-retry")
-	require.NoError(t, err)
-	user, err := createIncidentTestUser(ctx, client, tenant.ID, "wf-retry")
-	require.NoError(t, err)
-
-	t.Run("escalation", func(t *testing.T) {
-		entity := newLifecycleIncidentFixture(t, client, ctx, tenant.ID, user.ID, "INC-WF-RETRY-ESC")
-		_, err := incidentService.EscalateIncidentLevel(ctx, entity.ID, tenant.ID, 0)
-		require.NoError(t, err)
-		first := client.Incident.GetX(ctx, entity.ID)
-		firstWorkItem := requireIncidentWorkItem(t, client, first)
-
-		_, err = incidentService.EscalateIncidentLevel(ctx, entity.ID, tenant.ID, 0)
-		require.NoError(t, err)
-		after := client.Incident.GetX(ctx, entity.ID)
-		assert.Equal(t, 1, after.EscalationLevel)
-		assert.Equal(t, firstWorkItem.Version, requireIncidentWorkItem(t, client, after).Version)
-		assert.Equal(t, first.EscalatedAt, after.EscalatedAt)
-		assert.Equal(t, 1, client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).CountX(ctx))
-	})
-
-	t.Run("resolution", func(t *testing.T) {
-		entity := newLifecycleIncidentFixture(t, client, ctx, tenant.ID, user.ID, "INC-WF-RETRY-RES")
-		_, err := incidentService.ResolveIncidentForWorkflow(ctx, entity.ID, tenant.ID, "restored")
-		require.NoError(t, err)
-		first := client.Incident.GetX(ctx, entity.ID)
-		firstWorkItem := requireIncidentWorkItem(t, client, first)
-
-		_, err = incidentService.ResolveIncidentForWorkflow(ctx, entity.ID, tenant.ID, "restored")
-		require.NoError(t, err)
-		after := client.Incident.GetX(ctx, entity.ID)
-		afterWorkItem := requireIncidentWorkItem(t, client, after)
-		assert.Equal(t, firstWorkItem.Version, afterWorkItem.Version)
-		assert.Equal(t, firstWorkItem.ResolvedAt, afterWorkItem.ResolvedAt)
-		assert.Equal(t, 1, client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).CountX(ctx))
-	})
-}
-
-func TestIncidentServiceTaskHandler_RetryNoWriteIsIdempotent(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		vars func(incidentID, assigneeID int) map[string]interface{}
-	}{
-		{name: "assign", vars: func(id, assigneeID int) map[string]interface{} {
-			return map[string]interface{}{"action": "assign_incident", "incident_id": id, "assignee_id": assigneeID}
-		}},
-		{name: "escalate", vars: func(id, _ int) map[string]interface{} {
-			return map[string]interface{}{"action": "escalate_incident", "incident_id": id, "escalation_level": 1}
-		}},
-		{name: "resolve", vars: func(id, _ int) map[string]interface{} {
-			return map[string]interface{}{"action": "resolve_incident", "incident_id": id, "resolution": "restored"}
-		}},
-		{name: "close", vars: func(id, _ int) map[string]interface{} {
-			return map[string]interface{}{"action": "close_incident", "incident_id": id, "feedback": "done"}
-		}},
-		{name: "acknowledge", vars: func(id, _ int) map[string]interface{} {
-			return map[string]interface{}{"action": "acknowledge_incident", "incident_id": id}
-		}},
-		{name: "update", vars: func(id, _ int) map[string]interface{} {
-			return map[string]interface{}{"action": "update_incident", "incident_id": id, "title": "updated once"}
-		}},
-		{name: "categorize", vars: func(id, _ int) map[string]interface{} {
-			return map[string]interface{}{"action": "categorize_incident", "incident_id": id, "category": "network", "subcategory": "dns"}
-		}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			client, incidentService, ctx := setupIncidentTest(t)
-			defer client.Close()
-			tenant, err := createIncidentTestTenant(ctx, client, "handler-retry-"+tc.name)
-			require.NoError(t, err)
-			user, err := createIncidentTestUser(ctx, client, tenant.ID, "handler-retry-"+tc.name)
-			require.NoError(t, err)
-			if tc.name == "categorize" {
-				parent := client.TicketCategory.Create().SetName("network").SetCode("network").SetTenantID(tenant.ID).SaveX(ctx)
-				client.TicketCategory.Create().SetName("dns").SetCode("dns").SetTenantID(tenant.ID).SetParentID(parent.ID).SaveX(ctx)
-			}
-			entity := newLifecycleIncidentFixture(t, client, ctx, tenant.ID, user.ID, "INC-HANDLER-RETRY-"+tc.name)
-			handler := bpmn.NewIncidentServiceTaskHandler(client, zaptest.NewLogger(t).Sugar())
-			handler.SetIncidentService(incidentService)
-			workflowCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
-			variables := tc.vars(entity.ID, user.ID)
-
-			first, err := handler.Execute(workflowCtx, nil, variables)
-			require.NoError(t, err)
-			require.Equal(t, bpmn.CallbackEffectApplied, first.Status)
-			retried, err := handler.Execute(workflowCtx, nil, variables)
-			require.NoError(t, err)
-			require.Equal(t, bpmn.CallbackEffectIdempotent, retried.Status)
-		})
-	}
-}
-
-// TestIncidentService_WorkflowMethods_CrossTenantFailClosed 覆盖六个 BPMN 工作流方法
-// 共同的租户边界：跨租户调用必须失败且不产生任何写入。
 func TestIncidentService_WorkflowMethods_CrossTenantFailClosed(t *testing.T) {
 	client, service, ctx := setupIncidentTest(t)
 	defer client.Close()
@@ -1035,17 +710,12 @@ func TestIncidentService_WorkflowMethods_CrossTenantFailClosed(t *testing.T) {
 	require.NoError(t, err)
 	entity := newLifecycleIncidentFixture(t, client, ctx, tenant.ID, user.ID, "INC-WF-CROSS-1")
 
-	_, err = service.EscalateIncidentLevel(ctx, entity.ID, other.ID, 0)
+	_, err = service.ApplyIncidentCommand(ctx, dto.IncidentCommand{Meta: workitemmutation.Meta{TenantID: other.ID, ActorID: user.ID, ExpectedVersion: 1, OperationID: "cross", Source: "workflow"}, IncidentID: entity.ID, Action: "escalate"})
 	assert.Error(t, err)
-	_, err = service.ResolveIncidentForWorkflow(ctx, entity.ID, other.ID, "x")
+
+	_, err = service.UpdateIncident(ctx, entity.ID, &dto.UpdateIncidentRequest{Version: 1}, other.ID)
 	assert.Error(t, err)
-	_, err = service.CloseIncidentForWorkflow(ctx, entity.ID, other.ID, "x")
-	assert.Error(t, err)
-	_, err = service.AcknowledgeIncidentForWorkflow(ctx, entity.ID, other.ID)
-	assert.Error(t, err)
-	_, err = service.UpdateIncidentForWorkflow(ctx, entity.ID, other.ID, "改过的标题", "", "", "", "")
-	assert.Error(t, err)
-	_, err = service.CategorizeIncidentForWorkflow(ctx, entity.ID, other.ID, "x", "y")
+	_, err = service.UpdateClassification(ctx, entity.ID, other.ID, 1, "x", "y")
 	assert.Error(t, err)
 
 	after, err := client.Incident.Get(ctx, entity.ID)
@@ -1087,8 +757,14 @@ func TestIncidentService_DeleteIncident_Success(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
+	deletionRole := client.Role.Create().SetTenantID(testTenant.ID).SetCode("agent").SetName("delete fixture").SetIsActive(true).SaveX(ctx)
+	for _, verb := range []string{"read", "delete"} {
+		perm := client.Permission.Create().SetTenantID(testTenant.ID).SetCode("deletion_" + verb).SetName(verb).SetResource("incident").SetAction(verb).SaveX(ctx)
+		client.RolePermission.Create().SetTenantID(testTenant.ID).SetRoleID(deletionRole.ID).SetPermissionID(perm.ID).ExecX(ctx)
+	}
+
 	// 测试删除
-	err = service.DeleteIncident(ctx, testIncident.ID, testTenant.ID)
+	err = service.DeleteIncident(ctx, testIncident.ID, workitemmutation.Meta{TenantID: testTenant.ID, ActorID: testUser.ID})
 	require.NoError(t, err)
 
 	// 验证已软删除，标准查询不可见但审计数据仍保留
@@ -1113,10 +789,12 @@ func TestIncidentService_DeleteIncident_NotFound(t *testing.T) {
 	testTenant, err := createIncidentTestTenant(ctx, client, "delnotfound")
 	require.NoError(t, err)
 
+	testUser, err := createIncidentTestUser(ctx, client, testTenant.ID, "delnotfound")
+	require.NoError(t, err)
 	// 测试删除不存在的事件
-	err = service.DeleteIncident(ctx, 99999, testTenant.ID)
+	err = service.DeleteIncident(ctx, 99999, workitemmutation.Meta{TenantID: testTenant.ID, ActorID: testUser.ID})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "incident not found")
+	assert.True(t, ent.IsNotFound(err))
 }
 
 // TestIncidentService_DeleteIncident_CascadeTenantIsolation verifies that
@@ -1176,9 +854,9 @@ func TestIncidentService_DeleteIncident_CascadeTenantIsolation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Tenant 2 tries to delete Tenant 1's incident - should fail with cross-tenant error
-	err = service.DeleteIncident(ctx, testIncident.ID, testTenant2.ID)
+	err = service.DeleteIncident(ctx, testIncident.ID, workitemmutation.Meta{TenantID: testTenant2.ID, ActorID: testUser1.ID})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "cross-tenant access denied", "Expected cross-tenant access denied error")
+	assert.True(t, ent.IsNotFound(err))
 
 	// Verify incident still exists (not deleted)
 	incident, err := client.Incident.Get(ctx, testIncident.ID)

@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -17,6 +19,7 @@ import (
 	"itsm-backend/ent/incidentmetric"
 	"itsm-backend/ent/incidentruleexecution"
 	"itsm-backend/ent/outboxevent"
+	"itsm-backend/handlers/shared/workitemmutation"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -55,7 +58,9 @@ func TestIncidentAlertingLifecycleIsTenantScopedAndAudited(t *testing.T) {
 	foreignActor, err := createIncidentTestUser(ctx, client, otherTenant.ID, "alert-foreign")
 	require.NoError(t, err)
 	incidentEntity := createAutomationIncident(t, ctx, client, tenant.ID, actor.ID, "INC-ALERT-LIFECYCLE")
-	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar())
+	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
+	ctx = configureIncidentAlertProducerTarget(t, ctx, alerting, tenant.ID)
+	ctx = WithIncidentAlertActor(ctx, actor.ID, "user", "producer-fixture")
 	triggeredAt := time.Now().Add(-5 * time.Minute).Truncate(time.Second)
 
 	alert, err := alerting.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
@@ -98,7 +103,7 @@ func TestIncidentAlertCreationRejectsCrossTenantAndThresholdRequiresIncident(t *
 	userA, err := createIncidentTestUser(ctx, client, tenantA.ID, "alert-boundary-a")
 	require.NoError(t, err)
 	foreignIncident := createAutomationIncident(t, ctx, client, tenantB.ID, userA.ID, "INC-ALERT-FOREIGN")
-	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar())
+	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 
 	_, err = alerting.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
 		IncidentID: foreignIncident.ID, AlertType: "monitoring", AlertName: "Foreign", Message: "Foreign",
@@ -119,7 +124,9 @@ func TestIncidentAlertCreationDurablyAcceptsEmailDelivery(t *testing.T) {
 	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "alert-durable")
 	require.NoError(t, err)
 	incidentEntity := createAutomationIncident(t, ctx, client, tenant.ID, reporter.ID, "INC-ALERT-DURABLE")
-	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar())
+	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
+	ctx = configureIncidentAlertProducerTarget(t, ctx, alerting, tenant.ID)
+	ctx = WithIncidentAlertActor(ctx, reporter.ID, "user", "producer-fixture")
 
 	requestCtx := WithIncidentAlertActor(ctx, reporter.ID, "user", "request-alert-42")
 	alert, err := alerting.CreateIncidentAlert(requestCtx, &dto.CreateIncidentAlertRequest{
@@ -164,7 +171,9 @@ func TestIncidentAlertCreationRejectsUnsupportedDeliveryBeforePersisting(t *test
 	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "alert-unsupported")
 	require.NoError(t, err)
 	incidentEntity := createAutomationIncident(t, ctx, client, tenant.ID, reporter.ID, "INC-ALERT-UNSUPPORTED")
-	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar())
+	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
+	ctx = configureIncidentAlertProducerTarget(t, ctx, alerting, tenant.ID)
+	ctx = WithIncidentAlertActor(ctx, reporter.ID, "user", "producer-fixture")
 
 	_, err = alerting.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
 		IncidentID: incidentEntity.ID,
@@ -191,7 +200,9 @@ func TestIncidentAlertCreationCreatesOneDeliveryPerEmailRecipient(t *testing.T) 
 	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "alert-recipient-destinations")
 	require.NoError(t, err)
 	incidentEntity := createAutomationIncident(t, ctx, client, tenant.ID, reporter.ID, "INC-ALERT-DESTINATIONS")
-	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar())
+	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
+	ctx = configureIncidentAlertProducerTarget(t, ctx, alerting, tenant.ID)
+	ctx = WithIncidentAlertActor(ctx, reporter.ID, "user", "producer-fixture")
 
 	_, err = alerting.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
 		IncidentID: incidentEntity.ID,
@@ -226,7 +237,9 @@ func TestIncidentAlertCreationRollsBackWhenDeliveryEnqueueFails(t *testing.T) {
 	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "alert-enqueue-rollback")
 	require.NoError(t, err)
 	incidentEntity := createAutomationIncident(t, ctx, client, tenant.ID, reporter.ID, "INC-ALERT-ROLLBACK")
-	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar())
+	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
+	ctx = configureIncidentAlertProducerTarget(t, ctx, alerting, tenant.ID)
+	ctx = WithIncidentAlertActor(ctx, reporter.ID, "user", "producer-fixture")
 
 	client.OutboxEvent.Use(func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
@@ -259,7 +272,8 @@ func TestIncidentEscalationPersistsTenantScopedNamedEvent(t *testing.T) {
 	_, err = incidentEntity.Update().SetDetectedAt(time.Now().Add(-10 * time.Minute)).Save(ctx)
 	require.NoError(t, err)
 
-	escalation := NewIncidentEscalationService(client)
+	client.Ticket.UpdateOneID(incidentEntity.WorkItemID).SetStatus("in_progress").ExecX(ctx)
+	escalation := NewIncidentEscalationService(client, executionfixture.Standard())
 	_, err = escalation.CreateEscalationRule(ctx, dto.CreateIncidentEscalationRuleRequest{
 		Name: "L1 timeout", TriggerType: "time_based", TriggerMinutes: 1,
 		EscalationLevel: 1, TargetAssigneeType: "user", AutoEscalate: true,
@@ -267,13 +281,14 @@ func TestIncidentEscalationPersistsTenantScopedNamedEvent(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = escalation.CheckAndEscalate(ctx, incidentEntity.ID)
+	reporter.Update().SetRole("super_admin").ExecX(ctx)
+	_, err = escalation.CheckAndEscalate(ctx, incidentEntity.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: reporter.ID, ExpectedVersion: client.Ticket.GetX(ctx, incidentEntity.WorkItemID).Version, Source: "scheduler", OperationID: "timeout-event"})
 	require.NoError(t, err)
 	event, err := client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(incidentEntity.ID)).Only(ctx)
 	require.NoError(t, err)
 	require.Equal(t, tenant.ID, event.TenantID)
-	require.Equal(t, "事件升级", event.EventName)
-	require.Equal(t, "system", event.Source)
+	require.Equal(t, "escalate", event.EventName)
+	require.Equal(t, "scheduler", event.Source)
 }
 
 func TestPrometheusMetricCorrelationDoesNotFanOut(t *testing.T) {
@@ -325,7 +340,7 @@ func TestIncidentRuleActionFailureMarksExecutionFailed(t *testing.T) {
 	require.NoError(t, err)
 	incidentEntity, err = client.Incident.Query().Where(incident.IDEQ(incidentEntity.ID)).WithWorkItem().Only(ctx)
 	require.NoError(t, err)
-	engine := NewIncidentRuleEngine(client, zaptest.NewLogger(t).Sugar())
+	engine := NewIncidentRuleEngine(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 
 	err = engine.ExecuteRule(ctx, rule, incidentEntity, tenant.ID)
 	require.ErrorContains(t, err, "rule action failed")

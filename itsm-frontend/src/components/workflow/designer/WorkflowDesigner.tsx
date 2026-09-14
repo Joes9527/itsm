@@ -770,7 +770,7 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
           onAIClick={() => setShowAIModal(true)}
         />
 
-        <Content className='p-4 md:p-6 bg-gray-50 overflow-hidden'>
+        <Content className='p-[16px] md:p-[24px] bg-page overflow-hidden'>
           <Tabs
             activeKey={activeTab}
             onChange={handleTabChange}
@@ -781,7 +781,7 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
                 key: 'designer',
                 label: '流程设计',
                 children: (
-                  <div className='flex flex-col md:flex-row gap-2 md:gap-4 h-[calc(100vh-220px)] md:h-[calc(100vh-200px)]'>
+                  <div className='flex flex-col md:flex-row gap-2 md:gap-[14px] h-[calc(100vh-220px)] md:h-[calc(100vh-200px)]'>
                     <div className='flex-1 min-w-0 min-h-[300px] md:min-h-0'>
                       <WorkflowCanvas
                         currentXML={currentXML}
@@ -793,7 +793,7 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
                         onSelectionChange={handleSelectionChange}
                       />
                     </div>
-                    <div className='w-full md:w-80 shrink-0 overflow-y-auto bg-white rounded-lg shadow-sm border border-gray-200'>
+                    <div className='w-full md:w-80 shrink-0 overflow-y-auto bg-surface rounded-[8px] shadow-none border border-border'>
                       <WorkflowNodeInspector
                         selection={selectedNode}
                         onUpdateProperties={handleUpdateNodeProperties}
@@ -858,7 +858,7 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
                   </span>
                 ),
                 children: (
-                  <div className='bg-white rounded-lg shadow-sm border border-gray-200 p-6 h-[calc(100vh-200px)] overflow-y-auto'>
+                  <div className='bg-surface rounded-[8px] shadow-none border border-border p-[16px] h-[calc(100vh-200px)] overflow-y-auto'>
                     <div className='mb-4'>
                       <Space>
                         <Button
@@ -881,15 +881,15 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
                     {validationIssues.length === 0 ? (
                       <div className='text-center py-12'>
                         <CheckCircle className='text-4xl text-green-500 mb-2' />
-                        <Title level={4}>流程校验通过</Title>
+                        <Title className="!text-[15px] !font-semibold" level={4}>流程校验通过</Title>
                         <Text type='secondary'>未发现任何问题，可以正常部署</Text>
                       </div>
                     ) : (
-                      <div className='divide-y divide-gray-100'>
+                      <div className='divide-y divide-border'>
                         {validationIssues.map(item => (
                           <div
                             key={`${item.elementId || 'process'}-${item.message}`}
-                            className='cursor-pointer hover:bg-gray-50 transition-colors'
+                            className='cursor-pointer hover:bg-raised transition-colors'
                             onClick={() => item.elementId && jumpToIssue(item)}
                           >
                             <div className='flex gap-3 px-4 py-3'>
@@ -914,7 +914,7 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
                                 </Space>
                                 {item.elementId && (
                                   <div>
-                                    <Text type='secondary' className='text-xs'>
+                                    <Text type='secondary' className='text-[12px]'>
                                       点击定位到该元素
                                     </Text>
                                   </div>
@@ -1030,18 +1030,18 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
                 <span className='mx-2'>VS</span>
                 <Tag color='green'>版本 {compareVersions.version2.version}</Tag>
               </div>
-              <div className='grid grid-cols-2 gap-4 h-[600px]'>
-                <div className='border border-gray-200 rounded-lg p-4 overflow-y-auto bg-gray-50 font-mono text-xs whitespace-pre-wrap'>
+              <div className='grid grid-cols-2 gap-[14px] h-[600px]'>
+                <div className='border border-border rounded-[8px] p-[16px] overflow-y-auto bg-raised font-mono text-[12px] whitespace-pre-wrap'>
                   {compareVersions.version1.xml}
                 </div>
-                <div className='border border-gray-200 rounded-lg p-4 overflow-y-auto bg-gray-50 font-mono text-xs whitespace-pre-wrap'>
+                <div className='border border-border rounded-[8px] p-[16px] overflow-y-auto bg-raised font-mono text-[12px] whitespace-pre-wrap'>
                   {compareVersions.version2.xml}
                 </div>
               </div>
             </div>
           ) : (
             <div className='text-center py-12'>
-              <GitCompare className='text-4xl text-gray-400 mb-2' />
+              <GitCompare className='text-4xl text-muted mb-2' />
               <Text type='secondary'>请选择两个版本进行对比</Text>
             </div>
           )}

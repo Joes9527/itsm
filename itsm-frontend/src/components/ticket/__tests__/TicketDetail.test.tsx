@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import userEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
 import TicketDetail from '../TicketDetail';
 
@@ -252,4 +252,114 @@ describe('TicketDetail', () => {
     await screen.findByText('#101 VPN 无法连接');
     expect(screen.queryByText('新建')).not.toBeInTheDocument();
   });
-});
+  it('keeps a historical SLA breach visible during a fresh current cycle', async () => {
+    mockGetTicket.mockResolvedValueOnce({ ...baseTicket, status: 'open' });
+    mockGetSLA.mockResolvedValueOnce({
+      slaName: '冻结 SLA', cycleNumber: 2, isBreached: false,
+      responseTime: 60, resolutionTime: 60,
+      responseDeadline: null, resolutionDeadline: null,
+      responseTimeRemaining: 60, resolutionTimeRemaining: 60,
+      history: [{ number: 1, responseBreached: false, resolutionBreached: true }],
+    });
+    render(<TicketDetail />);
+    expect(await screen.findByText('当前周期 2')).toBeInTheDocument();
+    expect(screen.getByText('历史周期 1：已违约')).toBeInTheDocument();
+  });
+
+  describe('edit command retries through the real form', () => {
+    const update = TicketApi.updateTicket as jest.Mock;
+    let originalRandomUUID: typeof crypto.randomUUID;
+    beforeEach(() => {
+      originalRandomUUID = crypto.randomUUID;
+      let sequence = 0;
+      Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: jest.fn(() => `confirmed-edit-${++sequence}`) });
+      update.mockReset();
+      mockGetTicket.mockResolvedValue({ ...baseTicket, recordClass: 'generic', status: 'open' });
+    });
+    afterEach(() => Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: originalRandomUUID }));
+
+    it('keeps the form opening version across refresh and reuses the full uncertain request', async () => {
+      update.mockRejectedValueOnce(new Error('connection lost after submission')).mockResolvedValueOnce({ workItemId: 101, version: 2, status: 'open', replayed: true });
+      const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+      render(<TicketDetail />);
+      await user.click((await screen.findByText('编辑', { selector: 'span' })).closest('button')!);
+      let dialog = (await screen.findByText('编辑工单')).closest('[role="dialog"]')! as HTMLElement;
+      await user.clear(within(dialog).getByLabelText('工单标题'));
+      await user.type(within(dialog).getByLabelText('工单标题'), 'Confirmed title');
+      mockGetTicket.mockResolvedValue({ ...baseTicket, recordClass: 'generic', status: 'open', version: 9 });
+      fireEvent.keyDown(document.body, { key: 'r', altKey: true });
+      await waitFor(() => expect(mockGetTicket).toHaveBeenCalledTimes(2));
+      dialog = (await screen.findByText('编辑工单')).closest('[role="dialog"]')! as HTMLElement;
+      await user.click(within(dialog).getByText('保存修改').closest('button')!);
+      await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+      const first = update.mock.calls[0][1];
+      expect(first).toMatchObject({ title: 'Confirmed title', version: 1, operationId: 'confirmed-edit-1' });
+      await waitFor(() => expect(within(dialog).getByText('保存修改').closest('button')!).not.toHaveClass('ant-btn-loading'));
+      await user.click(within(dialog).getByText('保存修改').closest('button')!);
+      await waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+      expect(update.mock.calls[1]).toEqual([101, first]);
+      expect(crypto.randomUUID).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(mockGetTicket).toHaveBeenCalledTimes(3));
+    });
+
+    it('requires fresh confirmation after an explicit conflict and uses a new operation', async () => {
+      update.mockRejectedValueOnce(Object.assign(new Error('version conflict'), { status: 409, code: 4090 })).mockResolvedValueOnce({ workItemId: 101, version: 10, status: 'open', replayed: false });
+      const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+      render(<TicketDetail />);
+      await user.click((await screen.findByText('编辑', { selector: 'span' })).closest('button')!);
+      let dialog = (await screen.findByText('编辑工单')).closest('[role="dialog"]')! as HTMLElement;
+      await user.clear(within(dialog).getByLabelText('工单标题'));
+      await user.type(within(dialog).getByLabelText('工单标题'), 'Confirmed title');
+      mockGetTicket.mockResolvedValue({ ...baseTicket, recordClass: 'generic', status: 'open', version: 9 });
+      await user.click(within(dialog).getByText('保存修改').closest('button')!);
+      await waitFor(() => expect(mockGetTicket).toHaveBeenCalledTimes(2));
+      expect(update).toHaveBeenCalledTimes(1);
+      await user.click((await screen.findByText('编辑', { selector: 'span' })).closest('button')!);
+      dialog = (await screen.findByText('编辑工单')).closest('[role="dialog"]')! as HTMLElement;
+      await user.clear(within(dialog).getByLabelText('工单标题'));
+      await user.type(within(dialog).getByLabelText('工单标题'), 'Confirmed title');
+      await user.click(within(dialog).getByText('保存修改').closest('button')!);
+      await waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+      expect(update.mock.calls[0][1]).toMatchObject({ title: 'Confirmed title', version: 1, operationId: 'confirmed-edit-1' });
+      expect(update.mock.calls[1][1]).toMatchObject({ title: 'Confirmed title', version: 9, operationId: 'confirmed-edit-2' });
+    });
+  });
+
+  it.each(['ENGINEER.WANG', '王工'])('searches assignees by %s and submits the selected identity', async search => {
+    mockHasPermission.mockImplementation(permission => permission === 'user:read');
+    mockGetTicket.mockResolvedValue({ ...baseTicket, status: 'open' });
+    mockGetUsers.mockResolvedValue({ users: [{ id: 12, name: '王工', username: 'engineer.wang' }, { id: 13, name: '李工', username: 'engineer.li' }] });
+    (TicketApi.assignTicket as jest.Mock).mockResolvedValue({});
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+    render(<TicketDetail />);
+    await user.click(await screen.findByText('转派分配'));
+    const select = screen.getByLabelText('分配给');
+    await user.type(select, search);
+    expect(screen.queryByText('李工')).not.toBeInTheDocument();
+    await user.click(await screen.findByText('王工'));
+    await user.click(screen.getByText('确认分配'));
+    await waitFor(() => expect(TicketApi.assignTicket).toHaveBeenCalledWith(101, expect.objectContaining({ assigneeId: 12 })));
+  });
+
+  it('shows a retryable user lookup failure in the assignment form', async () => {
+    mockHasPermission.mockImplementation(permission => permission === 'user:read');
+    mockGetTicket.mockResolvedValue({ ...baseTicket, status: 'open' });
+    mockGetUsers.mockRejectedValueOnce(new Error('人员服务不可用')).mockResolvedValueOnce({ users: [{ id: 12, name: '王工', username: 'engineer.wang' }] });
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+    render(<TicketDetail />);
+    await user.click(await screen.findByText('转派分配'));
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('人员服务不可用');
+    await user.click(within(dialog).getByRole('button', { name: '重试人员列表' }));
+    await waitFor(() => expect(mockGetUsers).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument());
+  });  it('shows the shared user error in the CC form without bypassing read permission', async () => {
+    mockGetTicket.mockResolvedValue({ ...baseTicket, status: 'open' });
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+    render(<TicketDetail />);
+    await user.click(await screen.findByText('抄送'));
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('无权读取人员列表');
+    expect(mockGetUsers).not.toHaveBeenCalled();
+    expect(within(dialog).queryByRole('button', { name: '重试人员列表' })).not.toBeInTheDocument();
+  });});

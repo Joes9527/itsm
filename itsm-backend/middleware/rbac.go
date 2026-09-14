@@ -2,9 +2,10 @@ package middleware
 
 import (
 	"errors"
-	creation "itsm-backend/handlers/common/workitemcreation"
 	"strings"
 	"time"
+
+	creation "itsm-backend/handlers/common/workitemcreation"
 
 	"itsm-backend/authorization"
 	"itsm-backend/common"

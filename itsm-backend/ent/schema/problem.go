@@ -15,6 +15,11 @@ type Problem struct {
 // Fields of the Problem.
 func (Problem) Fields() []ent.Field {
 	return []ent.Field{
+		field.Int("verified_version").Optional(),
+		field.String("verification_digest").Optional(),
+		field.Int("verified_by").Optional(),
+		field.Time("verified_at").Optional(),
+		field.Text("verification_note").Optional(),
 		field.Text("root_cause").
 			Comment("根本原因").
 			Optional(),
@@ -40,15 +45,6 @@ func (Problem) Edges() []ent.Edge {
 			Unique().
 			Required().
 			Comment("共享字段的唯一权威 WorkItem"),
-		// 与工单的关联
-		edge.To("tickets", Ticket.Type).
-			Comment("关联的工单"),
-		// 与事件的关联
-		edge.To("incidents", Incident.Type).
-			Comment("关联的事件"),
-		// 与变更的关联
-		edge.To("changes", Change.Type).
-			Comment("关联的变更"),
 	}
 }
 

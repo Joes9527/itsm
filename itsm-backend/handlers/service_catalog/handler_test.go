@@ -79,7 +79,7 @@ func scSetup(t *testing.T) (*gin.Engine, *ent.Client, int) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	client.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType("ticket").SetProcessDefinitionKey("none").SetConditions(map[string]interface{}{"no_process": true}).SaveX(ctx)
+	client.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType("generic").SetProcessDefinitionKey("none").SetConditions(map[string]interface{}{"no_process": true}).SaveX(ctx)
 	repo := NewEntRepository(client)
 	svc := newCatalogPublisher(repo, client, zaptest.NewLogger(t).Sugar(), sameTransactionDirectory{})
 	h := NewHandler(svc)

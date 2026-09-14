@@ -2,18 +2,17 @@ package authorization
 
 import (
 	"context"
+	"strings"
+	"sync/atomic"
+	"time"
+
 	"itsm-backend/ent"
-	"itsm-backend/ent/incident"
 	"itsm-backend/ent/permission"
 	"itsm-backend/ent/role"
 	"itsm-backend/ent/rolepermission"
 	"itsm-backend/ent/standardchange"
-	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"strings"
-	"sync/atomic"
-	"time"
 )
 
 // RequireCurrentPermission reads current RBAC inside the caller transaction.
@@ -97,7 +96,13 @@ func authorizeWorkItemCreationForActor(ctx context.Context, tx *ent.Tx, actor *e
 	if resource == "" {
 		return nil, creation.NewUnsupportedRecordClass("unsupported creation class", nil)
 	}
-	for _, action := range []string{"write", "read"} {
+	// Generic ticket routes and role grants use granular create/update verbs.
+	// Professional creation retains its domain write contract.
+	creationAction := "write"
+	if command.RecordClass == creation.RecordClassGeneric {
+		creationAction = "create"
+	}
+	for _, action := range []string{creationAction, "read"} {
 		if err := RequireCurrentPermission(ctx, tx, identity, resource, action); err != nil {
 			return nil, err
 		}
@@ -131,20 +136,6 @@ func authorizeWorkItemCreationForActor(ctx context.Context, tx *ent.Tx, actor *e
 			return nil, creation.NewReferenceNotFound("standard change template is unavailable", nil)
 		}
 	}
-	if command.Problem != nil && command.Problem.SourceIncidentID != nil {
-		for _, action := range []string{"read", "write"} {
-			if err := RequireCurrentPermission(ctx, tx, identity, "incident", action); err != nil {
-				return nil, err
-			}
-		}
-		exists, err := tx.Incident.Query().Where(incident.IDEQ(*command.Problem.SourceIncidentID), incident.HasWorkItemWith(ticket.TenantIDEQ(identity.TenantID), ticket.RecordClassEQ("incident"), ticket.DeletedAtIsNil())).Exist(ctx)
-		if err != nil {
-			return nil, creation.NewInfrastructureUnavailable("could not authorize conversion source", err)
-		}
-		if !exists {
-			return nil, creation.NewReferenceNotFound("source incident is unavailable", nil)
-		}
-	}
 	authorized := &CreationAuthorization{tx: tx, identity: identity}
 	authorized.active.Store(true)
 	tx.OnCommit(func(next ent.Committer) ent.Committer {
@@ -176,6 +167,7 @@ func (a *CreationAuthorization) Identity() creation.Identity {
 	}
 	return a.identity
 }
+
 func (a *CreationAuthorization) Validate(tx *ent.Tx, identity creation.Identity) error {
 	if a == nil || !a.active.Load() || tx == nil || a.tx != tx || a.identity != identity || a.identity.ActorTenantID <= 0 {
 		return creation.NewPermissionDenied("creation authorization does not match transaction identity", nil)

@@ -12,6 +12,16 @@ const (
 	Label = "problem"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldVerifiedVersion holds the string denoting the verified_version field in the database.
+	FieldVerifiedVersion = "verified_version"
+	// FieldVerificationDigest holds the string denoting the verification_digest field in the database.
+	FieldVerificationDigest = "verification_digest"
+	// FieldVerifiedBy holds the string denoting the verified_by field in the database.
+	FieldVerifiedBy = "verified_by"
+	// FieldVerifiedAt holds the string denoting the verified_at field in the database.
+	FieldVerifiedAt = "verified_at"
+	// FieldVerificationNote holds the string denoting the verification_note field in the database.
+	FieldVerificationNote = "verification_note"
 	// FieldRootCause holds the string denoting the root_cause field in the database.
 	FieldRootCause = "root_cause"
 	// FieldWorkaround holds the string denoting the workaround field in the database.
@@ -24,12 +34,6 @@ const (
 	FieldWorkItemID = "work_item_id"
 	// EdgeWorkItem holds the string denoting the work_item edge name in mutations.
 	EdgeWorkItem = "work_item"
-	// EdgeTickets holds the string denoting the tickets edge name in mutations.
-	EdgeTickets = "tickets"
-	// EdgeIncidents holds the string denoting the incidents edge name in mutations.
-	EdgeIncidents = "incidents"
-	// EdgeChanges holds the string denoting the changes edge name in mutations.
-	EdgeChanges = "changes"
 	// Table holds the table name of the problem in the database.
 	Table = "problems"
 	// WorkItemTable is the table that holds the work_item relation/edge.
@@ -39,28 +43,16 @@ const (
 	WorkItemInverseTable = "tickets"
 	// WorkItemColumn is the table column denoting the work_item relation/edge.
 	WorkItemColumn = "work_item_id"
-	// TicketsTable is the table that holds the tickets relation/edge.
-	TicketsTable = "tickets"
-	// TicketsInverseTable is the table name for the Ticket entity.
-	// It exists in this package in order to avoid circular dependency with the "ticket" package.
-	TicketsInverseTable = "tickets"
-	// TicketsColumn is the table column denoting the tickets relation/edge.
-	TicketsColumn = "problem_tickets"
-	// IncidentsTable is the table that holds the incidents relation/edge. The primary key declared below.
-	IncidentsTable = "problem_incidents"
-	// IncidentsInverseTable is the table name for the Incident entity.
-	// It exists in this package in order to avoid circular dependency with the "incident" package.
-	IncidentsInverseTable = "incidents"
-	// ChangesTable is the table that holds the changes relation/edge. The primary key declared below.
-	ChangesTable = "problem_changes"
-	// ChangesInverseTable is the table name for the Change entity.
-	// It exists in this package in order to avoid circular dependency with the "change" package.
-	ChangesInverseTable = "changes"
 )
 
 // Columns holds all SQL columns for problem fields.
 var Columns = []string{
 	FieldID,
+	FieldVerifiedVersion,
+	FieldVerificationDigest,
+	FieldVerifiedBy,
+	FieldVerifiedAt,
+	FieldVerificationNote,
 	FieldRootCause,
 	FieldWorkaround,
 	FieldResolution,
@@ -73,15 +65,6 @@ var Columns = []string{
 var ForeignKeys = []string{
 	"known_error_problem",
 }
-
-var (
-	// IncidentsPrimaryKey and IncidentsColumn2 are the table columns denoting the
-	// primary key for the incidents relation (M2M).
-	IncidentsPrimaryKey = []string{"problem_id", "incident_id"}
-	// ChangesPrimaryKey and ChangesColumn2 are the table columns denoting the
-	// primary key for the changes relation (M2M).
-	ChangesPrimaryKey = []string{"problem_id", "change_id"}
-)
 
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
@@ -104,6 +87,31 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByVerifiedVersion orders the results by the verified_version field.
+func ByVerifiedVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVerifiedVersion, opts...).ToFunc()
+}
+
+// ByVerificationDigest orders the results by the verification_digest field.
+func ByVerificationDigest(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVerificationDigest, opts...).ToFunc()
+}
+
+// ByVerifiedBy orders the results by the verified_by field.
+func ByVerifiedBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVerifiedBy, opts...).ToFunc()
+}
+
+// ByVerifiedAt orders the results by the verified_at field.
+func ByVerifiedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVerifiedAt, opts...).ToFunc()
+}
+
+// ByVerificationNote orders the results by the verification_note field.
+func ByVerificationNote(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVerificationNote, opts...).ToFunc()
 }
 
 // ByRootCause orders the results by the root_cause field.
@@ -137,73 +145,10 @@ func ByWorkItemField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newWorkItemStep(), sql.OrderByField(field, opts...))
 	}
 }
-
-// ByTicketsCount orders the results by tickets count.
-func ByTicketsCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newTicketsStep(), opts...)
-	}
-}
-
-// ByTickets orders the results by tickets terms.
-func ByTickets(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newTicketsStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
-// ByIncidentsCount orders the results by incidents count.
-func ByIncidentsCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newIncidentsStep(), opts...)
-	}
-}
-
-// ByIncidents orders the results by incidents terms.
-func ByIncidents(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newIncidentsStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
-// ByChangesCount orders the results by changes count.
-func ByChangesCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newChangesStep(), opts...)
-	}
-}
-
-// ByChanges orders the results by changes terms.
-func ByChanges(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newChangesStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
 func newWorkItemStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(WorkItemInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, false, WorkItemTable, WorkItemColumn),
-	)
-}
-func newTicketsStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(TicketsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, TicketsTable, TicketsColumn),
-	)
-}
-func newIncidentsStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(IncidentsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2M, false, IncidentsTable, IncidentsPrimaryKey...),
-	)
-}
-func newChangesStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ChangesInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2M, false, ChangesTable, ChangesPrimaryKey...),
 	)
 }

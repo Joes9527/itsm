@@ -22,19 +22,11 @@ import {
   Popconfirm,
 } from 'antd';
 import Link from 'next/link';
-import {
-  Building2,
-  Plus,
-  RefreshCw,
-  CheckCircle,
-  AlertTriangle,
-} from 'lucide-react';
-import type { ProcessBinding} from '@/lib/api/process-binding-api';
+import { Building2, Plus, RefreshCw, CheckCircle, AlertTriangle } from 'lucide-react';
+import type { ProcessBinding } from '@/lib/api/process-binding-api';
 import { ProcessBindingApi } from '@/lib/api/process-binding-api';
 import type { Department } from '@/lib/services/department-service';
 import { departmentService } from '@/lib/services/department-service';
-
-
 
 interface DepartmentTreeNode {
   title: string;
@@ -137,21 +129,19 @@ export default function DepartmentProcessPage() {
       dataIndex: 'scenario',
       key: 'scenario',
       render: (scenario: string) => (
-        <Tag color={getScenarioColor(scenario)}>
-          {scenario || 'Default'}
-        </Tag>
+        <Tag color={getScenarioColor(scenario)}>{scenario || 'Default'}</Tag>
       ),
     },
     {
       title: 'Business Type',
-      dataIndex:'businessType',
-      key:'businessType',
+      dataIndex: 'businessType',
+      key: 'businessType',
       render: (type: string) => <Tag>{type}</Tag>,
     },
     {
       title: 'Process',
-      dataIndex:'processDefinitionKey',
-      key:'processDefinitionKey',
+      dataIndex: 'processDefinitionKey',
+      key: 'processDefinitionKey',
       render: (key: string) => <Tag color="cyan">{key}</Tag>,
     },
     {
@@ -164,7 +154,10 @@ export default function DepartmentProcessPage() {
       dataIndex: 'isActive',
       key: 'isActive',
       render: (active: boolean) => (
-        <Tag icon={active ? <CheckCircle /> : <AlertTriangle />} color={active ? 'success' : 'error'}>
+        <Tag
+          icon={active ? <CheckCircle /> : <AlertTriangle />}
+          color={active ? 'success' : 'error'}
+        >
           {active ? 'Active' : 'Inactive'}
         </Tag>
       ),
@@ -202,7 +195,7 @@ export default function DepartmentProcessPage() {
               <Tree
                 showIcon
                 treeData={buildDeptTree(departments)}
-                onSelect={(keys) => {
+                onSelect={keys => {
                   if (keys.length > 0) {
                     setSelectedDeptId(keys[0] as number);
                   }
@@ -219,9 +212,7 @@ export default function DepartmentProcessPage() {
                 {/* Department Info */}
                 <Card size="small" style={{ marginBottom: 16 }}>
                   <Descriptions size="small">
-                    <Descriptions.Item label="Department">
-                      {selectedDept?.name}
-                    </Descriptions.Item>
+                    <Descriptions.Item label="Department">{selectedDept?.name}</Descriptions.Item>
                     <Descriptions.Item label="Code">
                       <Tag>{selectedDept?.code}</Tag>
                     </Descriptions.Item>
@@ -240,7 +231,11 @@ export default function DepartmentProcessPage() {
                   </Col>
                   <Col span={8}>
                     <Card size="small">
-                      <Statistic title="Active" value={stats.active} valueStyle={{ color: '#3f8600' }} />
+                      <Statistic
+                        title="Active"
+                        value={stats.active}
+                        valueStyle={{ color: '#3f8600' }}
+                      />
                     </Card>
                   </Col>
                   <Col span={8}>
@@ -253,17 +248,10 @@ export default function DepartmentProcessPage() {
                 {/* Actions */}
                 <Card size="small" style={{ marginBottom: 16 }}>
                   <Space>
-                    <Button
-                      type="primary"
-                      icon={<Plus />}
-                      onClick={() => setShowInitModal(true)}
-                    >
+                    <Button type="primary" icon={<Plus />} onClick={() => setShowInitModal(true)}>
                       Initialize Default Templates
                     </Button>
-                    <Button
-                      icon={<RefreshCw />}
-                      onClick={() => loadDeptProcesses(selectedDeptId)}
-                    >
+                    <Button icon={<RefreshCw />} onClick={() => loadDeptProcesses(selectedDeptId)}>
                       Refresh
                     </Button>
                   </Space>
@@ -282,7 +270,9 @@ export default function DepartmentProcessPage() {
               </>
             ) : (
               <Card>
-                <div style={{ textAlign: 'center', padding: 48, color: '#999' }}>
+                <div
+                  style={{ textAlign: 'center', padding: 48, color: 'var(--color-text-secondary)' }}
+                >
                   <Building2 style={{ width: 48, height: 48, marginBottom: 16 }} />
                   <p>Select a department from the tree to configure processes</p>
                 </div>
@@ -310,7 +300,12 @@ export default function DepartmentProcessPage() {
             <Select
               value={departmentType}
               onChange={setDepartmentType}
-              options={[{ value: 'operations', label: 'Operations (Alert Handling, Change Release)' }, { value: 'rd', label: 'R&D (Code Release, Requirement Change)' }, { value: 'finance', label: 'Finance (Expense Approval, Budget)' }, { value: 'hr', label: 'HR (Leave, Recruitment)' }]}
+              options={[
+                { value: 'operations', label: 'Operations (Alert Handling, Change Release)' },
+                { value: 'rd', label: 'R&D (Code Release, Requirement Change)' },
+                { value: 'finance', label: 'Finance (Expense Approval, Budget)' },
+                { value: 'hr', label: 'HR (Leave, Recruitment)' },
+              ]}
             />
           </Form.Item>
         </Form>

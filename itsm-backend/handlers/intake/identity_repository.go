@@ -2,6 +2,8 @@ package intake
 
 import (
 	"context"
+	"strconv"
+
 	"itsm-backend/authentication"
 	"itsm-backend/authorization"
 	"itsm-backend/common/tenantctx"
@@ -9,7 +11,6 @@ import (
 	"itsm-backend/ent/externalidentity"
 	"itsm-backend/ent/user"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"strconv"
 )
 
 type IdentityRepository interface {
@@ -25,6 +26,7 @@ type EntIdentityRepository struct {
 func NewIdentityRepository(runtime, system *ent.Client, sessions *authorization.SessionReader) *EntIdentityRepository {
 	return &EntIdentityRepository{runtime: runtime, system: system, sessions: sessions}
 }
+
 func (r *EntIdentityRepository) Resolve(ctx context.Context, provider, workspace, subject string) (*ent.ExternalIdentity, creation.Identity, error) {
 	var identity creation.Identity
 	if r == nil || r.system == nil || r.runtime == nil || r.sessions == nil {
@@ -49,6 +51,7 @@ func (r *EntIdentityRepository) Resolve(ctx context.Context, provider, workspace
 	identity, err = r.Validate(tenantctx.WithTenantID(ctx, mapping.TenantID), claims)
 	return mapping, identity, err
 }
+
 func (r *EntIdentityRepository) Validate(ctx context.Context, c *authentication.IntakeClaims) (creation.Identity, error) {
 	identity := creation.Identity{TenantID: c.TenantID, ActorID: c.UserID, RequesterID: c.UserID, Role: c.Role, Provider: c.Provider, Channel: c.Channel, TokenID: c.ID}
 	if r == nil || r.sessions == nil {
@@ -70,6 +73,7 @@ func (r *EntIdentityRepository) Validate(ctx context.Context, c *authentication.
 	})
 	return identity, err
 }
+
 func (r *EntIdentityRepository) Audit(ctx context.Context, identity creation.Identity, action string, mappingID int) error {
 	ctx = tenantctx.WithTenantID(ctx, identity.TenantID)
 	_, err := r.runtime.AuditLog.Create().SetTenantID(identity.TenantID).SetUserID(identity.ActorID).SetResource("intake_identity").SetRequestBody(`{"mappingId":` + strconv.Itoa(mappingID) + `}`).SetAction(action).SetRequestID("intake-identity").SetIP("").SetPath("/api/v1/intake/identity-exchange").SetMethod("POST").SetStatusCode(200).Save(ctx)
@@ -89,6 +93,7 @@ func createIdentityMappingTx(ctx context.Context, tx *ent.Tx, tenantID int, inpu
 	}
 	return row, nil
 }
+
 func updateIdentityMappingTx(ctx context.Context, tx *ent.Tx, tenantID, id, version int, active bool) (*ent.ExternalIdentity, error) {
 	count, err := tx.ExternalIdentity.Update().Where(externalidentity.IDEQ(id), externalidentity.TenantIDEQ(tenantID), externalidentity.VersionEQ(version)).SetActive(active).AddVersion(1).Save(ctx)
 	if err != nil {
@@ -103,6 +108,7 @@ func updateIdentityMappingTx(ctx context.Context, tx *ent.Tx, tenantID, id, vers
 	}
 	return row, nil
 }
+
 func recordIdentityMappingAuditTx(ctx context.Context, tx *ent.Tx, i creation.Identity, action string, id, version int) error {
 	_, err := tx.AuditLog.Create().SetTenantID(i.TenantID).SetUserID(i.ActorID).SetResource("intake_identity_mapping").SetAction(action).SetPath("/api/v1/intake/identity-mappings").SetMethod("POST").SetStatusCode(200).SetRequestBody(`{"mappingId":` + strconv.Itoa(id) + `,"version":` + strconv.Itoa(version) + `}`).Save(ctx)
 	if err != nil {

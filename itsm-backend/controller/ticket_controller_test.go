@@ -9,7 +9,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
+
+	"itsm-backend/handlers/shared/workitemmutation"
+	ticketrepo "itsm-backend/repository/ticket"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -55,7 +60,7 @@ func setupTestTicketController(t *testing.T) (*gin.Engine, *ent.Client, *TicketC
 
 	logger := zaptest.NewLogger(t).Sugar()
 
-	ticketService := service.NewTicketServiceForTest(client, logger)
+	ticketService := service.NewTicketService(&service.TicketServiceConfig{Client: client, Repository: ticketrepo.NewEntRepository(client, logger), Logger: logger, Execution: executionfixture.Standard()})
 	var ticketDependencyService *service.TicketDependencyService
 
 	ticketController := NewTicketController(ticketService, ticketDependencyService, nil, client, logger)
@@ -66,7 +71,7 @@ func setupTestTicketController(t *testing.T) (*gin.Engine, *ent.Client, *TicketC
 	registry := intake.NewCreatorRegistry()
 	require.NoError(t, registry.Register(ticketService))
 	resolver := intake.NewResolver(service_catalog.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
-	ticketController.SetCreationApplication(intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}))
+	ticketController.SetCreationApplication(intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard()))
 
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -154,10 +159,10 @@ func seedTicketRolePermission(t *testing.T, client *ent.Client, tenantID int, ro
 func seedTicketNoProcessBinding(t *testing.T, client *ent.Client, tenantID int) {
 	t.Helper()
 	ctx := context.Background()
-	if client.ProcessBinding.Query().Where(entprocessbinding.TenantIDEQ(tenantID), entprocessbinding.BusinessTypeEQ("ticket")).ExistX(ctx) {
+	if client.ProcessBinding.Query().Where(entprocessbinding.TenantIDEQ(tenantID), entprocessbinding.BusinessTypeEQ("generic")).ExistX(ctx) {
 		return
 	}
-	client.ProcessBinding.Create().SetTenantID(tenantID).SetBusinessType("ticket").SetIsDefault(true).
+	client.ProcessBinding.Create().SetTenantID(tenantID).SetBusinessType("generic").SetIsDefault(true).
 		SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
 }
 
@@ -215,7 +220,7 @@ func TestTicketController_CreateTicket(t *testing.T) {
 	defer client.Close()
 
 	tenant, user := createTestTenantAndUserForTicket(t, client)
-	seedTicketRolePermission(t, client, tenant.ID, "end_user", "ticket", "write")
+	seedTicketRolePermission(t, client, tenant.ID, "end_user", "ticket", "create")
 	seedTicketRolePermission(t, client, tenant.ID, "end_user", "ticket", "read")
 	seedTicketNoProcessBinding(t, client, tenant.ID)
 
@@ -329,7 +334,7 @@ func TestTicketController_CreateTicket_IgnoresClientSuppliedSource(t *testing.T)
 	defer client.Close()
 
 	tenant, user := createTestTenantAndUserForTicket(t, client)
-	seedTicketRolePermission(t, client, tenant.ID, "end_user", "ticket", "write")
+	seedTicketRolePermission(t, client, tenant.ID, "end_user", "ticket", "create")
 	seedTicketRolePermission(t, client, tenant.ID, "end_user", "ticket", "read")
 	seedTicketNoProcessBinding(t, client, tenant.ID)
 
@@ -494,7 +499,8 @@ func TestTicketController_ListTickets(t *testing.T) {
 }
 
 func TestTicketController_UpdateTicket(t *testing.T) {
-	r, client, _ := setupTestTicketController(t)
+	r, client, controller := setupTestTicketController(t)
+	controller.ticketService.SetNotificationService(service.NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard()))
 	defer client.Close()
 
 	tenant, user := createTestTenantAndUserForTicket(t, client)
@@ -514,6 +520,7 @@ func TestTicketController_UpdateTicket(t *testing.T) {
 	// 请求没有带 X-Test-Role，中间件默认用 "admin"——UpdateTicket 现在会用
 	// service.CanEdit 二次校验 ticket:update，测试库是全新的，要先补上这条权限。
 	seedTicketRolePermission(t, client, tenant.ID, "admin", "ticket", "update")
+	seedTicketRolePermission(t, client, tenant.ID, user.Role, "ticket", "update")
 
 	tests := []struct {
 		name         string
@@ -524,27 +531,27 @@ func TestTicketController_UpdateTicket(t *testing.T) {
 		{
 			name:     "成功更新工单",
 			ticketID: strconv.Itoa(ticket.ID),
-			request: dto.UpdateTicketRequest{
+			request: dto.UpdateTicketRequest{TicketEditFields: dto.TicketEditFields{
 				Title:       "更新后的标题",
 				Description: "更新后的详细描述内容足够长以通过校验",
 				Priority:    "high",
-			},
+			}, Version: ticket.Version, OperationID: "controller-edit"},
 			expectedCode: common.SuccessCode,
 		},
 		{
 			name:     "无效的工单ID格式",
 			ticketID: "abc",
-			request: dto.UpdateTicketRequest{
+			request: dto.UpdateTicketRequest{TicketEditFields: dto.TicketEditFields{
 				Title: "更新后的标题",
-			},
+			}, Version: ticket.Version, OperationID: "controller-edit"},
 			expectedCode: common.ParamErrorCode,
 		},
 		{
 			name:     "工单不存在",
 			ticketID: "99999",
-			request: dto.UpdateTicketRequest{
+			request: dto.UpdateTicketRequest{TicketEditFields: dto.TicketEditFields{
 				Title: "更新后的标题",
-			},
+			}, Version: ticket.Version, OperationID: "controller-edit"},
 			expectedCode: common.NotFoundCode,
 		},
 	}
@@ -565,10 +572,11 @@ func TestTicketController_UpdateTicket(t *testing.T) {
 
 			// For success cases, the returned ticket should reflect the update.
 			if tt.expectedCode == common.SuccessCode {
-				var updated dto.TicketResponse
+				var updated workitemmutation.Result
 				require.NoError(t, json.Unmarshal(resp.Data, &updated), "data=%s", string(resp.Data))
-				assert.Equal(t, tt.request.Title, updated.Title)
-				assert.Equal(t, tt.request.Priority, updated.Priority)
+				assert.Equal(t, ticket.ID, updated.WorkItemID)
+				assert.Equal(t, tt.request.Title, client.Ticket.GetX(ctx, ticket.ID).Title)
+				assert.Equal(t, tt.request.Priority, client.Ticket.GetX(ctx, ticket.ID).Priority)
 			}
 		})
 	}
@@ -592,9 +600,12 @@ func TestTicketController_DeleteTicket(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	// 同 TestTicketController_UpdateTicket：默认角色 "admin" 需要先补上 ticket:delete，
-	// DeleteTicket 现在会用 service.CanDelete 二次校验。
-	seedTicketRolePermission(t, client, tenant.ID, "admin", "ticket", "delete")
+	// Deletion authorizes the persisted actor role inside its transaction.
+	deletionRole := client.Role.Create().SetTenantID(tenant.ID).SetCode(user.Role).SetName("delete fixture").SetIsActive(true).SaveX(context.Background())
+	for _, verb := range []string{"read", "delete"} {
+		perm := client.Permission.Create().SetTenantID(tenant.ID).SetCode("deletion_" + verb).SetName(verb).SetResource("ticket").SetAction(verb).SaveX(context.Background())
+		client.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(deletionRole.ID).SetPermissionID(perm.ID).ExecX(context.Background())
+	}
 
 	tests := []struct {
 		name         string
@@ -624,6 +635,124 @@ func TestTicketController_DeleteTicket(t *testing.T) {
 			verifyReq.Header.Set("X-Test-Tenant", strconv.Itoa(tenant.ID))
 			verifyResp, _ := doJSONRequest(t, r, verifyReq)
 			assert.Equal(t, common.NotFoundCode, verifyResp.Code, "deleted ticket should 404")
+		})
+	}
+}
+
+func TestTicketController_UpdateTicketRechecksInactiveActor(t *testing.T) {
+	r, client, controller := setupTestTicketController(t)
+	defer client.Close()
+	r.PATCH("/api/v1/tickets/:id/subtasks/:subtask_id", controller.UpdateSubtask)
+	tenant, actor := createTestTenantAndUserForTicket(t, client)
+	ctx := context.Background()
+	seedTicketRolePermission(t, client, tenant.ID, "admin", "ticket", "update")
+	seedTicketRolePermission(t, client, tenant.ID, actor.Role, "ticket", "update")
+	impersonated := client.User.Create().SetTenantID(tenant.ID).SetUsername("edit-body-actor").SetName("Body actor").SetEmail("body@example.invalid").SetPasswordHash("fixture").SetRole("super_admin").SetActive(true).SaveX(ctx)
+	parent := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetTicketNumber("EDIT-PARENT").SetTitle("Parent").SetRecordClass("generic").SetStatus("open").SaveX(ctx)
+	child := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetTicketNumber("EDIT-CHILD").SetTitle("Child").SetRecordClass("generic").SetStatus("open").SetParentTicketID(parent.ID).SaveX(ctx)
+	client.User.UpdateOneID(actor.ID).SetActive(false).ExecX(ctx)
+	for _, endpoint := range []struct{ method, url string }{{http.MethodPut, fmt.Sprintf("/api/v1/tickets/%d", child.ID)}, {http.MethodPatch, fmt.Sprintf("/api/v1/tickets/%d/subtasks/%d", parent.ID, child.ID)}} {
+		before, err := json.Marshal(client.Ticket.GetX(ctx, child.ID))
+		require.NoError(t, err)
+		body := fmt.Sprintf(`{"title":"must reject actor","userId":%d,"operationId":"actor-test","version":%d,"tags":["unauthorized"]}`, impersonated.ID, child.Version)
+		request := httptest.NewRequest(endpoint.method, endpoint.url, strings.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("X-Test-Tenant", strconv.Itoa(tenant.ID))
+		request.Header.Set("X-Test-User", strconv.Itoa(actor.ID))
+		response, _ := doJSONRequest(t, r, request)
+		require.Equal(t, common.ForbiddenCode, response.Code, response.Message)
+		after, err := json.Marshal(client.Ticket.GetX(ctx, child.ID))
+		require.NoError(t, err)
+		require.JSONEq(t, string(before), string(after))
+		require.Zero(t, client.TicketTag.Query().CountX(ctx))
+	}
+	var bound dto.UpdateTicketRequest
+	require.NoError(t, json.Unmarshal([]byte(`{"userId":123,"title":"input"}`), &bound))
+	encoded, err := json.Marshal(bound)
+	require.NoError(t, err)
+	require.NotContains(t, string(encoded), "userId")
+}
+
+func TestTicketController_UpdateSubtaskChecksParentInTransaction(t *testing.T) {
+	r, client, controller := setupTestTicketController(t)
+	defer client.Close()
+	r.PATCH("/api/v1/tickets/:id/subtasks/:subtask_id", controller.UpdateSubtask)
+	tenant, actor := createTestTenantAndUserForTicket(t, client)
+	ctx := context.Background()
+	seedTicketRolePermission(t, client, tenant.ID, actor.Role, "ticket", "update")
+	parent := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetTicketNumber("PARENT-ROUTE").SetTitle("Parent").SetRecordClass("generic").SetStatus("open").SaveX(ctx)
+	child := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetTicketNumber("CHILD-ROUTE").SetTitle("Child").SetRecordClass("generic").SetStatus("open").SetParentTicketID(parent.ID).SaveX(ctx)
+	for _, parentID := range []int{parent.ID + 10000, 0, -1} {
+		before, err := json.Marshal(client.Ticket.GetX(ctx, child.ID))
+		require.NoError(t, err)
+		body := fmt.Sprintf(`{"title":"wrong route","expectedParentId":%d,"operationId":"route-test","version":%d,"tags":["wrong-route"]}`, parent.ID, child.Version)
+		req := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/v1/tickets/%d/subtasks/%d", parentID, child.ID), strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Test-Tenant", strconv.Itoa(tenant.ID))
+		req.Header.Set("X-Test-User", strconv.Itoa(actor.ID))
+		resp, _ := doJSONRequest(t, r, req)
+		require.Equal(t, common.ParamErrorCode, resp.Code, resp.Message)
+		after, err := json.Marshal(client.Ticket.GetX(ctx, child.ID))
+		require.NoError(t, err)
+		require.JSONEq(t, string(before), string(after))
+		require.Zero(t, client.TicketTag.Query().CountX(ctx))
+	}
+	body := fmt.Sprintf(`{"title":"correct route","expectedParentId":-1,"operationId":"route-test","version":%d}`, child.Version)
+	req := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/v1/tickets/%d/subtasks/%d", parent.ID, child.ID), strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Test-Tenant", strconv.Itoa(tenant.ID))
+	req.Header.Set("X-Test-User", strconv.Itoa(actor.ID))
+	resp, _ := doJSONRequest(t, r, req)
+	require.Equal(t, common.SuccessCode, resp.Code, resp.Message)
+	updated := client.Ticket.GetX(ctx, child.ID)
+	require.Equal(t, "correct route", updated.Title)
+	require.Equal(t, child.Version+1, updated.Version)
+	require.Equal(t, parent.Version, client.Ticket.GetX(ctx, parent.ID).Version)
+	var bound dto.UpdateTicketRequest
+	require.NoError(t, json.Unmarshal([]byte(`{"expectedParentId":123}`), &bound))
+	encoded, err := json.Marshal(bound)
+	require.NoError(t, err)
+	require.NotContains(t, string(encoded), "expectedParentId")
+}
+
+func TestTicketController_EditTerminalReplay(t *testing.T) {
+	for _, method := range []string{http.MethodPut, http.MethodPatch} {
+		t.Run(method, func(t *testing.T) {
+			r, client, controller := setupTestTicketController(t)
+			defer client.Close()
+			r.PATCH("/api/v1/tickets/:id/subtasks/:subtask_id", controller.UpdateSubtask)
+			tenant, actor := createTestTenantAndUserForTicket(t, client)
+			ctx := context.Background()
+			seedTicketRolePermission(t, client, tenant.ID, actor.Role, "ticket", "update")
+			notifications := service.NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
+			notifications.SetNotificationPreferenceService(service.NewNotificationPreferenceService(client, zaptest.NewLogger(t).Sugar()))
+			controller.ticketService.SetNotificationService(notifications)
+			client.NotificationPreference.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetEventType("ticket_updated").SetEmailEnabled(false).SetInAppEnabled(true).SetSmsEnabled(false).SetPushEnabled(false).SaveX(ctx)
+			parent := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetTicketNumber("TERMINAL-PARENT").SetTitle("Parent").SetRecordClass("generic").SetStatus("open").SaveX(ctx)
+			item := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetTicketNumber("TERMINAL-CHILD").SetTitle("Child").SetRecordClass("generic").SetStatus("open").SetParentTicketID(parent.ID).SaveX(ctx)
+			url := fmt.Sprintf("/api/v1/tickets/%d", item.ID)
+			if method == http.MethodPatch {
+				url = fmt.Sprintf("/api/v1/tickets/%d/subtasks/%d", parent.ID, item.ID)
+			}
+			body := fmt.Sprintf(`{"status":"cancelled","version":%d,"operationId":"terminal-edit"}`, item.Version)
+			for attempt := 0; attempt < 2; attempt++ {
+				req := httptest.NewRequest(method, url, strings.NewReader(body))
+				req.Header.Set("Content-Type", "application/json")
+				req.Header.Set("X-Test-Tenant", strconv.Itoa(tenant.ID))
+				req.Header.Set("X-Test-User", strconv.Itoa(actor.ID))
+				response, _ := doJSONRequest(t, r, req)
+				require.Equal(t, common.SuccessCode, response.Code, response.Message)
+				var result workitemmutation.Result
+				require.NoError(t, json.Unmarshal(response.Data, &result))
+				require.Equal(t, item.ID, result.WorkItemID)
+				require.Equal(t, item.Version+1, result.Version)
+				require.Equal(t, "cancelled", result.Status)
+				require.Equal(t, attempt == 1, result.Replayed)
+				require.Equal(t, item.Version+1, client.Ticket.GetX(ctx, item.ID).Version)
+				require.Equal(t, 1, client.Notification.Query().CountX(ctx))
+				require.Equal(t, 1, client.TicketNotification.Query().CountX(ctx))
+				require.Equal(t, 1, client.AuditLog.Query().CountX(ctx))
+			}
 		})
 	}
 }

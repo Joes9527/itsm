@@ -454,3 +454,52 @@ func connectorConfigFor(mailbox, aadURL, graphURL string) connector.Config {
 		},
 	}
 }
+
+type blockingPollingStore struct {
+	*fakeStore
+	entered, cancelled, release chan struct{}
+}
+
+func (s *blockingPollingStore) TicketExistsForExternalMessage(ctx context.Context, _ int, _ string) (bool, error) {
+	close(s.entered)
+	<-ctx.Done()
+	close(s.cancelled)
+	<-s.release
+	return false, ctx.Err()
+}
+
+func TestCoordinatorCloseWaitsForPollAndRejectsRestart(t *testing.T) {
+	store := &blockingPollingStore{newFakeStore(), make(chan struct{}), make(chan struct{}), make(chan struct{})}
+	coord := NewEmailPollingCoordinator(store, fakeTriager{}, zaptest.NewLogger(t).Sugar())
+	aad, graph := newTestGraphServer(t, []map[string]interface{}{{"id": "m1", "internetMessageId": "<m1@example.com>", "from": map[string]interface{}{"emailAddress": map[string]interface{}{"address": "sender@example.com"}}}})
+	defer aad.Close()
+	defer graph.Close()
+	conn := New()
+	require.NoError(t, conn.Init(context.Background(), connectorConfigFor("support@contoso.com", aad.URL, graph.URL)))
+	require.NoError(t, coord.Start(context.Background(), 7, conn))
+	select {
+	case <-store.entered:
+	case <-time.After(3 * time.Second):
+		t.Fatal("poll did not enter store")
+	}
+	done := make(chan struct{})
+	go func() { coord.Close(); close(done) }()
+	select {
+	case <-store.cancelled:
+	case <-time.After(time.Second):
+		t.Fatal("poll was not cancelled")
+	}
+	select {
+	case <-done:
+		t.Fatal("close did not wait for poll completion")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(store.release)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("close did not complete")
+	}
+	require.Error(t, coord.Start(context.Background(), 7, New()))
+	coord.Close()
+}

@@ -423,8 +423,8 @@ const ServiceCatalogManagement = () => {
       key: 'name',
       render: (name: string, record: ServiceItem) => (
         <div>
-          <div className='font-medium text-gray-900'>{name}</div>
-          <div className='text-sm text-gray-500 mt-1'>{record.shortDescription}</div>
+          <div className='font-medium text-foreground'>{name}</div>
+          <div className='text-[13px] text-muted mt-1'>{record.shortDescription}</div>
         </div>
       ),
     },
@@ -461,7 +461,7 @@ const ServiceCatalogManagement = () => {
       key: 'deliveryTime',
       width: 120,
       render: (_: unknown, record: ServiceItem) => (
-        <span className='text-sm flex items-center'>
+        <span className='text-[13px] flex items-center'>
           <Clock className='w-4 h-4 mr-1' />
           {record.availability?.responseTime ? `${record.availability.responseTime}小时` : '-'}
         </span>
@@ -493,7 +493,7 @@ const ServiceCatalogManagement = () => {
       key: 'createdAt',
       width: 150,
       render: (date: string) => (
-        <span className='text-sm text-gray-600'>{new Date(date).toLocaleDateString('zh-CN')}</span>
+        <span className='text-[13px] text-muted'>{new Date(date).toLocaleDateString('zh-CN')}</span>
       ),
     },
     {
@@ -567,7 +567,7 @@ const ServiceCatalogManagement = () => {
           <BookOpen className='inline-block w-6 h-6 mr-2' />
           服务目录管理
         </Title>
-        <Text type='secondary'>管理IT服务目录和服务分类</Text>
+        <Text type='secondary'>维护可申请的服务目录项，配置申请字段、流程和服务级别</Text>
       </div>
 
       {/* 统计卡片 */}
@@ -605,10 +605,10 @@ const ServiceCatalogManagement = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card className='enterprise-card'>
             <Statistic
-              title='服务分类'
+              title='目录分类'
               value={stats.categories}
               prefix={<Filter className='w-5 h-5' />}
-              styles={{ content: { color: '#722ed1' } }}
+              styles={{ content: { color: 'var(--color-text-primary)' } }}
             />
           </Card>
         </Col>
@@ -787,11 +787,11 @@ const ServiceCatalogManagement = () => {
 
           <Form.Item
             name='category'
-            label='服务分类'
-            rules={[{ required: true, message: '请选择服务分类' }]}
+            label='目录分类'
+            rules={[{ required: true, message: '请选择目录分类' }]}
           >
             <Select
-              placeholder='请选择服务分类'
+              placeholder='请选择目录分类'
               options={[
                 { value: '云服务', label: '云服务' },
                 { value: '基础设施', label: '基础设施' },
@@ -850,7 +850,7 @@ const ServiceCatalogManagement = () => {
           <CustomFieldsEditor name='fields' />
 
           {/* 审批配置 */}
-          <div className='bg-gray-50 p-4 rounded-lg mb-4'>
+          <div className='bg-raised p-[16px] rounded-[8px] mb-4'>
             <Text strong className='block mb-3'>
               审批配置
             </Text>
@@ -892,7 +892,7 @@ const ServiceCatalogManagement = () => {
           </div>
 
           {/* SLA配置 */}
-          <div className='bg-blue-50 p-4 rounded-lg mb-4'>
+          <div className='bg-raised p-[16px] rounded-[8px] mb-4'>
             <Text strong className='block mb-3'>
               SLA配置
             </Text>

@@ -8,7 +8,10 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/repository/ticket"
+	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -214,10 +217,11 @@ func TestTicketService_UpdateTicketStatus(t *testing.T) {
 
 	t.Run("approval decisions must use BPMN task command", func(t *testing.T) {
 		id := fx.makeTicket(t, "u-approval", ticket.StatusOpen)
+		require.NoError(t, configureEntryTicketEdit(fx.ctx, fx.client, fx.tenantID(), fx.userID()))
 		for _, status := range []string{"approved", "rejected"} {
 			_, err := fx.svc.UpdateTicketStatus(fx.ctx, id, status, fx.tenantID(), fx.userID())
 			require.ErrorContains(t, err, "只能由 BPMN")
-			_, err = fx.svc.UpdateTicket(fx.ctx, id, &dto.UpdateTicketRequest{Status: status}, fx.tenantID())
+			_, err = fx.svc.UpdateTicket(fx.ctx, editCommandForTest(id, &dto.TicketEditCommand{Fields: dto.TicketEditFields{Status: status}, Meta: workitemmutation.Meta{ActorID: fx.userID(), ExpectedVersion: fx.client.Ticket.GetX(fx.ctx, id).Version}}, fx.tenantID()))
 			require.ErrorContains(t, err, "只能由 BPMN")
 		}
 	})
@@ -375,10 +379,16 @@ func TestTicketService_BatchDeleteTickets(t *testing.T) {
 	fx := newTicketFixture(t)
 	defer fx.client.Close()
 
+	deletionRole := fx.client.Role.Create().SetTenantID(fx.tenant.GetID()).SetCode("end_user").SetName("delete fixture").SetIsActive(true).SaveX(fx.ctx)
+	for _, verb := range []string{"read", "delete"} {
+		perm := fx.client.Permission.Create().SetTenantID(fx.tenant.GetID()).SetCode("deletion_" + verb).SetName(verb).SetResource("ticket").SetAction(verb).SaveX(fx.ctx)
+		fx.client.RolePermission.Create().SetTenantID(fx.tenant.GetID()).SetRoleID(deletionRole.ID).SetPermissionID(perm.ID).ExecX(fx.ctx)
+	}
+
 	t.Run("批量删除空列表", func(t *testing.T) {
 		tenantID := fx.tenantID()
-		err := fx.svc.BatchDeleteTickets(fx.ctx, []int{}, tenantID)
-		assert.NoError(t, err)
+		err := fx.svc.BatchDeleteTickets(fx.ctx, []int{}, workitemmutation.Meta{TenantID: tenantID, ActorID: fx.user.GetID()})
+		assert.Error(t, err)
 	})
 
 	t.Run("批量删除多条 ticket", func(t *testing.T) {
@@ -387,7 +397,7 @@ func TestTicketService_BatchDeleteTickets(t *testing.T) {
 		id3 := fx.makeTicket(t, "b3", ticket.StatusNew)
 		tenantID := fx.tenantID()
 
-		err := fx.svc.BatchDeleteTickets(fx.ctx, []int{id1, id2, id3}, tenantID)
+		err := fx.svc.BatchDeleteTickets(fx.ctx, []int{id1, id2, id3}, workitemmutation.Meta{TenantID: tenantID, ActorID: fx.user.GetID()})
 		require.NoError(t, err)
 
 		// 验证已删除（GetByID 应失败）
@@ -529,13 +539,11 @@ func TestTicketService_BatchDeleteTickets_TenantIsolation(t *testing.T) {
 	tenantID := fx.tenantID()
 
 	// 用 tenant2 删除不应该成功（保护原租户）
-	err = fx.svc.BatchDeleteTickets(fx.ctx, []int{id}, tenant2.ID)
-	// 跨租户删除行为：可能返回错误或部分成功；主要验证原租户 ticket 仍然存在
+	err = fx.svc.BatchDeleteTickets(fx.ctx, []int{id}, workitemmutation.Meta{TenantID: tenant2.ID, ActorID: fx.user.GetID()})
+	require.Error(t, err, "foreign-tenant batch must fail atomically")
 	tkt, err2 := fx.svc.GetTicket(fx.ctx, id, tenantID)
 	require.NoError(t, err2, "原租户 ticket 仍应可查询")
 	assert.Equal(t, id, tkt.ID, "跨租户删除不应影响原租户 ticket")
-
-	_ = err // err 类型取决于 repository 实现
 }
 
 // =====================================================================
@@ -549,7 +557,8 @@ func TestTicketService_EscalateTicket_TicketNotFound(t *testing.T) {
 	tenantID := fx.tenantID()
 	userID := fx.userID()
 
-	_, err := fx.svc.EscalateTicket(fx.ctx, 99999, "reason", tenantID, userID)
+	manualOwner := service.NewTicketService(&service.TicketServiceConfig{Execution: executionfixture.Standard(), Client: fx.client, Repository: ticket.NewEntRepository(fx.client, zaptest.NewLogger(t).Sugar()), Logger: zaptest.NewLogger(t).Sugar()})
+	_, err := manualOwner.EscalateTicket(fx.ctx, dto.TicketEscalationCommand{WorkItemID: 99999, Reason: "reason", Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: userID, ExpectedVersion: 1, Source: "http", OperationID: "not-found"}})
 	assert.Error(t, err, "不存在的 ticket 应该失败")
 }
 

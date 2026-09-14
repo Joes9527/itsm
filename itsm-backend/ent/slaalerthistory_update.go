@@ -353,6 +353,9 @@ func (_u *SLAAlertHistoryUpdate) sqlSave(ctx context.Context) (_node int, err er
 			}
 		}
 	}
+	if _u.mutation.NotificationTrackingVersionCleared() {
+		_spec.ClearField(slaalerthistory.FieldNotificationTrackingVersion, field.TypeInt)
+	}
 	if value, ok := _u.mutation.TicketNumber(); ok {
 		_spec.SetField(slaalerthistory.FieldTicketNumber, field.TypeString, value)
 	}
@@ -831,6 +834,9 @@ func (_u *SLAAlertHistoryUpdateOne) sqlSave(ctx context.Context) (_node *SLAAler
 				ps[i](selector)
 			}
 		}
+	}
+	if _u.mutation.NotificationTrackingVersionCleared() {
+		_spec.ClearField(slaalerthistory.FieldNotificationTrackingVersion, field.TypeInt)
 	}
 	if value, ok := _u.mutation.TicketNumber(); ok {
 		_spec.SetField(slaalerthistory.FieldTicketNumber, field.TypeString, value)

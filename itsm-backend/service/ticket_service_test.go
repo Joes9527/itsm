@@ -6,6 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/handlers/shared/workitemmutation"
+	domain "itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
@@ -836,6 +841,13 @@ func TestTicketService_UpdateTicket(t *testing.T) {
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketService := NewTicketServiceForTest(client, logger)
 
+	policy := executionfixture.Standard()
+	notifications := domain.NewTicketNotificationService(client, logger, policy)
+	mail := domain.NewEmailService(domain.EmailConfig{DeliveryTransport: "smtp", Host: "smtp.example.invalid", Port: 2525, Username: "fixture", From: "fixture@example.invalid"}, logger)
+	mail.SetDeliveryTargetDependencies(nil, policy)
+	notifications.SetEmailService(mail)
+	ticketService.SetNotificationService(notifications)
+
 	ctx := context.Background()
 
 	// 创建测试数据
@@ -846,6 +858,7 @@ func TestTicketService_UpdateTicket(t *testing.T) {
 		SetStatus("active").
 		Save(ctx)
 	require.NoError(t, err)
+	ctx = tenantctx.WithTenantID(ctx, testTenant.ID)
 
 	testUser, err := client.User.Create().
 		SetUsername("testuser").
@@ -857,6 +870,8 @@ func TestTicketService_UpdateTicket(t *testing.T) {
 		SetTenantID(testTenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
+
+	require.NoError(t, configureEntryTicketEdit(ctx, client, testTenant.ID, testUser.ID))
 
 	testTicket, err := client.Ticket.Create().
 		SetTitle("原始标题").
@@ -872,67 +887,57 @@ func TestTicketService_UpdateTicket(t *testing.T) {
 	tests := []struct {
 		name          string
 		ticketID      int
-		request       *dto.UpdateTicketRequest
+		request       *dto.TicketEditCommand
 		tenantID      int
 		expectedError bool
 	}{
 		{
-			name:     "成功更新工单",
-			ticketID: testTicket.ID,
-			request: &dto.UpdateTicketRequest{
-				Title:       "更新后的标题",
-				Description: "更新后的描述",
-				Priority:    "high",
-				Status:      "in_progress",
-				UserID:      testUser.ID,
-			},
+			name:          "成功更新工单",
+			ticketID:      testTicket.ID,
+			request:       &dto.TicketEditCommand{Fields: dto.TicketEditFields{Title: "更新后的标题", Description: "更新后的描述", Priority: "high", Status: "in_progress"}, Meta: workitemmutation.Meta{ActorID: testUser.ID}},
 			tenantID:      testTenant.ID,
 			expectedError: false,
 		},
 		{
-			name:     "部分更新",
-			ticketID: testTicket.ID,
-			request: &dto.UpdateTicketRequest{
-				Priority: "critical",
-				UserID:   testUser.ID,
-			},
+			name:          "部分更新",
+			ticketID:      testTicket.ID,
+			request:       &dto.TicketEditCommand{Fields: dto.TicketEditFields{Priority: "critical"}, Meta: workitemmutation.Meta{ActorID: testUser.ID}},
 			tenantID:      testTenant.ID,
 			expectedError: false,
 		},
 		{
-			name:     "工单不存在",
-			ticketID: 99999,
-			request: &dto.UpdateTicketRequest{
-				Title:  "新标题",
-				UserID: testUser.ID,
-			},
+			name:          "工单不存在",
+			ticketID:      99999,
+			request:       &dto.TicketEditCommand{Fields: dto.TicketEditFields{Title: "新标题"}, Meta: workitemmutation.Meta{ActorID: testUser.ID}},
 			tenantID:      testTenant.ID,
 			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
+	for index, tt := range tests {
+		tt.request.Meta.ExpectedVersion = testTicket.Version + index
 		t.Run(tt.name, func(t *testing.T) {
-			updatedTicket, err := ticketService.UpdateTicket(ctx, tt.ticketID, tt.request, tt.tenantID)
+			updatedTicket, err := ticketService.UpdateTicket(ctx, editCommandForTest(tt.ticketID, tt.request, tt.tenantID))
 
 			if tt.expectedError {
 				assert.Error(t, err)
-				assert.Nil(t, updatedTicket)
+				assert.Equal(t, workitemmutation.Result{}, updatedTicket)
 			} else {
 				assert.NoError(t, err)
-				assert.NotNil(t, updatedTicket)
+				assert.Equal(t, tt.ticketID, updatedTicket.WorkItemID)
+				persisted := client.Ticket.GetX(ctx, tt.ticketID)
 
-				if tt.request.Title != "" {
-					assert.Equal(t, tt.request.Title, updatedTicket.Title)
+				if tt.request.Fields.Title != "" {
+					assert.Equal(t, tt.request.Fields.Title, persisted.Title)
 				}
-				if tt.request.Description != "" {
-					assert.Equal(t, tt.request.Description, updatedTicket.Description)
+				if tt.request.Fields.Description != "" {
+					assert.Equal(t, tt.request.Fields.Description, persisted.Description)
 				}
-				if tt.request.Priority != "" {
-					assert.Equal(t, tt.request.Priority, string(updatedTicket.Priority))
+				if tt.request.Fields.Priority != "" {
+					assert.Equal(t, tt.request.Fields.Priority, string(persisted.Priority))
 				}
-				if tt.request.Status != "" {
-					assert.Equal(t, tt.request.Status, string(updatedTicket.Status))
+				if tt.request.Fields.Status != "" {
+					assert.Equal(t, tt.request.Fields.Status, string(updatedTicket.Status))
 				}
 			}
 		})
@@ -956,13 +961,13 @@ func TestTicketService_UpdateTicketPersistsTypeCategoryAndTags(t *testing.T) {
 	}, tenant.ID)
 	require.NoError(t, err)
 
-	updated, err := service.UpdateTicket(ctx, created.ID, &dto.UpdateTicketRequest{
-		Type: "improvement", CategoryID: &category.ID, Tags: []string{"backend", "backend", "customer"}, Version: created.Version,
-	}, tenant.ID)
+	require.NoError(t, configureEntryTicketEdit(ctx, client, tenant.ID, user.ID))
+
+	updated, err := service.UpdateTicket(ctx, editCommandForTest(created.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{Type: "improvement", CategoryID: &category.ID, Tags: []string{"backend", "backend", "customer"}}, Meta: workitemmutation.Meta{ActorID: user.ID, ExpectedVersion: created.Version}}, tenant.ID))
 	require.NoError(t, err)
-	assert.Equal(t, "improvement", updated.GenericSubtype)
-	require.Equal(t, "generic", updated.RecordClass)
-	_, mutationErr := service.UpdateTicket(ctx, created.ID, &dto.UpdateTicketRequest{Type: "incident", Version: updated.Version}, tenant.ID)
+	assert.Equal(t, "improvement", client.Ticket.GetX(ctx, updated.WorkItemID).GenericSubtype)
+	require.Equal(t, "generic", client.Ticket.GetX(ctx, updated.WorkItemID).RecordClass)
+	_, mutationErr := service.UpdateTicket(ctx, editCommandForTest(created.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{Type: "incident"}, Meta: workitemmutation.Meta{ActorID: user.ID, ExpectedVersion: updated.Version}}, tenant.ID))
 	require.ErrorContains(t, mutationErr, "cannot change professional class")
 	entity, err := client.Ticket.Query().Where(entTicket.IDEQ(created.ID)).WithTags().Only(ctx)
 	require.NoError(t, err)
@@ -970,18 +975,14 @@ func TestTicketService_UpdateTicketPersistsTypeCategoryAndTags(t *testing.T) {
 	require.Len(t, entity.Edges.Tags, 2)
 
 	zero := 0
-	cleared, err := service.UpdateTicket(ctx, created.ID, &dto.UpdateTicketRequest{
-		CategoryID: &zero, Tags: []string{}, Version: updated.Version,
-	}, tenant.ID)
+	cleared, err := service.UpdateTicket(ctx, editCommandForTest(created.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{CategoryID: &zero, Tags: []string{}}, Meta: workitemmutation.Meta{ActorID: user.ID, ExpectedVersion: updated.Version}}, tenant.ID))
 	require.NoError(t, err)
-	assert.Nil(t, cleared.CategoryID)
+	assert.Zero(t, client.Ticket.GetX(ctx, cleared.WorkItemID).CategoryID)
 	entity, err = client.Ticket.Query().Where(entTicket.IDEQ(created.ID)).WithTags().Only(ctx)
 	require.NoError(t, err)
 	assert.Empty(t, entity.Edges.Tags)
 
-	_, err = service.UpdateTicket(ctx, created.ID, &dto.UpdateTicketRequest{
-		CategoryID: &foreignCategory.ID, Version: cleared.Version,
-	}, tenant.ID)
+	_, err = service.UpdateTicket(ctx, editCommandForTest(created.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{CategoryID: &foreignCategory.ID}, Meta: workitemmutation.Meta{ActorID: user.ID, ExpectedVersion: cleared.Version}}, tenant.ID))
 	require.ErrorContains(t, err, "工单分类不存在")
 }
 
@@ -1025,6 +1026,12 @@ func TestTicketService_DeleteTicket(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
+	deletionRole := client.Role.Create().SetTenantID(testTenant.ID).SetCode("end_user").SetName("delete fixture").SetIsActive(true).SaveX(ctx)
+	for _, verb := range []string{"read", "delete"} {
+		perm := client.Permission.Create().SetTenantID(testTenant.ID).SetCode("deletion_" + verb).SetName(verb).SetResource("ticket").SetAction(verb).SaveX(ctx)
+		client.RolePermission.Create().SetTenantID(testTenant.ID).SetRoleID(deletionRole.ID).SetPermissionID(perm.ID).ExecX(ctx)
+	}
+
 	tests := []struct {
 		name          string
 		ticketID      int
@@ -1047,7 +1054,7 @@ func TestTicketService_DeleteTicket(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ticketService.DeleteTicket(ctx, tt.ticketID, tt.tenantID)
+			err := ticketService.DeleteTicket(ctx, tt.ticketID, workitemmutation.Meta{TenantID: tt.tenantID, ActorID: testUser.ID})
 
 			if tt.expectedError {
 				assert.Error(t, err)
@@ -1140,7 +1147,7 @@ func TestTicketService_DeleteTicket_CascadeTenantIsolation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Tenant 2 tries to delete tenant 1's ticket.
-	err = ticketService.DeleteTicket(ctx, ticket1.ID, tenant2.ID)
+	err = ticketService.DeleteTicket(ctx, ticket1.ID, workitemmutation.Meta{TenantID: tenant2.ID, ActorID: user1.ID})
 	assert.Error(t, err)
 
 	// Verify ticket still exists (未被删除，跨租户隔离仍然有效)
@@ -1597,4 +1604,16 @@ func createNamedTestUser(t *testing.T, ctx context.Context, client *ent.Client, 
 		Save(ctx)
 	require.NoError(t, err)
 	return user
+}
+
+// editCommandForTest assembles a trusted fixture boundary without replacing the observed version.
+func editCommandForTest(id int, input *dto.TicketEditCommand, tenantID int) dto.TicketEditCommand {
+	cmd := *input
+	cmd.WorkItemID = id
+	cmd.Meta.TenantID = tenantID
+	cmd.Meta.Source = "test"
+	if cmd.Meta.OperationID == "" {
+		cmd.Meta.OperationID = fmt.Sprintf("test-edit:%d:%d", id, cmd.Meta.ExpectedVersion)
+	}
+	return cmd
 }

@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/outboxevent"
@@ -412,7 +414,7 @@ func newOutboxRepositoryWithDriver(t *testing.T, driverName string) (*OutboxEven
 	db.SetMaxIdleConns(4)
 	client := enttest.NewClient(t, enttest.WithOptions(ent.Driver(entsql.OpenDB(dialect.SQLite, db))))
 	t.Cleanup(func() { _ = client.Close() })
-	return NewOutboxEventRepository(client), client, db
+	return NewOutboxEventRepository(client, executionfixture.Standard("outbox")), client, db
 }
 
 type sqliteOutboxUpdateTracker struct {
@@ -472,4 +474,12 @@ func assertEventState(t *testing.T, client *ent.Client, eventID, wantStatus stri
 	assert.Equal(t, wantStatus, event.Status)
 	assert.Equal(t, wantAttempts, event.AttemptCount)
 	assert.WithinDuration(t, wantNextAttemptAt, event.NextAttemptAt, time.Millisecond)
+}
+
+func TestOutboxEventRepository_PreservesStructuredExecutionReference(t *testing.T) {
+	repo, _ := newOutboxRepository(t)
+	event, err := repo.Enqueue(context.Background(), nil, NewOutboxEvent{EventID: "reference", EventType: "test", TenantID: 1, AggregateType: "alert", AggregateID: "900", ExecutionWorkItemID: 77, Payload: json.RawMessage(`{}`)})
+	require.NoError(t, err)
+	require.NotNil(t, event.ExecutionWorkItemID)
+	require.Equal(t, 77, *event.ExecutionWorkItemID)
 }

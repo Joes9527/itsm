@@ -629,6 +629,9 @@ func (_u *ProcessInstanceUpdate) sqlSave(ctx context.Context) (_node int, err er
 			}
 		}
 	}
+	if _u.mutation.ExecutionWorkItemIDCleared() {
+		_spec.ClearField(processinstance.FieldExecutionWorkItemID, field.TypeInt)
+	}
 	if value, ok := _u.mutation.ProcessInstanceID(); ok {
 		_spec.SetField(processinstance.FieldProcessInstanceID, field.TypeString, value)
 	}
@@ -1556,6 +1559,9 @@ func (_u *ProcessInstanceUpdateOne) sqlSave(ctx context.Context) (_node *Process
 				ps[i](selector)
 			}
 		}
+	}
+	if _u.mutation.ExecutionWorkItemIDCleared() {
+		_spec.ClearField(processinstance.FieldExecutionWorkItemID, field.TypeInt)
 	}
 	if value, ok := _u.mutation.ProcessInstanceID(); ok {
 		_spec.SetField(processinstance.FieldProcessInstanceID, field.TypeString, value)

@@ -8,11 +8,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"itsm-backend/handlers/common/accessgrant"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"itsm-backend/database"
+	"itsm-backend/handlers/common/accessgrant"
 
 	"itsm-backend/common"
 	"itsm-backend/ent"
@@ -43,6 +45,7 @@ type ApprovedAccessReader interface {
 	ReadApprovedAccess(context.Context, *ent.Client, int, int, *ent.ProcessTask) (*accessgrant.ApprovedContext, error)
 }
 type KafDelegationService struct {
+	execution    *database.ExecutionPolicy
 	accessReader ApprovedAccessReader
 	client       *ent.Client
 	outbox       kafDelegationOutbox
@@ -160,11 +163,13 @@ type kafDelegatedTaskCursor struct {
 func (s *KafDelegationService) SetApprovedAccessReader(owner ApprovedAccessReader) {
 	s.accessReader = owner
 }
-func NewKafDelegationService(client *ent.Client) *KafDelegationService {
+
+func NewKafDelegationService(client *ent.Client, execution *database.ExecutionPolicy) *KafDelegationService {
 	return &KafDelegationService{
-		client: client,
-		outbox: NewOutboxEventRepository(client),
-		now:    time.Now,
+		execution: execution,
+		client:    client,
+		outbox:    NewOutboxEventRepository(client, execution),
+		now:       time.Now,
 	}
 }
 
@@ -283,8 +288,9 @@ func (s *KafDelegationService) GetTaskContext(ctx context.Context, taskID string
 			return nil, err
 		}
 	}
-	return &KafTaskContext{ApprovedAccess: approved,
-		TaskID: task.TaskID, TaskType: task.TaskType, Status: task.Status,
+	return &KafTaskContext{
+		ApprovedAccess: approved,
+		TaskID:         task.TaskID, TaskType: task.TaskType, Status: task.Status,
 		CorrelationID: task.CorrelationID, TenantID: strconv.Itoa(task.TenantID), RecordClass: recordClass,
 		AllowedActions: kafAllowedActions(task), ExpectedVersion: instance.Version,
 		WaitingPoint:   KafWaitingPoint{ProcessInstanceID: instance.ProcessInstanceID, ProcessDefinition: instance.ProcessDefinitionKey, ActivityID: instance.CurrentActivityID, ActivityName: instance.CurrentActivityName},
@@ -653,9 +659,24 @@ func (s *KafDelegationService) claimKafActionOnce(ctx context.Context, task *ent
 	if err != nil {
 		return nil, false, err
 	}
+	// Applied receipts are read-only; do not probe their uniqueness by INSERT.
+	if existing, lookupErr := loadKafActionLedger(ctx, s.client, task, req); lookupErr == nil {
+		if err := validateKafActionLedger(existing, task, req); err != nil {
+			return nil, false, err
+		}
+		if existing.ResultStatus == "applied" {
+			return existing, false, nil
+		}
+	} else if !ent.IsNotFound(lookupErr) {
+		return nil, false, lookupErr
+	}
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return nil, false, fmt.Errorf("start KAF action claim transaction: %w", err)
+	}
+	defer tx.Rollback()
+	if err := requireKafExecutionTx(ctx, tx, s.execution, task.TenantID, task.TaskID); err != nil {
+		return nil, false, err
 	}
 	var ledger *ent.KafTaskActionLedger
 	if req.Action == kafActionFailure && task.CallbackAction == accessgrant.Capability {
@@ -726,9 +747,17 @@ func (s *KafDelegationService) claimKafActionOnce(ctx context.Context, task *ent
 	if ledger.ResultStatus == "failed_terminal" {
 		return nil, false, fmt.Errorf("%w: action has a terminal failure", ErrKafActionInvalid)
 	}
+	leaseTx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	defer leaseTx.Rollback()
+	if err := requireKafExecutionTx(ctx, leaseTx, s.execution, task.TenantID, task.TaskID); err != nil {
+		return nil, false, err
+	}
 	now := s.now()
 	leaseOwner := uuid.NewString()
-	updated, err := s.client.KafTaskActionLedger.Update().Where(
+	updated, err := leaseTx.KafTaskActionLedger.Update().Where(
 		kaftaskactionledger.IDEQ(ledger.ID),
 		kaftaskactionledger.Or(
 			kaftaskactionledger.ResultStatusIn("pending", "failed_retryable"),
@@ -744,10 +773,14 @@ func (s *KafDelegationService) claimKafActionOnce(ctx context.Context, task *ent
 	if updated != 1 {
 		return nil, false, fmt.Errorf("%w: %w", ErrKafActionConflict, ErrKafActionInProgress)
 	}
-	ledger, err = s.client.KafTaskActionLedger.Get(ctx, ledger.ID)
+	ledger, err = leaseTx.KafTaskActionLedger.Get(ctx, ledger.ID)
 	if err != nil {
 		return nil, false, fmt.Errorf("load claimed KAF action ledger: %w", err)
 	}
+	if err := leaseTx.Commit(); err != nil {
+		return nil, false, err
+	}
+	ledger.Unwrap()
 	return ledger, true, nil
 }
 
@@ -826,7 +859,15 @@ func (s *KafDelegationService) finalizeKafAction(ctx context.Context, ledger *en
 	if ledger == nil || ledger.LeaseOwner == "" {
 		return fmt.Errorf("%w: action lease is required for finalization", ErrKafActionConflict)
 	}
-	update := s.client.KafTaskActionLedger.Update().Where(
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := requireKafExecutionTx(ctx, tx, s.execution, ledger.TenantID, ledger.TaskID); err != nil {
+		return err
+	}
+	update := tx.KafTaskActionLedger.Update().Where(
 		kaftaskactionledger.IDEQ(ledger.ID), kaftaskactionledger.ResultStatusEQ("executing"),
 		kaftaskactionledger.LeaseOwnerEQ(ledger.LeaseOwner),
 		kaftaskactionledger.LeaseExpiresAtGT(s.now()),
@@ -847,7 +888,7 @@ func (s *KafDelegationService) finalizeKafAction(ctx context.Context, ledger *en
 	if updated != 1 {
 		return fmt.Errorf("%w: action lease was lost before finalization", ErrKafActionConflict)
 	}
-	return nil
+	return tx.Commit()
 }
 
 // finalizeAppliedKafAction commits the durable audit reference and applied
@@ -862,6 +903,9 @@ func (s *KafDelegationService) finalizeAppliedKafAction(ctx context.Context, tas
 		return fmt.Errorf("start KAF action finalization transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := requireKafExecutionTx(ctx, tx, s.execution, task.TenantID, task.TaskID); err != nil {
+		return err
+	}
 	payload, err := json.Marshal(map[string]interface{}{"action": ledger.Action, "idempotencyKey": ledger.IdempotencyKey})
 	if err != nil {
 		return fmt.Errorf("marshal KAF action result payload: %w", err)
@@ -899,6 +943,9 @@ func (s *KafDelegationService) persistNonCompletingAction(ctx context.Context, t
 		return fmt.Errorf("start KAF action transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := requireKafExecutionTx(ctx, tx, s.execution, task.TenantID, task.TaskID); err != nil {
+		return err
+	}
 	updated, err := tx.ProcessInstance.Update().Where(
 		processinstance.IDEQ(instance.ID), processinstance.TenantIDEQ(task.TenantID), processinstance.VersionEQ(req.ExpectedVersion),
 	).SetVersion(req.ExpectedVersion + 1).Save(ctx)
@@ -1057,7 +1104,7 @@ func (s *KafDelegationService) CreateDelegatedTask(ctx context.Context, instance
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	task, err := s.createDelegatedTaskWithClient(ctx, tx.Client(), instanceID, serviceTask)
+	task, err := s.createDelegatedTaskTx(ctx, tx, instanceID, serviceTask)
 	if err != nil {
 		return nil, err
 	}
@@ -1081,13 +1128,14 @@ func (s *KafDelegationService) CreateDelegatedTask(ctx context.Context, instance
 	return task, nil
 }
 
-// CreateDelegatedTaskWithClient joins an existing BPMN transaction. Callers
+// CreateDelegatedTaskTx joins an existing BPMN transaction. Callers
 // own commit and lease fencing; no nested Ent transaction is opened here.
-func (s *KafDelegationService) CreateDelegatedTaskWithClient(ctx context.Context, client *ent.Client, instanceID int, serviceTask *BPMNServiceTask) (*ent.ProcessTask, error) {
-	if client == nil || serviceTask == nil {
-		return nil, fmt.Errorf("KAF delegation transaction client and service task are required")
+func (s *KafDelegationService) CreateDelegatedTaskTx(ctx context.Context, tx *ent.Tx, instanceID int, serviceTask *BPMNServiceTask) (*ent.ProcessTask, error) {
+	if tx == nil || serviceTask == nil {
+		return nil, fmt.Errorf("KAF delegation owning transaction and service task are required")
 	}
-	task, err := s.createDelegatedTaskWithClient(ctx, client, instanceID, serviceTask)
+	client := tx.Client()
+	task, err := s.createDelegatedTaskTx(ctx, tx, instanceID, serviceTask)
 	if err != nil {
 		return nil, err
 	}
@@ -1102,6 +1150,9 @@ func (s *KafDelegationService) CreateDelegatedTaskWithClient(ctx context.Context
 		SetAggregateType(event.AggregateType).
 		SetAggregateID(event.AggregateID).
 		SetPayload(event.Payload)
+	if event.ExecutionWorkItemID > 0 {
+		create.SetExecutionWorkItemID(event.ExecutionWorkItemID)
+	}
 	if !event.NextAttemptAt.IsZero() {
 		create.SetNextAttemptAt(event.NextAttemptAt)
 	}
@@ -1111,7 +1162,8 @@ func (s *KafDelegationService) CreateDelegatedTaskWithClient(ctx context.Context
 	return task, nil
 }
 
-func (s *KafDelegationService) createDelegatedTaskWithClient(ctx context.Context, client *ent.Client, instanceID int, serviceTask *BPMNServiceTask) (*ent.ProcessTask, error) {
+func (s *KafDelegationService) createDelegatedTaskTx(ctx context.Context, tx *ent.Tx, instanceID int, serviceTask *BPMNServiceTask) (*ent.ProcessTask, error) {
+	client := tx.Client()
 	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
 	if tenantID <= 0 {
 		return nil, fmt.Errorf("KAF delegation tenant context is required")
@@ -1134,6 +1186,10 @@ func (s *KafDelegationService) createDelegatedTaskWithClient(ctx context.Context
 		if !actorExists {
 			return nil, fmt.Errorf("KAF delegation audit actor %d does not belong to tenant %d", actorID, instance.TenantID)
 		}
+	}
+
+	if err := requireKafInstanceExecutionTx(ctx, tx, s.execution, tenantID, instance.ID); err != nil {
+		return nil, err
 	}
 
 	if _, err := client.ProcessInstance.UpdateOne(instance).
@@ -1232,13 +1288,18 @@ func newKafDelegateOutboxEvent(ctx context.Context, client *ent.Client, task *en
 	if err != nil {
 		return NewOutboxEvent{}, fmt.Errorf("marshal KAF delegation outbox event: %w", err)
 	}
+	executionWorkItemID := 0
+	if instance.ExecutionWorkItemID != nil {
+		executionWorkItemID = *instance.ExecutionWorkItemID
+	}
 	return NewOutboxEvent{
-		EventID:       event.EventID,
-		EventType:     event.EventType,
-		TenantID:      instance.TenantID,
-		AggregateType: "process_task",
-		AggregateID:   task.TaskID,
-		Payload:       payload,
+		ExecutionWorkItemID: executionWorkItemID,
+		EventID:             event.EventID,
+		EventType:           event.EventType,
+		TenantID:            instance.TenantID,
+		AggregateType:       "process_task",
+		AggregateID:         task.TaskID,
+		Payload:             payload,
 	}, nil
 }
 

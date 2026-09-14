@@ -38,17 +38,17 @@ const NewImprovementPage = () => {
   };
 
   return (
-    <div className="p-6 bg-gray-50 min-h-full">
+    <div className="min-h-full bg-page p-[16px] text-[13px] text-foreground md:p-[24px]">
       <CreationAttempts creation={creation} />
       <Card>
         <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <Button icon={<ArrowLeft />} onClick={() => router.push('/improvements')} type="text">
             返回列表
           </Button>
-          <h2 className="text-2xl font-bold text-gray-800">新建改进计划</h2>
+          <h2 className="text-[24px] font-semibold text-foreground">新建改进计划</h2>
 
           <Form form={form} layout="vertical" onFinish={onFinish}>
-            <CreationRequester />
+            <CreationRequester resource="ticket" />
             <Form.Item
               label="标题"
               name="title"

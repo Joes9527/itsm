@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"testing"
+
 	"itsm-backend/ent"
 	"itsm-backend/ent/schema"
 	creation "itsm-backend/handlers/common/workitemcreation"
@@ -13,8 +16,7 @@ import (
 	srhandler "itsm-backend/handlers/service_request"
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
-	"strconv"
-	"testing"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
@@ -32,6 +34,7 @@ func newResolverFixture(t *testing.T) *resolverFixture {
 	client, _, identity, _, _, _ := intakeFixture(t)
 	return resolverFixtureWithClient(t, client, identity)
 }
+
 func resolverFixtureWithClient(t *testing.T, client *ent.Client, identity creation.Identity) *resolverFixture {
 	t.Helper()
 	ctx := context.Background()
@@ -40,14 +43,15 @@ func resolverFixtureWithClient(t *testing.T, client *ent.Client, identity creati
 	sla := client.SLADefinition.Create().SetTenantID(identity.TenantID).SetName("Access SLA").SetResponseTime(30).SetResolutionTime(240).SaveX(ctx)
 	deployment := client.ProcessDeployment.Create().SetTenantID(identity.TenantID).SetDeploymentID("workflow-" + strconv.Itoa(identity.TenantID)).SetDeploymentName("Workflow").SaveX(ctx)
 	client.ProcessDefinition.Create().SetTenantID(identity.TenantID).SetDeploymentID(deployment.ID).SetKey("vpn").SetName("VPN").SetVersion("1").SetIsActive(true).SetIsLatest(true).SetBpmnXML([]byte("<definitions/>")).SaveX(ctx)
-	client.ProcessBinding.Create().SetTenantID(identity.TenantID).SetBusinessType("service_request").SetIsDefault(true).SetProcessDefinitionKey("vpn").SetSLAPolicyID(strconv.Itoa(sla.ID)).SaveX(ctx)
+	client.ProcessBinding.Create().SetTenantID(identity.TenantID).SetBusinessType("service_request_item").SetIsDefault(true).SetProcessDefinitionKey("vpn").SetSLAPolicyID(strconv.Itoa(sla.ID)).SaveX(ctx)
 	logger := zap.NewNop().Sugar()
 	resolver := NewResolver(cataloghandler.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
 	registry := NewCreatorRegistry()
-	domain := srhandler.NewService(nil, client, logger, service.NewApprovalChainResolver(client, logger))
+	domain := srhandler.NewService(nil, client, logger, service.NewApprovalChainResolver(client, logger), executionfixture.Standard())
 	require.NoError(t, registry.Register(domain))
-	return &resolverFixture{client: client, actor: identity, catalog: catalog, app: NewService(client, resolver, registry, NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})}
+	return &resolverFixture{client: client, actor: identity, catalog: catalog, app: NewService(client, resolver, registry, NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard())}
 }
+
 func (f *resolverFixture) catalogCommand(t *testing.T) creation.CreateWorkItemCommand {
 	t.Helper()
 	ctx := context.Background()
@@ -59,6 +63,7 @@ func (f *resolverFixture) catalogCommand(t *testing.T) creation.CreateWorkItemCo
 	require.NoError(t, tx.Rollback())
 	return creation.CreateWorkItemCommand{RecordClass: "service_request_item", IntakeKind: "catalog_item", Confirmation: "confirmed", CatalogItemID: &f.catalog.ID, CatalogVersion: catalog.Version, FormSchemaVersion: catalog.FormSchemaVersion, Title: "VPN request", IdempotencyKey: "one", FormValues: map[string]any{"device_count": json.Number("2")}}
 }
+
 func installIntakeMutationFailure(client *ent.Client, stage string) *bool {
 	reached := new(bool)
 	hook := func(next ent.Mutator) ent.Mutator {
@@ -96,6 +101,7 @@ func installIntakeMutationFailure(client *ent.Client, stage string) *bool {
 	}
 	return reached
 }
+
 func assertNoIntakeGraph(t *testing.T, client *ent.Client) {
 	t.Helper()
 	ctx := context.Background()
@@ -111,6 +117,7 @@ func assertNoIntakeGraph(t *testing.T, client *ent.Client) {
 	require.Zero(t, client.OutboxEvent.Query().CountX(ctx))
 	require.Zero(t, client.WorkItemNumberSequence.Query().CountX(ctx))
 }
+
 func TestServiceCreateRollbackFaultMatrix(t *testing.T) {
 	for _, stage := range []string{"base", "extension", "field value", "SLA", "audit", "snapshot", "workflow start"} {
 		t.Run(stage, func(t *testing.T) {
@@ -129,6 +136,7 @@ func TestServiceCreateRollbackFaultMatrix(t *testing.T) {
 		})
 	}
 }
+
 func TestServiceRequestFieldFailureRollsBackCreation(t *testing.T) {
 	f := newResolverFixture(t)
 	command := f.catalogCommand(t)
@@ -139,6 +147,7 @@ func TestServiceRequestFieldFailureRollsBackCreation(t *testing.T) {
 	require.Contains(t, errors.Unwrap(err).Error(), "injected field value failure")
 	assertNoIntakeGraph(t, f.client)
 }
+
 func TestAuthoritativeGraphIncludesSLAAndRejectsUnknownFields(t *testing.T) {
 	f := newResolverFixture(t)
 	command := f.catalogCommand(t)
@@ -200,7 +209,7 @@ func TestRealResolverRoutingUsesRequestAmount(t *testing.T) {
 func TestRealResolverUnknownRoutingOperatorCannotFallThrough(t *testing.T) {
 	f := newResolverFixture(t)
 	ctx := context.Background()
-	f.client.ProcessBinding.Create().SetTenantID(f.actor.TenantID).SetBusinessType("service_request").SetProcessDefinitionKey("vpn").SetPriority(1000).SetConditions(map[string]any{"amount": map[string]any{"unknown": 1}}).SaveX(ctx)
+	f.client.ProcessBinding.Create().SetTenantID(f.actor.TenantID).SetBusinessType("service_request_item").SetProcessDefinitionKey("vpn").SetPriority(1000).SetConditions(map[string]any{"amount": map[string]any{"unknown": 1}}).SaveX(ctx)
 	command := f.catalogCommand(t)
 	_, err := f.app.Create(ctx, f.actor, command)
 	require.ErrorIs(t, err, creation.ErrDomainValidationFailed)

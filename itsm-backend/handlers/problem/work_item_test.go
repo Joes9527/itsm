@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"testing"
 
+	"itsm-backend/handlers/shared/workitemmutation"
+
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -84,7 +86,7 @@ func TestProblemAddAssociations_TicketWritesWorkItemRelation(t *testing.T) {
 		SetTitle("Related ticket").SetTicketNumber("PRB-REL-1").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	require.NoError(t, service.AddAssociations(ctx, tenant.ID, p.ID, user.ID, "ticket", []int{relatedTicket.ID}))
+	require.NoError(t, applyProblemRelation(service, ctx, tenant.ID, user.ID, *p.WorkItemID, relatedTicket.ID, 1, "related_to", "same-operation", false))
 
 	relations, err := client.WorkItemRelation.Query().
 		Where(
@@ -98,22 +100,16 @@ func TestProblemAddAssociations_TicketWritesWorkItemRelation(t *testing.T) {
 	require.Len(t, relations, 1)
 	assert.Equal(t, user.ID, relations[0].CreatedByID)
 
-	// The legacy ent m2m edge must NOT be used by the new write path.
-	problemEnt, err := client.Problem.Get(ctx, p.ID)
-	require.NoError(t, err)
-	legacyEdgeTickets, err := client.Problem.QueryTickets(problemEnt).All(ctx)
-	require.NoError(t, err)
-	assert.Empty(t, legacyEdgeTickets, "new ticket associations must not be written to the legacy Problem<->Ticket edge")
-
+	// Physical legacy-storage exclusion is tested with old-only SQL fixtures.
 	// GetWithAssociations must resolve the ticket via WorkItemRelation.
-	withAssoc, err := service.GetWithAssociations(ctx, p.ID, tenant.ID)
+	withAssoc, err := service.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"})
 	require.NoError(t, err)
-	require.Len(t, withAssoc.Tickets, 1)
-	assert.Equal(t, relatedTicket.ID, withAssoc.Tickets[0].ID)
-	assert.Equal(t, relatedTicket.TicketNumber, withAssoc.Tickets[0].Number)
+	require.Len(t, withAssoc.Relations, 1)
+	assert.Equal(t, relatedTicket.ID, withAssoc.Relations[0].Target.WorkItemID)
+	assert.Equal(t, relatedTicket.TicketNumber, withAssoc.Relations[0].Target.Number)
 
 	// Idempotent re-add must not create a duplicate live relation row.
-	require.NoError(t, service.AddAssociations(ctx, tenant.ID, p.ID, user.ID, "ticket", []int{relatedTicket.ID}))
+	require.NoError(t, applyProblemRelation(service, ctx, tenant.ID, user.ID, *p.WorkItemID, relatedTicket.ID, 1, "related_to", "same-operation", false))
 	relationsAfterReAdd, err := client.WorkItemRelation.Query().
 		Where(
 			workitemrelation.TenantID(tenant.ID),
@@ -126,7 +122,7 @@ func TestProblemAddAssociations_TicketWritesWorkItemRelation(t *testing.T) {
 	require.Len(t, relationsAfterReAdd, 1, "re-adding the same ticket association must be a no-op, not a duplicate row")
 
 	// RemoveAssociation soft-deletes the relation and relinking creates a fresh row.
-	require.NoError(t, service.RemoveAssociation(ctx, tenant.ID, p.ID, "ticket", relatedTicket.ID))
+	require.NoError(t, applyProblemRelation(service, ctx, tenant.ID, user.ID, *p.WorkItemID, relatedTicket.ID, 2, "related_to", "remove", true))
 	liveAfterRemove, err := client.WorkItemRelation.Query().
 		Where(
 			workitemrelation.TenantID(tenant.ID),
@@ -137,11 +133,11 @@ func TestProblemAddAssociations_TicketWritesWorkItemRelation(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, liveAfterRemove)
 
-	withAssocAfterRemove, err := service.GetWithAssociations(ctx, p.ID, tenant.ID)
+	withAssocAfterRemove, err := service.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"})
 	require.NoError(t, err)
-	assert.Empty(t, withAssocAfterRemove.Tickets)
+	assert.Empty(t, withAssocAfterRemove.Relations)
 
-	require.NoError(t, service.AddAssociations(ctx, tenant.ID, p.ID, user.ID, "ticket", []int{relatedTicket.ID}))
+	require.NoError(t, applyProblemRelation(service, ctx, tenant.ID, user.ID, *p.WorkItemID, relatedTicket.ID, 3, "related_to", "relink", false))
 	liveAfterRelink, err := client.WorkItemRelation.Query().
 		Where(
 			workitemrelation.TenantID(tenant.ID),
@@ -171,19 +167,19 @@ func TestProblemWorkItem_CrossTenantIsolation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Tenant B cannot link its own ticket to Tenant A's problem (problem lookup fails closed).
-	err = service.AddAssociations(ctx, tenantB.ID, problemA.ID, userB.ID, "ticket", []int{ticketB.ID})
+	err = applyProblemRelation(service, ctx, tenantB.ID, userB.ID, *problemA.WorkItemID, ticketB.ID, 1, "related_to", "foreign-owner", false)
 	require.Error(t, err)
 
 	// Tenant A cannot link a foreign tenant's ticket to its own problem.
-	err = service.AddAssociations(ctx, tenantA.ID, problemA.ID, userA.ID, "ticket", []int{ticketB.ID})
-	require.ErrorContains(t, err, "current tenant")
+	err = applyProblemRelation(service, ctx, tenantA.ID, userA.ID, *problemA.WorkItemID, ticketB.ID, 1, "related_to", "foreign-target", false)
+	require.Error(t, err)
 
 	// Directly probing WorkItemRelation across tenants must not surface Tenant A's relation
 	// under Tenant B's tenant_id filter, even if the caller knew the raw WorkItem IDs.
 	ticketA, err := client.Ticket.Create().
 		SetTitle("Tenant A ticket").SetTicketNumber("PRB-ISO-A").SetRequesterID(userA.ID).SetTenantID(tenantA.ID).Save(ctx)
 	require.NoError(t, err)
-	require.NoError(t, service.AddAssociations(ctx, tenantA.ID, problemA.ID, userA.ID, "ticket", []int{ticketA.ID}))
+	require.NoError(t, applyProblemRelation(service, ctx, tenantA.ID, userA.ID, *problemA.WorkItemID, ticketA.ID, 1, "related_to", "local-target", false))
 
 	foreignCount, err := client.WorkItemRelation.Query().
 		Where(
@@ -195,7 +191,7 @@ func TestProblemWorkItem_CrossTenantIsolation(t *testing.T) {
 
 	// GetWithAssociations under tenant B for problem A must fail closed (not found), never
 	// silently return an empty/partial result impersonating success.
-	_, err = service.GetWithAssociations(ctx, problemA.ID, tenantB.ID)
+	_, err = service.Get(ctx, problemA.ID, workitemmutation.Meta{TenantID: tenantB.ID, ActorID: userB.ID, Source: "http"})
 	require.True(t, ent.IsNotFound(err))
 }
 
@@ -238,9 +234,9 @@ func TestProblemAddAssociationHTTP_MissingUserContext(t *testing.T) {
 		SetTitle("T1").SetTicketNumber("PRB-NOUSER-1").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	assocReq := dto.ProblemAssociationRequest{RelatedType: "ticket", RelatedIDs: []int{ticket1.ID}}
+	assocReq := dto.WorkItemRelationRequest{SourceWorkItemID: *p.WorkItemID, TargetWorkItemID: ticket1.ID, RelationType: "related_to", ExpectedVersion: p.Version, OperationID: "missing-actor"}
 	// performProblemRequest only sets X-User-ID when userID > 0; pass 0 to omit it.
-	w := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/associations", p.ID), assocReq, tenant.ID, 0)
+	w := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/work-items/%d/relations", *p.WorkItemID), assocReq, tenant.ID, 0)
 	require.Equal(t, http.StatusUnauthorized, w.Code)
 	var res common.Response
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &res))

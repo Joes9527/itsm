@@ -2,8 +2,9 @@ package intake
 
 import (
 	"errors"
-	"itsm-backend/handlers/common/workitemcreation"
 	"time"
+
+	"itsm-backend/handlers/common/workitemcreation"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
