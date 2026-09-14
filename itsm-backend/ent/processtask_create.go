@@ -82,6 +82,20 @@ func (_c *ProcessTaskCreate) SetNillableAssignee(v *string) *ProcessTaskCreate {
 	return _c
 }
 
+// SetAssigneeSource sets the "assignee_source" field.
+func (_c *ProcessTaskCreate) SetAssigneeSource(v string) *ProcessTaskCreate {
+	_c.mutation.SetAssigneeSource(v)
+	return _c
+}
+
+// SetNillableAssigneeSource sets the "assignee_source" field if the given value is not nil.
+func (_c *ProcessTaskCreate) SetNillableAssigneeSource(v *string) *ProcessTaskCreate {
+	if v != nil {
+		_c.SetAssigneeSource(*v)
+	}
+	return _c
+}
+
 // SetCandidateUsers sets the "candidate_users" field.
 func (_c *ProcessTaskCreate) SetCandidateUsers(v string) *ProcessTaskCreate {
 	_c.mutation.SetCandidateUsers(v)
@@ -432,6 +446,10 @@ func (_c *ProcessTaskCreate) defaults() {
 		v := processtask.DefaultTaskType
 		_c.mutation.SetTaskType(v)
 	}
+	if _, ok := _c.mutation.AssigneeSource(); !ok {
+		v := processtask.DefaultAssigneeSource
+		_c.mutation.SetAssigneeSource(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := processtask.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -502,6 +520,9 @@ func (_c *ProcessTaskCreate) check() error {
 	}
 	if _, ok := _c.mutation.TaskType(); !ok {
 		return &ValidationError{Name: "task_type", err: errors.New(`ent: missing required field "ProcessTask.task_type"`)}
+	}
+	if _, ok := _c.mutation.AssigneeSource(); !ok {
+		return &ValidationError{Name: "assignee_source", err: errors.New(`ent: missing required field "ProcessTask.assignee_source"`)}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "ProcessTask.status"`)}
@@ -587,6 +608,10 @@ func (_c *ProcessTaskCreate) createSpec() (*ProcessTask, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Assignee(); ok {
 		_spec.SetField(processtask.FieldAssignee, field.TypeString, value)
 		_node.Assignee = value
+	}
+	if value, ok := _c.mutation.AssigneeSource(); ok {
+		_spec.SetField(processtask.FieldAssigneeSource, field.TypeString, value)
+		_node.AssigneeSource = value
 	}
 	if value, ok := _c.mutation.CandidateUsers(); ok {
 		_spec.SetField(processtask.FieldCandidateUsers, field.TypeString, value)
@@ -836,6 +861,18 @@ func (u *ProcessTaskUpsert) UpdateAssignee() *ProcessTaskUpsert {
 // ClearAssignee clears the value of the "assignee" field.
 func (u *ProcessTaskUpsert) ClearAssignee() *ProcessTaskUpsert {
 	u.SetNull(processtask.FieldAssignee)
+	return u
+}
+
+// SetAssigneeSource sets the "assignee_source" field.
+func (u *ProcessTaskUpsert) SetAssigneeSource(v string) *ProcessTaskUpsert {
+	u.Set(processtask.FieldAssigneeSource, v)
+	return u
+}
+
+// UpdateAssigneeSource sets the "assignee_source" field to the value that was provided on create.
+func (u *ProcessTaskUpsert) UpdateAssigneeSource() *ProcessTaskUpsert {
+	u.SetExcluded(processtask.FieldAssigneeSource)
 	return u
 }
 
@@ -1365,6 +1402,20 @@ func (u *ProcessTaskUpsertOne) UpdateAssignee() *ProcessTaskUpsertOne {
 func (u *ProcessTaskUpsertOne) ClearAssignee() *ProcessTaskUpsertOne {
 	return u.Update(func(s *ProcessTaskUpsert) {
 		s.ClearAssignee()
+	})
+}
+
+// SetAssigneeSource sets the "assignee_source" field.
+func (u *ProcessTaskUpsertOne) SetAssigneeSource(v string) *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetAssigneeSource(v)
+	})
+}
+
+// UpdateAssigneeSource sets the "assignee_source" field to the value that was provided on create.
+func (u *ProcessTaskUpsertOne) UpdateAssigneeSource() *ProcessTaskUpsertOne {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateAssigneeSource()
 	})
 }
 
@@ -2122,6 +2173,20 @@ func (u *ProcessTaskUpsertBulk) UpdateAssignee() *ProcessTaskUpsertBulk {
 func (u *ProcessTaskUpsertBulk) ClearAssignee() *ProcessTaskUpsertBulk {
 	return u.Update(func(s *ProcessTaskUpsert) {
 		s.ClearAssignee()
+	})
+}
+
+// SetAssigneeSource sets the "assignee_source" field.
+func (u *ProcessTaskUpsertBulk) SetAssigneeSource(v string) *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.SetAssigneeSource(v)
+	})
+}
+
+// UpdateAssigneeSource sets the "assignee_source" field to the value that was provided on create.
+func (u *ProcessTaskUpsertBulk) UpdateAssigneeSource() *ProcessTaskUpsertBulk {
+	return u.Update(func(s *ProcessTaskUpsert) {
+		s.UpdateAssigneeSource()
 	})
 }
 

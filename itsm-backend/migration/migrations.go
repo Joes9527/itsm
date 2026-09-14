@@ -452,6 +452,7 @@ var RegisteredMigrations = []Migration{
 	{Version: "029_catalog_target_class_authority", Description: "Retire legacy Catalog class inference"},
 	{Version: "030_catalog_access_policy_result", Description: "Finite catalog access policy and immutable verified results"},
 	{Version: "031_kaf_action_request_digest", Description: "Bind verified access completion to immutable canonical request digest"},
+	{Version: "032_bpmn_assignment_source", Description: "Persist immutable BPMN WorkItem assignment source"},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -1104,6 +1105,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number
     ADD COLUMN IF NOT EXISTS optional_declared boolean NOT NULL DEFAULT false;`
 	case "031_kaf_action_request_digest":
 		return kafActionRequestDigestSQL
+	case "032_bpmn_assignment_source":
+		return bpmnAssignmentSourceSQL
 	case "030_catalog_access_policy_result":
 		return catalogAccessPolicyResultSQL
 	case "029_catalog_target_class_authority":

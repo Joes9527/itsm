@@ -1644,6 +1644,9 @@ func mergeServiceTaskVariables(instanceVariables map[string]interface{}, task *B
 const approvalFallbackCandidateGroup = "ticket-approvers"
 
 func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.ProcessInstance, task *BPMNUserTask) error {
+	if err := validateBPMNAssigneeSource(task); err != nil {
+		return err
+	}
 	// 自动分配逻辑：优先级 BPMN定义 > 流程变量(request/assignee) > 默认分配
 	assignee := task.Assignee
 
@@ -1743,7 +1746,7 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 				// 都没声明：解析申请人自己所在部门的负责人（这次会话早前已经做的部分）
 				assignee = e.resolveApprovalAssignee(ctx, instance, approvalRequester)
 			}
-		} else if strings.TrimSpace(task.CandidateUsers) == "" && strings.TrimSpace(task.CandidateGroups) == "" {
+		} else if task.AssigneeSource == "" && strings.TrimSpace(task.CandidateUsers) == "" && strings.TrimSpace(task.CandidateGroups) == "" {
 			// Explicit candidate routing stays unassigned until claimed. Unresolved
 			// configured candidates must not silently route fulfillment back to the requester.
 			// 优先使用 requester_id（工单申请人）
@@ -1835,6 +1838,7 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 		SetTaskType("user_task").
 		SetStatus("created").
 		SetAssignee(assignee).
+		SetAssigneeSource(task.AssigneeSource).
 		SetCandidateUsers(expandedCandidateUsers).
 		SetCandidateGroups(candidateGroupsToExpand).
 		SetFormKey(task.FormKey).

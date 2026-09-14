@@ -90,6 +90,11 @@ func Assignee(v string) predicate.ProcessTask {
 	return predicate.ProcessTask(sql.FieldEQ(FieldAssignee, v))
 }
 
+// AssigneeSource applies equality check predicate on the "assignee_source" field. It's identical to AssigneeSourceEQ.
+func AssigneeSource(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldEQ(FieldAssigneeSource, v))
+}
+
 // CandidateUsers applies equality check predicate on the "candidate_users" field. It's identical to CandidateUsersEQ.
 func CandidateUsers(v string) predicate.ProcessTask {
 	return predicate.ProcessTask(sql.FieldEQ(FieldCandidateUsers, v))
@@ -618,6 +623,71 @@ func AssigneeEqualFold(v string) predicate.ProcessTask {
 // AssigneeContainsFold applies the ContainsFold predicate on the "assignee" field.
 func AssigneeContainsFold(v string) predicate.ProcessTask {
 	return predicate.ProcessTask(sql.FieldContainsFold(FieldAssignee, v))
+}
+
+// AssigneeSourceEQ applies the EQ predicate on the "assignee_source" field.
+func AssigneeSourceEQ(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldEQ(FieldAssigneeSource, v))
+}
+
+// AssigneeSourceNEQ applies the NEQ predicate on the "assignee_source" field.
+func AssigneeSourceNEQ(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldNEQ(FieldAssigneeSource, v))
+}
+
+// AssigneeSourceIn applies the In predicate on the "assignee_source" field.
+func AssigneeSourceIn(vs ...string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldIn(FieldAssigneeSource, vs...))
+}
+
+// AssigneeSourceNotIn applies the NotIn predicate on the "assignee_source" field.
+func AssigneeSourceNotIn(vs ...string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldNotIn(FieldAssigneeSource, vs...))
+}
+
+// AssigneeSourceGT applies the GT predicate on the "assignee_source" field.
+func AssigneeSourceGT(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldGT(FieldAssigneeSource, v))
+}
+
+// AssigneeSourceGTE applies the GTE predicate on the "assignee_source" field.
+func AssigneeSourceGTE(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldGTE(FieldAssigneeSource, v))
+}
+
+// AssigneeSourceLT applies the LT predicate on the "assignee_source" field.
+func AssigneeSourceLT(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldLT(FieldAssigneeSource, v))
+}
+
+// AssigneeSourceLTE applies the LTE predicate on the "assignee_source" field.
+func AssigneeSourceLTE(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldLTE(FieldAssigneeSource, v))
+}
+
+// AssigneeSourceContains applies the Contains predicate on the "assignee_source" field.
+func AssigneeSourceContains(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldContains(FieldAssigneeSource, v))
+}
+
+// AssigneeSourceHasPrefix applies the HasPrefix predicate on the "assignee_source" field.
+func AssigneeSourceHasPrefix(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldHasPrefix(FieldAssigneeSource, v))
+}
+
+// AssigneeSourceHasSuffix applies the HasSuffix predicate on the "assignee_source" field.
+func AssigneeSourceHasSuffix(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldHasSuffix(FieldAssigneeSource, v))
+}
+
+// AssigneeSourceEqualFold applies the EqualFold predicate on the "assignee_source" field.
+func AssigneeSourceEqualFold(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldEqualFold(FieldAssigneeSource, v))
+}
+
+// AssigneeSourceContainsFold applies the ContainsFold predicate on the "assignee_source" field.
+func AssigneeSourceContainsFold(v string) predicate.ProcessTask {
+	return predicate.ProcessTask(sql.FieldContainsFold(FieldAssigneeSource, v))
 }
 
 // CandidateUsersEQ applies the EQ predicate on the "candidate_users" field.

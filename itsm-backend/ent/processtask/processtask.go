@@ -28,6 +28,8 @@ const (
 	FieldTaskType = "task_type"
 	// FieldAssignee holds the string denoting the assignee field in the database.
 	FieldAssignee = "assignee"
+	// FieldAssigneeSource holds the string denoting the assignee_source field in the database.
+	FieldAssigneeSource = "assignee_source"
 	// FieldCandidateUsers holds the string denoting the candidate_users field in the database.
 	FieldCandidateUsers = "candidate_users"
 	// FieldCandidateGroups holds the string denoting the candidate_groups field in the database.
@@ -97,6 +99,7 @@ var Columns = []string{
 	FieldTaskName,
 	FieldTaskType,
 	FieldAssignee,
+	FieldAssigneeSource,
 	FieldCandidateUsers,
 	FieldCandidateGroups,
 	FieldStatus,
@@ -145,6 +148,8 @@ var (
 	TaskNameValidator func(string) error
 	// DefaultTaskType holds the default value on creation for the "task_type" field.
 	DefaultTaskType string
+	// DefaultAssigneeSource holds the default value on creation for the "assignee_source" field.
+	DefaultAssigneeSource string
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
 	// DefaultPriority holds the default value on creation for the "priority" field.
@@ -206,6 +211,11 @@ func ByTaskType(opts ...sql.OrderTermOption) OrderOption {
 // ByAssignee orders the results by the assignee field.
 func ByAssignee(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAssignee, opts...).ToFunc()
+}
+
+// ByAssigneeSource orders the results by the assignee_source field.
+func ByAssigneeSource(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAssigneeSource, opts...).ToFunc()
 }
 
 // ByCandidateUsers orders the results by the candidate_users field.
