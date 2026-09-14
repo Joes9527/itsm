@@ -31,7 +31,7 @@
 | 6 | `ci_types` | 9 | `ci_types` | `(tenant, name)` | 含 `business_system`（第 1 项业务系统 CI 依赖） |
 | 7 | `incident_categories` | 8 | **目标无此表**（`to_regclass` 为空） | — | **差额**：目标无 `incident_categories`，待确认归属 |
 | 8 | `standard_changes` | 3 | `standard_changes` | `(tenant, title)` | 目标表已存在 |
-| 9 | `known_errors` | 1 | `known_errors` | `(tenant, title)` | 目标表已存在；seed 为模板样例（占位标题） |
+| 9 | `known_errors` | 1 | `known_errors` | `(tenant, title)` | 目标表已存在；**用户确认纳入**，在目标与本文标注为**模板样例/占位**（非真实故障），后续可替换 |
 | 10 | `ticket_tags` | 4 | `ticket_tags` | `(tenant, code)` | 目标表已存在 |
 | 11 | `ticket_views` | 5 | `ticket_views` | `(tenant, name)` | 目标表已存在 |
 
@@ -87,4 +87,4 @@
 1. **写入窗口**与单一写入者确认（唯一剩余阻塞）。
 2. ~~`process_bindings` 依赖~~ → **已确认拆出 B0**（独立规范流程初始化批次）。
 3. ~~`sla_policies` / `incident_categories`~~ → **已确认均未接纳**（`standard_changes`、`known_errors` 目标表已存在）。
-4. `known_errors` 为模板样例（占位标题），是否纳入 B0（建议：纳入占位并标注，或排除待真实数据）。
+4. ~~`known_errors`~~ → **已确认纳入并标注占位**（见 §2 行 9）。
