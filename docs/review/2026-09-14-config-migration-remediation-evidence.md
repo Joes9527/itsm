@@ -35,7 +35,7 @@
 
 `make verify-scripts` 有原基线 `build-start-scripts.test.js:157` 镜像引用数量断言失败（预期 2、实际 3）；相关文件未改。KAF 全套测试存在既有环境收集错误，不能声称全量测试通过。
 
-SLA 修复 `e290fd97c7f60838b966e0089ee843f01cb5afa8` 在独立分支，限定独立复审通过；`TestSLACalendar`、`TestTicketSLAService`、`TestA5FixSLA` 分别通过，尚未集成到运行时。产品默认 ticket_types 定向初始化仍在开发。没有启动候选应用或执行真实新建业务验收。
+SLA 修复 `e290fd97c7f60838b966e0089ee843f01cb5afa8` 在独立分支，限定独立复审通过；`TestSLACalendar`、`TestTicketSLAService`、`TestA5FixSLA` 分别通过，尚未集成到运行时。产品默认 ticket_types 定向初始化源提交 `8ba80e186322d878d6801ff95b320b718f5fc356` 已独立复审通过，隔离 PostgreSQL 6 顶层测试 + 9 授权子例、CLI 2 例通过；已集成到独立运行时分支，尚未应用 G-A。没有启动候选应用或执行真实新建业务验收。
 
 ## 首期范围
 
