@@ -1,5 +1,8 @@
 # 服务请求管理模块测试用例
 
+> 本轮 SSLVPN/邮件验收仅通过 UI 执行，以[UI 主手册](../sslvpn-manual-lifecycle-runbook.md)和[邮件 UI 手册](../email-ticket-ui-runbook.md)为准。以下保留的历史 API 用例不属于本轮范围；缺页面入口记录 BLOCKED，不调用接口补做。
+
+
 > 2026-09-14 SSLVPN 适用说明：按[手工全流程测试手册](../sslvpn-manual-lifecycle-runbook.md)执行。服务请求与 WorkItem 同时创建，共享详情为 `/tickets/{workItemId}`，审批在 `/approvals`。下列通用用例不是当前页面功能已全部实现的证明；关闭、申请人取消、SLA 与通知按实际入口/配置分别记录。
 
 ## 功能概述
@@ -41,7 +44,7 @@
 |--------|----------|----------|----------|----------|
 | SR-301 | SLA计时开始/暂停/停止 | SLA与工作时间已配置 | 1. 提交请求<br>2. 进入暂停状态（如等待客户）<br>3. 完成请求 | SLA计时符合规则，最终合规/违规结果正确 |
 | SR-302 | 请求状态机校验 | 定义状态流转规则 | 1. 触发非法状态跳转 | 前端限制/后端拦截，提示准确 |
-| SR-303 | 请求与 WorkItem 身份一致性 | 从服务目录提交本轮申请 | 1. 记录创建回执 workItemId/编号及专业引用<br>2. 打开统一详情<br>3. GET `/api/v1/service-requests/by-ticket/{workItemId}` | 一个 WorkItem 对应一个专业扩展，专业 ticketId 与原 workItemId 一致；不另建工单接续流程 |
+| SR-303 | 请求与 WorkItem 身份一致性 | 从服务目录提交本轮申请 | 1. 记录页面回执编号和链接<br>2. 从服务请求列表打开统一详情<br>3. 比较同一编号与页面可见专业引用；不可见信息记录缺口 | 一个 WorkItem 对应一个专业扩展，专业 ticketId 与原 workItemId 一致；不另建工单接续流程 |
 
 ### 1.5 通知与审计
 
@@ -61,5 +64,5 @@
 | SR-502 | KAF 正常用户提供五类字段，核对原卡确认后打开 ITSM 详情 | 必填值齐全且与原确认一致；缺失应拒绝，卡片字段缺口单独登记 | R02、P01 |
 | SR-503 | M/N 分别打开同一 WorkItem 查看字段并审批 | 审批前后保留原字段；批准不改变申请答案或目标身份 | F09、P03–P04 |
 | SR-504 | 原申请完成后更改目录字段，再回读旧申请 | 旧标签和值快照不随新定义改变 | V01 |
-| SR-505 | 正向授权与原回执重放 | 专业 completed、原 verifiedAt/expiresAt 不变；没有第二次 grant | P05–P07、X07 |
-| SR-506 | 完成后核对关闭、取消/终止入口 | resolved/completed/closed 分开登记；UI 不支持记 BLOCKED，API 补充不能充当 UI 通过 | L01–L06 |
+| SR-505 | 正向授权与原页面刷新/恢复入口检查 | 专业 completed、原 verifiedAt/expiresAt 不变；没有第二次 grant | P05–P07、X07 |
+| SR-506 | 完成后核对关闭、取消/终止入口 | resolved/completed/closed 分开登记；UI 不支持记 BLOCKED，不得调用接口补关 | L01–L06 |

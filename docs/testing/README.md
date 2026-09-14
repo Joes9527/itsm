@@ -5,7 +5,8 @@
 ## 当前入口
 
 - [SSLVPN Coding Agent 执行说明](./sslvpn-coding-agent-execution-guide.md)及[本轮执行记录模板](./sslvpn-agent-run-record-template.md)：授权、角色交接、断点续跑和副作用记录。
-- [SSLVPN 手工全流程测试手册](./sslvpn-manual-lifecycle-runbook.md)：先完成 WSL/ITSM/KAF/Worker 部署核对，再按角色测试自定义字段、BPMN 与 Ticket 生命周期；包含异常分支和执行记录模板。
+- [SSLVPN UI 全流程测试手册](./sslvpn-manual-lifecycle-runbook.md)：WSL/KAF 部署前置、自定义表单、审批链/BPMN、生命周期、查找和恢复；业务验收仅通过 UI。
+- [邮件建单与自动回复 UI 手册](./email-ticket-ui-runbook.md)：真实邮箱发信、确认回信、原会话回复、附件、工程师通知与内部备注保密。
 - [角色视角产品测试方案](./role-based-product-test-plan.md)
 - [测试用例目录](./test-cases/README.md)
 

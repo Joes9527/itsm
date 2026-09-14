@@ -1,5 +1,8 @@
 # 服务目录模块 (Service Catalog) 测试用例
 
+> 本轮 SSLVPN/邮件验收仅通过 UI 执行，以[UI 主手册](../sslvpn-manual-lifecycle-runbook.md)和[邮件 UI 手册](../email-ticket-ui-runbook.md)为准。以下保留的历史 API 用例不属于本轮范围；缺页面入口记录 BLOCKED，不调用接口补做。
+
+
 > 2026-09-14 SSLVPN 更新：完整操作见[全流程手册](../sslvpn-manual-lifecycle-runbook.md)。本文旧用例中的云资源字段、评分、审批链与条件审批不是所有目录的通用能力；SSLVPN 使用 `serviceType=access`、`recordClass=service_request_item`、BPMN ProcessTask 双审批和固定 accessPolicy。不要为 SSLVPN 再配置独立审批引擎。日期基础设施字段与自定义授权期限不是同一个字段。
 
 > 生成时间: 2026-05-10
@@ -876,19 +879,19 @@
 
 ## 9. 自定义字段与表单版本（2026-09-14 补充）
 
-配置页面 `/admin/service-catalogs` 的“自定义字段”支持 Text、Textarea、Number、Date、Select；可配置字段名、标签、必填及 Select 选项。默认值、placeholder、条件显隐和拖拽排序没有完整入口。按当前列表顺序保存 sortOrder；SSLVPN 编码/标签分离及 accessPolicy 使用管理员 API。详细样例与请求体见主手册第 4 节。
+配置页面 `/admin/service-catalogs` 的“自定义字段”支持 Text、Textarea、Number、Date、Select；可配置字段名、标签、必填及 Select 选项。默认值、placeholder、条件显隐和拖拽排序没有完整入口。按当前列表顺序保存 sortOrder；SSLVPN 编码/标签分离及 accessPolicy 缺完整管理 UI 时记录 BLOCKED，由环境负责人独立准备下游前置，不调用管理员 API 补验。UI 字段样例见主手册第 4 节。
 
 | 用例ID | 操作 | 预期 | 主手册对应 |
 |---|---|---|---|
-| TC-SC-061 | 新建禁用测试目录，配置五种字段、必填与顺序，保存后再次编辑并 GET 回读 | 定义一致，有目录/字段版本；无字段丢失 | F01 |
+| TC-SC-061 | 新建禁用测试目录，配置五种字段、必填与顺序，保存后刷新并再次编辑 | 定义一致，有目录/字段版本；无字段丢失 | F01 |
 | TC-SC-062 | 尝试空字段名、空标签、重复字段名后保存 | 明确拒绝无效定义；若覆盖/误保存则记 FAIL | F02 |
-| TC-SC-063 | 将 select 设为 `value=30d,label=30天`，与 accessPolicy.durationOptions 一致；保存绑定后回读 | 编码、标签、durationField、seconds 与 policy ID/version 一致 | F03 |
+| TC-SC-063 | 通过 UI 配置 select 并核对与本轮 policy 的选项编码一致；不能分设编码/标签或配置 policy 时记录 UI 缺口 | 编码、标签、durationField、seconds 与 policy ID/version 一致 | F03 |
 | TC-SC-064 | R 打开申请页检查五类字段；必填逐一留空再提交 | 渲染正确，空必填不创建 WorkItem | F04–F05 |
-| TC-SC-065 | 分别提交合法数值/选项，以及管理员 API 的非法数值/未知选项 | 合法可保存；非法明确拒绝，无半创建 | F06、第 10 节 |
-| TC-SC-066 | 日期分别留空/填写，再查看统一详情；另记非法日期服务端检查 | 可选空值允许；所填日期可辨认，不偏移；不能推断服务端已具备完整日期约束 | F07 |
+| TC-SC-065 | 在表单控件内提交合法值及可输入的无效值；不构造隐藏请求 | 合法可保存；非法明确拒绝，无半创建 | F06 |
+| TC-SC-066 | 日期分别留空/填写，再查看统一详情；仅使用日期控件允许的输入 | 可选空值允许；所填日期可辨认，不偏移；不能推断服务端已具备完整日期约束 | F07 |
 | TC-SC-067 | 提交后查看业务扩展参数，再更改当前目录标签 | 旧申请标签/答案保持原快照，新表单使用新定义 | F08、V01 |
 | TC-SC-068 | R 打开旧表单，A 更新定义，再提交并重新读取目录 | 旧版本被拒绝；兼容答案保留，不兼容答案须明确确认舍弃 | V02–V04 |
-| TC-SC-069 | UI 编辑已有 access 目录，保存前后比较完整 GET 响应 | serviceType、审批开关、policy、process key 及选项编码未被无意改写；变化则 FAIL | F03 |
+| TC-SC-069 | UI 编辑已有 access 目录，保存前后刷新比较页面可见配置，不可见项记缺口 | serviceType、审批开关、policy、process key 及选项编码未被无意改写；变化则 FAIL | F03 |
 
 ## 附录
 

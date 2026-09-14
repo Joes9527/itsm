@@ -1,5 +1,7 @@
 # SSLVPN：WSL 部署与手工端到端验收
 
+> 本轮业务验收仅通过 UI，另含[邮件建单与自动回复](../testing/email-ticket-ui-runbook.md)。本文的部署命令属于独立环境准备；保留的 C4/API 验证脚本不属于本轮 UI 执行步骤，不能用于补成页面 PASS。历史邮件禁用设置仅代表原 C4 范围，邮件路线须单独准备启用的邮件连接器和真实测试邮箱。
+
 > 2026-09-14 手工测试入口更新：先读[第 0 节](#wsl-dev-entry)，再执行[全流程测试手册](../testing/sslvpn-manual-lifecycle-runbook.md)。新手册覆盖自定义字段配置/快照/版本、两种受理入口、审批、履约、关闭检查与查找。人工待办入口已核对为 `/approvals`；`/workflow/ticket-approval` 是设计器。本次为源码与文档核对，没有重新部署或实测 WSL。
 
 > 2026-09-08 维护补充：目录整理已完成，运行版本未升级。当前 ITSM API 使用 `intake-catalog-discovery-v2`，交付对应尚未进入本地 main 的 `7c114b3e` 修复；仅从 main 重建可能丢失修复。先读[当前开发环境与交付约束](../development-environment.md)，本手册正式升级流程需单独规划。
