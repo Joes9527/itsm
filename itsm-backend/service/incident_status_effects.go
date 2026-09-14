@@ -37,6 +37,7 @@ type incidentRuleSnapshot struct {
 	At         time.Time `json:"at"`
 }
 type incidentStatusPayload struct {
+	PreviousAssigneeID  int                  `json:"previousAssigneeId"`
 	AssigneeID          int                  `json:"assigneeId"`
 	EscalationLevel     int                  `json:"escalationLevel"`
 	Reason              string               `json:"reason"`
