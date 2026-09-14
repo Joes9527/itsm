@@ -20,6 +20,7 @@
 | S1 抽取 | `ITSM_URL=… ITSM_USERNAME=… ITSM_PASSWORD=… .venv/bin/python scripts/fetch_itsm_master_data.py` | `data/legacy_itsm/<env>/*.json` + `manifest.json` |
 | S2 核验完整性 | `.venv/bin/python scripts/verify_legacy_master_data.py --dir data/legacy_itsm/<env> --json-out <evidence>.json` | 10/10 资源 sha256/行数一致 |
 | S3 源冲突 | `.venv/bin/python scripts/report_legacy_config_conflicts.py --legacy-dir data/legacy_itsm/<env> --as-of <cutoff> --out <md> --json-out <json>` | blockers/conflicts 清单 |
+| S3.1 授权对象解析 | `.venv/bin/python scripts/fetch_legacy_identity_objects.py --authz …/cti_authorized.json --out-dir data/legacy_itsm/identity --summary-out <json>`（只读；PII 落 gitignored 目录） | `authorizedType`→对象类型解析 |
 | S4 差异对照 | `.venv/bin/python scripts/diff_legacy_vs_new_itsm.py --legacy-dir … --out itsm/docs/migrations/<date>-diff.md` | 名称匹配口径（仅数量级参考） |
 | S5 节点分流 | 见 §2（本手册规则） | CTI 工作表 |
 | S6 目标核验 | 只读核对目标容器/库/schema/制品/账本/Phase1 行数（见 §4） | 核验记录 |
@@ -92,6 +93,7 @@
 | S5 | 旧 CTI 混合树按节点类型分流（业务系统→CMDB CI，服务→分类） | 用户确认 |
 | S5.1 | 服务分类节点：AD账户申请→`ACC-AD-001`、O365邮箱账户申请→`COL-MAIL-001`、SSLVPN账号申请→`NET-VPN-001`、K3.5数据变更→`APP-IL-DAT-002`；邮箱导出/业务系统账号/业务系统服务→新建正式分类；`OA申请` 父容器→排除 | 用户确认 |
 | S5.2 | 配置字典按 **seed 选项集对账**：关联组精确对账（已覆盖 5 / 差额 37），其余 178 组未接纳；不整包导入。差额逐项建议（归并/新增选项/排除）**已全部采纳** | 用户确认 |
+| S6 | 路由授权语义：只读补抽 `sysUser/sysRole/sysGroup`；`authorizedType=0`→**角色**（82/82 命中 `roleId`）、`=2`→**用户**（570 行命中 `userId`；68 行/20 个 ID 未命中，阻塞相关路由） | 用户确认 + 实测 |
 
 ## 7.1 删除/排除登记（不得在后续批次再纳入）
 
