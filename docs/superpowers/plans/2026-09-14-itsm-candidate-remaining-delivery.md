@@ -156,3 +156,13 @@ R1 状态：本轮入口盘点已完成；安全缺口未关闭，M1 不通过�
 私有依赖：新建任务容器 `itsm-agent-a-pg-20260914-0918`，镜像本机 `postgres:16` 实测 PostgreSQL16.15，网络模式 none、PGDATA tmpfs，唯一主机挂载 `/tmp/itsm-agent-a-pg-20260914-0918` → `/candidate-socket`，port25439，测试角色 `candidate_test_owner`；测试自行创建/删除随机数据库及角色。未连接B共享源。初始化两次因镜像脚本清空PGHOST而失败，经读取镜像 entrypoint 确认后同时保留容器内默认与任务专用socket解决；未对共享服务重试。
 
 本批未关闭：R2-F 全部持久目标/同实例/claim及回执差额；R3 整体周期、恢复和独立里程碑审阅；R4 鉴权；R5 新候选集成；R6–R9 环境与真实验收。R2-B 上述已验证入口不重新立项；未覆盖的配置编辑/事件入口或任意并发排列不因本批自动扩展，只有原交付断言的可达失败才能回R2。没有生成新 CandidateSHA、没有推送或合并main。下一实施仍是 R2，转向 R2-F；M1 总工时仍不足以可靠估算。
+
+### 7.4 R2-F 目标组件进展（2026-09-14 09:53 CST）
+
+中间代码提交：`fa0820704d6eff6035452e9c6522ad9dd48b3d70`；仍不是 CandidateSHA，R2-F 未关闭。
+
+- 真实 Feishu client 的 RED 已证明：调用方 map 修改可改变 destination/callback 标识、重复 Init 可重绑同一实例、token/task HTTP307会转发到第二个本地接收端。
+- 复用既有 `DeliveryDestinationDescriber` / `DeliveryDestination` / Manager 声明与激活协议；Feishu Init 与描述共享纯解析，捕获 app/baseURL/callback 身份，拒绝重复初始化，HTTP不跟随重定向且非2xx显式报错。未另建路由或候选业务服务。
+- 目标摘要采用 `feishu-task-v2` 路由身份，不含密钥；旧意图没有被转换或重写。接下来的持久payload/原producer必须完整固定目标，不能把本提交的字符串摘要等同于完整交付协议。
+- `r2-f-target-red.log`、`r2-f-activation-red.log` 为实际失败证据；`r2-f-target-green.log` 和 `r2-f-activation-green.log`（`go test -p 1 -race ./connector/... -count=1`）PASS，无skip/race。真实Manager在纯初始化后通过原Feishu client向本地接收端create/update成功；disabled、缺secret、错误digest、调用方配置修改和错owner受到检查。
+- 仍需 R2-F：原事务producer的版本化目标；creation持久claim/成员/actor核验；update同实例发送；manual同步消除直接外发；inbound已有mapping/删除边界；发送后重绑/回执失败保持unknown且不重发。尚未做此提交上的全后端构建、完整私有S6或里程碑独立审阅，不复用此前构建为这次变更的构建证明。
