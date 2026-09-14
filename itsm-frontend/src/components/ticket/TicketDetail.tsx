@@ -6,6 +6,7 @@
  * 包含：基本信息、SLA、分配/编辑/抄送/删除操作、详情 Tabs（评论/附件/BPMN 审批历史/历史/关联/通知）
  */
 
+import { TicketProcessTasks } from './TicketProcessTasks';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { TicketApi } from '@/lib/api/ticket-api';
@@ -623,6 +624,8 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
               <ServiceRequestPanel ticketId={ticket.id} />
             </div>
           )}
+
+          <TicketProcessTasks ticketId={ticket.id} recordClass={ticket.recordClass ?? ""} />
 
           {/* 3. 底部协作 Tabs（评论/附件/审批链/历史/关联/通知） */}
           <TicketDetailTabs

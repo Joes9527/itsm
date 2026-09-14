@@ -166,7 +166,7 @@
 2. 为 Helpdesk 接入后端允许的人工任务动作。沿用 BPMN 查询/领取/完成，不根据节点名称硬编码「受理」权限；先核对任务 action 投影、业务 ID 语义和 formKey/必要输入，未知或缺契约时显示明确限制。审批仍使用 decisions；自动化任务不可通过普通完成按钮执行。动作后重新读取真实任务与工单状态。
 3. 使用三类路径验收：直接审批（SSLVPN 仅作为示例）、先受理后审批、无需审批。覆盖未授权、转派后权限变化、重复提交、读取失败和待办刷新。第一阶段不执行真实外部授权；KAF/KB、团队负载仍保持既有范围。
 
-上述顺序是具体接入建议，尚未实现新任务面板或修改 BPMN 配置。完整可执行任务面板涉及服务端权限/输入投影时，应先确认契约设计，不能当成单纯加按钮。
+上述顺序为接入计划；首批只读任务面板已在下节实现，完整进展投影、任务操作与 BPMN 配置仍未改动。完整可执行任务面板涉及服务端权限/输入投影时，应先确认契约设计，不能当成单纯加按钮。
 
 #### 本次核验
 
@@ -176,3 +176,12 @@
 二次复核依据：`docs/superpowers/specs/2026-08-25-bpmn-task-instance-authorization-design.md` 第 2 节、`docs/superpowers/plans/2026-08-30-bpmn-instance-authorization.md`；历史提交 `28e5c6da`（工单审批契约收敛）、`5898e224`（BPMN 唯一审批权威）。当前源码 `SubmitTaskDecision`、`recordApprovalDecision` 与任务变量合并路径交叉核验，避免将旧设计稿的「待实现」状态当作当前实现缺失。此修订仅纠正核查结论，不修改既有授权与意见行为。
 
 二次复核验证：SubmitTaskDecision 五项 controller 测试、任务变量合并保存及审批历史租户/唯一性两项 service 测试，共 7 项通过；日志 `/tmp/ui-approval-recheck.log`。无共享环境变更。
+
+
+### 当前流程任务首批 UI（implemented：当前账号可见任务，只读）
+
+- 分支 `codex/feat/ticket-current-process-tasks`，基于 `d4619db3`。在 TicketDetail 保留原布局新增 TicketProcessTasks，复用现有 BPMN listUserTasks 和 useDetailResource。按 recordClass 对应的 businessType 与 WorkItem ID 查询，完整读取分页后排除已完成/已取消任务；错关联、重复、不完整分页与未知类型显式报错。
+- 展示任务名称、状态及后端返回的 assignee（可能为账号/ID，不伪造为显示姓名），审批任务链接已有审批中心。空态明确「当前账号暂无可见的活动任务」，不推断流程不存在；权限拒绝清空，刷新错误保留旧数据并提示，切换工单/租户隔离旧响应。未知状态原样标明，不推导专业生命周期。
+- 范围限定：仅当前账号可见任务，不是申请人全流程进展视图；不新增领取/完成任务按钮，不修改流程定义、任务授权或意见存储。因此这是步骤 1 的首批交付，不代表通用执行任务或三角色验收完成。后续仍按既有契约接入人工任务操作。
+- 验证：最初新增测试因组件尚不存在失败（该轮 Jest 完成后未退出，读取日志确认后仅停止本轮测试进程）；实现后最终 2 suites / 29 tests 通过并正常退出。覆盖分页、关联、未知类型/状态、失败重试、撤权、工单/租户切换以及原 TicketDetail 行为。类型检查、lint、production build 通过；lint 仅既有 BPMNDesigner warning。独立只读审查无阻断，已补其建议的切换/分页/未知状态测试。
+- Chromium `ticket-process-tasks-ui.spec.ts` 1 passed，使用环境变量指定已有 generic WorkItem #10，真实登录与详情读取，任务 GET 使用隔离错误/成功响应验证面板；390/1440 无横向溢出且两张截图已查看。没有调用领取/完成/审批等业务写命令，不据此宣称真实后端任务已执行。临时 3016/3017 已停止，共享 API 未替换。日志与截图保留 `/tmp/ticket-tasks-*`，不提交。
