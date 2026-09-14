@@ -3776,16 +3776,16 @@ func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksR
 	filtered := make([]*ent.ProcessTask, 0, len(tasks))
 	for _, task := range tasks {
 		if task.AssigneeSource != "" {
-			if err := s.authorizeTaskRead(ctx, task, scope); err != nil {
+			assignment, err := s.engine.authorizeBoundTaskAssignment(ctx, s.client, task, scope, "")
+			if err != nil {
 				if isBPMNTaskAccessDenial(err) {
 					continue
 				}
 				return nil, 0, err
 			}
-			projected, err := s.engine.projectTaskAssignment(ctx, task)
-			if err != nil {
-				return nil, 0, err
-			}
+			projectedTask := *task
+			projectedTask.Assignee = assignment.Assignee
+			projected := &projectedTask
 			if actor != nil && !s.participationResolver.matchesTask(projected, actor) {
 				continue
 			}

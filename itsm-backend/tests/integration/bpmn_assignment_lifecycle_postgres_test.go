@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -384,78 +385,94 @@ func (boundLifecycleCallback) Execute(context.Context, *ent.ProcessTask, map[str
 }
 
 func TestPostgresBoundLifecycleCallbackCreationRace(t *testing.T) {
-	for _, first := range []string{"callback", "assignment"} {
-		t.Run(first, func(t *testing.T) {
-			f := newBoundLifecycleFixture(t)
-			xml := `<?xml version="1.0"?><definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><process id="bound" isExecutable="true"><startEvent id="start"/><serviceTask id="callback" implementation="bound_lifecycle_probe"/><userTask id="next" name="Next" taskPurpose="fulfillment" assigneeSource="work_item_assignee"/><endEvent id="end"/><sequenceFlow id="a" sourceRef="start" targetRef="callback"/><sequenceFlow id="b" sourceRef="callback" targetRef="next"/><sequenceFlow id="c" sourceRef="next" targetRef="end"/></process></definitions>`
-			f.setup.client.ProcessDefinition.UpdateOne(f.definition).SetBpmnXML([]byte(xml)).ExecX(f.setup.ctx)
-			f.setup.client.ProcessInstance.UpdateOneID(f.task.ProcessInstanceID).SetCurrentActivityID("callback").ExecX(f.setup.ctx)
-			row := f.setup.client.ProcessCallbackOutbox.Create().SetExecutionKey("callback-race").SetProcessInstanceID(f.task.ProcessInstanceID).SetCallbackKind("service_task").SetHandlerID("bound_lifecycle_probe").SetTaskType("bound_lifecycle_probe").SetElementID("callback").SetTenantID(f.item.TenantID).SaveX(f.setup.ctx)
-			f.engine.CallbackRegistry().RegisterHandler(boundLifecycleCallback{})
-			entered, release := make(chan struct{}), make(chan struct{})
-			assigned, advanced := make(chan error, 1), make(chan error, 1)
-			advance := func() {
-				count, err := f.engine.ProcessPendingCallbacks(f.ctx, "race-worker", 10)
-				if err == nil && count != 1 {
-					err = fmt.Errorf("callback completed count %d", count)
+	for _, kind := range []string{"service_task", "user_task_callback"} {
+		for _, first := range []string{"callback", "assignment"} {
+			t.Run(kind+"/"+first, func(t *testing.T) {
+				f := newBoundLifecycleFixture(t)
+				xml := `<?xml version="1.0"?><definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><process id="bound" isExecutable="true"><startEvent id="start"/><serviceTask id="callback" implementation="bound_lifecycle_probe"/><userTask id="next" name="Next" taskPurpose="fulfillment" assigneeSource="work_item_assignee"/><endEvent id="end"/><sequenceFlow id="a" sourceRef="start" targetRef="callback"/><sequenceFlow id="b" sourceRef="callback" targetRef="next"/><sequenceFlow id="c" sourceRef="next" targetRef="end"/></process></definitions>`
+				f.setup.client.ProcessDefinition.UpdateOne(f.definition).SetBpmnXML([]byte(xml)).ExecX(f.setup.ctx)
+				f.setup.client.ProcessInstance.UpdateOneID(f.task.ProcessInstanceID).SetCurrentActivityID("callback").ExecX(f.setup.ctx)
+				row := f.setup.client.ProcessCallbackOutbox.Create().SetExecutionKey("callback-race").SetProcessInstanceID(f.task.ProcessInstanceID).SetCallbackKind(kind).SetHandlerID("bound_lifecycle_probe").SetTaskType("bound_lifecycle_probe").SetElementID("callback").SetTenantID(f.item.TenantID).SaveX(f.setup.ctx)
+				if kind == "user_task_callback" {
+					xml = strings.Replace(xml, `<serviceTask id="callback" implementation="bound_lifecycle_probe"/>`, `<userTask id="callback" name="Callback"/>`, 1)
+					f.setup.client.ProcessDefinition.UpdateOne(f.definition).SetBpmnXML([]byte(xml)).ExecX(f.setup.ctx)
+					completed := f.setup.client.ProcessTask.Create().SetTenantID(f.item.TenantID).SetTaskID("completed-callback").SetProcessInstanceID(f.task.ProcessInstanceID).SetProcessDefinitionKey(f.definition.Key).SetTaskDefinitionKey("callback").SetTaskName("Callback").SetTaskType("user_task").SetAssignee(fmt.Sprint(f.owner.ID)).SetStatus("completed").SaveX(f.setup.ctx)
+					row = f.setup.client.ProcessCallbackOutbox.UpdateOne(row).SetProcessTaskID(completed.ID).SetTaskID(completed.TaskID).SaveX(f.setup.ctx)
 				}
-				advanced <- err
-			}
-			if first == "callback" {
-				var once sync.Once
-				f.client.ProcessTask.Use(func(next ent.Mutator) ent.Mutator {
-					return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-						if m.Op().Is(ent.OpCreate) {
-							once.Do(func() { close(entered); <-release })
-						}
-						return next.Mutate(ctx, m)
-					})
-				})
-				go advance()
-				select {
-				case <-entered:
-				case err := <-advanced:
-					t.Fatalf("callback failed before create barrier: %v", err)
+				f.engine.CallbackRegistry().RegisterHandler(boundLifecycleCallback{})
+				entered, release := make(chan struct{}), make(chan struct{})
+				assigned, advanced := make(chan error, 1), make(chan error, 1)
+				advance := func() {
+					count, err := f.engine.ProcessPendingCallbacks(f.ctx, "race-worker", 10)
+					if err == nil && count != 1 {
+						err = fmt.Errorf("callback completed count %d", count)
+					}
+					advanced <- err
 				}
-				go func() { assigned <- f.assign(f.ctx, f.next.ID, nil) }()
-				awaitBlocked(t, assigned)
-			} else {
-				go func() {
-					assigned <- f.assign(f.ctx, f.next.ID, func(ctx context.Context, client *ent.Client, event workitemassignment.Event) error {
-						close(entered)
-						<-release
-						return service.EnqueueWorkItemAssignment(ctx, client, event)
+				if first == "callback" {
+					var once sync.Once
+					f.client.ProcessTask.Use(func(next ent.Mutator) ent.Mutator {
+						return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+							if m.Op().Is(ent.OpCreate) {
+								once.Do(func() { close(entered); <-release })
+							}
+							return next.Mutate(ctx, m)
+						})
 					})
-				}()
-				<-entered
-				go advance()
-				awaitBlocked(t, advanced)
-			}
-			close(release)
-			require.NoError(t, <-advanced)
-			assignmentErr := <-assigned
-			if assignmentErr != nil {
-				var pgErr *pq.Error
-				require.ErrorAs(t, assignmentErr, &pgErr)
-				require.Equal(t, pq.ErrorCode("40001"), pgErr.Code)
-				require.Zero(t, f.client.TicketWorkflowRecord.Query().Where(ticketworkflowrecord.ActionEQ("assign")).CountX(f.ctx))
-				require.Zero(t, f.client.OutboxEvent.Query().Where(outboxevent.EventTypeEQ("work_item.assigned")).CountX(f.ctx))
-				require.NoError(t, f.assign(f.ctx, f.next.ID, nil))
-			}
-			require.Equal(t, "completed", f.client.ProcessCallbackOutbox.GetX(f.ctx, row.ID).Status)
-			tasks := f.client.ProcessTask.Query().Where(processtask.ProcessInstanceID(f.task.ProcessInstanceID)).AllX(f.ctx)
-			require.Len(t, tasks, 2)
-			if first == "callback" {
-				audit := f.client.TicketWorkflowRecord.Query().Where(ticketworkflowrecord.ActionEQ("assign")).OnlyX(f.ctx)
-				require.Len(t, audit.Metadata["affectedTaskIds"], 2)
-			}
-			for _, task := range tasks {
-				view, err := f.engine.TaskService().GetTaskByID(f.scope(f.next), task.ID)
-				require.NoError(t, err)
-				require.Equal(t, fmt.Sprint(f.next.ID), view.Assignee)
-				require.Empty(t, task.Assignee)
-			}
-			t.Logf("serial outcome: %s first; callback creates one bound task, current owner consistent", first)
-		})
+					go advance()
+					select {
+					case <-entered:
+					case err := <-advanced:
+						t.Fatalf("callback failed before create barrier: %v", err)
+					}
+					go func() { assigned <- f.assign(f.ctx, f.next.ID, nil) }()
+					awaitBlocked(t, assigned)
+				} else {
+					go func() {
+						assigned <- f.assign(f.ctx, f.next.ID, func(ctx context.Context, client *ent.Client, event workitemassignment.Event) error {
+							close(entered)
+							<-release
+							return service.EnqueueWorkItemAssignment(ctx, client, event)
+						})
+					}()
+					<-entered
+					go advance()
+					awaitBlocked(t, advanced)
+				}
+				close(release)
+				require.NoError(t, <-advanced)
+				assignmentErr := <-assigned
+				if assignmentErr != nil {
+					var pgErr *pq.Error
+					require.ErrorAs(t, assignmentErr, &pgErr)
+					require.Equal(t, pq.ErrorCode("40001"), pgErr.Code)
+					require.Zero(t, f.client.TicketWorkflowRecord.Query().Where(ticketworkflowrecord.ActionEQ("assign")).CountX(f.ctx))
+					require.Zero(t, f.client.OutboxEvent.Query().Where(outboxevent.EventTypeEQ("work_item.assigned")).CountX(f.ctx))
+					require.NoError(t, f.assign(f.ctx, f.next.ID, nil))
+				}
+				require.Equal(t, "completed", f.client.ProcessCallbackOutbox.GetX(f.ctx, row.ID).Status)
+				tasks := f.client.ProcessTask.Query().Where(processtask.ProcessInstanceID(f.task.ProcessInstanceID)).AllX(f.ctx)
+				if kind == "user_task_callback" {
+					require.Len(t, tasks, 3)
+				} else {
+					require.Len(t, tasks, 2)
+				}
+				if first == "callback" {
+					audit := f.client.TicketWorkflowRecord.Query().Where(ticketworkflowrecord.ActionEQ("assign")).OnlyX(f.ctx)
+					require.Len(t, audit.Metadata["affectedTaskIds"], 2)
+				}
+				for _, task := range tasks {
+					if task.Status == "completed" {
+						require.Equal(t, fmt.Sprint(f.owner.ID), task.Assignee)
+						continue
+					}
+					view, err := f.engine.TaskService().GetTaskByID(f.scope(f.next), task.ID)
+					require.NoError(t, err)
+					require.Equal(t, fmt.Sprint(f.next.ID), view.Assignee)
+					require.Empty(t, task.Assignee)
+				}
+				t.Logf("serial outcome: %s first; callback creates one bound task, current owner consistent", first)
+			})
+		}
 	}
 }

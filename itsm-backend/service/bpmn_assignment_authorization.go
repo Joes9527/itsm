@@ -34,37 +34,44 @@ func isBPMNTaskAccessDenial(err error) bool {
 // authorizeBoundTask intersects existing tenant, row, professional and BPMN
 // authorities. Elevated task capabilities waive only the participant check.
 func (e *CustomProcessEngine) authorizeBoundTask(ctx context.Context, client *ent.Client, task *ent.ProcessTask, scope BPMNAccessScope, command BPMNTaskCommand) error {
+	_, err := e.authorizeBoundTaskAssignment(ctx, client, task, scope, command)
+	return err
+}
+
+// A list may reuse this successful projection for the same task. Mutation
+// callers still resolve all authority afresh in their owning transaction.
+func (e *CustomProcessEngine) authorizeBoundTaskAssignment(ctx context.Context, client *ent.Client, task *ent.ProcessTask, scope BPMNAccessScope, command BPMNTaskCommand) (BPMNTaskAssignment, error) {
 	if task == nil || task.TenantID != scope.TenantID {
-		return denyBPMNTaskAccess("bound task tenant mismatch")
+		return BPMNTaskAssignment{}, denyBPMNTaskAccess("bound task tenant mismatch")
 	}
 	if task.AssigneeSource != BPMNAssigneeSourceWorkItem {
-		return fmt.Errorf("unsupported task assignment source %q", task.AssigneeSource)
+		return BPMNTaskAssignment{}, fmt.Errorf("unsupported task assignment source %q", task.AssigneeSource)
 	}
 	switch command {
 	case "", BPMNTaskCommandComplete, BPMNTaskCommandCancel, BPMNTaskCommandSetVariables:
 	case BPMNTaskCommandAssign, BPMNTaskCommandClaim, BPMNTaskCommandDelegate, BPMNTaskCommandCreateCounterSign, BPMNTaskCommandVote:
-		return denyBPMNTaskAccess("bound task assignment is owned by WorkItem")
+		return BPMNTaskAssignment{}, denyBPMNTaskAccess("bound task assignment is owned by WorkItem")
 	default:
-		return fmt.Errorf("unsupported bound task command %q", command)
+		return BPMNTaskAssignment{}, fmt.Errorf("unsupported bound task command %q", command)
 	}
 	actor, err := e.resolveAssignmentUser(ctx, client, scope.UserID, scope.TenantID)
 	if unavailableBPMNIdentity(err) {
-		return denyBPMNTaskAccess("bound task actor unavailable")
+		return BPMNTaskAssignment{}, denyBPMNTaskAccess("bound task actor unavailable")
 	}
 	if err != nil {
-		return err
+		return BPMNTaskAssignment{}, err
 	}
 	item, policy, err := resolveBoundTaskWorkItem(ctx, client, task)
 	if err != nil {
-		return err
+		return BPMNTaskAssignment{}, err
 	}
 	role := authorization.EffectiveSessionRole(actor)
 	visible, err := client.Ticket.Query().Where(ticket.ID(item.ID), ticket.TenantID(scope.TenantID), authorization.WorkItemRowScope(actor.ID, role)).Exist(ctx)
 	if err != nil {
-		return err
+		return BPMNTaskAssignment{}, err
 	}
 	if !visible {
-		return denyBPMNTaskAccess("insufficient WorkItem row visibility")
+		return BPMNTaskAssignment{}, denyBPMNTaskAccess("insufficient WorkItem row visibility")
 	}
 	taskAction := "read"
 	elevated := scope.CanReadAllTasks
@@ -72,24 +79,31 @@ func (e *CustomProcessEngine) authorizeBoundTask(ctx context.Context, client *en
 		taskAction = "update"
 		elevated = scope.CanUpdateAllTasks
 	}
-	if !authorization.HasResourcePermission(client, role, "task", taskAction, scope.TenantID) ||
-		!authorization.HasResourcePermission(client, role, policy.Resource, "read", scope.TenantID) {
-		return denyBPMNTaskAccess("insufficient bound task read permission")
+	permissions := []authorization.Permission{{Resource: "*", Action: "*"}}
+	if role != "super_admin" {
+		permissions, err = authorization.LoadPermissionsByModeChecked(ctx, client, role, scope.TenantID)
+		if err != nil {
+			return BPMNTaskAssignment{}, err
+		}
 	}
-	if command != "" && !authorization.HasResourcePermission(client, role, policy.Resource, policy.FulfillmentAction(), scope.TenantID) {
-		return denyBPMNTaskAccess("insufficient professional fulfillment permission")
+	if !authorization.CheckPermissionMatch(permissions, "task", taskAction) ||
+		!authorization.CheckPermissionMatch(permissions, policy.Resource, "read") {
+		return BPMNTaskAssignment{}, denyBPMNTaskAccess("insufficient bound task read permission")
+	}
+	if command != "" && !authorization.CheckPermissionMatch(permissions, policy.Resource, policy.FulfillmentAction()) {
+		return BPMNTaskAssignment{}, denyBPMNTaskAccess("insufficient professional fulfillment permission")
 	}
 	assignment, err := e.resolveTaskAssignment(ctx, client, task)
 	if err != nil {
-		return err
+		return BPMNTaskAssignment{}, err
 	}
 	if command == BPMNTaskCommandComplete && assignment.State != "assigned" {
-		return denyBPMNTaskAccess("bound task has no available responsible user")
+		return BPMNTaskAssignment{}, denyBPMNTaskAccess("bound task has no available responsible user")
 	}
 	if !elevated && assignment.ResponsibleUserID != scope.UserID {
-		return denyBPMNTaskAccess("actor is not the current bound task participant")
+		return BPMNTaskAssignment{}, denyBPMNTaskAccess("actor is not the current bound task participant")
 	}
-	return nil
+	return assignment, nil
 }
 
 func (e *CustomProcessEngine) projectTaskAssignment(ctx context.Context, task *ent.ProcessTask) (*ent.ProcessTask, error) {

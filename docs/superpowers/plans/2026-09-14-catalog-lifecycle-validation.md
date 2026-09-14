@@ -84,6 +84,49 @@
 
 动态当前 WorkItem 处理人解析、九项生产目录配置、解决/关闭 UI 及第 5 节其他边界仍待完成；此次浏览器验证不包括两个候选人的并发领取或外部交付。
 
-## 7. 当前处理人绑定设计
+## 7. 当前处理人绑定实施与源码验收
 
-用户进一步确认：执行任务生成后，工单从 A 改派 B，尚未完成的执行任务同步交给 B，并保留审计。技术方案见[执行任务绑定当前工单处理人设计草案](../specs/2026-09-14-work-item-task-assignment-design.md)。该草案涉及任务绑定字段、权限投影、事务与审计，尚未实施或执行迁移；不能据此报告目录整改完成。
+2026-09-15 更新：用户确认的“工单 A 改派 B，未结束执行任务随之转交”已在 `codex/feat/work-item-task-assignment` 实施。设计见[已接受的执行任务绑定设计](../specs/2026-09-14-work-item-task-assignment-design.md)。Task 1–6 已分别审查；Task 7 集成改动及整个分支仍需独立终审。**本计划保持执行中，尚未进行共享迁移、此分支部署或生产目录发布。**
+
+实现使用不可变 `assigneeSource=work_item_assignee`，持续从 WorkItem 当前处理人投影；绑定任务的持久化 assignee/candidate 字段为空。专业权限、当前租户/有效 MSP 分配、WorkItem 行可见范围与 BPMN 能力取交集；终态由精确任务/版本审计固定负责人与实际操作人。改派、工作项版本、审计和 `work_item.assigned` Outbox 同事务写入，事件包含经专业类注册表验证的 `recordClass`，消费时与不可变改派审计核对。
+
+Task 7 修正 migration 032 引入的 bootstrap 注册数量断言（明确校验第 25 项为 032），补充事件类身份契约，并修复绑定任务列表将 RBAC 数据库错误当作普通无权结果的问题。既有布尔权限接口仍为失败关闭返回 false；共用同一读取实现，错误不写入缓存，绑定路径使用可返回错误的接口。列表复用同一任务已成功授权的负责人投影，不在任务间缓存负责人，也不改变命令事务的实时复核。
+
+### 7.1 已取得证据（2026-09-15）
+
+- 后端 `GOMAXPROCS=4 go test -p 2 ./... -count=1` 全包通过；最终 Task 7 源码再次执行全包门禁通过。PostgreSQL 条件测试另行执行，不能用普通套件未启用的测试替代。
+- 隔离 PostgreSQL：`go test -p 2 -tags=integration_postgres ./tests/integration -run 'TestBPMNAssignmentSourceMigration|TestPostgresWorkItemAssignment|TestPostgresBoundLifecycle|TestPostgresAssignmentCaller|TestPostgresAssignmentReview' -count=1 -v`，56.167s，通过，无跳过。仅使用自有容器 `codex-workitem-assignment-test-20260914` / 端口 36444 / 数据库 `sslvpn_test`，凭据保存在私有本地配置；每例使用独立 schema，生命周期/并发与 MSP 正向测试使用非超级用户、无 BYPASSRLS 的普通运行角色。受限目录能力用于既有身份验证；无共享数据库或真实外部发送。
+- 同一 PostgreSQL 并发夹具覆盖 user-task callback 与 service-task callback 两种推进路径、改派先/推进先两个顺序。验证阻塞、可显式重试的 40001、重试后新任务进入改派审计、无死锁/无中间改派事件、终态负责人不漂移。回调为测试内纯本地效果。
+- 事件契约先复现缺失 `recordClass`；真实数据库覆盖持久化字段和伪造合法类与原审计不一致时阻止投递。删除消费端类校验的反事实运行实际失败；恢复后通过。
+- 前端 `npm test -- --runInBand --watch=false`：231 suites、3281 tests 通过，13 项既有 skipped；425.407s。`npm run type-check`、`npm run lint:check`、`npm run build` 通过。lint 保留 `BPMNDesigner.tsx` 的一项既有 unused-disable warning，未执行自动修复。
+- 后端 API 与 migration CLI 均构建；前端 standalone 构建归档已准备。构建物、SHA256 清单、源码清单、migration 032 只读 preflight SQL 位于工作树的已忽略 `.superpowers/artifacts/work-item-assignment/`，不提交二进制/日志/凭据，不依赖后续可删除的 SDD scratch。
+- 对 `ec1901f8` 的 76 个既有 migration 文件逐字节比较无改动；migration 注册表只新增 032，旧 SQL 分支不变。032 SQL SHA256：`cd4ecbe146e7fb1173b8e1d50fb2805e44bdd28a0b59214cbb9f5f8b3dec9343`；verify SQL：`6ab38a2654fdc179c642a1df5c7efe09d506a2405612f5652c103957514ac2e9`。共享 ledger 尚未读取/对账，不能把源码比较说成数据库迁移完成。
+
+剩余列表性能风险仍交终审：SQLite 同一实例 101 个绑定任务、取 10 条，改动前 1014 次查询，复用后 711 次（一次观察约 69.17ms → 46.33ms）；1000 个独立任务仍全量物化、1 次查询、取 10 条约 12.42ms。无生产延迟保证，仍有全量物化和按任务查询。未经本次授权扩展为跨任务缓存、权限快照或分页重设计；任何后续方案必须先授权过滤，再计算 total/page，命令保持重新验证。
+
+### 7.2 准备好的浏览器夹具与明确未执行项
+
+长期测试位于 `itsm-frontend/tests/e2e/flows/work-item-assignment.spec.ts`，配套纯人工定义在 `tests/e2e/fixtures/work-item-assignment.bpmn`：Helpdesk 候选组 → WorkItem 绑定执行 → 独立经理候选组 → 申请人确认。经理节点用于确认职责独立，并非代替专门审批决策流程的验收。Go contract 使用真实 BPMN parser 校验定义没有 service/script/call/subprocess 或委托 handler。Playwright `--list`、类型和 lint 已通过；**未运行浏览器，不宣称其运行成功**。
+
+部署获批后，由既有用户/组/角色/流程/目录 API 建立带独立标记的临时定义与 Requested Item 目录，绑定精确 key/version，不修改现有九项生产目录。Helpdesk/经理组名分别为 `assignment_acceptance_helpdesk`、`assignment_acceptance_manager`；申请人、Helpdesk、A、B、经理必须为五个不同有效账号。A/B 只赋实际需要的专业 read/provision 与 BPMN read/update 权限，不能用全局管理员身份替代 A 失权证据。Helpdesk 需具备现行合法分配、读流程/工单及清理权限；不静默授予额外权限。仅允许 in-app 或 fake 通知 transport，无真实邮件/Graph/KAF/VPN 调用。
+
+`WORK_ITEM_ASSIGNMENT_FIXTURE` 指向权限 0600 的私有 JSON，包含 `baseURL`、`tenantId`、`catalogId`、`definitionKey`、`actors` 和 `states`；后二者以 `requester/helpdesk/a/b/manager` 为键，值分别为实际用户 ID 和经真实登录取得的 storageState 文件路径。`PLAYWRIGHT_BASE_URL` 必须等于 fixture.baseURL。不存在 fixture 时测试明确失败，不跳过为通过。运行命令：
+
+```sh
+PLAYWRIGHT_EXTERNAL_SERVER=1 PLAYWRIGHT_SKIP_CHANNELS=1 \
+  npx playwright test tests/e2e/flows/work-item-assignment.spec.ts --project=chromium --workers=1
+```
+
+测试通过现有 intake 提交、Helpdesk 领取、授权改派、A/B 页面完成入口和直接命令、经理/申请人独立任务及终态历史投影执行。成功记录经删除 API 清理并读取 404；失败记录保留供审计调查，不能用数据库强制改状态。运行负责人另需在删除前/按事件 ID 以只读方式核对 WorkItem、process_tasks、ticket_workflow_records、process_audit_logs、outbox_events 的持久化字段与投递结果，验证没有外部交付；之后停用/删除本次自有账号、组、目录和定义，保留历史审计。完整生产审批、MSP 会话切换和九项目录发布均未由此纯人工夹具代替。
+
+### 7.3 待批准的共享环境门禁
+
+以下操作尚未授权，Task 7 只准备材料：
+
+1. 独立终审通过后，锁定该分支确切提交及构建 manifest；确认目标仍为开发 API 8080 / 前端 3001 所对应环境、进程/容器所有者、备份、迁移唯一操作人和维护窗口。目标若变化，先更新部署记录。不得以读取旧健康端点推断新源码已运行。
+2. 使用预备的**只读** SQL 确认数据库/schema、migration ledger 连续前缀与已部署旧 checksum、任务字段、活动事务及现有流程；确认只有 032 待执行，并审查已有 assignee_source/候选冲突。`itsm-migrate -status/-dry-run` 也会调用 EnsureMigrationsTable，不能当作无写入的预检工具。
+3. 获得共享迁移/部署授权后，停止相关写入与工作进程，备份并执行现有 migration runner 的 `-up`（仅当预检确认待执行项恰为 032），随后执行 032 verify。032 增列/约束/触发器可能等待 process_tasks DDL 锁；不得清洗历史实例绕过约束。启动 API 时保持 `ITSM_AUTO_MIGRATE=false`、`ITSM_AUTO_SEED=false`，部署匹配前端，验证 readyz、代理 CSRF 与源码/build ID。
+4. 迁移与匹配版本就绪后，再授权纯人工临时夹具配置/浏览器运行及上述只读审计检查。生产目录新版本发布另行批准，且只影响新实例；不重写旧任务。
+5. 回滚界限：尚无绑定任务时可停止新版本并在核实旧版本可读附加列后回退二进制/前端，保留 032；不自动降 schema。已有绑定任务/事件后，旧二进制不了解动态负责人及新审计契约，禁止直接回退继续处理；须暂停流量和 worker，以审查后的向前修复或完整备份恢复方案处理。032 无自动 down SQL，不删除绑定字段/触发器/审计换取旧代码运行。
+
+第 4 节解决/关闭 UI、第 5 节其余边界未在 Task 7 解决。源码测试/构建通过不等于目录整改或共享上线验收完成。

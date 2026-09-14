@@ -67,6 +67,9 @@ func decodeWorkItemAssignment(event *ent.OutboxEvent) (assignment.Event, error) 
 		event.AggregateType != "work_item" || event.AggregateID != strconv.Itoa(p.Command.WorkItemID) {
 		return p, blockOutboxDelivery("assignment event identity mismatch")
 	}
+	if _, err := authorization.ResolveWorkItemPolicy(p.RecordClass); err != nil {
+		return p, blockOutboxDelivery("assignment record class invalid")
+	}
 	return p, nil
 }
 func (h *WorkItemAssignmentNotificationHandler) Deliver(ctx context.Context, event *ent.OutboxEvent) error {
@@ -106,7 +109,7 @@ func (h *WorkItemAssignmentNotificationHandler) Deliver(ctx context.Context, eve
 		}
 		version, vok := numericInt(record.Metadata["version"])
 		actorTenant, aok := numericInt(record.Metadata["actorTenantId"])
-		if !vok || !aok || version != p.Version || actorTenant != p.Command.ActorTenantID || record.FromUserID != p.PreviousAssigneeID || record.ToUserID != p.Command.AssigneeID || record.Metadata["source"] != p.Command.Source || record.Reason != p.Command.Reason {
+		if record.Metadata["recordClass"] != p.RecordClass || !vok || !aok || version != p.Version || actorTenant != p.Command.ActorTenantID || record.FromUserID != p.PreviousAssigneeID || record.ToUserID != p.Command.AssigneeID || record.Metadata["source"] != p.Command.Source || record.Reason != p.Command.Reason {
 			return blockOutboxDelivery("assignment audit mismatch")
 		}
 		matched++

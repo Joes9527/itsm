@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"itsm-backend/authorization"
@@ -341,7 +342,7 @@ func installBoundAssignmentReadFault(f *bpmnAuthorizationFixture, task *ent.Proc
 					userQueries++
 					target := 2
 					if stage == "identity" {
-						target = 4
+						target = 3 // actor, authorized owner, then textual identity filter
 					}
 					if userQueries == target {
 						return nil, fault
@@ -430,4 +431,93 @@ func TestBPMNBoundAssignmentMissingActorIsDenialNotPartialFailure(t *testing.T) 
 	require.NoError(t, err)
 	require.Empty(t, rows)
 	require.Zero(t, total)
+}
+
+func TestBPMNBoundAssignmentRBACFailureIsObservableAndNotCached(t *testing.T) {
+	for _, stage := range []string{"role", "role_permission", "permission"} {
+		t.Run(stage, func(t *testing.T) {
+			f := newBPMNAuthorizationFixture(t)
+			seedBoundAssignment(t, f, "rbac-fault")
+			grantBoundPermissions(t, f, f.actor, "service_request", "read", "task", "read")
+			fault := errors.New("injected RBAC storage failure")
+			fail := true
+			interceptor := ent.InterceptFunc(func(next ent.Querier) ent.Querier {
+				return ent.QuerierFunc(func(ctx context.Context, q ent.Query) (ent.Value, error) {
+					if fail {
+						return nil, fault
+					}
+					return next.Query(ctx, q)
+				})
+			})
+			switch stage {
+			case "role":
+				f.client.Role.Intercept(interceptor)
+			case "role_permission":
+				f.client.RolePermission.Intercept(interceptor)
+			case "permission":
+				f.client.Permission.Intercept(interceptor)
+			}
+			ctx := f.typedTaskScopeOnlyCtx(f.actor, false)
+			rows, total, err := f.engine.TaskService().ListUserTasks(ctx, &ListUserTasksRequest{Page: 1, PageSize: 10})
+			require.ErrorIs(t, err, fault)
+			require.Empty(t, rows)
+			require.Zero(t, total)
+			fail = false
+			rows, total, err = f.engine.TaskService().ListUserTasks(ctx, &ListUserTasksRequest{Page: 1, PageSize: 10})
+			require.NoError(t, err)
+			require.Equal(t, 1, total)
+			require.Len(t, rows, 1)
+		})
+	}
+}
+
+// Characterize tenant-history work separately from authorization correctness.
+// This records query/row work without an environment-sensitive latency threshold.
+func TestBPMNAssignmentListHistoryScale(t *testing.T) {
+	for _, bound := range []bool{false, true} {
+		t.Run(strconv.FormatBool(bound), func(t *testing.T) {
+			f := newBPMNAuthorizationFixture(t)
+			_, original := seedBoundAssignment(t, f, "scale")
+			if !bound {
+				f.client.ProcessTask.DeleteOne(original).ExecX(f.userCtx)
+			}
+			count := 1000
+			if bound {
+				count = 100
+			}
+			creates := make([]*ent.ProcessTaskCreate, 0, count)
+			for i := 0; i < count; i++ {
+				create := f.client.ProcessTask.Create().SetTenantID(f.tenant.ID).SetTaskID("scale-" + strconv.Itoa(i)).SetProcessInstanceID(original.ProcessInstanceID).SetProcessDefinitionKey(f.definition.Key).SetTaskDefinitionKey("fulfill").SetTaskName("Scale").SetStatus("created")
+				if bound {
+					create.SetAssigneeSource("work_item_assignee")
+				}
+				creates = append(creates, create)
+			}
+			f.client.ProcessTask.CreateBulk(creates...).SaveX(f.userCtx)
+			if bound {
+				count++
+			}
+			grantBoundPermissions(t, f, f.actor, "task", "read", "service_request", "read")
+			queries, materialized := 0, 0
+			f.client.Intercept(ent.InterceptFunc(func(next ent.Querier) ent.Querier {
+				return ent.QuerierFunc(func(ctx context.Context, q ent.Query) (ent.Value, error) {
+					queries++
+					value, err := next.Query(ctx, q)
+					if rows, ok := value.([]*ent.ProcessTask); ok {
+						materialized += len(rows)
+					}
+					return value, err
+				})
+			}))
+			started := time.Now()
+			rows, total, err := f.engine.TaskService().ListUserTasks(WithBPMNAccessScope(f.userCtx, BPMNAccessScope{UserID: f.actor.ID, TenantID: f.tenant.ID, CanReadAllTasks: true}), &ListUserTasksRequest{Page: 1, PageSize: 10})
+			require.NoError(t, err)
+			require.Equal(t, count, total)
+			require.Len(t, rows, 10)
+			if bound {
+				require.LessOrEqual(t, queries, count*7+4, "one assignment projection per authorized task")
+			}
+			t.Logf("bound=%v history=%d page=%d materialized=%d queries=%d elapsed=%s", bound, count, len(rows), materialized, queries, time.Since(started))
+		})
+	}
 }

@@ -37,6 +37,7 @@ type Command struct {
 	Reason          string `json:"reason"`
 }
 type Event struct {
+	RecordClass        string  `json:"recordClass"`
 	Command            Command `json:"command"`
 	PreviousAssigneeID int     `json:"previousAssigneeId"`
 	Version            int     `json:"version"`
@@ -142,10 +143,10 @@ func (w *Writer) Apply(ctx context.Context, client *ent.Client, cmd Command) (*e
 	if count != 1 {
 		return nil, ErrVersionConflict
 	}
-	event := Event{Command: cmd, PreviousAssigneeID: item.AssigneeID, Version: item.Version + 1, EventID: EventID(cmd.TenantID, item.ID, item.Version+1)}
+	event := Event{RecordClass: item.RecordClass, Command: cmd, PreviousAssigneeID: item.AssigneeID, Version: item.Version + 1, EventID: EventID(cmd.TenantID, item.ID, item.Version+1)}
 	err = client.TicketWorkflowRecord.Create().SetTenantID(cmd.TenantID).SetTicketID(item.ID).SetAction("assign").SetOperatorID(cmd.ActorID).
 		SetFromUserID(item.AssigneeID).SetToUserID(cmd.AssigneeID).SetReason(cmd.Reason).
-		SetMetadata(map[string]any{"source": cmd.Source, "actorTenantId": cmd.ActorTenantID, "eventId": event.EventID, "version": event.Version, "previousAssigneeId": item.AssigneeID, "assigneeId": cmd.AssigneeID, "affectedTaskIds": taskIDs}).Exec(ctx)
+		SetMetadata(map[string]any{"recordClass": item.RecordClass, "source": cmd.Source, "actorTenantId": cmd.ActorTenantID, "eventId": event.EventID, "version": event.Version, "previousAssigneeId": item.AssigneeID, "assigneeId": cmd.AssigneeID, "affectedTaskIds": taskIDs}).Exec(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("assignment audit: %w", err)
 	}

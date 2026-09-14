@@ -285,6 +285,7 @@ func TestPostgresWorkItemAssignmentAtomicAndIdempotent(t *testing.T) {
 	writer := workitemassignment.NewWriter(service.EnqueueWorkItemAssignment, assignmentTestActor)
 	tx, err := client.Tx(ctx)
 	require.NoError(t, err)
+	defer tx.Rollback()
 	item, err := writer.Apply(ctx, tx.Client(), cmd)
 	require.NoError(t, err)
 	require.Equal(t, cmd.AssigneeID, item.AssigneeID)
@@ -296,6 +297,10 @@ func TestPostgresWorkItemAssignmentAtomicAndIdempotent(t *testing.T) {
 	event := tx.OutboxEvent.Query().OnlyX(ctx)
 	require.Equal(t, "pending", event.Status)
 	require.Equal(t, "work_item.assigned", event.EventType)
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(event.Payload, &payload))
+	require.Equal(t, item.RecordClass, payload["recordClass"])
+	require.Equal(t, item.RecordClass, audit.Metadata["recordClass"])
 	cmd.ExpectedVersion = item.Version
 	_, err = writer.Apply(ctx, tx.Client(), cmd)
 	require.NoError(t, err)
@@ -386,4 +391,31 @@ func TestPostgresWorkItemAssignmentRejectsInvalidIdentitiesAndStaleVersion(t *te
 			require.Zero(t, tx.TicketWorkflowRecord.Query().CountX(ctx))
 		})
 	}
+}
+
+func TestPostgresWorkItemAssignmentEventRecordClassMatchesImmutableAudit(t *testing.T) {
+	client, cmd := assignmentFixture(t)
+	ctx := context.Background()
+	client.NotificationPreference.Create().SetTenantID(cmd.TenantID).SetUserID(cmd.AssigneeID).SetEventType("ticket_assigned").SetInAppEnabled(true).SetEmailEnabled(false).SetSmsEnabled(false).SetPushEnabled(false).SaveX(ctx)
+	tx, err := client.Tx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback()
+	_, err = workitemassignment.NewWriter(service.EnqueueWorkItemAssignment, assignmentTestActor).Apply(ctx, tx.Client(), cmd)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+	event := client.OutboxEvent.Query().OnlyX(ctx)
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(event.Payload, &payload))
+	require.Equal(t, "generic", payload["recordClass"])
+	payload["recordClass"] = "incident"
+	forged := *event
+	forged.Payload, err = json.Marshal(payload)
+	require.NoError(t, err)
+	notifications := service.NewTicketNotificationService(client, zap.NewNop().Sugar())
+	notifications.SetAssignmentDirectory(sameTransactionDirectory{})
+	err = service.NewWorkItemAssignmentNotificationHandler(client, notifications).Deliver(ctx, &forged)
+	require.ErrorContains(t, err, "assignment audit mismatch")
+	require.Zero(t, client.Notification.Query().CountX(ctx))
+	require.Zero(t, client.TicketNotification.Query().CountX(ctx))
+	require.True(t, client.OutboxEvent.GetX(ctx, event.ID).PublishedAt.IsZero())
 }

@@ -34,7 +34,7 @@ func TestRunPostSchemaMigrationsAppliesVersion007(t *testing.T) {
 
 	require.NoError(t, err)
 	require.True(t, runner.ensured)
-	require.Len(t, runner.migrations, 24)
+	require.Len(t, runner.migrations, 25)
 	require.Equal(t, "007_add_change_execution_tables", runner.migrations[0].Version)
 	require.Equal(t, "008_add_initialization_ledger", runner.migrations[1].Version)
 	require.Equal(t, "009_enable_rls_tenant_isolation", runner.migrations[2].Version)
@@ -59,6 +59,7 @@ func TestRunPostSchemaMigrationsAppliesVersion007(t *testing.T) {
 	require.Equal(t, "029_catalog_target_class_authority", runner.migrations[21].Version)
 	require.Equal(t, "030_catalog_access_policy_result", runner.migrations[22].Version)
 	require.Equal(t, "031_kaf_action_request_digest", runner.migrations[23].Version)
+	require.Equal(t, "032_bpmn_assignment_source", runner.migrations[24].Version)
 }
 
 func TestRunPostSchemaMigrationsFailsClosed(t *testing.T) {
