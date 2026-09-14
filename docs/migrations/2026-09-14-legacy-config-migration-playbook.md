@@ -84,6 +84,7 @@
 | `docs/review/2026-09-14-b0-seed-admission-evidence.md` | B0 执行证据（计数/完整性/幂等/不变量） |
 | `docs/review/2026-09-14-process-init-evidence.md` | 规范流程初始化批次执行证据（20 模板 + 7 绑定） |
 | `docs/review/2026-09-14-b1-landing-evidence.md` | B1 分类/资产落位证据 + 旧 ctiId→目标 CI 映射 |
+| `docs/review/2026-09-14-b2-dictionary-landing-evidence.md` | B2 字典选项落地证据（追加/归并/排除） |
 | `docs/review/2026-09-14-workitem-config-migration-handoff.md` | G-B 交接（消费固定 GARevision） |
 
 ## 7. 决策日志
@@ -103,6 +104,7 @@
 | S9 | **B0 已执行**：`generate_seed_sql.py` 生成幂等 SQL，备份+回滚预演+单事务写入 `itsm_ga_ready`（租户 1）；结果 分类182/模板10/字段59/SLA7/目录8/CI9/标准变更3/KE1(占位)/标签4/视图5；幂等复跑 0 新增；Phase 1 不变量与账本不变 | 用户授权 + 实测 |
 | S10 | **流程初始化批次已执行**：`generate_process_sql.py` 复刻 `deployTemplate`，部署 20 个内嵌模板（源=候选工作区 bpmn，经逐字节校验与制品一致）+ 7 条 `process_bindings`；悬空绑定 0、坏 XML 0、幂等复跑 0 新增 | 用户确认 + 实测 |
 | S11 | **B1 分类/资产落位已执行**：46 个叶子（43 业务系统 + 3 基础设施）建 CMDB CI（legacy id 存 `attributes`），新建 3 分类 `COL-MAIL-004`/`ACC-LCM-003`/`APP-GEN-SVC-001`；7 容器不建 CI、17 地点归 Phase 1、4 排除；幂等复跑 0 新增。含过程修正（名称尾部竖线已纠正并加回归测试） | 用户确认 + 实测 |
+| S12 | **B2 字典选项落地已执行**：追加 25 个选项（`target_system` 9→16 ×3 模板；`service_type` 6→8；`operation` 5→7）；归并/排除仅登记不写；jsonb 包含性守卫，幂等复跑 0 新增 | 用户确认 + 实测 |
 
 ## 7.1 删除/排除登记（不得在后续批次再纳入）
 
