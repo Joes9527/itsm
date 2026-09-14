@@ -44,6 +44,9 @@ func (e *CustomProcessEngine) TerminateProcessTx(ctx context.Context, tx *ent.Tx
 	if err != nil {
 		return err
 	}
+	if err := requireBPMNExecution(ctx, tx, e.execution, instance.TenantID, instance.ExecutionWorkItemID); err != nil {
+		return err
+	}
 	if err := ValidateBPMNProcessLifecycle(BPMNProcessCommandTerminate, instance.Status); err != nil {
 		return err
 	}

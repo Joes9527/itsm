@@ -55,6 +55,7 @@ import (
 	"itsm-backend/ent/kaftaskcompletionreceipt"
 	"itsm-backend/ent/marketplaceitem"
 	"itsm-backend/ent/outboxevent"
+	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processcallbackoutbox"
 	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/servicerequestaccesssnapshot"
@@ -375,6 +376,145 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		standardFixtureClient = ent.NewClient(ent.Driver(entsql.OpenDB("postgres", db)))
 		return standardFixtureClient
 	}
+
+	t.Run("candidate task commands preserve history", func(t *testing.T) {
+		engine := service.NewCustomProcessEngine(runtime, zap.NewNop().Sugar(), policy).(*service.CustomProcessEngine)
+		engine.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
+		actionCtx := service.WithBPMNAccessScope(ctx, service.BPMNAccessScope{
+			UserID: actor.ID, TenantID: tenant.ID, CanReadAllTasks: true, CanUpdateAllTasks: true,
+		})
+		for _, kind := range []string{"independent", "historical", "member"} {
+			for _, action := range []string{"claim", "variables", "cancel", "complete"} {
+				t.Run(kind+"/"+action, func(t *testing.T) {
+					key := "candidate-task-" + kind + "-" + action
+					deployment := owner.ProcessDeployment.Create().SetDeploymentID(key).SetDeploymentName(key).SetTenantID(tenant.ID).SaveX(ctx)
+					xml := `<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="local-test"><bpmn:process id="local" isExecutable="true"><bpmn:startEvent id="Start"/><bpmn:userTask id="Current"/><bpmn:endEvent id="End"/><bpmn:sequenceFlow id="S1" sourceRef="Start" targetRef="Current"/><bpmn:sequenceFlow id="S2" sourceRef="Current" targetRef="End"/></bpmn:process></bpmn:definitions>`
+					definition := owner.ProcessDefinition.Create().SetKey(key).SetName(key).SetBpmnXML([]byte(xml)).SetDeploymentID(deployment.ID).SetTenantID(tenant.ID).SaveX(ctx)
+					builder := owner.ProcessInstance.Create().SetProcessInstanceID(key).SetProcessDefinitionKey(key).SetProcessDefinitionID(definition.ID).SetTenantID(tenant.ID).SetInitiator(strconv.Itoa(actor.ID)).SetCurrentActivityID("Current").SetCurrentActivityName("Waiting").SetStatus("running")
+					if kind == "historical" {
+						builder.SetExecutionWorkItemID(historical.WorkItemID)
+					}
+					if kind == "member" {
+						fresh, err := app.Create(ctx, identity, command(key, "generic"))
+						require.NoError(t, err)
+						builder.SetExecutionWorkItemID(fresh.WorkItemID)
+					}
+					instance := builder.SaveX(ctx)
+					taskBuilder := owner.ProcessTask.Create().SetTaskID(key).SetProcessInstanceID(instance.ID).SetProcessDefinitionKey(key).SetTaskDefinitionKey("Current").SetTaskName("Waiting").SetTaskType("userTask").SetTenantID(tenant.ID).SetStatus("assigned").SetAssignee(strconv.Itoa(actor.ID))
+					if action == "claim" {
+						taskBuilder.SetStatus("created").SetAssignee("")
+					}
+					task := taskBuilder.SaveX(ctx)
+					before := snapshotCandidateTables(t, ctx, ownerDB)
+					var mutationErr error
+					switch action {
+					case "claim":
+						mutationErr = engine.TaskService().ClaimTask(actionCtx, key, strconv.Itoa(actor.ID))
+					case "variables":
+						mutationErr = engine.TaskService().SetTaskVariables(actionCtx, key, map[string]interface{}{"local_note": "admitted"})
+					case "cancel":
+						mutationErr = engine.TaskService().CancelTask(actionCtx, key, "private candidate test")
+					case "complete":
+						mutationErr = engine.CompleteTask(actionCtx, key, nil)
+					}
+					if kind != "member" {
+						require.ErrorIs(t, mutationErr, executionscope.ErrDenied)
+						require.Equal(t, before, snapshotCandidateTables(t, ctx, ownerDB))
+						return
+					}
+					require.NoError(t, mutationErr)
+					after := owner.ProcessTask.GetX(ctx, task.ID)
+					require.Equal(t, task.AggregationVersion+1, after.AggregationVersion)
+				})
+			}
+		}
+	})
+
+	t.Run("candidate process start requires original transaction membership", func(t *testing.T) {
+		engine := service.NewCustomProcessEngine(runtime, zap.NewNop().Sugar(), policy).(*service.CustomProcessEngine)
+		engine.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
+		actionCtx := service.WithBPMNAccessScope(ctx, service.BPMNAccessScope{
+			UserID: actor.ID, TenantID: tenant.ID, CanReadAllInstances: true, CanUpdateAllInstances: true,
+		})
+		for _, kind := range []string{"historical", "member"} {
+			t.Run(kind, func(t *testing.T) {
+				key := "candidate-start-" + kind
+				var itemID int
+				if kind == "historical" {
+					itemID = legacyManualItem.WorkItemID
+				} else {
+					fresh, err := app.Create(ctx, identity, command(key, "generic"))
+					require.NoError(t, err)
+					itemID = fresh.WorkItemID
+				}
+				deployment := owner.ProcessDeployment.Create().SetDeploymentID(key).SetDeploymentName(key).SetTenantID(tenant.ID).SaveX(ctx)
+				definition := owner.ProcessDefinition.Create().SetKey(key).SetName(key).SetBpmnXML([]byte(`<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="local-test"><bpmn:process id="local" isExecutable="true"><bpmn:startEvent id="Start"/><bpmn:endEvent id="End"/><bpmn:sequenceFlow id="Flow" sourceRef="Start" targetRef="End"/></bpmn:process></bpmn:definitions>`)).SetDeploymentID(deployment.ID).SetTenantID(tenant.ID).SetIsActive(true).SetIsLatest(true).SaveX(ctx)
+				before := snapshotCandidateTables(t, ctx, ownerDB)
+				instance, startErr := engine.StartProcess(actionCtx, definition.Key, fmt.Sprintf("generic:%d", itemID), "generic", itemID, nil)
+				if kind == "historical" {
+					require.ErrorIs(t, startErr, executionscope.ErrDenied)
+					require.Nil(t, instance)
+					require.Equal(t, before, snapshotCandidateTables(t, ctx, ownerDB))
+					return
+				}
+				require.NoError(t, startErr)
+				require.NotNil(t, instance)
+				require.NotNil(t, instance.ExecutionWorkItemID)
+				require.Equal(t, itemID, *instance.ExecutionWorkItemID)
+			})
+		}
+	})
+
+	t.Run("candidate process instance management preserves history", func(t *testing.T) {
+		engine := service.NewCustomProcessEngine(runtime, zap.NewNop().Sugar(), policy).(*service.CustomProcessEngine)
+		engine.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
+		actionCtx := service.WithBPMNAccessScope(ctx, service.BPMNAccessScope{
+			UserID: actor.ID, TenantID: tenant.ID, CanReadAllInstances: true, CanUpdateAllInstances: true,
+		})
+		for _, kind := range []string{"independent", "historical", "member"} {
+			for _, action := range []string{"suspend", "resume", "terminate", "variables"} {
+				t.Run(kind+"/"+action, func(t *testing.T) {
+					key := "candidate-instance-" + kind + "-" + action
+					deployment := owner.ProcessDeployment.Create().SetDeploymentID(key).SetDeploymentName(key).SetTenantID(tenant.ID).SaveX(ctx)
+					definition := owner.ProcessDefinition.Create().SetKey(key).SetName(key).SetBpmnXML([]byte("<definitions/>")).SetDeploymentID(deployment.ID).SetTenantID(tenant.ID).SaveX(ctx)
+					builder := owner.ProcessInstance.Create().SetProcessInstanceID(key).SetProcessDefinitionKey(key).SetProcessDefinitionID(definition.ID).SetTenantID(tenant.ID).SetInitiator(strconv.Itoa(actor.ID)).SetCurrentActivityID("waiting-task").SetCurrentActivityName("Waiting").SetStatus("running")
+					if kind == "historical" {
+						builder.SetExecutionWorkItemID(historical.WorkItemID)
+					}
+					if kind == "member" {
+						fresh, err := app.Create(ctx, identity, command(key, "generic"))
+						require.NoError(t, err)
+						builder.SetExecutionWorkItemID(fresh.WorkItemID)
+					}
+					if action == "resume" {
+						builder.SetStatus("suspended")
+					}
+					instance := builder.SaveX(ctx)
+					before := snapshotCandidateTables(t, ctx, ownerDB)
+					var mutationErr error
+					switch action {
+					case "suspend":
+						mutationErr = engine.SuspendProcess(actionCtx, key, "private candidate test")
+					case "resume":
+						mutationErr = engine.ResumeProcess(actionCtx, key)
+					case "terminate":
+						mutationErr = engine.TerminateProcess(actionCtx, key, "private candidate test")
+					case "variables":
+						mutationErr = engine.ProcessInstanceService().SetProcessInstanceVariables(actionCtx, key, map[string]interface{}{"local_note": "admitted"})
+					}
+					if kind != "member" {
+						require.ErrorIs(t, mutationErr, executionscope.ErrDenied)
+						require.Equal(t, before, snapshotCandidateTables(t, ctx, ownerDB), "rejection must preserve complete SQL rows, including queue and audit payloads")
+						return
+					}
+					require.NoError(t, mutationErr)
+					after := owner.ProcessInstance.GetX(ctx, instance.ID)
+					require.Equal(t, instance.Version+1, after.Version)
+					require.Equal(t, 1, owner.ProcessAuditLog.Query().Where(processauditlog.ProcessInstanceID(instance.ID)).CountX(ctx))
+				})
+			}
+		}
+	})
 
 	t.Run("Incident email uses restricted candidate roles", func(t *testing.T) {
 		for _, transport := range []string{"smtp", "graph"} {

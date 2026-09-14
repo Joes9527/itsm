@@ -8,6 +8,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/processauditlog"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -61,6 +62,7 @@ func setupInstanceVariablesFixture(t *testing.T) (*ent.Client, *bpmnProcessInsta
 
 	logger := zaptest.NewLogger(t).Sugar()
 	svc := &bpmnProcessInstanceService{
+		execution:    executionfixture.Standard(),
 		client:       client,
 		logger:       logger,
 		auditService: NewBPMNAuditService(client, logger),

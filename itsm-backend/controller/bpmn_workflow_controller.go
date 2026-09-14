@@ -11,6 +11,7 @@ import (
 
 	"itsm-backend/authorization"
 	"itsm-backend/common"
+	"itsm-backend/common/executionscope"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/middleware"
@@ -76,6 +77,8 @@ func respondBPMNError(ctx *gin.Context, err error, fallback string) {
 	errorClass := "internal"
 	if errors.As(err, &appErr) {
 		errorClass = string(appErr.Code)
+	} else if errors.Is(err, executionscope.ErrDenied) {
+		errorClass = string(common.ErrCodeForbidden)
 	} else if ent.IsNotFound(err) {
 		errorClass = "not_found"
 	}
@@ -85,6 +88,10 @@ func respondBPMNError(ctx *gin.Context, err error, fallback string) {
 		"request_id", ctx.GetString("request_id"),
 	)
 
+	if errors.Is(err, executionscope.ErrDenied) {
+		common.Forbidden(ctx, "无权执行此流程操作")
+		return
+	}
 	if errors.As(err, &appErr) {
 		switch appErr.Code {
 		case common.ErrCodeForbidden:

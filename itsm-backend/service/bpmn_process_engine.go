@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"itsm-backend/common"
+	"itsm-backend/common/executionscope"
 	"itsm-backend/common/workitemidentity"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -165,7 +166,7 @@ func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger, execu
 	engine.auditService.instanceAccessPolicy = instanceAccessPolicy
 	engine.callbackOutbox = &bpmnCallbackOutbox{client: client, executor: engine, execution: execution}
 	engine.processDefinitionService = &bpmnProcessDefinitionService{client: client, logger: logger}
-	engine.processInstanceService = &bpmnProcessInstanceService{client: client, logger: logger, instanceAccessPolicy: instanceAccessPolicy, auditService: engine.auditService}
+	engine.processInstanceService = &bpmnProcessInstanceService{execution: execution, client: client, logger: logger, instanceAccessPolicy: instanceAccessPolicy, auditService: engine.auditService}
 	// taskService 持有 engine 自身的引用（而不是每次调用再 NewCustomProcessEngine 造一个新的）：
 	// callbackRegistry 是 engine 级别的状态，bootstrap 在各领域 service 构造完成后往
 	// 这一个 engine 的 registry 里注入 TicketService/IncidentService。任务完成路径若临时
@@ -244,6 +245,7 @@ func (e *CustomProcessEngine) ProcessDefinitionService() ProcessDefinitionServic
 // ProcessInstanceService 返回流程实例服务
 func (e *CustomProcessEngine) ProcessInstanceService() ProcessInstanceService {
 	return &bpmnProcessInstanceService{
+		execution:            e.execution,
 		client:               e.client,
 		logger:               e.logger,
 		instanceAccessPolicy: e.instanceAccessPolicy,
@@ -382,6 +384,17 @@ func (e *CustomProcessEngine) startProcessWithClient(ctx context.Context, proces
 
 // startResolvedProcess shares the atomic engine path for resolved and key-based starts.
 func (e *CustomProcessEngine) startResolvedProcess(ctx context.Context, definition *ent.ProcessDefinition, businessKey, businessType string, businessID int, variables map[string]interface{}, instanceIdentity, startDigest string) (*ent.ProcessInstance, error) {
+	// The immutable execution reference must be admitted in the owning start
+	// transaction, before creating an instance, initial tasks, or audit records.
+	if e.execution.IsCandidate() {
+		var workItemID *int
+		if workitemidentity.IsRecordClass(businessType) {
+			workItemID = &businessID
+		}
+		if err := requireBPMNExecution(ctx, e.owningTx, e.execution, definition.TenantID, workItemID); err != nil {
+			return nil, err
+		}
+	}
 	if err := validateWorkItemStartTiming(ctx, e.client, businessKey, businessType, definition.TenantID, businessID, variables); err != nil {
 		return nil, err
 	}
@@ -699,6 +712,7 @@ func (e *CustomProcessEngine) forClient(client *ent.Client, executionKeys *[]str
 	clone.callbackExecutionKeys = executionKeys
 	clone.transactionBound = true
 	clone.processInstanceService = &bpmnProcessInstanceService{
+		execution:            clone.execution,
 		client:               client,
 		logger:               clone.logger,
 		instanceAccessPolicy: clone.instanceAccessPolicy,
@@ -896,6 +910,20 @@ func (e *CustomProcessEngine) authorizeTaskActorWithClient(ctx context.Context, 
 }
 
 func (e *CustomProcessEngine) authorizeTaskCommandActorWithClient(ctx context.Context, client *ent.Client, task *ent.ProcessTask, command BPMNTaskCommand) error {
+	if e.execution.IsCandidate() {
+		if task == nil || e.owningTx == nil {
+			return executionscope.ErrDenied
+		}
+		instance, err := e.owningTx.ProcessInstance.Query().Where(
+			processinstance.ID(task.ProcessInstanceID), processinstance.TenantID(task.TenantID),
+		).Only(ctx)
+		if err != nil {
+			return err
+		}
+		if err := requireBPMNExecution(ctx, e.owningTx, e.execution, instance.TenantID, instance.ExecutionWorkItemID); err != nil {
+			return err
+		}
+	}
 	if command == BPMNTaskCommandComplete {
 		if internal, err := authorizeInternalCascadeTask(ctx, client, task); internal {
 			return err
@@ -2472,6 +2500,9 @@ func (e *CustomProcessEngine) SuspendProcess(ctx context.Context, processInstanc
 	if err != nil {
 		return err
 	}
+	if err := requireBPMNExecution(ctx, tx, e.execution, instance.TenantID, instance.ExecutionWorkItemID); err != nil {
+		return err
+	}
 	if err := ValidateBPMNProcessLifecycle(BPMNProcessCommandSuspend, instance.Status); err != nil {
 		return err
 	}
@@ -2535,6 +2566,9 @@ func (e *CustomProcessEngine) ResumeProcess(ctx context.Context, processInstance
 	txEngine := e.forClient(tx.Client(), nil, tx)
 	instance, err := txEngine.instanceAccessPolicy.loadForUpdate(ctx, processInstanceID)
 	if err != nil {
+		return err
+	}
+	if err := requireBPMNExecution(ctx, tx, e.execution, instance.TenantID, instance.ExecutionWorkItemID); err != nil {
 		return err
 	}
 	if err := ValidateBPMNProcessLifecycle(BPMNProcessCommandResume, instance.Status); err != nil {
@@ -3000,6 +3034,7 @@ func (s *bpmnProcessDefinitionService) SetProcessDefinitionActive(ctx context.Co
 }
 
 type bpmnProcessInstanceService struct {
+	execution            *database.ExecutionPolicy
 	client               *ent.Client
 	logger               *zap.SugaredLogger
 	instanceAccessPolicy *bpmnInstanceAccessPolicy
@@ -3102,6 +3137,9 @@ func (s *bpmnProcessInstanceService) SetProcessInstanceVariables(ctx context.Con
 	defer func() { _ = tx.Rollback() }()
 	instance, err := s.accessPolicy().forClient(tx.Client()).loadForUpdate(ctx, processInstanceID)
 	if err != nil {
+		return err
+	}
+	if err := requireBPMNExecution(ctx, tx, s.execution, instance.TenantID, instance.ExecutionWorkItemID); err != nil {
 		return err
 	}
 	if err := ValidateBPMNProcessLifecycle(BPMNProcessCommandSetVariables, instance.Status); err != nil {
