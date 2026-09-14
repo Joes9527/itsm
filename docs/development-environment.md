@@ -119,3 +119,11 @@ KAF 开发目前有意共用 acp MinIO（9000）；不能据此声称 CI 与开�
 完整逐步回滚记录位于本机 `/mnt/c/Users/Administrator/Documents/Codex/2026-09-08/kaf-itms-wsl/outputs/repository-migration.md`。回滚前先保全迁移后新增工作并停止应用，恢复旧注册及运行 `.git` 指针、退出新注册，核对 HEAD/common dir/工作区后按原配置启动。不能只执行一次 `worktree repair` 就认定跨仓库关联迁移或回滚完成。
 
 后续正常开发使用各自功能分支/worktree；源码编辑不会自动更新固定运行副本。版本升级、依赖安装、数据库迁移和真实业务验收分别规划，不与目录整理混做。
+
+
+### 2026-09-14 任务二审查修复增量
+
+- 当前根任务新增 `gb-remediation-test-pg-20260914` 内部测试实例，三个库分别是 `gb_review_test`（SQL 语义测试）、`gb_replay_review`（真实备份五批重放）、`gb_ticket_types_test`（产品类型初始化测试）。**都不是业务应用连接目标**，见数据库总清单。
+- ITSM 工具修复 `7c8cee6fae181400573308bfb7e73043d11ed0b9` 与 KAF 工具修复 `e6fd8a50368a15505c98c8826dee5af975cef5c2` 独立复审通过；G-B 仍 BLOCKED，不能据工具测试切换连接。
+- 首期范围：单租户功能收口；旧路由后续处理，使用现有分派及规范流程；不迁历史工单。SLA 日历已修复并准备新配置，但七个现有流程绑定没有 SLA ID，实际新建计时接线尚需完成。
+- 运行时集成工作树 `config-launch-integration` 尚在开发，未替代 G-A 固定运行时，未启动候选应用。
