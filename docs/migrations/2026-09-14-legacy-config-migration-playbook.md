@@ -85,6 +85,7 @@
 | `docs/review/2026-09-14-process-init-evidence.md` | 规范流程初始化批次执行证据（20 模板 + 7 绑定） |
 | `docs/review/2026-09-14-b1-landing-evidence.md` | B1 分类/资产落位证据 + 旧 ctiId→目标 CI 映射 |
 | `docs/review/2026-09-14-b2-dictionary-landing-evidence.md` | B2 字典选项落地证据（追加/归并/排除） |
+| `docs/review/2026-09-14-b4-sla-calendar-evidence.md` | B4 SLA 日历证据 + 能力差额（时区/午休/补班） |
 | `docs/review/2026-09-14-workitem-config-migration-handoff.md` | G-B 交接（消费固定 GARevision） |
 
 ## 7. 决策日志
@@ -105,6 +106,7 @@
 | S10 | **流程初始化批次已执行**：`generate_process_sql.py` 复刻 `deployTemplate`，部署 20 个内嵌模板（源=候选工作区 bpmn，经逐字节校验与制品一致）+ 7 条 `process_bindings`；悬空绑定 0、坏 XML 0、幂等复跑 0 新增 | 用户确认 + 实测 |
 | S11 | **B1 分类/资产落位已执行**：46 个叶子（43 业务系统 + 3 基础设施）建 CMDB CI（legacy id 存 `attributes`），新建 3 分类 `COL-MAIL-004`/`ACC-LCM-003`/`APP-GEN-SVC-001`；7 容器不建 CI、17 地点归 Phase 1、4 排除；幂等复跑 0 新增。含过程修正（名称尾部竖线已纠正并加回归测试） | 用户确认 + 实测 |
 | S12 | **B2 字典选项落地已执行**：追加 25 个选项（`target_system` 9→16 ×3 模板；`service_type` 6→8；`operation` 5→7）；归并/排除仅登记不写；jsonb 包含性守卫，幂等复跑 0 新增 | 用户确认 + 实测 |
+| S13 | **B4 SLA 日历已写入**：7 条 `sla_definitions.business_hours` = 周一至五 **09:00–18:00** + 89 假日（2024=28/2025=28/2026=33）+ `Asia/Shanghai`；19 补班日单独登记。**截止计算验收 BLOCKED**：时区不消费、午休/补班不可表达（G7） | 用户确认 + 实测 |
 
 ## 7.1 删除/排除登记（不得在后续批次再纳入）
 
