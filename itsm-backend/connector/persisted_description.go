@@ -33,6 +33,9 @@ func (m *Manager) DescribePersistedDeliveryTarget(ctx context.Context, ref execu
 	if err != nil {
 		return "", fmt.Errorf("read connector configuration: %w", err)
 	}
+	if len(rows) == 0 {
+		return "", fmt.Errorf("%w: %w", executionscope.ErrDenied, executionscope.ErrTargetNotConfigured)
+	}
 	if len(rows) != 1 || rows[0].Provider != provider {
 		return "", executionscope.ErrDenied
 	}

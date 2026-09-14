@@ -67,8 +67,11 @@ func (p *ExecutionPolicy) DeclaredConnectorTarget(ctx context.Context, ref execu
 		return config.ConnectorTargetConfig{}, fmt.Errorf("connector declarations unavailable")
 	}
 	for _, target := range targets {
-		if target.TenantID != ref.TenantID || target.ScopeID != ref.ScopeID || target.Name != name || target.Provider != provider {
+		if target.TenantID != ref.TenantID || target.ScopeID != ref.ScopeID || target.Name != name {
 			continue
+		}
+		if target.Provider != provider {
+			return config.ConnectorTargetConfig{}, executionscope.ErrDenied
 		}
 		for _, declared := range target.Capabilities {
 			if declared == capability {
@@ -76,5 +79,5 @@ func (p *ExecutionPolicy) DeclaredConnectorTarget(ctx context.Context, ref execu
 			}
 		}
 	}
-	return config.ConnectorTargetConfig{}, executionscope.ErrDenied
+	return config.ConnectorTargetConfig{}, fmt.Errorf("%w: %w", executionscope.ErrDenied, executionscope.ErrTargetNotConfigured)
 }

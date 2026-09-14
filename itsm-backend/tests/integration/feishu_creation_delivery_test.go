@@ -7,10 +7,12 @@ import (
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/outboxevent"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -31,7 +33,7 @@ type creationFeishuConnector struct {
 }
 
 func (*creationFeishuConnector) Manifest() connector.Manifest {
-	return connector.Manifest{Name: "feishu", Version: "1", Type: connector.TypeIM, RequiredPermissions: []string{"connector:write", "ticket:write"}}
+	return connector.Manifest{Name: "feishu", Provider: "feishu", Version: "1", Type: connector.TypeIM, RequiredPermissions: []string{"connector:write", "ticket:write"}}
 }
 func (*creationFeishuConnector) Init(context.Context, connector.Config) error   { return nil }
 func (*creationFeishuConnector) Send(context.Context, *connector.Message) error { return nil }
@@ -43,7 +45,24 @@ func (f *creationFeishuConnector) TaskDestinationIdentity() string {
 	if f.destination != "" {
 		return f.destination
 	}
-	return "configured-feishu-app"
+	return strings.Repeat("a", 64)
+}
+func (f *creationFeishuConnector) DescribeDeliveryDestination(connector.Config) (string, error) {
+	return f.TaskDestinationIdentity(), nil
+}
+func persistCreationFeishuConfig(t *testing.T, client *ent.Client, cfg connector.Config) {
+	t.Helper()
+	// This fixture exercises Feishu delivery; email transport has separate contracts.
+	for _, actor := range client.User.Query().AllX(context.Background()) {
+		for _, eventType := range []string{"ticket_created", "ticket_updated"} {
+			client.NotificationPreference.Create().SetTenantID(actor.TenantID).SetUserID(actor.ID).SetEventType(eventType).SetEmailEnabled(false).SetSmsEnabled(false).SetPushEnabled(false).SetInAppEnabled(true).SaveX(context.Background())
+		}
+	}
+	settings, err := json.Marshal(cfg.Settings)
+	require.NoError(t, err)
+	credentials, err := json.Marshal(cfg.Credentials)
+	require.NoError(t, err)
+	client.ConnectorConfig.Create().SetTenantID(cfg.TenantID).SetName(cfg.Name).SetProvider("feishu").SetEnabled(true).SetSettings(string(settings)).SetCredentials(string(credentials)).SaveX(context.Background())
 }
 func (f *creationFeishuConnector) CreateTask(_ context.Context, task *feishu.FeishuTask) (*feishu.FeishuTask, error) {
 	f.calls++
@@ -63,10 +82,12 @@ func TestIntakeGenericFeishuIntentFreezesAndDeliversOwningMapping(t *testing.T) 
 		manager := connector.NewManager(registry, logger, executionfixture.Standard())
 		t.Cleanup(manager.CloseAll)
 		tenant := client.Tenant.Query().OnlyX(context.Background())
-		require.NoError(t, manager.Provision(tenantctx.WithTenantID(context.Background(), tenant.ID), connector.Config{TenantID: tenant.ID, Name: "feishu", Type: connector.TypeIM, Enabled: true}))
+		cfg := connector.Config{TenantID: tenant.ID, Name: "feishu", Provider: "feishu", Type: connector.TypeIM, Enabled: true}
+		persistCreationFeishuConfig(t, client, cfg)
+		require.NoError(t, manager.Provision(tenantctx.WithTenantID(context.Background(), tenant.ID), cfg))
 		return configuredCreationTicketOwnerWithConnector(client, logger, manager)
 	})
-	ctx := context.Background()
+	ctx := tenantctx.WithTenantID(context.Background(), fixture.identity.TenantID)
 	result, err := fixture.app.Create(ctx, fixture.identity, fixture.command)
 	require.NoError(t, err)
 	require.Zero(t, fake.calls)
@@ -93,6 +114,7 @@ func TestIntakeGenericFeishuIntentFreezesAndDeliversOwningMapping(t *testing.T) 
 func TestFeishuManualAndAutomaticSyncShareCreationIntent(t *testing.T) {
 	fixture := newUnifiedIntakeFixture(t)
 	ctx := context.Background()
+	ctx = tenantctx.WithTenantID(ctx, fixture.identity.TenantID)
 	item, err := fixture.app.Create(ctx, fixture.identity, fixture.command)
 	require.NoError(t, err)
 	calls := 0
@@ -133,10 +155,12 @@ func TestFeishuManualSyncKeepsGovernedIntentAndCurrentAuthority(t *testing.T) {
 		manager := connector.NewManager(registry, logger, executionfixture.Standard())
 		t.Cleanup(manager.CloseAll)
 		tenant := client.Tenant.Query().OnlyX(context.Background())
-		require.NoError(t, manager.Provision(tenantctx.WithTenantID(context.Background(), tenant.ID), connector.Config{TenantID: tenant.ID, Name: "feishu", Type: connector.TypeIM, Enabled: true}))
+		cfg := connector.Config{TenantID: tenant.ID, Name: "feishu", Provider: "feishu", Type: connector.TypeIM, Enabled: true}
+		persistCreationFeishuConfig(t, client, cfg)
+		require.NoError(t, manager.Provision(tenantctx.WithTenantID(context.Background(), tenant.ID), cfg))
 		return configuredCreationTicketOwnerWithConnector(client, logger, manager)
 	})
-	ctx := context.Background()
+	ctx := tenantctx.WithTenantID(context.Background(), f.identity.TenantID)
 	result, err := f.app.Create(ctx, f.identity, f.command)
 	require.NoError(t, err)
 	original := f.client.OutboxEvent.Query().OnlyX(ctx)
@@ -166,7 +190,7 @@ func TestFeishuManualSyncKeepsGovernedIntentAndCurrentAuthority(t *testing.T) {
 
 func TestFeishuConcurrentManualSyncWritesOneIntent(t *testing.T) {
 	f := newUnifiedIntakeFixture(t)
-	ctx := context.Background()
+	ctx := tenantctx.WithTenantID(context.Background(), f.identity.TenantID)
 	result, err := f.app.Create(ctx, f.identity, f.command)
 	require.NoError(t, err)
 	fc := feishu.New()
@@ -235,10 +259,13 @@ func TestTicketReadDoesNotUpdateFeishuTask(t *testing.T) {
 		manager := connector.NewManager(registry, logger, executionfixture.Standard())
 		t.Cleanup(manager.CloseAll)
 		tenant := client.Tenant.Query().OnlyX(ctx)
-		require.NoError(t, manager.Provision(tenantctx.WithTenantID(ctx, tenant.ID), connector.Config{TenantID: tenant.ID, Name: "feishu", Enabled: true, Credentials: map[string]string{"app_id": "local-app", "app_secret": "local-only"}, Settings: map[string]any{"base_url": server.URL}}))
+		cfg := connector.Config{TenantID: tenant.ID, Name: "feishu", Provider: "feishu", Enabled: true, Credentials: map[string]string{"app_id": "local-app", "app_secret": "local-only"}, Settings: map[string]any{"base_url": server.URL}}
+		persistCreationFeishuConfig(t, client, cfg)
+		require.NoError(t, manager.Provision(tenantctx.WithTenantID(ctx, tenant.ID), cfg))
 		owner = configuredCreationTicketOwnerWithConnector(client, logger, manager)
 		return owner
 	})
+	ctx = tenantctx.WithTenantID(ctx, fixture.identity.TenantID)
 	item, err := fixture.app.Create(ctx, fixture.identity, fixture.command)
 	require.NoError(t, err)
 	mapping := fixture.client.FeishuTicketSync.Create().SetTenantID(fixture.identity.TenantID).SetTicketID(item.WorkItemID).SetFeishuTaskID("read-test-task").SetFeishuTaskGUID("read-test-task").SaveX(ctx)
@@ -258,4 +285,30 @@ func TestTicketReadDoesNotUpdateFeishuTask(t *testing.T) {
 	after, err := json.Marshal(fixture.client.FeishuTicketSync.GetX(ctx, mapping.ID))
 	require.NoError(t, err)
 	require.JSONEq(t, string(before), string(after), "reading must preserve the sync mapping")
+}
+
+func TestFeishuProducerConfigurationReadFailureRollsBack(t *testing.T) {
+	fake := &creationFeishuConnector{}
+	f := newUnifiedIntakeFixture(t, func(client *ent.Client, logger *zap.SugaredLogger) *service.TicketService {
+		registry := connector.NewRegistry()
+		registry.Register(func() connector.Connector { return fake })
+		manager := connector.NewManager(registry, logger, executionfixture.Standard())
+		t.Cleanup(manager.CloseAll)
+		tenant := client.Tenant.Query().OnlyX(context.Background())
+		persistCreationFeishuConfig(t, client, connector.Config{TenantID: tenant.ID, Name: "feishu", Provider: "feishu", Enabled: true})
+		return configuredCreationTicketOwnerWithConnector(client, logger, manager)
+	})
+	ctx := tenantctx.WithTenantID(context.Background(), f.identity.TenantID)
+	injected := errors.New("private connector configuration read failure")
+	f.client.ConnectorConfig.Intercept(ent.InterceptFunc(func(next ent.Querier) ent.Querier {
+		return ent.QuerierFunc(func(context.Context, ent.Query) (ent.Value, error) { return nil, injected })
+	}))
+	beforeItems := f.client.Ticket.Query().CountX(ctx)
+	beforeIntents := f.client.OutboxEvent.Query().CountX(ctx)
+	_, err := f.app.Create(ctx, f.identity, f.command)
+	require.ErrorIs(t, err, creation.ErrInfrastructureUnavailable)
+	require.ErrorIs(t, err, injected)
+	require.Equal(t, beforeItems, f.client.Ticket.Query().CountX(ctx))
+	require.Equal(t, beforeIntents, f.client.OutboxEvent.Query().CountX(ctx))
+	require.Zero(t, fake.calls)
 }

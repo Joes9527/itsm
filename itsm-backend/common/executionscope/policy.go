@@ -11,6 +11,10 @@ import (
 
 var ErrDenied = errors.New("execution scope is not permitted")
 
+// ErrTargetNotConfigured distinguishes an absent optional route from invalid authority.
+// Delivery still fails closed: target lookup errors also wrap ErrDenied.
+var ErrTargetNotConfigured = errors.New("delivery target is not configured")
+
 type Ref struct {
 	DeploymentID string
 	ScopeID      string

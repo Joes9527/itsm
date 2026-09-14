@@ -159,10 +159,14 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 		}
 		return cmd
 	}
-	application := func(client *ent.Client, policy *database.ExecutionPolicy, directory database.DirectorySnapshot) *intake.Service {
+	application := func(client *ent.Client, policy *database.ExecutionPolicy, directory database.DirectorySnapshot, genericOwners ...creation.ProfessionalCreator) *intake.Service {
 		logger := zap.NewNop().Sugar()
 		registry := intake.NewCreatorRegistry()
-		for _, creator := range []creation.ProfessionalCreator{&service.TicketService{}, service.NewIncidentService(client, logger, policy), problemdomain.NewService(nil, logger, policy), changedomain.NewService(nil, client, logger, policy), srdomain.NewService(nil, client, logger, service.NewApprovalChainResolver(client, logger), policy)} {
+		var generic creation.ProfessionalCreator = &service.TicketService{}
+		if len(genericOwners) > 0 {
+			generic = genericOwners[0]
+		}
+		for _, creator := range []creation.ProfessionalCreator{generic, service.NewIncidentService(client, logger, policy), problemdomain.NewService(nil, logger, policy), changedomain.NewService(nil, client, logger, policy), srdomain.NewService(nil, client, logger, service.NewApprovalChainResolver(client, logger), policy)} {
 			require.NoError(t, registry.Register(creator))
 		}
 		resolver := intake.NewResolver(catalogdomain.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
@@ -376,6 +380,43 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		standardFixtureClient = ent.NewClient(ent.Driver(entsql.OpenDB("postgres", db)))
 		return standardFixtureClient
 	}
+
+	t.Run("Feishu producer records declared target while delivery disabled", func(t *testing.T) {
+		var calls atomic.Int32
+		receiver := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { calls.Add(1) }))
+		defer receiver.Close()
+		cfg := connector.Config{Name: "feishu", Provider: "feishu", Credentials: map[string]string{"app_id": "private-app"}, Settings: map[string]interface{}{"base_url": receiver.URL}}
+		digest, err := feishu.New().DescribeDeliveryDestination(cfg)
+		require.NoError(t, err)
+		frozen, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: scopeID}}, Capabilities: map[string]string{"outbox": "disabled"}, ConnectorTargets: []config.ConnectorTargetConfig{{TenantID: tenant.ID, ScopeID: scopeID, Name: cfg.Name, Provider: cfg.Provider, DestinationDigest: digest, Credentials: cfg.Credentials, Settings: cfg.Settings, Capabilities: []string{"outbox"}}}})
+		require.NoError(t, err)
+		registry := connector.NewRegistry()
+		registry.Register(func() connector.Connector { return feishu.New() })
+		manager := connector.NewManager(registry, zap.NewNop().Sugar(), frozen)
+		defer manager.CloseAll()
+		generic := service.NewTicketService(&service.TicketServiceConfig{Client: runtime, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: frozen, Directory: clients.IntakeDirectorySnapshot(), ConnectorManager: manager})
+		source := application(runtime, frozen, clients.IntakeDirectorySnapshot(), generic)
+		result, err := source.Create(ctx, identity, command("feishu-disabled-target", "generic"))
+		require.NoError(t, err)
+		intent, err := owner.OutboxEvent.Query().Where(outboxevent.TenantIDEQ(tenant.ID), outboxevent.ExecutionWorkItemIDEQ(result.WorkItemID), outboxevent.EventTypeEQ(service.FeishuCreationRequestedEventType)).Only(ctx)
+		require.NoError(t, err, "an unactivated declared destination must still be frozen in the owning transaction")
+		var payload struct {
+			Target struct {
+				ProtocolVersion   int    `json:"protocolVersion"`
+				ConnectorName     string `json:"connectorName"`
+				ConnectorProvider string `json:"connectorProvider"`
+				DestinationDigest string `json:"destinationDigest"`
+			} `json:"target"`
+		}
+		require.NoError(t, json.Unmarshal(intent.Payload, &payload))
+		require.Equal(t, 2, payload.Target.ProtocolVersion)
+		require.Equal(t, "feishu", payload.Target.ConnectorName)
+		require.Equal(t, "feishu", payload.Target.ConnectorProvider)
+		require.Equal(t, digest, payload.Target.DestinationDigest)
+		require.Equal(t, "pending", intent.Status)
+		require.Zero(t, calls.Load())
+		require.Empty(t, manager.ListByTenant(tenant.ID))
+	})
 
 	t.Run("candidate task commands preserve history", func(t *testing.T) {
 		engine := service.NewCustomProcessEngine(runtime, zap.NewNop().Sugar(), policy).(*service.CustomProcessEngine)

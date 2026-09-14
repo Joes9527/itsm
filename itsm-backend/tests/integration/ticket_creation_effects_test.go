@@ -27,7 +27,7 @@ func configuredCreationTicketOwnerWithConnector(client *ent.Client, logger *zap.
 	rules := service.NewTicketAutomationRuleService(client, logger)
 	rules.SetAssignmentService(assignment)
 	rules.SetNotificationService(notifications)
-	return service.NewTicketService(&service.TicketServiceConfig{Client: client, Logger: logger, ConnectorManager: manager, Repository: repositoryticket.NewEntRepository(client, logger), NotificationService: notifications, AutomationRuleService: rules})
+	return service.NewTicketService(&service.TicketServiceConfig{Client: client, Logger: logger, Execution: executionfixture.Standard(), ConnectorManager: manager, Repository: repositoryticket.NewEntRepository(client, logger), NotificationService: notifications, AutomationRuleService: rules})
 }
 func TestIntakeGenericCreationUsesConfiguredEffectsAtomically(t *testing.T) {
 	f := newUnifiedIntakeFixture(t, configuredCreationTicketOwner)

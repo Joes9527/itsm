@@ -124,3 +124,26 @@ func TestDeclaredConnectorTargetReturnsOwnedConfiguration(t *testing.T) {
 	require.ErrorIs(t, err, executionscope.ErrDenied)
 	require.Empty(t, target)
 }
+
+func TestDeclaredConnectorTargetDistinguishesAbsenceFromInvalidAuthority(t *testing.T) {
+	scope := "149ff1af-a27c-47c7-827f-103271130bb9"
+	policy, err := NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: "declared-read", Scopes: []config.ExecutionScopeConfig{{TenantID: 1, ScopeID: scope}}, ConnectorTargets: []config.ConnectorTargetConfig{{TenantID: 1, ScopeID: scope, Name: "feishu", Provider: "feishu", DestinationDigest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", Capabilities: []string{"outbox"}}}})
+	require.NoError(t, err)
+	ctx := tenantctx.WithTenantID(context.Background(), 1)
+	ref, err := policy.EventRef(1)
+	require.NoError(t, err)
+	_, err = policy.DeclaredConnectorTarget(ctx, ref, "outbox", "absent", "feishu")
+	require.ErrorIs(t, err, executionscope.ErrTargetNotConfigured)
+	require.ErrorIs(t, err, executionscope.ErrDenied)
+	_, err = policy.DeclaredConnectorTarget(ctx, ref, "outbox", "feishu", "wrong-provider")
+	require.ErrorIs(t, err, executionscope.ErrDenied)
+	require.NotErrorIs(t, err, executionscope.ErrTargetNotConfigured)
+	_, err = policy.DeclaredConnectorTarget(tenantctx.WithTenantID(ctx, 2), ref, "outbox", "absent", "feishu")
+	require.ErrorIs(t, err, executionscope.ErrDenied)
+	require.NotErrorIs(t, err, executionscope.ErrTargetNotConfigured)
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	_, err = policy.DeclaredConnectorTarget(canceled, ref, "outbox", "absent", "feishu")
+	require.ErrorIs(t, err, context.Canceled)
+	require.NotErrorIs(t, err, executionscope.ErrTargetNotConfigured)
+}
