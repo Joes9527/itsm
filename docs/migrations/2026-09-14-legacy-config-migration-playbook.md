@@ -78,6 +78,7 @@
 | `docs/superpowers/specs/2026-09-14-legacy-config-migration-gap-and-solution-design.md` | GAP 台账与决策 D1–D4 |
 | `docs/review/2026-09-14-config-mapping-workbook.md` | 优先级/SLA 日历/模块/批次 |
 | `docs/review/2026-09-14-cti-mapping-worksheet.md` | CTI 节点分流与逐节点映射 |
+| `docs/review/2026-09-14-dictionary-option-reconciliation.md` | 字典→字段选项对账（已覆盖/差额/未接纳） |
 | `docs/review/2026-09-14-workitem-config-migration-handoff.md` | G-B 交接（消费固定 GARevision） |
 
 ## 7. 决策日志
@@ -90,6 +91,7 @@
 | D4 | 规范配置来源 = 固定制品 seed `0788a9bb` | 用户确认 |
 | S5 | 旧 CTI 混合树按节点类型分流（业务系统→CMDB CI，服务→分类） | 用户确认 |
 | S5.1 | 服务分类节点：AD账户申请→`ACC-AD-001`、O365邮箱账户申请→`COL-MAIL-001`、SSLVPN账号申请→`NET-VPN-001`、K3.5数据变更→`APP-IL-DAT-002`；邮箱导出/业务系统账号/业务系统服务→新建正式分类；`OA申请` 父容器→排除 | 用户确认 |
+| S5.2 | 配置字典按 **seed 选项集对账**：关联组精确对账（已覆盖 5 / 差额 35），其余 178 组未接纳；不整包导入 | 用户确认 |
 
 ## 7.1 删除/排除登记（不得在后续批次再纳入）
 
