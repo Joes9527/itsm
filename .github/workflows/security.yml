@@ -37,8 +37,13 @@ jobs:
 
       - name: Run gosec
         uses: securego/gosec@master
+        env:
+          # Bound analyzer/package-loader memory after repeated runner shutdowns.
+          GOMAXPROCS: '2'
+          GOMEMLIMIT: 2GiB
+          GOFLAGS: -p=2
         with:
-          args: '-no-fail -fmt sarif -out gosec-results.sarif ./itsm-backend/...'
+          args: '-concurrency 2 -no-fail -fmt sarif -out gosec-results.sarif ./itsm-backend/...'
 
       - name: Upload gosec results
         uses: github/codeql-action/upload-sarif@v3

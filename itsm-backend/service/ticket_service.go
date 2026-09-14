@@ -114,9 +114,6 @@ func (s *TicketService) SetNotificationService(n *TicketNotificationService) {
 	s.notificationSvc = n
 }
 
-// extractAdHocFieldValues 解析 formFields["fieldDefs"]（客户端提交的 {name,label} 列表，
-// 用于没有 field_definitions 行的静态预设）配合 formFields["values"] 里的实际值，
-// 构造成 AdHocFieldValue 列表。fieldDefs 缺失或为空返回 nil。
 func isFinalStatus(s ticket.Status) bool {
 	return s == ticket.StatusResolved || s == ticket.StatusClosed || s == ticket.StatusCancelled
 }
@@ -391,7 +388,7 @@ func (s *TicketService) UpdateTicket(ctx context.Context, cmd dto.TicketEditComm
 		if err = s.execution.RequireEntMembers(ctx, tx, tenantID, parentID); err != nil {
 			return empty, err
 		}
-		exists, err := client.Ticket.Query().Where(ticket.IDEQ(parentID), ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()).Exist(ctx)
+		exists, err := client.Ticket.Query().Where(entTicket.IDEQ(parentID), entTicket.TenantIDEQ(tenantID), entTicket.DeletedAtIsNil()).Exist(ctx)
 		if err != nil {
 			return empty, err
 		}
@@ -1140,7 +1137,7 @@ func (s *TicketService) GetTicketSLAInfo(ctx context.Context, ticketID int, tena
 		return nil, fmt.Errorf("SLA persistence unavailable")
 	}
 	svc := NewTicketSLAService(s.client, s.logger)
-	item, err := s.client.Ticket.Query().Where(ticket.ID(ticketID), ticket.TenantID(tenantID), ticket.DeletedAtIsNil()).Only(ctx)
+	item, err := s.client.Ticket.Query().Where(entTicket.ID(ticketID), entTicket.TenantID(tenantID), entTicket.DeletedAtIsNil()).Only(ctx)
 	if err != nil {
 		return nil, err
 	}
