@@ -285,7 +285,8 @@ describe('TicketDetail', () => {
     const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
     render(<TicketDetail />);
     await user.click(await screen.findByText('抄送'));
-    expect(await screen.findByRole('alert')).toHaveTextContent('无权读取人员列表');
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('无权读取人员列表');
     expect(mockGetUsers).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: '重试人员列表' })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: '重试人员列表' })).not.toBeInTheDocument();
   });});
