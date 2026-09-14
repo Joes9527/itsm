@@ -171,3 +171,24 @@ func TestFeishuWebhookAmbiguousTaskNeverDispatches(t *testing.T) {
 	require.Equal(t, 400, w.Code)
 	require.Zero(t, sideEffects.calls)
 }
+
+func TestUnconfiguredFeishuRoutesDoNotReachSyncOwner(t *testing.T) {
+	manager := connector.NewManager(connector.NewRegistry(), zap.NewNop().Sugar(), executionfixture.Standard())
+	defer manager.CloseAll()
+	c := NewFeishuController(manager, nil, nil, zap.NewNop().Sugar())
+	// A missing side-effect owner would panic if either route dispatched.
+	r := gin.New()
+	r.Use(func(ctx *gin.Context) { ctx.Set("tenant_id", 17); ctx.Set("user_id", 23); ctx.Next() })
+	r.POST("/sync/:ticket_id", c.SyncTicketToFeishu)
+	r.POST("/webhook/:instance_id", c.Webhook)
+	for _, path := range []string{"/sync/1", "/webhook/unconfigured-instance"} {
+		t.Run(path, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			require.NotPanics(t, func() { r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))) })
+			var response common.Response
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+			require.NotEqual(t, common.SuccessCode, response.Code)
+		})
+	}
+	require.Empty(t, manager.ListByTenant(17))
+}

@@ -381,6 +381,24 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		return standardFixtureClient
 	}
 
+	t.Run("core ticket creation and edit need no Feishu target", func(t *testing.T) {
+		registry := connector.NewRegistry()
+		registry.Register(func() connector.Connector { return feishu.New() })
+		manager := connector.NewManager(registry, zap.NewNop().Sugar(), policy)
+		defer manager.CloseAll()
+		generic := service.NewTicketService(&service.TicketServiceConfig{Client: runtime, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: policy, Directory: clients.IntakeDirectorySnapshot(), ConnectorManager: manager})
+		source := application(runtime, policy, clients.IntakeDirectorySnapshot(), generic)
+		result, err := source.Create(ctx, identity, command("core-without-feishu", "generic"))
+		require.NoError(t, err)
+		item := owner.Ticket.GetX(ctx, result.WorkItemID)
+		updated, err := generic.UpdateTicket(ctx, dto.TicketEditCommand{WorkItemID: item.ID, Fields: dto.TicketEditFields{Title: "Core ticket updated without Feishu"}, Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: item.Version, OperationID: "core-without-feishu-edit", Source: "http"}})
+		require.NoError(t, err)
+		require.Equal(t, item.Version+1, updated.Version)
+		require.Equal(t, "Core ticket updated without Feishu", owner.Ticket.GetX(ctx, item.ID).Title)
+		require.Zero(t, owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(item.ID), outboxevent.EventTypeIn(service.FeishuCreationRequestedEventType, service.FeishuUpdateRequestedEventType)).CountX(ctx))
+		require.Empty(t, manager.ListByTenant(tenant.ID))
+	})
+
 	t.Run("Feishu producer records declared target while delivery disabled", func(t *testing.T) {
 		var calls atomic.Int32
 		receiver := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { calls.Add(1) }))
