@@ -89,6 +89,7 @@
 | `docs/review/2026-09-14-b3-priority-matrix-ledger.md` | B3 优先级/矩阵台账（BLOCKED + 能力差额） |
 | `docs/review/2026-09-14-b6-module-mapping-evidence.md` | B6 模块→recordClass 对照 + `ticket_types` 差额登记 |
 | `docs/review/2026-09-14-b5-routing-dry-run.md` | B5 路由 dry-run（可表达性 14/720 + 阻塞项） |
+| `docs/review/2026-09-14-b5-open-items-resolution.md` | B5 未决项处置（20 用户 id / 14 孤立 ctiId → void） |
 | `docs/review/2026-09-14-workitem-config-migration-handoff.md` | G-B 交接（消费固定 GARevision） |
 
 ## 7. 决策日志
@@ -113,12 +114,15 @@
 | S14 | **B3 记 BLOCKED**（不写目标）：优先级矩阵无持久化/无 API、维度 4×4 无模块；规则不支持 impact/urgency。交付 P0–P3 归一化映射与 86 条矩阵台账（`docs/review/2026-09-14-b3-priority-matrix-ledger.md`），列出 4 项产品决策 | 用户确认 + 实测 |
 | S15 | **B6 对照完成，无写入**：旧模块→recordClass（IN→incident、SR→service_request_item、SERVER→generic、KN→排除、问题→problem、变更→change_request）与目标一致；`ticket_types` 空表登记为"产品内置默认未初始化"差额（非旧数据迁移，本任务不迁工单历史） | 用户确认 + 实测 |
 | S16 | **B5 dry-run 完成，不写入**：规则条件仅支持 status/priority/category_id/department_id/requester_id/assignee_id，动作仅 user/round_robin/load_balance（无角色）。720 条路由仅 **14** 条落在已映射分类上可近似，**706 条不可表达**；82 条角色路由动作不支持；14 个孤立 ctiId/118 条无目标；可表达子集仍缺旧→新用户 id 映射 | 用户确认 + 实测 |
+| S17 | **B5 未决项已处置**：20 个 `authorizedId` 在全量 `sys_user`(12,387) 中不存在（已删除用户）→ 68 条路由 **void**；14 个孤立 ctiId 不在 CTI 树(82) 中（已删除节点）→ 118 条路由 **void**；可表达子集由 14 降至 **9** 条（需旧→新用户 id 映射） | 用户确认 + 实测 |
 
 ## 7.1 删除/排除登记（不得在后续批次再纳入）
 
 | 对象 | ctiId | 处置 | 日期 | 依据 |
 | --- | --- | --- | --- | --- |
 | `OA申请`（父容器） | `6217e2ebb22b4ef890d0af9af31c8f7a` | 迁移排除/删除，不写入目标；**不改动旧源数据** | 2026-09-14 | 用户确认 |
+| 20 个已删除/不存在的用户 id（68 条路由的 `authorizedId`） | — | **失效（void）**，不迁移；详见 `docs/review/2026-09-14-b5-open-items-resolution.md` | 2026-09-14 | 全量 `sys_user`(12,387) 比对 |
+| 14 个已删除 CTI 节点（118 条路由） | 见处置文档 | **失效（void）**，不迁移 | 2026-09-14 | 全量 CTI 树(82) 比对 |
 
 
 ## 8. 下一次迁移复用清单
