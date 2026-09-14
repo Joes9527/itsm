@@ -43,10 +43,23 @@ func TestBPMNAssignmentSourceMigrationEnforcesImmutabilityAndExactDefault(t *tes
 	_, err = db.ExecContext(ctx, `UPDATE process_tasks SET assignee_source = '' WHERE id = $1`, boundID)
 	require.ErrorContains(t, err, "assignee_source is immutable")
 
+	_, err = db.ExecContext(ctx, `ALTER TABLE process_tasks ALTER COLUMN assignee_source DROP DEFAULT`)
+	require.NoError(t, err)
+	err = execBPMNAssignmentSourceMigrationAsset(ctx, db, "032_bpmn_assignment_source_verify.sql")
+	require.ErrorContains(t, err, "empty-string default")
 	_, err = db.ExecContext(ctx, `ALTER TABLE process_tasks ALTER COLUMN assignee_source SET DEFAULT 'work_item_assignee'`)
 	require.NoError(t, err)
 	err = execBPMNAssignmentSourceMigrationAsset(ctx, db, "032_bpmn_assignment_source_verify.sql")
 	require.ErrorContains(t, err, "empty-string default")
+	_, err = db.ExecContext(ctx, `ALTER TABLE process_tasks ALTER COLUMN assignee_source SET DEFAULT ''; ALTER TABLE process_tasks ALTER COLUMN assignee_source DROP NOT NULL`)
+	require.NoError(t, err)
+	require.ErrorContains(t, execBPMNAssignmentSourceMigrationAsset(ctx, db, "032_bpmn_assignment_source_verify.sql"), "NOT NULL")
+	_, err = db.ExecContext(ctx, `ALTER TABLE process_tasks ALTER COLUMN assignee_source SET NOT NULL`)
+	require.NoError(t, err)
+	require.NoError(t, execBPMNAssignmentSourceMigrationAsset(ctx, db, "032_bpmn_assignment_source_verify.sql"))
+	var defaultSource string
+	require.NoError(t, db.QueryRowContext(ctx, `INSERT INTO process_tasks DEFAULT VALUES RETURNING assignee_source`).Scan(&defaultSource))
+	require.Empty(t, defaultSource)
 }
 
 func openBPMNAssignmentSourceMigrationDB(t *testing.T) *sql.DB {

@@ -376,6 +376,9 @@ func (tc *TicketController) EscalateTicket(c *gin.Context) {
 
 	ticket, err := tc.ticketService.EscalateTicket(c.Request.Context(), ticketID, req.Reason, tenantID, escalatedBy, creation.Identity{ActorID: escalatedBy, TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
 		tc.logger.Errorw("Failed to escalate ticket", "error", err, "ticket_id", ticketID, "tenant_id", tenantID)
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
@@ -952,6 +955,9 @@ func (tc *TicketController) UpdateSubtask(c *gin.Context) {
 
 	updatedTicket, err := tc.ticketService.UpdateTicket(c.Request.Context(), subtaskID, &req, tenantID, creation.Identity{ActorID: c.GetInt("user_id"), TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
 		tc.logger.Errorw("Failed to update subtask", "error", err, "subtask_id", subtaskID, "tenant_id", tenantID)
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return

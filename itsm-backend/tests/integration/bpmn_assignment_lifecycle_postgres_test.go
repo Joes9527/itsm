@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	entcore "entgo.io/ent"
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -282,6 +283,14 @@ func TestPostgresBoundLifecycleMSPCurrentAllocation(t *testing.T) {
 				require.Equal(t, actor.ID, audit.AssigneeID)
 				require.Equal(t, actor.ID, audit.UserID)
 			} else {
+				if scenario != "no-professional-permission" {
+					rows, total, err := f.engine.TaskService().ListUserTaskViews(f.scope(f.admin), &service.ListUserTasksRequest{Page: 1, PageSize: 10})
+					require.NoError(t, err)
+					require.Equal(t, 1, total)
+					require.Equal(t, "unavailable", rows[0].AssignmentState)
+					_, _, err = f.engine.TaskService().ListUserTaskViews(ctx, &service.ListUserTasksRequest{Page: 1, PageSize: 10})
+					require.Error(t, err, "ineligible MSP actor cannot use the read snapshot")
+				}
 				require.Error(t, f.engine.CompleteTask(ctx, f.task.TaskID, nil))
 				if scenario != "no-professional-permission" {
 					require.Error(t, f.engine.CompleteTask(f.scope(f.admin), f.task.TaskID, nil), "valid administrator cannot complete for an unavailable owner")
@@ -475,4 +484,79 @@ func TestPostgresBoundLifecycleCallbackCreationRace(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestPostgresBoundLifecycleReadSnapshotAndIndependentProof(t *testing.T) {
+	for _, bound := range []bool{false, true} {
+		t.Run(fmt.Sprint(bound), func(t *testing.T) {
+			f := newBoundLifecycleFixture(t)
+			directory := &countingTaskReadDirectory{DirectorySnapshot: f.runtime.IntakeDirectorySnapshot()}
+			f.engine.SetAssignmentDirectory(directory)
+			if !bound {
+				f.setup.client.ProcessTask.DeleteOne(f.task).ExecX(f.setup.ctx)
+				f.task = f.setup.client.ProcessTask.Create().SetTenantID(f.item.TenantID).SetTaskID("independent-snapshot").SetProcessInstanceID(f.task.ProcessInstanceID).SetProcessDefinitionKey(f.definition.Key).SetTaskDefinitionKey("independent").SetTaskName("Independent").SetTaskType("user_task").SetAssignee(fmt.Sprint(f.owner.ID)).SetStatus("created").SaveX(f.setup.ctx)
+			}
+			changed := false
+			f.client.ProcessTask.Intercept(ent.InterceptFunc(func(next ent.Querier) ent.Querier {
+				return ent.QuerierFunc(func(ctx context.Context, q ent.Query) (ent.Value, error) {
+					value, err := next.Query(ctx, q)
+					if err == nil && !changed {
+						if qc := entcore.QueryFromContext(ctx); qc != nil && qc.Op == entcore.OpQueryExist {
+							changed = true
+							if bound {
+								require.NoError(t, f.assign(f.scope(f.admin), f.next.ID, nil))
+							} else {
+								f.setup.client.ProcessTask.Create().SetTenantID(f.item.TenantID).SetTaskID("concurrent-bound").SetProcessInstanceID(f.task.ProcessInstanceID).SetProcessDefinitionKey(f.definition.Key).SetTaskDefinitionKey("fulfill").SetTaskName("Concurrent").SetTaskType("user_task").SetAssigneeSource("work_item_assignee").SetStatus("created").SaveX(f.setup.ctx)
+							}
+						}
+					}
+					return value, err
+				})
+			}))
+			rows, total, err := f.engine.TaskService().ListUserTaskViews(f.scope(f.admin), &service.ListUserTasksRequest{Page: 1, PageSize: 10})
+			require.NoError(t, err)
+			require.True(t, changed)
+			if bound {
+				require.Equal(t, 1, directory.opens, "selection and DTO/actions share one imported directory snapshot")
+			}
+			require.Equal(t, 1, total)
+			require.Len(t, rows, 1)
+			require.Equal(t, fmt.Sprint(f.owner.ID), rows[0].Assignee, "DTO projection stays on the same snapshot as selection/count")
+			rows, total, err = f.engine.TaskService().ListUserTaskViews(f.scope(f.admin), &service.ListUserTasksRequest{Page: 1, PageSize: 10})
+			require.NoError(t, err)
+			if bound {
+				require.Equal(t, 1, total)
+				require.Equal(t, fmt.Sprint(f.next.ID), rows[0].Assignee)
+			} else {
+				require.Equal(t, 2, total)
+			}
+		})
+	}
+}
+
+type countingTaskReadDirectory struct {
+	database.DirectorySnapshot
+	opens int
+}
+
+func (d *countingTaskReadDirectory) Open(ctx context.Context, tx *ent.Tx, tenantID int) (*ent.Client, func() error, error) {
+	d.opens++
+	return d.DirectorySnapshot.Open(ctx, tx, tenantID)
+}
+
+func TestPostgresBoundLifecycleTerminalBatchAuditMetadata(t *testing.T) {
+	f := newBoundLifecycleFixture(t)
+	task := f.setup.client.ProcessTask.UpdateOne(f.task).SetStatus("completed").SetAggregationVersion(2).SaveX(f.setup.ctx)
+	instance := f.setup.client.ProcessInstance.GetX(f.setup.ctx, task.ProcessInstanceID)
+	for _, id := range []any{fmt.Sprint(task.ID), "malformed-audit-task-id"} {
+		f.setup.client.ProcessAuditLog.Create().SetProcessInstanceID(instance.ID).SetProcessInstanceKey(instance.ProcessInstanceID).SetProcessDefinitionID(instance.ProcessDefinitionID).SetProcessDefinitionKey(instance.ProcessDefinitionKey).SetActivityID(task.TaskDefinitionKey).SetActivityType(service.ActivityTypeUserTask).SetAction(service.AuditActionTaskCompleted).SetTenantID(task.TenantID).SetAssigneeID(f.owner.ID).SetUserID(f.admin.ID).SetMetadata(map[string]interface{}{"taskId": id, "taskVersion": "2", "terminalStatus": "completed", "assigneeSource": "work_item_assignee"}).SaveX(f.setup.ctx)
+	}
+	f.setup.client.Ticket.UpdateOne(f.item).SetAssigneeID(f.next.ID).ExecX(f.setup.ctx)
+	rows, total, err := f.engine.TaskService().ListUserTaskViews(f.scope(f.admin), &service.ListUserTasksRequest{Page: 1, PageSize: 10})
+	require.NoError(t, err)
+	require.Equal(t, 1, total)
+	require.Len(t, rows, 1)
+	require.Equal(t, "terminal", rows[0].AssignmentState)
+	require.Equal(t, f.owner.ID, rows[0].ResponsibleUserID)
+	require.Equal(t, f.admin.ID, rows[0].ActorID)
 }

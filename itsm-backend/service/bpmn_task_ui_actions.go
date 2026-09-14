@@ -24,8 +24,17 @@ func (e *CustomProcessEngine) taskUIActions(ctx context.Context, task *ent.Proce
 		result.Reason = "此任务需要填写专用表单"
 		return result
 	}
-	if ValidateBPMNTaskLifecycle(BPMNTaskCommandComplete, task.Status) == nil && e.authorizeTaskCommandActorWithClient(ctx, e.client, task, BPMNTaskCommandComplete) == nil {
-		result.Complete = true
+	if ValidateBPMNTaskLifecycle(BPMNTaskCommandComplete, task.Status) == nil {
+		err := e.authorizeTaskCommandActorWithClient(ctx, e.client, task, BPMNTaskCommandComplete)
+		if err == nil {
+			result.Complete = true
+		} else if task.AssigneeSource == BPMNAssigneeSourceWorkItem {
+			if isBPMNTaskAccessDenial(err) {
+				result.Reason = "当前账号无权执行此任务，请联系管理员核验任务及业务权限"
+			} else {
+				result.Reason = "暂时无法核验任务执行权限，请刷新后重试"
+			}
+		}
 	}
 	return result
 }

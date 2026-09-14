@@ -11,7 +11,6 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processinstance"
-	"itsm-backend/ent/ticket"
 )
 
 // Only explicit actor/permission/participant denials may remove a row from a
@@ -66,7 +65,7 @@ func (e *CustomProcessEngine) authorizeBoundTaskAssignment(ctx context.Context, 
 		return BPMNTaskAssignment{}, err
 	}
 	role := authorization.EffectiveSessionRole(actor)
-	visible, err := client.Ticket.Query().Where(ticket.ID(item.ID), ticket.TenantID(scope.TenantID), authorization.WorkItemRowScope(actor.ID, role)).Exist(ctx)
+	visible, err := boundWorkItemVisible(ctx, client, item, actor, scope.TenantID)
 	if err != nil {
 		return BPMNTaskAssignment{}, err
 	}

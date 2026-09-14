@@ -16,7 +16,7 @@ const businessTypes: Record<string, string> = {
 const terminal = new Set(['completed', 'cancelled']);
 const statuses: Record<string, string> = {
   created: '待处理', assigned: '已分配', started: '处理中', pending: '等待处理',
-  delegated: '已委派', suspended: '已暂停',
+  delegated: '已委派', suspended: '已暂停', completed: '已完成', cancelled: '已取消',
 };
 const assignmentStates: Record<UserTask['assignmentState'], string> = {
   assigned: '已由工单分配',
@@ -41,7 +41,7 @@ async function readTasks(ticketId: number, recordClass: string): Promise<UserTas
       if (task.businessType !== businessType || task.businessId !== ticketId) throw new Error('任务关联不一致，请重试');
       if (!Number.isSafeInteger(task.id) || task.id <= 0 || seen.has(task.id)) throw new Error('任务分页重复或无效，请重试');
       seen.add(task.id);
-      if (!terminal.has(task.status) || task.assignmentState === 'terminal') tasks.push(task);
+      if (!terminal.has(task.status) || task.assigneeSource === 'work_item_assignee') tasks.push(task);
     }
     if (page * pageSize >= result.total) return tasks;
   }
@@ -113,7 +113,7 @@ function ProcessTasksPanel({ ticketId, recordClass, onTaskChange, session }: {
             <div>状态：{statuses[task.status] ?? `未知状态（${task.status || '-'}）`}</div>
             {task.assigneeSource === 'work_item_assignee' ? (
               <>
-                <div>分配状态：<span>{assignmentStates[task.assignmentState]}</span></div>
+                <div>分配状态：<span>{terminal.has(task.status) && task.assignmentState === 'unavailable' ? '历史处理人记录不可用' : assignmentStates[task.assignmentState]}</span></div>
                 {task.responsibleUserId > 0 && <div>处理人用户 ID：{task.responsibleUserId}</div>}
                 {task.assignmentState === 'terminal' && task.actorId > 0 && <div>实际操作人用户 ID：{task.actorId}</div>}
               </>

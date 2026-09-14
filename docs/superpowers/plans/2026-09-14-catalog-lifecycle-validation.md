@@ -86,23 +86,30 @@
 
 ## 7. 当前处理人绑定实施与源码验收
 
-2026-09-15 更新：用户确认的“工单 A 改派 B，未结束执行任务随之转交”已在 `codex/feat/work-item-task-assignment` 实施。设计见[已接受的执行任务绑定设计](../specs/2026-09-14-work-item-task-assignment-design.md)。Task 1–6 已分别审查；Task 7 集成改动及整个分支仍需独立终审。**本计划保持执行中，尚未进行共享迁移、此分支部署或生产目录发布。**
+2026-09-15 更新：用户确认的“工单 A 改派 B，未结束执行任务随之转交”已在 `codex/feat/work-item-task-assignment` 实施。设计见[已接受的执行任务绑定设计](../specs/2026-09-14-work-item-task-assignment-design.md)。Task 1–7 已分别审查；整分支终审提出 I1–I4 与 M1，本轮集中修复后仍需独立复审。**本计划保持执行中，尚未进行共享迁移、此分支部署或生产目录发布。**
 
 实现使用不可变 `assigneeSource=work_item_assignee`，持续从 WorkItem 当前处理人投影；绑定任务的持久化 assignee/candidate 字段为空。专业权限、当前租户/有效 MSP 分配、WorkItem 行可见范围与 BPMN 能力取交集；终态由精确任务/版本审计固定负责人与实际操作人。改派、工作项版本、审计和 `work_item.assigned` Outbox 同事务写入，事件包含经专业类注册表验证的 `recordClass`，消费时与不可变改派审计核对。
 
-Task 7 修正 migration 032 引入的 bootstrap 注册数量断言（明确校验第 25 项为 032），补充事件类身份契约，并修复绑定任务列表将 RBAC 数据库错误当作普通无权结果的问题。既有布尔权限接口仍为失败关闭返回 false；共用同一读取实现，错误不写入缓存，绑定路径使用可返回错误的接口。列表复用同一任务已成功授权的负责人投影，不在任务间缓存负责人，也不改变命令事务的实时复核。
+Task 7 修正 migration 032 引入的 bootstrap 注册数量断言（明确校验第 25 项为 032），补充事件类身份契约，并修复绑定任务列表将 RBAC 数据库错误当作普通无权结果的问题。既有布尔权限接口仍为失败关闭返回 false；共用同一读取实现，错误不写入缓存，绑定路径使用可返回错误的接口。终审修复将列表及 DTO/actions 放在同一只读 Repeatable Read 响应快照中；当前身份、工单解析和行可见性只在最多 128 条任务的当前批次复用成功结果，选中页保留已授权负责人/审计投影。目录快照按需打开一次并与业务事务一致；错误不缓存、不返回部分列表。缓存不跨请求，命令事务仍重新校验当前权限和负责人。
 
 ### 7.1 已取得证据（2026-09-15）
 
-- 后端 `GOMAXPROCS=4 go test -p 2 ./... -count=1` 全包通过；最终 Task 7 源码再次执行全包门禁通过。PostgreSQL 条件测试另行执行，不能用普通套件未启用的测试替代。
-- 隔离 PostgreSQL：`go test -p 2 -tags=integration_postgres ./tests/integration -run 'TestBPMNAssignmentSourceMigration|TestPostgresWorkItemAssignment|TestPostgresBoundLifecycle|TestPostgresAssignmentCaller|TestPostgresAssignmentReview' -count=1 -v`，56.167s，通过，无跳过。仅使用自有容器 `codex-workitem-assignment-test-20260914` / 端口 36444 / 数据库 `sslvpn_test`，凭据保存在私有本地配置；每例使用独立 schema，生命周期/并发与 MSP 正向测试使用非超级用户、无 BYPASSRLS 的普通运行角色。受限目录能力用于既有身份验证；无共享数据库或真实外部发送。
+- 后端 `GOMAXPROCS=4 go test -p 2 ./... -count=1` 全包通过；最终终审修复源码再次执行全包门禁通过（controller 17.040s、service 30.864s、integration 17.878s，exit 0），包含最后的审计 JSON 粗筛修正。PostgreSQL 条件测试另行执行，不能用普通套件未启用的测试替代。
+- 隔离 PostgreSQL：`go test -p 2 -tags=integration_postgres ./tests/integration -run 'TestBPMNAssignmentSourceMigration|TestPostgresWorkItemAssignment|TestPostgresBoundLifecycle|TestPostgresAssignmentCaller|TestPostgresAssignmentReview' -count=1 -v`，58.306s，31 个顶层测试通过，无跳过。随后只调整审计批量查询的 JSON 粗筛：避免将不可信 taskId 强转 PostgreSQL int；使用 JSON 包含/规范字符串比较，仍由既有精确证据匹配器决定终态归属。新增真实 PG 反例先复现 22P02，最终针对 `TestPostgresBoundLifecycleTerminalBatchAuditMetadata|TestPostgresBoundLifecycleReadSnapshot` 再验证，2 个顶层测试通过、3.375s、无跳过；合法旧负责人不随当前工单改派变化，畸形审计被忽略。仅使用自有容器 `codex-workitem-assignment-test-20260914` / 端口 36444 / 数据库 `sslvpn_test`，凭据保存在私有本地配置；每例使用独立 schema，生命周期/并发与 MSP 正向测试使用非超级用户、无 BYPASSRLS 的普通运行角色。受限目录能力用于既有身份验证；无共享数据库或真实外部发送。
 - 同一 PostgreSQL 并发夹具覆盖 user-task callback 与 service-task callback 两种推进路径、改派先/推进先两个顺序。验证阻塞、可显式重试的 40001、重试后新任务进入改派审计、无死锁/无中间改派事件、终态负责人不漂移。回调为测试内纯本地效果。
 - 事件契约先复现缺失 `recordClass`；真实数据库覆盖持久化字段和伪造合法类与原审计不一致时阻止投递。删除消费端类校验的反事实运行实际失败；恢复后通过。
-- 前端 `npm test -- --runInBand --watch=false`：231 suites、3281 tests 通过，13 项既有 skipped；425.407s。`npm run type-check`、`npm run lint:check`、`npm run build` 通过。lint 保留 `BPMNDesigner.tsx` 的一项既有 unused-disable warning，未执行自动修复。全量 Jest 仍有既有 Ant Design Alert message→title 等 deprecation console.error 和 React act 更新提示；本次 231 suites 通过不代表零控制台告警。原始日志保留，UI 告警整治另行跟踪，不在本轮加 blanket console suppression 或修改无关组件。
-- 后端 API 与 migration CLI 均构建；前端 standalone 构建归档已准备。构建物、SHA256 清单、源码清单、migration 032 只读 preflight SQL 位于工作树的已忽略 `.superpowers/artifacts/work-item-assignment/`，不提交二进制/日志/凭据，不依赖后续可删除的 SDD scratch。
-- 对 `ec1901f8` 的 76 个既有 migration 文件逐字节比较无改动；migration 注册表只新增 032，旧 SQL 分支不变。032 SQL SHA256：`cd4ecbe146e7fb1173b8e1d50fb2805e44bdd28a0b59214cbb9f5f8b3dec9343`；verify SQL：`6ab38a2654fdc179c642a1df5c7efe09d506a2405612f5652c103957514ac2e9`。共享 ledger 尚未读取/对账，不能把源码比较说成数据库迁移完成。
+- 前端 `npm test -- --runInBand --watch=false`：231 suites、3284 tests 通过，13 项既有 skipped；384.561s。`npm run type-check`、`npm run lint:check`、`npm run build` 通过。lint 保留 `BPMNDesigner.tsx` 的一项既有 unused-disable warning，未执行自动修复。全量 Jest 仍有既有 Ant Design Alert message→title 等 deprecation console.error 和 React act 更新提示；本次 231 suites 通过不代表零控制台告警。原始日志保留，UI 告警整治另行跟踪，不在本轮加 blanket console suppression 或修改无关组件。
+- 后端 API 与 migration CLI 使用 `-buildvcs=false -p 2` 构建，避免包围 checkout 的错误 Git 元数据；精确提交/tree/文件 SHA256 以 manifest 为准。前端 standalone 已刷新，BUILD_ID `SmgybwvWwNlbdezRXwLLB`，归档排除 .env/.env.*/.npmrc。构建物、SHA256 清单、源码清单、migration 032 只读 preflight SQL 位于工作树的已忽略 `.superpowers/artifacts/work-item-assignment/`，不提交二进制/日志/凭据，不依赖后续可删除的 SDD scratch。
+- 对 `ec1901f8` 的 76 个既有 migration 文件逐字节比较无改动；migration 注册表只新增 032，旧 SQL 分支不变。032 SQL SHA256：`cd4ecbe146e7fb1173b8e1d50fb2805e44bdd28a0b59214cbb9f5f8b3dec9343`；verify SQL：`10e3c5a71ae639408e444e955f3dd76e2ab0745c57062a39363f3dc5edd55f6a`。修复 worker 未连接共享 ledger；控制器只读对账见下文，不能把源码比较或只读对账说成数据库迁移完成。
 
-剩余列表性能风险仍交终审：SQLite 同一实例 101 个绑定任务、取 10 条，改动前 1014 次查询，复用后 711 次（一次观察约 69.17ms → 46.33ms）；1000 个独立任务仍全量物化、1 次查询、取 10 条约 12.42ms。无生产延迟保证，仍有全量物化和按任务查询。未经本次授权扩展为跨任务缓存、权限快照或分页重设计；任何后续方案必须先授权过滤，再计算 total/page，命令保持重新验证。
+终审 I1 的旧“711 次查询、全量物化可留待优化”处置已被替代。任务按 createdTime/id 键集以 128 条分批扫描；参与实例按任务 id 分批，终态审计也分批读取并只保留每任务最多两条有效证据（两条即明确歧义）。混合/绑定路径先授权再累计精确 total，只保存请求页；统计先应用 SQL 日期条件再流式累计。仅当同一 RR 快照证明匹配候选没有任何非空 assigneeSource（包含未知值）时，actor-free/elevated 独立列表使用 SQL Count 和 Offset/Limit；没有独立事务探测后回退的竞争窗口。
+
+新的长期测试证据：独立 1000 条、页大小 10，仅物化 10 条、3 次 Ent 查询；同一实例绑定 301 条、页大小 10，单批最多 128 条、19 次查询（授权仍处理全部 301 候选），返回仅 10 条。混合 270 条及不可见记录覆盖跨批次排序/总数、后续批次错误丢弃已选页、统计排除日期外损坏关联；270 条终态任务/271 条审计证据按最多 128 条读取，页 DTO 复用选中证据，歧义显示 unavailable。真实 PostgreSQL 证明独立路径探测后并发新增绑定任务、本已绑定列表并发改派均保持本次 total/page/DTO 一致，下次请求可见变更；有效/撤销 MSP 读取与目录快照一次打开均覆盖。此处为有限夹具的查询/物化证据，不是生产延迟/SLO 保证。绑定/参与扫描仍是 O(候选数)；内存为 O(批大小 + 输出页/输出实例ID/统计维度)，不同工单仍需各自现行权限解析，长响应会持有 RR 快照，后续可据真实负载评估 set-based 查询。
+
+I2 的 MSP 分配、智能分配、接单、升级和子任务更新均在控制器泛化错误前映射包装的 SQLSTATE 40001 为 409、retryable=true，不暴露数据库细节、不伪造 currentVersion、不自动重试写入。I3 由后端动作投影给出安全的执行拒绝原因，页面不复制授权规则；已分配可读但不可执行及完整权限正例均覆盖。M1 增加 completed/cancelled 文案，已授权终态缺失/歧义证据仍可见为“历史处理人记录不可用”，不回退当前负责人。I4 的 032 verifier 使用 IS DISTINCT FROM 拒绝缺失默认值；真实 PG 覆盖 DROP DEFAULT、错误默认值、去掉 NOT NULL、恢复后的 legacy insert 及不可变约束。
+
+控制器本轮只读共享预检（未由修复 worker 执行）：API 8080 readyz、前端 3001 login 均 200；API 仍为 7ed97de4，前端仍旧 BUILD wlcY0limNxk71JkwpGrDC。配置目标为 5432 的 itsm_config_baseline_20260908/public，24 项已应用 canonical checksum 一致，仅 032 pending，auto-migrate/seed=false。未执行共享写入、重启或外部发送；应用角色无作用域 count=0 不是空库证明。相关只读证据位于保留 artifacts/evidence/shared*20260915*；该预检不能替代下面的备份/窗口/目标进程所有权和实际运行授权。
+
 
 ### 7.2 准备好的浏览器夹具与明确未执行项
 
@@ -127,6 +134,6 @@ PLAYWRIGHT_EXTERNAL_SERVER=1 PLAYWRIGHT_SKIP_CHANNELS=1 \
 2. 使用预备的**只读** SQL 确认数据库/schema、migration ledger 连续前缀与已部署旧 checksum、任务字段、活动事务及现有流程；确认只有 032 待执行，并审查已有 assignee_source/候选冲突。`itsm-migrate -status/-dry-run` 也会调用 EnsureMigrationsTable，不能当作无写入的预检工具。
 3. 获得共享迁移/部署授权后，停止相关写入与工作进程，备份并执行现有 migration runner 的 `-up`（仅当预检确认待执行项恰为 032），随后执行 032 verify。032 增列/约束/触发器可能等待 process_tasks DDL 锁；不得清洗历史实例绕过约束。启动 API 时保持 `ITSM_AUTO_MIGRATE=false`、`ITSM_AUTO_SEED=false`，部署匹配前端，验证 readyz、代理 CSRF 与源码/build ID。
 4. 迁移与匹配版本就绪后，再授权纯人工临时夹具配置/浏览器运行及上述只读审计检查。生产目录新版本发布另行批准，且只影响新实例；不重写旧任务。
-5. 回滚界限：尚无绑定任务时可停止新版本并在核实旧版本可读附加列后回退二进制/前端，保留 032；不自动降 schema。已有绑定任务/事件后，旧二进制不了解动态负责人及新审计契约，禁止直接回退继续处理；须暂停流量和 worker，以审查后的向前修复或完整备份恢复方案处理。032 无自动 down SQL，不删除绑定字段/触发器/审计换取旧代码运行。
+5. 回滚界限：尚未产生任何依赖新运行时的分配记录/审计格式或 `work_item.assigned` 事件（包括没有绑定任务的普通 WorkItem 改派）时，才可停止新版本并在核实旧版本可读附加列后回退二进制/前端，保留 032；不自动降 schema。已有上述新格式记录、绑定任务或事件后，旧二进制不了解动态负责人及新审计契约，禁止直接回退继续处理；须暂停流量和 worker，以审查后的向前修复或完整备份恢复方案处理。032 无自动 down SQL，不删除绑定字段/触发器/审计换取旧代码运行。
 
 第 4 节解决/关闭 UI、第 5 节其余边界未在 Task 7 解决。源码测试/构建通过不等于目录整改或共享上线验收完成。

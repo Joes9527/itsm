@@ -32,6 +32,30 @@ func unavailableBPMNIdentity(err error) bool {
 // The directory is a restricted snapshot of the ordinary customer transaction.
 // It never supplies business rows, permissions, or an alternative actor ID.
 func (e *CustomProcessEngine) resolveAssignmentUser(ctx context.Context, client *ent.Client, id, tenantID int) (*ent.User, error) {
+	if view := taskReadSnapshot(ctx, client); view != nil {
+		key := [2]int{tenantID, id}
+		if actor, ok := view.users[key]; ok {
+			return actor, nil
+		}
+		var actor *ent.User
+		var err error
+		if e.assignmentDirectory == nil {
+			actor, err = client.User.Query().Where(user.ID(id), user.TenantID(tenantID), user.Active(true)).Only(ctx)
+		} else {
+			if view.directory == nil {
+				view.directory, view.closeDirectory, err = e.assignmentDirectory.Open(ctx, view.tx, tenantID)
+				if err != nil {
+					return nil, err
+				}
+			}
+			actor, err = authorization.ResolveCurrentTenantUser(ctx, view.directory, id, tenantID, view.now)
+		}
+		if err == nil {
+			view.users[key] = actor
+		}
+		return actor, err
+	}
+
 	if e.assignmentDirectory == nil {
 		return client.User.Query().Where(user.ID(id), user.TenantID(tenantID), user.Active(true)).Only(ctx)
 	}

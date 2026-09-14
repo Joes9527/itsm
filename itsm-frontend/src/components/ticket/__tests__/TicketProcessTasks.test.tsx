@@ -196,3 +196,20 @@ it('renders frozen terminal responsibility and actual actor separately', async (
   expect(screen.getByText('实际操作人用户 ID：23')).toBeInTheDocument();
   expect(screen.queryByText('处理人用户 ID：23')).not.toBeInTheDocument();
 });
+
+it.each([['completed', '已完成'], ['cancelled', '已取消']])('shows bound terminal status %s and unavailable history', async (status, label) => {
+  read.mockResolvedValue(page([{ ...task, taskPurpose: 'fulfillment', assigneeSource: 'work_item_assignee', assignmentState: 'unavailable', status, responsibleUserId: 0, uiActions: { claim: false, complete: false } }]));
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+  expect(await screen.findByText(`状态：${label}`)).toBeInTheDocument();
+  expect(screen.getByText('历史处理人记录不可用')).toBeInTheDocument();
+  expect(screen.queryByText('处理人当前不可用')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '完成任务' })).not.toBeInTheDocument();
+});
+it('shows the backend execution denial for an assigned bound task', async () => {
+  const reason = '当前账号无权执行此任务，请联系管理员核验任务及业务权限';
+  read.mockResolvedValue(page([{ ...task, taskPurpose: 'fulfillment', assigneeSource: 'work_item_assignee', assignmentState: 'assigned', responsibleUserId: 7, uiActions: { claim: false, complete: false, reason } }]));
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+  expect(await screen.findByText(reason)).toBeInTheDocument();
+  expect(screen.getByText('已由工单分配')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '完成任务' })).not.toBeInTheDocument();
+});

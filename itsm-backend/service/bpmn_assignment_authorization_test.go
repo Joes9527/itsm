@@ -340,10 +340,7 @@ func installBoundAssignmentReadFault(f *bpmnAuthorizationFixture, task *ent.Proc
 			if listed {
 				if stage == "owner" || stage == "identity" {
 					userQueries++
-					target := 2
-					if stage == "identity" {
-						target = 3 // actor, authorized owner, then textual identity filter
-					}
+					target := 1 // Actor, owner and textual identity share the same successful snapshot read.
 					if userQueries == target {
 						return nil, fault
 					}
@@ -483,7 +480,7 @@ func TestBPMNAssignmentListHistoryScale(t *testing.T) {
 			}
 			count := 1000
 			if bound {
-				count = 100
+				count = 300
 			}
 			creates := make([]*ent.ProcessTaskCreate, 0, count)
 			for i := 0; i < count; i++ {
@@ -498,13 +495,16 @@ func TestBPMNAssignmentListHistoryScale(t *testing.T) {
 				count++
 			}
 			grantBoundPermissions(t, f, f.actor, "task", "read", "service_request", "read")
-			queries, materialized := 0, 0
+			queries, materialized, maxBatch := 0, 0, 0
 			f.client.Intercept(ent.InterceptFunc(func(next ent.Querier) ent.Querier {
 				return ent.QuerierFunc(func(ctx context.Context, q ent.Query) (ent.Value, error) {
 					queries++
 					value, err := next.Query(ctx, q)
 					if rows, ok := value.([]*ent.ProcessTask); ok {
 						materialized += len(rows)
+						if len(rows) > maxBatch {
+							maxBatch = len(rows)
+						}
 					}
 					return value, err
 				})
@@ -515,9 +515,150 @@ func TestBPMNAssignmentListHistoryScale(t *testing.T) {
 			require.Equal(t, count, total)
 			require.Len(t, rows, 10)
 			if bound {
-				require.LessOrEqual(t, queries, count*7+4, "one assignment projection per authorized task")
+				require.LessOrEqual(t, maxBatch, 128)
+				require.LessOrEqual(t, queries, 40, "authority loads are shared within each bounded chunk")
+			} else {
+				require.Equal(t, 10, materialized, "independent history uses SQL count and page limit")
 			}
 			t.Logf("bound=%v history=%d page=%d materialized=%d queries=%d elapsed=%s", bound, count, len(rows), materialized, queries, time.Since(started))
 		})
 	}
+}
+func TestBPMNBoundAssignmentExplainsExecuteDenial(t *testing.T) {
+	for _, execute := range []bool{false, true} {
+		t.Run(strconv.FormatBool(execute), func(t *testing.T) {
+			f := newBPMNAuthorizationFixture(t)
+			_, task := seedBoundAssignment(t, f, "ui-denial")
+			grants := []string{"service_request", "read", "task", "read"}
+			if execute {
+				grants = append(grants, "service_request", "provision", "task", "update")
+			}
+			grantBoundPermissions(t, f, f.actor, grants...)
+			view, err := f.engine.TaskService().ProjectTaskView(f.typedTaskScopeOnlyCtx(f.actor, false), task)
+			require.NoError(t, err)
+			require.Equal(t, "assigned", view.AssignmentState)
+			require.Equal(t, execute, view.UIActions.Complete)
+			require.False(t, view.UIActions.Claim)
+			if execute {
+				require.Empty(t, view.UIActions.Reason)
+			} else {
+				require.Equal(t, "当前账号无权执行此任务，请联系管理员核验任务及业务权限", view.UIActions.Reason)
+			}
+		})
+	}
+}
+
+func TestBPMNBoundAssignmentMixedChunksAndStatistics(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	_, original := seedBoundAssignment(t, f, "mixed-chunks")
+	grantBoundPermissions(t, f, f.actor, "task", "read", "service_request", "read")
+	f.client.ProcessTask.DeleteOne(original).ExecX(f.userCtx)
+	created := time.Now().UTC().Truncate(time.Second)
+	var expected []int
+	for i := 0; i < 270; i++ {
+		builder := f.client.ProcessTask.Create().SetTenantID(f.tenant.ID).SetTaskID("mixed-" + strconv.Itoa(i)).SetProcessInstanceID(original.ProcessInstanceID).SetProcessDefinitionKey(f.definition.Key).SetTaskDefinitionKey("fulfill").SetTaskName("Mixed").SetStatus("created").SetCreatedTime(created)
+		if i%2 == 0 {
+			builder.SetAssigneeSource(BPMNAssigneeSourceWorkItem)
+		}
+		task := builder.SaveX(f.userCtx)
+		expected = append([]int{task.ID}, expected...)
+	}
+	_, hidden := seedBoundAssignment(t, f, "hidden-in-middle")
+	hiddenItem, _, err := resolveBoundTaskWorkItem(f.userCtx, f.client, hidden)
+	require.NoError(t, err)
+	f.client.Ticket.UpdateOne(hiddenItem).SetAssigneeID(f.outsider.ID).SaveX(f.userCtx)
+	// This old row is outside the statistics date window. Its broken authoritative
+	// identity must not be resolved by a current-window statistics request.
+	_, old := seedBoundAssignment(t, f, "old-outside-stats")
+	f.client.ProcessTask.UpdateOne(old).SetCreatedTime(created.Add(-24 * time.Hour)).SaveX(f.userCtx)
+	f.client.ProcessInstance.UpdateOneID(old.ProcessInstanceID).SetBusinessID(999999).SaveX(f.userCtx)
+	scope := WithBPMNAccessScope(f.userCtx, BPMNAccessScope{UserID: f.actor.ID, TenantID: f.tenant.ID, CanReadAllTasks: true})
+	stats, err := f.engine.TaskService().GetTaskStatistics(scope, &TaskStatisticsRequest{StartDate: &created})
+	require.NoError(t, err)
+	require.Equal(t, 270, stats.TotalTasks)
+	f.client.ProcessTask.DeleteOne(old).ExecX(f.userCtx)
+	rows, total, err := f.engine.TaskService().ListUserTasks(scope, &ListUserTasksRequest{Page: 14, PageSize: 10})
+	require.NoError(t, err)
+	require.Equal(t, 270, total)
+	require.Len(t, rows, 10)
+	for i, row := range rows {
+		require.Equal(t, expected[130+i], row.ID)
+	}
+	actor, err := f.resolver.resolveActor(scope, BPMNAccessScope{UserID: f.actor.ID, TenantID: f.tenant.ID})
+	require.NoError(t, err)
+	queries, maxBatch := 0, 0
+	f.client.Intercept(ent.InterceptFunc(func(next ent.Querier) ent.Querier {
+		return ent.QuerierFunc(func(ctx context.Context, q ent.Query) (ent.Value, error) {
+			queries++
+			v, err := next.Query(ctx, q)
+			if tasks, ok := v.([]*ent.ProcessTask); ok && len(tasks) > maxBatch {
+				maxBatch = len(tasks)
+			}
+			return v, err
+		})
+	}))
+	ids, err := f.resolver.participatingInstanceIDs(scope, actor)
+	require.NoError(t, err)
+	require.Contains(t, ids, original.ProcessInstanceID)
+	require.NotContains(t, ids, hidden.ProcessInstanceID)
+	require.LessOrEqual(t, maxBatch, bpmnTaskReadBatchSize)
+	require.Less(t, queries, 40)
+	// A late resolution error must discard the already collected page and total.
+	f.client.ProcessTask.Intercept(ent.InterceptFunc(func(next ent.Querier) ent.Querier {
+		return ent.QuerierFunc(func(ctx context.Context, q ent.Query) (ent.Value, error) {
+			v, err := next.Query(ctx, q)
+			if rows, ok := v.([]*ent.ProcessTask); ok {
+				for _, row := range rows {
+					if row.ID == expected[len(expected)-1] {
+						row.AssigneeSource = "future_source"
+					}
+				}
+			}
+			return v, err
+		})
+	}))
+	rows, total, err = f.engine.TaskService().ListUserTasks(scope, &ListUserTasksRequest{Page: 1, PageSize: 10})
+	require.ErrorContains(t, err, "unsupported")
+	require.Empty(t, rows)
+	require.Zero(t, total)
+}
+
+func TestBPMNBoundAssignmentTerminalEvidenceUsesBoundedBatches(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	_, original := seedBoundAssignment(t, f, "terminal-batches")
+	grantBoundPermissions(t, f, f.actor, "task", "read", "service_request", "read")
+	instance := f.client.ProcessInstance.GetX(f.userCtx, original.ProcessInstanceID)
+	f.client.ProcessTask.DeleteOne(original).ExecX(f.userCtx)
+	for i := 0; i < 270; i++ {
+		task := f.client.ProcessTask.Create().SetTenantID(f.tenant.ID).SetTaskID("terminal-" + strconv.Itoa(i)).SetProcessInstanceID(instance.ID).SetProcessDefinitionKey(f.definition.Key).SetTaskDefinitionKey("fulfill").SetTaskName("Terminal").SetTaskType("user_task").SetStatus("completed").SetAssigneeSource(BPMNAssigneeSourceWorkItem).SetAggregationVersion(2).SaveX(f.userCtx)
+		copies := 1
+		if i == 269 {
+			copies = 2
+		}
+		for n := 0; n < copies; n++ {
+			f.client.ProcessAuditLog.Create().SetProcessInstanceID(instance.ID).SetProcessInstanceKey(instance.ProcessInstanceID).SetProcessDefinitionID(instance.ProcessDefinitionID).SetProcessDefinitionKey(instance.ProcessDefinitionKey).SetActivityID(task.TaskDefinitionKey).SetActivityType(ActivityTypeUserTask).SetAction(AuditActionTaskCompleted).SetTenantID(task.TenantID).SetAssigneeID(f.actor.ID).SetUserID(f.outsider.ID).SetMetadata(map[string]interface{}{"taskId": task.ID, "taskVersion": 2, "terminalStatus": "completed", "assigneeSource": BPMNAssigneeSourceWorkItem}).SaveX(f.userCtx)
+		}
+	}
+	auditRows, maxAudit := 0, 0
+	f.client.ProcessAuditLog.Intercept(ent.InterceptFunc(func(next ent.Querier) ent.Querier {
+		return ent.QuerierFunc(func(ctx context.Context, q ent.Query) (ent.Value, error) {
+			value, err := next.Query(ctx, q)
+			if rows, ok := value.([]*ent.ProcessAuditLog); ok {
+				auditRows += len(rows)
+				if len(rows) > maxAudit {
+					maxAudit = len(rows)
+				}
+			}
+			return value, err
+		})
+	}))
+	rows, total, err := f.engine.TaskService().ListUserTaskViews(WithBPMNAccessScope(f.userCtx, BPMNAccessScope{UserID: f.actor.ID, TenantID: f.tenant.ID, CanReadAllTasks: true}), &ListUserTasksRequest{Page: 1, PageSize: 10})
+	require.NoError(t, err)
+	require.Equal(t, 270, total)
+	require.Len(t, rows, 10)
+	require.Equal(t, "unavailable", rows[0].AssignmentState)
+	require.Equal(t, "terminal", rows[1].AssignmentState)
+	require.Equal(t, f.outsider.ID, rows[1].ActorID)
+	require.Equal(t, 271, auditRows, "page DTO reuses the authorized evidence instead of scanning node history again")
+	require.LessOrEqual(t, maxAudit, bpmnTaskReadBatchSize)
 }

@@ -2808,6 +2808,9 @@ type ListProcessInstancesRequest struct {
 }
 
 type ListUserTasksRequest struct {
+	startDate, endDate *time.Time
+	visit              func(*ent.ProcessTask)
+
 	Assignee        string `json:"assignee" form:"assignee"`
 	CandidateUsers  string `json:"candidateUsers" form:"candidateUsers"`
 	CandidateGroups string `json:"candidateGroups" form:"candidateGroups"`
@@ -3697,6 +3700,20 @@ func (s *bpmnTaskService) CompleteTaskByID(ctx context.Context, id int, variable
 }
 
 func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksRequest) ([]*ent.ProcessTask, int, error) {
+	if taskReadSnapshot(ctx, s.client) == nil {
+		var tasks []*ent.ProcessTask
+		var total int
+		err := s.engine.withTaskReadSnapshot(ctx, func(ctx context.Context, e *CustomProcessEngine) error {
+			var err error
+			tasks, total, err = e.taskService.ListUserTasks(ctx, req)
+			return err
+		})
+		if err != nil {
+			return nil, 0, err
+		}
+		return tasks, total, nil
+	}
+
 	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
 		return nil, 0, err
@@ -3769,62 +3786,125 @@ func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksR
 		))
 	}
 
-	tasks, err := query.Order(ent.Desc(processtask.FieldCreatedTime), ent.Desc(processtask.FieldID)).All(ctx)
-	if err != nil {
-		return nil, 0, fmt.Errorf("获取任务列表失败: %w", err)
+	if req.startDate != nil {
+		query = query.Where(processtask.CreatedTimeGTE(*req.startDate))
 	}
-	filtered := make([]*ent.ProcessTask, 0, len(tasks))
-	for _, task := range tasks {
-		if task.AssigneeSource != "" {
-			assignment, err := s.engine.authorizeBoundTaskAssignment(ctx, s.client, task, scope, "")
+	if req.endDate != nil {
+		query = query.Where(processtask.CreatedTimeLTE(*req.endDate))
+	}
+	// The absence proof and count/page query use this same RR snapshot. Unknown
+	// nonempty sources block the fast path and are validated by the normal resolver.
+	if actor == nil && req.visit == nil {
+		nonIndependent, err := query.Clone().Where(processtask.AssigneeSourceNEQ("")).Exist(ctx)
+		if err != nil {
+			return nil, 0, err
+		}
+		if !nonIndependent {
+			total, err := query.Clone().Count(ctx)
 			if err != nil {
-				if isBPMNTaskAccessDenial(err) {
-					continue
-				}
 				return nil, 0, err
 			}
-			projectedTask := *task
-			projectedTask.Assignee = assignment.Assignee
-			projected := &projectedTask
-			if actor != nil && !s.participationResolver.matchesTask(projected, actor) {
-				continue
+			page := query.Clone().Order(ent.Desc(processtask.FieldCreatedTime), ent.Desc(processtask.FieldID))
+			if req.Page > 0 && req.PageSize > 0 {
+				page = page.Offset((req.Page - 1) * req.PageSize).Limit(req.PageSize)
 			}
-			if actor == nil && req.Assignee != "" {
-				matches, err := s.engine.boundAssignmentMatchesIdentity(ctx, projected, req.Assignee)
+			rows, err := page.All(ctx)
+			if err != nil {
+				return nil, 0, err
+			}
+			return rows, total, nil
+		}
+	}
+	var result []*ent.ProcessTask
+	view := taskReadSnapshot(ctx, s.client)
+	view.pageAssignments = make(map[int]BPMNTaskAssignment)
+	total := 0
+	accept := func(task *ent.ProcessTask, assignment *BPMNTaskAssignment) {
+		index := total
+		total++
+		if req.visit != nil {
+			req.visit(task)
+			return
+		}
+		if req.Page > 0 && req.PageSize > 0 && (index < (req.Page-1)*req.PageSize || index >= req.Page*req.PageSize) {
+			return
+		}
+		result = append(result, task)
+		if assignment != nil {
+			view.pageAssignments[task.ID] = *assignment
+		}
+	}
+	var last *ent.ProcessTask
+	for {
+		page := query.Clone().Order(ent.Desc(processtask.FieldCreatedTime), ent.Desc(processtask.FieldID)).Limit(bpmnTaskReadBatchSize)
+		if last != nil {
+			page = page.Where(processtask.Or(processtask.CreatedTimeLT(last.CreatedTime), processtask.And(processtask.CreatedTimeEQ(last.CreatedTime), processtask.IDLT(last.ID))))
+		}
+		tasks, err := page.All(ctx)
+		if err != nil {
+			return nil, 0, err
+		}
+		if len(tasks) == 0 {
+			break
+		}
+		taskReadSnapshot(ctx, s.client).resetChunk()
+		if err := taskReadSnapshot(ctx, s.client).loadTerminalAssignments(ctx, tasks); err != nil {
+			return nil, 0, err
+		}
+		for _, task := range tasks {
+			if task.AssigneeSource != "" {
+				assignment, err := s.engine.authorizeBoundTaskAssignment(ctx, s.client, task, scope, "")
 				if err != nil {
+					if isBPMNTaskAccessDenial(err) {
+						continue
+					}
 					return nil, 0, err
 				}
-				if !matches {
+				projectedTask := *task
+				projectedTask.Assignee = assignment.Assignee
+				projected := &projectedTask
+				if actor != nil && !s.participationResolver.matchesTask(projected, actor) {
 					continue
 				}
+				if actor == nil && req.Assignee != "" {
+					matches, err := s.engine.boundAssignmentMatchesIdentity(ctx, projected, req.Assignee)
+					if err != nil {
+						return nil, 0, err
+					}
+					if !matches {
+						continue
+					}
+				}
+				accept(projected, &assignment)
+			} else if actor == nil || s.participationResolver.matchesTask(task, actor) {
+				accept(task, nil)
 			}
-			filtered = append(filtered, projected)
-		} else if actor == nil || s.participationResolver.matchesTask(task, actor) {
-			filtered = append(filtered, task)
+		}
+		last = tasks[len(tasks)-1]
+		if len(tasks) < bpmnTaskReadBatchSize {
+			break
 		}
 	}
-	tasks = filtered
-
-	total := len(tasks)
-	if req.Page > 0 && req.PageSize > 0 {
-		start := (req.Page - 1) * req.PageSize
-		if start >= total {
-			tasks = nil
-		} else {
-			end := start + req.PageSize
-			if end > total {
-				end = total
-			}
-			tasks = tasks[start:end]
-		}
-	}
-
-	return tasks, total, nil
+	return result, total, nil
 }
 
 // ListUserTaskViews 「我的待办」视图：任务列表附带所属实例的 businessKey 等业务上下文，
 // 供审批中心跳转业务单据使用。返回 DTO 而非 Ent 模型。
 func (s *bpmnTaskService) ListUserTaskViews(ctx context.Context, req *ListUserTasksRequest) ([]*dto.BPMNTaskResponse, int, error) {
+	if taskReadSnapshot(ctx, s.client) == nil {
+		var tasks []*dto.BPMNTaskResponse
+		var total int
+		err := s.engine.withTaskReadSnapshot(ctx, func(ctx context.Context, e *CustomProcessEngine) error {
+			var err error
+			tasks, total, err = e.taskService.ListUserTaskViews(ctx, req)
+			return err
+		})
+		if err != nil {
+			return nil, 0, err
+		}
+		return tasks, total, nil
+	}
+
 	tasks, total, err := s.ListUserTasks(ctx, req)
 	if err != nil {
 		return nil, 0, err
@@ -4274,26 +4354,8 @@ func (s *bpmnTaskService) GetTaskStatistics(ctx context.Context, req *TaskStatis
 		return nil, common.NewForbiddenError("无权读取任务统计")
 	}
 	req.TenantID = scope.TenantID
-	tasks, _, err := s.ListUserTasks(ctx, &ListUserTasksRequest{
-		ProcessDefinitionKey: req.ProcessDefinitionKey, Assignee: req.Assignee, Status: req.Status,
-	})
-	if err != nil {
-		return nil, err
-	}
-	filtered := make([]*ent.ProcessTask, 0, len(tasks))
-	for _, task := range tasks {
-		if req.StartDate != nil && task.CreatedTime.Before(*req.StartDate) {
-			continue
-		}
-		if req.EndDate != nil && task.CreatedTime.After(*req.EndDate) {
-			continue
-		}
-		filtered = append(filtered, task)
-	}
-	tasks = filtered
-
 	stats := &TaskStatistics{
-		TotalTasks:        len(tasks),
+		TotalTasks:        0,
 		StatusBreakdown:   make(map[string]int),
 		AssigneeBreakdown: make(map[string]int),
 		TimeDistribution:  make(map[string]interface{}),
@@ -4302,7 +4364,8 @@ func (s *bpmnTaskService) GetTaskStatistics(ctx context.Context, req *TaskStatis
 	var totalCompletionTime time.Duration
 	completedCount := 0
 
-	for _, task := range tasks {
+	visit := func(task *ent.ProcessTask) {
+		stats.TotalTasks++
 		stats.StatusBreakdown[task.Status]++
 
 		if task.Assignee != "" {
@@ -4318,6 +4381,11 @@ func (s *bpmnTaskService) GetTaskStatistics(ctx context.Context, req *TaskStatis
 		if !task.DueDate.IsZero() && time.Now().After(task.DueDate) && task.Status != "completed" {
 			stats.OverdueTasks++
 		}
+	}
+
+	_, _, err = s.ListUserTasks(ctx, &ListUserTasksRequest{ProcessDefinitionKey: req.ProcessDefinitionKey, Assignee: req.Assignee, Status: req.Status, startDate: req.StartDate, endDate: req.EndDate, visit: visit})
+	if err != nil {
+		return nil, err
 	}
 
 	if completedCount > 0 {

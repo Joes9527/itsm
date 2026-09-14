@@ -11,7 +11,7 @@ BEGIN
 
     IF NOT FOUND
        OR source_column.is_nullable <> 'NO'
-       OR source_column.column_default <> $default$''::character varying$default$ THEN
+       OR source_column.column_default IS DISTINCT FROM $default$''::character varying$default$ THEN
         RAISE EXCEPTION 'process_tasks.assignee_source must be NOT NULL with an empty-string default';
     END IF;
     IF NOT EXISTS (

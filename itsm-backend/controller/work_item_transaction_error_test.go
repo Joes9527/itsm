@@ -69,3 +69,62 @@ func TestTicketAssignmentAndMixedUpdateSerializationConflict(t *testing.T) {
 		})
 	}
 }
+
+type serializationFailureDirectory struct{}
+
+func (serializationFailureDirectory) Open(context.Context, *ent.Tx, int) (*ent.Client, func() error, error) {
+	return nil, nil, fmt.Errorf("directory snapshot: %w", &pq.Error{Code: "40001", Message: "private-database-detail"})
+}
+
+func TestConvergedAssignmentBoundariesMapSerializationConflict(t *testing.T) {
+	for _, operation := range []string{"msp", "auto", "accept", "escalate", "subtask"} {
+		t.Run(operation, func(t *testing.T) {
+			_, client, tc := setupTestTicketController(t)
+			tenant, actor := createTestTenantAndUserForTicket(t, client)
+			ctx := tenantctx.WithTenantID(context.Background(), tenant.ID)
+			actor = client.User.UpdateOne(actor).SetRole("super_admin").SaveX(ctx)
+			parent := client.Ticket.Create().SetTitle("Parent").SetTicketNumber("SERIAL-PARENT").SetRequesterID(actor.ID).SetTenantID(tenant.ID).SaveX(ctx)
+			item := client.Ticket.Create().SetTitle("Before").SetTicketNumber("SERIAL-CHILD").SetRequesterID(actor.ID).SetAssigneeID(actor.ID).SetParentTicketID(parent.ID).SetTenantID(tenant.ID).SaveX(ctx)
+			logger := zap.NewNop().Sugar()
+			sessions := authorization.NewSessionReader(client, serializationFailureDirectory{})
+			tc.ticketService = service.NewTicketService(&service.TicketServiceConfig{Client: client, Repository: repository.NewEntRepository(client, logger), Logger: logger, SessionReader: sessions})
+			record := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(record)
+			c.Set("user_id", actor.ID)
+			c.Set("tenant_id", tenant.ID)
+			c.Set("role", "super_admin")
+			c.Params = gin.Params{{Key: "id", Value: strconv.Itoa(item.ID)}}
+			payload := `{}`
+			var handler gin.HandlerFunc
+			switch operation {
+			case "msp":
+				handler = (&MSPController{ticketService: tc.ticketService, logger: logger}).AssignMSPTechnician
+				payload = fmt.Sprintf(`{"customerTenantId":%d}`, tenant.ID)
+			case "auto":
+				smart := service.NewTicketAssignmentSmartService(client, logger, nil, nil)
+				smart.SetSessionReader(sessions)
+				handler = NewTicketAssignmentSmartController(smart, nil, logger).AutoAssign
+			case "accept":
+				workflow := service.NewTicketWorkflowService(client, logger)
+				workflow.SetSessionReader(sessions)
+				handler = NewTicketWorkflowController(workflow, nil, logger).AcceptTicket
+				payload = fmt.Sprintf(`{"ticketId":%d}`, item.ID)
+			case "escalate":
+				handler = tc.EscalateTicket
+				payload = `{"reason":"Review conflict"}`
+			case "subtask":
+				handler = tc.UpdateSubtask
+				c.Params = gin.Params{{Key: "id", Value: strconv.Itoa(parent.ID)}, {Key: "subtask_id", Value: strconv.Itoa(item.ID)}}
+				payload = fmt.Sprintf(`{"title":"After","assigneeId":%d,"version":%d}`, actor.ID, item.Version)
+			}
+			c.Request = httptest.NewRequest("POST", "/", bytes.NewBufferString(payload)).WithContext(ctx)
+			c.Request.Header.Set("Content-Type", "application/json")
+			handler(c)
+			require.Equal(t, 409, record.Code, record.Body.String())
+			require.Contains(t, record.Body.String(), `"retryable":true`)
+			require.NotContains(t, record.Body.String(), "private-database-detail")
+			require.NotContains(t, record.Body.String(), "currentVersion")
+			require.Equal(t, "Before", client.Ticket.GetX(ctx, item.ID).Title)
+		})
+	}
+}

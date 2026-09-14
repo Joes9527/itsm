@@ -43,6 +43,9 @@ func (tasc *TicketAssignmentSmartController) AutoAssign(c *gin.Context) {
 
 	response, err := tasc.smartService.AutoAssign(c.Request.Context(), ticketID, tenantID, creation.Identity{ActorID: c.GetInt("user_id"), TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
 		tasc.logger.Errorw("Failed to auto assign ticket", "error", err, "ticket_id", ticketID)
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return

@@ -346,6 +346,9 @@ func (mc *MSPController) AssignMSPTechnician(c *gin.Context) {
 		creation.Identity{ActorID: assignerID, TenantID: req.CustomerTenantID, Role: c.GetString("role"), Channel: "http"},
 	)
 	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
 		mc.logger.Errorw("Failed to assign MSP technician", "error", err, "ticket_id", ticketID)
 		common.Fail(c, common.InternalErrorCode, "分配失败: "+err.Error())
 		return
