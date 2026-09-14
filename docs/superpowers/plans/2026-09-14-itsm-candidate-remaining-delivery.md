@@ -40,7 +40,7 @@
 
 ## 3. 唯一剩余任务清单（交付必需）
 
-仅以下 9 项可驱动本轮交付工作。状态为未关闭，不能从项目数量推算完成百分比。
+仅以下 9 项可驱动本轮交付工作。以当前各行及最新检查点为准，不从项目数量推算完成百分比。
 
 | ID / 状态 | 单一交付物及责任 | 完成判据 | 原合同映射 |
 | --- | --- | --- | --- |
@@ -50,8 +50,8 @@
 | R4 / A1–A2完成；A3–A4维护者接受暂未完成（7.11） | A：鉴权持久状态代码与私有故障证据 | 按既有鉴权计划核查并完成唯一 PG authority、规范 token、撤销与单次消费、受限角色、启动/注销/刷新失败关闭；两实例与 PG/API 重启、Redis 丢失、旧快照恢复换 authority/密钥，新登录正向。先确认已有代码，禁止仅因旧框未勾选重做。 | 鉴权 A1–A4、B3、原设计第8节 |
 | R5 / 完成（第7.12节，携带7.11限制） | A：已审阅的固定候选与 T1 新交接包 | 纳入已审阅修复，核对 bootstrap/迁移依赖与原 WorkItem/主题，完成受影响后端和前端 G1 检查；固定 CandidateSHA、构建/迁移指纹、配置合同、日志和未验证项，校验 bundle。代码 SHA 与文档 SHA 分开。 | 鉴权 A5、T1/G1 |
 | R6 / 完成T3（7.13）；R7配置增量留证 | 当前 Agent 执行并留证：T2 差额关闭及 T3 EnvironmentRevision | 固定新 SHA 上核对真实源与写入者、受保护备份/附件、目标 PG17/资源和受限角色；完整迁移语义在执行前准入，恢复/迁移后历史保全、出站阻断与候选入口。明确备份窗口；不再等待其他 Agent。只有完整 EnvironmentRevision 才放行 R7。 | T2/T3、B4/B6、G2 环境 |
-| R7 / 真实验收中（7.13），后台差额未关闭 | 当前 Agent 业务验收与监测：目标环境 G2 | 在同一已交接版本执行 Incident、Problem、Change、generic/Requested Item、真实 BPMN/Worker/SLA、版本冲突/权限/附件/通知，以及双主题真实浏览器旅程；受限身份正向和负向，启动/周期后历史对账。失败只回到对应 R 项，不新开无关波次。 | T4/G2 |
-| R8 / 待 R7 | 当前 Agent 执行并复核证据：稳定运行及恢复交接 | 固定构建受控重启，关键旅程和消费者恢复；连续至少60分钟低频只读观察，保全人工新增数据，给出固定 URL/启停/资源/恢复说明及限制。 | T5/G3 |
+| R7 / 完成当前核心范围G2（7.14） | 当前 Agent 业务验收与监测：目标环境 G2 | 在同一已交接版本执行 Incident、Problem、Change、generic/Requested Item、真实 BPMN/Worker/SLA、版本冲突/权限/附件/通知，以及双主题真实浏览器旅程；受限身份正向和负向，启动/周期后历史对账。失败只回到对应 R 项，不新开无关波次。 | T4/G2 |
+| R8 / 受控重启通过，60分钟观察中（7.14） | 当前 Agent 执行并复核证据：稳定运行及恢复交接 | 固定构建受控重启，关键旅程和消费者恢复；连续至少60分钟低频只读观察，保全人工新增数据，给出固定 URL/启停/资源/恢复说明及限制。 | T5/G3 |
 | R9 / 待 R8 | 维护者验收、A 汇总：最终关闭 | 维护者完成代表性页面/业务旅程；G1/G2/G3 全部有证据，无未解释的阻断问题；分别报告代码、私有验证、候选运行、main、企业外发、生产部署状态。 | 原设计第7–9节 |
 
 ### 实施入口（只引用既有技术步骤）
@@ -81,7 +81,7 @@
 | M0 范围收口 | 本文件及入口取代关系 | 单一清单、责任、必需/延后、证据引用 | 只开始 R1，不同时启动新实现 |
 | M1 执行隔离关闭（已完成） | R1–R3 | 入口差额清零，B2 私有验收与独立审阅 | 进入 M2 |
 | M2 固定可交接代码（已完成，按7.11修订范围） | R4–R5 | 已完成鉴权证据及7.11限制、G1、新 CandidateSHA/bundle | 当前 Agent 继续环境准入 |
-| M3 候选业务验收 | R6–R7 | T3 EnvironmentRevision、真实 G2 | 进入 M4 |
+| M3 候选业务验收（已完成当前核心范围） | R6–R7 | T3 EnvironmentRevision、真实 G2 | 进入 M4 |
 | M4 稳定交付 | R8–R9 | G3、维护者验收、稳定访问/恢复入口 | 关闭完整目标 |
 
 执行约束：
@@ -288,3 +288,16 @@ R7已核验的真实路径（本地私有证据根 `~/.local/state/itsm-candidat
 保全口径：T4前152张原表原主键/字段无变化、Redis222键保全及1键自然过期。T4后 `original-row-preservation-124202.json` 原始检查FAIL，唯一变化为编号计数器work_item_number_sequences从8到24及更新时间；与新增16张工单及最大编号24一致，属于本轮合法创建副作用。其余历史业务行无差异；原FAIL保留，不改称152表全部零变化。
 
 **R7未关闭的实际差额：**后台2条incident.status_changed在首次分派后blocked，生产者包含previousAssigneeId而消费者严格结构漏字段；独立fix worktree candidate-incident-status正补回归，未宣称修好或重部署。另3条旧事件模板assign_incident callback为handler_contract，需核对模板输入与当前合同。R7其余差额为SLA/周期及权限/租户完整断言、双主题业务路径、最终历史/资源对账和里程碑复核。R8至少60分钟观察及受控恢复尚未开始，R9维护者验收待R8，M3/M4未完成。范围仍为既有R7核心上线，不增加飞书或新架构波次。
+### 7.14 R7/M3收口与R8启动（2026-09-14 13:32 CST）
+
+本批12:50–13:32约42分钟，关闭既有R7差额并启动R8；未扩大功能范围。当前CandidateSHA `0788a9bb196ab37a8389b3f366bed9877b2f72c3`，EnvironmentRevision `f058c8227e7f350387ecfa9f5296bc0a1fd852c1c392d1071619de27f1c24424`。代码分支codex/fix/candidate-approval-contract；三个后端二进制重新构建通过，前端tree与3142247e一致并复用既有构建。candidate-0788a9bb.bundle verify成功，main未变。
+
+R7/G2按当前核心范围完成，M3通过：
+
+- 04bc4917修复Incident状态事件漏解码previousAssigneeId；生产者生成、交付/重放及篡改拒绝回归race通过，真实新事件发布成功。原2条blocked事件及3条旧应急模板blocked回调保留，不人工清除或冒称已恢复。新Incident采用明确no_process人工生命周期；自动应急未交付，此可逆假设已告知，维护者偏好仍待确认，不能写为已获得范围接受。
+- Change三种实施结果随后PIR、review、close均通过（change-close-run-2.log），专业终态completed；RequestedItem真实BPMN受理/审批/履约到resolved通过（fulfillment-run-1.log），不声称已覆盖其取消/最终closed。五类详情双主题显示、主题持久化和移动宽度通过；不是所有功能全量测试。
+- 实際SLA到期违约与本地SMTP/站内通知、声明的内部Webhook投递及HMAC验证通过。04bc真实05:22:21Z升级处理开始并完成，SLA多轮周期留证escalation-cycle-04bc.log。没有企业投递；KAF仍只证明隔离传输接收。
+- 权限/历史拒绝、版本冲突、附件字节、signed tenant抵御伪造header/query均有实际证据；租户用例不冒称创建第二租户身份。历史152表原行核对唯一变化为编号序列8→28及时间，与新增20工单一致；其余历史业务行零差异。原始非零检查original-row-preservation-132825.json保留，history-reconciliation.json解释唯一差异。Redis222键DUMP/绝对期限不变，1键自然过期。
+- 双主题视觉检查额外发现已通过CAB审批在页面显示待审批：HTTP返回内部Go字段Status等，前端期望status。0788a9bb只复用既有dto.ChangeApproval映射输出，空历史[]；实际HTTP/UI RED、handler定向race GREEN1.461s、最终真实API及页面刷新GREEN1/1（approval-ui-green.log）均完成。独立m1_core_review确认无新增阻断，允许复用不受影响的04bc生命周期/周期证据；不声称全套在0788重跑。
+
+R8正在执行：0788的API/Worker于13:30:03–13:30:05受控停止/重启，同容器/构建/配置，9张业务表摘要完全一致，源health始终200；重启后新RequestedItem审批和履约通过（t5/recovery-flow.log）。只读观察从13:30:23开始，必须实际累计至少3600秒后才判G3，当前不算通过。观察期不更改运行配置、不重复无变化测试。R9仍待G3后维护者实际验收，M4未关闭；7.11新PG鉴权A3/A4限制继续有效。
