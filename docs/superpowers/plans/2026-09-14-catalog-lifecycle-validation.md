@@ -1,7 +1,7 @@
 # 现有目录与 Helpdesk 生命周期验收
 
 - 日期：2026-09-14
-- 状态：in progress；目录盘点完成，真实解决/关闭路径存在 P1 阻塞，P2 待 P1 修复后推进。
+- 状态：accepted；执行中。目录盘点完成，候选路由修复已通过回归，真实解决/关闭路径仍存在 P1 阻塞。
 - 分支：codex/test/catalog-lifecycle-audit，基于 c3347992；此次仅文档与本地验收，没有修改生产代码或现有目录配置。
 - 上游：[UI 核心路径计划](2026-09-14-ui-core-journey-recovery.md)。本任务延续 UI 重构，不重设计 E2E、WorkItem 或审批引擎。
 
@@ -69,3 +69,11 @@
 - 审批驳回及专业闭环未在本次重跑。现有 SR 驳回路径含 notify_rejection，SSLVPN 含外部 KAF，需先核对回调与通知边界。P1 阻塞未修复前，不将三类临时纯人工流程完成扩大为全部目录/专业生命周期通过。
 
 本轮没有生产代码修改、目录发布、任务改派、数据库迁移或外部交付。私有原始证据保留在 ~/.local/state/itsm-kaf-baseline-20260908/evidence/catalog-lifecycle-20260914/；本文件维护可复用验收结论，不提交原始日志/账号凭据。
+
+## 6. 候选路由修复进展
+
+在 `codex/fix/bpmn-human-task-routing`（基于目录盘点分支）修改既有 `createUserTask`：显式 candidateUsers/candidateGroups 的非审批任务保持未分配，交由现有领取命令处理。显式 assignee、审批分配和完全未配置参与人的原有回退不变。候选组无法解析时保持未分配，不退回申请人；本次不增加配置校验或历史修复路径。
+
+新增回归先在原实现复现三项失败，修复后通过；覆盖候选用户、候选组、无有效成员、显式处理人、申请人确认，以及真实服务领取时对非候选人和跨租户账号的拒绝。执行 `go test ./service -run TestFulfillment -count=1`、审批任务相关测试及 `GOMAXPROCS=4 go test -p 2 ./service ./controller ./tests/integration ./tests/rbac` 均通过，独立审查未发现阻塞项。
+
+此项仅源码修复，尚未部署或发布目录配置，也没有证明浏览器真实领取通过。动态当前 WorkItem 处理人解析、九项目录配置、解决/关闭 UI 及第 5 节边界仍待完成。

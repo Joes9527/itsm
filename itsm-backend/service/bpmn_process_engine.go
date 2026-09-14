@@ -1743,7 +1743,9 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 				// 都没声明：解析申请人自己所在部门的负责人（这次会话早前已经做的部分）
 				assignee = e.resolveApprovalAssignee(ctx, instance, approvalRequester)
 			}
-		} else {
+		} else if strings.TrimSpace(task.CandidateUsers) == "" && strings.TrimSpace(task.CandidateGroups) == "" {
+			// Explicit candidate routing stays unassigned until claimed. Unresolved
+			// configured candidates must not silently route fulfillment back to the requester.
 			// 优先使用 requester_id（工单申请人）
 			assignee = getUserID("requester_id")
 			// 其次使用 triggered_by（触发者）
