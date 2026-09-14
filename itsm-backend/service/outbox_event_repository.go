@@ -11,6 +11,7 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/outboxevent"
+	"itsm-backend/ent/predicate"
 
 	"github.com/google/uuid"
 )
@@ -400,9 +401,77 @@ func (r *OutboxEventRepository) MarkRetryWithAudit(ctx context.Context, eventID 
 	return nil
 }
 
-// MarkPublished finalizes an active, successfully delivered publishing lease.
+// DeliveryCompleted reads the existing delivery-completion timestamp. A durable
+// handler may commit this receipt before the worker acknowledges its lease;
+// pending/publishing plus published_at is therefore a completed delivery waiting
+// for acknowledgement, not permission to repeat its materialization.
+func (r *OutboxEventRepository) DeliveryCompleted(ctx context.Context, event *ent.OutboxEvent) (bool, error) {
+	if event == nil {
+		return false, fmt.Errorf("outbox event is required")
+	}
+	row, err := r.client.OutboxEvent.Query().Where(outboxDeliveryIdentity(event)...).Only(ctx)
+	if err != nil {
+		return false, err
+	}
+	return !row.PublishedAt.IsZero(), nil
+}
+
+// RecordDeliveryCompleted must use the handler's transaction-backed repository
+// so successful delivery (including suppressed channels) and its receipt commit
+// together. It never acknowledges or clears the worker lease. External transport
+// handlers cannot use this to claim transactional/replay-safe delivery.
+func (r *OutboxEventRepository) RecordDeliveryCompleted(ctx context.Context, event *ent.OutboxEvent) error {
+	if event == nil {
+		return fmt.Errorf("outbox event is required")
+	}
+	scope := outboxDeliveryIdentity(event)
+	if event.ClaimToken != "" {
+		scope = append(scope, outboxevent.StatusEQ(outboxEventStatusPublishing), outboxevent.ClaimTokenEQ(event.ClaimToken), outboxevent.ClaimExpiresAtGT(r.currentTime()))
+	} else {
+		// Direct synchronous delivery may materialize an unclaimed pending event;
+		// it cannot steal a publishing lease or reopen a terminal outcome.
+		scope = append(scope, outboxevent.StatusEQ(outboxEventStatusPending), outboxevent.ClaimTokenIsNil())
+	}
+	return r.recordDeliveryCompleted(ctx, scope, r.currentTime())
+}
+
+func outboxDeliveryIdentity(event *ent.OutboxEvent) []predicate.OutboxEvent {
+	return []predicate.OutboxEvent{outboxevent.IDEQ(event.ID), outboxevent.EventIDEQ(event.EventID), outboxevent.EventTypeEQ(event.EventType), outboxevent.TenantIDEQ(event.TenantID), outboxevent.AggregateTypeEQ(event.AggregateType), outboxevent.AggregateIDEQ(event.AggregateID)}
+}
+
+// One authoritative timestamp write for both transactional delivery receipts and
+// ordinary worker acknowledgement. A receipt already committed is immutable.
+func (r *OutboxEventRepository) recordDeliveryCompleted(ctx context.Context, scope []predicate.OutboxEvent, at time.Time) error {
+	updated, err := r.client.OutboxEvent.Update().Where(scope...).Where(outboxevent.PublishedAtIsNil()).SetPublishedAt(at).Save(ctx)
+	if err != nil {
+		return err
+	}
+	if updated == 1 {
+		return nil
+	}
+	exists, err := r.client.OutboxEvent.Query().Where(scope...).Exist(ctx)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return ErrOutboxEventClaimLost
+	}
+	return nil
+}
+
+// MarkPublished atomically acknowledges an active successfully delivered lease,
+// preserving a completion timestamp already committed by a durable handler.
 func (r *OutboxEventRepository) MarkPublished(ctx context.Context, eventID int, claimToken string, publishedAt time.Time) error {
-	updated, err := r.client.OutboxEvent.Update().
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("start outbox acknowledgement: %w", err)
+	}
+	defer tx.Rollback()
+	scope := []predicate.OutboxEvent{outboxevent.IDEQ(eventID), outboxevent.StatusEQ(outboxEventStatusPublishing), outboxevent.ClaimTokenEQ(claimToken), outboxevent.ClaimExpiresAtGT(r.currentTime())}
+	if err := NewOutboxEventRepository(tx.Client()).recordDeliveryCompleted(ctx, scope, publishedAt); err != nil {
+		return err
+	}
+	updated, err := tx.OutboxEvent.Update().
 		Where(
 			outboxevent.IDEQ(eventID),
 			outboxevent.StatusEQ(outboxEventStatusPublishing),
@@ -410,7 +479,6 @@ func (r *OutboxEventRepository) MarkPublished(ctx context.Context, eventID int, 
 			outboxevent.ClaimExpiresAtGT(r.currentTime()),
 		).
 		SetStatus(outboxEventStatusPublished).
-		SetPublishedAt(publishedAt).
 		ClearLastError().
 		ClearClaimToken().
 		ClearClaimExpiresAt().
@@ -421,7 +489,7 @@ func (r *OutboxEventRepository) MarkPublished(ctx context.Context, eventID int, 
 	if updated == 0 {
 		return ErrOutboxEventClaimLost
 	}
-	return nil
+	return tx.Commit()
 }
 
 // MarkBlocked records a non-retryable configuration or payload failure while

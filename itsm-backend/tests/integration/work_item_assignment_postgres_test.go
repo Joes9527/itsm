@@ -152,6 +152,81 @@ func TestPostgresWorkItemAssignmentWorkerRetryRestartAndUnknownTransport(t *test
 	require.Equal(t, 1, graph.calls, "ambiguous external delivery must not be replayed")
 }
 
+func TestPostgresWorkItemAssignmentSuppressedDeliverySurvivesPreferenceChangeAndRestart(t *testing.T) {
+	client, cmd := assignmentFixture(t)
+	ctx := context.Background()
+	pref := client.NotificationPreference.Create().SetTenantID(cmd.TenantID).SetUserID(cmd.AssigneeID).SetEventType("ticket_assigned").SetInAppEnabled(false).SetEmailEnabled(false).SetSmsEnabled(false).SetPushEnabled(false).SaveX(ctx)
+	tx, err := client.Tx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback()
+	_, err = workitemassignment.NewWriter(service.EnqueueWorkItemAssignment, assignmentTestActor).Apply(ctx, tx.Client(), cmd)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+	repository := service.NewOutboxEventRepository(client)
+	claimed, err := repository.ClaimDue(ctx, time.Now().Add(time.Second), 1)
+	require.NoError(t, err)
+	require.Len(t, claimed, 1)
+	notifications := service.NewTicketNotificationService(client, zap.NewNop().Sugar())
+	require.NoError(t, service.NewWorkItemAssignmentNotificationHandler(client, notifications).Deliver(ctx, claimed[0]))
+	require.Zero(t, client.TicketNotification.Query().CountX(ctx))
+	completedAt := client.OutboxEvent.GetX(ctx, claimed[0].ID).PublishedAt
+	require.False(t, completedAt.IsZero())
+	// Successful delivery was not acknowledged. Preference changes cannot alter
+	// that durable historical outcome when a new worker recovers the claim.
+	pref.Update().SetInAppEnabled(true).SaveX(ctx)
+	client.OutboxEvent.UpdateOneID(claimed[0].ID).SetClaimExpiresAt(time.Now().Add(-time.Second)).ExecX(ctx)
+	registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{service.NewWorkItemAssignmentNotificationHandler(client, notifications)})
+	require.NoError(t, err)
+	worker, err := service.NewOutboxDeliveryWorker(repository, service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: time.Minute, MaxAttempts: 3}, zap.NewNop().Sugar(), registry)
+	require.NoError(t, err)
+	require.NoError(t, worker.DispatchOnce(ctx))
+	require.Zero(t, client.TicketNotification.Query().CountX(ctx), "suppressed historical outcome must remain suppressed")
+	require.Zero(t, client.Notification.Query().CountX(ctx))
+	require.Equal(t, "published", client.OutboxEvent.GetX(ctx, claimed[0].ID).Status)
+	require.Equal(t, completedAt, client.OutboxEvent.GetX(ctx, claimed[0].ID).PublishedAt)
+}
+
+func TestPostgresWorkItemAssignmentDeliveryReceiptFailureRollsBackMaterialization(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		t.Run(fmt.Sprint(enabled), func(t *testing.T) {
+			client, cmd := assignmentFixture(t)
+			ctx := context.Background()
+			pref := client.NotificationPreference.Create().SetTenantID(cmd.TenantID).SetUserID(cmd.AssigneeID).SetEventType("ticket_assigned").SetInAppEnabled(enabled).SetEmailEnabled(false).SetSmsEnabled(false).SetPushEnabled(false).SaveX(ctx)
+			tx, err := client.Tx(ctx)
+			require.NoError(t, err)
+			defer tx.Rollback()
+			_, err = workitemassignment.NewWriter(service.EnqueueWorkItemAssignment, assignmentTestActor).Apply(ctx, tx.Client(), cmd)
+			require.NoError(t, err)
+			require.NoError(t, tx.Commit())
+			event := client.OutboxEvent.Query().OnlyX(ctx)
+			fail := true
+			client.OutboxEvent.Use(func(next ent.Mutator) ent.Mutator {
+				return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+					v, err := next.Mutate(ctx, m)
+					if err != nil {
+						return nil, err
+					}
+					if fail {
+						return nil, errors.New("delivery receipt fault")
+					}
+					return v, nil
+				})
+			})
+			notifications := service.NewTicketNotificationService(client, zap.NewNop().Sugar())
+			err = service.NewWorkItemAssignmentNotificationHandler(client, notifications).Deliver(ctx, event)
+			require.ErrorContains(t, err, "delivery receipt fault")
+			require.True(t, client.OutboxEvent.GetX(ctx, event.ID).PublishedAt.IsZero())
+			require.Zero(t, client.Notification.Query().CountX(ctx))
+			require.Zero(t, client.TicketNotification.Query().CountX(ctx))
+			fail = false
+			pref.Update().SetInAppEnabled(true).SaveX(ctx)
+			require.NoError(t, service.NewWorkItemAssignmentNotificationHandler(client, notifications).Deliver(ctx, event))
+			require.Equal(t, 1, client.TicketNotification.Query().CountX(ctx))
+			require.Equal(t, 1, client.Notification.Query().CountX(ctx))
+		})
+	}
+}
+
 func assignmentFixture(t *testing.T) (*ent.Client, workitemassignment.Command) {
 	db := openBPMNAssignmentSourceMigrationDB(t)
 	client := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.Postgres, db)))

@@ -257,6 +257,49 @@ func TestOutboxEventRepository_MarkPublishedFinalizesClaimedEvent(t *testing.T) 
 	assert.WithinDuration(t, publishedAt, event.PublishedAt, time.Millisecond)
 }
 
+func TestOutboxEventRepository_MarkPublishedPreservesCompletedDeliveryTime(t *testing.T) {
+	repo, client := newOutboxRepository(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	seedPendingEvent(t, repo, "completed-before-ack", now.Add(-time.Second))
+	claimed, err := repo.ClaimDue(ctx, now, 1)
+	require.NoError(t, err)
+	require.Len(t, claimed, 1)
+	client.OutboxEvent.UpdateOneID(claimed[0].ID).SetPublishedAt(now).SaveX(ctx)
+	require.NoError(t, repo.MarkPublished(ctx, claimed[0].ID, claimed[0].ClaimToken, now.Add(time.Minute)))
+	require.WithinDuration(t, now, client.OutboxEvent.GetX(ctx, claimed[0].ID).PublishedAt, time.Millisecond)
+}
+
+func TestOutboxEventRepository_DeliveryReceiptRejectsStaleClaimAndForeignIdentity(t *testing.T) {
+	repo, client := newOutboxRepository(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	seedPendingEvent(t, repo, "receipt-scope", now.Add(-time.Second))
+	first, err := repo.ClaimDue(ctx, now, 1)
+	require.NoError(t, err)
+	require.Len(t, first, 1)
+	recoveredAt := now.Add(outboxEventClaimLeaseDuration + time.Second)
+	repo.clock = func() time.Time { return recoveredAt }
+	second, err := repo.ClaimDue(ctx, recoveredAt, 1)
+	require.NoError(t, err)
+	require.Len(t, second, 1)
+	require.ErrorIs(t, repo.RecordDeliveryCompleted(ctx, first[0]), ErrOutboxEventClaimLost)
+	for _, change := range []func(*ent.OutboxEvent){
+		func(e *ent.OutboxEvent) { e.TenantID++ }, func(e *ent.OutboxEvent) { e.EventID = "other" }, func(e *ent.OutboxEvent) { e.AggregateID = "other" }, func(e *ent.OutboxEvent) { e.EventType = "other" },
+	} {
+		foreign := *second[0]
+		change(&foreign)
+		require.ErrorIs(t, repo.RecordDeliveryCompleted(ctx, &foreign), ErrOutboxEventClaimLost)
+		_, err := repo.DeliveryCompleted(ctx, &foreign)
+		require.Error(t, err)
+	}
+	require.True(t, client.OutboxEvent.GetX(ctx, first[0].ID).PublishedAt.IsZero())
+	require.NoError(t, repo.RecordDeliveryCompleted(ctx, second[0]))
+	completed, err := repo.DeliveryCompleted(ctx, second[0])
+	require.NoError(t, err)
+	require.True(t, completed)
+}
+
 func TestOutboxEventRepository_RedactsSensitiveEntityFieldsAndSanitizesRetryError(t *testing.T) {
 	repo, client := newOutboxRepository(t)
 	ctx := context.Background()

@@ -13,7 +13,6 @@ import (
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/ticketnotification"
 	"itsm-backend/ent/ticketworkflowrecord"
 	assignment "itsm-backend/handlers/common/workitemassignment"
 )
@@ -115,18 +114,25 @@ func (h *WorkItemAssignmentNotificationHandler) Deliver(ctx context.Context, eve
 	if matched != 1 {
 		return blockOutboxDelivery("assignment audit unavailable or ambiguous")
 	}
-	if p.Command.AssigneeID == 0 {
-		return tx.Commit()
-	}
-	exists, err := tx.TicketNotification.Query().Where(ticketnotification.TenantID(item.TenantID), ticketnotification.TicketID(item.ID), ticketnotification.UserID(p.Command.AssigneeID), ticketnotification.DeliveryKey(p.EventID)).Exist(ctx)
+	repository := NewOutboxEventRepository(tx.Client())
+	completed, err := repository.DeliveryCompleted(ctx, event)
 	if err != nil {
 		return err
 	}
-	if exists {
+	if completed {
+		return tx.Commit()
+	}
+	if p.Command.AssigneeID == 0 {
+		if err = repository.RecordDeliveryCompleted(ctx, event); err != nil {
+			return err
+		}
 		return tx.Commit()
 	}
 	content := fmt.Sprintf("工单 #%s 已分配给您", item.TicketNumber)
 	if err = h.notifications.enqueueTicketNotificationTx(ctx, tx, item, "ticket_assigned", content, p.EventID, []int{p.Command.AssigneeID}); err != nil {
+		return err
+	}
+	if err = repository.RecordDeliveryCompleted(ctx, event); err != nil {
 		return err
 	}
 	return tx.Commit()
