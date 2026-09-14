@@ -194,3 +194,21 @@ R1 状态：本轮入口盘点已完成；安全缺口未关闭，M1 不通过�
 当前执行顺序：R2仅完成非飞书核心阻断与飞书未启用边界核实 → R3核心业务/架构运行验收 → R4必要鉴权可靠性 → R5固定可发布代码 → B环境交接和R7真实功能验收 → R8恢复稳定性与R9维护者验收。R1完成，R2部分完成，其他状态不因范围调整自动变为通过；M1–M4继续沿用。
 
 历史7.1–7.5的缺陷与日志保留作事实记录，其中飞书后续开发安排已被本节取代。此前M1剩余3–6小时估算主要包含飞书开发，现不再适用；下一批根据核心业务实际失败给出差额与工时，不沿用该估算。
+### 7.7 核心功能优先批次（2026-09-14 10:43 CST，M1审阅中）
+
+新增测试提交 `a830814b`（无业务代码变更）。按维护者范围修订，本批没有继续飞书协议开发；只证明未配置飞书时核心工单创建/编辑可用，公开回调和手动同步入口不进入同步owner。实际部署的目标声明仍须B在R6交接确认，不能据fixture冒称目标配置已检查。
+
+本机实际PASS，日志仍位于第7.3证据目录：
+
+| 用户任务/运行能力 | 本批证据 | 证明边界 |
+| --- | --- | --- |
+| 操作人员创建、编辑工单；申请服务；Incident/Problem/Change专业写入 | r3-core-business-private-race.log | candidate受限角色、真实PG事务，版本推进、历史及关系保全、失败回滚；选定用例通过，不等于所有UI旅程 |
+| BPMN启动、认领/完成/取消任务、实例管理 | 同上 | 已批准新成员正向、历史/独立实例拒绝；范围外实例不登记、不写入 |
+| 异步任务、通知、SLA与升级；权限撤销及并发编辑 | r3-core-runtime-private-race.log | 真实outbox/callback/notification worker、claim/lease恢复、SLA周期、原事务副作用和不可变操作回执 |
+| 消费者离线及进程终止后恢复 | r3-stream-recovery-race.log | 真实私有Redis，消息保留、旧topic保全、拒绝ACK保留pending、消费者kill恢复；transport fixture不替代PG授权证据 |
+| 应用初始化与资源隔离 | r3-construction-preservation-race.log | runtime角色/登记边界、完整NewApplication子进程，真实PG/Redis/MinIO保全；没有Start应用运行时 |
+| 未启用飞书不触发业务同步 | r3-unused-integration-boundary-race.log及core业务日志 | HTTP手动同步/公开回调拒绝，无owner调用；核心创建/编辑不生成飞书意图 |
+
+上述均 `-race -count=1`，退出0、选定用例无skip。测试资源：原任务私有PG16.15；Redis7.0.15包及其两个缺失库仅解压到任务test-deps，不安装系统服务，fixture使用随机loopback端口/随机密码并校验PID；MinIO从本地缓存镜像提取可执行文件，提取容器未运行且已删除，fixture自行创建并销毁独立进程和目录。未连接共享DB11或B数据库，未执行R038。
+
+M1一次独立只读审阅已发起，尚未以这些PASS直接宣告M1通过。R3剩余由该次审阅按核心合同判断；真实浏览器与目标PG17业务验收属于R7，需要新版CandidateSHA和B的T3交接。旧integration_postgres harness部分硬编码旧专用容器/端口，未把它直接指向现有共享目标，也未将未执行项算通过。
