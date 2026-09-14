@@ -34,7 +34,8 @@
 | 9 | `known_errors` | 1 | `known_errors` | `(tenant, title)` | 目标表已存在；seed 为模板样例（占位标题） |
 | 10 | `ticket_tags` | 4 | `ticket_tags` | `(tenant, code)` | 目标表已存在 |
 | 11 | `ticket_views` | 5 | `ticket_views` | `(tenant, name)` | 目标表已存在 |
-| 12 | `process_bindings` | 7 | `process_bindings` | `(tenant, business_type, sub_type)` | **依赖** `process_definitions`（目标表存在）；`process_definition_key` 对应定义须先存在（见 §4） |
+
+> **2026-09-14 用户确认**：`process_bindings`（7 条）**拆出 B0**，进入独立"规范流程初始化批次"（需先确认固定制品内的规范流程定义来源），避免悬空绑定；B0 不含流程绑定。
 
 ## 3. 排除（不纳入 B0）
 
