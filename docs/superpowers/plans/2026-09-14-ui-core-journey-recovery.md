@@ -220,3 +220,14 @@
 清理证据：本轮 WorkItem #13–#22 均删除后 GET 404；各自未结束实例先终止，已结束实例保留审计。测试账号 #7906–#7920 已停用并读取确认。临时目录 #27–#30 已删除；首次 #27 删除因缺 expectedCatalogVersion 返回 409，随后按真实版本补偿删除 HTTP 200。四个 `ui-runtime-*` 专用流程定义已停用，保留历史审计；没有修改或清理旧业务记录。临时测试的账号切换导航竞争已通过先离开旧页面再建立会话修正，最终三类完整运行没有失败步骤。
 
 私有验收证据保存在 `~/.local/state/itsm-kaf-baseline-20260908/evidence/ui-workbench-20260914/`，部署指纹在同级 `ui-workbench-deployment.json`；没有提交凭据、截图、日志或临时脚本。此次追加仅文档，不改变已验收二进制与前端产物。
+
+
+### PR 集成准入与单一实现复核（2026-09-14，in progress）
+
+“已部署修复”指此前开发 API 的源码提交，不是应保留的第二套业务实现。`80349336` 是本地运行验收的 Git 合并；不能把该运行分支整体作为 UI PR 合入 main。分类、RCA、菜单、目录发现和 KAF 请求人引用查询各自按领域依赖审查；已有 #12–#15 等 PR 不在 UI PR 中重复提交。
+
+独立静态复核没有发现四个交叠文件新增平行建单/审批/RCA 执行路径：创建仍通过 creation.submit / TicketApi；任务仍由 BPMN 授权与执行；RCA root cause 收敛至 problems.root_cause。发现建单页与 WorkItemClassificationSelect 分别查询分类树、维护重复读取状态，须在分类依赖交付中收敛；此项尚未修复，不用“旧运行修复”豁免 AGENTS.md。部署迁移 SQL 的既有 CRLF 字节保持不变，避免修改已部署 checksum。
+
+首批 PR 顺序：#19 工作台恢复 → #20 个人队列 → #21 核心路径范围文档 → #22 门户直接求助；#21/#22 为本次新增 draft。后续审批、权限、历史与任务面板继续按单一目标及 400 行限制拆分；尚未整条合入主线。创建 PR 不代表依赖或 CI 已满足。
+
+当前集成树全量验证：frontend test:ci 230 suites、3272 passed、13 skipped，覆盖率门槛通过；go test -p 2 ./... 最终通过。首次后端失败定位到 integration/intake_http_entry_test.go 的旧 category 字符串夹具；改用 cti.categoryId，并验证 WorkItem 持久化及旧 category 字段仍被拒绝。只修改测试，没有添加双读或兼容接口，独立复审无发现。现有 #19/#20 当时没有 CI/review 结果；已通过 workflow_dispatch 为 #19/#20/#22 的实际分支启动 frontend-ci，结果需在合并前核验。
