@@ -109,6 +109,7 @@ func (r *bpmnParticipationResolver) participatingInstanceIDs(ctx context.Context
 		prefilter = append(prefilter, processtask.CandidateGroupsContainsFold(token))
 	}
 
+	prefilter = append(prefilter, processtask.AssigneeSourceNEQ(""))
 	tasks, err := r.client.ProcessTask.Query().
 		Where(
 			processtask.TenantID(actor.TenantID),
@@ -123,7 +124,13 @@ func (r *bpmnParticipationResolver) participatingInstanceIDs(ctx context.Context
 	seen := make(map[int]struct{}, len(tasks))
 	instanceIDs := make([]int, 0, len(tasks))
 	for _, task := range tasks {
-		if !r.matchesTask(task, actor) {
+		if task.AssigneeSource != "" {
+			engine := &CustomProcessEngine{client: r.client}
+			scope := BPMNAccessScope{UserID: actor.UserID, TenantID: actor.TenantID}
+			if err := engine.authorizeBoundTask(ctx, r.client, task, scope, ""); err != nil {
+				continue
+			}
+		} else if !r.matchesTask(task, actor) {
 			continue
 		}
 		if _, exists := seen[task.ProcessInstanceID]; exists {

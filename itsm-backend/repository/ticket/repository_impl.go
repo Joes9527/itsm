@@ -3,6 +3,7 @@ package ticket
 import (
 	"context"
 	"fmt"
+	"itsm-backend/authorization"
 	"time"
 
 	"itsm-backend/ent"
@@ -215,15 +216,7 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, filters *FilterP
 		// 使普通员工只能看到自己创建或分配给自己的工单。
 		// 这是安全关键路径：即使上层忘记传 RequesterID 过滤，这里仍会兜底收窄。
 		if filters.DataScope == DataScopeOwnedOrAssigned {
-			if filters.CurrentUserID <= 0 {
-				// 防御性：未提供用户 ID 时 fail closed，返回空集而非全量。
-				query = query.Where(ticket.IDEQ(-1))
-			} else {
-				query = query.Where(ticket.Or(
-					ticket.RequesterIDEQ(filters.CurrentUserID),
-					ticket.AssigneeIDEQ(filters.CurrentUserID),
-				))
-			}
+			query = query.Where(authorization.WorkItemOwnedOrAssignedScope(filters.CurrentUserID))
 		}
 	}
 

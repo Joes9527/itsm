@@ -64,6 +64,10 @@ type fakeTaskService struct {
 	statsCtx           context.Context
 }
 
+func (f *fakeTaskService) ProjectTaskView(ctx context.Context, task *ent.ProcessTask) (*dto.BPMNTaskResponse, error) {
+	return dto.ToBPMNTaskResponse(task, nil), nil
+}
+
 func (f *fakeTaskService) GetTask(ctx context.Context, taskID string) (*ent.ProcessTask, error) {
 	return nil, errors.New("not implemented")
 }

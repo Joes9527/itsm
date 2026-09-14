@@ -702,7 +702,7 @@ func (c *BPMNWorkflowController) GetTask(ctx *gin.Context) {
 
 	// 先尝试解析为数字ID（数据库自增ID）
 	id, err := strconv.Atoi(taskID)
-	var task interface{}
+	var task *ent.ProcessTask
 	if err == nil {
 		// 数字ID，使用GetTaskByID
 		task, err = c.processEngine.TaskService().GetTaskByID(workflowCtx, id)
@@ -715,7 +715,12 @@ func (c *BPMNWorkflowController) GetTask(ctx *gin.Context) {
 		return
 	}
 
-	common.Success(ctx, task)
+	view, err := c.processEngine.TaskService().ProjectTaskView(workflowCtx, task)
+	if err != nil {
+		respondBPMNError(ctx, err, "读取任务视图失败")
+		return
+	}
+	common.Success(ctx, view)
 }
 
 // AssignTask 分配任务

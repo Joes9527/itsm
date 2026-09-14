@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"itsm-backend/authorization"
 	"strconv"
 	"strings"
 	"time"
@@ -268,18 +269,6 @@ func uniqueIDs(ids []int) []int {
 		result = append(result, id)
 	}
 	return result
-}
-
-// isTicketDataScopeAllRole 判断角色是否拥有全租户工单可见权限（DataScopeAll）。
-// 阻断8：管理角色（super_admin/sysadmin）可见全租户工单，
-// 其余角色（end_user 等）只能查看本人创建或分配给自己的工单。
-func isTicketDataScopeAllRole(role string) bool {
-	switch role {
-	case "super_admin", "sysadmin":
-		return true
-	default:
-		return false
-	}
 }
 
 // GetWorkflowStatus 获取工单关联的流程状态
@@ -707,7 +696,7 @@ func (s *TicketService) ListTickets(ctx context.Context, req *dto.ListTicketsReq
 	// 阻断8：按角色注入行级数据权限。
 	// 管理角色放行全租户；普通角色强制收窄到本人创建或分配给自己的工单。
 	filters.CurrentUserID = currentUserID
-	if isTicketDataScopeAllRole(currentRole) {
+	if authorization.WorkItemDataScopeAllRole(currentRole) {
 		filters.DataScope = ticket.DataScopeAll
 	} else {
 		filters.DataScope = ticket.DataScopeOwnedOrAssigned
