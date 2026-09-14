@@ -4,7 +4,6 @@
  */
 
 import { httpClient } from './http-client';
-import { API_BASE_URL } from '@/lib/api/api-config';
 
 export interface TicketAttachment {
   id: number;
@@ -55,46 +54,11 @@ export class TicketAttachmentApi {
     const formData = new FormData();
     formData.append('file', file);
 
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-
-      // 监听上传进度
-      xhr.upload.addEventListener('progress', event => {
-        if (event.lengthComputable && onProgress) {
-          const progress = (event.loaded / event.total) * 100;
-          onProgress(progress);
-        }
-      });
-
-      // 监听完成
-      xhr.addEventListener('load', () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            const response = JSON.parse(xhr.responseText);
-            if (response.code === 200 && response.data) {
-              resolve(response.data);
-            } else {
-              reject(new Error(response.message || '上传失败'));
-            }
-          } catch (_error) {
-            reject(new Error('响应格式错误'));
-          }
-        } else {
-          reject(new Error(`上传失败: ${xhr.statusText}`));
-        }
-      });
-
-      // 监听错误
-      xhr.addEventListener('error', () => {
-        reject(new Error('上传失败'));
-      });
-
-      const baseURL = API_BASE_URL || process.env.ITSM_BACKEND_URL || 'http://localhost:8090';
-      xhr.open('POST', `${baseURL}/api/v1/tickets/${ticketId}/attachments`);
-      xhr.withCredentials = true;
-
-      xhr.send(formData);
-    });
+    return httpClient.post<TicketAttachment>(
+      `/api/v1/tickets/${ticketId}/attachments`,
+      formData,
+      onProgress ? { onUploadProgress: onProgress } : undefined
+    );
   }
 
   /**
