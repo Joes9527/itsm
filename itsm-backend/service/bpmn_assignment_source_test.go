@@ -5,8 +5,21 @@ import (
 	"fmt"
 	"testing"
 
+	entschema "itsm-backend/ent/schema"
+
 	"github.com/stretchr/testify/require"
 )
+
+func TestBPMNAssignmentSourceSchemaIsImmutable(t *testing.T) {
+	for _, candidate := range (entschema.ProcessTask{}).Fields() {
+		descriptor := candidate.Descriptor()
+		if descriptor.Name == "assignee_source" {
+			require.True(t, descriptor.Immutable, "assignment source must not have generated update setters")
+			return
+		}
+	}
+	require.Fail(t, "assignee_source field is missing")
+}
 
 func TestBPMNAssignmentSourceValidation(t *testing.T) {
 	valid := &BPMNUserTask{TaskPurpose: "fulfillment", AssigneeSource: BPMNAssigneeSourceWorkItem}

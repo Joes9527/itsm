@@ -42,6 +42,7 @@ func (ProcessTask) Fields() []ent.Field {
 			Optional(),
 		field.String("assignee_source").
 			Default("").
+			Immutable().
 			Comment("Immutable task assignment source from the pinned process definition"),
 		field.String("candidate_users").
 			Comment("候选用户，逗号分隔").

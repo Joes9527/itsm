@@ -864,18 +864,6 @@ func (u *ProcessTaskUpsert) ClearAssignee() *ProcessTaskUpsert {
 	return u
 }
 
-// SetAssigneeSource sets the "assignee_source" field.
-func (u *ProcessTaskUpsert) SetAssigneeSource(v string) *ProcessTaskUpsert {
-	u.Set(processtask.FieldAssigneeSource, v)
-	return u
-}
-
-// UpdateAssigneeSource sets the "assignee_source" field to the value that was provided on create.
-func (u *ProcessTaskUpsert) UpdateAssigneeSource() *ProcessTaskUpsert {
-	u.SetExcluded(processtask.FieldAssigneeSource)
-	return u
-}
-
 // SetCandidateUsers sets the "candidate_users" field.
 func (u *ProcessTaskUpsert) SetCandidateUsers(v string) *ProcessTaskUpsert {
 	u.Set(processtask.FieldCandidateUsers, v)
@@ -1270,6 +1258,11 @@ func (u *ProcessTaskUpsert) UpdateUpdatedAt() *ProcessTaskUpsert {
 //		Exec(ctx)
 func (u *ProcessTaskUpsertOne) UpdateNewValues() *ProcessTaskUpsertOne {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.AssigneeSource(); exists {
+			s.SetIgnore(processtask.FieldAssigneeSource)
+		}
+	}))
 	return u
 }
 
@@ -1402,20 +1395,6 @@ func (u *ProcessTaskUpsertOne) UpdateAssignee() *ProcessTaskUpsertOne {
 func (u *ProcessTaskUpsertOne) ClearAssignee() *ProcessTaskUpsertOne {
 	return u.Update(func(s *ProcessTaskUpsert) {
 		s.ClearAssignee()
-	})
-}
-
-// SetAssigneeSource sets the "assignee_source" field.
-func (u *ProcessTaskUpsertOne) SetAssigneeSource(v string) *ProcessTaskUpsertOne {
-	return u.Update(func(s *ProcessTaskUpsert) {
-		s.SetAssigneeSource(v)
-	})
-}
-
-// UpdateAssigneeSource sets the "assignee_source" field to the value that was provided on create.
-func (u *ProcessTaskUpsertOne) UpdateAssigneeSource() *ProcessTaskUpsertOne {
-	return u.Update(func(s *ProcessTaskUpsert) {
-		s.UpdateAssigneeSource()
 	})
 }
 
@@ -2041,6 +2020,13 @@ type ProcessTaskUpsertBulk struct {
 //		Exec(ctx)
 func (u *ProcessTaskUpsertBulk) UpdateNewValues() *ProcessTaskUpsertBulk {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		for _, b := range u.create.builders {
+			if _, exists := b.mutation.AssigneeSource(); exists {
+				s.SetIgnore(processtask.FieldAssigneeSource)
+			}
+		}
+	}))
 	return u
 }
 
@@ -2173,20 +2159,6 @@ func (u *ProcessTaskUpsertBulk) UpdateAssignee() *ProcessTaskUpsertBulk {
 func (u *ProcessTaskUpsertBulk) ClearAssignee() *ProcessTaskUpsertBulk {
 	return u.Update(func(s *ProcessTaskUpsert) {
 		s.ClearAssignee()
-	})
-}
-
-// SetAssigneeSource sets the "assignee_source" field.
-func (u *ProcessTaskUpsertBulk) SetAssigneeSource(v string) *ProcessTaskUpsertBulk {
-	return u.Update(func(s *ProcessTaskUpsert) {
-		s.SetAssigneeSource(v)
-	})
-}
-
-// UpdateAssigneeSource sets the "assignee_source" field to the value that was provided on create.
-func (u *ProcessTaskUpsertBulk) UpdateAssigneeSource() *ProcessTaskUpsertBulk {
-	return u.Update(func(s *ProcessTaskUpsert) {
-		s.UpdateAssigneeSource()
 	})
 }
 

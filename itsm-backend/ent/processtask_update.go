@@ -134,20 +134,6 @@ func (_u *ProcessTaskUpdate) ClearAssignee() *ProcessTaskUpdate {
 	return _u
 }
 
-// SetAssigneeSource sets the "assignee_source" field.
-func (_u *ProcessTaskUpdate) SetAssigneeSource(v string) *ProcessTaskUpdate {
-	_u.mutation.SetAssigneeSource(v)
-	return _u
-}
-
-// SetNillableAssigneeSource sets the "assignee_source" field if the given value is not nil.
-func (_u *ProcessTaskUpdate) SetNillableAssigneeSource(v *string) *ProcessTaskUpdate {
-	if v != nil {
-		_u.SetAssigneeSource(*v)
-	}
-	return _u
-}
-
 // SetCandidateUsers sets the "candidate_users" field.
 func (_u *ProcessTaskUpdate) SetCandidateUsers(v string) *ProcessTaskUpdate {
 	_u.mutation.SetCandidateUsers(v)
@@ -692,9 +678,6 @@ func (_u *ProcessTaskUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if _u.mutation.AssigneeCleared() {
 		_spec.ClearField(processtask.FieldAssignee, field.TypeString)
 	}
-	if value, ok := _u.mutation.AssigneeSource(); ok {
-		_spec.SetField(processtask.FieldAssigneeSource, field.TypeString, value)
-	}
 	if value, ok := _u.mutation.CandidateUsers(); ok {
 		_spec.SetField(processtask.FieldCandidateUsers, field.TypeString, value)
 	}
@@ -968,20 +951,6 @@ func (_u *ProcessTaskUpdateOne) SetNillableAssignee(v *string) *ProcessTaskUpdat
 // ClearAssignee clears the value of the "assignee" field.
 func (_u *ProcessTaskUpdateOne) ClearAssignee() *ProcessTaskUpdateOne {
 	_u.mutation.ClearAssignee()
-	return _u
-}
-
-// SetAssigneeSource sets the "assignee_source" field.
-func (_u *ProcessTaskUpdateOne) SetAssigneeSource(v string) *ProcessTaskUpdateOne {
-	_u.mutation.SetAssigneeSource(v)
-	return _u
-}
-
-// SetNillableAssigneeSource sets the "assignee_source" field if the given value is not nil.
-func (_u *ProcessTaskUpdateOne) SetNillableAssigneeSource(v *string) *ProcessTaskUpdateOne {
-	if v != nil {
-		_u.SetAssigneeSource(*v)
-	}
 	return _u
 }
 
@@ -1558,9 +1527,6 @@ func (_u *ProcessTaskUpdateOne) sqlSave(ctx context.Context) (_node *ProcessTask
 	}
 	if _u.mutation.AssigneeCleared() {
 		_spec.ClearField(processtask.FieldAssignee, field.TypeString)
-	}
-	if value, ok := _u.mutation.AssigneeSource(); ok {
-		_spec.SetField(processtask.FieldAssigneeSource, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.CandidateUsers(); ok {
 		_spec.SetField(processtask.FieldCandidateUsers, field.TypeString, value)
