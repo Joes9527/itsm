@@ -1,7 +1,7 @@
 # 执行任务绑定当前工单处理人
 
 - 日期：2026-09-14
-- 状态：draft；业务分工及 2026-09-14 三项审查修订已获确认，技术设计尚未实施。
+- 状态：accepted；业务分工及三项审查修订已确认，用户已选择 subagent-driven-development，实施进行中。
 - 负责人：维护者确认业务契约，Coding Agent 实现，独立审查者复核。
 - 依赖：`codex/fix/bpmn-human-task-routing` 的 e5f9b318；生产修复为 7ed97de4，已部署并完成真实领取验证。本分支只提交设计，不混入上游 PR。
 - 上游：[现有目录与 Helpdesk 生命周期验收](../plans/2026-09-14-catalog-lifecycle-validation.md)。本文只补充该计划第 3 节的参与人契约，不取代 UI 核心路径计划或专业生命周期设计。
