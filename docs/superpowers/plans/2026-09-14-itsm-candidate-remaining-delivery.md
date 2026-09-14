@@ -219,3 +219,11 @@ M1一次独立只读审阅已发起，尚未以这些PASS直接宣告M1通过。
 生命周期证据明确复用：T1交接B2/S1/S2段（约115–138行）记录 `s2-final-race.log`、`s2-lifecycle-review-green.log` 的显式启动/取消/等待验证，后续3098基线含bootstrap/eventbus全包回归；本次delta未改变该生命周期实现。该证据与本批真实worker周期/回执/历史保全和Stream进程恢复合用，不能报告成完整Application已在目标环境启动或重启。R7/R8仍负责真实环境/PG17/浏览器及持续恢复。
 
 M1核心交付修复与私有验证关闭；飞书完整协议按维护者指示延后，不称已修复或获准激活。接下来只实施R4，遵循既有鉴权设计，不新增业务规则。源码盘点确认默认内存撤销和Redis单次消费仍存在；当前authentication基线 `r4-auth-existing-baseline-race.log` PASS，不覆盖状态丢失安全。旧计划预留040已被占用，现有迁移至045；新增迁移实施前应使用未占用版本并保留旧checksum，不按旧编号覆盖。
+### 7.9 R4/A1已验证检查点（2026-09-14 10:57 CST）
+
+从已审阅M1代码建立独立安全worktree `/home/administrator/project/itsm/.worktrees/candidate-a-auth-state`，分支 `codex/security/candidate-auth-state-windows`。A1提交 `cddd4a396e9c77be2ac4238297bb93b980f901f5`；不是CandidateSHA，原core worktree保留。
+
+- 实际RED `r4-a1-canonical-red.log`：同签名字节的非规范尾部位/换行编码被接纳；access/refresh缺expiry、actor/tenant、role/username及HS384未被统一拒绝。GREEN要求三段规范base64url、严格JWT解码、仅HS256和完整身份。
+- 实际RED `r4-a1-tenant-red.log`：空上下文没有带入已验签tenant、冲突tenant仍进入存储、继承system bypass未清除。现在access检查和refresh消费均从不可由包外字段构造的VerifiedCredential派生tenant，冲突/空主体/错误用途/已过期主体在存储前拒绝；修改返回claims不改变已验证身份快照。
+- `r4-a1-final-race.log`：authentication全包race PASS；`r4-a1-http-regression-race.log`：middleware及handlers/common受影响Token/Auth/Refresh/Logout/Login/Tenant测试race PASS。Redis故障日志来自私有测试主动关闭依赖的预期失败路径，无共享Redis访问。
+- 这一步不声称已解决持久撤销：Redis/内存生产实现尚存，A2/A3待替换；尚无新鉴权迁移、B配置或共享库变更。下一步A2仅实现PG存储及受限角色私有证据；现有迁移040–045均已占用，拟使用未占用046并在注册时核验。
