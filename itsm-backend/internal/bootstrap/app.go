@@ -678,7 +678,7 @@ func NewApplication() *Application {
 	toolQueue := service.NewToolQueue(client, toolRegistry, intakeApplication, ticketService, 100, sugar)
 	feishuSyncService := service.NewFeishuSyncService(client, sugar, intakeApplication)
 	outboxRegistry, err := service.NewOutboxEventTypeRegistry(
-		[]service.OutboxDeliveryHandler{service.NewWorkflowStartOutboxHandler(client, concreteProcessEngine, systemClient), incidentService.RuleEngine(), service.NewFeishuCreationDeliveryHandler(feishuSyncService, func(tenantID int) (service.FeishuTaskCreator, bool) {
+		[]service.OutboxDeliveryHandler{service.NewWorkItemAssignmentNotificationHandler(client, ticketNotificationService), service.NewWorkflowStartOutboxHandler(client, concreteProcessEngine, systemClient), incidentService.RuleEngine(), service.NewFeishuCreationDeliveryHandler(feishuSyncService, func(tenantID int) (service.FeishuTaskCreator, bool) {
 			conn, ok := connectorManager.Get(tenantID, "feishu")
 			if !ok {
 				return nil, false

@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-const BPMNAssigneeSourceWorkItem = "work_item_assignee"
+const BPMNAssigneeSourceWorkItem = common.BPMNAssigneeSourceWorkItem
 
 func validateBPMNAssigneeSource(task *BPMNUserTask) error {
 	if task == nil {

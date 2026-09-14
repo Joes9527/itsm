@@ -33,6 +33,12 @@ func (s *TicketNotificationService) EnqueueCreationTx(ctx context.Context, tx *e
 	if !actor {
 		return creation.NewPermissionDenied("notification actor is unavailable", nil)
 	}
+	return s.enqueueTicketNotificationTx(ctx, tx, item, eventType, content, deliveryKey, recipientIDs)
+}
+
+// enqueueTicketNotificationTx persists channel intent only. The existing delivery
+// worker owns external calls, leases and delivery_unknown reconciliation.
+func (s *TicketNotificationService) enqueueTicketNotificationTx(ctx context.Context, tx *ent.Tx, item *ent.Ticket, eventType, content, deliveryKey string, recipientIDs []int) error {
 	recipients := uniqueTicketNotificationUserIDs(recipientIDs)
 	if len(recipients) == 0 {
 		return creation.NewDomainValidationFailed("creation notification recipients are required", nil)

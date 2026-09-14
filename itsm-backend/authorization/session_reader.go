@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"itsm-backend/common/tenantctx"
@@ -34,6 +35,24 @@ type SessionSnapshot struct {
 	Tx          *ent.Tx
 	directory   *ent.Client
 	now         time.Time
+	mutation    *sessionMutationIdentity
+}
+
+// Captured only by SessionReader.Write. Public snapshot projections are not an
+// authorization capability and cannot extend its lifetime or change its scope.
+type sessionMutationIdentity struct {
+	active                           atomic.Bool
+	client                           *ent.Client
+	actorID, actorTenantID, tenantID int
+}
+
+func (s *SessionSnapshot) ValidateMutationActor(client *ent.Client, actorID, actorTenantID, tenantID int) error {
+	if s == nil || s.mutation == nil || !s.mutation.active.Load() ||
+		client == nil || client != s.mutation.client || actorID != s.mutation.actorID ||
+		actorTenantID != s.mutation.actorTenantID || tenantID != s.mutation.tenantID {
+		return creation.NewPermissionDenied("active verified session mutation identity is required", nil)
+	}
+	return nil
 }
 
 // Read owns both transactions. A projection is usable only after Read succeeds,
@@ -79,7 +98,17 @@ func (s *SessionReader) withSnapshot(ctx context.Context, identity creation.Iden
 		permissions, readErr = CurrentSessionPermissions(ctx, tx, identity)
 	}
 	if readErr == nil {
-		readErr = project(&SessionSnapshot{Actor: actor, Identity: identity, Permissions: permissions, Tx: tx, directory: directory, now: now})
+		snapshot := &SessionSnapshot{Actor: actor, Identity: identity, Permissions: permissions, Tx: tx, directory: directory, now: now}
+		if !readOnly {
+			snapshot.mutation = &sessionMutationIdentity{client: tx.Client(), actorID: actor.ID, actorTenantID: actor.TenantID, tenantID: identity.TenantID}
+			snapshot.mutation.active.Store(true)
+		}
+		readErr = func() error {
+			if snapshot.mutation != nil {
+				defer snapshot.mutation.active.Store(false)
+			}
+			return project(snapshot)
+		}()
 	}
 	closeErr := closeDirectory()
 	closed = true
