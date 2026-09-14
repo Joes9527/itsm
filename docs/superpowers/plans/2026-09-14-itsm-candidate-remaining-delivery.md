@@ -49,8 +49,8 @@
 | R3 / 完成（本机M1范围） | A：本机候选执行隔离验收包 | 复用既有测试集，补尚缺的历史逐行/关系/队列/审计/对象/Stream 对账、获准新业务、实际相关周期、取消/恢复及进程重启。区分本机测试与目标环境证据；skip 不能过门禁。只在改动影响范围内回归，里程碑结束做一次集成验证与独立审阅。 | S6、B2 |
 | R4 / A1–A2完成；A3–A4维护者接受暂未完成（7.11） | A：鉴权持久状态代码与私有故障证据 | 按既有鉴权计划核查并完成唯一 PG authority、规范 token、撤销与单次消费、受限角色、启动/注销/刷新失败关闭；两实例与 PG/API 重启、Redis 丢失、旧快照恢复换 authority/密钥，新登录正向。先确认已有代码，禁止仅因旧框未勾选重做。 | 鉴权 A1–A4、B3、原设计第8节 |
 | R5 / 完成（第7.12节，携带7.11限制） | A：已审阅的固定候选与 T1 新交接包 | 纳入已审阅修复，核对 bootstrap/迁移依赖与原 WorkItem/主题，完成受影响后端和前端 G1 检查；固定 CandidateSHA、构建/迁移指纹、配置合同、日志和未验证项，校验 bundle。代码 SHA 与文档 SHA 分开。 | 鉴权 A5、T1/G1 |
-| R6 / 当前 Agent 接管、准入复核中 | 当前 Agent 执行并留证：T2 差额关闭及 T3 EnvironmentRevision | 固定新 SHA 上核对真实源与写入者、受保护备份/附件、目标 PG17/资源和受限角色；完整迁移语义在执行前准入，恢复/迁移后历史保全、出站阻断与候选入口。明确备份窗口；不再等待其他 Agent。只有完整 EnvironmentRevision 才放行 R7。 | T2/T3、B4/B6、G2 环境 |
-| R7 / 待 R5/R6 | 当前 Agent 业务验收与监测：目标环境 G2 | 在同一已交接版本执行 Incident、Problem、Change、generic/Requested Item、真实 BPMN/Worker/SLA、版本冲突/权限/附件/通知，以及双主题真实浏览器旅程；受限身份正向和负向，启动/周期后历史对账。失败只回到对应 R 项，不新开无关波次。 | T4/G2 |
+| R6 / 完成T3（7.13）；R7配置增量留证 | 当前 Agent 执行并留证：T2 差额关闭及 T3 EnvironmentRevision | 固定新 SHA 上核对真实源与写入者、受保护备份/附件、目标 PG17/资源和受限角色；完整迁移语义在执行前准入，恢复/迁移后历史保全、出站阻断与候选入口。明确备份窗口；不再等待其他 Agent。只有完整 EnvironmentRevision 才放行 R7。 | T2/T3、B4/B6、G2 环境 |
+| R7 / 真实验收中（7.13），后台差额未关闭 | 当前 Agent 业务验收与监测：目标环境 G2 | 在同一已交接版本执行 Incident、Problem、Change、generic/Requested Item、真实 BPMN/Worker/SLA、版本冲突/权限/附件/通知，以及双主题真实浏览器旅程；受限身份正向和负向，启动/周期后历史对账。失败只回到对应 R 项，不新开无关波次。 | T4/G2 |
 | R8 / 待 R7 | 当前 Agent 执行并复核证据：稳定运行及恢复交接 | 固定构建受控重启，关键旅程和消费者恢复；连续至少60分钟低频只读观察，保全人工新增数据，给出固定 URL/启停/资源/恢复说明及限制。 | T5/G3 |
 | R9 / 待 R8 | 维护者验收、A 汇总：最终关闭 | 维护者完成代表性页面/业务旅程；G1/G2/G3 全部有证据，无未解释的阻断问题；分别报告代码、私有验证、候选运行、main、企业外发、生产部署状态。 | 原设计第7–9节 |
 
@@ -267,3 +267,24 @@ R5完成：CandidateSHA `3142247e7ef4f29639d373d8bf53f797e35c0913`，代码workt
 R6进行中：原源API PID2248818及两个Worker PID2249326/2249327现活跃；PG存在源system角色连接，DB11存在历史Stream和活跃状态。源当前8工单/4评论/0附件，不使用旧6工单基线。新只读证据在t2/revision-3-20260914；T2交接更新提交a1f48272并提出确认后15分钟的精确备份窗口。
 
 尚需维护者确认该源短暂停写，并确认窗口内Mac/其他操作者不向源及DB11写入；之后由当前Agent完成备份、独立候选恢复、目标迁移准入与部署。不是等待另一个B。M3/M4未完成、无EnvironmentRevision；R7真实业务/浏览器与R8观察未开始。具体窗口及影响见T2 revision-3，不停止共享数据库/Redis/MinIO，不执行R(038)。
+### 7.13 R6交接及R7真实候选检查点（2026-09-14 12:46 CST）
+
+本批自11:53开始；维护者已明确批准“可以，随时可做”，取代7.12末段等待窗口确认。当前Agent执行全部A/B责任。
+
+R6/T3完成：源11:55:50–11:55:53一致性备份窗口已执行，原API和两个Worker恢复、源health200。独立PG17/Redis7.4/MinIO恢复及资源隔离完成，实际037及032–036、039–046已执行，**没有执行038**。升级发现并修复两处入口组合缺陷：a014c1b9终端人工退役迁移的排序检查、0544e159准备回执对039正规登记trigger的精确核验；RED/GREEN及独立审阅通过。
+
+当前CandidateSHA `0544e159adf47a5fa18af175611a77ea09cab574`；初始T3 EnvironmentRevision `f8a2caac2c536832f304c05dc6f5798d11e66adb70b81090e76a29b848015b1b`。T3事实文档位于环境分支提交3f34a3de的 `docs/review/2026-09-14-candidate-t3-handoff.md`。Web `http://localhost:3301`，API `http://localhost:18080`；Windows及真实浏览器表单登录已验证。新PG鉴权依然未接生产，7.11限制继续有效，不能将普通登录通过说成A3/A4完成。
+
+R7已核验的真实路径（本地私有证据根 `~/.local/state/itsm-candidate-delivery/t4`）：
+
+- `core-run-4.log` 2/2：generic/Incident/Problem/Change创建与幂等重放、版本冲突拒绝、评论、附件字节读回、详情重载；实际主题切换持久化与移动端宽度。不是双主题全业务旅程。
+- `journeys-run-2.log`：事件/问题分派、解决/关闭/重开，问题未验证先拒绝解决；end_user直接API转派被拒且版本不变。
+- `journeys-run-1.log` 中RequestedItem用例通过：目录创建、真实BPMN受理和独立审批节点、审批历史。首个生命周期用例缺关闭原因而失败，修正后由run-2覆盖；不能把run-1整份算绿，也未证明RequestedItem最终履约关闭。
+- `change-run-2.log`：三种结果failed/rolled_back/successful，真实评估、独立CAB账号审批、排期、实施和结果登记通过；尚未覆盖review/close。
+- `runtime-status.json`：10个workflow.start、3个change.outcome等实际outbox已published；15个Change callback完成；5封邮件只进入本地SMTP接收器，5条站内通知sent。SMTP/KAF隔离接收器不代表企业投递或真实KAF执行。
+
+候选配置升级增量：旧绑定采用ticket/change词表；通过管理API新增generic/change_request，未改旧绑定。备份旧Change v1缺动作元数据，通过管理API发布现有仓库v2 BPMN（只改process id、新key）并新增normal专用绑定，原定义/实例不变。证据canonical-bindings.json、change-template-admission.json；配置增量须纳入最终EnvironmentRevision，不把初始T3摘要冒称为最终状态。
+
+保全口径：T4前152张原表原主键/字段无变化、Redis222键保全及1键自然过期。T4后 `original-row-preservation-124202.json` 原始检查FAIL，唯一变化为编号计数器work_item_number_sequences从8到24及更新时间；与新增16张工单及最大编号24一致，属于本轮合法创建副作用。其余历史业务行无差异；原FAIL保留，不改称152表全部零变化。
+
+**R7未关闭的实际差额：**后台2条incident.status_changed在首次分派后blocked，生产者包含previousAssigneeId而消费者严格结构漏字段；独立fix worktree candidate-incident-status正补回归，未宣称修好或重部署。另3条旧事件模板assign_incident callback为handler_contract，需核对模板输入与当前合同。R7其余差额为SLA/周期及权限/租户完整断言、双主题业务路径、最终历史/资源对账和里程碑复核。R8至少60分钟观察及受控恢复尚未开始，R9维护者验收待R8，M3/M4未完成。范围仍为既有R7核心上线，不增加飞书或新架构波次。
