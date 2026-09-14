@@ -10,7 +10,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { TicketApi } from '@/lib/api/ticket-api';
 import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
-import { TicketRelationsApi } from '@/lib/api/ticket-relations-api';
 import { UserApi } from '@/lib/api/user-api';
 import type { Ticket } from '@/lib/api/api-config';
 import type { User } from '@/lib/api/user-api';
@@ -50,7 +49,7 @@ import { SafeTextBlock } from '@/components/common/SafeContent';
 import { AISuggestionPanel } from '@/components/business/AISuggestionPanel';
 import { isValidTransition, isFinalStatus } from '@/lib/utils/workflow-state-machine';
 import { TicketStatus, TicketStatusConfig, getPriorityConfig } from '@/constants/taxonomy';
-import { ticketCommentAdapter, ticketAttachmentAdapter } from '@/components/business/detail-tabs';
+import { ticketAttachmentAdapter } from '@/components/business/detail-tabs';
 import { ApprovalMiniStepper } from '@/components/business/detail-tabs/ApprovalMiniStepper';
 import ServiceRequestPanel from './ServiceRequestPanel';
 import ServiceCatalogApprovalChain from './ServiceCatalogApprovalChain';
@@ -106,7 +105,14 @@ const formatHours = (minutes: number): string => (minutes / 60).toFixed(1);
 
 const DISABLED_ACTION_CLASS = 'opacity-40 cursor-not-allowed pointer-events-auto';
 
-export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
+import { useDetailIdentity } from '@/components/business/detail-tabs/useDetailResource';
+
+export const TicketDetail: React.FC<{ id?: string }> = props => {
+  const params = useParams();
+  const identity = useDetailIdentity(props.id ?? (params?.ticketId as string) ?? '');
+  return <TicketDetailContent key={identity} {...props} />;
+};
+const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
   const params = useParams();
   // 支持通过 props 传入 id，或通过 useParams 获取
   const ticketId = parseInt((propId ?? (params?.ticketId as string)) || '');
@@ -145,6 +151,10 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
     history?: number;
     relations?: number;
   }>({});
+
+  const updateCount = useCallback((tab: 'comments' | 'attachments' | 'relations', count: number | undefined) => {
+    setTabCounts(previous => ({ ...previous, [tab]: count }));
+  }, []);
 
   const [assignForm] = Form.useForm();
   const [editForm] = Form.useForm();
@@ -218,12 +228,9 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
     let cancelled = false;
     (async () => {
       try {
-        const [comments, attachments, approvals, history, relations] = await Promise.allSettled([
-          ticketCommentAdapter.list(ticketId),
-          ticketAttachmentAdapter.list(ticketId),
+        const [approvals, history] = await Promise.allSettled([
           BPMNWorkflowApi.getTicketApprovalDecisions(ticketId),
           TicketApi.getTicketHistory(ticketId),
-          TicketRelationsApi.getRelationStats(ticketId),
         ]);
         if (cancelled) return;
 
@@ -234,25 +241,13 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
           history?: number;
           relations?: number;
         } = {};
-        if (comments.status === 'fulfilled' && typeof comments.value?.total === 'number') {
-          next.comments = comments.value.total;
-        }
-        if (attachments.status === 'fulfilled' && Array.isArray(attachments.value)) {
-          next.attachments = attachments.value.length;
-        }
         if (approvals.status === 'fulfilled' && Array.isArray(approvals.value)) {
           next.approvals = approvals.value.length;
         }
         if (history.status === 'fulfilled' && Array.isArray(history.value)) {
           next.history = history.value.length;
         }
-        if (
-          relations.status === 'fulfilled' &&
-          typeof relations.value?.totalRelations === 'number'
-        ) {
-          next.relations = relations.value.totalRelations;
-        }
-        setTabCounts(next);
+        setTabCounts(previous => ({ ...previous, ...next }));
       } catch {
         // 任一数据源异常都静默处理，不阻塞详情页
       }
@@ -631,6 +626,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
             currentUserId={currentUser?.id}
             ticketAssigneeId={ticket.assigneeId}
             tabCounts={tabCounts}
+            updateCount={updateCount}
             canReadNotifications={hasPermission('notification:read')}
             canSendNotifications={hasPermission('notification:create')}
           />
@@ -1147,6 +1143,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 // ==================== 详情 Tabs 子组件 ====================
 
 interface TicketDetailTabsProps {
+  updateCount: (tab: 'comments' | 'attachments' | 'relations', count: number | undefined) => void;
   ticketId: number;
   recordClass?: string;
   currentUserId?: number;
@@ -1167,11 +1164,15 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
   recordClass,
   currentUserId,
   tabCounts,
+  updateCount,
   ticketAssigneeId,
   canReadNotifications,
   canSendNotifications,
 }) => {
   const hasPermission = useAuthStore(state => state.hasPermission);
+  const commentsCount = useCallback((count: number | undefined) => updateCount('comments', count), [updateCount]);
+  const attachmentsCount = useCallback((count: number | undefined) => updateCount('attachments', count), [updateCount]);
+  const relationsCount = useCallback((count: number | undefined) => updateCount('relations', count), [updateCount]);
   const countSuffix = (count?: number) => (count !== undefined ? ` (${count})` : '');
 
   const items = [
@@ -1184,7 +1185,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
         </span>
       ),
       children: (
-        <TicketCommentStream
+        <TicketCommentStream onCountChange={commentsCount}
           ticketId={ticketId}
           currentUserId={currentUserId}
           ticketAssigneeId={ticketAssigneeId}
@@ -1201,7 +1202,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
         </span>
       ),
       children: (
-        <AttachmentPanel
+        <AttachmentPanel onCountChange={attachmentsCount}
           targetType='ticket'
           targetId={ticketId}
           adapter={ticketAttachmentAdapter}
@@ -1244,7 +1245,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
           关联工单与资产{countSuffix(tabCounts?.relations)}
         </span>
       ),
-      children: <TicketRelationCards ticketId={ticketId} />,
+      children: <TicketRelationCards ticketId={ticketId} onCountChange={relationsCount} />,
     },
   ];
 

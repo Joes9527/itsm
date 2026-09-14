@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Upload, Button, App, Typography, Progress, Modal, Space, Empty, Spin, Alert } from 'antd';
+import React, { useEffect, useRef, useState } from 'react';
+import { Upload, Button, App, Typography, Progress, Modal, Space, Empty, Spin } from 'antd';
 import type { RcFile } from 'antd/es/upload/interface';
 import {
   File as FileIcon,
@@ -15,6 +15,8 @@ import {
   Trash2,
   Upload as UploadIcon,
 } from 'lucide-react';
+import { useDetailIdentity, useDetailResource } from './useDetailResource';
+import { DetailReadState } from './DetailReadState';
 import type { AttachmentAdapter, AttachmentItem, TargetType } from './types';
 
 const { Text } = Typography;
@@ -52,7 +54,12 @@ const getFileIcon = (mimeType: string) => {
   return <FileIcon size={20} />;
 };
 
-export const AttachmentPanel: React.FC<AttachmentPanelProps> = ({
+export const AttachmentPanel: React.FC<AttachmentPanelProps> = props => {
+  const identity = useDetailIdentity(props.targetId);
+  return <AttachmentPanelContent key={identity} {...props} />;
+};
+
+const AttachmentPanelContent: React.FC<AttachmentPanelProps> = ({
   targetId,
   adapter,
   maxSize = 50 * 1024 * 1024,
@@ -63,39 +70,40 @@ export const AttachmentPanel: React.FC<AttachmentPanelProps> = ({
 }) => {
   const { message, modal } = App.useApp();
   const busy = useRef(false);
-  const [items, setItems] = useState<AttachmentItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const resource = useDetailResource(
+    targetId,
+    () => adapter.list(targetId),
+    data => data.length,
+    onCountChange,
+    permissions.canRead
+  );
+  const items = resource.data || [];
+  const access = useRef(permissions);
+  access.current = permissions;
+  const confirmation = useRef<ReturnType<typeof modal.confirm> | null>(null);
+
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewName, setPreviewName] = useState<string>('');
 
-  const fetch = useCallback(async () => {
-    if (!permissions.canRead) {
-      setItems([]);
-      onCountChange?.(undefined);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await adapter.list(targetId);
-      setItems(res || []);
-      onCountChange?.(res.length);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '加载附件失败');
-    } finally {
-      setLoading(false);
-    }
-  }, [adapter, targetId, permissions.canRead, onCountChange]);
-
   useEffect(() => {
-    void fetch();
-  }, [fetch]);
-
+    if (resource.denied) {
+      setPreviewUrl(null);
+      confirmation.current?.destroy();
+      setUploading(false);
+      setUploadProgress(0);
+      busy.current = false;
+    }
+  }, [resource.denied]);
+  useEffect(
+    () => () => {
+      confirmation.current?.destroy();
+    },
+    []
+  );
   const beforeUpload = (file: RcFile) => {
-    if (!permissions.canUpload || busy.current) return Upload.LIST_IGNORE;
+    if (!resource.ready || !access.current.canUpload || busy.current) return Upload.LIST_IGNORE;
     if (file.size > maxSize) {
       message.error(`文件大小超过 ${formatFileSize(maxSize)} 限制`);
       return Upload.LIST_IGNORE;
@@ -108,46 +116,57 @@ export const AttachmentPanel: React.FC<AttachmentPanelProps> = ({
     onSuccess?: (response: unknown) => void;
     onError?: (err: Error) => void;
   }) => {
-    if (!permissions.canUpload || busy.current) return;
+    if (!resource.ready || !access.current.canUpload || busy.current) return;
     busy.current = true;
+    const current = resource.capture();
     const file = options.file as File;
     setUploading(true);
     setUploadProgress(0);
     try {
-      await adapter.upload(targetId, file, p => setUploadProgress(p));
+      await adapter.upload(targetId, file, p => {
+        if (current()) setUploadProgress(p);
+      });
+      if (!current()) return;
       options.onSuccess?.({});
       message.success(`${file.name} 上传成功`);
-      await fetch();
+      await resource.reload();
     } catch (e) {
+      if (!current()) return;
+      resource.deny(e);
       const err = e instanceof Error ? e : new Error('上传失败');
       options.onError?.(err);
       message.error(err.message);
     } finally {
-      busy.current = false;
-      setUploading(false);
-      setUploadProgress(0);
+      if (current()) busy.current = false;
+      if (current()) setUploading(false);
+      if (current()) setUploadProgress(0);
     }
   };
 
   const handleDelete = (item: AttachmentItem) => {
-    if (!permissions.canDelete || busy.current) return;
-    modal.confirm({
+    if (!resource.ready || !access.current.canDelete || busy.current) return;
+    const current = resource.capture();
+    confirmation.current = modal.confirm({
       title: '确认删除',
       content: `确定要删除附件 "${item.fileName}" 吗？`,
       okText: '删除',
       okType: 'danger',
       cancelText: '取消',
       onOk: async () => {
-        if (busy.current || !permissions.canDelete) return;
+        if (!current() || busy.current || !access.current.canDelete) return;
         busy.current = true;
         try {
           await adapter.remove(targetId, item.id);
+          if (!current()) return;
           message.success('删除成功');
-          await fetch();
+          await resource.reload();
         } catch (e) {
-          message.error(e instanceof Error ? e.message : '删除失败');
+          if (current()) {
+            resource.deny(e);
+            message.error(e instanceof Error ? e.message : '删除失败');
+          }
         } finally {
-          busy.current = false;
+          if (current()) busy.current = false;
         }
       },
     });
@@ -178,34 +197,19 @@ export const AttachmentPanel: React.FC<AttachmentPanelProps> = ({
   const isPreviewable = (mime: string) =>
     mime.startsWith('image/') || mime.includes('pdf') || mime.startsWith('text/');
 
-  if (!permissions.canRead) return <Alert title='无权读取附件' type='error' showIcon />;
-
-  if (loading && items.length === 0) {
+  const feedback = (
+    <DetailReadState error={resource.error} loading={resource.loading} reload={resource.reload} />
+  );
+  if (!resource.ready)
     return (
-      <div className='p-6 text-center'>
-        <Spin />
+      <div className='p-3'>
+        {feedback}
+        {resource.loading && <Spin />}
       </div>
     );
-  }
-
   return (
-    <div className='p-6'>
-      {error && (
-        <Alert
-          message={error}
-          type='error'
-          showIcon
-          closable
-          className='mb-4'
-          onClose={() => setError(null)}
-          action={
-            <Button size='small' type='link' onClick={() => void fetch()}>
-              重试
-            </Button>
-          }
-        />
-      )}
-
+    <div className='p-3 min-w-0'>
+      {feedback}{' '}
       {permissions.canUpload && (
         <div className='mb-6'>
           <Upload
@@ -229,7 +233,6 @@ export const AttachmentPanel: React.FC<AttachmentPanelProps> = ({
           </Text>
         </div>
       )}
-
       {items.length === 0 ? (
         <Empty description='暂无附件' />
       ) : (
@@ -276,7 +279,6 @@ export const AttachmentPanel: React.FC<AttachmentPanelProps> = ({
           ))}
         </div>
       )}
-
       <Modal
         title={previewName}
         open={!!previewUrl}

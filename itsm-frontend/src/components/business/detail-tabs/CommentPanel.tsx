@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Send, Edit, Trash2, MessageSquare, AtSign, User } from 'lucide-react';
 import {
   Card,
@@ -9,10 +9,10 @@ import {
   Input,
   Avatar,
   Tag as AntTag,
-  Modal,
+
   App,
-  Spin,
-  Alert,
+
+
 } from 'antd';
 import { UserSelect } from '@/components/common/UserSelect';
 import type {
@@ -20,6 +20,9 @@ import type {
   CommentItem,
   TargetType,
 } from './types';
+
+import { useDetailIdentity, useDetailResource } from './useDetailResource';
+import { DetailReadState } from './DetailReadState';
 
 const { Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -48,7 +51,11 @@ export interface CommentPanelProps {
 
 const defaultFormat = (s: string) => (s ? new Date(s).toLocaleString('zh-CN') : '');
 
-export const CommentPanel: React.FC<CommentPanelProps> = ({
+export const CommentPanel: React.FC<CommentPanelProps> = props => {
+  const identity = useDetailIdentity(props.targetId);
+  return <CommentPanelContent key={identity} {...props} />;
+};
+const CommentPanelContent: React.FC<CommentPanelProps> = ({
   targetId,
   adapter,
   showInternalToggle = true,
@@ -56,10 +63,11 @@ export const CommentPanel: React.FC<CommentPanelProps> = ({
   currentUserId,
   formatDateTime = defaultFormat,
 }) => {
-  const { message } = App.useApp();
-  const [comments, setComments] = useState<CommentItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { message, modal } = App.useApp();
+  const confirmation = useRef<ReturnType<typeof modal.confirm> | null>(null);
+  const busy = useRef(false);
+  const resource = useDetailResource(targetId, () => adapter.list(targetId), data => data.total);
+  const comments = resource.data?.comments || [];
   const [newComment, setNewComment] = useState('');
   const [isInternal, setIsInternal] = useState(false);
   const [mentionedUsers, setMentionedUsers] = useState<number[]>([]);
@@ -68,76 +76,50 @@ export const CommentPanel: React.FC<CommentPanelProps> = ({
   const [submitting, setSubmitting] = useState(false);
 
   const canEditByAdapter = typeof adapter.update === 'function';
-  const canEditByUser = (c: CommentItem) => (currentUserId ? c.userId === currentUserId : true);
-
-  const fetchComments = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { comments } = await adapter.list(targetId);
-      setComments(comments || []);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : '加载评论失败';
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  }, [adapter, targetId]);
+  const canEditByUser = (c: CommentItem) => (currentUserId ? c.userId === currentUserId : false);
 
   useEffect(() => {
-    void fetchComments();
-  }, [fetchComments]);
-
-  const handleAddComment = async () => {
+    if (!resource.denied) return;
+    setNewComment(''); setIsInternal(false); setMentionedUsers([]);
+    setEditingCommentId(null); setEditingCommentContent('');
+    setSubmitting(false); busy.current = false;
+    confirmation.current?.destroy();
+  }, [resource.denied]);
+  useEffect(() => () => confirmation.current?.destroy(), []);
+  const mutate = async (write: () => Promise<unknown>, reset?: () => void) => {
+    if (!resource.ready || busy.current) return;
+    const current = resource.capture();
+    busy.current = true; setSubmitting(true);
+    try {
+      await write();
+      if (!current()) return;
+      reset?.();
+      message.success('评论操作成功');
+      await resource.reload();
+    } catch (error) {
+      if (!current()) return;
+      resource.deny(error);
+      message.error(error instanceof Error ? error.message : '评论操作失败');
+    } finally {
+      if (current()) { busy.current = false; setSubmitting(false); }
+    }
+  };
+  const handleAddComment = () => {
     if (!newComment.trim()) return;
-    setSubmitting(true);
-    try {
-      await adapter.create(targetId, {
-        content: newComment,
-        isInternal: showInternalToggle ? isInternal : undefined,
-        mentions: showMentions ? mentionedUsers : undefined,
-      });
-      setNewComment('');
-      setMentionedUsers([]);
-      setIsInternal(false);
-      await fetchComments();
-      message.success('评论已发布');
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : '添加评论失败';
-      message.error(msg);
-    } finally {
-      setSubmitting(false);
-    }
+    return mutate(() => adapter.create(targetId, {
+      content: newComment,
+      isInternal: showInternalToggle ? isInternal : undefined,
+      mentions: showMentions ? mentionedUsers : undefined,
+    }), () => { setNewComment(''); setMentionedUsers([]); setIsInternal(false); });
   };
-
-  const handleEditComment = async (commentId: number) => {
-    if (!editingCommentContent.trim() || !adapter.update) return;
-    setSubmitting(true);
-    try {
-      await adapter.update(targetId, commentId, {
-        content: editingCommentContent,
-      });
-      setEditingCommentId(null);
-      setEditingCommentContent('');
-      await fetchComments();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : '更新评论失败';
-      message.error(msg);
-    } finally {
-      setSubmitting(false);
-    }
+  const handleEditComment = (commentId: number) => {
+    const update = adapter.update;
+    if (!editingCommentContent.trim() || !update) return;
+    return mutate(() => update(targetId, commentId, { content: editingCommentContent }), () => {
+      setEditingCommentId(null); setEditingCommentContent('');
+    });
   };
-
-  const handleDeleteComment = async (commentId: number) => {
-    try {
-      await adapter.remove(targetId, commentId);
-      await fetchComments();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : '删除评论失败';
-      message.error(msg);
-    }
-  };
-
+  const handleDeleteComment = (commentId: number) => mutate(() => adapter.remove(targetId, commentId));
   const startEditComment = (comment: CommentItem) => {
     setEditingCommentId(comment.id);
     setEditingCommentContent(comment.content);
@@ -148,34 +130,10 @@ export const CommentPanel: React.FC<CommentPanelProps> = ({
     setEditingCommentContent('');
   };
 
-  if (loading && comments.length === 0) {
-    return (
-      <div className="p-6 text-center">
-        <Spin />
-      </div>
-    );
-  }
-
+  if (!resource.ready) return <DetailReadState {...resource} />;
   return (
     <div className="p-6">
-      {/* 错误提示 */}
-      {error && (
-        <Alert
-          message={error}
-          type="error"
-          showIcon
-          closable
-          className="mb-4"
-          onClose={() => setError(null)}
-          action={
-            <Button size="small" type="link" onClick={() => void fetchComments()}>
-              重试
-            </Button>
-          }
-        />
-      )}
-
-      {/* 添加评论 */}
+      <DetailReadState {...resource} />      {/* 添加评论 */}
       <div className="mb-6">
         <Card title="添加评论" className="shadow-sm">
           <div className="space-y-4">
@@ -305,13 +263,14 @@ export const CommentPanel: React.FC<CommentPanelProps> = ({
                         danger
                         icon={<Trash2 className="w-3 h-3" />}
                         onClick={() => {
-                          Modal.confirm({
+                          const current = resource.capture();
+                          confirmation.current = modal.confirm({
                             title: '确认删除',
                             content: '确定要删除这条评论吗？',
                             okText: '删除',
                             okType: 'danger',
                             cancelText: '取消',
-                            onOk: () => handleDeleteComment(comment.id),
+                            onOk: () => { if (current()) return handleDeleteComment(comment.id); },
                           });
                         }}
                       >
@@ -325,7 +284,7 @@ export const CommentPanel: React.FC<CommentPanelProps> = ({
           </Card>
         ))}
 
-        {comments.length === 0 && !loading && (
+        {comments.length === 0 && !resource.loading && (
           <div className="text-center py-8 text-gray-500">
             <MessageSquare className="w-16 h-16 mx-auto mb-4 text-gray-300" />
             <Text>暂无评论</Text>

@@ -11,7 +11,7 @@
 **Spec:** [UI 工作台补齐设计](../specs/2026-09-14-ui-workbench-completion-design.md)，特别是 1A/1B 边界与第 4.5 节。
 
 - 日期：2026-09-14
-- 状态：draft（依据已接受设计编写，实施尚未开始）
+- 状态：accepted（用户批准在当前任务内按依赖顺序实施，每项完成后独立审查）
 - 分支：`codex/fix/ui-workbench-completion`
 - 工作区：`/home/administrator/project/itsm/.worktrees/ui-workbench-completion`
 - 初始源码基线：`a25e108d`；设计修订提交：`b154d847`
@@ -51,7 +51,7 @@
 
 **Interfaces:** 保持 `TicketAttachmentApi.uploadAttachment(ticketId: number, file: File, onProgress?: (percent: number) => void): Promise<TicketAttachment>`；失败向面板传播既有 `ApiError.status/code/errorCode`。
 
-- [ ] 检查本 worktree 的 Node、依赖和最小基线；缺依赖用 npm ci 安装，不复用其他 worktree 的可写 node_modules。
+- [x] 检查本 worktree 的 Node、依赖和最小基线；缺依赖用 npm ci 安装，不复用其他 worktree 的可写 node_modules。
 
 ```bash
 node --version
@@ -61,7 +61,7 @@ npm test -- --runInBand --coverage=false --reporters=default --runTestsByPath sr
 
 记录实际结果；已有失败与新增回归分开，不静默降低门禁。
 
-- [ ] 为上传增加失败测试。拦截传输返回后端真实成功 envelope（code=0），断言返回附件；code 非零、403 和网络错误不得作为成功。测试 FormData 字段 file、目标 ticketId、进度以及 cookie/CSRF 行为。
+- [x] 为上传增加失败测试。拦截传输返回后端真实成功 envelope（code=0），断言返回附件；code 非零、403 和网络错误不得作为成功。测试 FormData 字段 file、目标 ticketId、进度以及 cookie/CSRF 行为。
 
 ```ts
 it('returns the server attachment through the shared multipart client', async () => {
@@ -76,8 +76,8 @@ it('returns the server attachment through the shared multipart client', async ()
 
 测试文件导入 jest、httpClient、TicketAttachmentApi；传输级测试使用可控 XHR/fetch mock 触发真实客户端分支，而不是只重复上述 spy 断言。
 
-- [ ] 运行上述两个测试文件，确认旧实现的独立 XHR/code===200 行为使新增用例失败。
-- [ ] 移除 TicketAttachmentApi 的独立 XHR，改为现有 httpClient.post multipart 入口：
+- [x] 运行上述两个测试文件，确认旧实现的独立 XHR/code===200 行为使新增用例失败。
+- [x] 移除 TicketAttachmentApi 的独立 XHR，改为现有 httpClient.post multipart 入口：
 
 ```ts
 const data = new FormData();
@@ -90,8 +90,8 @@ return httpClient.post<TicketAttachment>(
 
 不能只做这一替换：当前 httpClient.post 的 multipart 分支也绕过部分 requestInternal 安全流程。将该分支接入同一凭证、tenant header、CSRF 获取/恢复和错误解析策略；保留 XHR 上传进度，设置 withCredentials，不手写 multipart Content-Type。复用已有安全 helper，不另建认证重试规则。支持同一逻辑请求的有限认证/CSRF恢复；网络结果不确定时不自动重放上传。403 必须保留结构化状态，不能只抛普通字符串错误。增加 abort/timeout 结束处理，释放回调，避免永久 pending。
 
-- [ ] 测试有/无进度的上传分支、成功 envelope、最终403、认证恢复失败、网络失败、超时和已有 http-client 回归；随后 type-check。
-- [ ] 提交：`fix(attachments): use shared authenticated multipart transport`。
+- [x] 测试有/无进度的上传分支、成功 envelope、最终403、认证恢复失败、网络失败、超时和已有 http-client 回归；随后 type-check。
+- [x] 提交：`fix(attachments): use shared authenticated multipart transport`。
 
 ## Task 2：恢复附件功能且明确共享消费者授权
 
@@ -103,7 +103,7 @@ return httpClient.post<TicketAttachment>(
 
 **Interfaces:** 保留 AttachmentAdapter。AttachmentPanel 增加可选 `onCountChange?: (count: number | undefined) => void`；成功读取通知长度，身份/授权失效通知 undefined。操作显示策略通过明确 `permissions: { canRead: boolean; canUpload: boolean; canDelete: boolean }` 传入，所有生产消费者必须提供；上传者身份不能替代授权。source capability 缺失时不默认允许。
 
-- [ ] 添加行为测试，adapter mock 实现 list/upload/remove/getDownloadUrl/getPreviewUrl。使用真实 Ant Design App 包装组件。
+- [x] 添加行为测试，adapter mock 实现 list/upload/remove/getDownloadUrl/getPreviewUrl。使用真实 Ant Design App 包装组件。
 
 ```tsx
 const permissions = { canRead: true, canUpload: true, canDelete: true };
@@ -115,10 +115,10 @@ expect(await screen.findByRole('button', { name: '上传附件' })).toBeEnabled(
 
 补充删除取消/确认、上传失败重试、权限缺失、文件超限、预览/下载接口、相同按钮连续点击只触发一次操作。用户信息缺失不得暴露删除权。
 
-- [ ] 运行 AttachmentPanel 与 WorkItemAttachments 测试，确认缺权限契约/功能接线的断言先失败。
-- [ ] 在共享组件保留工作台卡片呈现与完整操作；用 App.useApp() 的 modal/message，保留删除确认、上传进度、错误状态。由调用方消费现有会话权限和 recordClass→资源映射：附件路由 read/create/delete 分别对应读取/上传/删除；这仅控制入口，后端仍验证行权限及附件规则。未知 class 不授予权限，不能根据 persona 推断。
-- [ ] TicketDetail 替换附件 Tab 为 AttachmentPanel；WorkItemAttachments 提供对应权限，targetId 始终是 WorkItem ID。确认所有消费者后删除 TicketAttachmentGrid，不保留第二套附件功能路径。
-- [ ] 重跑测试与 type-check，提交：`fix(ticket): restore shared attachment management in workbench`。
+- [x] 运行 AttachmentPanel 与 WorkItemAttachments 测试，确认缺权限契约/功能接线的断言先失败。
+- [x] 在共享组件保留工作台卡片呈现与完整操作；用 App.useApp() 的 modal/message，保留删除确认、上传进度、错误状态。由调用方消费现有会话权限和 recordClass→资源映射：附件路由 read/create/delete 分别对应读取/上传/删除；这仅控制入口，后端仍验证行权限及附件规则。未知 class 不授予权限，不能根据 persona 推断。
+- [x] TicketDetail 替换附件 Tab 为 AttachmentPanel；WorkItemAttachments 提供对应权限，targetId 始终是 WorkItem ID。确认所有消费者后删除 TicketAttachmentGrid，不保留第二套附件功能路径。
+- [x] 重跑测试与 type-check，提交：`fix(ticket): restore shared attachment management in workbench`。
 
 ## Task 3：读取失败、身份失效、并发与计数
 
@@ -233,3 +233,9 @@ PLAYWRIGHT_SKIP_CHANNELS=1 npx playwright test tests/e2e/flows/ticket-workbench-
 | 关系写入、迁移、统一关系切换 | 1B，明确不执行；第 4.5 节准入条件保留 |
 
 本计划只授权 1A 的实现顺序，不授权集成关系候选分支或对共享环境执行迁移。
+
+## Execution evidence (2026-09-14)
+
+- Task 1: `d8965ae1`。私有 Node 22.23.2 / npm ci；上传与客户端 32 个定向测试通过。独立审查发现 auth→CSRF 连续恢复缺口，补失败回归后修复。网络不确定失败不重放写入。
+- Task 2: `d5841163`。恢复共享附件上传、删除确认、预览、下载和后端资源权限门控；删除无消费者的 TicketAttachmentGrid。附件 8 项回归、共享消费者基础测试及 TypeScript 检查通过。
+- Task 3 implementation note: 三类面板复用局部 `useDetailResource` 请求归属机制，不创建业务缓存/第二套权限规则。共享 WorkItemShell 的 CommentPanel 也纳入身份/最终拒绝清理，保留其已有布局。浏览器、全局门禁与真实共享组合验证留在 Task 5，尚未完成。

@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { AttachmentPanel } from '../AttachmentPanel';
 import type { AttachmentAdapter } from '../types';
 import { getAttachmentPermissions } from '@/components/work-item/toTargetType';
+import { ApiError } from '@/lib/api/http-client';
 
 const attachment = {
   id: 17,
@@ -145,4 +146,26 @@ it('uses professional permissions and fails closed for an unknown class', () => 
     canUpload: false,
     canDelete: false,
   });
+});
+
+it('clears attachments and disables mutations after read authorization is revoked', async () => {
+  (adapter.list as jest.Mock).mockResolvedValueOnce([attachment]).mockRejectedValueOnce(new ApiError('权限已撤销', 403));
+  mount(); await screen.findByText('diagnostic.txt');
+  await userEvent.click(screen.getByRole('button', { name: '刷新' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('权限已撤销');
+  expect(screen.queryByText('diagnostic.txt')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '上传附件' })).not.toBeInTheDocument();
+});
+
+it.each(['预览', '删除'])('closes the %s dialog when read permission is withdrawn', async action => {
+  (adapter.list as jest.Mock).mockResolvedValue([attachment]);
+  const onCountChange = jest.fn();
+  const view = render(<App><AttachmentPanel targetType="ticket" targetId={101} adapter={adapter} permissions={permissions} onCountChange={onCountChange} /></App>);
+  await userEvent.click(await screen.findByRole('button', { name: action }));
+  await waitFor(() => expect(screen.getByRole('dialog')).toBeVisible());
+  view.rerender(<App><AttachmentPanel targetType="ticket" targetId={101} adapter={adapter} permissions={{ canRead: false, canUpload: false, canDelete: false }} onCountChange={onCountChange} /></App>);
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(screen.queryByText('diagnostic.txt')).not.toBeInTheDocument();
+  expect(onCountChange).toHaveBeenLastCalledWith(undefined);
+  expect(adapter.remove).not.toHaveBeenCalled();
 });
