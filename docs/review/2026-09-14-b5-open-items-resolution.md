@@ -1,8 +1,16 @@
 # B5 未决项处置：20 个未解析用户 ID 与 14 个孤立 ctiId
 
-- 状态：**已分析并给出处置建议（不写目标）**。日期：2026-09-14。
+- 状态：**已批准迁移排除范围已冻结（R8 修订，不写目标）**。日期：2026-09-14。
 - 目标：`ga-itsm-20260914 / itsm_ga_ready`，租户 `tenant_id=1`。目标 `ticket_assignment_rules` 仍为 0 行。
 - 依据：`cti_authorized.json`、`cti_tree.json`（82 节点）、`sys_user.json`（12,387 行全量）、`sys_role.json`/`sys_group.json`、KAF 只读客户端探测。
+
+## 本次独立修订：精确范围与证据边界
+
+用户此前批准的20个用户ID、14个CTI ID及其182条路由并集，固定于[批准范围 JSON](2026-09-14-routing-void-approval.json)。文件包含源环境、目标租户、3份源快照SHA256、确切ID及源companykey/companyId命名空间。该批准只适用于这些固定对象；未来新出现的unresolved对象不能自动void。
+
+当前只证明这些ID未出现在保留快照中。历史身份抽取没有manifest／分页完整性回执，不能独立证明源系统已删除它们；以下旧分析的“全量／已删除”是当时实现报告口径，不作为新的删除事实证明。**既有用户批准的迁移排除仍有效**，不需要重问；不改动旧源数据。
+
+生成器 `KAF scripts/freeze_legacy_void_scope.py` 以批准文件及相同快照运行，检查来源与SHA，结果为：68条用户排除、118条CTI排除、交集4条、并集182条、剩余538条。生成证据：`/home/administrator/.local/state/itsm-task2-remediation-20260914/void-register.json`，SHA256 `faa94b0428189b50d04859a234580658966755f827e0720ff474aa6e4940ad7a`。其中 `identity_completeness=unverified`，不补造历史分页成功记录。
 
 ## 1. 20 个未解析用户 ID
 
@@ -37,6 +45,6 @@
 | --- | --- | --- |
 | 20 个未解析用户 id（68 条路由） | **void（已确认）**，登记删除，后续批次不得再纳入 | 路由失效，不写目标 |
 | 14 个孤立 ctiId（118 条路由） | **void（已确认）**，登记删除，后续批次不得再纳入 | 路由失效，不写目标 |
-| 其余 720−68−118 条 | 仍需维度扩展/身份映射后方可评估 | 见 `b5-routing-dry-run.md` §4 |
+| 其余 538 条（720−(68+118−4)） | 仍需维度扩展/身份映射后方可评估 | 见 `b5-routing-dry-run.md` §4 |
 
 > 本文件不写入任何目标行；两条 void 已并入操作手册 §7.1 删除/排除登记。
