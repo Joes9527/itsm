@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
 import TicketDetail from '../TicketDetail';
 
@@ -252,4 +252,40 @@ describe('TicketDetail', () => {
     await screen.findByText('#101 VPN 无法连接');
     expect(screen.queryByText('新建')).not.toBeInTheDocument();
   });
-});
+  it.each(['ENGINEER.WANG', '王工'])('searches assignees by %s and submits the selected identity', async search => {
+    mockHasPermission.mockImplementation(permission => permission === 'user:read');
+    mockGetTicket.mockResolvedValue({ ...baseTicket, status: 'open' });
+    mockGetUsers.mockResolvedValue({ users: [{ id: 12, name: '王工', username: 'engineer.wang' }, { id: 13, name: '李工', username: 'engineer.li' }] });
+    (TicketApi.assignTicket as jest.Mock).mockResolvedValue({});
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+    render(<TicketDetail />);
+    await user.click(await screen.findByText('转派分配'));
+    const select = screen.getByLabelText('分配给');
+    await user.type(select, search);
+    expect(screen.queryByText('李工')).not.toBeInTheDocument();
+    await user.click(await screen.findByText('王工'));
+    await user.click(screen.getByText('确认分配'));
+    await waitFor(() => expect(TicketApi.assignTicket).toHaveBeenCalledWith(101, expect.objectContaining({ assigneeId: 12 })));
+  });
+
+  it('shows a retryable user lookup failure in the assignment form', async () => {
+    mockHasPermission.mockImplementation(permission => permission === 'user:read');
+    mockGetTicket.mockResolvedValue({ ...baseTicket, status: 'open' });
+    mockGetUsers.mockRejectedValueOnce(new Error('人员服务不可用')).mockResolvedValueOnce({ users: [{ id: 12, name: '王工', username: 'engineer.wang' }] });
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+    render(<TicketDetail />);
+    await user.click(await screen.findByText('转派分配'));
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('人员服务不可用');
+    await user.click(within(dialog).getByRole('button', { name: '重试人员列表' }));
+    await waitFor(() => expect(mockGetUsers).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument());
+  });  it('shows the shared user error in the CC form without bypassing read permission', async () => {
+    mockGetTicket.mockResolvedValue({ ...baseTicket, status: 'open' });
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+    render(<TicketDetail />);
+    await user.click(await screen.findByText('抄送'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('无权读取人员列表');
+    expect(mockGetUsers).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: '重试人员列表' })).not.toBeInTheDocument();
+  });});

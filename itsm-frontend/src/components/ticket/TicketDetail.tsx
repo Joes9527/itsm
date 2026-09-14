@@ -41,6 +41,7 @@ import {
   Input,
   Tabs,
   Skeleton,
+  Alert,
 } from 'antd';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { useErrorHandler } from '@/lib/hooks/useErrorHandler';
@@ -130,6 +131,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
   const [assigning, setAssigning] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [ccing, setCCing] = useState(false);
@@ -185,14 +187,17 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
   // Get users for assignment
   const fetchUsers = useCallback(async () => {
     if (!hasPermission('user:read')) {
+      setUsersError('无权读取人员列表');
       setUsers([]);
       return;
     }
     try {
       setLoadingUsers(true);
+      setUsersError(null);
       const data = await UserApi.getUsers({ pageSize: 100 });
-      setUsers(data.users || []);
+      setUsers(hasPermission('user:read') ? data.users || [] : []);
     } catch (error) {
+      setUsersError(error instanceof Error ? error.message : '人员列表加载失败');
       setUsers([]);
     } finally {
       setLoadingUsers(false);
@@ -861,6 +866,9 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
         width={500}
       >
         <Form form={assignForm} layout='vertical' onFinish={handleAssignSubmit}>
+          {usersError && <Alert title={usersError} type="error" showIcon action={
+            hasPermission('user:read') ? <Button aria-label="重试人员列表" size="small" loading={loadingUsers} onClick={() => void fetchUsers()}>重试</Button> : undefined
+          } className="mb-4" />}
           <Form.Item
             label='分配给'
             name='assigneeId'
@@ -869,12 +877,14 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
             <Select
               placeholder='请选择处理人'
               loading={loadingUsers}
+              disabled={!hasPermission('user:read') || !!usersError}
               showSearch
               filterOption={(input, option) =>
-                (option?.label as unknown as string)?.toLowerCase().includes(input.toLowerCase())
+                (option?.searchText ?? '').toLowerCase().includes(input.toLowerCase())
               }
               options={users.map(user => ({
                 value: user.id,
+                searchText: [user.name, user.username].filter(Boolean).join(' '),
                 label: (
                   <Space>
                     <span>{user.name}</span>
@@ -1033,6 +1043,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
           initialValues={{ notifyChannels: ['in_app'] }}
           onFinish={handleCCSubmit}
         >
+          {usersError && <Alert title={usersError} type='error' showIcon action={hasPermission('user:read') ? <Button aria-label='重试人员列表' loading={loadingUsers} onClick={() => void fetchUsers()}>重试</Button> : undefined} />}
           <Form.Item
             label='抄送给'
             name='ccUsers'
@@ -1042,6 +1053,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
               mode='multiple'
               placeholder='请选择抄送人'
               loading={loadingUsers}
+              disabled={!hasPermission('user:read') || !!usersError}
               showSearch
               optionFilterProp='label'
               options={users.map(user => ({
