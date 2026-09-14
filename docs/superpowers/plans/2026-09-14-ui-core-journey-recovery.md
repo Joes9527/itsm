@@ -137,3 +137,18 @@
 - 回归先红后绿：middleware 验证 requester/assigned Helpdesk 的 create/update、未分配/只读/缺 read/缺 actor/跨租户/旧 create-update 权限拒绝，以及资源管理员例外。真实 Intake + Gin/controller/service + SQLite/临时文件存储验证评论与附件持久化、自己的评论 PUT 编辑成功；转派完成后的新 POST/PUT 请求均 403，内容和记录数不变。这里不承诺请求执行途中并发转派的数据库原子撤权。
 - 前端 3 suites / 29 tests 通过；类型检查和生产构建通过；lint 无错误，仅保留 BPMNDesigner 既有 warning。后端 authorization/middleware/contract/RBAC 完整通过，Requested Item 定向 HTTP 集成通过。最初附件 fixture 使用默认 octet-stream，被既有类型验证拒绝，改用浏览器文本上传对应的 text/plain 后通过，未放宽生产文件验证。
 - 独立审查未发现阻断问题；已补其建议的真实 PUT、非 requester/assignee 的管理员，以及旧专业动作和通用 ticket 权限不能替代协作授权的回归。无共享数据库或账号权限修改，8080 仍是原部署；这些结果不能替代后续部署后的三角色浏览器验收。
+
+
+### 审批决策历史状态修复（源码与独立前端验证完成）
+
+- 分支 `codex/fix/approval-history-states`，基于 `5862d9f7`。三个既有只读展示组件共用审批决策读取 hook，复用 `useDetailResource` 与 `DetailReadState`，没有新增审批或流程状态规则。
+- 空数组显示「暂无审批决策记录」，不再推断「未走审批流程」；右侧标题改为「审批决策历史」。首次错误明确提示和重试；刷新失败保留历史并标明旧数据；401/403 清空旧记录。切换工单或租户后，迟到响应不能恢复旧记录；非数组响应显式报错。
+- TDD 初始 9 项行为测试失败；最终 3 suites / 22 tests 通过，覆盖三处展示的错误重试、刷新旧数据、权限拒绝、响应格式错误、工单和租户切换。类型检查通过，lint 无错误（仅既有 BPMNDesigner warning），最终生产构建通过。独立审查无阻塞，已补其建议的同工单切换租户用例。
+- Chromium `approval-history-ui.spec.ts` 1 passed：通过环境变量指定既有可读工单 #10，真实登录与详情读取，审批决策 GET 使用隔离的 500/空数组响应，验证错误→重试→空态；390/1440 无页面横向溢出，并查看两张截图。没有提交评论、附件、审批决策或修改既有工单。该测试默认无指定工单时 skip，不依赖固定共享数据。
+- 浏览器运行本次 production build `OyguDF_KkyvUHmCORrE33`，私有 3016 前端、3017 同源代理；结束后停止本次私有服务。日志及截图位于 `/tmp/approval-history-*`，不提交。共享 8080 未更换；前两项后端修复仍待部署验证，本项浏览器结果不是三角色真实审批验收。
+
+### 后续最小接入点：既有 BPMN 受理任务（待设计与实施）
+
+再次核对现有源码：`TicketWorkflowService.AcceptTicket` 仅在事务中修改 assignee/status/first_response_at/version 并写流转记录，没有完成 BPMN ProcessTask；`BPMNWorkflowApi.completeTask` 当前没有页面调用者。标准服务请求 BPMN 的 `Activity_Accept` 位于审批网关之前，没有显式受理人配置，且不是 taskPurpose=approval。因此不能用「接单」状态变化或伪造 approve 命令代替完成受理任务。
+
+下一项应围绕既有引擎核对受理任务的后端执行权限、分配配置和完成契约，再把真实受理动作接到 Helpdesk 页面；保留后端对当前执行人的授权、审计与专业域边界，成功后重新读取当前任务。不得把全部普通任务暴露到审批中心，也不新增审批引擎。先形成可验证的最小接入方案，再实施和审查；最后在后端修复实际部署后重跑 end user → Helpdesk → 管理层的真实路径。当前三角色验收仍未通过，团队负载、KB 与智能建单仍不进入本轮。
