@@ -4,6 +4,8 @@
 
 给 Coding Agent 执行前，先读[执行说明](sslvpn-coding-agent-execution-guide.md)，复制[执行记录模板](sslvpn-agent-run-record-template.md)。详细邮件步骤见[邮件建单与自动回复 UI 手册](email-ticket-ui-runbook.md)，它是本轮必测部分。
 
+具体账号候选、角色/审批组、菜单路径及 WSL 入口见[账号与菜单清单](sslvpn-ui-accounts-and-menus.md)。历史账号必须先在本轮环境确认有效。
+
 ## 1. 范围与执行路线
 
 两条路线共享工单查询、协作和生命周期检查，但不强行合成同一个专业流程：

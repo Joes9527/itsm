@@ -15,3 +15,5 @@
 - 可重复执行的测试方案放在本目录。
 - 一次性测试报告保留日期，长期无效后移动到 `docs/archive/testing-reports/`。
 - 自动化脚本放在 `docs/scripts/` 或 `tests/`，不要混在测试报告里。
+
+- [SSLVPN UI 账号与菜单清单](sslvpn-ui-accounts-and-menus.md)：历史测试账号、角色/审批组、页面入口及当前环境确认步骤。
