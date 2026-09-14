@@ -82,6 +82,7 @@
 | `docs/review/2026-09-14-dictionary-option-reconciliation.md` | 字典→字段选项对账（已覆盖/差额/未接纳） |
 | `docs/migrations/2026-09-14-b0-seed-admission-dry-run.md` | B0 规范 seed 准入 dry-run（纳入/排除/依赖/契约） |
 | `docs/review/2026-09-14-b0-seed-admission-evidence.md` | B0 执行证据（计数/完整性/幂等/不变量） |
+| `docs/review/2026-09-14-process-init-evidence.md` | 规范流程初始化批次执行证据（20 模板 + 7 绑定） |
 | `docs/review/2026-09-14-workitem-config-migration-handoff.md` | G-B 交接（消费固定 GARevision） |
 
 ## 7. 决策日志
@@ -99,6 +100,7 @@
 | S7 | B0 准入固定 seed 规范配置（分类/SLA/目录/字段/CI类型/标签/视图等）；**`process_bindings` 拆出 B0** 至独立流程初始化批次；`departments/teams/roles` 与历史数据排除 | 用户确认 |
 | S8 | `sla_policies`(3) 与 `incident_categories`(8) **均未接纳**；事件分类概念映射到 182 树已有 38 个 `itsm_type=Incident` 分类（B0 §3.1），不新增扁平节点 | 用户确认 |
 | S9 | **B0 已执行**：`generate_seed_sql.py` 生成幂等 SQL，备份+回滚预演+单事务写入 `itsm_ga_ready`（租户 1）；结果 分类182/模板10/字段59/SLA7/目录8/CI9/标准变更3/KE1(占位)/标签4/视图5；幂等复跑 0 新增；Phase 1 不变量与账本不变 | 用户授权 + 实测 |
+| S10 | **流程初始化批次已执行**：`generate_process_sql.py` 复刻 `deployTemplate`，部署 20 个内嵌模板（源=候选工作区 bpmn，经逐字节校验与制品一致）+ 7 条 `process_bindings`；悬空绑定 0、坏 XML 0、幂等复跑 0 新增 | 用户确认 + 实测 |
 
 ## 7.1 删除/排除登记（不得在后续批次再纳入）
 

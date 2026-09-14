@@ -60,5 +60,5 @@
 
 - `known_errors` 写入的是**模板样例/占位**（标题 `Known Error 模板：请替换为真实问题标题`），非真实故障；不得计入 G-B 业务验收的真实数据证据。
 - `ticket_categories` 的 47 个纯容器节点（`itsm_type/default_priority/sla_tier` 为空）按 seed 原样保留。
-- 仍待推进：独立**规范流程初始化批次**（`process_bindings` 依赖）、路由批次 20 个未解析用户 ID、B1–B6 映射批次。
+- 仍待推进：路由批次 20 个未解析用户 ID、B1–B6 映射批次。规范流程初始化批次**已完成**（见 `docs/review/2026-09-14-process-init-evidence.md`），B0 不再留有悬空流程绑定。
 - 本批只写配置主数据，未触碰历史工单/流程实例/身份/账本。
