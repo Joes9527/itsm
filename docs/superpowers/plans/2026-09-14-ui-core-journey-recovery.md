@@ -231,3 +231,6 @@
 首批 PR 顺序：#19 工作台恢复 → #20 个人队列 → #21 核心路径范围文档 → #22 门户直接求助；#21/#22 为本次新增 draft。后续审批、权限、历史与任务面板继续按单一目标及 400 行限制拆分；尚未整条合入主线。创建 PR 不代表依赖或 CI 已满足。
 
 当前集成树全量验证：frontend test:ci 230 suites、3272 passed、13 skipped，覆盖率门槛通过；go test -p 2 ./... 最终通过。首次后端失败定位到 integration/intake_http_entry_test.go 的旧 category 字符串夹具；改用 cti.categoryId，并验证 WorkItem 持久化及旧 category 字段仍被拒绝。只修改测试，没有添加双读或兼容接口，独立复审无发现。现有 #19/#20 当时没有 CI/review 结果；已通过 workflow_dispatch 为 #19/#20/#22 的实际分支启动 frontend-ci，结果需在合并前核验。
+
+
+后续 P1 目录配置与 Helpdesk 解决/关闭实测、用户确认的受理/执行分工及 P2 准入，统一维护在 [目录与生命周期验收](2026-09-14-catalog-lifecycle-validation.md)。该项发现新的 P1 阻塞，不能以此前纯人工流程通过替代。
