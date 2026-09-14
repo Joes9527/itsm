@@ -136,3 +136,23 @@ R1 状态：本轮入口盘点已完成；安全缺口未关闭，M1 不通过�
 - R1 没有运行 Go 测试/构建；“已完成”仅表示本轮定向盘点和差额落表。R2 的最小实现集中于 R2-F 与 R2-B，未知项 R3-V 不自动扩展范围。
 - M1 尚无法给可信完成小时数：飞书仍有跨 producer/transport/receipt 的实质差额，先用下一批不超过60分钟的 RED/最小修复核实成本；这不是新的无限审计或完成承诺。下一项仅 R2，R3/R4 不并行编码。
 - R6–R9 继续等待 B 的新版 T3 EnvironmentRevision、后续 G3 与维护者验收；旧 CandidateSHA 及旧 T2 观察不构成候选启动/验收准入。
+
+### 7.3 R2-B 已验证批次（2026-09-14 09:42 CST）
+
+代码提交：`437689af3861a3d0da46b40a547256943bbd3467`，基于本节 R1 基线；实现 worktree 干净。本地实施记录 09:00–09:42，约42分钟，包含首次 race 编译；本批只推进 R1/R2，没有扩大到 R3/R4 或环境交付。
+
+实际关闭的断言：
+- `startResolvedProcess` 在原事务检查候选成员，拒绝独立实例及历史 WorkItem 启动；获准新成员正向仍成功。
+- 暂停、恢复、终止、实例变量修改通过同一原事务检查不可变 `execution_work_item_id`；不登记历史实例。
+- `authorizeTaskCommandActorWithClient` 在公共任务授权边界验证实例成员，覆盖该边界下的任务命令；实测认领、变量修改、取消、完成的历史/独立拒绝和成员正向。既有角色、专业授权、CAS、审批回执及 KAF 逻辑保留。
+- BPMN HTTP 对范围拒绝（含包装错误）返回403；数据库故障保留500，不将基础设施失败伪装为权限拒绝。
+
+证据目录：`/home/administrator/.local/state/itsm-candidate-delivery/agent-a-windows/`。所有下列 PASS 均在本机实际运行，未使用 Mac 日志替代：
+- RED：`r2-b-start-red.log` 复现候选裸实例新增实例/审计；`r2-b-instance-red-corrected.log` 复现4个实例管理入口写入；`r2-b-member-start-red.log` 复现历史 generic 启动；`r2-b-task-red.log` 复现8个历史/独立任务入口成功写入；`r2-b-http-red.log` 复现范围拒绝500。第一次实例 RED 的 fixture 缺 activity_id 与 time.Time 表示差异已修正，不作为成功复现证据。
+- `r2-b-final-race.log`：service/controller 受影响启动、实例生命周期、任务生命周期、变量及HTTP错误映射测试，`-race -count=1` PASS，无 skip/race。
+- `r2-b-final-private-race.log`：`candidate_scope` 下新增26个实例/启动/任务用例，以及已有 `KAF access completion uses candidate transaction`、`real callback worker preserves historical states`，`-race -count=1` PASS。拒绝路径比较所有 public 表完整 SQL 行、队列/审计载荷及 schema/sequence 元数据；不是 Ent JSON 比较。
+- `r2-b-build.log`：`go build -p 1 ./...`，退出0（空日志）。
+
+私有依赖：新建任务容器 `itsm-agent-a-pg-20260914-0918`，镜像本机 `postgres:16` 实测 PostgreSQL16.15，网络模式 none、PGDATA tmpfs，唯一主机挂载 `/tmp/itsm-agent-a-pg-20260914-0918` → `/candidate-socket`，port25439，测试角色 `candidate_test_owner`；测试自行创建/删除随机数据库及角色。未连接B共享源。初始化两次因镜像脚本清空PGHOST而失败，经读取镜像 entrypoint 确认后同时保留容器内默认与任务专用socket解决；未对共享服务重试。
+
+本批未关闭：R2-F 全部持久目标/同实例/claim及回执差额；R3 整体周期、恢复和独立里程碑审阅；R4 鉴权；R5 新候选集成；R6–R9 环境与真实验收。R2-B 上述已验证入口不重新立项；未覆盖的配置编辑/事件入口或任意并发排列不因本批自动扩展，只有原交付断言的可达失败才能回R2。没有生成新 CandidateSHA、没有推送或合并main。下一实施仍是 R2，转向 R2-F；M1 总工时仍不足以可靠估算。
