@@ -39,7 +39,7 @@
 
 | ID / 状态 | 单一交付物及责任 | 完成判据 | 原合同映射 |
 | --- | --- | --- | --- |
-| R1 / 待核验 | A：锁定候选实际入口与现有证据差额表 | 逐项对应真实 HTTP/service/worker/工具/connector 入口、所属旅程、启用或明确拒绝、已有 SHA/日志、唯一缺口编号；专业编辑、请求人/表单、工具审批、裸实例入口不得只靠搜索结果判断。没有缺口的项直接复用，不重测。 | S3–S5、G2 启动前边界 |
+| R1 / 完成本轮盘点（第7节） | A：锁定候选实际入口与现有证据差额表 | 逐项对应真实 HTTP/service/worker/工具/connector 入口、所属旅程、启用或明确拒绝、已有 SHA/日志、唯一缺口编号；专业编辑、请求人/表单、工具审批、裸实例入口不得只靠搜索结果判断。没有缺口的项直接复用，不重测。 | S3–S5、G2 启动前边界 |
 | R2 / 部分完成 | A：业务与异步入口的最小安全收口 | 只修 R1 证明在候选可达且违反成员/租户/当前权限/事务或历史保全的入口；补飞书真实 create/update 的固定 outbox 权限、持久目标、同实例发送及重绑/回执失败处理。复用原 GUID、映射、顺序及业务回执；必需入口正向可用，拒绝路径零副作用，发送后不确定结果不重发。 | S3、S4、S5 飞书/裸实例/消费者授权 |
 | R3 / 待整体验收 | A：本机候选执行隔离验收包 | 复用既有测试集，补尚缺的历史逐行/关系/队列/审计/对象/Stream 对账、获准新业务、实际相关周期、取消/恢复及进程重启。区分本机测试与目标环境证据；skip 不能过门禁。只在改动影响范围内回归，里程碑结束做一次集成验证与独立审阅。 | S6、B2 |
 | R4 / 待完成核验 | A：鉴权持久状态代码与私有故障证据 | 按既有鉴权计划核查并完成唯一 PG authority、规范 token、撤销与单次消费、受限角色、启动/注销/刷新失败关闭；两实例与 PG/API 重启、Redis 丢失、旧快照恢复换 authority/密钥，新登录正向。先确认已有代码，禁止仅因旧框未勾选重做。 | 鉴权 A1–A4、B3、原设计第8节 |
@@ -98,3 +98,41 @@
 - [x] 独立 reviewer `review_execution_scope_s1` 完成有界复核：G1/G2/G3 与鉴权合同均映射到 R1–R9，未发现阻断或暗中豁免；已修正原设计顶部旧状态入口，避免双重权威。M0 完成。
 
 本次仅文档收口，不启动 Go 测试/构建、候选应用或 WSL 操作；不产生新 CandidateSHA。下一执行批次仅 R1，必须先交付差额表，再进入 R2 编码。
+
+## 7. Windows 接任 R1 定向盘点（2026-09-14）
+
+R1 状态：本轮入口盘点已完成；安全缺口未关闭，M1 不通过。代码基线为 `3098f9718b98fbcd2fa4fc422a8496c14a141d7f`，下表路径均相对此代码 worktree。这里记录源码追踪与既有证据，不声称重新执行了 Mac 测试或目标环境验收。
+
+### 7.1 入口与证据差额
+
+既有证据 E1：同一代码基线中的 `docs/review/2026-09-12-candidate-t1-handoff.md`，最近记录的 `s5-graph-activation-final-private-corrected.log`（私有 PG16/Redis/MinIO race），以及各行注明的测试源码。Mac 原始日志未随远端分支落到本机，故仅复用已记录结果，不将其标注为本机复跑。需要新的组合验证统一归 R3，不重复开项目。
+
+| 实际入口 / 所属旅程 | 源码追踪和启用/拒绝结论 | 已有证据 / 唯一差额 |
+| --- | --- | --- |
+| generic 创建、关系/子任务，HTTP/intake | 原 creation transaction 登记成员，父/关联对象检查；构造及登记机制复用 | E1；candidate_intake_boundary_test 的 new base extension/member、historical parent/relation、rollback 子测试。无新增实现项，组合证据 R3 |
+| generic 编辑/子任务编辑 → TicketService.UpdateTicket | service/ticket_service.go:409 原事务当前权限、BindEnt/RequireEntMembers、实际父项、版本和业务回执；专业字段禁止走 generic | E1 工单编辑章节及 ticket edit receipt/Feishu intent commit together。复用；发送侧另见 R2-F |
+| 请求人/表单编辑 → 同一 UpdateTicket | DTO 包含 requesterId/formFields，但 service 明确报 owning command required（非 UI 隐藏、非静默忽略），在更新之前返回 | 源码 ticket_service.go:484；不新增请求人/表单编辑功能。R3 核对拒绝证据与 G2 必需旅程，不能误报该功能可用 |
+| Problem 元数据 → handlers/problem/handler.go applyMetadata → ApplyMetadata | 当前命令授权、版本/replay，requireExecutionTx 在 Ticket/Problem 更新前，仍由专业所有者处理 | E1 Problem writes preserve historical work；metadata.go 实际事务已读。复用 |
+| Change 元数据/分派 → command_handler.go UpdateChange/AssignChange → ApplyMetadata | 当前授权、已评估事实锁定、callback settled、版本及 requireExecutionTx 在写之前 | E1 Change/PIR historical preservation；metadata.go 实际事务已读。复用 |
+| Incident 命令/metadata/规则/CI/alert | 保留专业命令及 Incident v2 持久来源、当前 actor 和 claim 检查 | E1 最后 29 项 private PG 故障证据及对应 candidate_intake 子测试；不重做主体，R3 组合验收 |
+| Requested Item/履约/BPMN callback | handlers/service_request/execution_scope.go 原事务成员检查；已建基表/扩展原子创建与回滚覆盖 | E1 Requested Item writes preserve history / extension failure，KAF access completion。复用，R3 |
+| 工具审批 HTTP /agent/tools/:id/approve → AI Service → EntRepository.DecideToolInvocation | 仓库方法在 RepeatableRead 内 BindEnt、RequireEntToolInvocation、active approver/current ai:write、CAS；批准后才 Enqueue。直接执行另经 ToolQueue approved source/actor/outcome tx | repository_impl.go:215 已读；E1 AI approval preserves historical invocation、工具撤权/并发结果私有测试。复用 |
+| 裸实例 HTTP BPMNWorkflowController.StartProcess → StartProcessTx/startResolvedProcess；实例管理 service | HTTP 传 businessType 空、businessID=0；validateWorkItemStartTiming 对合法独立 business key 返回 nil；startResolvedProcess 随后可创建无 execution_work_item_id 实例。actor snapshot 仅检查隔离级别。实例 update access 检查 tenant/permission，尚未证明成员限制 | **R2-B**：需最小 RED 验证候选裸实例启动/管理历史实例的真实写前拒绝；不能以 callback worker 的过滤代表整个入口已封闭。未测行为不标为已复现 |
+| 必需 Outbox/Callback/Notification、KAF/SLA/升级 | worker 原事务成员谓词、claim/recovery 和当前绑定；CallbackPredicate 从实例 execution_work_item_id 关联；通知已收敛 enqueue | E1 real workers preserve historical states、lease/audit fault、SLA/escalation cycles、notification 6 contracts。复用；R3 只补组合/恢复差额 |
+| Feishu manual HTTP /feishu/sync/ticket/:ticket_id → SyncTicketToFeishu | 当前 actor/专业权限已有；无 execution policy。已有 mapping 分支 tx.Commit 后直接 UpdateTask，随后另写 mapping；未经过固定 claim/outbox | **R2-F**：同一飞书合同缺口，需原事务持久意图+成员/当前权限/顺序/回执；不得停掉必需发送路径假通过 |
+| Feishu creation outbox → FeishuCreationDeliveryHandler.Deliver | 直接信任传入 event.Payload；无持久 row claim/lease/attempt 与成员核验；provider 只按 tenant/Destination 查找，发送后另写 mapping | **R2-F**：复用已有 origin/intake receipt/GUID，补固定 claim、完整持久目标、同实例、发送后不确定结果禁止重发 |
+| Feishu update outbox → FeishuUpdateDeliveryHandler | 已有 stored claim/lease/attempt/ordered head、payload digest、成员、actor、audit receipt、mapping 和 post-send 再查；不能列为全未实现。provider target 仍只有 Destination，无完整固定实例声明 | **R2-F**：只补持久目标/同实例/重绑窗口。E1 manual escalation persists Feishu update intent、ticket edit receipt/intent tests 使用本地 mock updater，不能代替真实 Feishu client 协议 |
+| Feishu connector Init/TaskDestinationIdentity/HTTP client | Init 持有 cfg map，身份读取 cfg.app_id，实际 client 捕获 appID；client 使用默认 redirect policy。实际 Manifest 未声明 InitializationLocalOnly，候选 trusted manager 的准入拒绝不能被 mock 的声明替代 | **R2-F**：真实本地接收端、不可变配置、重 Init/重绑/redirect 的已批准目标合同；当前实际 connector 正向准入仍未关闭 |
+| Feishu webhook/直接 inbound service → HandleTaskEvent / SyncFeishuTaskToTicket / markTaskDeleted | 现有 inbound creation 走 creation owner；已有 mapping 更新和 task.deleted 仍直接改 Ticket/mapping，无成员策略；HandleTaskEvent 在取外部 Task 前没有该策略 | **R2-F**：同入口范围保全。先证明真实 candidate manager/直接 service 可达和拒绝/所需正向，不扩大成企业接入平台 |
+| Webhook/Stream/EventAudit | 已有固定目标、订阅权限、持久命名空间与进程恢复测试；不读写旧 stream 作为消费源 | E1，candidate_stream_preservation_test.go 与 candidate_stream_process_test.go。复用；R3 整体对账 |
+| 可选 cloud discovery/runner、connector restore/management/probe、embedding/poll/import-export | frozen policy 对后四类只允许 disabled；cloud/direct runner、restore/management 有拒绝保全测试。不能用 capability 枚举单独证明全部直接入口 | E1 candidate cloud direct entry disabled、connector restore rejects persisted activation、read routes do not probe 等。**R3-V**：尚未逐项证实的直接入口保留待核验，不自动新开实现；出现具体违反断言才回 R2 |
+| Auth logout/refresh/token | 未在本轮发现 auth_state_authorities/auth_token_states 迁移；不据名称搜索宣称已完成或全未实现 | **R4** 专项核验唯一 PG authority/规范 token/失败关闭，R1 不实施鉴权 |
+
+### 7.2 批次结果与下一步
+
+- 已验证 origin 为 `git@github.com:Joes9527/itsm.git`，fetch 后 design=`5c968fa5bb0d0a4bf58841380532a5ea407cc169`、scope=`3098f9718b98fbcd2fa4fc422a8496c14a141d7f`、integration=`d62420b6cddbb37cb0fa6d1ec739e959689d2a7e`。用户最新推送事实替代 handoff 中 ZIP/bundle 和未推送历史步骤。
+- 实现工作区 `/home/administrator/project/itsm/.worktrees/candidate-a-windows-delivery`，分支 `codex/fix/candidate-a-windows-delivery`；唯一计划工作区 `/home/administrator/project/itsm/.worktrees/candidate-a-remaining-delivery`，分支 `codex/docs/candidate-a-remaining-delivery`。
+- 原 main=`a25e108d2a08a55469fa5ad547aac5a9adc251ff`，原未跟踪 `docs/poc/` 保留；未覆盖已有 worktree，未修改 B 配置或访问共享数据库，未启动候选服务。
+- R1 没有运行 Go 测试/构建；“已完成”仅表示本轮定向盘点和差额落表。R2 的最小实现集中于 R2-F 与 R2-B，未知项 R3-V 不自动扩展范围。
+- M1 尚无法给可信完成小时数：飞书仍有跨 producer/transport/receipt 的实质差额，先用下一批不超过60分钟的 RED/最小修复核实成本；这不是新的无限审计或完成承诺。下一项仅 R2，R3/R4 不并行编码。
+- R6–R9 继续等待 B 的新版 T3 EnvironmentRevision、后续 G3 与维护者验收；旧 CandidateSHA 及旧 T2 观察不构成候选启动/验收准入。
