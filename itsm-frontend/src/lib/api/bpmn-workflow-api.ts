@@ -81,6 +81,7 @@ export interface StartProcessRequest {
 }
 
 export interface UserTask {
+  uiActions?: { claim: boolean; complete: boolean; reason?: string };
   id: number;
   taskId: string;
   taskDefinitionKey: string;
@@ -403,8 +404,8 @@ export class BPMNWorkflowApi {
     });
   }
 
-  static async completeTask(id: string | number, data: CompleteTaskRequest = {}): Promise<void> {
-    await httpClient.put(`${this.baseUrl}/tasks/${encodeURIComponent(String(id))}/complete`, data);
+  static async completeTask(id: string | number, data: CompleteTaskRequest = {}, assertSubmissionContext?: () => void): Promise<void> {
+    await httpClient.put(`${this.baseUrl}/tasks/${encodeURIComponent(String(id))}/complete`, data, { assertSubmissionContext });
   }
 
   static async submitApprovalDecision(

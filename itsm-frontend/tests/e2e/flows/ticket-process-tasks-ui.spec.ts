@@ -27,3 +27,37 @@ test('ticket shows scoped process tasks with isolated read responses', async ({ 
     await page.screenshot({ path: testInfo.outputPath(`process-tasks-${width}.png`), fullPage: true });
   }
 });
+
+
+test('claims and completes a simple task with isolated mutations', async ({ page }) => {
+  const id = process.env.PLAYWRIGHT_PROCESS_TASK_TICKET_ID;
+  test.skip(!id, 'Requires an existing readable generic ticket');
+  let claimed = false;
+  let completed = false;
+  let writes = 0;
+  await page.route('**/api/v1/bpmn/tasks**', async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname.endsWith('/999001/claim')) {
+      expect(request.method()).toBe('PUT'); claimed = true; writes++;
+      await route.fulfill({ json: { code: 0, data: {} } }); return;
+    }
+    if (url.pathname.endsWith('/999001/complete')) {
+      expect(request.method()).toBe('PUT'); expect(request.postDataJSON()).toEqual({}); completed = true; writes++;
+      await route.fulfill({ json: { code: 0, data: {} } }); return;
+    }
+    if (request.method() !== 'GET') { await route.abort(); return; }
+    if (url.searchParams.get('businessId') !== id) { await route.continue(); return; }
+    const tasks = completed ? [] : [{ id: 999001, businessType: 'ticket', businessId: Number(id), taskName: '请求受理', taskType: 'user_task', taskPurpose: '', status: claimed ? 'assigned' : 'created', assignee: claimed ? 'Helpdesk A' : '', uiActions: { claim: !claimed, complete: claimed } }];
+    await route.fulfill({ json: { code: 0, data: { data: tasks, pagination: { page: 1, pageSize: 100, total: tasks.length } } } });
+  });
+  await loginAndReturn(page, DEFAULT_LOGIN, `/tickets/${id}`);
+  const panel = page.getByRole('region', { name: '当前流程任务' });
+  await panel.getByRole('button', { name: '领取任务' }).click();
+  await expect(panel.getByText('状态：已分配', { exact: true })).toBeVisible();
+  await panel.getByRole('button', { name: '完成任务' }).click();
+  expect(writes).toBe(1);
+  await page.getByRole('button', { name: '确认完成' }).click();
+  await expect(panel.getByText('当前账号暂无可见的活动任务')).toBeVisible();
+  expect(writes).toBe(2);
+});

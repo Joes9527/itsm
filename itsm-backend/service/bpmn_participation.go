@@ -24,6 +24,8 @@ type bpmnActorIdentity struct {
 type bpmnParticipationResolver struct {
 	client        *ent.Client
 	groupResolver *bpmn.GroupResolver
+	// Populated only on a short-lived read projection resolver, never on the engine's mutation resolver.
+	readActor *bpmnActorIdentity
 }
 
 func newBPMNParticipationResolver(client *ent.Client, groupResolver *bpmn.GroupResolver) *bpmnParticipationResolver {
@@ -31,13 +33,16 @@ func newBPMNParticipationResolver(client *ent.Client, groupResolver *bpmn.GroupR
 }
 
 func (r *bpmnParticipationResolver) forClient(client *ent.Client) *bpmnParticipationResolver {
-	if client == nil {
+	if client == nil || (client == r.client && r.readActor != nil) {
 		return r
 	}
 	return newBPMNParticipationResolver(client, bpmn.NewGroupResolver(client))
 }
 
 func (r *bpmnParticipationResolver) resolveActor(ctx context.Context, scope BPMNAccessScope) (*bpmnActorIdentity, error) {
+	if r.readActor != nil && r.readActor.UserID == scope.UserID && r.readActor.TenantID == scope.TenantID {
+		return r.readActor, nil
+	}
 	actor, err := r.client.User.Query().
 		Where(
 			user.ID(scope.UserID),

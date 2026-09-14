@@ -625,7 +625,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
             </div>
           )}
 
-          <TicketProcessTasks ticketId={ticket.id} recordClass={ticket.recordClass ?? ""} />
+          <TicketProcessTasks ticketId={ticket.id} recordClass={ticket.recordClass ?? ""} onTaskChange={fetchTicket} />
 
           {/* 3. 底部协作 Tabs（评论/附件/审批链/历史/关联/通知） */}
           <TicketDetailTabs

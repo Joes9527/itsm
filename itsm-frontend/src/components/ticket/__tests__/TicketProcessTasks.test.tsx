@@ -4,11 +4,11 @@ import { TicketProcessTasks } from '../TicketProcessTasks';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { ApiError } from '@/lib/api/http-client';
 import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
-jest.mock('@/lib/api/bpmn-workflow-api', () => ({ BPMNWorkflowApi: { listUserTasks: jest.fn() } }));
+jest.mock('@/lib/api/bpmn-workflow-api', () => ({ BPMNWorkflowApi: { listUserTasks: jest.fn(), claimTask: jest.fn(), completeTask: jest.fn() } }));
 const read = BPMNWorkflowApi.listUserTasks as jest.Mock;
 const task = { id: 8, businessType: 'service_request', businessId: 42, taskName: '主管审批', taskPurpose: 'approval', status: 'created', assignee: '主管甲' };
 const page = (items: unknown[], total = items.length) => ({ items, total, page: 1, pageSize: 100 });
-beforeEach(() => read.mockReset());
+beforeEach(() => { jest.clearAllMocks(); read.mockReset(); });
 it('reads scoped tasks and links approvals without using the ticket assignee', async () => {
   read.mockResolvedValue(page([task]));
   render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
@@ -95,4 +95,60 @@ it('isolates a tenant change for the same ticket ID', async () => {
     unmount();
     act(() => useAuthStore.setState({ currentTenant: initial }));
   }
+});
+
+it('claims a task only when the server offers claim and refreshes its state', async () => {
+  read.mockResolvedValueOnce(page([{ ...task, taskPurpose: '', uiActions: { claim: true, complete: false } }])).mockResolvedValue(page([]));
+  (BPMNWorkflowApi.claimTask as jest.Mock).mockResolvedValue(undefined);
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+  fireEvent.click(await screen.findByRole('button', { name: '领取任务' }));
+  await screen.findByText('当前账号暂无可见的活动任务');
+  expect(BPMNWorkflowApi.claimTask).toHaveBeenCalledWith(8, expect.any(Function));
+});
+it('confirms completion then calls the canonical task command', async () => {
+  read.mockResolvedValueOnce(page([{ ...task, taskPurpose: '', uiActions: { claim: false, complete: true } }])).mockResolvedValue(page([]));
+  (BPMNWorkflowApi.completeTask as jest.Mock).mockResolvedValue(undefined);
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+  fireEvent.click(await screen.findByRole('button', { name: '完成任务' }));
+  expect(BPMNWorkflowApi.completeTask).not.toHaveBeenCalled();
+  fireEvent.click(await screen.findByRole('button', { name: '确认完成' }));
+  await screen.findByText('当前账号暂无可见的活动任务');
+  expect(BPMNWorkflowApi.completeTask).toHaveBeenCalledWith(8, {}, expect.any(Function));
+});
+it('keeps old servers read only and explains unsupported forms', async () => {
+  read.mockResolvedValue(page([{ ...task, taskPurpose: '', uiActions: { claim: false, complete: false, reason: '此任务需要填写专用表单' } }]));
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+  await screen.findByText('此任务需要填写专用表单');
+  expect(screen.queryByRole('button', { name: '完成任务' })).not.toBeInTheDocument();
+});
+
+it('does not duplicate a pending claim', async () => {
+  read.mockResolvedValue(page([{ ...task, taskPurpose: '', uiActions: { claim: true, complete: false } }]));
+  let finish!: () => void;
+  (BPMNWorkflowApi.claimTask as jest.Mock).mockReturnValue(new Promise<void>(done => { finish = done; }));
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+  const button = await screen.findByRole('button', { name: '领取任务' });
+  fireEvent.click(button); fireEvent.click(button);
+  expect(BPMNWorkflowApi.claimTask).toHaveBeenCalledTimes(1);
+  await act(async () => finish());
+});
+it('drops a pending completion dialog when the tenant changes', async () => {
+  const initial = useAuthStore.getState().currentTenant;
+  read.mockResolvedValue(page([{ ...task, taskPurpose: '', uiActions: { claim: false, complete: true } }]));
+  const { unmount } = render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+  try {
+    fireEvent.click(await screen.findByRole('button', { name: '完成任务' }));
+    await screen.findByRole('dialog');
+    act(() => useAuthStore.setState({ currentTenant: { id: 87654, name: '测试', code: 'test', type: 'standard', status: 'active', createdAt: '', updatedAt: '' } }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(BPMNWorkflowApi.completeTask).not.toHaveBeenCalled();
+  } finally { unmount(); act(() => useAuthStore.setState({ currentTenant: initial })); }
+});
+it('clears actions when a mutation loses permission', async () => {
+  read.mockResolvedValue(page([{ ...task, taskPurpose: '', uiActions: { claim: true, complete: false } }]));
+  (BPMNWorkflowApi.claimTask as jest.Mock).mockRejectedValue(new ApiError('任务权限已变化', 403));
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+  fireEvent.click(await screen.findByRole('button', { name: '领取任务' }));
+  await screen.findAllByText('任务权限已变化');
+  expect(screen.queryByRole('button', { name: '领取任务' })).not.toBeInTheDocument();
 });

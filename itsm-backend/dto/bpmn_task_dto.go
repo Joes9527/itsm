@@ -9,7 +9,14 @@ import (
 )
 
 // BPMNTaskResponse 「我的待办」任务视图：任务字段 + 所属流程实例的业务上下文（camelCase）
+type BPMNTaskUIActions struct {
+	Claim    bool   `json:"claim"`
+	Complete bool   `json:"complete"`
+	Reason   string `json:"reason,omitempty"`
+}
+
 type BPMNTaskResponse struct {
+	UIActions            BPMNTaskUIActions      `json:"uiActions"`
 	ID                   int                    `json:"id"`
 	TaskID               string                 `json:"taskId"`
 	TaskDefinitionKey    string                 `json:"taskDefinitionKey"`
