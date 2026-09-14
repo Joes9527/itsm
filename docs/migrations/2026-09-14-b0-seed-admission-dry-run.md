@@ -46,11 +46,26 @@
 | `roles` | 18 | 同上，且不得重置角色 |
 | `incidents` / `problems` / `changes` / `knowledge_articles` | 0 | 历史/业务数据，明确不迁 |
 | `seed_workflows` | bool | 仅开关；旧 BPMN 不导入（见 §4） |
+| `sla_policies` | 3 | **未接纳**：代码无 `sla_policy` schema，seeder 仅声明/合并该配置但从不写入；SLA 权威是 `sla_definitions`（+`sla_alert_rules`）；事件里的 `sla_policy_id` 是运行时字段而非配置表 |
+| `incident_categories` | 8 | **未接纳**：`seedIncidentCategories` 写入的仍是 `ticket_categories` 且表非空即跳过（顺序在 182 树之后，实际不生效）；其概念已被 182 树中 38 个 `itsm_type=Incident` 分类覆盖，见 §3.1 |
+
+### 3.1 事件分类概念映射（旧 8 → 现有 Incident 分类，不新增扁平节点）
+
+| 旧 incident_categories | 建议映射（seed 现有分类 code） | 备注 |
+| --- | --- | --- |
+| hardware 硬件故障 | `EUC-HDW-001` 电脑无法开机 | 终端硬件；服务器硬件无直接落点（差额） |
+| software 软件故障 | `EUC-ENV-001` 操作系统异常 / `EUC-ENV-003` 本地办公软件异常 | 可细分 |
+| network 网络故障 | `NET-INC-001` 网络连接中断故障（含 `NET-INC-002/003`） | 全量连接中断 |
+| database 数据库问题 | `INF-MDW-003` 中间件/数据库异常 | — |
+| security 安全问题 | `SEC-EMG-001` 安全事件上报（`SEC-EMG-002` 终端感染上报） | — |
+| performance 性能问题 | **无直接落点**（差额） | 需业务确认是否新增 Incident 分类 |
+| configuration 配置问题 | `INF-ENV-003` 环境配置异常支持 | — |
+| other 其他 | **无直接落点**（按 recordClass/模板选择） | 不建"其他"节点 |
 
 ## 4. 依赖与阻塞
 
-- `process_bindings` 引用 `process_definition_key`（如 `ticket_general_flow`、`incident_emergency_flow`、`change_normal_flow`…）。G-A 交接明确规范流程**未初始化**，且不得导入旧 BPMN。因此 B0 要么同时准入**固定制品内的规范流程定义**，要么把 `process_bindings` 拆到流程初始化批次；**不能留下悬空绑定**。
-- `sla_policies`、`incident_categories`、`standard_changes`、`known_errors` 的目标表/模型需按固定制品确认；缺失即列差额，不落入任意 JSON。
+- `process_bindings` 引用 `process_definition_key`（如 `ticket_general_flow`、`incident_emergency_flow`、`change_normal_flow`…）。G-A 交接明确规范流程**未初始化**，且不得导入旧 BPMN。**已确认拆出 B0**，进入独立"规范流程初始化批次"（先由固定制品的 `seedBPMNWorkflows` 部署可执行流程，再写绑定）；**不能留下悬空绑定**。
+- `sla_policies`（未接纳）与 `incident_categories`（未接纳，概念映射见 §3.1）**不写入**；`standard_changes`、`known_errors` 目标表已存在。
 - `ci_types` 的 `business_system` 是第 1 项业务系统 CI 的前置；B0 必须先行。
 
 ## 5. 执行契约（审查通过后）
@@ -69,7 +84,7 @@
 
 ## 7. 待你确认（窗口与依赖）
 
-1. **写入窗口**与单一写入者确认。
-2. `process_bindings` 依赖：是否在 B0 同时准入固定制品的规范流程定义，还是拆分为独立流程批次。
-3. `sla_policies` / `incident_categories` / `standard_changes` / `known_errors` 的目标表确认。
-4. `known_errors` 为模板样例（占位标题），是否纳入。
+1. **写入窗口**与单一写入者确认（唯一剩余阻塞）。
+2. ~~`process_bindings` 依赖~~ → **已确认拆出 B0**（独立规范流程初始化批次）。
+3. ~~`sla_policies` / `incident_categories`~~ → **已确认均未接纳**（`standard_changes`、`known_errors` 目标表已存在）。
+4. `known_errors` 为模板样例（占位标题），是否纳入 B0（建议：纳入占位并标注，或排除待真实数据）。
