@@ -98,7 +98,7 @@ Task 7 修正 migration 032 引入的 bootstrap 注册数量断言（明确校�
 - 隔离 PostgreSQL：`go test -p 2 -tags=integration_postgres ./tests/integration -run 'TestBPMNAssignmentSourceMigration|TestPostgresWorkItemAssignment|TestPostgresBoundLifecycle|TestPostgresAssignmentCaller|TestPostgresAssignmentReview' -count=1 -v`，56.167s，通过，无跳过。仅使用自有容器 `codex-workitem-assignment-test-20260914` / 端口 36444 / 数据库 `sslvpn_test`，凭据保存在私有本地配置；每例使用独立 schema，生命周期/并发与 MSP 正向测试使用非超级用户、无 BYPASSRLS 的普通运行角色。受限目录能力用于既有身份验证；无共享数据库或真实外部发送。
 - 同一 PostgreSQL 并发夹具覆盖 user-task callback 与 service-task callback 两种推进路径、改派先/推进先两个顺序。验证阻塞、可显式重试的 40001、重试后新任务进入改派审计、无死锁/无中间改派事件、终态负责人不漂移。回调为测试内纯本地效果。
 - 事件契约先复现缺失 `recordClass`；真实数据库覆盖持久化字段和伪造合法类与原审计不一致时阻止投递。删除消费端类校验的反事实运行实际失败；恢复后通过。
-- 前端 `npm test -- --runInBand --watch=false`：231 suites、3281 tests 通过，13 项既有 skipped；425.407s。`npm run type-check`、`npm run lint:check`、`npm run build` 通过。lint 保留 `BPMNDesigner.tsx` 的一项既有 unused-disable warning，未执行自动修复。
+- 前端 `npm test -- --runInBand --watch=false`：231 suites、3281 tests 通过，13 项既有 skipped；425.407s。`npm run type-check`、`npm run lint:check`、`npm run build` 通过。lint 保留 `BPMNDesigner.tsx` 的一项既有 unused-disable warning，未执行自动修复。全量 Jest 仍有既有 Ant Design Alert message→title 等 deprecation console.error 和 React act 更新提示；本次 231 suites 通过不代表零控制台告警。原始日志保留，UI 告警整治另行跟踪，不在本轮加 blanket console suppression 或修改无关组件。
 - 后端 API 与 migration CLI 均构建；前端 standalone 构建归档已准备。构建物、SHA256 清单、源码清单、migration 032 只读 preflight SQL 位于工作树的已忽略 `.superpowers/artifacts/work-item-assignment/`，不提交二进制/日志/凭据，不依赖后续可删除的 SDD scratch。
 - 对 `ec1901f8` 的 76 个既有 migration 文件逐字节比较无改动；migration 注册表只新增 032，旧 SQL 分支不变。032 SQL SHA256：`cd4ecbe146e7fb1173b8e1d50fb2805e44bdd28a0b59214cbb9f5f8b3dec9343`；verify SQL：`6ab38a2654fdc179c642a1df5c7efe09d506a2405612f5652c103957514ac2e9`。共享 ledger 尚未读取/对账，不能把源码比较说成数据库迁移完成。
 
@@ -106,11 +106,11 @@ Task 7 修正 migration 032 引入的 bootstrap 注册数量断言（明确校�
 
 ### 7.2 准备好的浏览器夹具与明确未执行项
 
-长期测试位于 `itsm-frontend/tests/e2e/flows/work-item-assignment.spec.ts`，配套纯人工定义在 `tests/e2e/fixtures/work-item-assignment.bpmn`：Helpdesk 候选组 → WorkItem 绑定执行 → 独立经理候选组 → 申请人确认。经理节点用于确认职责独立，并非代替专门审批决策流程的验收。Go contract 使用真实 BPMN parser 校验定义没有 service/script/call/subprocess 或委托 handler。Playwright `--list`、类型和 lint 已通过；**未运行浏览器，不宣称其运行成功**。
+长期测试位于 `itsm-frontend/tests/e2e/flows/work-item-assignment.spec.ts`，配套纯人工定义在 `tests/e2e/fixtures/work-item-assignment.bpmn`：Helpdesk 候选组 → WorkItem 绑定执行 → 独立经理候选组 → 申请人确认。经理节点用于确认职责独立，并非代替专门审批决策流程的验收。Go contract 使用真实 BPMN parser 校验定义没有 service/script/call/subprocess 或委托 handler。Playwright `--list`、类型和 lint 已通过；独立 preflight 测试使用注入的只读响应和 POST 计数器，在无浏览器/网络/共享服务环境下验证错误目录、定义身份、模糊分页及 script/business-rule/subprocess 等 XML 不匹配均阻止 POST；**未运行浏览器，不宣称其运行成功**。
 
-部署获批后，由既有用户/组/角色/流程/目录 API 建立带独立标记的临时定义与 Requested Item 目录，绑定精确 key/version，不修改现有九项生产目录。Helpdesk/经理组名分别为 `assignment_acceptance_helpdesk`、`assignment_acceptance_manager`；申请人、Helpdesk、A、B、经理必须为五个不同有效账号。A/B 只赋实际需要的专业 read/provision 与 BPMN read/update 权限，不能用全局管理员身份替代 A 失权证据。Helpdesk 需具备现行合法分配、读流程/工单及清理权限；不静默授予额外权限。仅允许 in-app 或 fake 通知 transport，无真实邮件/Graph/KAF/VPN 调用。
+部署获批后，由既有用户/组/角色/流程/目录 API 建立带独立标记的临时定义与 Requested Item 目录，为本次验收生成唯一 `work_item_assignment_acceptance_<唯一标记>` key，不修改现有九项生产目录。当前 intake 对目录的非空 processDefinitionKey 按 active 定义的 deployed_at DESC、id DESC 选择，latest 或 GET 的 version 参数不能固定 intake 版本。因此必须确保目录 processDefinitionKey 非空且等于该 owned key，该 key 恰好只有一条 active 定义；测试读取 Key/IsActive 过滤列表，校验完整分页 total=1/data=1，以及预先批准的 definitionId、definitionVersion、tenantId、deploymentId 和仓库纯人工 XML 的逐字节内容/SHA256。任何未解析、不同或多条 active 记录都在 intake POST 前终止。由唯一执行人冻结目录及该 key 下所有定义直至运行结束，期间不发布、编辑、激活或停用；`configurationFrozen=true` 是受控运行的前提声明，不是 API 锁，也不构成原子选择保证。Helpdesk/经理组名分别为 `assignment_acceptance_helpdesk`、`assignment_acceptance_manager`；申请人、Helpdesk、A、B、经理必须为五个不同有效账号。A/B 只赋实际需要的专业 read/provision 与 BPMN read/update 权限，不能用全局管理员身份替代 A 失权证据。Helpdesk 需具备现行合法分配、读流程/工单及清理权限；不静默授予额外权限。仅允许 in-app 或 fake 通知 transport，无真实邮件/Graph/KAF/VPN 调用。
 
-`WORK_ITEM_ASSIGNMENT_FIXTURE` 指向权限 0600 的私有 JSON，包含 `baseURL`、`tenantId`、`catalogId`、`definitionKey`、`actors` 和 `states`；后二者以 `requester/helpdesk/a/b/manager` 为键，值分别为实际用户 ID 和经真实登录取得的 storageState 文件路径。`PLAYWRIGHT_BASE_URL` 必须等于 fixture.baseURL。不存在 fixture 时测试明确失败，不跳过为通过。运行命令：
+`WORK_ITEM_ASSIGNMENT_FIXTURE` 指向权限 0600 的私有 JSON，包含 `baseURL`、`tenantId`、`catalogId`、`definitionKey`、`definitionId`、`definitionVersion`、`definitionSha256`、`configurationFrozen=true`、`actors` 和 `states`；后二者以 `requester/helpdesk/a/b/manager` 为键，值分别为实际用户 ID 和经真实登录取得的 storageState 文件路径。`PLAYWRIGHT_BASE_URL` 必须等于 fixture.baseURL。不存在 fixture 时测试明确失败，不跳过为通过。运行命令：
 
 ```sh
 PLAYWRIGHT_EXTERNAL_SERVER=1 PLAYWRIGHT_SKIP_CHANNELS=1 \

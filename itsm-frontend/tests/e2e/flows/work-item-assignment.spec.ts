@@ -1,11 +1,13 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
+import { submitApprovedAssignmentIntake, type ApprovedAssignmentTarget, type AssignmentCatalog, type AssignmentDefinition } from '../work-item-assignment.test-utils';
 import { mutateWithCSRF } from '../auth-utils';
 
 type Role = 'requester' | 'helpdesk' | 'a' | 'b' | 'manager';
-type Fixture = {
-  baseURL: string; tenantId: number; catalogId: number; definitionKey: string;
+type Fixture = ApprovedAssignmentTarget & {
+  baseURL: string;
   states: Record<Role, string>; actors: Record<Role, number>;
 };
 type Task = {
@@ -44,16 +46,20 @@ test('pure-human WorkItem assignment A to B preserves independent responsibiliti
       expect(me.id).toBe(fixture.actors[role]); expect(me.tenantId).toBe(fixture.tenantId);
     }
     expect(new Set(Object.values(fixture.actors)).size).toBe(5);
-    const definition = await get<{ bpmnXml: string }>(pages.helpdesk, `/api/v1/bpmn/process-definitions/${fixture.definitionKey}`);
-    expect(definition.bpmnXml).toContain('assigneeSource="work_item_assignee"');
-    expect(definition.bpmnXml).not.toMatch(/serviceTask|callActivity|implementation=|operationRef=/);
-    const catalog = await get<{ targetClass: string; catalogVersion: number; formSchemaVersion: number }>(pages.requester, `/api/v1/service-catalogs/${fixture.catalogId}`);
-    expect(catalog.targetClass).toBe('service_request_item');
-    const submitted = await mutateWithCSRF(pages.requester.request, 'POST', fixture.baseURL + '/api/v1/service-requests', {
-      data: { catalogId: fixture.catalogId, recordClass: catalog.targetClass, catalogVersion: catalog.catalogVersion,
-        formSchemaVersion: catalog.formSchemaVersion, title: `Assignment acceptance ${randomUUID()}`, reason: 'Pure human assignment validation', complianceAck: true, formData: {} },
-      headers: { 'Idempotency-Key': randomUUID() },
-    });
+    const approvedXml = readFileSync(path.join(__dirname, '../fixtures/work-item-assignment.bpmn'), 'utf8');
+    const submitted = await submitApprovedAssignmentIntake({
+      getCatalog: () => get<AssignmentCatalog>(pages.requester, `/api/v1/service-catalogs/${fixture.catalogId}`),
+      // This API's query struct binds exported Go names (no form tags).
+      // total=1 and a complete first page prove the unique active selection;
+      // checking the latest or GET ?version alone would not pin intake.
+      getActiveDefinitions: key => get<{ data: AssignmentDefinition[]; pagination: { page: number; pageSize: number; total: number } }>(pages.helpdesk,
+        `/api/v1/bpmn/process-definitions?Key=${encodeURIComponent(key)}&IsActive=true&Page=1&PageSize=2`),
+      submit: catalog => mutateWithCSRF(pages.requester.request, 'POST', fixture.baseURL + '/api/v1/service-requests', {
+        data: { catalogId: fixture.catalogId, recordClass: catalog.targetClass, catalogVersion: catalog.catalogVersion,
+          formSchemaVersion: catalog.formSchemaVersion, title: `Assignment acceptance ${randomUUID()}`, reason: 'Pure human assignment validation', complianceAck: true, formData: {} },
+        headers: { 'Idempotency-Key': randomUUID() },
+      }),
+    }, fixture, approvedXml);
     expect(submitted.status()).toBe(201);
     const envelope = await submitted.json(); expect(envelope.code).toBe(0);
     workItemId = envelope.data.workItemId; expect(workItemId).toBeGreaterThan(0);
