@@ -31,7 +31,9 @@
 
 ## 产品与架构
 
-- [UI 工作台补齐：背景与第一阶段回归修复设计（draft）](./superpowers/specs/2026-09-14-ui-workbench-completion-design.md)
+- [UI 工作台 1A 回归修复实施计划](./superpowers/plans/2026-09-14-ui-workbench-1a-recovery.md)
+
+- [UI 工作台补齐：背景与第一阶段回归修复设计（accepted）](./superpowers/specs/2026-09-14-ui-workbench-completion-design.md)
 
 - [SSLVPN：KAF 对话受理、统一创建与授权闭环设计](./superpowers/specs/2026-09-05-sslvpn-kaf-intake-end-to-end-design.md)
 - [SSLVPN 端到端实施总计划](./superpowers/plans/2026-09-05-sslvpn-end-to-end-implementation.md)
