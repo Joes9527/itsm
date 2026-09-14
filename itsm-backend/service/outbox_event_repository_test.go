@@ -5,13 +5,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"

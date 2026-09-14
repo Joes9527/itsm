@@ -3,6 +3,9 @@ package bpmn
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"itsm-backend/dto"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/processcallbackoutbox"
@@ -10,8 +13,6 @@ import (
 	"itsm-backend/ent/processtask"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/handlers/shared/workitemmutation"
-	"strconv"
-	"strings"
 )
 
 func (h *IncidentServiceTaskHandler) applyLifecycle(ctx context.Context, action string) (*CallbackEffect, error) {

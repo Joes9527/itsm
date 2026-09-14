@@ -1,11 +1,12 @@
 package migration
 
 import (
-	"github.com/stretchr/testify/require"
 	"os"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestAccessPolicyResultMigrationRegistered(t *testing.T) {

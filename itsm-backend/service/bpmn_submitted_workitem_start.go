@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+
 	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/common/workitemidentity"
@@ -19,8 +20,10 @@ import (
 	"itsm-backend/service/bpmn"
 )
 
-type submittedWorkItemStartKey struct{}
-type submittedWorkItemStart struct{ tenantID, workItemID int }
+type (
+	submittedWorkItemStartKey struct{}
+	submittedWorkItemStart    struct{ tenantID, workItemID int }
+)
 
 // SubmittedWorkItemProcessStarter belongs to the professional submit command.
 // It uses the caller transaction and immutable creation evidence, never current routing.

@@ -111,6 +111,7 @@ func (s *TicketAssignmentService) autoAssignTicket(ctx context.Context, req *Ass
 	}
 	return result, nil
 }
+
 func (s *TicketAssignmentService) selectAutoAssignment(ctx context.Context, req *AssignmentRequest) (*AssignmentResponse, error) {
 	// 1. 获取可用的处理人
 	availableUsers, err := s.getAvailableUsers(ctx, req)

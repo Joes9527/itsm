@@ -116,9 +116,11 @@ func (s *postgresTokenStateStore) matchesState(ctx context.Context, tx *sql.Tx, 
 func (s *postgresTokenStateStore) Revoke(ctx context.Context, c *VerifiedCredential) error {
 	return s.record(ctx, c, "access", "access_revocation", false)
 }
+
 func (s *postgresTokenStateStore) ConsumeRefresh(ctx context.Context, c *VerifiedCredential) error {
 	return s.record(ctx, c, "refresh", "refresh_consumption", true)
 }
+
 func (s *postgresTokenStateStore) record(ctx context.Context, c *VerifiedCredential, tokenPurpose, statePurpose string, once bool) error {
 	ctx, err := credentialContext(ctx, c, tokenPurpose)
 	if err != nil {

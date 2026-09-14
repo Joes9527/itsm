@@ -3,10 +3,11 @@ package service
 import (
 	"context"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strings"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -290,8 +291,10 @@ func TestAssignIncidentRejectsStaleSnapshot(t *testing.T) {
 			incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 			_, err = incidentService.ApplyIncidentCommand(ctx, dto.IncidentCommand{
 				IncidentID: incidentEntity.ID, Action: "assign", AssigneeID: assignee.ID,
-				Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: reporter.ID,
-					ExpectedVersion: workItem.Version, Source: "http", OperationID: "stale-assign"},
+				Meta: workitemmutation.Meta{
+					TenantID: tenant.ID, ActorID: reporter.ID,
+					ExpectedVersion: workItem.Version, Source: "http", OperationID: "stale-assign",
+				},
 			})
 			require.Error(t, err)
 			testCase.assertErr(t, err)

@@ -4,6 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/common/tenantctx"
@@ -13,9 +17,6 @@ import (
 	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/service"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"os"
-	"strings"
-	"testing"
 )
 
 type governedChangeFixture struct {
@@ -62,20 +63,24 @@ func newGovernedChangeFixture(t *testing.T, kind string) *governedChangeFixture 
 	client.IntakeResolutionSnapshot.Create().SetTenantID(tenant).SetIntakeRequestID(receipt.ID).SetWorkItemID(item.ID).SetChannel("itsm_web").SetSourceProvider("itsm_web").SetRecordClass("change_request").SetWorkflowDefinitionID(frozen.ID).SetWorkflowDefinitionKey(frozen.Key).SetWorkflowDefinitionVersion(frozen.Version).SetWorkflowDefinitionDigest(frozen.Digest).SetWorkflowVariables(variables).SetResolverVersion("fixture").SetRequestDigest("fixture-digest").SaveX(ctx)
 	return &governedChangeFixture{ctx: ctx, client: client, svc: svc, engine: engine, tenant: tenant, requester: requester, approver: approver.ID, record: record}
 }
+
 func (f *governedChangeFixture) command(action string, actor int) Command {
 	f.seq++
 	return Command{Meta: workitemmutation.Meta{TenantID: f.tenant, ActorID: actor, ExpectedVersion: f.client.Ticket.GetX(f.ctx, f.record.WorkItemID).Version, OperationID: fmt.Sprintf("%s-%d", action, f.seq), Source: "http"}, ChangeID: f.record.ID, Action: action, Evidence: "Observed evidence"}
 }
+
 func (f *governedChangeFixture) submit(t *testing.T) {
 	t.Helper()
 	_, err := f.svc.ApplyCommand(f.ctx, f.command("submit", f.requester))
 	require.NoError(t, err)
 }
+
 func (f *governedChangeFixture) taskCommand(t *testing.T, action string, actor int) TaskCommand {
 	t.Helper()
 	task := f.client.ProcessTask.Query().Where(processtask.CallbackAction(changeTaskActions[action]), processtask.StatusNEQ("completed"), processtask.StatusNEQ("cancelled")).OnlyX(f.ctx)
 	return TaskCommand{Command: f.command(action, actor), TaskID: task.TaskID}
 }
+
 func (f *governedChangeFixture) assess(t *testing.T) {
 	t.Helper()
 	result, err := f.svc.CompleteChangeTask(f.ctx, f.taskCommand(t, "assess", f.requester))

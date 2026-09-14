@@ -62,6 +62,7 @@ const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const reviewedMappings = require('./test-coverage-mappings.json');
+const reviewedFormatting = require('./test-coverage-formatting.json');
 
 const args = parseArgs(process.argv.slice(2));
 const BASE = args.base || process.env.TEST_COVERAGE_BASE || 'origin/main';
@@ -82,7 +83,7 @@ function main() {
   }
 
   const removalOnly = removalOnlyFiles(BASE, HEAD);
-  const sources = allChanged.filter(isSourceFile).filter((f) => !isExempt(f) && !removalOnly.has(f));
+  const sources = allChanged.filter(isSourceFile).filter((f) => !isExempt(f) && !removalOnly.has(f) && !isReviewedFormatting(f, BASE, HEAD));
   const tests = allChanged.filter(isTestFile);
 
   const missing = [];
@@ -332,4 +333,17 @@ function removalOnlyFiles(base, head) {
     ));
   } catch { return new Set(); }
 }
-module.exports = { parseRemovalOnlyFiles, testCandidatesFor };
+// Exact blob pairs exempt only the reviewed formatting delta, never future edits.
+function matchesReviewedFormatting(file, baseBlob, headBlob) {
+  const entry = reviewedFormatting[file];
+  return !!entry && entry.baseBlob === baseBlob && entry.headBlob === headBlob;
+}
+function isReviewedFormatting(file, base, head) {
+  if (!reviewedFormatting[file]) return false;
+  try {
+    const blob = ref => execFileSync('git', ['rev-parse', `${ref}:${file}`],
+      { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    return matchesReviewedFormatting(file, blob(base), blob(head));
+  } catch { return false; }
+}
+module.exports = { parseRemovalOnlyFiles, testCandidatesFor, matchesReviewedFormatting };

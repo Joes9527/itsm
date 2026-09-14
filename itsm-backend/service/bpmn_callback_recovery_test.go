@@ -169,6 +169,7 @@ func (h *countingIdempotentCallbackHandler) GetHandlerID() string { return h.han
 func (h *countingIdempotentCallbackHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
 	return bpmn.CallbackActionContract{PayloadFields: append([]string(nil), h.callbackFields...)}, true
 }
+
 func (h *countingIdempotentCallbackHandler) Execute(ctx context.Context, task *ent.ProcessTask, _ map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	key, ok := bpmn.BPMNCallbackExecutionKey(ctx)
 	if !ok || key == "" {

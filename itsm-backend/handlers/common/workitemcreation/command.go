@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"reflect"
+	"strings"
+
 	"itsm-backend/common/workitemidentity"
 	relationmeta "itsm-backend/common/workitemrelation"
 	"itsm-backend/handlers/common/accessgrant"
-	"reflect"
-	"strings"
 
 	"itsm-backend/ent"
 )
@@ -340,6 +341,7 @@ func DecodeCreateWorkItemCommand(reader io.Reader) (CreateWorkItemCommand, error
 	}
 	return command, nil
 }
+
 func wireError(cause error) error {
 	return NewInvalidCommand("invalid intake command", FieldError{Field: "body", Message: "must be one JSON object with exact supported field names, no duplicate typed keys, and concrete typed values"}, cause)
 }

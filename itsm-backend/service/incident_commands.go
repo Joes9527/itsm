@@ -6,6 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
 	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/common/executionscope"
@@ -16,9 +20,6 @@ import (
 	"itsm-backend/ent/ticket"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/shared/workitemmutation"
-	"strconv"
-	"strings"
-	"time"
 )
 
 // ValidateIncidentRecovery requires observed service recovery; Problem completion

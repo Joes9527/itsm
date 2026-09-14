@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/dto"
@@ -11,8 +14,6 @@ import (
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"testing"
-	"time"
 )
 
 func TestPublicationDraftRepairVersionAndRollback(t *testing.T) {

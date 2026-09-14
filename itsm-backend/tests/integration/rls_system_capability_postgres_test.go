@@ -162,7 +162,6 @@ func TestPostgresRLSSystemCapabilityConstruction(t *testing.T) {
 	require.ErrorContains(t, err, "non-owner")
 	_, err = f.db.ExecContext(f.ctx, "ALTER TABLE tickets OWNER TO postgres")
 	require.NoError(t, err)
-
 }
 
 func TestPostgresRLSRuntimeConnectorRestore(t *testing.T) {

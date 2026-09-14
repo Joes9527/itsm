@@ -2,12 +2,14 @@ package service_request
 
 import (
 	"context"
-	"entgo.io/ent/dialect/sql"
 	"fmt"
+	"time"
+
+	"entgo.io/ent/dialect/sql"
+
 	"itsm-backend/database"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/ticket"
-	"time"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/servicerequest"
@@ -161,6 +163,7 @@ func (r *EntRepository) Update(ctx context.Context, req *ServiceRequest) error {
 	}
 	return tx.Commit()
 }
+
 func casRequestWorkItem(ctx context.Context, tx *ent.Tx, policy *database.ExecutionPolicy, req *ServiceRequest) error {
 	// Verify extension identity before touching its owning WorkItem.
 	if _, err := tx.ServiceRequest.Query().Where(servicerequest.ID(req.ID), servicerequest.TicketID(req.TicketID), requestScope(req.TenantID)).Only(ctx); err != nil {

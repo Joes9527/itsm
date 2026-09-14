@@ -1,9 +1,10 @@
 package change
 
 import (
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestBuildChangeActions(t *testing.T) {
@@ -17,6 +18,7 @@ func TestBuildChangeActions(t *testing.T) {
 		require.False(t, actions[action].Allowed)
 	}
 }
+
 func TestBuildChangeActionsUsesDistinctSelfApprovalAndRejectionReasons(t *testing.T) {
 	f := newGovernedChangeFixture(t, "normal")
 	f.submit(t)
@@ -32,6 +34,7 @@ func TestBuildChangeActionsUsesDistinctSelfApprovalAndRejectionReasons(t *testin
 	require.True(t, actions["approve"].Allowed)
 	require.True(t, actions["reject"].Allowed)
 }
+
 func TestCanStartImplementationIsTypeAware(t *testing.T) {
 	for _, kind := range []string{"normal", "standard", "emergency"} {
 		t.Run(kind, func(t *testing.T) {

@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"itsm-backend/common"
-	"itsm-backend/handlers/shared/workitemmutation"
-	relationService "itsm-backend/service"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"itsm-backend/common"
+	"itsm-backend/handlers/shared/workitemmutation"
+	relationService "itsm-backend/service"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"

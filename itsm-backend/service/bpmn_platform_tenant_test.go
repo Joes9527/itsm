@@ -2,9 +2,10 @@ package service
 
 import (
 	"context"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"testing"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"

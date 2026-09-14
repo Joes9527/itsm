@@ -3,10 +3,11 @@ package service
 import (
 	"context"
 	"errors"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
-	"testing"
 )
 
 func TestWorkItemDeliveryCurrentAuthorization(t *testing.T) {

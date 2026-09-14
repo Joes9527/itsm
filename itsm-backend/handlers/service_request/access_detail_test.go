@@ -2,12 +2,13 @@ package service_request_test
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	sr "itsm-backend/handlers/service_request"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"testing"
 )
 
 func TestManagedAccessDetailUsesAuthoritativeFulfillment(t *testing.T) {

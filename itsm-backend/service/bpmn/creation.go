@@ -6,14 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"itsm-backend/authorization"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processcallbackoutbox"
 	"itsm-backend/ent/processinstance"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"strconv"
-	"strings"
 )
 
 func executeWorkItemCreation(ctx context.Context, client, directory *ent.Client, app creation.Application, handlerID, action, class string) (*CallbackEffect, error) {
@@ -81,6 +82,7 @@ func executeWorkItemCreation(ctx context.Context, client, directory *ent.Client,
 	effect.CreationResult = result
 	return effect, nil
 }
+
 func creationCommandFromCallback(values map[string]any, key, class string, actorID int) (creation.CreateWorkItemCommand, int, error) {
 	for _, obsolete := range []string{"related_tickets", "related_ticket_numbers"} {
 		if _, present := values[obsolete]; present {

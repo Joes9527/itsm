@@ -4,13 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
+	"strings"
+	"time"
+
 	"itsm-backend/dto"
 	"itsm-backend/ent/servicecatalog"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service/bpmn"
-	"strconv"
-	"strings"
-	"time"
 
 	"go.uber.org/zap"
 	"itsm-backend/common"
@@ -386,7 +387,8 @@ func (s *Service) SetPublicationEngine(engine *service.CustomProcessEngine) {
 
 func (s *Service) SetCreatorRegistry(registry interface {
 	Get(string) (creation.ProfessionalCreator, error)
-}) {
+},
+) {
 	s.creators = registry
 }
 

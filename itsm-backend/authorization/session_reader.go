@@ -46,6 +46,7 @@ func (s *SessionReader) Read(ctx context.Context, identity creation.Identity, pr
 func (s *SessionReader) Write(ctx context.Context, identity creation.Identity, apply func(*SessionSnapshot) error) error {
 	return s.withSnapshot(ctx, identity, false, apply)
 }
+
 func (s *SessionReader) withSnapshot(ctx context.Context, identity creation.Identity, readOnly bool, project func(*SessionSnapshot) error) error {
 	scope, ok := tenantctx.TenantID(ctx)
 	if !ok || scope != identity.TenantID || tenantctx.IsSystemBypass(ctx) || identity.ActorID <= 0 || strings.TrimSpace(identity.Role) == "" {

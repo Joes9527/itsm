@@ -4,13 +4,14 @@ package integration
 
 import (
 	"context"
-	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/require"
-	"itsm-backend/ent/workitemrelation"
 	"net"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
+	"itsm-backend/ent/workitemrelation"
 )
 
 // Isolated real UI/transport/PG harness. Authentication context is injected by

@@ -2,8 +2,14 @@ package service
 
 import (
 	"context"
-	entsql "entgo.io/ent/dialect/sql"
 	"fmt"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	entsql "entgo.io/ent/dialect/sql"
+
 	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/common/tenantctx"
@@ -17,10 +23,6 @@ import (
 	"itsm-backend/handlers/shared/workflowcallback"
 	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/service/bpmn"
-	"sort"
-	"strconv"
-	"strings"
-	"time"
 )
 
 // ApplyTicketWorkflowEscalation owns the domain transaction. The process engine

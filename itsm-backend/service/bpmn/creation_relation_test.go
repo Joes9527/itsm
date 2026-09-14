@@ -1,9 +1,10 @@
 package bpmn
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"testing"
 )
 
 func TestCreationCallbackSourceRelations(t *testing.T) {

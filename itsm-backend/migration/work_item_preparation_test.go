@@ -1,9 +1,10 @@
 package migration
 
 import (
-	"github.com/stretchr/testify/require"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestPreparationEvidenceBindsTargetAndInputs(t *testing.T) {
@@ -32,6 +33,7 @@ func TestPreparationEvidenceBindsTargetAndInputs(t *testing.T) {
 		})
 	}
 }
+
 func TestPreparationSQLRetainsHistoryAndLaterStageBoundaries(t *testing.T) {
 	sql := strings.ToUpper(GetMigrationSQL(WorkItemPrepareVersion))
 	require.NotEmpty(t, sql)

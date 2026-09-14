@@ -4,12 +4,13 @@ package integration
 
 import (
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/authorization"
 	changedomain "itsm-backend/handlers/change"

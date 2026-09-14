@@ -2,7 +2,6 @@ package router
 
 import (
 	"context"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -10,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/authentication"
 	"itsm-backend/authorization"

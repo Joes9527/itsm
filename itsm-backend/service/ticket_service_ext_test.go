@@ -544,7 +544,6 @@ func TestTicketService_BatchDeleteTickets_TenantIsolation(t *testing.T) {
 	tkt, err2 := fx.svc.GetTicket(fx.ctx, id, tenantID)
 	require.NoError(t, err2, "原租户 ticket 仍应可查询")
 	assert.Equal(t, id, tkt.ID, "跨租户删除不应影响原租户 ticket")
-
 }
 
 // =====================================================================

@@ -52,7 +52,8 @@ func (s *ProblemInvestigationService) GetRootCauseAnalysis(ctx context.Context, 
 // Both DB and transaction reads use the authoritative Problem root cause.
 func getRootCauseAnalysis(ctx context.Context, db interface {
 	QueryRowContext(context.Context, string, ...interface{}) *sql.Row
-}, id, tenantID int) (*dto.RootCauseAnalysisResponse, error) {
+}, id, tenantID int,
+) (*dto.RootCauseAnalysisResponse, error) {
 	var analysis dto.RootCauseAnalysisResponse
 	err := db.QueryRowContext(ctx, `
 		SELECT prca.id, prca.problem_id, prca.analyst_id, u1.name, prca.analysis_method,

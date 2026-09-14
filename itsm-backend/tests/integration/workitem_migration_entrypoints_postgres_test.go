@@ -9,9 +9,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"itsm-backend/config"
-	"itsm-backend/database"
-	appbootstrap "itsm-backend/internal/bootstrap"
 	"net/url"
 	"os"
 	"os/exec"
@@ -20,6 +17,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"itsm-backend/config"
+	"itsm-backend/database"
+	appbootstrap "itsm-backend/internal/bootstrap"
 
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
@@ -261,7 +262,7 @@ func TestControlledEntryCLIRejectsBeforeWrites(t *testing.T) {
 			parsed := migrationEntryTarget(t)
 			password, _ := parsed.User.Password()
 			dir := t.TempDir()
-			require.NoError(t, os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("database:\n  host: \"${DB_HOST}\"\n  port: \"${DB_PORT}\"\n  user: \"${DB_USER}\"\n  dbname: \"${DB_NAME}\"\n  sslmode: disable\n"), 0600))
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("database:\n  host: \"${DB_HOST}\"\n  port: \"${DB_PORT}\"\n  user: \"${DB_USER}\"\n  dbname: \"${DB_NAME}\"\n  sslmode: disable\n"), 0o600))
 			before := entryDigest(t, db)
 			cmd := exec.CommandContext(ctx, binary, flag)
 			cmd.Dir = dir
@@ -512,7 +513,7 @@ func TestControlledEntryReadOnlyInspectorNeedsNoBusinessAccess(t *testing.T) {
 	t.Cleanup(func() { _, err := roleDB.Exec("DROP ROLE " + pq.QuoteIdentifier(role)); require.NoError(t, err) })
 	file := filepath.Join(t.TempDir(), "control.json")
 	content, _ := json.Marshal(map[string]any{"DeploymentID": "owned-v2", "InspectionRole": role})
-	require.NoError(t, os.WriteFile(file, content, 0600))
+	require.NoError(t, os.WriteFile(file, content, 0o600))
 	t.Setenv("ITSM_MIGRATION_CONTROL_FILE", file)
 	control, err := migration.LoadControlConfiguration()
 	require.NoError(t, err)
@@ -653,7 +654,7 @@ func TestControlledEntryCompiledRetirementAuthorizationAndReplay(t *testing.T) {
 	require.NoError(t, err, string(out))
 	folder := t.TempDir()
 	controlFile := filepath.Join(folder, "control.json")
-	require.NoError(t, os.WriteFile(controlFile, []byte("{\"DeploymentID\":\"owned-v2\"}"), 0600))
+	require.NoError(t, os.WriteFile(controlFile, []byte("{\"DeploymentID\":\"owned-v2\"}"), 0o600))
 	t.Setenv("ITSM_MIGRATION_CONTROL_FILE", controlFile)
 	control, err := migration.LoadControlConfiguration()
 	require.NoError(t, err)
@@ -661,12 +662,12 @@ func TestControlledEntryCompiledRetirementAuthorizationAndReplay(t *testing.T) {
 	control.RetirementPublicKeys = map[string]ed25519.PublicKey{"fixture": priv.Public().(ed25519.PublicKey)}
 	configBytes, err := json.Marshal(control)
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(controlFile, configBytes, 0600))
+	require.NoError(t, os.WriteFile(controlFile, configBytes, 0o600))
 	evidence := retirementEvidence(t, m, ctx, priv)
 	evidence.Operator = control.Operator
 	signRetirement(t, &evidence, priv)
 	evidenceFile := filepath.Join(folder, "evidence.json")
-	require.NoError(t, os.WriteFile(filepath.Join(folder, "config.yaml"), []byte("database:\n  host: \"${DB_HOST}\"\n  port: \"${DB_PORT}\"\n  user: \"${DB_USER}\"\n  dbname: \"${DB_NAME}\"\n  sslmode: disable\n"), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(folder, "config.yaml"), []byte("database:\n  host: \"${DB_HOST}\"\n  port: \"${DB_PORT}\"\n  user: \"${DB_USER}\"\n  dbname: \"${DB_NAME}\"\n  sslmode: disable\n"), 0o600))
 	target := migrationEntryTarget(t)
 	password, _ := target.User.Password()
 	var schema string
@@ -674,7 +675,7 @@ func TestControlledEntryCompiledRetirementAuthorizationAndReplay(t *testing.T) {
 	run := func(e migration.MigrationEvidence) (string, error) {
 		data, err := json.Marshal(e)
 		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(evidenceFile, data, 0600))
+		require.NoError(t, os.WriteFile(evidenceFile, data, 0o600))
 		cmd := exec.CommandContext(ctx, binary, "-retire-workitem", "-evidence-file", evidenceFile)
 		cmd.Dir = folder
 		cmd.Env = []string{"DB_HOST=" + target.Hostname(), "DB_PORT=" + target.Port(), "DB_USER=" + target.User.Username(), "DB_PASSWORD=" + password, "DB_NAME=" + strings.TrimPrefix(target.Path, "/"), "DB_SCHEMA=" + schema, "ITSM_MIGRATION_CONTROL_FILE=" + controlFile}

@@ -1,9 +1,10 @@
 package dto
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/ent"
-	"testing"
 )
 
 func TestIncidentNumberProjectsOwningWorkItem(t *testing.T) {

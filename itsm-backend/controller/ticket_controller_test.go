@@ -5,15 +5,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"itsm-backend/handlers/shared/workitemmutation"
-	ticketrepo "itsm-backend/repository/ticket"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	mathrand "math/rand"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
+
+	"itsm-backend/handlers/shared/workitemmutation"
+	ticketrepo "itsm-backend/repository/ticket"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	_ "github.com/mattn/go-sqlite3"
 

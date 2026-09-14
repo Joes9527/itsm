@@ -6,11 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"itsm-backend/service/bpmn"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strings"
 	"testing"
 	"time"
+
+	"itsm-backend/service/bpmn"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"

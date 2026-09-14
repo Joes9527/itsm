@@ -216,7 +216,8 @@ func (h *WebhookHandler) callTrustedWebhook(ctx context.Context, variables map[s
 		return nil, fmt.Errorf("Webhook 目标返回非成功状态")
 	}
 	h.logger.Infow("Webhook called successfully", "status_code", resp.StatusCode)
-	return &CallbackEffect{Status: CallbackEffectApplied,
+	return &CallbackEffect{
+		Status:     CallbackEffectApplied,
 		Message:    fmt.Sprintf("Webhook调用成功，状态码: %d", resp.StatusCode),
 		OutputVars: map[string]interface{}{"status_code": resp.StatusCode},
 	}, nil

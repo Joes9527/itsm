@@ -2,6 +2,9 @@ package service_catalog
 
 import (
 	"context"
+	"strconv"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/database"
@@ -10,8 +13,6 @@ import (
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/intake"
 	"itsm-backend/service"
-	"strconv"
-	"testing"
 )
 
 func catalogTestFields(fields []service.FieldDefinitionInput) []map[string]interface{} {
@@ -24,9 +25,11 @@ func catalogTestFields(fields []service.FieldDefinitionInput) []map[string]inter
 	}
 	return result
 }
+
 func catalogCreateInput(name, category, description string, days int, status string, ci, cloud int, fields []service.FieldDefinitionInput, key, serviceType string) dto.CreateServiceCatalogRequest {
 	return dto.CreateServiceCatalogRequest{Name: name, Category: category, Description: description, DeliveryTime: strconv.Itoa(days), Status: status, CITypeID: ci, CloudServiceID: cloud, Fields: catalogTestFields(fields), ProcessDefinitionKey: key, ServiceType: serviceType, TargetClass: "generic"}
 }
+
 func catalogUpdateInput(t *testing.T, s *Service, ctx context.Context, tenant, id int, name, category, description string, days int, status string, ci, cloud int, fields []service.FieldDefinitionInput, key, serviceType string) dto.UpdateServiceCatalogRequest {
 	t.Helper()
 	tx, err := s.client.Tx(ctx)

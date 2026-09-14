@@ -1,8 +1,9 @@
 package dto
 
 import (
-	creation "itsm-backend/handlers/common/workitemcreation"
 	"time"
+
+	creation "itsm-backend/handlers/common/workitemcreation"
 )
 
 // 结构化字段定义

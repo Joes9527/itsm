@@ -5,12 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"itsm-backend/handlers/shared/workitemmutation"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"itsm-backend/handlers/shared/workitemmutation"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
@@ -183,7 +184,6 @@ func TestChangeController_TransitionStatus_NonApprovalLifecycleByType(t *testing
 			})
 		}
 	}
-
 }
 
 // 这组生命周期测试故意不注入 processEngine：这里只锁定非审批状态机守卫和持久化行为；
@@ -211,7 +211,6 @@ func TestChangeController_TransitionStatus_StartGuardByType(t *testing.T) {
 			require.Zero(t, f.client.ProcessCallbackOutbox.Query().CountX(f.ctx))
 		})
 	}
-
 }
 
 // TestEntRepository_RelatedTickets_WorkItemRelationBehavior 覆盖结构化关系行为：
@@ -292,6 +291,7 @@ func TestEntRepository_RelatedTickets_WorkItemRelationBehavior(t *testing.T) {
 		assert.Equal(t, 1, client.Ticket.GetX(ctx, item.ID).Version)
 	})
 }
+
 func changeRelationNumbers(c *Change) []string {
 	numbers := []string{}
 	for _, v := range c.Relations {

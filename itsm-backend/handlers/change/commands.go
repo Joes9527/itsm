@@ -5,10 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"itsm-backend/ent/intakeresolutionsnapshot"
 	"strconv"
 	"strings"
 	"time"
+
+	"itsm-backend/ent/intakeresolutionsnapshot"
 
 	"itsm-backend/authorization"
 	"itsm-backend/common"
@@ -366,6 +367,7 @@ func assessmentDigestTx(ctx context.Context, tx *ent.Tx, c *ent.Change, tenantID
 	}
 	return assessmentDigest(c, details)
 }
+
 func assessmentDigest(c *ent.Change, details *RiskAssessment) (string, error) {
 	type riskFacts struct {
 		Description, Impact, Mitigation, Contingency, Owner string

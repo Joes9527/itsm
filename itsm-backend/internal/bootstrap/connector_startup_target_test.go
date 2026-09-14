@@ -32,7 +32,8 @@ func TestCandidateRuntimeActivatesOnlyFrozenDeclaredTargets(t *testing.T) {
 	// Later mutable config must not substitute the frozen startup destination.
 	cfg.ConnectorTargets[0].Settings["url"] = receiver.URL + "/substituted"
 	var background atomic.Int32
-	app := &Application{Cfg: &config.Config{Execution: cfg}, executionPolicy: policy, connectorManager: manager,
+	app := &Application{
+		Cfg: &config.Config{Execution: cfg}, executionPolicy: policy, connectorManager: manager,
 		notificationWorker: &recordingTicketNotificationWorker{},
 		startBackgroundTasksFunc: func(context.Context) {
 			background.Add(1)
@@ -85,8 +86,10 @@ func TestCandidateTargetFailurePreventsConsumersAndCleansBatch(t *testing.T) {
 			manager := connector.NewManager(reg, zap.NewNop().Sugar(), policy)
 			defer manager.CloseAll()
 			var background atomic.Int32
-			app := &Application{Cfg: &config.Config{Execution: cfg}, executionPolicy: policy, connectorManager: manager,
-				notificationWorker: &recordingTicketNotificationWorker{}, startBackgroundTasksFunc: func(context.Context) { background.Add(1) }}
+			app := &Application{
+				Cfg: &config.Config{Execution: cfg}, executionPolicy: policy, connectorManager: manager,
+				notificationWorker: &recordingTicketNotificationWorker{}, startBackgroundTasksFunc: func(context.Context) { background.Add(1) },
+			}
 			stop, err := app.startAPIRuntime(context.Background())
 			if stop != nil {
 				defer stop()
@@ -109,11 +112,14 @@ func connectorStartupDigest(t *testing.T, endpoint string) string {
 
 func connectorStartupExecution(t *testing.T, endpoint string) config.ExecutionConfig {
 	t.Helper()
-	return config.ExecutionConfig{Mode: "candidate", DeploymentID: "startup-target-test",
+	return config.ExecutionConfig{
+		Mode: "candidate", DeploymentID: "startup-target-test",
 		Scopes:       []config.ExecutionScopeConfig{{TenantID: 1, ScopeID: "149ff1af-a27c-47c7-827f-103271130bb9"}},
 		Capabilities: map[string]string{"notification": "scoped"},
-		ConnectorTargets: []config.ConnectorTargetConfig{{TenantID: 1, ScopeID: "149ff1af-a27c-47c7-827f-103271130bb9", Name: "webhook", Provider: "local-startup",
-			DestinationDigest: connectorStartupDigest(t, endpoint), Capabilities: []string{"notification"}, Settings: map[string]interface{}{"url": endpoint}}},
+		ConnectorTargets: []config.ConnectorTargetConfig{{
+			TenantID: 1, ScopeID: "149ff1af-a27c-47c7-827f-103271130bb9", Name: "webhook", Provider: "local-startup",
+			DestinationDigest: connectorStartupDigest(t, endpoint), Capabilities: []string{"notification"}, Settings: map[string]interface{}{"url": endpoint},
+		}},
 	}
 }
 
@@ -125,6 +131,7 @@ type unclassifiedStartupConnector struct {
 func (*unclassifiedStartupConnector) Manifest() connector.Manifest {
 	return connector.Manifest{Name: "unclassified-startup", Version: "1", RequiredPermissions: []string{"connector:write"}}
 }
+
 func (c *unclassifiedStartupConnector) Init(ctx context.Context, cfg connector.Config) error {
 	c.inits.Add(1)
 	return c.Webhook.Init(ctx, cfg)

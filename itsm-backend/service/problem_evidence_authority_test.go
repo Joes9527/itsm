@@ -2,11 +2,12 @@ package service_test
 
 import (
 	"context"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
 	problem "itsm-backend/handlers/problem"
 	"itsm-backend/handlers/shared/workitemmutation"
-	"testing"
 )
 
 func TestProblemEvidenceMutationAuthorityReplayAndRollback(t *testing.T) {

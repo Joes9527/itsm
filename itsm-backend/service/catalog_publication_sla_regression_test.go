@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/ent/enttest"
-	"testing"
-	"time"
 )
 
 func TestA5FixSLAStoredCalendar(t *testing.T) {
@@ -23,6 +24,7 @@ func TestA5FixSLAStoredCalendar(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, start.Add(time.Hour), deadline)
 }
+
 func TestA5FixSLAStoredEscalation(t *testing.T) {
 	ctx := context.Background()
 	client := enttest.Open(t, "sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_fk=1")

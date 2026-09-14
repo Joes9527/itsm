@@ -1,9 +1,10 @@
 package service_request
 
 import (
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 // Values come from actual PostgreSQL timestamp input/output, including decimal

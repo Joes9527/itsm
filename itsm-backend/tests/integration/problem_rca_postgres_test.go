@@ -5,6 +5,9 @@ package integration
 import (
 	"context"
 	"database/sql"
+	"os"
+	"testing"
+
 	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -15,8 +18,6 @@ import (
 	problem "itsm-backend/handlers/problem"
 	"itsm-backend/service"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"os"
-	"testing"
 )
 
 // RCA_POSTGRES_TEST_DSN must point to a disposable, isolated PostgreSQL database.

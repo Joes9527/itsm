@@ -7,6 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"itsm-backend/authorization"
@@ -16,10 +21,6 @@ import (
 	changedomain "itsm-backend/handlers/change"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
-	"net/http/httptest"
-	"strings"
-	"testing"
-	"time"
 )
 
 func TestWorkItemChangePIROwner(t *testing.T) {
@@ -122,6 +123,7 @@ func TestWorkItemChangePIRGuards(t *testing.T) {
 		})
 	}
 }
+
 func TestWorkItemChangePIRMSPAndReplay(t *testing.T) {
 	f := newChangeLifecycleFixture(t, "normal")
 	role, allocation := setChangeWriter(t, f, true)
@@ -146,6 +148,7 @@ func TestWorkItemChangePIRMSPAndReplay(t *testing.T) {
 	_, err = f.pirOwner.CreatePIR(f.ctx, req, meta)
 	require.Error(t, err)
 }
+
 func TestWorkItemChangePIRRaces(t *testing.T) {
 	for _, mode := range []string{"metadata", "task", "same_key", "different_key", "close_update", "close_delete"} {
 		t.Run(mode, func(t *testing.T) {
@@ -272,6 +275,7 @@ func TestWorkItemChangePIRHTTPBinding(t *testing.T) {
 	denied := invoke(body)
 	require.Equal(t, 403, denied.Code, denied.Body.String())
 }
+
 func TestWorkItemChangePIRAuditRollback(t *testing.T) {
 	for _, action := range []string{"create", "update", "delete"} {
 		t.Run(action, func(t *testing.T) {

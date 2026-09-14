@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	"itsm-backend/controller"
@@ -13,7 +15,6 @@ import (
 	problemDomain "itsm-backend/handlers/problem"
 	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/service"
-	"testing"
 )
 
 func TestProblemMetadataRequiresActor(t *testing.T) {

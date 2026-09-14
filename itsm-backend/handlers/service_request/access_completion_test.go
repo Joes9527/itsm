@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strings"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -255,6 +256,7 @@ type c3FailureAuthorityBarrier struct {
 func (b *c3FailureAuthorityBarrier) ReadApprovedAccess(ctx context.Context, client *ent.Client, tenantID, itemID int, task *ent.ProcessTask) (*accessgrant.ApprovedContext, error) {
 	return b.owner.ReadApprovedAccess(ctx, client, tenantID, itemID, task)
 }
+
 func (b *c3FailureAuthorityBarrier) ValidateAccessFailure(ctx context.Context, client *ent.Client, tenantID, itemID int, task *ent.ProcessTask) error {
 	if err := b.owner.ValidateAccessFailure(ctx, client, tenantID, itemID, task); err != nil {
 		return err

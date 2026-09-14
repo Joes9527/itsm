@@ -256,5 +256,4 @@ func (c *EmailPollingCoordinator) handleMessage(ctx context.Context, tenantID in
 		return
 	}
 	c.logger.Infow("msgraph ticket created", "tenant_id", tenantID, "ticket_id", ticketID, "ticket_number", ticketNumber, "from", m.FromAddress)
-
 }

@@ -3,9 +3,10 @@ package problem_test
 import (
 	"context"
 	"fmt"
-	"itsm-backend/handlers/shared/workitemmutation"
 	"testing"
 	"time"
+
+	"itsm-backend/handlers/shared/workitemmutation"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -294,7 +295,6 @@ func TestProblemServiceAssociationsLifecycle(t *testing.T) {
 	after, err := service.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID})
 	require.NoError(t, err)
 	assert.Empty(t, after.Relations)
-
 }
 
 func TestProblemServiceCrossTenantIsolation(t *testing.T) {

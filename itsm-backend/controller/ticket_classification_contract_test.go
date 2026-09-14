@@ -2,10 +2,11 @@ package controller
 
 import (
 	"encoding/json"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"testing"
 )
 
 func TestTicketCreationCTIContract(t *testing.T) {

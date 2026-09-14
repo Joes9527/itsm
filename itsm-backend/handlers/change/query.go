@@ -3,6 +3,7 @@ package change
 import (
 	"context"
 	"database/sql"
+
 	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/common/tenantctx"
@@ -34,6 +35,7 @@ func (s *Service) GetChange(ctx context.Context, id int, m workitemmutation.Meta
 	}
 	return c, nil
 }
+
 func (s *Service) projectRelationsTx(ctx context.Context, tx *ent.Tx, m workitemmutation.Meta, c *Change) error {
 	if c == nil || c.WorkItemID == nil {
 		return common.NewInternalError("Change WorkItem is missing", nil)
@@ -45,6 +47,7 @@ func (s *Service) projectRelationsTx(ctx context.Context, tx *ent.Tx, m workitem
 	c.Relations = views
 	return nil
 }
+
 func (s *Service) ListChanges(ctx context.Context, m workitemmutation.Meta, page, size int, status, search, riskLevel string) ([]*Change, int, error) {
 	if m.ActorID <= 0 || m.TenantID <= 0 {
 		return nil, 0, common.NewUnauthorizedError("authenticated actor and tenant required")

@@ -3,13 +3,14 @@ package service_catalog
 import (
 	"context"
 	"fmt"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/dto"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/service"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"testing"
 )
 
 func TestA5FixPublicationFixedScopeCandidates(t *testing.T) {

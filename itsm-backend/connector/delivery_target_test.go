@@ -5,6 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/common/executionscope"
 	"itsm-backend/common/tenantctx"
@@ -12,9 +16,6 @@ import (
 	"itsm-backend/connector"
 	"itsm-backend/connector/builtin/webhook"
 	"itsm-backend/database"
-	"net/http"
-	"net/http/httptest"
-	"testing"
 )
 
 func TestManagerDeliveryRequiresDeclaredTargetCapability(t *testing.T) {

@@ -15,7 +15,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"itsm-backend/common/tenantctx"
- relationmeta "itsm-backend/common/workitemrelation"
+	relationmeta "itsm-backend/common/workitemrelation"
 	"itsm-backend/database"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
@@ -227,7 +227,7 @@ func TestWorkItemRelationsAuthorityAndAtomicRollback(t *testing.T) {
 	f.problem.Update().ClearDeletedAt().ExecX(f.ctx)
 	for _, fault := range []string{"relation", "audit"} {
 		t.Run(fault, func(t *testing.T) {
-			var enabled = true
+			enabled := true
 			hook := func(next ent.Mutator) ent.Mutator {
 				return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
 					if enabled {

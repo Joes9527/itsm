@@ -467,6 +467,7 @@ func (s *blockingPollingStore) TicketExistsForExternalMessage(ctx context.Contex
 	<-s.release
 	return false, ctx.Err()
 }
+
 func TestCoordinatorCloseWaitsForPollAndRejectsRestart(t *testing.T) {
 	store := &blockingPollingStore{newFakeStore(), make(chan struct{}), make(chan struct{}), make(chan struct{})}
 	coord := NewEmailPollingCoordinator(store, fakeTriager{}, zaptest.NewLogger(t).Sugar())

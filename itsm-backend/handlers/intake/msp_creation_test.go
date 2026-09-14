@@ -3,11 +3,12 @@ package intake
 import (
 	"context"
 	"errors"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/ent"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"testing"
-	"time"
 )
 
 func TestMSPIntakeUsesNativeActorAndCustomerRequester(t *testing.T) {
@@ -116,6 +117,7 @@ type failingCloseDirectory struct{ closes *int }
 func (p failingCloseDirectory) Open(_ context.Context, tx *ent.Tx, _ int) (*ent.Client, func() error, error) {
 	return tx.Client(), func() error { *p.closes++; return errors.New("directory close unavailable") }, nil
 }
+
 func TestDirectoryCloseFailurePreventsReceiptClaim(t *testing.T) {
 	client, app, identity, command, _, _ := intakeFixture(t)
 	closes := 0

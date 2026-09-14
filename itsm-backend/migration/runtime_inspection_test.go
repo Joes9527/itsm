@@ -58,6 +58,7 @@ func (c *bindingConn) Rollback() error {
 	c.held = nil
 	return nil
 }
+
 func (c *bindingConn) QueryContext(ctx context.Context, q string, args []driver.NamedValue) (driver.Rows, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

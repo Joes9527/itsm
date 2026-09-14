@@ -222,7 +222,8 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 		return BlockedEffect(CallbackBlockRecipientEmpty, "CC recipient set produced no durable delivery"), nil
 	}
 
-	return &CallbackEffect{Status: CallbackEffectApplied,
+	return &CallbackEffect{
+		Status:  CallbackEffectApplied,
 		Message: fmt.Sprintf("已成功添加 %d 位抄送人", len(addedUsers)),
 		OutputVars: map[string]interface{}{
 			"added_cc_users": addedUsers,

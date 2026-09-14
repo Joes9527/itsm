@@ -1,8 +1,9 @@
 package change
 
 import (
-	relationmeta "itsm-backend/common/workitemrelation"
 	"time"
+
+	relationmeta "itsm-backend/common/workitemrelation"
 )
 
 // Change domain entity

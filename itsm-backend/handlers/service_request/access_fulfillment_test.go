@@ -2,6 +2,9 @@ package service_request
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/authorization"
@@ -12,8 +15,6 @@ import (
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/intake"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"testing"
-	"time"
 )
 
 func TestAccessResultFulfillmentUsesProfessionalAndWorkflowOwners(t *testing.T) {

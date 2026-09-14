@@ -2,9 +2,10 @@ package dto
 
 import (
 	"encoding/json"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/ent"
-	"testing"
 )
 
 func TestBPMNTaskResponseIncludesOwningWorkItemNumber(t *testing.T) {

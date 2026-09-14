@@ -48,6 +48,7 @@ func validateIncidentRuleRecipients(ctx context.Context, client *ent.Client, rec
 	}
 	return nil
 }
+
 func incidentRuleUserRecipients(ctx context.Context, client *ent.Client, ids []int, tenantID int) ([]string, error) {
 	var recipients []string
 	seen := map[int]bool{}

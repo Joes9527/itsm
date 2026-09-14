@@ -2,9 +2,10 @@ package intake
 
 import (
 	"context"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"testing"
 )
 
 func TestGenericRequesterCreateAndReplayWithoutWriteGrant(t *testing.T) {

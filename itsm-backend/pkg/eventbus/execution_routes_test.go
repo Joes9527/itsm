@@ -34,8 +34,14 @@ func TestCandidatePublishRejectsInvalidRoutesBeforeRedis(t *testing.T) {
 	routes, err := newStreamRoutes(config.ExecutionConfig{Mode: "candidate", DeploymentID: "routing-test", Scopes: []config.ExecutionScopeConfig{{TenantID: 1, ScopeID: uuid.NewString()}}})
 	require.NoError(t, err)
 	for _, tc := range []struct{ topic, tenant string }{
-		{"sla.breached", "2"}, {"sla.breached", "01"}, {"sla.breached", "0"}, {"sla.breached", ""},
-		{"candidate:other:topic", "1"}, {"", "1"}, {"sla..breached", "1"}, {"SLA.breached", "1"},
+		{"sla.breached", "2"},
+		{"sla.breached", "01"},
+		{"sla.breached", "0"},
+		{"sla.breached", ""},
+		{"candidate:other:topic", "1"},
+		{"", "1"},
+		{"sla..breached", "1"},
+		{"SLA.breached", "1"},
 	} {
 		t.Run(tc.topic+"/"+tc.tenant, func(t *testing.T) {
 			publisher := &fakePublisher{}

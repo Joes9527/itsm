@@ -3,13 +3,14 @@ package intake
 import (
 	"context"
 	"errors"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/authentication"
 	"itsm-backend/authorization"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"testing"
 )
 
 func TestIdentityRepositoryExactMappingAndCurrentUserRole(t *testing.T) {
@@ -36,6 +37,7 @@ func TestIdentityRepositoryExactMappingAndCurrentUserRole(t *testing.T) {
 	_, err = repo.Validate(ctx, c)
 	require.Error(t, err)
 }
+
 func TestIdentityRepositoryStorageFailureIsNotUnmapped(t *testing.T) {
 	client, _, _, _, _, _ := intakeFixture(t)
 	client.ExternalIdentity.Intercept(ent.InterceptFunc(func(next ent.Querier) ent.Querier {
@@ -45,6 +47,7 @@ func TestIdentityRepositoryStorageFailureIsNotUnmapped(t *testing.T) {
 	_, _, err := repo.Resolve(context.Background(), "kaf", "workspace", "subject")
 	require.ErrorIs(t, err, creation.ErrInfrastructureUnavailable)
 }
+
 func TestIdentityMappingAuditFailureRollsBackMutation(t *testing.T) {
 	client, _, i, _, _, _ := intakeFixture(t)
 	ctx := tenantctx.WithTenantID(context.Background(), i.TenantID)

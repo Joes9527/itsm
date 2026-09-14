@@ -7,10 +7,11 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"fmt"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/migration"
-	"testing"
 )
 
 // Synthetic historical-shape fixture. Legacy identity/tenant columns derive from
@@ -84,6 +85,7 @@ func preparationEvidence(t *testing.T, m *migration.Migrator, ctx context.Contex
 	require.NoError(t, err)
 	return migration.MigrationEvidence{Target: inv.Target, CatalogRevision: migration.ControlledCatalogRevision, LedgerDigest: inv.LedgerDigest, InventoryDigest: inv.InventoryDigest, ApplicationDigest: "app", BackupDigest: "backup", RestoreReportDigest: "restore", JourneyReportDigest: "journey", ObservationReportDigest: "observation", Operator: "test", ChangeRecord: "task3"}
 }
+
 func TestWorkItemControlledPreparationRefusesInvalidShapes(t *testing.T) {
 	cases := map[string]string{
 		"unsafe base RLS":          `DROP POLICY tenant_isolation_tickets ON tickets;CREATE POLICY tenant_isolation_tickets ON tickets USING(true) WITH CHECK(true)`,
@@ -118,6 +120,7 @@ func TestWorkItemControlledPreparationRefusesInvalidShapes(t *testing.T) {
 		})
 	}
 }
+
 func TestWorkItemControlledPreparationReceiptAndAttachmentAtomic(t *testing.T) {
 	db, ctx := preparationFixture(t)
 	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{Operator: "test", DeploymentID: "owned-v2"})
@@ -148,6 +151,7 @@ func TestWorkItemControlledPreparationReceiptAndAttachmentAtomic(t *testing.T) {
 	require.NoError(t, err)
 	require.ErrorContains(t, m.InspectMigrationTarget(ctx), "digest mismatch")
 }
+
 func TestWorkItemControlledPreparationRestrictedSQLRoles(t *testing.T) {
 	db, ctx := preparationFixture(t)
 	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{Operator: "test", DeploymentID: "owned-v2"})
@@ -342,6 +346,7 @@ func TestWorkItemControlledPreparationWithoutLaterReports(t *testing.T) {
 	require.NoError(t, m.ApplyPreparation(ctx, e))
 	require.NoError(t, m.InspectMigrationTarget(ctx))
 }
+
 func TestWorkItemControlledPreparationUnreviewedEnforcingIndexes(t *testing.T) {
 	for name, indexSQL := range map[string]string{
 		"expression":        `CREATE UNIQUE INDEX unexpected_legacy_title ON incidents ((coalesce(title,'')))`,

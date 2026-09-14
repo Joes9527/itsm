@@ -1,8 +1,9 @@
 package schema
 
 import (
-	"itsm-backend/handlers/shared/slacontract"
 	"time"
+
+	"itsm-backend/handlers/shared/slacontract"
 
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"

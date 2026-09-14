@@ -7,6 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/dto"
@@ -18,8 +21,6 @@ import (
 	ticketrepo "itsm-backend/repository/ticket"
 	"itsm-backend/service"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"testing"
-	"time"
 )
 
 // The test command models the contract consumed by subsequent professional commands:
@@ -62,6 +63,7 @@ func cycleCommand(ctx context.Context, client *ent.Client, id int, at time.Time,
 	}
 	return result, tx.Commit()
 }
+
 func cycleFixture(t *testing.T) (*incidentEffectsFixture, *ent.Ticket, *ent.SLADefinition, time.Time, workitemmutation.Meta) {
 	f := newIncidentEffectsFixture(t)
 	at := time.Date(2026, 9, 9, 8, 0, 0, 0, time.UTC)
@@ -75,6 +77,7 @@ func cycleFixture(t *testing.T) (*incidentEffectsFixture, *ent.Ticket, *ent.SLAD
 	item = f.client.Ticket.UpdateOneID(item.ID).SetFirstResponseAt(at.Add(30 * time.Minute)).SetResolvedAt(at.Add(time.Hour)).SetSLAPausedMinutes(30).SaveX(f.ctx)
 	return f, item, policy, at, workitemmutation.Meta{TenantID: f.tenant.ID, ActorID: f.actor.ID, ExpectedVersion: item.Version, OperationID: "reopen-1", Source: "api"}
 }
+
 func TestWorkItemSLACycleFrozenReopenAndReceipt(t *testing.T) {
 	f, item, policy, at, meta := cycleFixture(t)
 	policy.Update().SetResponseTime(900).SetResolutionTime(900).SetBusinessHours(map[string]interface{}{"work_days": []interface{}{0}}).SaveX(f.ctx)
@@ -102,6 +105,7 @@ func TestWorkItemSLACycleFrozenReopenAndReceipt(t *testing.T) {
 	_, err = service.NewTicketSLAService(f.client, zap.NewNop().Sugar()).GetTicketSLAInfo(f.ctx, item.ID, f.tenant.ID+1)
 	require.Error(t, err)
 }
+
 func TestWorkItemSLACycleAuditFailureRollsBackCAS(t *testing.T) {
 	for _, stage := range []string{"before_fact", "after_receipt"} {
 		t.Run(stage, func(t *testing.T) {
@@ -132,6 +136,7 @@ func TestWorkItemSLACycleAuditFailureRollsBackCAS(t *testing.T) {
 		})
 	}
 }
+
 func TestWorkItemSLACyclePreservesBreachAndFailsClosed(t *testing.T) {
 	f, item, _, at, meta := cycleFixture(t)
 	f.client.Ticket.UpdateOneID(item.ID).SetResolvedAt(at.Add(2 * time.Hour)).SaveX(f.ctx)
@@ -162,6 +167,7 @@ func TestWorkItemSLACycleExplicitPolicyApplication(t *testing.T) {
 	require.True(t, got.SLAResponseDeadline.Equal(at.Add(6*time.Hour)))
 	require.Equal(t, 2, got.SLACycleNumber)
 }
+
 func TestWorkItemSLACycleMetadataAndNoSLA(t *testing.T) {
 	f, item, _, at, meta := cycleFixture(t)
 	for _, test := range []struct {
@@ -192,6 +198,7 @@ func TestWorkItemSLACycleMetadataAndNoSLA(t *testing.T) {
 	require.Equal(t, 0, f.client.Ticket.GetX(f.ctx, item.ID).SLACycleNumber)
 	require.Zero(t, f.client.AuditLog.Query().Where(auditlog.Action("sla.cycle.completed")).CountX(f.ctx))
 }
+
 func TestWorkItemSLACycleCompletionProjection(t *testing.T) {
 	f, item, _, at, _ := cycleFixture(t)
 	svc := service.NewTicketSLAService(f.client, zap.NewNop().Sugar())
@@ -216,7 +223,6 @@ func TestWorkItemSLACycleCompletionProjection(t *testing.T) {
 	require.Equal(t, 0, *apiInfo.ResolutionTimeRemaining)
 	_, err = apiSvc.GetTicketSLAInfo(f.ctx, item.ID, f.tenant.ID+1)
 	require.Error(t, err)
-
 }
 
 func TestWorkItemSLACycleMigrationAndImmutableAudit(t *testing.T) {
@@ -245,7 +251,6 @@ func TestWorkItemSLACycleMigrationAndImmutableAudit(t *testing.T) {
 	_, err = normal.Update().SetStatusCode(200).Save(f.ctx)
 	require.NoError(t, err)
 	require.NoError(t, f.client.AuditLog.DeleteOneID(normal.ID).Exec(f.ctx))
-
 }
 
 func TestWorkItemSLACycleEscalationAfterRealReopen(t *testing.T) {

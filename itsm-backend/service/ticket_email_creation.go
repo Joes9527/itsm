@@ -9,8 +9,10 @@ import (
 	creation "itsm-backend/handlers/common/workitemcreation"
 )
 
-const EmailAttachmentsRequestedEventType = "email.attachments.requested"
-const EmailConfirmationRequestedEventType = "email.confirmation.requested"
+const (
+	EmailAttachmentsRequestedEventType  = "email.attachments.requested"
+	EmailConfirmationRequestedEventType = "email.confirmation.requested"
+)
 
 type emailCreationDelivery struct {
 	Number            string `json:"number"`

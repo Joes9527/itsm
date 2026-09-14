@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
+	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
@@ -17,7 +19,6 @@ import (
 	problemDomain "itsm-backend/handlers/problem"
 	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/service"
-	"time"
 )
 
 type rcaCommandFixture struct {
@@ -57,6 +58,7 @@ func rcaAuthorityFixture(t *testing.T) (*sql.DB, *rcaCommandFixture) {
 	require.NoError(t, err)
 	return db, &rcaCommandFixture{ProblemInvestigationService: service.NewProblemInvestigationService(db, zaptest.NewLogger(t).Sugar()), owner: problemDomain.NewService(problemDomain.NewEntRepository(client), zaptest.NewLogger(t).Sugar(), executionfixture.Standard()), client: client, db: db, tenant: tenant.ID, foreignTenant: foreign.ID, actor: actor.ID, foreignActor: outsider.ID, pid: records[0].ID, foreignPID: records[1].ID, deletedPID: records[2].ID, itemID: records[0].WorkItemID}
 }
+
 func (s *rcaCommandFixture) mutate(ctx context.Context, pid, tenant int, rca *problemDomain.RootCauseMetadata) error {
 	p, err := s.client.Problem.Get(ctx, pid)
 	if err != nil {
@@ -69,6 +71,7 @@ func (s *rcaCommandFixture) mutate(ctx context.Context, pid, tenant int, rca *pr
 	_, err = s.owner.ApplyMetadata(ctx, problemDomain.MetadataCommand{Meta: workitemmutation.Meta{TenantID: tenant, ActorID: s.actor, ExpectedVersion: item.Version, Source: "http", OperationID: uuid.NewString()}, ProblemID: pid, RootCauseAnalysis: rca})
 	return err
 }
+
 func (s *rcaCommandFixture) CreateRootCauseAnalysis(ctx context.Context, req *dto.CreateRootCauseAnalysisRequest, tenant int) (*dto.RootCauseAnalysisResponse, error) {
 	if err := s.mutate(ctx, req.ProblemID, tenant, &problemDomain.RootCauseMetadata{Create: req}); err != nil {
 		return nil, err
@@ -79,6 +82,7 @@ func (s *rcaCommandFixture) CreateRootCauseAnalysis(ctx context.Context, req *dt
 	}
 	return s.GetRootCauseAnalysis(ctx, id, tenant)
 }
+
 func (s *rcaCommandFixture) UpdateRootCauseAnalysis(ctx context.Context, id int, req *dto.UpdateRootCauseAnalysisRequest, tenant int) (*dto.RootCauseAnalysisResponse, error) {
 	old, err := s.GetRootCauseAnalysis(ctx, id, tenant)
 	if err != nil {
@@ -89,6 +93,7 @@ func (s *rcaCommandFixture) UpdateRootCauseAnalysis(ctx context.Context, id int,
 	}
 	return s.GetRootCauseAnalysis(ctx, id, tenant)
 }
+
 func (s *rcaCommandFixture) DeleteRootCauseAnalysis(ctx context.Context, id, tenant int) error {
 	old, err := s.GetRootCauseAnalysis(ctx, id, tenant)
 	if err != nil {

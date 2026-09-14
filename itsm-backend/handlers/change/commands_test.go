@@ -2,9 +2,10 @@ package change
 
 import (
 	"context"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/ent"
-	"testing"
 )
 
 func TestChangeCommandRejectsMissingIdentity(t *testing.T) {

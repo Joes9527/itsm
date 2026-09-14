@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	webhookconnector "itsm-backend/connector/builtin/webhook"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -22,6 +21,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	webhookconnector "itsm-backend/connector/builtin/webhook"
 
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/gin-gonic/gin"
@@ -703,7 +704,6 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.ErrorIs(t, absent.LoadAll(tenantctx.SystemContext(ctx, "test:absent-restore", "reject before query")), executionscope.ErrDenied)
 		noClient := controller.NewConnectorController(manager, reg, nil, zap.NewNop().Sugar(), nil, nil)
 		require.ErrorIs(t, noClient.LoadAll(tenantctx.SystemContext(ctx, "test:candidate-no-client", "reject before query")), executionscope.ErrDenied)
-
 	})
 	t.Run("candidate request cannot activate an undeclared delivery target", func(t *testing.T) {
 		var sends atomic.Int32
@@ -1868,9 +1868,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 					require.JSONEq(t, after, afterRetry)
 					assert.Equal(t, items+1, owner.Ticket.Query().CountX(ctx), "business committed before this revocation")
 				})
-
 			}
-
 		}
 		for _, kind := range []string{"actor", "approver", "requester", "actor_role", "role_active", "role_permission", "permission", "approval", "arguments"} {
 			for _, rollback := range []bool{false, true} {
@@ -2014,7 +2012,6 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				})
 			}
 		}
-
 	})
 	t.Run("new base extension and member commit together", func(t *testing.T) {
 		created, err := app.Create(ctx, identity, command("new", "incident"))
@@ -2161,8 +2158,10 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			owner.ProcessApprovalDecision.Create().SetProcessInstanceID(instance.ID).SetProcessTaskID(task.ID).SetProcessInstanceKey(key).SetTaskID(key + "-approval").SetProcessDefinitionKey(key).SetNodeKey("Approval").SetActorID(actor.ID).SetAction("approve").SetDecision("approved").SetTenantID(tenant.ID).SaveX(ctx)
 			owner.ServiceRequestAccessSnapshot.Create().SetWorkItemID(itemID).SetPolicyID(accessPolicy.ID).SetPolicyVersion(1).SetProvider("graph").SetExternalSystem("directory").SetSubjectID("approved-subject").SetGroupID("approved-group").SetDurationKey("month").SetDurationSeconds(2592000).SaveX(ctx)
 			if kind == "historical" {
-				claim := service.KafActionRequest{Action: "complete_bpmn_task", ExpectedVersion: instance.Version,
-					Execution: service.KafActionExecution{RunID: "historical-claim", StepID: "finish", CorrelationID: key, ProcedureRef: "access", ProcedureVersion: "1"}}
+				claim := service.KafActionRequest{
+					Action: "complete_bpmn_task", ExpectedVersion: instance.Version,
+					Execution: service.KafActionExecution{RunID: "historical-claim", StepID: "finish", CorrelationID: key, ProcedureRef: "access", ProcedureVersion: "1"},
+				}
 				claim.Execution.IdempotencyKey = fmt.Sprintf("%d:%s:%s:%s", tenant.ID, task.TaskID, claim.Execution.RunID, claim.Execution.StepID)
 				beforeClaims := owner.KafTaskActionLedger.Query().CountX(ctx)
 				_, claimed, claimErr := service.NewKafDelegationService(runtime, policy).ClaimKafAction(ctx, task, claim)
@@ -2187,8 +2186,10 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			}
 			variables := map[string]interface{}{"kaf_access_result": map[string]interface{}{"outcome": "granted", "provider": "graph", "subjectId": "approved-subject", "groupId": "approved-group", "baseline": "not_member", "verifiedAt": verifiedAt.Format(time.RFC3339Nano), "evidenceRef": key}}
 			if kind != "historical" {
-				claim := service.KafActionRequest{Action: "complete_bpmn_task", ExpectedVersion: instance.Version,
-					Execution: service.KafActionExecution{RunID: "candidate-claim", StepID: "finish", CorrelationID: key, ProcedureRef: "access", ProcedureVersion: "1"}}
+				claim := service.KafActionRequest{
+					Action: "complete_bpmn_task", ExpectedVersion: instance.Version,
+					Execution: service.KafActionExecution{RunID: "candidate-claim", StepID: "finish", CorrelationID: key, ProcedureRef: "access", ProcedureVersion: "1"},
+				}
 				claim.Execution.IdempotencyKey = fmt.Sprintf("%d:%s:%s:%s", tenant.ID, task.TaskID, claim.Execution.RunID, claim.Execution.StepID)
 				claim.Payload.AccessResult, err = json.Marshal(variables["kaf_access_result"])
 				require.NoError(t, err)
@@ -2522,7 +2523,6 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			require.NoError(t, err)
 		}
 		require.Equal(t, "investigating", owner.Ticket.GetX(ctx, fresh.WorkItemID).Status)
-
 	})
 
 	t.Run("Incident CI and alert writes require membership", func(t *testing.T) {
@@ -2615,7 +2615,6 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.Equal(t, outboxes, owner.OutboxEvent.Query().CountX(ctx))
 		require.Equal(t, notifications, owner.Notification.Query().CountX(ctx))
 		require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx))
-
 	})
 
 	t.Run("Incident event metric and major escalation reject history", func(t *testing.T) {
@@ -2724,7 +2723,6 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.ErrorIs(t, engine.ExecuteRule(ctx, rule, current, tenant.ID), injected)
 		require.False(t, failMetric)
 		require.Equal(t, metrics+1, owner.IncidentMetric.Query().CountX(ctx), "metric action must roll back its caller transaction")
-
 	})
 
 	t.Run("rule execution bookkeeping preserves historical incidents", func(t *testing.T) {
@@ -2831,7 +2829,6 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		latest = owner.IncidentRuleExecution.Query().Order(ent.Desc("id")).FirstX(ctx)
 		require.Equal(t, "running", latest.Status)
 		require.Equal(t, 2, owner.IncidentRule.GetX(ctx, rule.ID).ExecutionCount)
-
 	})
 
 	t.Run("Incident metadata and direct escalation require original transaction membership", func(t *testing.T) {
@@ -3115,7 +3112,6 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.NoError(t, err)
 		require.Error(t, permissionErr)
 		require.NotErrorIs(t, permissionErr, executionscope.ErrDenied)
-
 	})
 	t.Run("real outbox worker preserves historical states", func(t *testing.T) {
 		fresh, err := app.Create(ctx, identity, command("worker-member", "generic"))
@@ -3667,7 +3663,6 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		req.DeliveryKey = "target-unknown"
 		require.ErrorIs(t, run(req), executionscope.ErrDenied)
 		require.Empty(t, probe.ids)
-
 	})
 
 	t.Run("real notification worker preserves historical rows", func(t *testing.T) {
@@ -3884,7 +3879,6 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				owner.TicketNotification.UpdateOneID(row.ID).SetStatus("failed").SaveX(ctx)
 			})
 		}
-
 	})
 
 	t.Run("notification intents share the owning transaction", func(t *testing.T) {
@@ -3991,7 +3985,6 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.Zero(t, extra)
 		require.NoError(t, prefTx.Rollback())
 		require.Equal(t, []int{before[0] + 2, before[1] + 1}, counts())
-
 	})
 	t.Run("stream source requires current persistent authority", func(t *testing.T) {
 		fresh, err := app.Create(ctx, identity, command("stream-source-member", "generic"))
@@ -4571,7 +4564,6 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 					require.Equal(t, initialAttempts, attempted.Load(), "blocked delivery must not be sent again")
 					require.Zero(t, redirected.Load())
 				})
-
 			}
 		})
 		t.Run("stream consumer recovers committed audit before ack", func(t *testing.T) {
@@ -4679,8 +4671,10 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				encoded, err := json.Marshal(endpoint)
 				require.NoError(t, err)
 				digest := sha256.Sum256(encoded)
-				targetExecution.ConnectorTargets = append(targetExecution.ConnectorTargets, config.ConnectorTargetConfig{TenantID: tenant.ID, ScopeID: scopeID, Name: "webhook", Provider: provider,
-					DestinationDigest: hex.EncodeToString(digest[:]), Capabilities: []string{"webhook"}, Settings: map[string]interface{}{"url": endpoint}})
+				targetExecution.ConnectorTargets = append(targetExecution.ConnectorTargets, config.ConnectorTargetConfig{
+					TenantID: tenant.ID, ScopeID: scopeID, Name: "webhook", Provider: provider,
+					DestinationDigest: hex.EncodeToString(digest[:]), Capabilities: []string{"webhook"}, Settings: map[string]interface{}{"url": endpoint},
+				})
 			}
 			targetPolicy, err := database.NewExecutionPolicy(targetExecution)
 			require.NoError(t, err)
@@ -5180,7 +5174,6 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 					require.NoError(t, err)
 					require.True(t, triggered)
 				}
-
 			})
 		}
 	})
@@ -5227,7 +5220,6 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 					require.Len(t, rows, 1)
 					require.Equal(t, tc.notifications > 0, rows[0].NotificationSent, "SLA status must reflect actual in-app delivery")
 				}
-
 			})
 		}
 	})
@@ -5358,7 +5350,6 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.NoError(t, escalation.ProcessEscalations(ctx, tenant.ID))
 		require.NoError(t, ownerDB.QueryRow(`SELECT escalation_level FROM sla_alert_histories WHERE ticket_id=$1`, fresh.WorkItemID).Scan(&level))
 		require.Equal(t, 1, level, "old-cycle alert must not escalate again")
-
 	})
 
 	t.Run("automatic reminders preserve historical WorkItems", func(t *testing.T) {
@@ -5974,7 +5965,6 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		after := owner.Ticket.GetX(ctx, before.ID)
 		require.Equal(t, before.Status, after.Status)
 		require.Equal(t, before.Version, after.Version)
-
 	})
 
 	t.Run("ticket edits recheck current actor and permissions", func(t *testing.T) {
@@ -6036,7 +6026,6 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		_, err = svc.UpdateTicket(ctx, editCommandForTest(item.ID, req, tenant.ID))
 		require.NoError(t, err)
 		require.Equal(t, item.Version+1, owner.Ticket.GetX(ctx, item.ID).Version)
-
 	})
 
 	t.Run("ticket edit checks actual parent execution membership", func(t *testing.T) {
@@ -6583,7 +6572,6 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.ErrorIs(t, err, creation.ErrPermissionDenied, "revoked approval must block receipt replay")
 		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, item.ID).Scan(&replayed))
 		require.JSONEq(t, after, replayed)
-
 	})
 	t.Run("ticket edit receipt and Feishu intent commit together", func(t *testing.T) {
 		for _, fault := range []string{"audit", "outbox"} {
@@ -6757,7 +6745,6 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			_, err = svc.EscalateTicket(ctx, command)
 			require.NoError(t, err)
 		}
-
 	})
 
 	require.Equal(t, oldRow.Title, owner.Ticket.GetX(ctx, historical.WorkItemID).Title)
@@ -6781,6 +6768,7 @@ func (*candidateCallbackHandler) GetHandlerID() string { return "candidate-local
 func (*candidateCallbackHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
 	return bpmn.CallbackActionContract{}, true
 }
+
 func (h *candidateCallbackHandler) Execute(context.Context, *ent.ProcessTask, map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	h.calls++
 	return bpmn.AppliedEffect("local candidate callback", nil), nil
@@ -6795,6 +6783,7 @@ type candidateNotificationConnector struct {
 func (*candidateNotificationConnector) Manifest() connector.Manifest {
 	return connector.Manifest{InitializationBehavior: connector.InitializationLocalOnly, Name: "webhook", Version: "1.0.0", Title: "Candidate local receiver", Type: connector.TypeEmail, Capabilities: []connector.Capability{connector.CapSendMessage}, RequiredPermissions: []string{"connector:write"}}
 }
+
 func (*candidateNotificationConnector) DeliveryDestinationIdentity() string {
 	return candidateTargetDigest("local-notification-receiver")
 }
@@ -6806,6 +6795,7 @@ func (c *candidateNotificationConnector) Send(_ context.Context, m *connector.Me
 	}
 	return nil
 }
+
 func (*candidateNotificationConnector) HealthCheck(context.Context) connector.HealthStatus {
 	return connector.HealthStatus{OK: true}
 }
@@ -6846,6 +6836,7 @@ type candidateFeishuUpdater struct {
 func (*candidateFeishuUpdater) Manifest() connector.Manifest {
 	return connector.Manifest{InitializationBehavior: connector.InitializationLocalOnly, Name: "feishu", Version: "1", Title: "Local Feishu receiver", Type: connector.TypeIM, Capabilities: []connector.Capability{connector.CapUpdateTicket}, RequiredPermissions: []string{"connector:write"}}
 }
+
 func (r *candidateFeishuUpdater) DeliveryDestinationIdentity() string {
 	return candidateTargetDigest(r.destination)
 }
@@ -6919,6 +6910,7 @@ func (h *candidateCommitBeforeAck) EventConsumerID() string { return h.audit.Eve
 func (*candidateCommitBeforeAck) Handle(interface{}) error {
 	return errors.New("consumption context required")
 }
+
 func (h *candidateCommitBeforeAck) HandleContext(ctx context.Context, event interface{}) error {
 	if err := h.audit.HandleContext(ctx, event); err != nil {
 		return err
@@ -6984,14 +6976,17 @@ func candidateTestStandardManagement(t *testing.T) *database.ExecutionPolicy {
 	require.NoError(t, err)
 	return p
 }
+
 func candidateTargetDigest(value string) string {
 	encoded, _ := json.Marshal(value)
 	digest := sha256.Sum256(encoded)
 	return hex.EncodeToString(digest[:])
 }
+
 func candidateWebhookTarget(provider, endpoint string) config.ConnectorTargetConfig {
 	return config.ConnectorTargetConfig{Name: "webhook", Provider: provider, DestinationDigest: candidateTargetDigest(endpoint), Capabilities: []string{"webhook"}, Settings: map[string]interface{}{"url": endpoint}}
 }
+
 func candidateDeclaredManager(t *testing.T, ctx context.Context, tenantID int, scopeID string, registry *connector.Registry, targets ...config.ConnectorTargetConfig) *connector.Manager {
 	t.Helper()
 	execution := config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenantID, ScopeID: scopeID}}, Capabilities: map[string]string{}}

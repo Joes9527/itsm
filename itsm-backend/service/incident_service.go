@@ -3,10 +3,11 @@ package service
 import (
 	"context"
 	"fmt"
-	"itsm-backend/database"
-	creation "itsm-backend/handlers/common/workitemcreation"
 	"strings"
 	"time"
+
+	"itsm-backend/database"
+	creation "itsm-backend/handlers/common/workitemcreation"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
@@ -41,7 +42,8 @@ type IncidentAlertCreator interface {
 }
 
 func NewIncidentService(client *ent.Client, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) *IncidentService {
-	incidentService := &IncidentService{execution: execution,
+	incidentService := &IncidentService{
+		execution:             execution,
 		client:                client,
 		logger:                logger,
 		priorityMatrixService: NewPriorityMatrixService(logger),

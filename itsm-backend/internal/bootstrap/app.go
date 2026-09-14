@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	intakecreation "itsm-backend/handlers/common/workitemcreation"
-	"itsm-backend/handlers/intake"
 	"log"
 	"net"
 	"net/http"
@@ -16,6 +14,9 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	intakecreation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/handlers/intake"
 
 	"itsm-backend/authentication"
 	"itsm-backend/authorization"

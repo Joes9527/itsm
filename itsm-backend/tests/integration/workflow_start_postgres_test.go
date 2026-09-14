@@ -6,12 +6,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/url"
 	"os"
 	"sync"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/require"

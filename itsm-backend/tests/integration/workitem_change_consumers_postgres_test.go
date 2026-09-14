@@ -6,6 +6,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
@@ -17,8 +20,6 @@ import (
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
-	"testing"
-	"time"
 )
 
 // These cross-domain tests moved from package service to exercise the actual
@@ -30,6 +31,7 @@ func prepareChangeMetadataTask(t *testing.T, f *changeLifecycleFixture) *ent.Pro
 	f.apply(t, f.command("submit", "submit"))
 	return f.client.ProcessTask.Query().OnlyX(f.ctx)
 }
+
 func seedChangeCABActor(t *testing.T, f *changeLifecycleFixture) *ent.User {
 	t.Helper()
 	actor := f.client.User.Create().SetTenantID(f.tenant.ID).SetUsername("consumer-cab").SetName("CAB").SetEmail("consumer-cab@example.test").SetPasswordHash("test").SetRole("super_admin").SetActive(true).SaveX(f.ctx)
@@ -37,6 +39,7 @@ func seedChangeCABActor(t *testing.T, f *changeLifecycleFixture) *ent.User {
 	actor.Update().AddRoleIDs(role.ID).ExecX(f.ctx)
 	return actor
 }
+
 func completeDefaultChangeAction(t *testing.T, f *changeLifecycleFixture, action, key string) changedomain.TaskProgress {
 	t.Helper()
 	task := f.client.ProcessTask.Query().Where(processtask.TaskDefinitionKey(key)).OnlyX(f.ctx)
@@ -46,6 +49,7 @@ func completeDefaultChangeAction(t *testing.T, f *changeLifecycleFixture, action
 	require.NotNil(t, result.Result)
 	return result
 }
+
 func TestCompleteTask_TypedScope_CallbackUsesAuthoritativeBusinessIdentity(t *testing.T) {
 	f := newChangeLifecycleFixture(t, "normal")
 	task := prepareChangeMetadataTask(t, f)
@@ -60,6 +64,7 @@ func TestCompleteTask_TypedScope_CallbackUsesAuthoritativeBusinessIdentity(t *te
 	require.Equal(t, "completed", f.client.ProcessInstance.Query().OnlyX(f.ctx).Status)
 	require.Equal(t, 1, f.client.AuditLog.Query().Where(auditlog.Action("change.metadata")).CountX(f.ctx))
 }
+
 func TestCompleteTask_ParticipantBusinessIDCannotRetargetCallback(t *testing.T) {
 	f := newChangeLifecycleFixture(t, "normal")
 	task := prepareChangeMetadataTask(t, f)
@@ -75,6 +80,7 @@ func TestCompleteTask_ParticipantBusinessIDCannotRetargetCallback(t *testing.T) 
 	require.Equal(t, "completed", row.Status)
 	require.Equal(t, 1, f.client.AuditLog.Query().Where(auditlog.Action("change.metadata")).CountX(f.ctx))
 }
+
 func TestCABApprovalAssignsChangeManagerRole(t *testing.T) {
 	f := newChangeLifecycleFixture(t, "normal")
 	cab := seedChangeCABActor(t, f)
@@ -85,6 +91,7 @@ func TestCABApprovalAssignsChangeManagerRole(t *testing.T) {
 	require.NotContains(t, task.CandidateUsers, f.actor.Username)
 	require.Zero(t, f.client.ProcessApprovalDecision.Query().CountX(f.ctx))
 }
+
 func TestCABApprovalGatewayRoutesToScheduleOnApprove(t *testing.T) {
 	f := newChangeLifecycleFixture(t, "normal")
 	cab := seedChangeCABActor(t, f)
@@ -97,6 +104,7 @@ func TestCABApprovalGatewayRoutesToScheduleOnApprove(t *testing.T) {
 	require.Equal(t, 1, f.client.ProcessApprovalDecision.Query().CountX(f.ctx))
 	require.Equal(t, 1, f.client.AuditLog.Query().Where(auditlog.Action("change.authorize")).CountX(f.ctx))
 }
+
 func TestCABApprovalGatewayRoutesToRejectOnReject(t *testing.T) {
 	f := newChangeLifecycleFixture(t, "normal")
 	cab := seedChangeCABActor(t, f)
@@ -111,6 +119,7 @@ func TestCABApprovalGatewayRoutesToRejectOnReject(t *testing.T) {
 	require.Equal(t, 1, f.client.ProcessApprovalDecision.Query().CountX(f.ctx))
 	require.Zero(t, f.client.ProcessTask.Query().Where(processtask.TaskDefinitionKey("Activity_Schedule")).CountX(f.ctx))
 }
+
 func TestUserTaskWithServiceTaskTypeMetadataTriggersCallback(t *testing.T) {
 	f := newChangeLifecycleFixture(t, "normal")
 	cab := seedChangeCABActor(t, f)
@@ -126,6 +135,7 @@ func TestUserTaskWithServiceTaskTypeMetadataTriggersCallback(t *testing.T) {
 	require.Equal(t, version, f.client.Ticket.GetX(f.ctx, f.c.WorkItemID).Version)
 	require.Equal(t, "submitted", f.client.Ticket.GetX(f.ctx, f.c.WorkItemID).Status)
 }
+
 func TestUserTaskMetadataPersistsOnlyInImmutableDescriptor(t *testing.T) {
 	f := newChangeLifecycleFixture(t, "normal")
 	seedChangeCABActor(t, f)
@@ -143,6 +153,7 @@ func TestUserTaskMetadataPersistsOnlyInImmutableDescriptor(t *testing.T) {
 	require.Equal(t, "completed", row.Status)
 	require.Equal(t, "Activity_CABApproval", f.client.ProcessInstance.Query().OnlyX(f.ctx).CurrentActivityID)
 }
+
 func TestApprovalGatewayReadsApplicationVariableName(t *testing.T) {
 	for _, approval := range []bool{true, false} {
 		t.Run(fmt.Sprint(approval), func(t *testing.T) {
@@ -176,6 +187,7 @@ func TestApprovalGatewayReadsApplicationVariableName(t *testing.T) {
 		})
 	}
 }
+
 func TestChangeCallbackBusinessEffectSurvivesAdvanceFailureWithoutReplay(t *testing.T) {
 	f := newChangeLifecycleFixture(t, "normal")
 	initiator := f.actor
@@ -246,6 +258,7 @@ func TestChangeServiceTaskHandler_UpdateChangeCASLoserClassifiesExactEffect(t *t
 		})
 	}
 }
+
 func TestChangeServiceTaskHandler_UnchangedUpdateRequiresReceipt(t *testing.T) {
 	f := newChangeLifecycleFixture(t, "normal")
 	task := prepareChangeMetadataTask(t, f)
@@ -256,8 +269,8 @@ func TestChangeServiceTaskHandler_UnchangedUpdateRequiresReceipt(t *testing.T) {
 	require.Equal(t, before.Version, f.client.Ticket.GetX(f.ctx, before.ID).Version)
 	require.Zero(t, f.client.AuditLog.Query().Where(auditlog.Action("change.metadata")).CountX(f.ctx))
 	require.Equal(t, "metadata", f.client.ProcessInstance.Query().OnlyX(f.ctx).CurrentActivityID)
-
 }
+
 func TestChangeMetadataCallbackPreservesTenantBoundary(t *testing.T) {
 	for _, scope := range []string{"own", "foreign", "missing"} {
 		t.Run(scope, func(t *testing.T) {

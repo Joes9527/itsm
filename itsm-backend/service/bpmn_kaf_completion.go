@@ -6,9 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"itsm-backend/handlers/common/accessgrant"
 	"strings"
 	"time"
+
+	"itsm-backend/handlers/common/accessgrant"
 
 	"itsm-backend/authorization"
 	"itsm-backend/common"

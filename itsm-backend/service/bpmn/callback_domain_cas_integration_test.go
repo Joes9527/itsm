@@ -6,13 +6,14 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"os"
 	"sort"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/ent"
 	servicerequesthandler "itsm-backend/handlers/service_request"

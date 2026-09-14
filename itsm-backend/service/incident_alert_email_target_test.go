@@ -2,13 +2,14 @@ package service
 
 import (
 	"context"
+	"net/smtp"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/dto"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"net/smtp"
-	"testing"
 )
 
 func TestIncidentAlertMissingEmailTargetRollsBackOriginalTransaction(t *testing.T) {

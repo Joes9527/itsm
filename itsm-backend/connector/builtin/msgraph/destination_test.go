@@ -18,6 +18,7 @@ type graphDestinationDescriber interface {
 func graphDestinationConfig() connector.Config {
 	return connector.Config{Settings: map[string]interface{}{"azure_tenant_id": "test-tenant", "mailbox": "original@example.invalid"}, Credentials: map[string]string{"azure_client_id": "test-app", "azure_client_secret": "private-secret"}}
 }
+
 func TestGraphDestinationDescribesWithoutActivation(t *testing.T) {
 	g := New()
 	describe, ok := any(g).(graphDestinationDescriber)
@@ -45,6 +46,7 @@ func TestGraphDestinationDescribesWithoutActivation(t *testing.T) {
 	require.Equal(t, digest, bound.DeliveryDestinationIdentity())
 	require.Zero(t, calls.Load())
 }
+
 func TestGraphDestinationCoversActualRoutingIdentity(t *testing.T) {
 	describe, ok := any(New()).(graphDestinationDescriber)
 	require.True(t, ok)

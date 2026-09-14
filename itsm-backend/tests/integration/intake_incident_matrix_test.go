@@ -3,8 +3,9 @@ package integration
 import (
 	"context"
 	"encoding/json"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"

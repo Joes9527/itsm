@@ -6,13 +6,14 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/google/uuid"
-	_ "github.com/lib/pq"
-	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/google/uuid"
+	_ "github.com/lib/pq"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPreparationAdmitsOnlyRegisteredCandidateTrigger(t *testing.T) {

@@ -23,6 +23,7 @@ type activationSelectionProbe struct{ initialized *int }
 func (*activationSelectionProbe) Manifest() connector.Manifest {
 	return connector.Manifest{Name: "selection-probe", Provider: "test", Version: "1", RequiredPermissions: []string{"connector:write"}, InitializationBehavior: connector.InitializationLocalOnly}
 }
+
 func (p *activationSelectionProbe) Init(context.Context, connector.Config) error {
 	*p.initialized++
 	return nil

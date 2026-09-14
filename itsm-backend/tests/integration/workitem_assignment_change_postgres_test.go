@@ -6,6 +6,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"sync"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -13,9 +17,6 @@ import (
 	"itsm-backend/ent/processdefinition"
 	"itsm-backend/ent/processtask"
 	changedomain "itsm-backend/handlers/change"
-	"os"
-	"sync"
-	"testing"
 )
 
 func changeAssignmentCommand(t *testing.T, f *changeLifecycleFixture, key string) changedomain.MetadataCommand {

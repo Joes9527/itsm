@@ -5,11 +5,12 @@ package integration
 import (
 	"context"
 	"errors"
+	"sync"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
-	"sync"
-	"testing"
 )
 
 func TestWorkItemAssignmentIncidentConcurrentAndReplay(t *testing.T) {

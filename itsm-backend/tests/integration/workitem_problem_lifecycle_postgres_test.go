@@ -6,6 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http/httptest"
+	"os"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -20,12 +27,6 @@ import (
 	"itsm-backend/migration"
 	"itsm-backend/service"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"net/http/httptest"
-	"os"
-	"strings"
-	"sync"
-	"testing"
-	"time"
 )
 
 func TestWorkItemProblemLifecycleAllocatedMSP(t *testing.T) {
@@ -191,10 +192,12 @@ func newProblemLifecycleFixture(t *testing.T) *problemLifecycleFixture {
 	p := f.client.Problem.Create().SetWorkItemID(item.ID).SaveX(f.ctx)
 	return &problemLifecycleFixture{f, problem.NewService(problem.NewEntRepository(f.client), zap.NewNop().Sugar(), executionfixture.Standard()), p}
 }
+
 func (f *problemLifecycleFixture) command(action, key string) problem.Command {
 	item := f.client.Ticket.GetX(f.ctx, f.p.WorkItemID)
 	return problem.Command{Meta: workitemmutation.Meta{TenantID: f.tenant.ID, ActorID: f.actor.ID, ExpectedVersion: item.Version, Source: "test", OperationID: key}, ProblemID: f.p.ID, Action: action}
 }
+
 func (f *problemLifecycleFixture) apply(t *testing.T, action, key string) workitemmutation.Result {
 	t.Helper()
 	cmd := f.command(action, key)
@@ -203,6 +206,7 @@ func (f *problemLifecycleFixture) apply(t *testing.T, action, key string) workit
 	require.NoError(t, err)
 	return result
 }
+
 func (f *problemLifecycleFixture) evidence(t *testing.T) {
 	t.Helper()
 	// Persistence probe supplies the observed version for this metadata effect fixture; it is not a public relation read.
@@ -502,6 +506,7 @@ func (f *problemLifecycleFixture) metadata(p *problem.Problem) (workitemmutation
 	}
 	return f.owner.ApplyMetadata(f.ctx, problem.MetadataCommand{Meta: workitemmutation.Meta{TenantID: f.tenant.ID, ActorID: f.actor.ID, ExpectedVersion: p.Version, Source: "test", OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano())}, ProblemID: f.p.ID, Patch: patch})
 }
+
 func (f *problemLifecycleFixture) createRCA(req *dto.CreateRootCauseAnalysisRequest, tenant int) (*dto.RootCauseAnalysisResponse, error) {
 	cmd := problem.MetadataCommand{Meta: f.command("metadata", fmt.Sprintf("rca-create-%d", time.Now().UnixNano())).Meta, ProblemID: req.ProblemID, RootCauseAnalysis: &problem.RootCauseMetadata{Create: req}}
 	cmd.Meta.TenantID = tenant
@@ -514,6 +519,7 @@ func (f *problemLifecycleFixture) createRCA(req *dto.CreateRootCauseAnalysisRequ
 	}
 	return service.NewProblemInvestigationService(f.db, zap.NewNop().Sugar()).GetRootCauseAnalysis(f.ctx, id, tenant)
 }
+
 func (f *problemLifecycleFixture) updateRCA(id int, req *dto.UpdateRootCauseAnalysisRequest, tenant int) (*dto.RootCauseAnalysisResponse, error) {
 	cmd := problem.MetadataCommand{Meta: f.command("metadata", fmt.Sprintf("rca-update-%d", time.Now().UnixNano())).Meta, ProblemID: f.p.ID, RootCauseAnalysis: &problem.RootCauseMetadata{ID: id, Update: req}}
 	cmd.Meta.TenantID = tenant
@@ -526,6 +532,7 @@ func (f *problemLifecycleFixture) updateRCA(id int, req *dto.UpdateRootCauseAnal
 func (f *problemLifecycleFixture) mutateEvidence(e *problem.EvidenceMetadata) (workitemmutation.Result, error) {
 	return f.owner.ApplyMetadata(f.ctx, problem.MetadataCommand{Meta: f.command("metadata", fmt.Sprintf("evidence-%d", time.Now().UnixNano())).Meta, ProblemID: f.p.ID, Evidence: e})
 }
+
 func (f *problemLifecycleFixture) createCandidate(req *dto.CreateProblemSolutionRequest, tenant int) (*dto.ProblemSolutionResponse, error) {
 	cmd := problem.MetadataCommand{Meta: f.command("metadata", fmt.Sprintf("candidate-%d", time.Now().UnixNano())).Meta, ProblemID: f.p.ID, Evidence: &problem.EvidenceMetadata{CreateSolution: req}}
 	cmd.Meta.TenantID = tenant
@@ -538,6 +545,7 @@ func (f *problemLifecycleFixture) createCandidate(req *dto.CreateProblemSolution
 	}
 	return service.NewProblemInvestigationService(f.db, zap.NewNop().Sugar()).GetProblemSolution(f.ctx, id, tenant)
 }
+
 func (f *problemLifecycleFixture) createStep(req *dto.CreateInvestigationStepRequest, tenant int) (*dto.InvestigationStepResponse, error) {
 	req.ProblemID = f.p.ID
 	cmd := problem.MetadataCommand{Meta: f.command("metadata", fmt.Sprintf("step-%d", time.Now().UnixNano())).Meta, ProblemID: f.p.ID, Evidence: &problem.EvidenceMetadata{CreateStep: req}}

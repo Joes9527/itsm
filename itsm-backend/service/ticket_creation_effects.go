@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"itsm-backend/common/executionscope"
 
 	"itsm-backend/ent"
@@ -83,6 +84,7 @@ func (s *TicketService) prepareCreationEffects(ctx context.Context, tx *ent.Tx, 
 	plan.WorkflowVariables["category_id"] = item.CategoryID
 	return nil
 }
+
 func (s *TicketService) writeCreationEffects(ctx context.Context, tx *ent.Tx, item *ent.Ticket, plan *creation.CreationPlan) error {
 	effects, ok := plan.ProfessionalInput.(*ticketCreationEffects)
 	if !ok {

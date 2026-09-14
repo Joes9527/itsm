@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -66,10 +67,12 @@ func sslvpnApprovalTask(t *testing.T, h *sslvpnTestHarness, instance *ent.Proces
 	t.Helper()
 	return h.client.ProcessTask.Query().Where(processtask.ProcessInstanceIDEQ(instance.ID), processtask.TaskDefinitionKeyEQ(node)).OnlyX(context.Background())
 }
+
 func submitSSLVPNDecision(t *testing.T, h *sslvpnTestHarness, session, taskID, action string) (apiEnvelope, int) {
 	t.Helper()
 	return doRequest(t, h.router, session, http.MethodPost, "/api/v1/bpmn/tasks/"+taskID+"/decisions", map[string]interface{}{"action": action, "comment": "Synthetic regression decision"})
 }
+
 func assertSSLVPNDispatchCount(t *testing.T, h *sslvpnTestHarness, expected int32) {
 	t.Helper()
 	var calls atomic.Int32
@@ -80,6 +83,7 @@ func assertSSLVPNDispatchCount(t *testing.T, h *sslvpnTestHarness, expected int3
 	require.NoError(t, dispatcher.DispatchOnce(context.Background()))
 	assert.Equal(t, expected, calls.Load(), "mock KAF HTTP dispatches; no real KAF or provider is connected")
 }
+
 func assertSSLVPNNoDelegation(t *testing.T, h *sslvpnTestHarness, instance *ent.ProcessInstance) {
 	t.Helper()
 	ctx := context.Background()

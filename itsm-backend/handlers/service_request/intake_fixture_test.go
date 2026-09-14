@@ -5,9 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http/httptest"
 	"strconv"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -28,10 +29,12 @@ import (
 	"go.uber.org/zap"
 )
 
-type ServiceRequest = sr.ServiceRequest
-type ListFilters = sr.ListFilters
-type EntRepository = sr.EntRepository
-type Handler = sr.Handler
+type (
+	ServiceRequest = sr.ServiceRequest
+	ListFilters    = sr.ListFilters
+	EntRepository  = sr.EntRepository
+	Handler        = sr.Handler
+)
 
 var NewEntRepository = sr.NewEntRepository
 
@@ -61,6 +64,7 @@ func NewService(repo sr.Repository, client *ent.Client, logger *zap.SugaredLogge
 	}
 	return &Service{owner, intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard()), client}
 }
+
 func NewHandler(owner *Service) *Handler {
 	h := sr.NewHandler(owner.Service)
 	h.SetCreationApplication(owner.app)
@@ -80,6 +84,7 @@ func (s *Service) SubmitCreation(ctx context.Context, tenantID, actorID, catalog
 	}
 	return s.Get(ctx, result.ProfessionalReference.ID, tenantID)
 }
+
 func (s *Service) SubmitCatalog(ctx context.Context, tenantID, actorID, catalogID int, input *ServiceRequest) (*creation.CreateWorkItemResult, error) {
 	actor, err := s.client.User.Get(ctx, actorID)
 	if err != nil {
@@ -138,6 +143,7 @@ func (s *Service) SubmitCatalog(ctx context.Context, tenantID, actorID, catalogI
 	}
 	return &response.Data, nil
 }
+
 func configureSRIntakeFixture(ctx context.Context, client *ent.Client, tenantID int) {
 	for _, business := range []string{"service_request_item", "incident"} {
 		if !client.ProcessBinding.Query().Where(processbinding.TenantIDEQ(tenantID), processbinding.BusinessTypeEQ(business)).ExistX(ctx) {

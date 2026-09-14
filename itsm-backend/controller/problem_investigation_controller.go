@@ -471,6 +471,7 @@ func (pc *ProblemInvestigationController) applyEvidence(c *gin.Context, problemI
 	}
 	common.Success(c, result)
 }
+
 func (pc *ProblemInvestigationController) DeleteProblemSolution(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id <= 0 {

@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/authorization"
 	"itsm-backend/common/tenantctx"
@@ -376,8 +377,11 @@ func TestPostgresIncidentConversionSignedMSPHTTPAuthorizationAndReplay(t *testin
 			role := f.client.Role.Create().SetTenantID(f.tenant.ID).SetCode("msp_tech").SetName("Customer conversion operator").SetIsActive(true).SaveX(f.ctx)
 			rolePermissions := make(map[string]*ent.RolePermission)
 			for _, grant := range []struct{ resource, action string }{
-				{"incident", "read"}, {"incident", "write"},
-				{"problem", "read"}, {"problem", "write"}, {"problem", "create_on_behalf"},
+				{"incident", "read"},
+				{"incident", "write"},
+				{"problem", "read"},
+				{"problem", "write"},
+				{"problem", "create_on_behalf"},
 			} {
 				permission := f.client.Permission.Create().SetTenantID(f.tenant.ID).SetCode(grant.resource + ":" + grant.action).SetName(grant.resource + ":" + grant.action).SetResource(grant.resource).SetAction(grant.action).SaveX(f.ctx)
 				rolePermissions[grant.resource+":"+grant.action] = f.client.RolePermission.Create().SetTenantID(f.tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).SaveX(f.ctx)
@@ -580,7 +584,6 @@ func TestPostgresIncidentConversionSignedMSPHTTPAuthorizationAndReplay(t *testin
 			require.Zero(t, database.GetRawDB().Stats().InUse)
 			require.Zero(t, clients.SystemDB.Stats().InUse)
 			t.Log("signed selected-tenant transport verifies current auth; restricted MSP remains denied without writes, all-scope session proves conversion/replay persistence; current revocations preserve the original graph")
-
 		})
 	}
 }

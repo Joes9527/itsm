@@ -125,6 +125,7 @@ func (s *partialTargetGraphSender) SendMail(context.Context, string, string, str
 	}
 	return newEmailTransportError("graph", "rejected", emailNotAccepted, fmt.Errorf("second recipient rejected"))
 }
+
 func TestEmailTargetGraphPartialAcceptanceIsUnknown(t *testing.T) {
 	svc := NewEmailService(EmailConfig{}, zap.NewNop().Sugar())
 	sender := &partialTargetGraphSender{}

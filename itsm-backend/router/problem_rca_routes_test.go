@@ -1,11 +1,12 @@
 package router
 
 import (
+	"testing"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/controller"
-	"testing"
 )
 
 func TestProblemRCARoutesMatchInvestigationClient(t *testing.T) {

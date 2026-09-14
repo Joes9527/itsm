@@ -5,6 +5,9 @@ package integration
 import (
 	"context"
 	"errors"
+	"sync"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/common/tenantctx"
@@ -12,8 +15,6 @@ import (
 	"itsm-backend/ent"
 	problem "itsm-backend/handlers/problem"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"sync"
-	"testing"
 )
 
 func TestWorkItemAssignmentProblemAtomicReceipt(t *testing.T) {

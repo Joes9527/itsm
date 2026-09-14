@@ -1,10 +1,11 @@
 package bootstrap
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/config"
 	"itsm-backend/service"
-	"testing"
 )
 
 func TestWebhookOutboxRegistrationFollowsCapability(t *testing.T) {

@@ -1,9 +1,10 @@
 package workitemcreation
 
 import (
-	"github.com/stretchr/testify/require"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestSourceRelationsStrictWireAndCanonicalIdentity(t *testing.T) {

@@ -4,11 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"itsm-backend/common/tenantctx"
-	"itsm-backend/ent/auditlog"
-	"itsm-backend/ent/outboxevent"
-	creation "itsm-backend/handlers/common/workitemcreation"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -16,6 +11,12 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/ent/auditlog"
+	"itsm-backend/ent/outboxevent"
+	creation "itsm-backend/handlers/common/workitemcreation"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -47,9 +48,11 @@ func (f *creationFeishuConnector) TaskDestinationIdentity() string {
 	}
 	return strings.Repeat("a", 64)
 }
+
 func (f *creationFeishuConnector) DescribeDeliveryDestination(connector.Config) (string, error) {
 	return f.TaskDestinationIdentity(), nil
 }
+
 func persistCreationFeishuConfig(t *testing.T, client *ent.Client, cfg connector.Config) {
 	t.Helper()
 	// This fixture exercises Feishu delivery; email transport has separate contracts.
@@ -64,6 +67,7 @@ func persistCreationFeishuConfig(t *testing.T, client *ent.Client, cfg connector
 	require.NoError(t, err)
 	client.ConnectorConfig.Create().SetTenantID(cfg.TenantID).SetName(cfg.Name).SetProvider("feishu").SetEnabled(true).SetSettings(string(settings)).SetCredentials(string(credentials)).SaveX(context.Background())
 }
+
 func (f *creationFeishuConnector) CreateTask(_ context.Context, task *feishu.FeishuTask) (*feishu.FeishuTask, error) {
 	f.calls++
 	copy := *task
@@ -74,6 +78,7 @@ func (f *creationFeishuConnector) CreateTask(_ context.Context, task *feishu.Fei
 	copy.GUID = "remote-task"
 	return &copy, nil
 }
+
 func TestIntakeGenericFeishuIntentFreezesAndDeliversOwningMapping(t *testing.T) {
 	fake := &creationFeishuConnector{}
 	fixture := newUnifiedIntakeFixture(t, func(client *ent.Client, logger *zap.SugaredLogger) *service.TicketService {

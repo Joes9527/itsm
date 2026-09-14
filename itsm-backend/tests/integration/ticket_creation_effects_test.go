@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"itsm-backend/common/tenantctx"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"testing"
+
+	"itsm-backend/common/tenantctx"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/connector"
 	"itsm-backend/ent"
@@ -21,6 +22,7 @@ import (
 func configuredCreationTicketOwner(client *ent.Client, logger *zap.SugaredLogger) *service.TicketService {
 	return configuredCreationTicketOwnerWithConnector(client, logger, nil)
 }
+
 func configuredCreationTicketOwnerWithConnector(client *ent.Client, logger *zap.SugaredLogger, manager *connector.Manager) *service.TicketService {
 	policy := executionfixture.Standard()
 	notifications := service.NewTicketNotificationService(client, logger, policy)
@@ -33,6 +35,7 @@ func configuredCreationTicketOwnerWithConnector(client *ent.Client, logger *zap.
 	rules.SetNotificationService(notifications)
 	return service.NewTicketService(&service.TicketServiceConfig{Client: client, Logger: logger, Execution: executionfixture.Standard(), ConnectorManager: manager, Repository: repositoryticket.NewEntRepository(client, logger), NotificationService: notifications, AutomationRuleService: rules})
 }
+
 func TestIntakeGenericCreationUsesConfiguredEffectsAtomically(t *testing.T) {
 	f := newUnifiedIntakeFixture(t, configuredCreationTicketOwner)
 	ctx := tenantctx.WithTenantID(context.Background(), f.identity.TenantID)
@@ -73,6 +76,7 @@ func TestIntakeGenericCreationUsesConfiguredEffectsAtomically(t *testing.T) {
 	require.Equal(t, 1, f.client.TicketAutomationRule.GetX(ctx, rule.ID).ExecutionCount)
 	require.Equal(t, 8, f.client.TicketNotification.Query().CountX(ctx))
 }
+
 func TestIntakeGenericCreationRejectsMalformedRulesAndRollsBackEffects(t *testing.T) {
 	for _, fault := range []string{"unknown action", "notification write"} {
 		t.Run(fault, func(t *testing.T) {

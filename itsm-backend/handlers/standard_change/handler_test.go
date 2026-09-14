@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"

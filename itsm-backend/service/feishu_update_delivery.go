@@ -33,21 +33,24 @@ type FeishuTaskUpdater interface {
 	UpdateTask(context.Context, string, *feishu.FeishuTask) (*feishu.FeishuTask, error)
 	TaskDestinationIdentity() string
 }
-type FeishuUpdateProvider func(int) (FeishuTaskUpdater, bool)
-type feishuUpdatePayload struct {
-	TenantID      int               `json:"tenantId"`
-	WorkItemID    int               `json:"workItemId"`
-	ActorID       int               `json:"actorId"`
-	OperationID   string            `json:"operationId"`
-	RequestDigest string            `json:"requestDigest"`
-	Action        string            `json:"action"`
-	ResultStatus  string            `json:"resultStatus"`
-	ResultVersion int               `json:"resultVersion"`
-	MappingID     int               `json:"mappingId"`
-	GUID          string            `json:"guid"`
-	Destination   string            `json:"destination"`
-	Task          feishu.FeishuTask `json:"task"`
-}
+type (
+	FeishuUpdateProvider func(int) (FeishuTaskUpdater, bool)
+	feishuUpdatePayload  struct {
+		TenantID      int               `json:"tenantId"`
+		WorkItemID    int               `json:"workItemId"`
+		ActorID       int               `json:"actorId"`
+		OperationID   string            `json:"operationId"`
+		RequestDigest string            `json:"requestDigest"`
+		Action        string            `json:"action"`
+		ResultStatus  string            `json:"resultStatus"`
+		ResultVersion int               `json:"resultVersion"`
+		MappingID     int               `json:"mappingId"`
+		GUID          string            `json:"guid"`
+		Destination   string            `json:"destination"`
+		Task          feishu.FeishuTask `json:"task"`
+	}
+)
+
 type feishuUpdateReceipt struct {
 	EventID       string `json:"eventId"`
 	PayloadDigest string `json:"payloadDigest"`
@@ -60,6 +63,7 @@ func feishuUpdateEventID(p feishuUpdatePayload) string {
 	}{p.TenantID, p.ActorID, p.WorkItemID, p.OperationID})
 	return "feishu-update:" + digest
 }
+
 func feishuUpdateAggregate(p feishuUpdatePayload) string {
 	digest, _ := workitemmutation.Digest(struct{ Destination, GUID string }{p.Destination, p.GUID})
 	return digest
@@ -123,6 +127,7 @@ type FeishuUpdateDeliveryHandler struct {
 func NewFeishuUpdateDeliveryHandler(client *ent.Client, execution *database.ExecutionPolicy, directory database.DirectorySnapshot, provider FeishuUpdateProvider) *FeishuUpdateDeliveryHandler {
 	return &FeishuUpdateDeliveryHandler{client, execution, directory, provider}
 }
+
 func (*FeishuUpdateDeliveryHandler) EventType() string       { return FeishuUpdateRequestedEventType }
 func (*FeishuUpdateDeliveryHandler) SerialByAggregate() bool { return true }
 
@@ -279,6 +284,7 @@ func (h *FeishuUpdateDeliveryHandler) validateUpdateTx(ctx context.Context, tx *
 	}
 	return payload, nil
 }
+
 func feishuUpdatePreflightError(err error) error {
 	if ent.IsNotFound(err) || errors.Is(err, executionscope.ErrDenied) || errors.Is(err, creation.ErrPermissionDenied) || errors.Is(err, creation.ErrAuthenticationRequired) {
 		return blockOutboxDelivery("Feishu update authority, lease, or target is unavailable")

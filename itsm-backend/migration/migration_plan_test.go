@@ -1,8 +1,9 @@
 package migration
 
 import (
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func controlledReceipts(ms []Migration) []Migration {
@@ -16,6 +17,7 @@ func controlledReceipts(ms []Migration) []Migration {
 	}
 	return out
 }
+
 func controlledOrdinary(c []MigrationDefinition) []Migration {
 	var out []Migration
 	for _, d := range c {
@@ -25,6 +27,7 @@ func controlledOrdinary(c []MigrationDefinition) []Migration {
 	}
 	return out
 }
+
 func controlledStage(c []MigrationDefinition, s MigrationStage) Migration {
 	for _, d := range c {
 		if d.Stage == s {
@@ -33,10 +36,12 @@ func controlledStage(c []MigrationDefinition, s MigrationStage) Migration {
 	}
 	panic("missing stage")
 }
+
 func TestControlledPlanUnknownStage(t *testing.T) {
 	_, err := PlanMigrations([]MigrationDefinition{{Migration: Migration{Version: "test", Description: "test"}, Stage: MigrationStage("unregistered")}}, nil, OpUp, nil)
 	require.ErrorContains(t, err, "unknown stage")
 }
+
 func TestControlledPlanOldHistoryCannotHideRetiredHoles(t *testing.T) {
 	for _, gap := range []string{"022_drop_professional_extension_shared_fields", "027_work_item_identity_field_retirement"} {
 		var applied []Migration
@@ -50,6 +55,7 @@ func TestControlledPlanOldHistoryCannotHideRetiredHoles(t *testing.T) {
 		require.Empty(t, p.Executable)
 	}
 }
+
 func TestControlledPlanTransition(t *testing.T) {
 	c := ControlledMigrationCatalog()
 	prepare, retire := controlledStage(c, StagePrepare), controlledStage(c, StageRetire)
@@ -82,6 +88,7 @@ func TestControlledPlanTransition(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []Migration{retire}, p.Executable)
 }
+
 func TestControlledPlanRejectsInvalidReceipts(t *testing.T) {
 	c := ControlledMigrationCatalog()
 	base := controlledReceipts(controlledOrdinary(c)[:14])
@@ -111,6 +118,7 @@ func TestControlledPlanRejectsInvalidReceipts(t *testing.T) {
 		})
 	}
 }
+
 func TestControlledPlanRejectsCatalogAndOperationBypass(t *testing.T) {
 	c := ControlledMigrationCatalog()
 	for _, op := range []MigrationOperation{OpUp, OpPrepare, OpRetire, OpReset} {
@@ -133,6 +141,7 @@ func TestControlledPlanRejectsCatalogAndOperationBypass(t *testing.T) {
 		require.Error(t, err)
 	}
 }
+
 func TestControlledPlanDownPreflightsWholeRequest(t *testing.T) {
 	c := ControlledMigrationCatalog()
 	ordinary := controlledOrdinary(c)

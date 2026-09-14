@@ -6,6 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/authorization"
 	"itsm-backend/dto"
@@ -15,10 +20,6 @@ import (
 	"itsm-backend/ent/processdefinition"
 	"itsm-backend/ent/processtask"
 	changedomain "itsm-backend/handlers/change"
-	"os"
-	"sync"
-	"testing"
-	"time"
 )
 
 func TestWorkItemChangeActionTaskReceipt(t *testing.T) {

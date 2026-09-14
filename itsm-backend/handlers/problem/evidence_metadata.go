@@ -3,12 +3,13 @@ package problem
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
+
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/user"
-	"strings"
-	"time"
 )
 
 // EvidenceMetadata edits investigation records and candidate solutions. It never
@@ -212,6 +213,7 @@ func (e *EvidenceMetadata) applyTx(ctx context.Context, tx *ent.Tx, problemID, t
 	query := "UPDATE " + table + " SET " + strings.Join(changes, ",") + fmt.Sprintf(" WHERE id=$%d AND ", len(args)+1) + fmt.Sprintf(relation, len(args)+2)
 	return exec(query, append(args, e.ID, problemID)...)
 }
+
 func validSolutionType(t dto.SolutionType) bool {
 	switch t {
 	case dto.SolutionTypeWorkaround, dto.SolutionTypeFix, dto.SolutionTypePrevention, dto.SolutionTypeProcess:

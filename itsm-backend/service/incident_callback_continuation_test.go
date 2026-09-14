@@ -4,6 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/ent"
@@ -11,9 +15,6 @@ import (
 	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/service/bpmn"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"strconv"
-	"testing"
-	"time"
 )
 
 func TestIncidentCallbackWorkerPersistsLifecycleBeforeContinuation(t *testing.T) {

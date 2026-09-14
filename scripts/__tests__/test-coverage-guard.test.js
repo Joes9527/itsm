@@ -25,3 +25,14 @@ test('unmapped implementations retain normal filename requirements', () => {
     'itsm-backend/service/new_feature_test.go', 'itsm-backend/service/new_feature_test.go'
   ]);
 });
+
+test('formatting review applies only to the exact reviewed blob pair', () => {
+  const { matchesReviewedFormatting } = require('../test-coverage-guard');
+  const entries = require('../test-coverage-formatting.json');
+  for (const [file, entry] of Object.entries(entries)) {
+    assert.equal(matchesReviewedFormatting(file, entry.baseBlob, entry.headBlob), true);
+    assert.equal(matchesReviewedFormatting(file, 'changed', entry.headBlob), false);
+    assert.equal(matchesReviewedFormatting(file, entry.baseBlob, 'changed'), false);
+    assert.equal(matchesReviewedFormatting('unreviewed.go', entry.baseBlob, entry.headBlob), false);
+  }
+});

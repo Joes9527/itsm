@@ -5,12 +5,13 @@ package integration
 import (
 	"context"
 	"database/sql"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
-	"itsm-backend/migration"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
+	"itsm-backend/migration"
 )
 
 func TestAuthTokenStateSchemaIsolation(t *testing.T) {

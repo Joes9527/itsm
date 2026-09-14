@@ -6,11 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/common"
 	"itsm-backend/ent"
@@ -48,6 +49,7 @@ func (h *failingKafCallbackHandler) GetHandlerID() string { return "failing_kaf_
 func (h *failingKafCallbackHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
 	return bpmn.CallbackActionContract{}, true
 }
+
 func (h *failingKafCallbackHandler) Execute(context.Context, *ent.ProcessTask, map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	return nil, h.err
 }

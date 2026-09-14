@@ -3,16 +3,17 @@ package service
 import (
 	"context"
 	"errors"
-	"itsm-backend/common/executionscope"
-	"itsm-backend/common/tenantctx"
-	"itsm-backend/config"
-	"itsm-backend/database"
 	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"itsm-backend/common/executionscope"
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/config"
+	"itsm-backend/database"
 
 	"itsm-backend/connector"
 	_ "itsm-backend/connector/builtin/msgraph"

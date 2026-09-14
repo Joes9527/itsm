@@ -2,6 +2,8 @@ package controller
 
 import (
 	"errors"
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 	"itsm-backend/common"
 	"itsm-backend/ent"
@@ -10,7 +12,6 @@ import (
 	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
-	"strconv"
 )
 
 // WorkItemRelationController exposes the sole relation owner for existing WorkItems of every registered class.
@@ -21,6 +22,7 @@ type WorkItemRelationController struct {
 func NewWorkItemRelationController(owner *service.WorkItemRelationService) *WorkItemRelationController {
 	return &WorkItemRelationController{owner: owner}
 }
+
 func relationRequestIdentity(c *gin.Context) (int, workitemmutation.Meta, bool) {
 	tenant, err := middleware.ResolveRequestTenantID(c)
 	if middleware.AbortIfTenantError(c, err) {
@@ -84,6 +86,7 @@ func (h *WorkItemRelationController) Add(c *gin.Context) { h.apply(c, false) }
 // @Success 200 {object} common.Response{data=workitemmutation.Result}
 // @Router /api/v1/work-items/{id}/relations [delete]
 func (h *WorkItemRelationController) Remove(c *gin.Context) { h.apply(c, true) }
+
 func (h *WorkItemRelationController) apply(c *gin.Context, remove bool) {
 	id, meta, ok := relationRequestIdentity(c)
 	if !ok {
@@ -106,6 +109,7 @@ func (h *WorkItemRelationController) apply(c *gin.Context, remove bool) {
 	}
 	common.Success(c, result)
 }
+
 func relationHTTPError(c *gin.Context, err error) {
 	var typed *creation.IntakeError
 	if errors.As(err, &typed) {

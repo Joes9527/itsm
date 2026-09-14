@@ -7,8 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
 	"io"
+	"strconv"
+	"sync"
+	"time"
+
+	"go.uber.org/zap"
+
 	"itsm-backend/authorization"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/database"
@@ -18,9 +23,6 @@ import (
 	"itsm-backend/ent/user"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/shared/workitemmutation"
-	"strconv"
-	"sync"
-	"time"
 )
 
 type ToolJob struct {
@@ -368,6 +370,7 @@ func positiveToolInteger(raw any) (int, error) {
 	}
 	return value, nil
 }
+
 func toolCreationCommand(raw string, invocationID, actorID int) (creation.CreateWorkItemCommand, int, error) {
 	command := creation.CreateWorkItemCommand{RecordClass: "generic", IntakeKind: "generic", Confirmation: "confirmed", IdempotencyKey: fmt.Sprintf("tool-invocation:%d", invocationID), Generic: &creation.GenericInput{Source: "ai"}, SourceReference: &creation.SourceReference{Provider: "tool_queue", EventID: strconv.Itoa(invocationID)}}
 	requester := actorID

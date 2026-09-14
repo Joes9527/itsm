@@ -5,6 +5,9 @@ package integration
 import (
 	"context"
 	"errors"
+	"sync"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/dto"
@@ -14,8 +17,6 @@ import (
 	catalog "itsm-backend/handlers/service_catalog"
 	"itsm-backend/migration"
 	"itsm-backend/service"
-	"sync"
-	"testing"
 )
 
 func TestPostgresCatalogAuthorityRetirement(t *testing.T) {
@@ -23,8 +24,12 @@ func TestPostgresCatalogAuthorityRetirement(t *testing.T) {
 		legacy, target string
 		conflict       bool
 	}{
-		{"Request", "service_request_item", false}, {"Incident", "", false}, {"Change", "change_request", false},
-		{"Request", "generic", true}, {"Alien", "", true}, {"Incident", "change_request", true},
+		{"Request", "service_request_item", false},
+		{"Incident", "", false},
+		{"Change", "change_request", false},
+		{"Request", "generic", true},
+		{"Alien", "", true},
+		{"Incident", "change_request", true},
 	} {
 		t.Run(tc.legacy+tc.target, func(t *testing.T) {
 			f := newIncidentEffectsFixture(t)

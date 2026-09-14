@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"testing"
+
 	"itsm-backend/ent"
 	"itsm-backend/ent/schema"
 	creation "itsm-backend/handlers/common/workitemcreation"
@@ -14,8 +17,6 @@ import (
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"strconv"
-	"testing"
 
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
@@ -33,6 +34,7 @@ func newResolverFixture(t *testing.T) *resolverFixture {
 	client, _, identity, _, _, _ := intakeFixture(t)
 	return resolverFixtureWithClient(t, client, identity)
 }
+
 func resolverFixtureWithClient(t *testing.T, client *ent.Client, identity creation.Identity) *resolverFixture {
 	t.Helper()
 	ctx := context.Background()
@@ -49,6 +51,7 @@ func resolverFixtureWithClient(t *testing.T, client *ent.Client, identity creati
 	require.NoError(t, registry.Register(domain))
 	return &resolverFixture{client: client, actor: identity, catalog: catalog, app: NewService(client, resolver, registry, NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard())}
 }
+
 func (f *resolverFixture) catalogCommand(t *testing.T) creation.CreateWorkItemCommand {
 	t.Helper()
 	ctx := context.Background()
@@ -60,6 +63,7 @@ func (f *resolverFixture) catalogCommand(t *testing.T) creation.CreateWorkItemCo
 	require.NoError(t, tx.Rollback())
 	return creation.CreateWorkItemCommand{RecordClass: "service_request_item", IntakeKind: "catalog_item", Confirmation: "confirmed", CatalogItemID: &f.catalog.ID, CatalogVersion: catalog.Version, FormSchemaVersion: catalog.FormSchemaVersion, Title: "VPN request", IdempotencyKey: "one", FormValues: map[string]any{"device_count": json.Number("2")}}
 }
+
 func installIntakeMutationFailure(client *ent.Client, stage string) *bool {
 	reached := new(bool)
 	hook := func(next ent.Mutator) ent.Mutator {
@@ -97,6 +101,7 @@ func installIntakeMutationFailure(client *ent.Client, stage string) *bool {
 	}
 	return reached
 }
+
 func assertNoIntakeGraph(t *testing.T, client *ent.Client) {
 	t.Helper()
 	ctx := context.Background()
@@ -112,6 +117,7 @@ func assertNoIntakeGraph(t *testing.T, client *ent.Client) {
 	require.Zero(t, client.OutboxEvent.Query().CountX(ctx))
 	require.Zero(t, client.WorkItemNumberSequence.Query().CountX(ctx))
 }
+
 func TestServiceCreateRollbackFaultMatrix(t *testing.T) {
 	for _, stage := range []string{"base", "extension", "field value", "SLA", "audit", "snapshot", "workflow start"} {
 		t.Run(stage, func(t *testing.T) {
@@ -130,6 +136,7 @@ func TestServiceCreateRollbackFaultMatrix(t *testing.T) {
 		})
 	}
 }
+
 func TestServiceRequestFieldFailureRollsBackCreation(t *testing.T) {
 	f := newResolverFixture(t)
 	command := f.catalogCommand(t)
@@ -140,6 +147,7 @@ func TestServiceRequestFieldFailureRollsBackCreation(t *testing.T) {
 	require.Contains(t, errors.Unwrap(err).Error(), "injected field value failure")
 	assertNoIntakeGraph(t, f.client)
 }
+
 func TestAuthoritativeGraphIncludesSLAAndRejectsUnknownFields(t *testing.T) {
 	f := newResolverFixture(t)
 	command := f.catalogCommand(t)

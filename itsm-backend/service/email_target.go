@@ -5,15 +5,16 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"itsm-backend/common/executionscope"
-	"itsm-backend/connector"
-	"itsm-backend/database"
-	"itsm-backend/ent"
 	"net"
 	"net/mail"
 	"strconv"
 	"strings"
 	"unicode"
+
+	"itsm-backend/common/executionscope"
+	"itsm-backend/connector"
+	"itsm-backend/database"
+	"itsm-backend/ent"
 )
 
 // EmailTarget is the versioned, secret-free identity stored with a durable

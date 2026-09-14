@@ -2,8 +2,9 @@ package workflowcallback
 
 import (
 	"context"
-	"itsm-backend/handlers/shared/workitemmutation"
 	"time"
+
+	"itsm-backend/handlers/shared/workitemmutation"
 )
 
 type Status string

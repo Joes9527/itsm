@@ -1,9 +1,10 @@
 package database
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/config"
-	"testing"
 )
 
 func TestExecutionPolicyFreezesAdmittedTenants(t *testing.T) {

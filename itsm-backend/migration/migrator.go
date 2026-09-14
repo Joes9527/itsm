@@ -7,11 +7,12 @@ import (
 	"database/sql/driver"
 	"encoding/hex"
 	"fmt"
-	"github.com/lib/pq"
 	"os"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/lib/pq"
 
 	"go.uber.org/zap"
 )
@@ -352,12 +353,14 @@ type migrationQuery interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }
 
-type migrationLockContextKey struct{}
-type migrationLockOwnership struct {
-	owner  *Migrator
-	schema string
-	active atomic.Bool
-}
+type (
+	migrationLockContextKey struct{}
+	migrationLockOwnership  struct {
+		owner  *Migrator
+		schema string
+		active atomic.Bool
+	}
+)
 
 // WithMigrationLock serializes every migration writer in the database/schema.
 // The session owns the lock across bootstrap callbacks that use separate DB
@@ -466,6 +469,7 @@ func (m *Migrator) InspectMigrationTarget(ctx context.Context) error {
 func inspectMigrationTarget(ctx context.Context, q migrationQuery, config MigrationControlConfig) ([]Migration, error) {
 	return inspectMigrationTargetMode(ctx, q, config, false)
 }
+
 func inspectMigrationTargetMode(ctx context.Context, q migrationQuery, config MigrationControlConfig, structuralOnly bool) ([]Migration, error) {
 	schema, err := migrationTargetSchema(ctx, q)
 	if err != nil {

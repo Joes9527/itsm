@@ -54,8 +54,10 @@ func (m *Manager) ActivateStartupTargets(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return cleanup(err)
 		}
-		cfg := Config{TenantID: target.TenantID, Name: target.Name, Provider: target.Provider, Enabled: true,
-			Credentials: target.Credentials, Settings: target.Settings}
+		cfg := Config{
+			TenantID: target.TenantID, Name: target.Name, Provider: target.Provider, Enabled: true,
+			Credentials: target.Credentials, Settings: target.Settings,
+		}
 		conn, err := m.initializeConnector(tenantctx.WithTenantID(ctx, target.TenantID), cfg, &manifests[i], target.DestinationDigest)
 		if err != nil {
 			return cleanup(err)

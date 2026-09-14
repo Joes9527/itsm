@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"net/http"
-	"testing"
-	"time"
 )
 
 func TestProblemHTTPClassificationIDContract(t *testing.T) {
@@ -81,7 +82,6 @@ func TestProblemHTTPClassificationIDContract(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, before.CategoryID, after.CategoryID)
 	require.Equal(t, before.Version, after.Version)
-
 }
 
 func TestProblemHTTPCreationCTI(t *testing.T) {

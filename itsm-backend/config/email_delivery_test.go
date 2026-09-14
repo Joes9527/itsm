@@ -1,9 +1,10 @@
 package config
 
 import (
+	"testing"
+
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestEmailDeliveryTransportIsExplicitAndFailClosed(t *testing.T) {

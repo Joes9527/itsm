@@ -1,8 +1,9 @@
 package problem
 
 import (
-	relationmeta "itsm-backend/common/workitemrelation"
 	"time"
+
+	relationmeta "itsm-backend/common/workitemrelation"
 )
 
 // Problem domain entity

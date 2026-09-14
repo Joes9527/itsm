@@ -7,13 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
 	"itsm-backend/authorization"
 	"itsm-backend/config"
 	"itsm-backend/database"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"strconv"
-	"strings"
-	"time"
 
 	"itsm-backend/common"
 	"itsm-backend/common/executionscope"
@@ -151,7 +152,8 @@ func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger, execu
 	groupResolver := bpmn.NewGroupResolver(client)
 	participationResolver := newBPMNParticipationResolver(client, groupResolver)
 	instanceAccessPolicy := newBPMNInstanceAccessPolicy(client, participationResolver)
-	engine := &CustomProcessEngine{execution: execution,
+	engine := &CustomProcessEngine{
+		execution:             execution,
 		client:                client,
 		logger:                logger,
 		parser:                NewBPMNParser(),

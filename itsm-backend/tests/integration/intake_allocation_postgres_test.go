@@ -7,11 +7,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/url"
 	"os"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"

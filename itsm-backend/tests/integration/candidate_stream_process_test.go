@@ -42,7 +42,7 @@ func (h streamProcessHandler) HandleContext(ctx context.Context, value interface
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(h.input.Receipt, data, 0600); err != nil {
+	if err := os.WriteFile(h.input.Receipt, data, 0o600); err != nil {
 		return err
 	}
 	if h.input.Hold {

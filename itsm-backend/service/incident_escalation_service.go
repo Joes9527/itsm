@@ -5,12 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	"itsm-backend/common"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/database"
 	"itsm-backend/handlers/shared/workitemmutation"
-	"strings"
-	"time"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -41,9 +42,10 @@ func (s *IncidentEscalationService) SetAlertCreator(creator IncidentAlertCreator
 
 // NewIncidentEscalationService 创建事件升级服务
 func NewIncidentEscalationService(client *ent.Client, execution *database.ExecutionPolicy) *IncidentEscalationService {
-	return &IncidentEscalationService{execution: execution,
-		client: client,
-		logger: zap.L().Sugar(),
+	return &IncidentEscalationService{
+		execution: execution,
+		client:    client,
+		logger:    zap.L().Sugar(),
 	}
 }
 

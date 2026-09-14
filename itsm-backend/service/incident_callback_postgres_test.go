@@ -6,14 +6,15 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	_ "github.com/lib/pq"
-	"github.com/stretchr/testify/require"
-	"itsm-backend/ent"
-	"itsm-backend/migration"
 	"net/url"
 	"os"
 	"testing"
 	"time"
+
+	_ "github.com/lib/pq"
+	"github.com/stretchr/testify/require"
+	"itsm-backend/ent"
+	"itsm-backend/migration"
 )
 
 func TestIncidentCallbackWorkerPostgresContinuation(t *testing.T) {

@@ -7,14 +7,16 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"fmt"
+	"testing"
+
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
-	"fmt"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/ent"
 	"itsm-backend/migration"
-	"testing"
 )
 
 func TestFinalFixPostRetirementCanonicalReconciliation(t *testing.T) {

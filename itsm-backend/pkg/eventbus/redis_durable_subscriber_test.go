@@ -2,19 +2,23 @@ package eventbus
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/ThreeDotsLabs/watermill-redisstream/pkg/redisstream"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/config"
-	"testing"
-	"time"
 )
 
 func TestDurableEntryRejectsMalformedWireWithoutPanic(t *testing.T) {
 	for _, fields := range []map[string]interface{}{
-		{}, {redisstream.UUIDHeaderKey: 1, "payload": "{}"}, {redisstream.UUIDHeaderKey: "", "payload": "{}"},
-		{redisstream.UUIDHeaderKey: "id", "payload": 1}, {redisstream.UUIDHeaderKey: "id", "payload": "{}", "metadata": 1},
+		{},
+		{redisstream.UUIDHeaderKey: 1, "payload": "{}"},
+		{redisstream.UUIDHeaderKey: "", "payload": "{}"},
+		{redisstream.UUIDHeaderKey: "id", "payload": 1},
+		{redisstream.UUIDHeaderKey: "id", "payload": "{}", "metadata": 1},
 		{redisstream.UUIDHeaderKey: "id", "payload": "{}", "metadata": "invalid-msgpack"},
 	} {
 		require.NotPanics(t, func() { _, err := decodeDurableEntry(redis.XMessage{ID: "1-0", Values: fields}); require.Error(t, err) })

@@ -6,11 +6,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/stretchr/testify/require"
 	"itsm-backend/common/executionscope"
@@ -52,9 +53,11 @@ type managementLifecycleProbe struct {
 func (*managementLifecycleProbe) Manifest() connector.Manifest {
 	return connector.Manifest{Name: "management-lifecycle", Version: "1", Title: "Local lifecycle", Type: connector.TypeCustom, RequiredPermissions: []string{"connector:write"}}
 }
+
 func (p *managementLifecycleProbe) Init(ctx context.Context, _ connector.Config) error {
 	return p.init(ctx)
 }
+
 func (p *managementLifecycleProbe) Close() error                                 { return p.close() }
 func (*managementLifecycleProbe) Send(context.Context, *connector.Message) error { return nil }
 func (*managementLifecycleProbe) HealthCheck(context.Context) connector.HealthStatus {

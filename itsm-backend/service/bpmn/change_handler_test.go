@@ -2,9 +2,9 @@ package bpmn_test
 
 import (
 	"context"
-	executionfixture "itsm-backend/tests/fixtures/execution"
-
 	"testing"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"

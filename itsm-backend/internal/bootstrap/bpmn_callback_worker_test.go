@@ -2,12 +2,13 @@ package bootstrap
 
 import (
 	"context"
-	"itsm-backend/common/tenantctx"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"itsm-backend/common/tenantctx"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/connector"
 	msgraph "itsm-backend/connector/builtin/msgraph"

@@ -5,6 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http/httptest"
+	"testing"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"itsm-backend/authentication"
@@ -13,9 +17,6 @@ import (
 	"itsm-backend/ent/role"
 	"itsm-backend/ent/rolepermission"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"net/http/httptest"
-	"testing"
-	"time"
 )
 
 func referenceHTTPFixture(t *testing.T) (*resolverFixture, *ReadService, func(string, ...creation.Identity) *httptest.ResponseRecorder) {

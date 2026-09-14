@@ -40,12 +40,12 @@ func New() *EmailConnector { return &EmailConnector{} }
 
 func (e *EmailConnector) Manifest() connector.Manifest {
 	return connector.Manifest{
-		Name:         "email",
-		Version:      "1.0.0",
-		Title:        "邮件连接器",
-		Provider:     "itsm",
-		Type:         connector.TypeEmail,
-		Description:  "IMAP拉取邮件自动创建工单 + SMTP自动回复",
+		Name:        "email",
+		Version:     "1.0.0",
+		Title:       "邮件连接器",
+		Provider:    "itsm",
+		Type:        connector.TypeEmail,
+		Description: "IMAP拉取邮件自动创建工单 + SMTP自动回复",
 		Capabilities: []connector.Capability{
 			connector.CapSendMessage,
 			connector.CapReceiveMessage,

@@ -49,6 +49,7 @@ func TestIncidentEffectsRejectPlaceholderEscalationBeforeMutation(t *testing.T) 
 	require.Error(t, err)
 	require.Zero(t, client.Incident.GetX(ctx, inc.ID).EscalationLevel, "unsupported options must not mutate")
 }
+
 func TestIncidentEffectsNotificationRequiresConfiguredRecipients(t *testing.T) {
 	e := &IncidentRuleEngine{}
 	_, err := e.parseNotificationAction(map[string]interface{}{"type": "notify", "channels": []string{"email"}})

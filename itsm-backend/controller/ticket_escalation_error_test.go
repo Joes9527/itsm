@@ -2,14 +2,15 @@ package controller
 
 import (
 	"errors"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"itsm-backend/common"
 	"itsm-backend/common/executionscope"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"net/http/httptest"
-	"strings"
-	"testing"
 )
 
 func TestTicketEscalationErrorClassification(t *testing.T) {
@@ -33,6 +34,7 @@ func TestTicketEscalationErrorClassification(t *testing.T) {
 		})
 	}
 }
+
 func TestTicketEscalationRequiresCommandMetadata(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	for _, body := range []string{`{"reason":"help"}`, `{"reason":"help","version":1}`, `{"reason":"help","operationId":"once"}`} {

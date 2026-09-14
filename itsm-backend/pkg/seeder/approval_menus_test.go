@@ -1,10 +1,11 @@
 package seeder
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/ent/menu"
 	"itsm-backend/pkg/tenantmode"
-	"testing"
 )
 
 func TestApprovalMenuConvergesToExistingPage(t *testing.T) {

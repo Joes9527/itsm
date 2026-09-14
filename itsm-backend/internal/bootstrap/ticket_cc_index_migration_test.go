@@ -3,14 +3,15 @@ package bootstrap
 import (
 	"context"
 	"database/sql"
-	"itsm-backend/common/executionscope"
-	"itsm-backend/common/tenantctx"
-	"itsm-backend/config"
-	"itsm-backend/database"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"itsm-backend/common/executionscope"
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/config"
+	"itsm-backend/database"
 
 	"itsm-backend/connector"
 	"itsm-backend/ent"
@@ -269,6 +270,7 @@ func (c *migratedNotificationConnector) Send(_ context.Context, message *connect
 	c.recorder.messageIDs = append(c.recorder.messageIDs, message.ID)
 	return nil
 }
+
 func (c *migratedNotificationConnector) HealthCheck(context.Context) connector.HealthStatus {
 	return connector.HealthStatus{OK: true}
 }

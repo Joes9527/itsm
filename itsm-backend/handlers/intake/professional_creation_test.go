@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"itsm-backend/ent/intakeresolutionsnapshot"
-	"itsm-backend/ent/ticket"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"testing"
 	"time"
+
+	"itsm-backend/ent/intakeresolutionsnapshot"
+	"itsm-backend/ent/ticket"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	changehandler "itsm-backend/handlers/change"
 	"itsm-backend/handlers/common/workitemcreation"

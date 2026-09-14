@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"itsm-backend/connector"
-	"itsm-backend/connector/builtin/msgraph"
 	"net/http"
 	"net/http/httptest"
 	"net/smtp"
@@ -13,6 +11,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"itsm-backend/connector"
+	"itsm-backend/connector/builtin/msgraph"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"

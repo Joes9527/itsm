@@ -23,15 +23,21 @@ import (
 
 func TestWorkItemRetirementAutomaticMigrationPreservesLegacyEvidence(t *testing.T) {
 	for _, tc := range []struct{ name, version, setup, preserved string }{
-		{"legacy workflow rows", "022_drop_professional_extension_shared_fields",
+		{
+			"legacy workflow rows", "022_drop_professional_extension_shared_fields",
 			"CREATE TABLE workflows(id bigint PRIMARY KEY, content text); INSERT INTO workflows VALUES(1, 'preserve historical evidence')",
-			"SELECT content FROM workflows WHERE id=1"},
-		{"shared professional field", "022_drop_professional_extension_shared_fields",
+			"SELECT content FROM workflows WHERE id=1",
+		},
+		{
+			"shared professional field", "022_drop_professional_extension_shared_fields",
 			"ALTER TABLE changes ADD COLUMN title text; UPDATE changes SET title='preserve historical evidence'",
-			"SELECT title FROM changes"},
-		{"identity field", "027_work_item_identity_field_retirement",
+			"SELECT title FROM changes",
+		},
+		{
+			"identity field", "027_work_item_identity_field_retirement",
 			"ALTER TABLE tickets ADD COLUMN type text; UPDATE tickets SET type='change'",
-			"SELECT type FROM tickets"},
+			"SELECT type FROM tickets",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newCutoverFixture(t)

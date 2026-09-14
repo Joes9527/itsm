@@ -31,6 +31,7 @@ on:
       - 'itsm-backend/service/**'
       - 'scripts/test-coverage-guard.js'
       - 'scripts/test-coverage-mappings.json'
+      - 'scripts/test-coverage-formatting.json'
       - 'scripts/__tests__/test-coverage-guard.test.js'
       - '.github/workflows/test-coverage-guard.yml'
   pull_request:
@@ -40,6 +41,7 @@ on:
       - 'itsm-backend/service/**'
       - 'scripts/test-coverage-guard.js'
       - 'scripts/test-coverage-mappings.json'
+      - 'scripts/test-coverage-formatting.json'
       - 'scripts/__tests__/test-coverage-guard.test.js'
       - '.github/workflows/test-coverage-guard.yml'
   workflow_dispatch:

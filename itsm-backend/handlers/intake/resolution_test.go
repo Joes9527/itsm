@@ -2,12 +2,13 @@ package intake
 
 import (
 	"context"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/handlers/common/workitemcreation"
 	cataloghandler "itsm-backend/handlers/service_catalog"
 	"itsm-backend/service"
-	"testing"
 )
 
 func TestCreationCatalogRevisionAndWorkflowResolution(t *testing.T) {
@@ -39,6 +40,7 @@ func TestCreationCatalogRevisionAndWorkflowResolution(t *testing.T) {
 	require.NotEqual(t, first.Version, second.Version)
 	require.NotEqual(t, first.FormSchemaVersion, second.FormSchemaVersion)
 }
+
 func TestCreationWorkflowMissingBindingFailsClosed(t *testing.T) {
 	client, _, identity, command, _, _ := intakeFixture(t)
 	owner := service.NewProcessBindingService(client)

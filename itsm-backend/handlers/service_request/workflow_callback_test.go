@@ -3,6 +3,9 @@ package service_request_test
 import (
 	"context"
 	"errors"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	"itsm-backend/ent"
@@ -10,8 +13,6 @@ import (
 	sr "itsm-backend/handlers/service_request"
 	"itsm-backend/handlers/shared/workflowcallback"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"testing"
-	"time"
 )
 
 func TestCompletionNoteUpdatePreservesResolvedAt(t *testing.T) {

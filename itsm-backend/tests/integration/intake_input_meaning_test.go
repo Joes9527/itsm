@@ -50,6 +50,7 @@ func TestIntakeInputMeaningLegacyChangeCategory(t *testing.T) {
 		})
 	}
 }
+
 func TestIntakeInputMeaningLegacyPresetRejectsBeforeGraph(t *testing.T) {
 	f := newUnifiedIntakeFixture(t)
 	handler := controller.NewTicketController(nil, nil, nil, f.client, zap.NewNop().Sugar())
@@ -59,6 +60,7 @@ func TestIntakeInputMeaningLegacyPresetRejectsBeforeGraph(t *testing.T) {
 	require.Contains(t, w.Body.String(), "formFields.presetTypeId")
 	assertNoEntryGraph(t, f.client)
 }
+
 func TestIntakeInputMeaningTemplateWorkflowSteps(t *testing.T) {
 	for _, tc := range []struct {
 		name, steps string
@@ -96,6 +98,7 @@ func TestIntakeInputMeaningTemplateWorkflowSteps(t *testing.T) {
 		})
 	}
 }
+
 func TestIntakeInputMeaningChangeCategoryPersistence(t *testing.T) {
 	f := newUnifiedIntakeFixture(t)
 	ctx := context.Background()

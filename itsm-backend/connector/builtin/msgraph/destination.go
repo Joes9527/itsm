@@ -60,6 +60,7 @@ func parseGraphDestination(cfg connector.Config) (graphDestination, error) {
 	}
 	return d, nil
 }
+
 func (d graphDestination) digest() string {
 	raw, _ := json.Marshal(d) // only fixed string fields; marshaling cannot fail
 	sum := sha256.Sum256(raw)

@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -32,12 +33,14 @@ func restrictEntryPermissions(t *testing.T, f *unifiedIntakeFixture) {
 		}
 	}
 }
+
 func grantEntryPermission(t *testing.T, f *unifiedIntakeFixture, resource, action string) *ent.RolePermission {
 	t.Helper()
 	ctx := context.Background()
 	p := f.client.Permission.Create().SetTenantID(f.identity.TenantID).SetCode(resource + ":" + action).SetName(resource + action).SetResource(resource).SetAction(action).SaveX(ctx)
 	return f.client.RolePermission.Create().SetTenantID(f.identity.TenantID).SetRoleID(f.client.Role.Query().OnlyX(ctx).ID).SetPermissionID(p.ID).SaveX(ctx)
 }
+
 func entryDefinition(t *testing.T, f *unifiedIntakeFixture, key string, tenantID int, xml string) *ent.ProcessDefinition {
 	t.Helper()
 	ctx := context.Background()
@@ -47,12 +50,14 @@ func entryDefinition(t *testing.T, f *unifiedIntakeFixture, key string, tenantID
 	d := f.client.ProcessDeployment.Create().SetTenantID(tenantID).SetDeploymentID(key).SetDeploymentName(key).SaveX(ctx)
 	return f.client.ProcessDefinition.Create().SetTenantID(tenantID).SetDeploymentID(d.ID).SetKey(key).SetName(key).SetVersion("1").SetIsActive(true).SetIsLatest(true).SetBpmnXML([]byte(xml)).SaveX(ctx)
 }
+
 func bindEntryDefinition(t *testing.T, f *unifiedIntakeFixture, business, key string) {
 	t.Helper()
 	ctx := context.Background()
 	f.client.ProcessBinding.Delete().Where(processbinding.TenantIDEQ(f.identity.TenantID), processbinding.BusinessTypeEQ(business)).ExecX(ctx)
 	f.client.ProcessBinding.Create().SetTenantID(f.identity.TenantID).SetBusinessType(business).SetIsDefault(true).SetProcessDefinitionKey(key).SaveX(ctx)
 }
+
 func TestIntakeWorkflowOverrideCurrentPermission(t *testing.T) {
 	f := newUnifiedIntakeFixture(t)
 	restrictEntryPermissions(t, f)
@@ -81,6 +86,7 @@ func TestIntakeWorkflowOverrideCurrentPermission(t *testing.T) {
 	require.Equal(t, 1, f.client.Ticket.Query().CountX(ctx))
 	require.Equal(t, 1, f.client.IntakeRequest.Query().CountX(ctx))
 }
+
 func TestIntakeHTTPWorkflowOverridePermissionAndTenant(t *testing.T) {
 	f := newUnifiedIntakeFixture(t)
 	restrictEntryPermissions(t, f)
@@ -101,6 +107,7 @@ func TestIntakeHTTPWorkflowOverridePermissionAndTenant(t *testing.T) {
 	w, _ = intakeHTTP(t, f, h.CreateTicket, body, "override-http", nil)
 	require.Equal(t, 403, w.Code, w.Body.String())
 }
+
 func TestIntakeWorkflowOverrideCrossTenantGrantAndDefinition(t *testing.T) {
 	f := newUnifiedIntakeFixture(t)
 	restrictEntryPermissions(t, f)
@@ -120,6 +127,7 @@ func TestIntakeWorkflowOverrideCrossTenantGrantAndDefinition(t *testing.T) {
 	require.Error(t, err)
 	assertNoEntryGraph(t, f.client)
 }
+
 func TestIntakeBPMNRuntimeWorkflowOverrideRequiresCurrentPermission(t *testing.T) {
 	for _, mode := range []string{"denied", "permitted", "revoked_on_replay"} {
 		t.Run(mode, func(t *testing.T) {

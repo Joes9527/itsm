@@ -2,6 +2,10 @@ package service_request_test
 
 import (
 	"fmt"
+	"os"
+	"strings"
+	"testing"
+
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -12,9 +16,6 @@ import (
 	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/service"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"os"
-	"strings"
-	"testing"
 )
 
 func TestAccessPolicyPublicationRequiresExactDeclaredCapability(t *testing.T) {
@@ -26,7 +27,7 @@ func TestAccessPolicyPublicationRequiresExactDeclaredCapability(t *testing.T) {
 			configureCatalogPublicationForTest(fx.ctx, fx.client, fx.tenant.ID, owner)
 			if kind == "valid" {
 				t.Chdir(t.TempDir())
-				require.NoError(t, os.WriteFile("config.yaml", []byte("{}\n"), 0600))
+				require.NoError(t, os.WriteFile("config.yaml", []byte("{}\n"), 0o600))
 				viper.Reset()
 				t.Cleanup(viper.Reset)
 				t.Setenv("KAF_WEBHOOK_URL", "http://127.0.0.1:1")

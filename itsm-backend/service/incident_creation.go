@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"itsm-backend/ent"
-	creation "itsm-backend/handlers/common/workitemcreation"
 	"strconv"
 	"time"
+
+	"itsm-backend/ent"
+	creation "itsm-backend/handlers/common/workitemcreation"
 )
 
 type incidentCreation struct {
@@ -77,6 +78,7 @@ func (s *IncidentService) Prepare(_ context.Context, _ *ent.Tx, in creation.Reso
 	plan.ProfessionalInput = incidentCreation{Input: input, DetectedAt: *detected}
 	return plan, nil
 }
+
 func (*IncidentService) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.Ticket, plan *creation.CreationPlan) (*creation.ProfessionalReference, error) {
 	prepared, ok := plan.ProfessionalInput.(incidentCreation)
 	if !ok {
@@ -113,8 +115,9 @@ func (*IncidentService) CreateExtension(ctx context.Context, tx *ent.Tx, item *e
 	if err != nil {
 		return nil, creation.NewInternalFailure("could not encode incident creation event", err)
 	}
-	_, err = enqueueOutboxEvent(ctx, tx.Client(), tx, NewOutboxEvent{ExecutionWorkItemID: item.ID,
-		EventID: "incident-created:" + strconv.Itoa(item.ID), EventType: "incident.created", TenantID: item.TenantID, AggregateType: "work_item", AggregateID: strconv.Itoa(item.ID), Payload: payload,
+	_, err = enqueueOutboxEvent(ctx, tx.Client(), tx, NewOutboxEvent{
+		ExecutionWorkItemID: item.ID,
+		EventID:             "incident-created:" + strconv.Itoa(item.ID), EventType: "incident.created", TenantID: item.TenantID, AggregateType: "work_item", AggregateID: strconv.Itoa(item.ID), Payload: payload,
 	})
 	if err != nil {
 		return nil, creation.NewInfrastructureUnavailable("could not enqueue incident automation", err)

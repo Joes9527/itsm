@@ -60,6 +60,7 @@ func NewProvisioningService(client *ent.Client, logger *zap.SugaredLogger) *Prov
 func (s *ProvisioningService) SetManualProvisioningGuard(guard ManualProvisioningGuard) {
 	s.accessGuard = guard
 }
+
 func (s *ProvisioningService) validateManualProvisioning(ctx context.Context, client *ent.Client, tenantID, itemID int) error {
 	if s.accessGuard == nil {
 		return fmt.Errorf("manual_provisioning_owner_unavailable")

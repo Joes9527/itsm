@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"

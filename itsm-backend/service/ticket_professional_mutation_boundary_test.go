@@ -2,12 +2,13 @@ package service
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
 	"itsm-backend/handlers/shared/workitemmutation"
 	ticketrepo "itsm-backend/repository/ticket"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"testing"
 )
 
 func TestTicketCoreMutationsRejectProfessionalClasses(t *testing.T) {

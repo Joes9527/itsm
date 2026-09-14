@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"itsm-backend/common"
-	"itsm-backend/handlers/shared/workitemmutation"
 	"strings"
 	"time"
+
+	"itsm-backend/common"
+	"itsm-backend/handlers/shared/workitemmutation"
 
 	"itsm-backend/database"
 	"itsm-backend/dto"
@@ -31,9 +32,10 @@ type IncidentRuleEngine struct {
 }
 
 func NewIncidentRuleEngine(client *ent.Client, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) *IncidentRuleEngine {
-	return &IncidentRuleEngine{execution: execution,
-		client: client,
-		logger: logger,
+	return &IncidentRuleEngine{
+		execution: execution,
+		client:    client,
+		logger:    logger,
 	}
 }
 
@@ -273,8 +275,10 @@ func (a *AssignmentAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *
 	}
 	owner := NewIncidentService(a.client, a.logger, a.execution)
 	owner.SetDirectorySnapshot(a.directory)
-	cmd := dto.IncidentCommand{IncidentID: incident.ID, Action: "assign", AssigneeID: a.AssigneeID, Reason: strings.TrimSpace(a.Reason),
-		Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: actor.ID, ExpectedVersion: incident.Edges.WorkItem.Version, Source: actor.Source, OperationID: actor.CorrelationID, CorrelationID: actor.CorrelationID}}
+	cmd := dto.IncidentCommand{
+		IncidentID: incident.ID, Action: "assign", AssigneeID: a.AssigneeID, Reason: strings.TrimSpace(a.Reason),
+		Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: actor.ID, ExpectedVersion: incident.Edges.WorkItem.Version, Source: actor.Source, OperationID: actor.CorrelationID, CorrelationID: actor.CorrelationID},
+	}
 	digest, err := incidentCommandDigest(cmd)
 	if err != nil {
 		return err
@@ -764,7 +768,8 @@ func (e *IncidentRuleEngine) parseEscalationAction(actionData map[string]interfa
 		return nil, fmt.Errorf("automatic escalation assignment is unsupported; configure an explicit assign action")
 	}
 
-	return &EscalationAction{execution: e.execution,
+	return &EscalationAction{
+		execution:    e.execution,
 		Level:        level,
 		Reason:       reason,
 		NotifyUsers:  notifyUsers,
@@ -825,7 +830,8 @@ func (e *IncidentRuleEngine) parseAssignmentAction(actionData map[string]interfa
 
 	reason, _ := actionData["reason"].(string)
 
-	return &AssignmentAction{execution: e.execution,
+	return &AssignmentAction{
+		execution:  e.execution,
 		directory:  e.directory,
 		AssigneeID: assigneeID,
 		Reason:     reason,
@@ -843,7 +849,8 @@ func (e *IncidentRuleEngine) parseStatusChangeAction(actionData map[string]inter
 
 	reason, _ := actionData["reason"].(string)
 	resolution, _ := actionData["resolution"].(string)
-	return &StatusChangeAction{execution: e.execution,
+	return &StatusChangeAction{
+		execution:  e.execution,
 		directory:  e.directory,
 		Status:     status,
 		Reason:     reason,
@@ -873,7 +880,8 @@ func (e *IncidentRuleEngine) parseMetricCollectionAction(actionData map[string]i
 	unit, _ := actionData["unit"].(string)
 	tags := toStringMap(actionData["tags"])
 
-	return &MetricCollectionAction{execution: e.execution,
+	return &MetricCollectionAction{
+		execution:   e.execution,
 		MetricType:  metricType,
 		MetricName:  metricName,
 		MetricValue: metricValue,

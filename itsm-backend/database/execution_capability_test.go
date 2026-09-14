@@ -2,11 +2,12 @@ package database
 
 import (
 	"context"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/common/executionscope"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/config"
-	"testing"
 )
 
 func TestExecutionCapabilityRequiresFrozenExplicitPermission(t *testing.T) {

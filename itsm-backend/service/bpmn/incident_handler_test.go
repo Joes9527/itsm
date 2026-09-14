@@ -2,9 +2,10 @@ package bpmn
 
 import (
 	"context"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
-	"testing"
 )
 
 func TestIncidentServiceTaskHandlerLifecycleRequiresDurableIdentity(t *testing.T) {
@@ -16,6 +17,7 @@ func TestIncidentServiceTaskHandlerLifecycleRequiresDurableIdentity(t *testing.T
 		require.Equal(t, CallbackEffectBlocked, effect.Status)
 	}
 }
+
 func TestIncidentServiceTaskHandlerUnknownActionBlocks(t *testing.T) {
 	h := NewIncidentServiceTaskHandler(nil, zap.NewNop().Sugar())
 	effect, err := h.Execute(context.Background(), nil, map[string]interface{}{"action": "unknown"})

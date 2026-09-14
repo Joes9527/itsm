@@ -2,8 +2,9 @@ package service
 
 import (
 	"context"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/ent/enttest"
 	"itsm-backend/service/bpmn"

@@ -4,10 +4,11 @@ import (
 	"context"
 	stdErrors "errors"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -285,9 +286,11 @@ func (d *processTriggerDefinitionQueryErrorDriver) Close() error    { return nil
 func (d *processTriggerDefinitionQueryErrorDriver) Tx(context.Context) (dialect.Tx, error) {
 	return nil, d.err
 }
+
 func (d *processTriggerDefinitionQueryErrorDriver) Exec(context.Context, string, any, any) error {
 	return d.err
 }
+
 func (d *processTriggerDefinitionQueryErrorDriver) Query(context.Context, string, any, any) error {
 	return d.err
 }

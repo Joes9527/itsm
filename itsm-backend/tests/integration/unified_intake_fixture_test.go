@@ -3,9 +3,10 @@ package integration
 import (
 	"context"
 	"errors"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"path/filepath"
 	"testing"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
@@ -78,6 +79,7 @@ func installEntryMutationFailure(client *ent.Client, stage string) *bool {
 	}
 	return reached
 }
+
 func assertNoEntryGraph(t *testing.T, client *ent.Client) {
 	t.Helper()
 	ctx := context.Background()

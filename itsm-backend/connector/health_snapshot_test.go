@@ -2,15 +2,16 @@ package connector_test
 
 import (
 	"context"
+	"sync/atomic"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/common/executionscope"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/config"
 	"itsm-backend/connector"
 	"itsm-backend/database"
-	"sync/atomic"
-	"testing"
-	"time"
 )
 
 type healthProbe struct {
@@ -24,12 +25,14 @@ func (*healthProbe) Init(context.Context, connector.Config) error             { 
 func (*healthProbe) Send(context.Context, *connector.Message) error           { return nil }
 func (*healthProbe) Close() error                                             { return nil }
 func (p *healthProbe) HealthCheck(ctx context.Context) connector.HealthStatus { return p.check(ctx) }
+
 func diagnosticPolicy(t *testing.T) *database.ExecutionPolicy {
 	t.Helper()
 	p, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "diagnostic-test", Capabilities: map[string]string{"connector_diagnostics": "enabled"}})
 	require.NoError(t, err)
 	return p
 }
+
 func TestHealthSnapshotsAreTenantScopedAndDetached(t *testing.T) {
 	ctx := tenantctx.WithTenantID(context.Background(), 1)
 	var calls atomic.Int32
@@ -74,6 +77,7 @@ func TestHealthSnapshotsAreTenantScopedAndDetached(t *testing.T) {
 	require.ErrorIs(t, connector.NewManager(reg, nil, nil).RefreshHealth(ctx, 1), executionscope.ErrDenied)
 	require.EqualValues(t, 1, calls.Load())
 }
+
 func TestHealthRefreshDiscardsReplacedGeneration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(tenantctx.WithTenantID(context.Background(), 1), 5*time.Second)
 	defer cancel()
@@ -114,6 +118,7 @@ func TestHealthRefreshDiscardsReplacedGeneration(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, snapshot, "old generation result must not certify replacement")
 }
+
 func TestHealthRefreshCancellationIsNotSuccessfulHealth(t *testing.T) {
 	ctx, cancel := context.WithTimeout(tenantctx.WithTenantID(context.Background(), 1), 5*time.Second)
 	defer cancel()

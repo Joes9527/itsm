@@ -2,6 +2,7 @@ package problem
 
 import (
 	"context"
+
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -67,6 +68,7 @@ func (s *Service) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedI
 	plan.WorkflowVariables["impact"] = input.Impact
 	return plan, nil
 }
+
 func (*Service) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.Ticket, plan *creation.CreationPlan) (*creation.ProfessionalReference, error) {
 	draft, ok := plan.ProfessionalInput.(problemCreationDraft)
 	if !ok {

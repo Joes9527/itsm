@@ -28,6 +28,7 @@ type ChangeServiceTaskHandler struct {
 func NewChangeServiceTaskHandler(client *ent.Client, _ *zap.SugaredLogger) *ChangeServiceTaskHandler {
 	return &ChangeServiceTaskHandler{client: client}
 }
+
 func (h *ChangeServiceTaskHandler) SetChangeService(service ChangeDomainServiceInterface) {
 	h.changeService = service
 }
@@ -83,6 +84,7 @@ func (h *ChangeServiceTaskHandler) SetCreationApplication(app creation.Applicati
 	h.creationApplication = app
 	h.creationDirectory = directory
 }
+
 func (h *ChangeServiceTaskHandler) createChange(ctx context.Context, _ map[string]interface{}) (*CallbackEffect, error) {
 	return executeWorkItemCreation(ctx, h.client, h.creationDirectory, h.creationApplication, h.GetHandlerID(), "create_change", creation.RecordClassChangeRequest)
 }

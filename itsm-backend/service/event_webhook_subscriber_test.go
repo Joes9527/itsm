@@ -3,12 +3,13 @@ package service
 import (
 	"context"
 	"fmt"
-	"itsm-backend/common/tenantctx"
-	"itsm-backend/pkg/eventbus"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/pkg/eventbus"
 
 	"itsm-backend/connector"
 	_ "itsm-backend/connector/builtin/webhook" // 触发 webhook 连接器 init 注册
@@ -45,7 +46,6 @@ func TestWebhookEventSubscriber_PushesToConfiguredWebhook(t *testing.T) {
 	require.Error(t, sub.Handle(map[string]interface{}{"eventType": "sla.breached", "tenantId": "7", "ticketId": "28"}))
 	require.Zero(t, received.Load())
 	var _ eventbus.ExecutionEnvelopeHandler = sub
-
 }
 
 func TestWebhookEventSubscriber_RejectsTenantWithoutWebhook(t *testing.T) {

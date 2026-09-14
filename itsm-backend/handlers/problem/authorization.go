@@ -2,9 +2,10 @@ package problem
 
 import (
 	"context"
+	"strings"
+
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent/user"
-	"strings"
 
 	"itsm-backend/authorization"
 	"itsm-backend/dto"
@@ -72,6 +73,7 @@ func CanVerifyProblem(actor service.ActionActor, p *Problem) dto.ActionPermissio
 	}
 	return CanEditProblem(actor)
 }
+
 func CanReopenProblem(actor service.ActionActor, p *Problem) dto.ActionPermission {
 	if p.Status != "resolved" && p.Status != "closed" {
 		return dto.ActionPermission{Allowed: false, Reason: "仅已解决或关闭的问题可以重新打开"}

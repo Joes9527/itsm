@@ -6,6 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/ent"
@@ -17,8 +20,6 @@ import (
 	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/service"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"testing"
-	"time"
 )
 
 func newRuntimeRelationDeliveryWorker(t *testing.T, f *relationFixture) *service.OutboxDeliveryWorker {

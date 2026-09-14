@@ -3,9 +3,10 @@ package service
 import (
 	"context"
 	"errors"
-	"itsm-backend/infrastructure/cloud"
 	"strconv"
 	"testing"
+
+	"itsm-backend/infrastructure/cloud"
 
 	"itsm-backend/authorization"
 	"itsm-backend/ent"
@@ -196,6 +197,7 @@ func (p authorityFailureProvider) Execute(context.Context, map[string]any) (*clo
 	}
 	return nil, errors.New("provider refused request")
 }
+
 func TestProvisioningFailureUsesWorkItemVersionTransaction(t *testing.T) {
 	for _, conflict := range []bool{false, true} {
 		t.Run(strconv.FormatBool(conflict), func(t *testing.T) {
@@ -240,6 +242,7 @@ func (g *provisioningAccessGuard) ValidateManualProvisioning(ctx context.Context
 	}
 	return nil
 }
+
 func TestManagedAccessManualProvisioningBlocked(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_fk=1")
 	defer client.Close()

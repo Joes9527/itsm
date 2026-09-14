@@ -30,9 +30,12 @@ func (c *processStartTriggerCapture) TriggerByBusinessType(context.Context, dto.
 	return nil, nil
 }
 
-func (c *processStartTriggerCapture) CancelProcess(context.Context, int, string) error  { return nil }
+func (c *processStartTriggerCapture) CancelProcess(context.Context, int, string) error { return nil }
+
 func (c *processStartTriggerCapture) SuspendProcess(context.Context, int, string) error { return nil }
-func (c *processStartTriggerCapture) ResumeProcess(context.Context, int) error          { return nil }
+
+func (c *processStartTriggerCapture) ResumeProcess(context.Context, int) error { return nil }
+
 func (c *processStartTriggerCapture) GetProcessStatus(context.Context, int) (*dto.ProcessTriggerResponse, error) {
 	return nil, nil
 }

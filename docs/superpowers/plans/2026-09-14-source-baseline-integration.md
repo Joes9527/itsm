@@ -47,3 +47,13 @@ Embedded development Compose API credential replaced with environment injection;
 PR23/24 appeared during concurrent work after the frozen inventory and remain excluded. No shared dev DB, production, R038, historical import or runtime deployment was operated. Source integration does not approve a new G-A runtime revision. Conditional PostgreSQL and browser E2E tests were not rerun against shared services.
 
 WSL new-session startup returned Wsl/Service/E_UNEXPECTED while the existing Jest process completed. The verified staged tree `c2b6cccdd0b7372d661e299472baf9557781effc` and its history were transferred as Git objects to an independent Windows checkout. The merge keeps parents f5f501c4 and c3347992, with generated test reports restored and delivery documentation updated. Original WSL worktree remains preserved; no shared service restart. Remote CI and merge evidence follow.
+
+
+### Remote CI repair follow-up
+
+- Pinned Go 1.25-compatible gofumpt v0.11.0 and govulncheck v1.7.0. Applied gofumpt to the backend; the second formatting check is empty.
+- Added reviewed behavioral test mappings for formatting-touched services. Two historical coverage gaps (root-cause and SMS service) receive exact before/after Git blob exemptions for their reviewed formatting-only deltas; any subsequent code change loses the exemption.
+- Updated Next.js and eslint-config-next to 15.5.25, sharp to 0.35.4, and compatible lockfile security patches. Local production npm audit reports zero vulnerabilities; updated dependencies still require current-head CI test/build evidence.
+- Secret scanning retains commit-range/history coverage and fails on scan errors, malformed output, verified findings, and unreviewed findings. Only two exact synthetic malformed-URL fixtures are recognized by file, URI detector, and SHA-256 value fingerprint. Raw scanner output is temporary and never uploaded. Twelve guard regression tests pass.
+- Docker Hub no longer serves the referenced MinIO image. Development Compose now uses the official Quay registry pinned to the verified multi-platform manifest digest. No local/shared containers were started or changed.
+- Previous-head frontend CI passed. GA was blocked by the unavailable image; Go security scan runner received a shutdown signal. Current-head CI must validate the fixes before main integration.

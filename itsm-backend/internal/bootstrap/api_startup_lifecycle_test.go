@@ -2,12 +2,13 @@ package bootstrap
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
-	"itsm-backend/config"
 	"net"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"itsm-backend/config"
 )
 
 func TestOccupiedPortDoesNotStartRuntime(t *testing.T) {

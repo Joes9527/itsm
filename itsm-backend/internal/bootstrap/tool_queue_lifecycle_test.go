@@ -2,9 +2,10 @@ package bootstrap
 
 import (
 	"context"
-	"itsm-backend/config"
 	"sync"
 	"testing"
+
+	"itsm-backend/config"
 
 	"github.com/stretchr/testify/require"
 )

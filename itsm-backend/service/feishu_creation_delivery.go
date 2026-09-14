@@ -30,15 +30,17 @@ type FeishuTaskCreator interface {
 	CreateTask(context.Context, *feishu.FeishuTask) (*feishu.FeishuTask, error)
 	TaskDestinationIdentity() string
 }
-type FeishuTaskProvider func(int) (FeishuTaskCreator, bool)
-type feishuCreationPayload struct {
-	Origin     string            `json:"origin"`
-	TenantID   int               `json:"tenantId"`
-	WorkItemID int               `json:"workItemId"`
-	ActorID    int               `json:"actorId"`
-	Target     FeishuTarget      `json:"target"`
-	Task       feishu.FeishuTask `json:"task"`
-}
+type (
+	FeishuTaskProvider    func(int) (FeishuTaskCreator, bool)
+	feishuCreationPayload struct {
+		Origin     string            `json:"origin"`
+		TenantID   int               `json:"tenantId"`
+		WorkItemID int               `json:"workItemId"`
+		ActorID    int               `json:"actorId"`
+		Target     FeishuTarget      `json:"target"`
+		Task       feishu.FeishuTask `json:"task"`
+	}
+)
 
 func enqueueFeishuCreation(ctx context.Context, tx *ent.Tx, item *ent.Ticket, actorID int, target FeishuTarget, origin string) error {
 	task, err := prepareFeishuTask(ctx, tx.Client(), item)

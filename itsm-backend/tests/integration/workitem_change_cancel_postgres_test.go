@@ -7,6 +7,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/authorization"
 	"itsm-backend/dto"
@@ -17,8 +20,6 @@ import (
 	"itsm-backend/ent/processtask"
 	changedomain "itsm-backend/handlers/change"
 	"itsm-backend/service"
-	"os"
-	"testing"
 )
 
 func TestWorkItemChangeCancellationOwner(t *testing.T) {
@@ -80,6 +81,7 @@ func setChangeWriter(t *testing.T, f *changeLifecycleFixture, msp bool) (*ent.Ro
 	t.Cleanup(authorization.InvalidateAllPermissionCaches)
 	return role, allocation
 }
+
 func TestWorkItemChangeCancellationAuthority(t *testing.T) {
 	for _, mode := range []string{"native_write_only", "msp", "revoked_permission", "revoked_allocation", "foreign", "foreign_native_actor", "forged", "unrelated", "engine_audit_rollback"} {
 		t.Run(mode, func(t *testing.T) {
@@ -130,6 +132,7 @@ func TestWorkItemChangeCancellationAuthority(t *testing.T) {
 		})
 	}
 }
+
 func prepareChangeDefaultTask(t *testing.T, f *changeLifecycleFixture) *ent.ProcessTask {
 	t.Helper()
 	xml, err := os.ReadFile("../../service/bpmn/change_normal_flow.bpmn")
@@ -138,6 +141,7 @@ func prepareChangeDefaultTask(t *testing.T, f *changeLifecycleFixture) *ent.Proc
 	f.apply(t, f.command("submit", "submit"))
 	return f.client.ProcessTask.Query().Where(processtask.TaskDefinitionKey("Activity_Assessment")).OnlyX(f.ctx)
 }
+
 func TestWorkItemChangeCancellationCallbackFence(t *testing.T) {
 	f := newChangeLifecycleFixture(t, "normal")
 	task := prepareChangeDefaultTask(t, f)
@@ -169,6 +173,7 @@ func TestWorkItemChangeCancellationCallbackFence(t *testing.T) {
 	}
 	require.Equal(t, 2, f.client.Ticket.GetX(f.ctx, f.c.WorkItemID).Version)
 }
+
 func TestWorkItemChangeCancelTaskRace(t *testing.T) {
 	f := newChangeLifecycleFixture(t, "normal")
 	task := prepareChangeDefaultTask(t, f)

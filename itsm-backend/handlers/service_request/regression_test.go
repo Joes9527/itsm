@@ -3,9 +3,10 @@ package service_request_test
 import (
 	"context"
 	"encoding/json"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/common"
 	"itsm-backend/ent"

@@ -8,7 +8,8 @@ func TestValidateRefRejectsIncompleteIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, ref := range []Ref{
-		{}, {DeploymentID: valid.DeploymentID, TenantID: 1},
+		{},
+		{DeploymentID: valid.DeploymentID, TenantID: 1},
 		{DeploymentID: valid.DeploymentID, ScopeID: "bad", TenantID: 1},
 		{DeploymentID: valid.DeploymentID, ScopeID: valid.ScopeID, TenantID: 0},
 		{DeploymentID: "candidate:other", ScopeID: valid.ScopeID, TenantID: 1},

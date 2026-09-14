@@ -5,13 +5,14 @@ package integration
 import (
 	"context"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/handlers/common/accessgrant"
 	"itsm-backend/migration"
-	"testing"
-	"time"
 )
 
 func TestPostgresAccessPolicyResultContract(t *testing.T) {
@@ -98,7 +99,6 @@ func TestPostgresAccessPolicyResultContract(t *testing.T) {
 	require.Error(t, err)
 	require.NoError(t, tx.Rollback())
 	require.False(t, c.Ticket.Query().Where(ticket.IDEQ(failedItem.ID)).ExistX(ctx))
-
 }
 
 // This exercises Ent reconciliation followed by the real migration ledger, not

@@ -1,8 +1,9 @@
 package schema
 
 import (
-	relation "itsm-backend/common/workitemrelation"
 	"time"
+
+	relation "itsm-backend/common/workitemrelation"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"

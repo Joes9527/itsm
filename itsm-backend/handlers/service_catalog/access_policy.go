@@ -4,6 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
+	"strconv"
+	"strings"
+	"time"
+
 	"itsm-backend/ent"
 	"itsm-backend/ent/catalogaccesspolicy"
 	"itsm-backend/ent/fielddefinition"
@@ -11,10 +16,6 @@ import (
 	"itsm-backend/handlers/common/accessgrant"
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
-	"math"
-	"strconv"
-	"strings"
-	"time"
 )
 
 func ValidateAccessPolicy(p *accessgrant.Policy, fields []service.FieldDefinitionInput) error {
@@ -66,6 +67,7 @@ func ReadAccessPolicy(ctx context.Context, client *ent.Client, tenantID, catalog
 	}
 	return &accessgrant.Policy{ID: row.ID, Version: row.Version, Provider: accessgrant.Provider(row.Provider), ExternalSystem: row.ExternalSystem, GroupID: row.GroupID, DurationField: row.DurationField, DurationOptions: row.DurationOptions}, nil
 }
+
 func saveAccessPolicy(ctx context.Context, tx *ent.Tx, tenantID, catalogID int, p *accessgrant.Policy) error {
 	if p == nil {
 		return nil
@@ -105,6 +107,7 @@ func (s *Service) PublicationConfiguration(ctx context.Context, client *ent.Clie
 	}
 	return json.Marshal(p)
 }
+
 func (s *Service) ValidatePublicationConfiguration(ctx context.Context, client *ent.Client, tenantID int, action, ref string) error {
 	if action != accessgrant.Capability {
 		return fmt.Errorf("unsupported external grant capability")

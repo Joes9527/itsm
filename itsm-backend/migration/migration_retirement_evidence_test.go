@@ -4,10 +4,11 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
-	"github.com/stretchr/testify/require"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func retirementUnitEvidence(t *testing.T) (MigrationEvidence, MigrationControlConfig) {
@@ -42,9 +43,11 @@ func retirementUnitEvidence(t *testing.T) (MigrationEvidence, MigrationControlCo
 	r.Authorization = a
 	return e, MigrationControlConfig{DeploymentID: "deployment", Operator: "operator", RetirementPublicKeys: map[string]ed25519.PublicKey{"fixture": pub}}
 }
+
 func TestRetirementEvidenceRejectsEmpty(t *testing.T) {
 	require.Error(t, ValidateRetirementEvidence(MigrationEvidence{}))
 }
+
 func TestRetirementEvidenceAuthorizationAndReports(t *testing.T) {
 	e, c := retirementUnitEvidence(t)
 	m := NewMigrator(nil, nil, c)
@@ -78,6 +81,7 @@ func TestRetirementEvidenceAuthorizationAndReports(t *testing.T) {
 		})
 	}
 }
+
 func TestRetirementEvidenceFailedReport(t *testing.T) {
 	e, c := retirementUnitEvidence(t)
 	e.Retirement.Reports[0].Result = "failed"

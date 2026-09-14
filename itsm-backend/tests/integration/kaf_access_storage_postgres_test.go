@@ -6,10 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"os"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -73,9 +74,11 @@ func TestC2AccessInitializeStorageUpgradeAndRestart(t *testing.T) {
 		t.Logf("InitializeStorage pass %d: 031 applied once, original ledger unchanged, C1 RLS/CHECK/FK/unique/immutable guards present", pass+1)
 	}
 	task := &ent.ProcessTask{TaskID: "legacy-access", TenantID: 1, CallbackAction: accessgrant.Capability}
-	req := service.KafActionRequest{Action: "complete_bpmn_task", ExpectedVersion: 1,
+	req := service.KafActionRequest{
+		Action: "complete_bpmn_task", ExpectedVersion: 1,
 		Execution: service.KafActionExecution{RunID: "run", StepID: "finish", IdempotencyKey: "1:legacy-access:run:finish", CorrelationID: "corr", ProcedureRef: "graph_vpn_access_grant", ProcedureVersion: "1"},
-		Payload:   service.KafActionPayload{ResultSummary: "granted", AccessResult: json.RawMessage(`{"outcome":"granted"}`)}}
+		Payload:   service.KafActionPayload{ResultSummary: "granted", AccessResult: json.RawMessage(`{"outcome":"granted"}`)},
+	}
 	_, _, err = service.NewKafDelegationService(client, executionfixture.Standard()).ClaimKafAction(ctx, task, req)
 	require.ErrorIs(t, err, service.ErrKafActionConflict)
 	t.Log(fmt.Sprintf("legacy applied access action %d with empty digest rejected for verified replay", legacy.ID))

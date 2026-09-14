@@ -6,6 +6,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	relationmeta "itsm-backend/common/workitemrelation"
@@ -19,8 +22,6 @@ import (
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"sync"
-	"testing"
 )
 
 func newIntakeRelationFixture(t *testing.T) (*relationFixture, *intake.Service, creation.Identity, creation.CreateWorkItemCommand) {

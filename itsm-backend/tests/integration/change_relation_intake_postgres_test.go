@@ -7,12 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"itsm-backend/authorization"
-	"itsm-backend/ent"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"itsm-backend/authorization"
+	"itsm-backend/ent"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"

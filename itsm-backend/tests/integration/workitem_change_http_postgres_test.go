@@ -7,6 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http/httptest"
+	"os"
+	"strings"
+	"testing"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"itsm-backend/ent"
@@ -16,10 +21,6 @@ import (
 	"itsm-backend/ent/processtask"
 	changedomain "itsm-backend/handlers/change"
 	"itsm-backend/middleware"
-	"net/http/httptest"
-	"os"
-	"strings"
-	"testing"
 )
 
 func changeHTTPFixture(f *changeLifecycleFixture) (*gin.Engine, *changedomain.Handler) {
@@ -160,6 +161,7 @@ func TestWorkItemChangeHTTPTaskProgress(t *testing.T) {
 		})
 	}
 }
+
 func changeHTTPCall(r *gin.Engine, method, path, body string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -167,6 +169,7 @@ func changeHTTPCall(r *gin.Engine, method, path, body string) *httptest.Response
 	r.ServeHTTP(w, req)
 	return w
 }
+
 func TestWorkItemChangeHTTPRequiresExplicitIdentity(t *testing.T) {
 	f := newChangeLifecycleFixture(t, "normal")
 	r, h := changeHTTPFixture(f)
@@ -229,6 +232,7 @@ func TestWorkItemChangeHTTPRiskAssignmentBoundaries(t *testing.T) {
 	require.Equal(t, "high", risk.RiskLevel)
 	require.Equal(t, "canonical observed risk", risk.RiskDescription)
 }
+
 func TestWorkItemChangeHTTPPIRMutations(t *testing.T) {
 	f := newChangeLifecycleFixture(t, "normal")
 	r, h := changeHTTPFixture(f)
@@ -267,6 +271,7 @@ func TestWorkItemChangeHTTPPIRMutations(t *testing.T) {
 	require.Equal(t, 200, w.Code, w.Body.String())
 	require.Equal(t, 4, f.client.Ticket.GetX(f.ctx, f.c.WorkItemID).Version)
 }
+
 func TestWorkItemChangeHTTPPIRAuditRollback(t *testing.T) {
 	for _, action := range []string{"create", "update", "delete"} {
 		t.Run(action, func(t *testing.T) {
@@ -315,6 +320,7 @@ func TestWorkItemChangeHTTPPIRAuditRollback(t *testing.T) {
 		})
 	}
 }
+
 func TestWorkItemChangeHTTPCancelAtomic(t *testing.T) {
 	for _, fail := range []bool{false, true} {
 		t.Run(fmt.Sprint(fail), func(t *testing.T) {

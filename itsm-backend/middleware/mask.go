@@ -2,8 +2,9 @@ package middleware
 
 import (
 	"encoding/json"
-	"itsm-backend/common"
 	"regexp"
+
+	"itsm-backend/common"
 
 	"github.com/gin-gonic/gin"
 )

@@ -242,6 +242,7 @@ func (e *EscalationService) resolveNotifyUsersTx(ctx context.Context, tx *ent.Tx
 func (e *EscalationService) processLongPendingTickets(ctx context.Context, tenantID int) error {
 	return e.processReminders(ctx, tenantID, "long_pending", 24*time.Hour)
 }
+
 func (e *EscalationService) processUnassignedTickets(ctx context.Context, tenantID int) error {
 	return e.processReminders(ctx, tenantID, "unassigned", 2*time.Hour)
 }

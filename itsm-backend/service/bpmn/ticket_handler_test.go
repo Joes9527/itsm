@@ -595,6 +595,7 @@ func (s *notificationAcceptanceSpy) SendNotification(_ context.Context, _ int, r
 	s.request = *req
 	return s.result, nil
 }
+
 func TestTicketNotificationCallbackAcceptance(t *testing.T) {
 	for _, effect := range []string{dto.TicketNotificationEffectQueued, dto.TicketNotificationEffectIdempotent, dto.TicketNotificationEffectApplied} {
 		t.Run(effect, func(t *testing.T) {

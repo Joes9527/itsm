@@ -144,9 +144,11 @@ func TestConsumerStartupFailureClosesActivatedTargets(t *testing.T) {
 		require.Len(t, manager.ListByTenant(1), 1, "stop a failed consumer before closing its connector dependency")
 		queueClosed.Store(true)
 	}}
-	app := &Application{Cfg: &config.Config{Execution: cfg}, executionPolicy: policy, connectorManager: manager,
+	app := &Application{
+		Cfg: &config.Config{Execution: cfg}, executionPolicy: policy, connectorManager: manager,
 		notificationWorker: &recordingTicketNotificationWorker{}, toolQueue: queue,
-		startBackgroundTasksFunc: func(context.Context) { t.Error("background started after startup failure") }}
+		startBackgroundTasksFunc: func(context.Context) { t.Error("background started after startup failure") },
+	}
 	stop, err := app.startAPIRuntime(context.Background())
 	require.Nil(t, stop)
 	require.ErrorIs(t, err, sentinel)

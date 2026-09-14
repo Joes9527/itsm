@@ -23,6 +23,7 @@ type recoveryGraph struct {
 func (g *recoveryGraph) ListAttachments(context.Context, string, string) ([]msgraph.Attachment, error) {
 	return []msgraph.Attachment{{ID: "attachment-a", Name: "evidence.txt", ContentType: "text/plain", Size: 8}}, nil
 }
+
 func (g *recoveryGraph) DownloadAttachment(context.Context, string, string, string) ([]byte, error) {
 	g.downloads++
 	if g.fail {
@@ -30,6 +31,7 @@ func (g *recoveryGraph) DownloadAttachment(context.Context, string, string, stri
 	}
 	return []byte("evidence"), nil
 }
+
 func (g *recoveryGraph) ReplyMessage(_ context.Context, _ string, _ string, subject string, body string) error {
 	g.subject = subject
 	g.body = body

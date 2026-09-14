@@ -21,7 +21,6 @@ func TestSubmitChange_TriggersBPMNProcess_Normal(t *testing.T) {
 	require.Equal(t, "change_normal_flow", instance.ProcessDefinitionKey)
 	require.Equal(t, "Activity_Assessment", instance.CurrentActivityID)
 	require.Zero(t, f.client.ProcessCallbackOutbox.Query().CountX(f.ctx))
-
 }
 
 func TestSubmitChange_TriggersBPMNProcess_Emergency(t *testing.T) {
@@ -32,8 +31,8 @@ func TestSubmitChange_TriggersBPMNProcess_Emergency(t *testing.T) {
 	require.Equal(t, "change_emergency_flow", instance.ProcessDefinitionKey)
 	require.Equal(t, "Activity_Assessment", instance.CurrentActivityID)
 	require.Zero(t, f.client.ProcessCallbackOutbox.Query().CountX(f.ctx))
-
 }
+
 func TestSubmitChange_RejectsDuplicateWhenRunningInstanceExists(t *testing.T) {
 	f := newGovernedChangeFixture(t, "normal")
 	f.submit(t)
@@ -41,6 +40,7 @@ func TestSubmitChange_RejectsDuplicateWhenRunningInstanceExists(t *testing.T) {
 	require.Error(t, err)
 	require.Equal(t, 1, f.client.ProcessInstance.Query().CountX(f.ctx))
 }
+
 func TestSubmitChange_TriggerProcessFailureLeavesChangeDraft(t *testing.T) {
 	f := newGovernedChangeFixture(t, "normal")
 	f.client.ProcessDefinition.Delete().ExecX(f.ctx)
@@ -67,8 +67,8 @@ func TestTransitionStatusUsesRejectGuardBeforeGenericStateValidation(t *testing.
 	require.Error(t, err)
 	require.Equal(t, "draft", f.client.Ticket.GetX(f.ctx, f.record.WorkItemID).Status)
 	require.Zero(t, f.client.ProcessCallbackOutbox.Query().CountX(f.ctx))
-
 }
+
 func TestSubmitChange_MarkSubmittedFailureCompensatesByCancellingProcess(t *testing.T) {
 	f := newGovernedChangeFixture(t, "normal")
 	f.client.Use(func(next ent.Mutator) ent.Mutator {
@@ -96,6 +96,7 @@ func (w *cancelAlwaysFailsTriggerService) CancelProcess(ctx context.Context, pro
 	w.cancelCalls = append(w.cancelCalls, processInstanceID)
 	return w.cancelErr
 }
+
 func TestSubmitChange_MarkSubmittedFailure_CancelProcessAlsoFails_ReturnsOriginalError(t *testing.T) {
 	f := newGovernedChangeFixture(t, "normal")
 	f.client.Use(func(next ent.Mutator) ent.Mutator {
@@ -112,6 +113,7 @@ func TestSubmitChange_MarkSubmittedFailure_CancelProcessAlsoFails_ReturnsOrigina
 	require.Zero(t, f.client.ProcessInstance.Query().CountX(f.ctx))
 	require.Zero(t, f.client.ProcessTask.Query().CountX(f.ctx))
 }
+
 func TestGetApprovalHistory_ReadsFromProcessApprovalDecision(t *testing.T) {
 	entClient := newChangeBPMNEntClient(t, "change_approval_history")
 	ctx := context.Background()
@@ -191,6 +193,7 @@ func TestGetApprovalHistoryUsesOnlyCanonicalWorkItemBusinessID(t *testing.T) {
 	require.NotNil(t, history[0].Comment)
 	assert.Equal(t, "canonical work item id", *history[0].Comment)
 }
+
 func TestGetApprovalHistory_RejectedRecordHasNoApprovedAt(t *testing.T) {
 	entClient := newChangeBPMNEntClient(t, "change_approval_history_rejected")
 	ctx := context.Background()
@@ -221,6 +224,7 @@ func TestGetApprovalHistory_RejectedRecordHasNoApprovedAt(t *testing.T) {
 	assert.Equal(t, "rejected", history[0].Status)
 	assert.Nil(t, history[0].ApprovedAt, "驳回记录不应该有 ApprovedAt")
 }
+
 func TestGetApprovalHistory_TenantIsolation(t *testing.T) {
 	entClient := newChangeBPMNEntClient(t, "change_approval_history_tenant_iso")
 	ctx := context.Background()
@@ -264,6 +268,7 @@ func TestGetApprovalHistory_TenantIsolation(t *testing.T) {
 	assert.Equal(t, actorA.ID, history[0].ApproverID)
 	assert.Equal(t, "tenant a", *history[0].Comment)
 }
+
 func TestGetApprovalHistory_IncludesPendingCABTask(t *testing.T) {
 	f := newGovernedChangeFixture(t, "normal")
 	f.submit(t)
@@ -273,6 +278,7 @@ func TestGetApprovalHistory_IncludesPendingCABTask(t *testing.T) {
 	require.Len(t, records, 1)
 	require.Equal(t, "pending", records[0].Status)
 }
+
 func TestGetApprovalHistory_NoPendingEntryAfterDecisionMade(t *testing.T) {
 	f := newGovernedChangeFixture(t, "normal")
 	f.submit(t)
@@ -289,6 +295,7 @@ func TestGetApprovalHistory_NoPendingEntryAfterDecisionMade(t *testing.T) {
 	require.Len(t, records, 1)
 	require.Equal(t, "approved", records[0].Status)
 }
+
 func TestTransitionStatus_Cancel_TerminatesRunningProcessInstance(t *testing.T) {
 	f := newGovernedChangeFixture(t, "normal")
 	f.submit(t)
@@ -298,6 +305,7 @@ func TestTransitionStatus_Cancel_TerminatesRunningProcessInstance(t *testing.T) 
 	require.Equal(t, "terminated", f.client.ProcessInstance.Query().OnlyX(f.ctx).Status)
 	require.Equal(t, "cancelled", f.client.ProcessTask.Query().OnlyX(f.ctx).Status)
 }
+
 func TestTransitionStatus_Cancel_NoRunningInstanceIsNoop(t *testing.T) {
 	f := newGovernedChangeFixture(t, "normal")
 	result, err := f.svc.ApplyCommand(f.ctx, f.command("cancel", f.requester))

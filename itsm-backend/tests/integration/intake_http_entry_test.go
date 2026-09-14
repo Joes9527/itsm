@@ -4,6 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http/httptest"
+	"strconv"
+	"strings"
+	"testing"
+
 	"itsm-backend/controller"
 	"itsm-backend/ent"
 	changedomain "itsm-backend/handlers/change"
@@ -13,10 +18,6 @@ import (
 	requestdomain "itsm-backend/handlers/service_request"
 	standarddomain "itsm-backend/handlers/standard_change"
 	"itsm-backend/middleware"
-	"net/http/httptest"
-	"strconv"
-	"strings"
-	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -41,6 +42,7 @@ func intakeHTTP(t *testing.T, f *unifiedIntakeFixture, handle gin.HandlerFunc, b
 	_ = json.Unmarshal(w.Body.Bytes(), &envelope)
 	return w, envelope.Data
 }
+
 func TestIntakeHTTPProblemAndIncidentEntry(t *testing.T) {
 	f := newUnifiedIntakeFixture(t)
 	ctx := context.Background()

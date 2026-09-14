@@ -2,8 +2,9 @@ package service
 
 import (
 	"context"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -72,6 +73,7 @@ func TestNotificationRuleActionUsesAuthoritativeAlertCreator(t *testing.T) {
 	require.Equal(t, incident.ID, client.IncidentAlert.Query().OnlyX(ctx).IncidentID)
 	require.Equal(t, "pending", client.OutboxEvent.Query().OnlyX(ctx).Status)
 }
+
 func TestNotificationRuleActionRejectsIndependentAlertCreator(t *testing.T) {
 	client, _, ctx := setupIncidentTest(t)
 	defer client.Close()

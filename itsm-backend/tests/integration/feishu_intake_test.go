@@ -34,6 +34,7 @@ func TestFeishuCreationUsesIntakeAndRejectsUnmappedActor(t *testing.T) {
 	require.Equal(t, 1, f.client.FeishuTicketSync.Query().CountX(ctx))
 	require.Equal(t, "Updated task", f.client.Ticket.GetX(ctx, first.TicketID).Title)
 }
+
 func TestFeishuMappingFailureRollsBackIntakeNumberAndGraph(t *testing.T) {
 	f := newUnifiedIntakeFixture(t)
 	ctx := context.Background()

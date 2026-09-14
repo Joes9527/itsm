@@ -6,9 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strconv"
+
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
-	"strconv"
 )
 
 // Digest hashes only normalized business input, never transport or secret data.

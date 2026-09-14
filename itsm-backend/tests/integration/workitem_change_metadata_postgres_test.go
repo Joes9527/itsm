@@ -6,15 +6,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	changedomain "itsm-backend/handlers/change"
-	"sync"
-	"sync/atomic"
-	"testing"
-	"time"
 )
 
 func TestWorkItemChangeMetadataOwner(t *testing.T) {

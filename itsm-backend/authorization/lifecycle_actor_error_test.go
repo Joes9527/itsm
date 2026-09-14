@@ -3,11 +3,12 @@ package authorization
 import (
 	"context"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
-	"testing"
-	"time"
 )
 
 func TestLifecycleActorPreservesInfrastructureErrors(t *testing.T) {

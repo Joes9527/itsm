@@ -2,6 +2,8 @@ package integration
 
 import (
 	"context"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/dto"
@@ -10,7 +12,6 @@ import (
 	"itsm-backend/handlers/intake"
 	catalogdomain "itsm-backend/handlers/service_catalog"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"testing"
 )
 
 func TestCatalogPublicationTypedChangeInputs(t *testing.T) {

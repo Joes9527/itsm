@@ -3,12 +3,13 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	"strings"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/controller"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"strings"
-	"testing"
 )
 
 func TestIntakeIncidentHTTPSourceAndMetadata(t *testing.T) {

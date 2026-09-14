@@ -81,6 +81,7 @@ func (a *emailApplicationRecorder) Create(_ context.Context, identity creation.I
 	a.command = command
 	return &creation.CreateWorkItemResult{WorkItemID: 23, Number: "TKT-202609-000023"}, nil
 }
+
 func TestTicketStoreAdapter_ForwardsVerifiedEmailToIntake(t *testing.T) {
 	client, tenant, actor := newWiringFixture(t)
 	defer client.Close()
@@ -107,6 +108,7 @@ func TestTicketStoreAdapter_ForwardsVerifiedEmailToIntake(t *testing.T) {
 	_, _, err = adapter.CreateTicket(context.Background(), tenant.ID, req)
 	require.Error(t, err)
 }
+
 func TestTicketStoreAdapter_AmbiguousEmailFailsClosed(t *testing.T) {
 	client, tenant, _ := newWiringFixture(t)
 	defer client.Close()

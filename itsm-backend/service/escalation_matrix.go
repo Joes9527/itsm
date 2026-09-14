@@ -3,10 +3,11 @@ package service
 import (
 	"context"
 	"fmt"
-	"itsm-backend/ent"
-	"itsm-backend/ent/sladefinition"
 	"sync"
 	"time"
+
+	"itsm-backend/ent"
+	"itsm-backend/ent/sladefinition"
 
 	"go.uber.org/zap"
 )
@@ -123,6 +124,7 @@ func (s *EscalationMatrixService) InvalidateCache(tenantID int) {
 func (s *EscalationMatrixService) GetMatrixBySLA(ctx context.Context, tenantID, slaDefinitionID int) (EscalationMatrix, error) {
 	return loadSLAEscalationMatrix(ctx, s.client, tenantID, slaDefinitionID)
 }
+
 func loadSLAEscalationMatrix(ctx context.Context, client *ent.Client, tenantID, slaDefinitionID int) (EscalationMatrix, error) {
 	if client == nil || slaDefinitionID <= 0 {
 		return nil, fmt.Errorf("SLA matrix database and definition are required")
@@ -212,6 +214,7 @@ func (s *EscalationMatrixService) FindNextEscalationLevel(ctx context.Context, t
 	}
 	return nextEscalationLevel(matrix, priority, elapsedMinutes, currentMaxLevel)
 }
+
 func nextEscalationLevel(matrix EscalationMatrix, priority string, elapsedMinutes, currentMaxLevel int) (*EscalationLevel, error) {
 	levels, ok := matrix[priority]
 	if !ok {

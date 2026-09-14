@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"itsm-backend/config"
 	"itsm-backend/ent"
 	"itsm-backend/service/bpmn"
-	"strconv"
-	"strings"
 )
 
 // SetPublicationKAFConfig receives the existing deployment configuration owner.

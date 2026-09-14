@@ -55,7 +55,7 @@ func TestWorkItemCutoverCLIExitCodesAndReadOnly(t *testing.T) {
 			// LoadConfig reads config.yaml from cwd, resolves these variables and applies
 			// DB_SCHEMA explicitly. No production .env or credential file is loaded.
 			configText := "database:\n  host: \"\u0024{DB_HOST}\"\n  port: \"\u0024{DB_PORT}\"\n  user: \"\u0024{DB_USER}\"\n  dbname: \"\u0024{DB_NAME}\"\n  sslmode: disable\n"
-			require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(configText), 0600))
+			require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(configText), 0o600))
 			before := f.databaseDigest(t)
 			command := exec.CommandContext(f.ctx, binary, "-json", "-tenant-id="+strconv.Itoa(f.tenant.ID))
 			command.Dir = configDir

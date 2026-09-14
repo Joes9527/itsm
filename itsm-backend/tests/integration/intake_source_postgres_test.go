@@ -5,11 +5,12 @@ package integration
 import (
 	"bytes"
 	"encoding/json"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"

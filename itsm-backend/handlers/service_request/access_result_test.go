@@ -1,12 +1,13 @@
 package service_request
 
 import (
-	"github.com/stretchr/testify/require"
-	"itsm-backend/handlers/common/accessgrant"
 	"math"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+	"itsm-backend/handlers/common/accessgrant"
 )
 
 func TestComputeAccessExpiryUsesVerificationTime(t *testing.T) {

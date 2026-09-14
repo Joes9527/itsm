@@ -2,10 +2,11 @@ package service
 
 import (
 	"encoding/json"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
 	"itsm-backend/handlers/shared/workitemmutation"
-	"testing"
 )
 
 func TestIncidentInitialAssignmentEventDeliveryPreservesProvenance(t *testing.T) {

@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/ent"
 	ticketrepo "itsm-backend/repository/ticket"
 	"itsm-backend/service"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"testing"
-	"time"
 )
 
 func TestIntakeApprovedToolCreationRecoversAcknowledgement(t *testing.T) {
@@ -59,6 +60,7 @@ func mapKeys(values map[string]any) []string {
 	}
 	return keys
 }
+
 func TestIntakeToolCreationRequiresApprovedTenantInvocation(t *testing.T) {
 	for _, state := range []string{"pending", "rejected", "wrong_tenant", "missing_actor", "malformed"} {
 		t.Run(state, func(t *testing.T) {

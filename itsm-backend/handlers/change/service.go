@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
+	"time"
+
 	"itsm-backend/common"
 	"itsm-backend/common/executionscope"
-	"strconv"
-
-	"time"
 
 	"itsm-backend/database"
 	"itsm-backend/dto"
@@ -331,6 +331,7 @@ func (s *Service) ListPIRs(ctx context.Context, tenantID int, page, pageSize int
 func (s *Service) UpdatePIR(ctx context.Context, id int, req *dto.UpdateChangePIRRequest, meta workitemmutation.Meta) (service.PIRMutationResult, error) {
 	return s.pirService.UpdatePIR(ctx, id, req, meta)
 }
+
 func (s *Service) DeletePIR(ctx context.Context, id int, req *dto.DeleteChangePIRRequest, meta workitemmutation.Meta) (service.PIRMutationResult, error) {
 	return s.pirService.DeletePIR(ctx, id, req, meta)
 }

@@ -238,9 +238,11 @@ func (h *startProcessCommitProbeHandler) EffectCount() int { return h.effectCoun
 
 func (h *startProcessCommitProbeHandler) GetTaskType() string  { return "start_commit_probe" }
 func (h *startProcessCommitProbeHandler) GetHandlerID() string { return "start_commit_probe_handler" }
+
 func (h *startProcessCommitProbeHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
 	return bpmn.CallbackActionContract{}, true
 }
+
 func (h *startProcessCommitProbeHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	h.effectCount++
 	instance, err := h.client.ProcessInstance.Query().Where(
@@ -620,6 +622,7 @@ func (h *postCommitProbeHandler) IsAsync() bool        { return false }
 func (h *postCommitProbeHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
 	return bpmn.CallbackActionContract{}, true
 }
+
 func (h *postCommitProbeHandler) Execute(ctx context.Context, callbackTask *ent.ProcessTask, _ map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	if callbackTask == nil {
 		return nil, fmt.Errorf("callback task is required")

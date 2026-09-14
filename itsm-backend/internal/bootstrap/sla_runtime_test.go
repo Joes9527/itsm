@@ -2,6 +2,8 @@ package bootstrap
 
 import (
 	"context"
+	"testing"
+
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
 	"itsm-backend/common/tenantctx"
@@ -10,7 +12,6 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/service"
-	"testing"
 )
 
 type scopeRecordingSLAMonitor struct {
@@ -26,6 +27,7 @@ func (m *scopeRecordingSLAMonitor) CheckSLAViolations(ctx context.Context, id in
 	m.ids = append(m.ids, id)
 	return &service.SLACheckStats{}, nil
 }
+
 func TestSLACycleUsesFrozenTenantContexts(t *testing.T) {
 	cfg := config.ExecutionConfig{Mode: "candidate", DeploymentID: "sla-test", Scopes: []config.ExecutionScopeConfig{{TenantID: 7, ScopeID: "11111111-1111-4111-8111-111111111111"}}}
 	policy, err := database.NewExecutionPolicy(cfg)
@@ -36,6 +38,7 @@ func TestSLACycleUsesFrozenTenantContexts(t *testing.T) {
 	require.NoError(t, app.runSLACycle(context.Background()))
 	require.Equal(t, []int{7}, monitor.ids)
 }
+
 func TestSLAStartupRequiresConfiguredMonitor(t *testing.T) {
 	for _, missing := range []string{"monitor", "policy", "discovery"} {
 		t.Run(missing, func(t *testing.T) {
@@ -85,6 +88,7 @@ func (m *scopeRecordingEscalation) ProcessEscalations(ctx context.Context, id in
 	m.ids = append(m.ids, id)
 	return nil
 }
+
 func TestEscalationCycleUsesFrozenTenantContexts(t *testing.T) {
 	cfg := config.ExecutionConfig{Mode: "candidate", DeploymentID: "escalation-test", Scopes: []config.ExecutionScopeConfig{{TenantID: 7, ScopeID: "11111111-1111-4111-8111-111111111111"}}}
 	policy, err := database.NewExecutionPolicy(cfg)
@@ -95,6 +99,7 @@ func TestEscalationCycleUsesFrozenTenantContexts(t *testing.T) {
 	require.NoError(t, app.runEscalationCycle(context.Background()))
 	require.Equal(t, []int{7}, processor.ids)
 }
+
 func TestEscalationStartupRequiresConfiguredProcessor(t *testing.T) {
 	for _, missing := range []string{"processor", "policy", "discovery"} {
 		t.Run(missing, func(t *testing.T) {

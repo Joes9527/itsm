@@ -1,10 +1,11 @@
 package dto
 
 import (
+	"time"
+
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/shared/slacontract"
 	"itsm-backend/handlers/shared/workitemmutation"
-	"time"
 )
 
 // UserBasicInfo 用户基本信息

@@ -2,10 +2,11 @@ package authentication
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
-	"itsm-backend/common/tenantctx"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+	"itsm-backend/common/tenantctx"
 )
 
 type credentialScopeProbe struct {
@@ -95,6 +96,7 @@ func (s *refreshScopeProbe) Consume(ctx context.Context, _ string, _ time.Time) 
 	s.bypass = tenantctx.IsSystemBypass(ctx)
 	return nil
 }
+
 func TestRefreshConsumptionUsesVerifiedTenantAndPurpose(t *testing.T) {
 	const secret = "private-refresh-context"
 	raw, err := GenerateRefreshToken(7, "operator", "agent", 3, secret, time.Hour)

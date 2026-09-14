@@ -1,13 +1,14 @@
 package service
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/handlers/shared/workitemmutation"
 	ticketrepo "itsm-backend/repository/ticket"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"testing"
 )
 
 func TestTicketAssignmentRejectsProfessionalClasses(t *testing.T) {

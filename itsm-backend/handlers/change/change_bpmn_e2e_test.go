@@ -28,7 +28,6 @@ func TestChangeApprovalE2E_FullApproveFlow(t *testing.T) {
 	require.Equal(t, result.Result.Version, again.Result.Version)
 	require.Equal(t, result.ExecutionKey, again.ExecutionKey)
 	require.Equal(t, 1, f.client.ProcessApprovalDecision.Query().CountX(f.ctx))
-
 }
 
 // TestChangeApprovalE2E_FullRejectFlow 同样结构，走驳回分支：断言 Change.Status=="rejected"，
@@ -43,7 +42,6 @@ func TestChangeApprovalE2E_FullRejectFlow(t *testing.T) {
 	require.NotNil(t, result.Result)
 	require.Equal(t, "rejected", result.Result.Status)
 	require.Equal(t, "completed", f.client.ProcessInstance.Query().OnlyX(f.ctx).Status)
-
 }
 
 // TestChangeApprovalE2E_NonCMUserCannotApprove 断言非 change_manager 角色的用户
@@ -57,5 +55,4 @@ func TestChangeApprovalE2E_NonCMUserCannotApprove(t *testing.T) {
 	require.Error(t, err)
 	require.Equal(t, "submitted", f.client.Ticket.GetX(f.ctx, f.record.WorkItemID).Status)
 	require.Zero(t, f.client.ProcessApprovalDecision.Query().CountX(f.ctx))
-
 }

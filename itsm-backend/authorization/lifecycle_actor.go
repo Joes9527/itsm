@@ -3,11 +3,12 @@ package authorization
 import (
 	"context"
 	"errors"
+	"time"
+
 	"itsm-backend/common"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/database"
 	"itsm-backend/ent"
-	"time"
 )
 
 // ResolveLifecycleActor applies the established tenant-session policy at the

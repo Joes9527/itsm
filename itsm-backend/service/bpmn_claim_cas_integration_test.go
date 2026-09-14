@@ -6,12 +6,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"os"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/common"
 	"itsm-backend/ent"

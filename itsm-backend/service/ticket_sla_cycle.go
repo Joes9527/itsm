@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
+
 	"itsm-backend/authorization"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/dto"
@@ -12,7 +14,6 @@ import (
 	"itsm-backend/ent/sladefinition"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/handlers/shared/slacontract"
-	"time"
 
 	"itsm-backend/handlers/shared/workitemmutation"
 )
@@ -30,18 +31,21 @@ type SLACycleClock struct {
 func ResetSLACycle(previous SLACycleClock, at time.Time) SLACycleClock {
 	return SLACycleClock{Number: previous.Number + 1, StartedAt: at}
 }
+
 func slaTime(t time.Time) *time.Time {
 	if t.IsZero() {
 		return nil
 	}
 	return &t
 }
+
 func slaCycleStart(item *ent.Ticket) time.Time {
 	if !item.SLACycleStartedAt.IsZero() {
 		return item.SLACycleStartedAt
 	}
 	return item.CreatedAt
 }
+
 func slaMeasuredAt(completed, now time.Time) time.Time {
 	if !completed.IsZero() {
 		return completed
@@ -114,6 +118,7 @@ func (s *TicketSLAService) ApplyPolicyTx(ctx context.Context, tx *ent.Tx, item *
 	}
 	return s.advanceCycleTx(ctx, tx, current, at, meta, appliedSLAPolicy(definition))
 }
+
 func (s *TicketSLAService) cycleCommandItem(ctx context.Context, tx *ent.Tx, item *ent.Ticket, at time.Time, meta workitemmutation.Meta) (*ent.Ticket, error) {
 	if tx == nil || item == nil || meta.TenantID <= 0 || meta.ActorID <= 0 || meta.ExpectedVersion <= 0 || meta.Source == "" || meta.OperationID == "" || at.IsZero() {
 		return nil, fmt.Errorf("SLA cycle requires transaction and trusted command metadata")
@@ -137,6 +142,7 @@ func (s *TicketSLAService) cycleCommandItem(ctx context.Context, tx *ent.Tx, ite
 	}
 	return current, nil
 }
+
 func (s *TicketSLAService) advanceCycleTx(ctx context.Context, tx *ent.Tx, current *ent.Ticket, at time.Time, meta workitemmutation.Meta, policy *slacontract.Policy) error {
 	if at.Before(slaCycleStart(current)) {
 		return fmt.Errorf("SLA cycle start precedes previous cycle")
@@ -166,6 +172,7 @@ func (s *TicketSLAService) advanceCycleTx(ctx context.Context, tx *ent.Tx, curre
 	}
 	return nil
 }
+
 func (s *TicketSLAService) cycleHistory(ctx context.Context, item *ent.Ticket) ([]dto.SLACycleResult, error) {
 	rows, err := s.client.AuditLog.Query().Where(auditlog.TenantID(item.TenantID), auditlog.Resource(fmt.Sprintf("work_item:%d", item.ID)), auditlog.Action(slaCycleCompletedAction)).Order(ent.Asc(auditlog.FieldID)).All(ctx)
 	if err != nil {

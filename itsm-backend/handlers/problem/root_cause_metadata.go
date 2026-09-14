@@ -3,12 +3,13 @@ package problem
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
+
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/user"
-	"strings"
-	"time"
 )
 
 // RootCauseMetadata describes investigation evidence attached to the same Problem mutation.

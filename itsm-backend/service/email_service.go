@@ -8,8 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"itsm-backend/connector"
-	"itsm-backend/database"
 	"net"
 	"net/mail"
 	"net/smtp"
@@ -17,6 +15,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"itsm-backend/connector"
+	"itsm-backend/database"
 
 	"go.uber.org/zap"
 )
@@ -74,8 +75,10 @@ func (e *emailTransportError) Is(target error) bool {
 	return (e.route == "graph" && target == errEmailGraphSend) || (e.route == "smtp" && target == errEmailSMTPSend)
 }
 
-type emailDeliveryOutcomeCarrier interface{ DeliveryOutcome() string }
-type emailDeliveryStageCarrier interface{ DeliveryStage() string }
+type (
+	emailDeliveryOutcomeCarrier interface{ DeliveryOutcome() string }
+	emailDeliveryStageCarrier   interface{ DeliveryStage() string }
+)
 
 func emailTransportOutcomeOf(err error) emailTransportOutcome {
 	if errors.Is(err, errEmailRouteMissing) {

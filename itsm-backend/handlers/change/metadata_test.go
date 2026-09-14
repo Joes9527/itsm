@@ -2,11 +2,12 @@ package change
 
 import (
 	"context"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
 	"itsm-backend/handlers/shared/workitemmutation"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"testing"
 )
 
 func TestChangeMetadataRequiresExplicitIdentity(t *testing.T) {

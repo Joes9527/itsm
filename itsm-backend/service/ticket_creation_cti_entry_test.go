@@ -2,12 +2,13 @@ package service_test
 
 import (
 	"context"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	"itsm-backend/dto"
 	"itsm-backend/ent/enttest"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"testing"
 )
 
 func TestTicketCreationCTIEntry(t *testing.T) {

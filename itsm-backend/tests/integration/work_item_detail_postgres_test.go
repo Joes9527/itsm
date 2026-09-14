@@ -5,6 +5,10 @@ package integration
 import (
 	"encoding/json"
 	"fmt"
+	"net/http/httptest"
+	"testing"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -12,9 +16,6 @@ import (
 	requestdomain "itsm-backend/handlers/service_request"
 	"itsm-backend/service"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"net/http/httptest"
-	"testing"
-	"time"
 )
 
 func TestPostgresMSPCommentsUseCurrentActorDirectory(t *testing.T) {

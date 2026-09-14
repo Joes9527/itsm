@@ -8,12 +8,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -89,9 +90,11 @@ func newIncidentEffectsFixture(t *testing.T) *incidentEffectsFixture {
 	svc.SetAlertCreator(service.NewIncidentAlertingService(client, zap.NewNop().Sugar(), executionfixture.Standard()))
 	return &incidentEffectsFixture{scopedDB, client, ctx, svc.RuleEngine(), svc, event, inc, actor, tenant}
 }
+
 func (f *incidentEffectsFixture) rule(actions ...map[string]interface{}) *ent.IncidentRule {
 	return f.client.IncidentRule.Create().SetTenantID(f.tenant.ID).SetName("effects").SetRuleType("automation").SetConditions(map[string]interface{}{}).SetActions(actions).SaveX(f.ctx)
 }
+
 func metricAction(name string) map[string]interface{} {
 	return map[string]interface{}{"type": "collect_metric", "metric_type": "automation", "metric_name": name, "metric_value": 1.0}
 }
@@ -131,6 +134,7 @@ func TestPostgresIncidentEffectsReceiptFaultRollsBackActualMutation(t *testing.T
 		})
 	}
 }
+
 func TestPostgresIncidentEffectsResumeFrozenActionsAndCandidateSet(t *testing.T) {
 	f := newIncidentEffectsFixture(t)
 	rule := f.rule(metricAction("first"), metricAction("second"))
@@ -165,6 +169,7 @@ func TestPostgresIncidentEffectsResumeFrozenActionsAndCandidateSet(t *testing.T)
 	require.Equal(t, 2, f.client.IncidentRuleActionReceipt.Query().CountX(f.ctx))
 	require.Equal(t, 1, f.client.IncidentRule.GetX(f.ctx, rule.ID).ExecutionCount)
 }
+
 func TestPostgresIncidentEffectsConcurrentReplayAndWorkerFencing(t *testing.T) {
 	f := newIncidentEffectsFixture(t)
 	f.rule(metricAction("once"), map[string]interface{}{"type": "escalate", "level": 1, "reason": "threshold", "notify_users": []int{f.actor.ID}})
@@ -222,6 +227,7 @@ func TestPostgresIncidentEffectsWorkerAcknowledgmentLossAndFencing(t *testing.T)
 	delivery := f.client.OutboxEvent.Query().Where(outboxevent.EventType("incident_alert_delivery")).OnlyX(f.ctx)
 	require.Equal(t, "pending", delivery.Status, "external send is not performed in action transaction")
 }
+
 func TestPostgresIncidentEffectsFreezeNoMatchingRules(t *testing.T) {
 	for _, empty := range []bool{true, false} {
 		t.Run(fmt.Sprint(empty), func(t *testing.T) {
@@ -237,6 +243,7 @@ func TestPostgresIncidentEffectsFreezeNoMatchingRules(t *testing.T) {
 		})
 	}
 }
+
 func TestPostgresIncidentEffectsConfiguredRecipientsAndPlaceholderFailures(t *testing.T) {
 	for _, name := range []string{"unknown", "missing", "foreign", "inactive", "auto_assign", "fractional", "invalid_status", "optional"} {
 		t.Run(name, func(t *testing.T) {
@@ -272,6 +279,7 @@ func TestPostgresIncidentEffectsConfiguredRecipientsAndPlaceholderFailures(t *te
 		})
 	}
 }
+
 func TestPostgresIncidentEffectsUpdateAndNotificationGraphRollback(t *testing.T) {
 	for _, target := range []string{"timeline", "alert", "in_app", "outbox", "audit"} {
 		t.Run(target, func(t *testing.T) {
@@ -309,6 +317,7 @@ func TestPostgresIncidentEffectsUpdateAndNotificationGraphRollback(t *testing.T)
 		})
 	}
 }
+
 func TestPostgresIncidentEffectsLifecycleOwnership(t *testing.T) {
 	f := newIncidentEffectsFixture(t)
 	for _, name := range []string{"032_workitem_sla_cycle", "033_incident_status_events"} {

@@ -5,12 +5,13 @@ package integration
 import (
 	"encoding/json"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	changedomain "itsm-backend/handlers/change"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"testing"
-	"time"
 )
 
 func TestWorkItemChangeHTTPIdentityAndOutcomeStats(t *testing.T) {

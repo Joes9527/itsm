@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"testing"
+	"time"
+
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/handlers/common/workitemcreation"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"testing"
-	"time"
 )
 
 type preparedCreator struct {
@@ -27,6 +28,7 @@ func (p *preparedCreator) Prepare(_ context.Context, _ *ent.Tx, in workitemcreat
 	}
 	return plan, nil
 }
+
 func (p *preparedCreator) CreateExtension(context.Context, *ent.Tx, *ent.Ticket, *workitemcreation.CreationPlan) (*workitemcreation.ProfessionalReference, error) {
 	if p.fail {
 		return nil, errors.New("extension failure")
@@ -46,6 +48,7 @@ func (a *testAllocator) Allocate(_ context.Context, _ *ent.Client, _ int, _ time
 	a.calls++
 	return fmt.Sprintf("TKT-TEST-%06d", a.calls), nil
 }
+
 func intakeFixture(t *testing.T) (*ent.Client, *Service, workitemcreation.Identity, workitemcreation.CreateWorkItemCommand, *testAllocator, *preparedCreator) {
 	t.Helper()
 	ctx := context.Background()
@@ -62,6 +65,7 @@ func intakeFixture(t *testing.T) (*ent.Client, *Service, workitemcreation.Identi
 	allocator := &testAllocator{}
 	return client, NewService(client, preparedResolver{}, registry, NewWorkItemCreator(allocator), sameTransactionDirectory{}, executionfixture.Standard()), identity, cmd, allocator, creator
 }
+
 func TestApplicationGenericAtomicCreationReplayAndConflict(t *testing.T) {
 	client, s, i, c, n, _ := intakeFixture(t)
 	ctx := context.Background()
@@ -83,11 +87,13 @@ func TestApplicationGenericAtomicCreationReplayAndConflict(t *testing.T) {
 	_, err = app.Create(ctx, i, c)
 	require.ErrorIs(t, err, workitemcreation.ErrIdempotencyConflict)
 }
+
 func TestApplicationRejectsMissingDependencies(t *testing.T) {
 	var s *Service
 	_, err := s.Create(context.Background(), workitemcreation.Identity{}, workitemcreation.CreateWorkItemCommand{})
 	require.Error(t, err)
 }
+
 func TestApplicationRejectsInvalidPreparationAndRollsBack(t *testing.T) {
 	for _, scenario := range []string{"tenant", "requester", "class", "status", "priority", "number", "extension"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -126,6 +132,7 @@ func TestApplicationRejectsReplayForDifferentRequester(t *testing.T) {
 	_, err = s.Create(context.Background(), i, c)
 	require.Error(t, err)
 }
+
 func TestApplicationRejectsUnregisteredClass(t *testing.T) {
 	client, s, i, c, _, _ := intakeFixture(t)
 	c.RecordClass = "problem"
@@ -134,6 +141,7 @@ func TestApplicationRejectsUnregisteredClass(t *testing.T) {
 	require.ErrorIs(t, err, workitemcreation.ErrUnsupportedRecordClass)
 	require.Zero(t, client.IntakeRequest.Query().CountX(context.Background()))
 }
+
 func TestApplicationDigestVersionMismatch(t *testing.T) {
 	client, s, i, c, _, _ := intakeFixture(t)
 	ctx := context.Background()

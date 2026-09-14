@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -382,7 +383,6 @@ func TestChangeController_GetChange(t *testing.T) {
 		w := governedHTTP(r, "GET", "/api/v1/changes/"+test.id, "", nil)
 		require.Equal(t, test.code, w.Code, w.Body.String())
 	}
-
 }
 
 func TestChangeController_GetChangeIncludesDetailActionsOnly(t *testing.T) {
@@ -400,7 +400,6 @@ func TestChangeController_GetChangeIncludesDetailActionsOnly(t *testing.T) {
 	w = governedHTTP(r, "GET", "/api/v1/changes", "", nil)
 	require.Equal(t, 200, w.Code, w.Body.String())
 	require.NotContains(t, w.Body.String(), `"actions"`)
-
 }
 
 func TestChangeController_GetChangeUsesResolvedMSPTenant(t *testing.T) {
@@ -418,7 +417,6 @@ func TestChangeController_GetChangeUsesResolvedMSPTenant(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 	require.Equal(t, f.tenant, body.Data.TenantID)
-
 }
 
 func TestChangeController_GetChangeDeniesUnauthorizedMSPTenant(t *testing.T) {
@@ -427,7 +425,6 @@ func TestChangeController_GetChangeDeniesUnauthorizedMSPTenant(t *testing.T) {
 	f.client.MSPAllocation.Update().SetDeassignedAt(time.Now()).ExecX(f.ctx)
 	w := governedHTTP(r, "GET", fmt.Sprintf("/api/v1/changes/%d", f.record.ID), "", headers)
 	require.Equal(t, 403, w.Code, w.Body.String())
-
 }
 
 func TestChangeControllerMutationsUseResolvedMSPTenant(t *testing.T) {
@@ -440,7 +437,6 @@ func TestChangeControllerMutationsUseResolvedMSPTenant(t *testing.T) {
 	w = governedHTTP(r, "POST", base+"/assign", fmt.Sprintf(`{"expectedVersion":2,"operationId":"msp-assign","assigneeId":%d}`, f.requester), headers)
 	require.Equal(t, 200, w.Code, w.Body.String())
 	require.Equal(t, f.requester, f.client.Ticket.GetX(f.ctx, f.record.WorkItemID).AssigneeID)
-
 }
 
 func TestChangeController_GetChangeRejectsInvalidActionActorContext(t *testing.T) {
@@ -452,7 +448,6 @@ func TestChangeController_GetChangeRejectsInvalidActionActorContext(t *testing.T
 	}
 	w := governedHTTP(r, "GET", base, "", map[string]string{"X-User-Role": "stale-role"})
 	require.Equal(t, 200, w.Code, w.Body.String(), "current persisted role owns authorization")
-
 }
 
 // TestChangeController_UpdateChange tests PUT /api/v1/changes/:id
@@ -469,7 +464,6 @@ func TestChangeController_UpdateChange(t *testing.T) {
 	require.Equal(t, 409, w.Code, w.Body.String())
 	w = governedHTTP(r, "PUT", base, `{"title":"No key"}`, nil)
 	require.Equal(t, 400, w.Code, w.Body.String())
-
 }
 
 // TestChangeController_DeleteChange tests DELETE /api/v1/changes/:id
@@ -529,7 +523,6 @@ func TestChangeController_SubmitChange(t *testing.T) {
 	require.Equal(t, 200, w.Code, w.Body.String())
 	require.Contains(t, w.Body.String(), `"status":"submitted"`)
 	require.Equal(t, "Activity_Assessment", f.client.ProcessInstance.Query().OnlyX(f.ctx).CurrentActivityID)
-
 }
 
 // TestChangeController_AssignChange tests POST /api/v1/changes/:id/assign
@@ -541,7 +534,6 @@ func TestChangeController_AssignChange(t *testing.T) {
 	require.Equal(t, f.approver, f.client.Ticket.GetX(f.ctx, f.record.WorkItemID).AssigneeID)
 	w = governedHTTP(r, "POST", base, `{"expectedVersion":2,"operationId":"invalid","assigneeId":999}`, nil)
 	require.Equal(t, 400, w.Code, w.Body.String())
-
 }
 
 func TestSubmitChangeAtomicFailureLeavesDraftUnchanged(t *testing.T) {
@@ -558,7 +550,6 @@ func TestSubmitChangeAtomicFailureLeavesDraftUnchanged(t *testing.T) {
 	require.ErrorContains(t, err, "receipt unavailable")
 	require.Equal(t, "draft", f.client.Ticket.GetX(f.ctx, f.record.WorkItemID).Status)
 	require.Zero(t, f.client.ProcessInstance.Query().CountX(f.ctx))
-
 }
 
 // TestChangeController_GetRiskAssessment tests GET /api/v1/changes/:id/risk-assessment
@@ -571,7 +562,6 @@ func TestChangeController_GetRiskAssessment(t *testing.T) {
 	require.Equal(t, 200, w.Code, w.Body.String())
 	require.Contains(t, w.Body.String(), `"riskDescription":"observed"`)
 	require.Contains(t, w.Body.String(), `"riskLevel":"medium"`)
-
 }
 
 // Helper functions

@@ -5,11 +5,12 @@ package integration
 import (
 	"database/sql"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/authorization"
 	"itsm-backend/ent"
-	"testing"
-	"time"
 )
 
 func TestWorkItemChangeTaskPreviewDoesNotWrite(t *testing.T) {
@@ -44,6 +45,7 @@ func seedChangeHTTPMSP(t *testing.T, f *changeLifecycleFixture) (*ent.User, *ent
 	t.Cleanup(authorization.InvalidateAllPermissionCaches)
 	return actor, allocation, role
 }
+
 func TestWorkItemChangeTaskPreviewActorParity(t *testing.T) {
 	for _, mode := range []string{"native", "msp", "revoked", "nonparticipant"} {
 		t.Run(mode, func(t *testing.T) {

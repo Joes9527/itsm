@@ -2,9 +2,10 @@ package fixtures_test
 
 import (
 	"context"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"testing"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/fielddefinition"

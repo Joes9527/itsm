@@ -3,6 +3,8 @@ package integration
 import (
 	"context"
 	"errors"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/dto"
@@ -14,7 +16,6 @@ import (
 	catalog "itsm-backend/handlers/service_catalog"
 	"itsm-backend/service"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"testing"
 )
 
 func TestA5FixCatalogKeepsExecutableVersionWhenSavingDraft(t *testing.T) {

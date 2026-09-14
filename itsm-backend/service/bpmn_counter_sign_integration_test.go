@@ -4,11 +4,12 @@ package service
 
 import (
 	"context"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/common"
 	"itsm-backend/ent"

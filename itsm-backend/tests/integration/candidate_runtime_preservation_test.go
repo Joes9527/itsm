@@ -209,7 +209,7 @@ redis:
   password: %s
 `, listener.Addr().(*net.TCPAddr).Port, id, runRole, systemRole, tenant.ID, scope, redisPort, redisPassword)
 	cfg += fmt.Sprintf("\nminio:\n  endpoint: %s\n  access_key: %s\n  secret_key: %s\n  bucket: protected-history\n  use_ssl: false\n", minioAddress, minioAccess, minioSecret)
-	require.NoError(t, os.WriteFile(filepath.Join(workDir, "config.yaml"), []byte(cfg), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(workDir, "config.yaml"), []byte(cfg), 0o600))
 	child := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestCandidateConstructChild$", "-test.v")
 	child.Dir = workDir
 	child.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + workDir, "TMPDIR=" + workDir, "ENV=test", "CANDIDATE_CONSTRUCT_CHILD=1"}
@@ -258,6 +258,7 @@ func snapshotCandidateTables(t *testing.T, ctx context.Context, db *sql.DB) map[
 	}
 	return result
 }
+
 func snapshotCandidateRedis(t *testing.T, ctx context.Context, db *redis.Client) map[string]string {
 	t.Helper()
 	keys, err := db.Keys(ctx, "*").Result()
@@ -315,6 +316,7 @@ func startCandidateMinio(t *testing.T, ctx context.Context, binary string) (stri
 	}, 15*time.Second, 50*time.Millisecond)
 	return address, client, access, secret
 }
+
 func snapshotCandidateMinio(t *testing.T, ctx context.Context, client *minio.Client) map[string]string {
 	t.Helper()
 	buckets, err := client.ListBuckets(ctx)

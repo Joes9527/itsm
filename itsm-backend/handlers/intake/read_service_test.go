@@ -5,6 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http/httptest"
+	"testing"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -16,9 +20,6 @@ import (
 	creation "itsm-backend/handlers/common/workitemcreation"
 
 	catalog "itsm-backend/handlers/service_catalog"
-	"net/http/httptest"
-	"testing"
-	"time"
 )
 
 func TestIdentityReadCatalogContractCursorAndCurrentWorkItemScope(t *testing.T) {

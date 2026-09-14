@@ -3,9 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/ticketnotification"

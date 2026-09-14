@@ -2,10 +2,11 @@ package seeder
 
 import (
 	"encoding/json"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/ent/menu"
 	"itsm-backend/pkg/tenantmode"
-	"testing"
 )
 
 func TestWorkflowMenuRepairCreatesAuditedTenantBaseline(t *testing.T) {

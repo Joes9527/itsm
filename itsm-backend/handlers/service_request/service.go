@@ -62,6 +62,7 @@ func (r *ServiceRequest) title() string {
 	}
 	return ""
 }
+
 func (r *ServiceRequest) reason() string {
 	if v, ok := r.FormData["reason"].(string); ok {
 		return v

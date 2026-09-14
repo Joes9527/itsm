@@ -10,10 +10,15 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
-	"entgo.io/ent/dialect"
-	entsql "entgo.io/ent/dialect/sql"
 	"errors"
 	"fmt"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
+
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -22,9 +27,6 @@ import (
 	"itsm-backend/migration"
 	"itsm-backend/service"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"sync/atomic"
-	"testing"
-	"time"
 )
 
 func TestWorkItemControlledRetirementRejectsEmpty(t *testing.T) {
@@ -40,6 +42,7 @@ func TestWorkItemControlledRetirementRejectsEmpty(t *testing.T) {
 func retirementFixture(t *testing.T, canonical ...bool) (*sql.DB, context.Context, *migration.Migrator, ed25519.PrivateKey) {
 	return retirementFixtureConfigured(t, migration.MigrationControlConfig{DeploymentID: "owned-v2", Operator: "fixture-operator"}, canonical...)
 }
+
 func retirementFixtureConfigured(t *testing.T, control migration.MigrationControlConfig, canonical ...bool) (*sql.DB, context.Context, *migration.Migrator, ed25519.PrivateKey) {
 	db, ctx := preparationFixture(t)
 	_, err := db.ExecContext(ctx, `
@@ -82,6 +85,7 @@ func retirementFixtureConfigured(t *testing.T, control migration.MigrationContro
 	require.NoError(t, m.InspectMigrationTarget(ctx))
 	return db, ctx, m, priv
 }
+
 func retirementEvidence(t *testing.T, m *migration.Migrator, ctx context.Context, priv ed25519.PrivateKey) migration.MigrationEvidence {
 	inv, err := m.InspectRetirement(ctx)
 	require.NoError(t, err)
@@ -107,6 +111,7 @@ func retirementEvidence(t *testing.T, m *migration.Migrator, ctx context.Context
 	signRetirement(t, &e, priv)
 	return e
 }
+
 func signRetirement(t *testing.T, e *migration.MigrationEvidence, priv ed25519.PrivateKey) {
 	digest, err := migration.RetirementEvidenceDigest(*e)
 	require.NoError(t, err)
@@ -116,6 +121,7 @@ func signRetirement(t *testing.T, e *migration.MigrationEvidence, priv ed25519.P
 	a.Signature = ed25519.Sign(priv, b)
 	e.Retirement.Authorization = a
 }
+
 func TestWorkItemControlledRetirementLaterMigrationsAndExactExecution(t *testing.T) {
 	db, ctx, m, priv := retirementFixture(t)
 	e := retirementEvidence(t, m, ctx, priv)
@@ -129,6 +135,7 @@ func TestWorkItemControlledRetirementLaterMigrationsAndExactExecution(t *testing
 	signRetirement(t, &e, priv)
 	require.Error(t, m.ApplyRetirement(ctx, e))
 }
+
 func TestWorkItemControlledRetirementPreparationAllows034(t *testing.T) {
 	db, ctx := preparationFixture(t)
 	_, err := db.ExecContext(ctx, `ALTER TABLE users ADD COLUMN tenant_id bigint`)
@@ -141,6 +148,7 @@ func TestWorkItemControlledRetirementPreparationAllows034(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, m.InspectMigrationTarget(ctx))
 }
+
 func TestWorkItemControlledRetirementRequiresImplicitDependencyApproval(t *testing.T) {
 	db, ctx, m, priv := retirementFixture(t)
 	_, err := db.ExecContext(ctx, `CREATE INDEX legacy_content_index ON workflows(content)`)
@@ -163,6 +171,7 @@ func TestWorkItemControlledRetirementRequiresImplicitDependencyApproval(t *testi
 	require.Error(t, m.ApplyRetirement(ctx, e))
 	require.Equal(t, before, preparationLogicalDigest(t, db))
 }
+
 func TestWorkItemControlledRetirementRejectsDriftAndUntrustedEvidence(t *testing.T) {
 	cases := map[string]func(*sql.DB, *migration.MigrationEvidence){
 		"routine drift": func(db *sql.DB, e *migration.MigrationEvidence) {
@@ -203,6 +212,7 @@ func TestWorkItemControlledRetirementRejectsDriftAndUntrustedEvidence(t *testing
 		})
 	}
 }
+
 func TestWorkItemControlledRetirementAtomicFailures(t *testing.T) {
 	for _, failure := range []string{"ddl restrict", "receipt insert", "attachment insert"} {
 		t.Run(failure, func(t *testing.T) {
@@ -241,6 +251,7 @@ func TestWorkItemControlledRetirementAtomicFailures(t *testing.T) {
 		})
 	}
 }
+
 func TestWorkItemControlledRetirementConcurrentAndLockTimeout(t *testing.T) {
 	t.Run("concurrent same evidence", func(t *testing.T) {
 		db, ctx, m, priv := retirementFixture(t)
@@ -281,6 +292,7 @@ func TestWorkItemControlledRetirementConcurrentAndLockTimeout(t *testing.T) {
 		require.NoError(t, m.InspectMigrationTarget(ctx))
 	})
 }
+
 func TestWorkItemControlledRetirementCrossSchemaDependenciesAndDecoys(t *testing.T) {
 	db, ctx, m, priv := retirementFixture(t)
 	var schema string
@@ -308,6 +320,7 @@ func TestWorkItemControlledRetirementCrossSchemaDependenciesAndDecoys(t *testing
 	require.NoError(t, db.QueryRow(`SELECT content FROM `+pq.QuoteIdentifier(decoy)+`.workflows`).Scan(&text))
 	require.Equal(t, "decoy", text)
 }
+
 func TestWorkItemControlledRetirementPreservesObservationWrites(t *testing.T) {
 	db, ctx, m, priv := retirementFixture(t)
 	_, err := db.Exec(`UPDATE tickets SET title='current title' WHERE id=1;INSERT INTO tickets(id,tenant_id,ticket_number,record_class,title,status,priority) VALUES(10,1,'INC010','incident','observation row','new','medium');INSERT INTO incidents(id,work_item_id) VALUES(10,10)`)
@@ -345,6 +358,7 @@ func (c *lostRetirementConnector) Connect(ctx context.Context) (driver.Conn, err
 	}
 	return &lostRetirementConn{conn, c}, nil
 }
+
 func (c *lostRetirementConn) BeginTx(ctx context.Context, o driver.TxOptions) (driver.Tx, error) {
 	tx, err := c.Conn.(driver.ConnBeginTx).BeginTx(ctx, o)
 	if err != nil {
@@ -352,6 +366,7 @@ func (c *lostRetirementConn) BeginTx(ctx context.Context, o driver.TxOptions) (d
 	}
 	return &lostRetirementTx{tx, c.owner}, nil
 }
+
 func (t *lostRetirementTx) Commit() error {
 	if err := t.Tx.Commit(); err != nil {
 		return err
@@ -361,6 +376,7 @@ func (t *lostRetirementTx) Commit() error {
 	}
 	return nil
 }
+
 func TestWorkItemControlledRetirementLostCommitResponse(t *testing.T) {
 	db, ctx, m, priv := retirementFixture(t)
 	e := retirementEvidence(t, m, ctx, priv)
@@ -401,6 +417,7 @@ func TestWorkItemControlledRetirementExpiredReplay(t *testing.T) {
 func (c *lostRetirementConn) ExecContext(ctx context.Context, q string, args []driver.NamedValue) (driver.Result, error) {
 	return c.Conn.(driver.ExecerContext).ExecContext(ctx, q, args)
 }
+
 func (c *lostRetirementConn) QueryContext(ctx context.Context, q string, args []driver.NamedValue) (driver.Rows, error) {
 	return c.Conn.(driver.QueryerContext).QueryContext(ctx, q, args)
 }
@@ -418,6 +435,7 @@ func TestWorkItemControlledRetirementExplicitEmptyInventory(t *testing.T) {
 	require.NoError(t, m.ApplyRetirement(ctx, e))
 	require.NoError(t, m.InspectMigrationTarget(ctx))
 }
+
 func TestWorkItemControlledRetirementRechecksCommittedWriteAfterLockWait(t *testing.T) {
 	db, ctx, m, priv := retirementFixture(t)
 	e := retirementEvidence(t, m, ctx, priv)

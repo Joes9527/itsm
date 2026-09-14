@@ -2,10 +2,11 @@ package service_catalog
 
 import (
 	"encoding/json"
+	"sort"
+
 	"itsm-backend/ent"
 	"itsm-backend/handlers/common/accessgrant"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"sort"
 )
 
 // Explicit public contract: storage additions, actors, clocks and secrets do not

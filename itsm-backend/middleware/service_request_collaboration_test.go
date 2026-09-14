@@ -3,14 +3,15 @@ package middleware
 import (
 	"context"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/require"
-	"itsm-backend/authorization"
-	"itsm-backend/ent/enttest"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
+	"itsm-backend/authorization"
+	"itsm-backend/ent/enttest"
 )
 
 func TestRequestedItemCollaborationScope(t *testing.T) {

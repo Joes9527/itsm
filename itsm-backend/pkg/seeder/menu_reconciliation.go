@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	"itsm-backend/ent"
 	"itsm-backend/ent/menu"
-	"strings"
 )
 
 // ReconcileMenus repairs only the requested tenant's navigation for an explicit scope. It does

@@ -4,6 +4,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
+	"net/textproto"
+	"strings"
+	"testing"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -11,12 +18,6 @@ import (
 	"itsm-backend/controller"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
-	"mime/multipart"
-	"net/http"
-	"net/http/httptest"
-	"net/textproto"
-	"strings"
-	"testing"
 )
 
 func TestRequestedItemAssignedCollaborationPersistsAndStopsAfterReassignment(t *testing.T) {

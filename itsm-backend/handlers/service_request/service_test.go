@@ -2,11 +2,12 @@ package service_request_test
 
 import (
 	"context"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/ent/enttest"
 	entticket "itsm-backend/ent/ticket"

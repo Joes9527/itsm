@@ -3,10 +3,11 @@ package bpmn_test
 import (
 	"context"
 	"errors"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"

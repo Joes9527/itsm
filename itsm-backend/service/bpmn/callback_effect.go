@@ -2,9 +2,10 @@ package bpmn
 
 import (
 	"fmt"
+	"reflect"
+
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/shared/workitemmutation"
-	"reflect"
 )
 
 // CallbackEffectStatus describes the durable business effect produced by a

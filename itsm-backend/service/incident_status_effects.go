@@ -5,12 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"time"
+
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/user"
-	"strconv"
-	"time"
 )
 
 // This registration exposes a second known input to the existing rule engine;
@@ -113,8 +114,10 @@ func (s incidentRuleSnapshot) incident(id, workItemID int) *ent.Incident {
 
 type incidentRuleClockKey struct{}
 
-type incidentRuleEventTypeKey struct{}
-type EventTypeCondition struct{ Types []string }
+type (
+	incidentRuleEventTypeKey struct{}
+	EventTypeCondition       struct{ Types []string }
+)
 
 func (c *EventTypeCondition) Evaluate(ctx context.Context, _ *ent.Incident) (bool, error) {
 	eventType, _ := ctx.Value(incidentRuleEventTypeKey{}).(string)

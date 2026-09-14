@@ -8,10 +8,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"itsm-backend/common/executionscope"
 	"net/mail"
 	"strings"
 	"time"
+
+	"itsm-backend/common/executionscope"
 
 	"itsm-backend/common"
 	"itsm-backend/database"
@@ -225,14 +226,15 @@ func (s *IncidentAlertingService) enqueueAlertDelivery(ctx context.Context, tx *
 	if err != nil {
 		return incidentAlertIntentReceipt{}, err
 	}
-	_, err = s.outboxRepository.Enqueue(ctx, tx, NewOutboxEvent{ExecutionWorkItemID: incidentRecord.WorkItemID,
-		EventID:       eventID,
-		EventType:     incidentAlertDeliveryEventType,
-		NextAttemptAt: time.Now().UTC(),
-		TenantID:      alert.TenantID,
-		AggregateType: "incident_alert",
-		AggregateID:   fmt.Sprint(alert.ID),
-		Payload:       payload,
+	_, err = s.outboxRepository.Enqueue(ctx, tx, NewOutboxEvent{
+		ExecutionWorkItemID: incidentRecord.WorkItemID,
+		EventID:             eventID,
+		EventType:           incidentAlertDeliveryEventType,
+		NextAttemptAt:       time.Now().UTC(),
+		TenantID:            alert.TenantID,
+		AggregateType:       "incident_alert",
+		AggregateID:         fmt.Sprint(alert.ID),
+		Payload:             payload,
 	})
 	if err != nil {
 		return incidentAlertIntentReceipt{}, err

@@ -6,10 +6,18 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
-	"io"
+
 	"itsm-backend/common"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/connector"
@@ -17,12 +25,6 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/service"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"net/http"
-	"net/http/httptest"
-	"strconv"
-	"strings"
-	"testing"
-	"time"
 )
 
 func webhookFixture(t *testing.T) (*FeishuController, *gin.Engine) {
@@ -35,6 +37,7 @@ func webhookFixture(t *testing.T) (*FeishuController, *gin.Engine) {
 	r.POST("/api/v1/feishu/webhook/:instance_id", c.Webhook)
 	return c, r
 }
+
 func signedWebhook(body string) *http.Request {
 	req := httptest.NewRequest("POST", "/api/v1/feishu/webhook/c83503e86cc5468aaab482cd204f30fa", strings.NewReader(body))
 	ts := strconv.FormatInt(time.Now().Unix(), 10)
@@ -44,6 +47,7 @@ func signedWebhook(body string) *http.Request {
 	req.Header.Set("X-Lark-Signature", hex.EncodeToString(sum[:]))
 	return req
 }
+
 func TestFeishuWebhookRejectsAmbiguousJSONBeforeChallenge(t *testing.T) {
 	for name, body := range map[string]string{
 		"type":         `{"type":"event_callback","type":"url_verification","token":"test-token","challenge":"x"}`,
@@ -64,6 +68,7 @@ func TestFeishuWebhookRejectsAmbiguousJSONBeforeChallenge(t *testing.T) {
 		})
 	}
 }
+
 func TestFeishuWebhookUnknownEventFailsClosed(t *testing.T) {
 	_, r := webhookFixture(t)
 	w := httptest.NewRecorder()
@@ -84,6 +89,7 @@ func TestFeishuWebhookBodyReadFailure(t *testing.T) {
 	require.Equal(t, 400, w.Code)
 	require.Empty(t, c.replayed)
 }
+
 func TestFeishuWebhookVerifiedChallengeAndOriginalSignature(t *testing.T) {
 	body := "{ \n  \"type\": \"url_verification\", \"token\": \"test-token\", \"challenge\": \"quote\\\"value\", \"vendor_extra\": 9007199254740993 }"
 	_, r := webhookFixture(t)
@@ -125,6 +131,7 @@ type webhookTaskService struct {
 func (s *webhookTaskService) SyncTicketToFeishu(context.Context, service.ActionActor, int, *feishu.Feishu) (*dto.FeishuTicketSyncResponse, error) {
 	return nil, errors.New("unexpected outbound sync")
 }
+
 func (s *webhookTaskService) HandleTaskEvent(_ context.Context, tenantID int, fc *feishu.Feishu, eventType string, data map[string]interface{}) (*dto.FeishuWebhookResponse, error) {
 	s.calls++
 	s.tenantID = tenantID
@@ -132,6 +139,7 @@ func (s *webhookTaskService) HandleTaskEvent(_ context.Context, tenantID int, fc
 	s.taskData = data
 	return &dto.FeishuWebhookResponse{EventType: eventType, Action: "created"}, s.failure
 }
+
 func TestFeishuWebhookSignedTaskDispatchAndReplay(t *testing.T) {
 	c, r := webhookFixture(t)
 	sideEffects := &webhookTaskService{}
@@ -153,6 +161,7 @@ func TestFeishuWebhookSignedTaskDispatchAndReplay(t *testing.T) {
 	require.Equal(t, 403, w.Code)
 	require.Equal(t, 1, sideEffects.calls)
 }
+
 func TestFeishuWebhookDispatchFailureIsVisible(t *testing.T) {
 	c, r := webhookFixture(t)
 	sideEffects := &webhookTaskService{failure: errors.New("application rejected event")}
@@ -162,6 +171,7 @@ func TestFeishuWebhookDispatchFailureIsVisible(t *testing.T) {
 	require.Equal(t, 500, w.Code)
 	require.Equal(t, 1, sideEffects.calls)
 }
+
 func TestFeishuWebhookAmbiguousTaskNeverDispatches(t *testing.T) {
 	c, r := webhookFixture(t)
 	sideEffects := &webhookTaskService{}

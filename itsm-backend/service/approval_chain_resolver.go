@@ -52,7 +52,8 @@ func NewApprovalChainResolver(client *ent.Client, logger *zap.SugaredLogger) *Ap
 // riskLevel: 预留参数，当前不参与计算。
 // orgUnitID: 预留参数，阶段四启用。
 func (r *ApprovalChainResolver) ResolveForServiceRequest(ctx context.Context, tenantID int,
-	amount float64, riskLevel string, orgUnitID int) (*ResolvedApprovalChain, error) {
+	amount float64, riskLevel string, orgUnitID int,
+) (*ResolvedApprovalChain, error) {
 	return r.resolveServiceRequestCreation(ctx, r.client, tenantID, json.Number(strconv.FormatFloat(amount, 'g', -1, 64)))
 }
 
@@ -64,6 +65,7 @@ func (r *ApprovalChainResolver) ResolveServiceRequestCreation(ctx context.Contex
 	}
 	return r.resolveServiceRequestCreation(ctx, tx.Client(), tenantID, amount)
 }
+
 func (r *ApprovalChainResolver) resolveServiceRequestCreation(ctx context.Context, client *ent.Client, tenantID int, amount json.Number) (*ResolvedApprovalChain, error) {
 	if amount == "" {
 		amount = "0"

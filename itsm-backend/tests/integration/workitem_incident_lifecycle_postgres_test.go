@@ -7,6 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -19,11 +25,6 @@ import (
 	"itsm-backend/migration"
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
-	"net/http/httptest"
-	"strings"
-	"sync"
-	"testing"
-	"time"
 )
 
 func incidentLifecycleFixture(t *testing.T) *incidentEffectsFixture {
@@ -130,6 +131,7 @@ func TestWorkItemIncidentLifecycleReopenSLAAndRollback(t *testing.T) {
 	require.Equal(t, resolved.Version, replay.Version)
 	require.Equal(t, after.SLACycleNumber, f.client.Ticket.GetX(f.ctx, item.ID).SLACycleNumber)
 }
+
 func incidentPGCommand(f *incidentEffectsFixture, key string) dto.IncidentCommand {
 	item := f.client.Ticket.GetX(f.ctx, f.inc.WorkItemID)
 	return dto.IncidentCommand{Meta: workitemmutation.Meta{TenantID: f.tenant.ID, ActorID: f.actor.ID, ExpectedVersion: item.Version, Source: "http", OperationID: key}, IncidentID: f.inc.ID, Action: "resolve", Resolution: "workaround restored service; validation passed"}

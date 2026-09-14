@@ -3,14 +3,15 @@ package ai_test
 import (
 	"context"
 	"errors"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/handlers/ai"
 	"itsm-backend/service"
-	"net/http/httptest"
-	"strings"
-	"testing"
 )
 
 type failingToolAuditRepo struct {
@@ -21,6 +22,7 @@ type failingToolAuditRepo struct {
 func (r *failingToolAuditRepo) CreateToolInvocation(context.Context, *ai.ToolInvocation) (*ai.ToolInvocation, error) {
 	return nil, r.failure
 }
+
 func TestUnknownToolRetainsAuditFailure(t *testing.T) {
 	failure := errors.New("private audit failure")
 	svc := ai.NewService(&failingToolAuditRepo{failure: failure}, zap.NewNop().Sugar(), nil, service.NewToolRegistry(nil, nil, nil, nil), nil, nil, nil, nil, nil, nil, nil)

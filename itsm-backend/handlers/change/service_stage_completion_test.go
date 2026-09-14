@@ -14,5 +14,4 @@ func TestChangeTaskCompletionWithoutRunningInstanceFailsClosed(t *testing.T) {
 	require.Error(t, err)
 	require.Equal(t, "draft", f.client.Ticket.GetX(f.ctx, f.record.WorkItemID).Status)
 	require.Zero(t, f.client.ProcessCallbackOutbox.Query().CountX(f.ctx))
-
 }

@@ -7,12 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"itsm-backend/ent/intakeresolutionsnapshot"
-	"itsm-backend/ent/processdefinition"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"sync"
 	"testing"
 	"time"
+
+	"itsm-backend/ent/intakeresolutionsnapshot"
+	"itsm-backend/ent/processdefinition"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -99,6 +100,7 @@ func (f *changeLifecycleFixture) command(action, key string) changedomain.Comman
 
 	return changedomain.Command{Meta: workitemmutation.Meta{TenantID: f.tenant.ID, ActorID: f.actor.ID, ExpectedVersion: f.client.Ticket.GetX(f.ctx, f.c.WorkItemID).Version, Source: "http", OperationID: key}, ChangeID: f.c.ID, Action: action, Evidence: "observed evidence " + key}
 }
+
 func (f *changeLifecycleFixture) apply(t *testing.T, cmd changedomain.Command) workitemmutation.Result {
 	t.Helper()
 	r, err := f.owner.ApplyCommand(f.ctx, cmd)
@@ -204,7 +206,7 @@ func TestWorkItemChangeLifecycleAtomicSubmit(t *testing.T) {
 	for _, fault := range []string{"audit", "process", "commit"} {
 		t.Run(fault, func(t *testing.T) {
 			f := newChangeLifecycleFixture(t, "normal")
-			var enabled = true
+			enabled := true
 			switch fault {
 			case "audit":
 				f.runtime.AuditLog.Use(func(next ent.Mutator) ent.Mutator {

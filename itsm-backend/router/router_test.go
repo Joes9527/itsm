@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/authentication"
 	"itsm-backend/authorization"

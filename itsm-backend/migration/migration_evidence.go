@@ -44,6 +44,7 @@ func evidenceDigest(v any) (string, error) {
 	}
 	return checksumSQL(string(b)), nil
 }
+
 func (m *Migrator) preparationTarget(ctx context.Context, q migrationQuery) (MigrationTarget, error) {
 	if strings.TrimSpace(m.controlConfig.DeploymentID) == "" {
 		return MigrationTarget{}, fmt.Errorf("trusted migration deployment identity is not configured")
@@ -56,6 +57,7 @@ func (m *Migrator) preparationTarget(ctx context.Context, q migrationQuery) (Mig
 	err = q.QueryRowContext(ctx, `SELECT current_database()`).Scan(&target.Database)
 	return target, err
 }
+
 func validatePreparationEvidence(e MigrationEvidence, i PreparationInventory) error {
 	if e.Target != i.Target {
 		return fmt.Errorf("migration evidence target mismatch")
@@ -95,17 +97,20 @@ type MigrationRoleGrant struct {
 
 // RetirementObject is an exact object identity. Dependencies are listed explicitly
 // in execution order; discovering an object never authorizes its deletion.
-type RetirementObject struct{ Kind, Schema, Table, Name string }
-type RetirementReport struct {
-	Result                                                              string
-	Kind                                                                string
-	Target                                                              MigrationTarget
-	ApplicationDigest, LedgerDigest, InventoryDigest, PreparationDigest string
-	DataDigest                                                          string
-	RecordedAt                                                          time.Time
-	Content                                                             []byte
-	Digest                                                              string
-}
+type (
+	RetirementObject struct{ Kind, Schema, Table, Name string }
+	RetirementReport struct {
+		Result                                                              string
+		Kind                                                                string
+		Target                                                              MigrationTarget
+		ApplicationDigest, LedgerDigest, InventoryDigest, PreparationDigest string
+		DataDigest                                                          string
+		RecordedAt                                                          time.Time
+		Content                                                             []byte
+		Digest                                                              string
+	}
+)
+
 type RetirementAuthorization struct {
 	KeyID, Action, EvidenceDigest string
 	Target                        MigrationTarget
@@ -144,6 +149,7 @@ func RetirementEvidenceDigest(e MigrationEvidence) (string, error) {
 	}
 	return evidenceDigest(e)
 }
+
 func RetirementAuthorizationPayload(a RetirementAuthorization) ([]byte, error) {
 	a.Signature = nil
 	return json.Marshal(a)
@@ -153,6 +159,7 @@ func RetirementAuthorizationPayload(a RetirementAuthorization) ([]byte, error) {
 func ValidateRetirementEvidence(e MigrationEvidence) error {
 	return validateRetirementEvidenceAt(e, time.Now())
 }
+
 func validateRetirementEvidenceAt(e MigrationEvidence, at time.Time) error {
 	if e.Retirement == nil {
 		return fmt.Errorf("retirement evidence is required")
@@ -217,6 +224,7 @@ func validateRetirementEvidenceAt(e MigrationEvidence, at time.Time) error {
 	}
 	return nil
 }
+
 func (m *Migrator) authorizeRetirement(e MigrationEvidence) error {
 	if err := ValidateRetirementEvidence(e); err != nil {
 		return err
@@ -226,6 +234,7 @@ func (m *Migrator) authorizeRetirement(e MigrationEvidence) error {
 	}
 	return verifyRetirementAuthorization(e, m.controlConfig.RetirementPublicKeys, time.Now())
 }
+
 func verifyRetirementAuthorization(e MigrationEvidence, keys map[string]ed25519.PublicKey, at time.Time) error {
 	if e.Retirement == nil || e.Retirement.Authorization == nil {
 		return fmt.Errorf("environment authorization envelope is required")
@@ -251,6 +260,7 @@ func verifyRetirementAuthorization(e MigrationEvidence, keys map[string]ed25519.
 	}
 	return nil
 }
+
 func historicalRetirementKeys(c MigrationControlConfig) map[string]ed25519.PublicKey {
 	keys := map[string]ed25519.PublicKey{}
 	for k, v := range c.HistoricalRetirementPublicKeys {

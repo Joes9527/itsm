@@ -44,6 +44,7 @@ func Fail(c *gin.Context, err error) {
 	}
 	common.FailWithData(c, code, typed.Message, details)
 }
+
 func Invalid(field, message string) error {
 	return creation.NewInvalidCommand(message, creation.FieldError{Field: field, Message: message}, nil)
 }
@@ -110,6 +111,7 @@ func Bind(c *gin.Context, target any) bool {
 	}
 	return true
 }
+
 func checkNames(value any, typ reflect.Type) error {
 	for typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()

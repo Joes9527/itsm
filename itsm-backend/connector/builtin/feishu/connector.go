@@ -86,6 +86,7 @@ func (f *Feishu) Init(_ context.Context, cfg connector.Config) error {
 	f.startedAt = time.Now()
 	return nil
 }
+
 func (f *Feishu) Send(ctx context.Context, msg *connector.Message) error {
 	if f.client == nil {
 		return fmt.Errorf("feishu: connector not initialized")

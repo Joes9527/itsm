@@ -74,6 +74,7 @@ func retirementStructure(ctx context.Context, q migrationQuery, schema string) (
 	}
 	return checksumSQL(data), nil
 }
+
 func retirementData(ctx context.Context, q migrationQuery, schema string, surviving bool) (string, error) {
 	rows, err := q.QueryContext(ctx, `SELECT relname FROM pg_class WHERE relnamespace=$1::regnamespace AND relkind='r' AND relname NOT IN ('schema_migrations','work_item_migration_evidence') ORDER BY relname`, schema)
 	if err != nil {
@@ -120,6 +121,7 @@ func retirementData(ctx context.Context, q migrationQuery, schema string, surviv
 	}
 	return evidenceDigest(data)
 }
+
 func loadPreparationAttachment(ctx context.Context, q migrationQuery, schema, digest string) (preparationAttachment, error) {
 	var a preparationAttachment
 	var b []byte
@@ -141,6 +143,7 @@ func loadPreparationAttachment(ctx context.Context, q migrationQuery, schema, di
 	}
 	return a, nil
 }
+
 func (m *Migrator) InspectRetirement(ctx context.Context) (RetirementInventory, error) {
 	tx, err := m.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
 	if err != nil {
@@ -149,6 +152,7 @@ func (m *Migrator) InspectRetirement(ctx context.Context) (RetirementInventory, 
 	defer tx.Rollback()
 	return m.retirementInventory(ctx, tx)
 }
+
 func (m *Migrator) retirementInventory(ctx context.Context, q migrationQuery) (RetirementInventory, error) {
 	var i RetirementInventory
 	target, err := m.preparationTarget(ctx, q)
@@ -449,6 +453,7 @@ func (m *Migrator) ApplyRetirement(ctx context.Context, e MigrationEvidence) err
 		return tx.Commit()
 	})
 }
+
 func retirementDDL(o RetirementObject) string {
 	table := preparationRelation(o.Schema, o.Table)
 	name := pq.QuoteIdentifier(o.Name)
@@ -472,6 +477,7 @@ func retirementDDL(o RetirementObject) string {
 	}
 	panic("validated object kind required")
 }
+
 func validateRetirementManifest(ctx context.Context, q migrationQuery, schema string, inventory, approved []RetirementObject) error {
 	a := append([]RetirementObject(nil), approved...)
 	i := append([]RetirementObject(nil), inventory...)

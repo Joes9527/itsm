@@ -7,17 +7,18 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 	"itsm-backend/authentication"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/migration"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"testing"
-	"time"
 )
 
 func TestPostgresTokenStateAuthorityAndConcurrency(t *testing.T) {
@@ -216,6 +217,7 @@ func (c *authCommitFaultConn) Begin() (driver.Tx, error) {
 	}
 	return &authCommitFaultTx{Tx: tx, fail: c.fail}, nil
 }
+
 func (c *authCommitFaultConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
 	tx, err := c.Conn.(driver.ConnBeginTx).BeginTx(ctx, opts)
 	if err != nil {
@@ -223,9 +225,11 @@ func (c *authCommitFaultConn) BeginTx(ctx context.Context, opts driver.TxOptions
 	}
 	return &authCommitFaultTx{Tx: tx, fail: c.fail}, nil
 }
+
 func (c *authCommitFaultConn) ExecContext(ctx context.Context, q string, args []driver.NamedValue) (driver.Result, error) {
 	return c.Conn.(driver.ExecerContext).ExecContext(ctx, q, args)
 }
+
 func (c *authCommitFaultConn) QueryContext(ctx context.Context, q string, args []driver.NamedValue) (driver.Rows, error) {
 	if c.beforeRead != nil && strings.HasPrefix(q, "SELECT tenant_id,actor_id,expires_at FROM public.auth_token_states") {
 		c.beforeRead(ctx)

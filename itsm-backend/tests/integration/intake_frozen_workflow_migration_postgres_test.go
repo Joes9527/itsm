@@ -6,11 +6,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/stretchr/testify/require"
-	"itsm-backend/migration"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+	"itsm-backend/migration"
 )
 
 func TestIntakeFrozenWorkflowMigrationSelectedSchema(t *testing.T) {

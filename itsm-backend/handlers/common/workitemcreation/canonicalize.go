@@ -17,6 +17,7 @@ const CanonicalDigestVersion = "intake-v4"
 func invalid(field, message string) error {
 	return NewInvalidCommand("invalid intake command", FieldError{Field: field, Message: message}, nil)
 }
+
 func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, string, error) {
 	// JSON round trip detaches all nested maps, slices and pointers, including typed map values.
 	payload, err := json.Marshal(command)
@@ -263,6 +264,7 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 	digest := sha256.Sum256(payload)
 	return n, hex.EncodeToString(digest[:]), nil
 }
+
 func normalizeCIIDs(ids []int) ([]int, error) {
 	if len(ids) == 0 {
 		return nil, nil

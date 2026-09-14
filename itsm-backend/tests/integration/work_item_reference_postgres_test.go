@@ -6,6 +6,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net"
+	"net/url"
+	"os"
+	"strconv"
+	"testing"
+	"time"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 	"itsm-backend/authorization"
@@ -18,12 +25,6 @@ import (
 	"itsm-backend/handlers/intake"
 	"itsm-backend/migration"
 	"itsm-backend/service"
-	"net"
-	"net/url"
-	"os"
-	"strconv"
-	"testing"
-	"time"
 )
 
 // Uses only the explicitly supplied disposable database, with per-test schema

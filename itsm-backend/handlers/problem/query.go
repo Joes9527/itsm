@@ -3,6 +3,7 @@ package problem
 import (
 	"context"
 	"database/sql"
+
 	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/common/tenantctx"
@@ -38,6 +39,7 @@ func (s *Service) Get(ctx context.Context, id int, m workitemmutation.Meta) (*Pr
 	}
 	return item, nil
 }
+
 func (s *Service) projectRelationsTx(ctx context.Context, tx *ent.Tx, m workitemmutation.Meta, p *Problem) error {
 	if p == nil || p.WorkItemID == nil {
 		return common.NewInternalError("Problem WorkItem is missing", nil)
@@ -49,6 +51,7 @@ func (s *Service) projectRelationsTx(ctx context.Context, tx *ent.Tx, m workitem
 	p.Relations = views
 	return nil
 }
+
 func (s *Service) List(ctx context.Context, m workitemmutation.Meta, page, size int, filters map[string]interface{}) ([]*Problem, int, error) {
 	if m.ActorID <= 0 || m.TenantID <= 0 {
 		return nil, 0, common.NewUnauthorizedError("authenticated actor and tenant required")

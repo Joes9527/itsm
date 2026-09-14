@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/common"
 	"itsm-backend/ent"
@@ -1206,8 +1207,10 @@ func (h *fakeAsyncServiceTaskHandler) Execute(ctx context.Context, task *ent.Pro
 	return bpmn.AppliedEffect("", nil), nil
 }
 
-var _ bpmn.ServiceTaskHandlerInterface = (*fakeAsyncServiceTaskHandler)(nil)
-var _ bpmn.AsyncServiceTaskHandler = (*fakeAsyncServiceTaskHandler)(nil)
+var (
+	_ bpmn.ServiceTaskHandlerInterface = (*fakeAsyncServiceTaskHandler)(nil)
+	_ bpmn.AsyncServiceTaskHandler     = (*fakeAsyncServiceTaskHandler)(nil)
+)
 
 type failingUserTaskCallbackHandler struct {
 	taskType  string
@@ -1221,6 +1224,7 @@ func (h *failingUserTaskCallbackHandler) GetHandlerID() string { return h.handle
 func (h *failingUserTaskCallbackHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
 	return bpmn.CallbackActionContract{}, true
 }
+
 func (h *failingUserTaskCallbackHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	h.scope, h.scopeOK = bpmn.KafActionScopeFromContext(ctx)
 	return nil, errors.New("callback rejected Bearer secret-token")

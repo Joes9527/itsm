@@ -3,10 +3,11 @@ package service
 import (
 	"context"
 	"encoding/hex"
+	"strings"
+
 	"itsm-backend/common/executionscope"
 	"itsm-backend/connector"
 	"itsm-backend/ent"
-	"strings"
 )
 
 func notificationConnectorChannel(channel string) bool {
@@ -80,6 +81,7 @@ func (s *TicketNotificationService) BindNotificationTargetTx(ctx context.Context
 	create.SetTargetProtocolVersion(1).SetTargetConnectorName(selected.Name).SetTargetConnectorProvider(selected.Provider).SetTargetDestinationDigest(digest)
 	return nil
 }
+
 func notificationTargetDigestValid(digest string) bool {
 	if len(digest) != 64 || strings.ToLower(digest) != digest {
 		return false
@@ -87,6 +89,7 @@ func notificationTargetDigestValid(digest string) bool {
 	_, err := hex.DecodeString(digest)
 	return err == nil
 }
+
 func validateNotificationConnectorTarget(row *ent.TicketNotification) error {
 	if row == nil {
 		return executionscope.ErrDenied
@@ -112,6 +115,7 @@ func validateNotificationConnectorTarget(row *ent.TicketNotification) error {
 	}
 	return nil
 }
+
 func (s *TicketNotificationService) resolveNotificationConnectorTarget(ctx context.Context, row *ent.TicketNotification) (connector.Connector, uint64, error) {
 	if err := validateNotificationConnectorTarget(row); err != nil {
 		return nil, 0, err

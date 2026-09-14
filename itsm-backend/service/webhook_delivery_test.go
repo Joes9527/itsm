@@ -3,9 +3,10 @@ package service
 import (
 	"context"
 	"errors"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/common/executionscope"
-	"testing"
 )
 
 func TestWebhookPreflightPreservesInfrastructureFailure(t *testing.T) {

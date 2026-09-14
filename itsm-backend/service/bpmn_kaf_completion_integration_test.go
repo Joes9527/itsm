@@ -5,11 +5,12 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"itsm-backend/handlers/common/accessgrant"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"sync"
 	"testing"
 	"time"
+
+	"itsm-backend/handlers/common/accessgrant"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/common"
 	"itsm-backend/ent"
@@ -72,16 +73,19 @@ type postgresAccessContribution struct{ called bool }
 func (p *postgresAccessContribution) ValidateAccessCompletionReplay(context.Context, *ent.Client, *ent.ProcessTask, *ent.KafTaskActionLedger) error {
 	return nil
 }
+
 func (p *postgresAccessContribution) ContributeAccessCompletion(ctx context.Context, tx *ent.Tx, task *ent.ProcessTask, ledger *ent.KafTaskActionLedger, raw json.RawMessage) error {
 	client := tx.Client()
 	p.called = true
 	return client.AuditLog.Create().SetTenantID(task.TenantID).SetResource("work_item").SetAction("c2.access_contribution_probe").SetPath("test").SetMethod("POST").SetStatusCode(200).Exec(ctx)
 }
+
 func TestKafCompletionFinalFenceRollsBackAllEffectsAfterPostgresLeaseReclaim(t *testing.T) {
 	for _, access := range []bool{false, true} {
 		t.Run(map[bool]string{false: "ordinary", true: "access_contribution"}[access], func(t *testing.T) { testPostgresKafFinalFence(t, access) })
 	}
 }
+
 func testPostgresKafFinalFence(t *testing.T, access bool) {
 	setupClient, setupDB := openBPMNPostgresIntegrationClient(t)
 	migrateBPMNPostgresIntegrationTables(t, setupClient,

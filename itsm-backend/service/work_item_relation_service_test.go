@@ -1,9 +1,10 @@
 package service
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/handlers/shared/workitemmutation"
-	"testing"
 )
 
 func TestWorkItemRelationRejectsReverseExistingTuple(t *testing.T) {
@@ -57,14 +58,23 @@ func TestWorkItemRelationClassMatrix(t *testing.T) {
 		kind, source, target string
 		allowed              bool
 	}{
-		{"caused_by", "incident", "problem", true}, {"caused_by", "problem", "incident", false},
-		{"resolved_by_change", "incident", "change_request", true}, {"resolved_by_change", "problem", "change_request", true}, {"resolved_by_change", "change_request", "problem", false},
-		{"requested_change", "service_request_item", "change_request", true}, {"requested_change", "generic", "change_request", false},
-		{"fulfilled_by", "service_request_item", "catalog_task", true}, {"fulfilled_by", "catalog_task", "service_request_item", false},
-		{"duplicate_of", "problem", "problem", true}, {"duplicate_of", "problem", "incident", false},
-		{"parent_child", "catalog_task", "generic", true}, {"parent_child", "unknown", "generic", false},
-		{"related_to", "generic", "catalog_task", true}, {"related_to", "catalog_task", "generic", true},
-		{"unknown", "generic", "generic", false}, {"duplicate_of", "unknown", "unknown", false},
+		{"caused_by", "incident", "problem", true},
+		{"caused_by", "problem", "incident", false},
+		{"resolved_by_change", "incident", "change_request", true},
+		{"resolved_by_change", "problem", "change_request", true},
+		{"resolved_by_change", "change_request", "problem", false},
+		{"requested_change", "service_request_item", "change_request", true},
+		{"requested_change", "generic", "change_request", false},
+		{"fulfilled_by", "service_request_item", "catalog_task", true},
+		{"fulfilled_by", "catalog_task", "service_request_item", false},
+		{"duplicate_of", "problem", "problem", true},
+		{"duplicate_of", "problem", "incident", false},
+		{"parent_child", "catalog_task", "generic", true},
+		{"parent_child", "unknown", "generic", false},
+		{"related_to", "generic", "catalog_task", true},
+		{"related_to", "catalog_task", "generic", true},
+		{"unknown", "generic", "generic", false},
+		{"duplicate_of", "unknown", "unknown", false},
 	} {
 		t.Run(tc.kind+"/"+tc.source+"/"+tc.target, func(t *testing.T) {
 			require.Equal(t, tc.allowed, ValidateRelationClasses(tc.kind, tc.source, tc.target) == nil)

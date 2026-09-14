@@ -2,6 +2,10 @@ package authorization
 
 import (
 	"context"
+	"strings"
+	"sync/atomic"
+	"time"
+
 	"itsm-backend/ent"
 	"itsm-backend/ent/permission"
 	"itsm-backend/ent/role"
@@ -9,9 +13,6 @@ import (
 	"itsm-backend/ent/standardchange"
 	"itsm-backend/ent/user"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"strings"
-	"sync/atomic"
-	"time"
 )
 
 // RequireCurrentPermission reads current RBAC inside the caller transaction.
@@ -166,6 +167,7 @@ func (a *CreationAuthorization) Identity() creation.Identity {
 	}
 	return a.identity
 }
+
 func (a *CreationAuthorization) Validate(tx *ent.Tx, identity creation.Identity) error {
 	if a == nil || !a.active.Load() || tx == nil || a.tx != tx || a.identity != identity || a.identity.ActorTenantID <= 0 {
 		return creation.NewPermissionDenied("creation authorization does not match transaction identity", nil)

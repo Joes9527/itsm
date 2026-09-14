@@ -2,10 +2,11 @@ package change
 
 import (
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/gin-gonic/gin"
 )
 
 func newGovernedHandlerFixture(t *testing.T) (*governedChangeFixture, *gin.Engine) {
@@ -15,6 +16,7 @@ func newGovernedHandlerFixture(t *testing.T) (*governedChangeFixture, *gin.Engin
 	h.svc = f.svc
 	return f, r
 }
+
 func governedHTTP(r *gin.Engine, method, path, body string, headers map[string]string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -25,6 +27,7 @@ func governedHTTP(r *gin.Engine, method, path, body string, headers map[string]s
 	r.ServeHTTP(w, req)
 	return w
 }
+
 func governedMSPHeaders(t *testing.T, f *governedChangeFixture) map[string]string {
 	t.Helper()
 	f.client.Tenant.UpdateOneID(f.tenant).SetType("msp_customer").ExecX(f.ctx)

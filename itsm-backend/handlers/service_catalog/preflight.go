@@ -2,6 +2,7 @@ package service_catalog
 
 import (
 	"context"
+
 	"itsm-backend/ent"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service"
@@ -18,6 +19,7 @@ func (s *Service) ValidateForPublication(ctx context.Context, tenantID int, cata
 	defer tx.Rollback()
 	return s.validateForPublicationTx(ctx, tx, tenantID, catalog)
 }
+
 func (s *Service) validateForPublicationTx(ctx context.Context, tx *ent.Tx, tenantID int, catalog *ServiceCatalog) error {
 	if catalog == nil || catalog.TenantID != tenantID {
 		return creation.NewDomainValidationFailed("catalog tenant mismatch", nil)

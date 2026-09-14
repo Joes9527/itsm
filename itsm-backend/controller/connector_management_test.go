@@ -78,6 +78,7 @@ type managementCloseProbe struct {
 func (*managementCloseProbe) Manifest() connector.Manifest {
 	return connector.Manifest{Name: "management-probe", Version: "1", Title: "Local close probe", Type: connector.TypeCustom, RequiredPermissions: []string{"connector:write"}}
 }
+
 func (p *managementCloseProbe) Init(_ context.Context, cfg connector.Config) error {
 	p.cfg = cfg
 	return nil
@@ -86,6 +87,7 @@ func (*managementCloseProbe) Send(context.Context, *connector.Message) error { r
 func (*managementCloseProbe) HealthCheck(context.Context) connector.HealthStatus {
 	return connector.HealthStatus{}
 }
+
 func (p *managementCloseProbe) Close() error {
 	p.closed[fmt.Sprintf("%d/%s", p.cfg.TenantID, p.cfg.Provider)]++
 	return nil

@@ -7,6 +7,11 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
@@ -17,10 +22,6 @@ import (
 	"itsm-backend/database"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/intake"
-	"strconv"
-	"strings"
-	"testing"
-	"time"
 )
 
 func signIntakeAssertion(a intake.IdentityAssertion) string {
@@ -28,6 +29,7 @@ func signIntakeAssertion(a intake.IdentityAssertion) string {
 	m.Write([]byte(strings.Join([]string{"2", a.Audience, a.Purpose, a.Provider, a.Workspace, a.Subject, a.Channel, a.EventID, strconv.FormatInt(a.IssuedAt, 10), a.Nonce}, "\n")))
 	return hex.EncodeToString(m.Sum(nil))
 }
+
 func TestPostgresIdentityExchangeRestrictedPoolsMappingAndMSP(t *testing.T) {
 	f := newIncidentEffectsFixture(t)
 	role := f.client.Role.Create().SetTenantID(f.tenant.ID).SetCode("agent").SetName("Agent").SaveX(f.ctx)

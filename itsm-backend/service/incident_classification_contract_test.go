@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
-	"testing"
-	"time"
 )
 
 func TestIncidentUpdateClassificationIDContract(t *testing.T) {

@@ -6,9 +6,10 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"itsm-backend/migration"
 	"os"
 	"time"
+
+	"itsm-backend/migration"
 )
 
 func main() {

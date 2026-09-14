@@ -2,11 +2,12 @@ package bpmn
 
 import (
 	"context"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	"itsm-backend/dto"
 	"itsm-backend/ent/enttest"
-	"testing"
 )
 
 func TestTicketBPMNAssignmentRejectsProfessionalClasses(t *testing.T) {

@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/common/executionscope"
@@ -19,8 +22,6 @@ import (
 	"itsm-backend/ent/ticket"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/shared/workitemmutation"
-	"strings"
-	"time"
 )
 
 // PIRMutationResult is the immutable mutation receipt, never a reread of mutable PIR facts.
@@ -32,6 +33,7 @@ type PIRMutationResult struct {
 func (s *ChangePIRService) SetDirectorySnapshot(directory database.DirectorySnapshot) {
 	s.directory = directory
 }
+
 func (s *ChangePIRService) CreatePIR(ctx context.Context, req *dto.CreateChangePIRRequest, meta workitemmutation.Meta) (PIRMutationResult, error) {
 	if req == nil {
 		return PIRMutationResult{}, common.NewValidationError("PIR input required", nil)
@@ -39,6 +41,7 @@ func (s *ChangePIRService) CreatePIR(ctx context.Context, req *dto.CreateChangeP
 	copy := *req
 	return s.mutatePIR(ctx, meta, copy.ChangeID, 0, "create", &copy, nil)
 }
+
 func (s *ChangePIRService) UpdatePIR(ctx context.Context, id int, req *dto.UpdateChangePIRRequest, meta workitemmutation.Meta) (PIRMutationResult, error) {
 	if req == nil {
 		return PIRMutationResult{}, common.NewValidationError("PIR input required", nil)
@@ -46,12 +49,14 @@ func (s *ChangePIRService) UpdatePIR(ctx context.Context, id int, req *dto.Updat
 	copy := *req
 	return s.mutatePIR(ctx, meta, copy.ChangeID, id, "update", nil, &copy)
 }
+
 func (s *ChangePIRService) DeletePIR(ctx context.Context, id int, req *dto.DeleteChangePIRRequest, meta workitemmutation.Meta) (PIRMutationResult, error) {
 	if req == nil {
 		return PIRMutationResult{}, common.NewValidationError("PIR input required", nil)
 	}
 	return s.mutatePIR(ctx, meta, req.ChangeID, id, "delete", nil, nil)
 }
+
 func (s *ChangePIRService) authorizePIR(ctx context.Context, tx *ent.Tx, meta workitemmutation.Meta, changeID int, action string) (*ent.Change, error) {
 	c, err := tx.Change.Query().Where(change.ID(changeID), change.HasWorkItemWith(ticket.TenantID(meta.TenantID), ticket.DeletedAtIsNil(), ticket.RecordClass("change_request"))).WithWorkItem().Only(ctx)
 	if err != nil {
@@ -74,6 +79,7 @@ func (s *ChangePIRService) authorizePIR(ctx context.Context, tx *ent.Tx, meta wo
 	}
 	return c, nil
 }
+
 func replayPIR(ctx context.Context, tx *ent.Tx, meta workitemmutation.Meta, itemID int, digest string) (PIRMutationResult, bool, error) {
 	result, found, err := workitemmutation.Replay(ctx, tx.Client(), meta, itemID, digest)
 	if err != nil || !found {
@@ -97,6 +103,7 @@ func replayPIR(ctx context.Context, tx *ent.Tx, meta workitemmutation.Meta, item
 	}
 	return PIRMutationResult{Result: result, PIRID: facts.PIRID}, true, nil
 }
+
 func (s *ChangePIRService) mutatePIR(ctx context.Context, m workitemmutation.Meta, changeID, id int, action string, create *dto.CreateChangePIRRequest, patch *dto.UpdateChangePIRRequest) (out PIRMutationResult, resultErr error) {
 	empty := PIRMutationResult{}
 	if m.TenantID <= 0 || m.ActorID <= 0 || m.ExpectedVersion <= 0 || strings.TrimSpace(m.Source) == "" || strings.TrimSpace(m.OperationID) == "" || changeID <= 0 || (action != "create" && id <= 0) {
@@ -312,6 +319,7 @@ func (s *ChangePIRService) mutatePIR(ctx context.Context, m workitemmutation.Met
 	}
 	return result, nil
 }
+
 func pirPatchChanges(p *ent.ChangePIR, u *dto.UpdateChangePIRRequest) bool {
 	for _, field := range []struct {
 		patch   *string

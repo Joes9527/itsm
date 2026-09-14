@@ -4,15 +4,16 @@ package integration
 
 import (
 	"context"
-	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/require"
-	"itsm-backend/ent/auditlog"
-	"itsm-backend/ent/processdefinition"
 	"net"
 	"net/http"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
+	"itsm-backend/ent/auditlog"
+	"itsm-backend/ent/processdefinition"
 )
 
 // Explicit fixture tag: actual Change owner and PG persistence, actor supplied by

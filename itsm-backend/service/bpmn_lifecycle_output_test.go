@@ -3,12 +3,13 @@ package service
 import (
 	"context"
 	"errors"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/ent"
 	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/service/bpmn"
-	"testing"
 )
 
 func TestChangeLifecycleOutputUsesCanonicalClass(t *testing.T) {
@@ -28,6 +29,7 @@ func TestChangeLifecycleOutputUsesCanonicalClass(t *testing.T) {
 	_, err := callbackContinuationOutputs(h, row, &ent.ProcessInstance{BusinessType: "change_request", BusinessID: 7}, effect)
 	require.Error(t, err)
 }
+
 func TestLifecycleOutputRequiresActualTenantSourceClass(t *testing.T) {
 	for _, mismatch := range []string{"class", "tenant"} {
 		t.Run(mismatch, func(t *testing.T) {
@@ -39,7 +41,6 @@ func TestLifecycleOutputRequiresActualTenantSourceClass(t *testing.T) {
 			item := f.client.Ticket.Create().SetTenantID(f.tenant.ID).SetRequesterID(f.actor.ID).SetTitle("class guard").SetTicketNumber("OUTPUT-CLASS").SetRecordClass(class).SetStatus("new").SaveX(f.userCtx)
 			row := &ent.ProcessCallbackOutbox{TenantID: f.tenant.ID, Action: "assess_risk", Variables: map[string]interface{}{"version": 1}}
 			if mismatch == "tenant" {
-
 				row.TenantID = f.tenant.ID + 999
 			}
 			instance := &ent.ProcessInstance{BusinessType: "change_request", BusinessID: item.ID, TenantID: row.TenantID}

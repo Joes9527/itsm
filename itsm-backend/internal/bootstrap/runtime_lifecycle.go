@@ -3,8 +3,9 @@ package bootstrap
 import (
 	"context"
 	"fmt"
-	"itsm-backend/common/tenantctx"
 	"sync"
+
+	"itsm-backend/common/tenantctx"
 )
 
 // startAPIRuntime owns cancellation and waits before callers close dependencies.

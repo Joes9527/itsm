@@ -3,13 +3,14 @@ package service
 import (
 	"context"
 	"errors"
-	"itsm-backend/dto"
-	"itsm-backend/ent"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"itsm-backend/dto"
+	"itsm-backend/ent"
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"

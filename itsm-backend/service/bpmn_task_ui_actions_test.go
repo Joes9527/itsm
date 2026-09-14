@@ -3,10 +3,11 @@ package service
 import (
 	"context"
 	"fmt"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/common"
 	"itsm-backend/ent"
-	"testing"
 )
 
 func TestBPMNTaskUIActionsReuseTaskAuthority(t *testing.T) {
@@ -60,6 +61,7 @@ func (d *unavailableTaskUIDirectory) Open(context.Context, *ent.Tx, int) (*ent.C
 	d.calls++
 	return nil, nil, fmt.Errorf("directory unavailable")
 }
+
 func TestBPMNTaskUIProjectionPreservesDirectoryAuthority(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	directory := &unavailableTaskUIDirectory{}

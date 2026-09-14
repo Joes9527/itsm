@@ -2,17 +2,19 @@ package controller
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"itsm-backend/dto"
 	"itsm-backend/handlers/common/intakehttp"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/middleware"
-	"strings"
 )
 
 func (tc *TicketController) SetCreationApplication(app creation.Application) {
 	tc.creationApplication = app
 }
+
 func (tc *TicketController) createFromRequest(c *gin.Context, req dto.CreateTicketRequest) {
 	tenantID, err := middleware.ResolveRequestTenantID(c)
 	if middleware.AbortIfTenantError(c, err) {
@@ -25,6 +27,7 @@ func (tc *TicketController) createFromRequest(c *gin.Context, req dto.CreateTick
 	}
 	intakehttp.Execute(c, tc.creationApplication, tenantID, req.RequesterID, command)
 }
+
 func ticketCreationCommand(req dto.CreateTicketRequest) (creation.CreateWorkItemCommand, error) {
 	command := creation.CreateWorkItemCommand{Title: req.Title, Description: req.Description, Priority: req.Priority, TemplateID: req.TemplateID, ParentTicketID: req.ParentTicketID, TagIDs: req.TagIDs, WorkflowDefinitionKey: req.WorkflowDefinitionKey}
 	for field, present := range map[string]bool{"creatorEmail": req.CreatorEmail != "", "externalMessageId": req.ExternalMessageID != "", "conversationId": req.ConversationID != "", "attachments": len(req.Attachments) > 0, "tags": len(req.Tags) > 0, "approvalChain": req.ApprovalChain != nil, "source": req.Source != "" && req.Source != "manual"} {
@@ -83,6 +86,7 @@ func ticketCreationCommand(req dto.CreateTicketRequest) (creation.CreateWorkItem
 	command.AdHocFields = defs
 	return command, nil
 }
+
 func ticketCreationFields(fields map[string]any) (map[string]any, []creation.AdHocFieldDefinition, error) {
 	fail := func(field string) (map[string]any, []creation.AdHocFieldDefinition, error) {
 		return nil, nil, intakehttp.Invalid("formFields."+field, "invalid or unsupported form field envelope")

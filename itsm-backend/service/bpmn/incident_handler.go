@@ -87,6 +87,7 @@ func (h *IncidentServiceTaskHandler) SetCreationApplication(app creation.Applica
 	h.creationApplication = app
 	h.creationDirectory = directory
 }
+
 func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, _ map[string]interface{}) (*CallbackEffect, error) {
 	return executeWorkItemCreation(ctx, h.client, h.creationDirectory, h.creationApplication, h.GetHandlerID(), "create_incident", creation.RecordClassIncident)
 }

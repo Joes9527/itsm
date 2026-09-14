@@ -7,6 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/authorization"
 	"itsm-backend/ent"
@@ -17,11 +23,6 @@ import (
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
-	"os"
-	"sync"
-	"sync/atomic"
-	"testing"
-	"time"
 )
 
 func changeCallbackContext(f *changeLifecycleFixture, actor *ent.User) context.Context {

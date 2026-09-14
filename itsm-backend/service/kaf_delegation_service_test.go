@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/common"
 	"itsm-backend/ent"
@@ -280,9 +281,11 @@ type failOncePersistingKafCallbackHandler struct {
 
 func (h *scopeCapturingKafCallbackHandler) GetTaskType() string  { return "kaf_scope_capture" }
 func (h *scopeCapturingKafCallbackHandler) GetHandlerID() string { return "kaf_scope_capture_handler" }
+
 func (h *scopeCapturingKafCallbackHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
 	return bpmn.CallbackActionContract{}, true
 }
+
 func (h *scopeCapturingKafCallbackHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	h.calls++
 	h.scope, h.scopeOK = bpmn.KafActionScopeFromContext(ctx)
@@ -294,12 +297,15 @@ var _ bpmn.ServiceTaskHandlerInterface = (*scopeCapturingKafCallbackHandler)(nil
 func (h *failOncePersistingKafCallbackHandler) GetTaskType() string {
 	return "kaf_fail_once_persisting_callback"
 }
+
 func (h *failOncePersistingKafCallbackHandler) GetHandlerID() string {
 	return "kaf_fail_once_persisting_callback_handler"
 }
+
 func (h *failOncePersistingKafCallbackHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
 	return bpmn.CallbackActionContract{}, true
 }
+
 func (h *failOncePersistingKafCallbackHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	h.calls++
 	h.scope, h.scopeOK = bpmn.KafActionScopeFromContext(ctx)

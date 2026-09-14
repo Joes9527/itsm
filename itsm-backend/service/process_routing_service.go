@@ -59,12 +59,14 @@ type RoutingResult struct {
 func (s *ProcessRoutingService) FindBestRoute(ctx context.Context, reqCtx *RoutingContext) (*RoutingResult, error) {
 	return s.findBestRoute(ctx, s.client, reqCtx)
 }
+
 func (s *ProcessRoutingService) FindBestRouteTx(ctx context.Context, tx *ent.Tx, reqCtx *RoutingContext) (*RoutingResult, error) {
 	if tx == nil {
 		return nil, fmt.Errorf("routing transaction is required")
 	}
 	return s.findBestRoute(ctx, tx.Client(), reqCtx)
 }
+
 func (s *ProcessRoutingService) findBestRoute(ctx context.Context, client *ent.Client, reqCtx *RoutingContext) (*RoutingResult, error) {
 	s.logger.Infow(
 		"Finding best route",
@@ -368,6 +370,7 @@ func routingValueToRational(value interface{}) (*big.Rat, bool) {
 	}
 	return new(big.Rat).SetString(text)
 }
+
 func validateRoutingConditions(conditions map[string]interface{}) error {
 	for key, value := range conditions {
 		if key == "no_process" {

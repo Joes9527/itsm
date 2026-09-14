@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"itsm-backend/service"
 	"strings"
+
+	"itsm-backend/service"
 )
 
 func catalogFieldInputs(fields []map[string]interface{}) ([]service.FieldDefinitionInput, error) {

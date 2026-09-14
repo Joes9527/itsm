@@ -6,6 +6,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -15,9 +19,6 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/service"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"sync"
-	"testing"
-	"time"
 )
 
 // This barrier commits a second connection's authorization change after native

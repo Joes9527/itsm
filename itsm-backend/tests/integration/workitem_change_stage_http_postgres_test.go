@@ -5,13 +5,14 @@ package integration
 import (
 	"encoding/json"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/processtask"
 	changedomain "itsm-backend/handlers/change"
-	"testing"
-	"time"
 )
 
 // Moved from handlers/change: actual review/close use PostgreSQL row locks.

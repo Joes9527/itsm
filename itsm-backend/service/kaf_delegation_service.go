@@ -8,12 +8,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"itsm-backend/database"
-	"itsm-backend/handlers/common/accessgrant"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"itsm-backend/database"
+	"itsm-backend/handlers/common/accessgrant"
 
 	"itsm-backend/common"
 	"itsm-backend/ent"
@@ -162,11 +163,13 @@ type kafDelegatedTaskCursor struct {
 func (s *KafDelegationService) SetApprovedAccessReader(owner ApprovedAccessReader) {
 	s.accessReader = owner
 }
+
 func NewKafDelegationService(client *ent.Client, execution *database.ExecutionPolicy) *KafDelegationService {
-	return &KafDelegationService{execution: execution,
-		client: client,
-		outbox: NewOutboxEventRepository(client, execution),
-		now:    time.Now,
+	return &KafDelegationService{
+		execution: execution,
+		client:    client,
+		outbox:    NewOutboxEventRepository(client, execution),
+		now:       time.Now,
 	}
 }
 
@@ -285,8 +288,9 @@ func (s *KafDelegationService) GetTaskContext(ctx context.Context, taskID string
 			return nil, err
 		}
 	}
-	return &KafTaskContext{ApprovedAccess: approved,
-		TaskID: task.TaskID, TaskType: task.TaskType, Status: task.Status,
+	return &KafTaskContext{
+		ApprovedAccess: approved,
+		TaskID:         task.TaskID, TaskType: task.TaskType, Status: task.Status,
 		CorrelationID: task.CorrelationID, TenantID: strconv.Itoa(task.TenantID), RecordClass: recordClass,
 		AllowedActions: kafAllowedActions(task), ExpectedVersion: instance.Version,
 		WaitingPoint:   KafWaitingPoint{ProcessInstanceID: instance.ProcessInstanceID, ProcessDefinition: instance.ProcessDefinitionKey, ActivityID: instance.CurrentActivityID, ActivityName: instance.CurrentActivityName},

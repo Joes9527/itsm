@@ -6,6 +6,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http/httptest"
+	"testing"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -13,9 +17,6 @@ import (
 	requestDomain "itsm-backend/handlers/service_request"
 	"itsm-backend/service"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"net/http/httptest"
-	"testing"
-	"time"
 )
 
 func TestWorkItemRelationsServiceRequestDeletionRejectsReference(t *testing.T) {
@@ -86,7 +87,6 @@ func TestWorkItemRelationsRequestedItemPolicyAcrossDeletionEntrypoints(t *testin
 			require.NoError(t, err, "current requester with read/delete must retain access through every entrypoint")
 			require.NotNil(t, f.client.Ticket.GetX(f.ctx, item.ID).DeletedAt)
 			require.Equal(t, item.Version+1, f.client.Ticket.GetX(f.ctx, item.ID).Version)
-
 		})
 	}
 }

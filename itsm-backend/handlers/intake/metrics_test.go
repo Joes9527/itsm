@@ -2,8 +2,9 @@ package intake
 
 import (
 	"context"
-	"itsm-backend/handlers/common/workitemcreation"
 	"testing"
+
+	"itsm-backend/handlers/common/workitemcreation"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"

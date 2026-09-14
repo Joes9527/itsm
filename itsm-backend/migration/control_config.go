@@ -23,7 +23,7 @@ func LoadControlConfiguration() (MigrationControlConfig, error) {
 	}
 	defer f.Close()
 	info, err := f.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0022 != 0 {
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o022 != 0 {
 		return c, fmt.Errorf("trusted control file must be regular and not group/world writable")
 	}
 	d := json.NewDecoder(io.LimitReader(f, 1<<20))

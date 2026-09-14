@@ -4,14 +4,16 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
+
 	"itsm-backend/dto"
 	"itsm-backend/ent"
-	"time"
 )
 
 func hasRiskDetails(p dto.ChangeRiskPatch) bool {
 	return p.RiskDescription != nil || p.ImpactAnalysis != nil || p.MitigationMeasures != nil || p.ContingencyPlan != nil || p.RiskOwner != nil || p.RiskReviewDate != nil
 }
+
 func riskDetailsChanged(current *RiskAssessment, p dto.ChangeRiskPatch) bool {
 	if current == nil {
 		current = &RiskAssessment{}
@@ -53,6 +55,7 @@ func readRiskDetails(ctx context.Context, tx *ent.Tx, changeID, tenantID int, ri
 	}
 	return value, nil
 }
+
 func writeRiskDetails(ctx context.Context, tx *ent.Tx, changeID, tenantID int, current *RiskAssessment, p dto.ChangeRiskPatch) error {
 	value := RiskAssessment{}
 	if current != nil {

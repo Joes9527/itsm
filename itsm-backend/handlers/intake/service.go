@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"itsm-backend/handlers/common/workitemcreation"
-	"itsm-backend/handlers/shared/workitemmutation"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
+
+	"itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/handlers/shared/workitemmutation"
 
 	"itsm-backend/authorization"
 	"itsm-backend/common"
@@ -450,8 +451,9 @@ func (s *Service) enqueueWorkflowStart(ctx context.Context, tx *ent.Tx, receiptI
 	if err != nil {
 		return workitemcreation.NewInternalFailure("could not encode workflow start event", err)
 	}
-	_, err = s.outbox.Enqueue(ctx, tx, itsmservice.NewOutboxEvent{ExecutionWorkItemID: workItemID,
-		EventID: eventID, EventType: workflowStartEventType, TenantID: identity.TenantID,
+	_, err = s.outbox.Enqueue(ctx, tx, itsmservice.NewOutboxEvent{
+		ExecutionWorkItemID: workItemID,
+		EventID:             eventID, EventType: workflowStartEventType, TenantID: identity.TenantID,
 		AggregateType: "work_item", AggregateID: strconv.Itoa(workItemID), Payload: payload,
 	})
 	if err != nil {

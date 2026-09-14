@@ -6,11 +6,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/lib/pq"
-	"itsm-backend/common/workitemidentity"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/lib/pq"
+	"itsm-backend/common/workitemidentity"
 )
 
 // Retained columns are an explicit evidence registry, never a second write path.
@@ -20,8 +21,11 @@ var preparationLegacyColumns = map[string][]string{
 	"problems":  {"title", "description", "status", "priority", "category", "assignee_id", "created_by", "tenant_id", "created_at", "updated_at", "resolved_at", "closed_at", "deleted_at"},
 	"changes":   {"title", "description", "status", "priority", "assignee_id", "created_by", "tenant_id", "related_tickets", "created_at", "updated_at"},
 }
-var preparationTables = []string{"tickets", "incidents", "problems", "changes"}
-var preparationHistoricalTables = []string{"ticket_approvals", "workflow_tasks", "workflow_instances", "workflow_versions", "workflows", "audit_logs", "change_status_events", "process_instances", "process_tasks", "process_approval_decisions", "process_callback_outboxes"}
+
+var (
+	preparationTables           = []string{"tickets", "incidents", "problems", "changes"}
+	preparationHistoricalTables = []string{"ticket_approvals", "workflow_tasks", "workflow_instances", "workflow_versions", "workflows", "audit_logs", "change_status_events", "process_instances", "process_tasks", "process_approval_decisions", "process_callback_outboxes"}
+)
 
 // PreparationBaseline contains immutable per-record evidence hashes; public values
 // are not duplicated. Subsequent authoritative updates must not rewrite it.
@@ -48,6 +52,7 @@ func preparationRelation(schema, table string) string {
 func preparationBaseline(ctx context.Context, q migrationQuery, schema string) ([]PreparationBaselineRow, error) {
 	return preparationBaselineWithScope(ctx, q, schema, nil)
 }
+
 func preparationBaselineWithScope(ctx context.Context, q migrationQuery, schema string, scopes map[string][]string) ([]PreparationBaselineRow, error) {
 	var result []PreparationBaselineRow
 	capture := func(table, expression string) error {
@@ -150,6 +155,7 @@ func (m *Migrator) InspectPreparation(ctx context.Context) (PreparationInventory
 	inv, _, err := m.preparationInventory(ctx, tx)
 	return inv, err
 }
+
 func (m *Migrator) preparationInventory(ctx context.Context, q migrationQuery) (PreparationInventory, []PreparationBaselineRow, error) {
 	var inv PreparationInventory
 	target, err := m.preparationTarget(ctx, q)
@@ -651,6 +657,7 @@ func preparationIndexes(ctx context.Context, q migrationQuery, schema string) ([
 	}
 	return indexes, nil
 }
+
 func validatePreparationIndexes(indexes []preparationIndex) error {
 	canonical := map[string]string{"incidents": "incident_work_item_id", "problems": "problem_work_item_id", "changes": "change_work_item_id"}
 	for _, index := range indexes {

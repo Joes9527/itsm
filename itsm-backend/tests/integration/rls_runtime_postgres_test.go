@@ -6,9 +6,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/authentication"
 	"itsm-backend/common/tenantctx"
@@ -19,9 +23,6 @@ import (
 	authcommon "itsm-backend/handlers/common"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
-	"net/http"
-	"net/http/httptest"
-	"sync/atomic"
 
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/alicebob/miniredis/v2"

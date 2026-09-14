@@ -362,9 +362,10 @@ func TestProblemHTTPHandlerUpdateAndLifecycle(t *testing.T) {
 	p := createProblemHandlerProblem(t, ctx, service, tenant.ID, user.ID)
 
 	// Update Problem
-	updateReq := dto.UpdateProblemRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()),
-		Version: p.Version,
-		Title:   strPtr("Updated Title HTTP"),
+	updateReq := dto.UpdateProblemRequest{
+		OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()),
+		Version:     p.Version,
+		Title:       strPtr("Updated Title HTTP"),
 	}
 	w := performProblemRequest(r, "PUT", fmt.Sprintf("/api/v1/problems/%d", p.ID), updateReq, tenant.ID, user.ID)
 	require.Equal(t, http.StatusOK, w.Code)
@@ -377,18 +378,20 @@ func TestProblemHTTPHandlerUpdateAndLifecycle(t *testing.T) {
 	assert.Equal(t, 0, resInv.Code)
 
 	// Update Root Cause
-	rcReq := dto.UpdateProblemRootCauseRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()),
-		Version:   p.Version + 2,
-		RootCause: "Network driver deadlock",
+	rcReq := dto.UpdateProblemRootCauseRequest{
+		OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()),
+		Version:     p.Version + 2,
+		RootCause:   "Network driver deadlock",
 	}
 	wRC := performProblemRequest(r, "PUT", fmt.Sprintf("/api/v1/problems/%d/root-cause", p.ID), rcReq, tenant.ID, user.ID)
 	require.Equal(t, http.StatusOK, wRC.Code)
 
 	// Update Solution
-	solReq := dto.UpdateProblemResolutionRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()),
-		Version:    p.Version + 3,
-		Workaround: stringPointer("Restart driver service"),
-		Resolution: stringPointer("Patched kernel driver"),
+	solReq := dto.UpdateProblemResolutionRequest{
+		OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()),
+		Version:     p.Version + 3,
+		Workaround:  stringPointer("Restart driver service"),
+		Resolution:  stringPointer("Patched kernel driver"),
 	}
 	wSol := performProblemRequest(r, "PUT", fmt.Sprintf("/api/v1/problems/%d/solution", p.ID), solReq, tenant.ID, user.ID)
 	require.Equal(t, http.StatusOK, wSol.Code)

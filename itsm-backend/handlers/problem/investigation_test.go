@@ -6,12 +6,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"itsm-backend/handlers/shared/workitemmutation"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"itsm-backend/handlers/shared/workitemmutation"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -275,7 +276,8 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	require.Equal(t, http.StatusOK, w2_4.Code)
 
 	// 2.5 Create Root Cause Analysis
-	rcaReq := dto.CreateRootCauseAnalysisRequest{Version: client.Ticket.GetX(ctx, *p.WorkItemID).Version, OperationID: "create-rca",
+	rcaReq := dto.CreateRootCauseAnalysisRequest{
+		Version: client.Ticket.GetX(ctx, *p.WorkItemID).Version, OperationID: "create-rca",
 		ProblemID:            p.ID,
 		AnalystID:            user.ID,
 		AnalysisMethod:       "5_whys",
@@ -408,6 +410,7 @@ func createRCAFixture(t *testing.T, owner *Service, reader *service.ProblemInves
 	}
 	return summary.RootCauseAnalysis, nil
 }
+
 func updateRCAFixture(t *testing.T, owner *Service, reader *service.ProblemInvestigationService, ctx context.Context, id int, req *dto.UpdateRootCauseAnalysisRequest, tenantID int) (*dto.RootCauseAnalysisResponse, error) {
 	prior, err := reader.GetRootCauseAnalysis(ctx, id, tenantID)
 	if err != nil {

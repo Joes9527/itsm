@@ -2,9 +2,10 @@ package common
 
 import (
 	"encoding/json"
-	"github.com/stretchr/testify/require"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestDecodeJSONObjectPreservesNumbersAndBounds(t *testing.T) {

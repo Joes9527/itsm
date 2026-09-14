@@ -20,6 +20,10 @@
     "itsm-backend/handlers/service_request/access_policy_publication_test.go",
     "itsm-backend/handlers/service_catalog/intake_read_test.go"
   ],
+  "itsm-backend/service/bpmn_access_scope.go": [
+    "itsm-backend/service/bpmn_authorization_test.go",
+    "itsm-backend/service/bpmn_usertask_callback_test.go"
+  ],
   "itsm-backend/service/bpmn_actor_snapshot.go": [
     "itsm-backend/service/bpmn_authorization_test.go",
     "itsm-backend/service/bpmn_task_ui_actions_test.go"
@@ -31,6 +35,9 @@
   "itsm-backend/service/bpmn_creation_configuration.go": [
     "itsm-backend/service/publication_precision_test.go",
     "itsm-backend/tests/integration/intake_workflow_override_test.go"
+  ],
+  "itsm-backend/service/bpmn_creation_output.go": [
+    "itsm-backend/tests/integration/intake_bpmn_entry_test.go"
   ],
   "itsm-backend/service/bpmn_execution_scope.go": [
     "itsm-backend/tests/integration/candidate_intake_boundary_test.go"
@@ -63,6 +70,9 @@
   "itsm-backend/service/cloud_discovery_service.go": [
     "itsm-backend/tests/integration/candidate_intake_boundary_test.go"
   ],
+  "itsm-backend/service/configuration_item_creation.go": [
+    "itsm-backend/handlers/intake/resolution_test.go"
+  ],
   "itsm-backend/service/event_webhook_intent.go": [
     "itsm-backend/tests/integration/candidate_intake_boundary_test.go"
   ],
@@ -82,6 +92,9 @@
   ],
   "itsm-backend/service/feishu_update_delivery.go": [
     "itsm-backend/tests/integration/candidate_intake_boundary_test.go"
+  ],
+  "itsm-backend/service/field_definition_creation.go": [
+    "itsm-backend/service/publication_precision_test.go"
   ],
   "itsm-backend/service/incident_alert_delivery_handler.go": [
     "itsm-backend/tests/integration/incident_email_target_postgres_test.go",
@@ -108,6 +121,9 @@
   "itsm-backend/service/incident_work_item_authority.go": [
     "itsm-backend/service/incident_service_test.go",
     "itsm-backend/service/incident_classification_contract_test.go"
+  ],
+  "itsm-backend/service/intake_actor.go": [
+    "itsm-backend/tests/integration/intake_start_actor_test.go"
   ],
   "itsm-backend/service/kaf_execution_scope.go": [
     "itsm-backend/tests/integration/candidate_intake_boundary_test.go"
@@ -138,11 +154,22 @@
     "itsm-backend/tests/integration/workitem_relation_outcome_postgres_test.go",
     "itsm-backend/tests/integration/workitem_delivery_authorization_postgres_test.go"
   ],
+  "itsm-backend/service/process_routing_service.go": [
+    "itsm-backend/service/process_routing_service_unit_test.go",
+    "itsm-backend/service/process_routing_creation_test.go"
+  ],
   "itsm-backend/service/sla_alert_notification_projection.go": [
     "itsm-backend/tests/integration/candidate_intake_boundary_test.go"
   ],
+  "itsm-backend/service/sla_configuration.go": [
+    "itsm-backend/service/catalog_publication_sla_regression_test.go"
+  ],
   "itsm-backend/service/ticket_assignment_smart_service.go": [
     "itsm-backend/service/ticket_incident_assignment_boundary_test.go"
+  ],
+  "itsm-backend/service/ticket_attachment_service.go": [
+    "itsm-backend/service/email_attachment_recovery_test.go",
+    "itsm-backend/tests/integration/service_request_collaboration_test.go"
   ],
   "itsm-backend/service/ticket_automation_creation.go": [
     "itsm-backend/tests/integration/ticket_creation_effects_test.go"
@@ -150,6 +177,13 @@
   "itsm-backend/service/ticket_category_creation.go": [
     "itsm-backend/service/ticket_creation_cti_entry_test.go",
     "itsm-backend/controller/ticket_classification_contract_test.go"
+  ],
+  "itsm-backend/service/ticket_comment_service.go": [
+    "itsm-backend/tests/integration/service_request_collaboration_test.go"
+  ],
+  "itsm-backend/service/ticket_creation.go": [
+    "itsm-backend/tests/integration/ticket_creation_effects_test.go",
+    "itsm-backend/service/ticket_creation_cti_entry_test.go"
   ],
   "itsm-backend/service/ticket_creation_effects.go": [
     "itsm-backend/tests/integration/ticket_creation_effects_test.go"
@@ -163,6 +197,9 @@
   ],
   "itsm-backend/service/ticket_notification_transaction.go": [
     "itsm-backend/tests/integration/candidate_intake_boundary_test.go"
+  ],
+  "itsm-backend/service/ticket_rule_conditions.go": [
+    "itsm-backend/tests/integration/ticket_creation_effects_test.go"
   ],
   "itsm-backend/service/ticket_sla_creation.go": [
     "itsm-backend/tests/integration/ticket_creation_effects_test.go",

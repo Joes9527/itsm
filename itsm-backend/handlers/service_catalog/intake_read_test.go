@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"testing"
+
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -16,7 +18,6 @@ import (
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"testing"
 )
 
 func TestIntakeCatalogDiscoverySkipsInvalidAcrossPages(t *testing.T) {
@@ -102,6 +103,7 @@ func TestIntakeCatalogDiscoverySkipsInvalidAcrossPages(t *testing.T) {
 	_, err = svc.ListAvailableForIntake(ctx, snapshot, 0, "", 51)
 	require.ErrorIs(t, err, creation.ErrInfrastructureUnavailable)
 }
+
 func TestCatalogDiscoveryErrorClassification(t *testing.T) {
 	marker := &bpmn.PublicationConfigurationError{Message: "missing candidates"}
 	require.True(t, isUnavailableIntakeCatalog(marker))

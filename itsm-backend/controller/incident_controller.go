@@ -2,10 +2,11 @@ package controller
 
 import (
 	"errors"
-	"itsm-backend/handlers/shared/workitemmutation"
 	"strconv"
 	"strings"
 	"time"
+
+	"itsm-backend/handlers/shared/workitemmutation"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
@@ -74,6 +75,7 @@ func (c *IncidentController) resolveTenantID(ctx *gin.Context) (int, bool) {
 func (c *IncidentController) SetCreationApplication(app creation.Application) {
 	c.creationApplication = app
 }
+
 func (c *IncidentController) CreateIncident(ctx *gin.Context) {
 	var req dto.CreateIncidentRequest
 	if !intakehttp.Bind(ctx, &req) {

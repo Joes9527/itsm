@@ -1,10 +1,11 @@
 package service
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/common/executionscope"
 	"itsm-backend/ent"
-	"testing"
 )
 
 func TestNotificationTargetRejectsUnknownChannel(t *testing.T) {

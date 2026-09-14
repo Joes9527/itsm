@@ -1,10 +1,11 @@
 package service
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
 	"itsm-backend/handlers/shared/workitemmutation"
-	"testing"
 )
 
 func TestIncidentStatusEventUsesFrozenStateAndReplays(t *testing.T) {

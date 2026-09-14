@@ -1,12 +1,13 @@
 package service
 
 import (
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
 	"itsm-backend/handlers/shared/workitemmutation"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"testing"
-	"time"
 )
 
 func TestIncidentEscalationCommandsAtomicReplay(t *testing.T) {

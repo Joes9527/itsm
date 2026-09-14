@@ -2,13 +2,14 @@ package change
 
 import (
 	"context"
+	"strconv"
+	"strings"
+	"time"
+
 	"itsm-backend/ent"
 	"itsm-backend/ent/standardchange"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service"
-	"strconv"
-	"strings"
-	"time"
 )
 
 type changeCreation struct {
@@ -76,8 +77,10 @@ func (s *Service) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedI
 	// Required professional fields are checked after authoritative standard-template
 	// expansion. Storage defaults support historical records, not incomplete intake.
 	for _, field := range []struct{ name, value string }{
-		{"justification", input.Justification}, {"impactScope", input.ImpactScope},
-		{"riskLevel", input.RiskLevel}, {"implementationPlan", input.ImplementationPlan},
+		{"justification", input.Justification},
+		{"impactScope", input.ImpactScope},
+		{"riskLevel", input.RiskLevel},
+		{"implementationPlan", input.ImplementationPlan},
 		{"rollbackPlan", input.RollbackPlan},
 	} {
 		if strings.TrimSpace(field.value) == "" {
@@ -125,6 +128,7 @@ func (s *Service) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedI
 	plan.ProfessionalInput = changeCreation{Input: input, Start: start, End: end, Policy: policy}
 	return plan, nil
 }
+
 func (*Service) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.Ticket, plan *creation.CreationPlan) (*creation.ProfessionalReference, error) {
 	prepared, ok := plan.ProfessionalInput.(changeCreation)
 	if !ok {

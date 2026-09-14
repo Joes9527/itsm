@@ -181,7 +181,6 @@ func TestKafOutboxDispatcher_RedactsJSONCredentialsFromClientRejection(t *testin
 	require.NoError(t, err)
 	assert.NotContains(t, persisted.LastError, responseSecret)
 	assert.Contains(t, persisted.LastError, "invalid_webhook_signature")
-
 }
 
 func TestKafOutboxDispatcher_RetriesServerErrorsWithoutClientErrorAudit(t *testing.T) {

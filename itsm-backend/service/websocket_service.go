@@ -90,8 +90,10 @@ type WebSocketMessage struct {
 	Payload interface{} `json:"payload"`
 }
 
-var errPushNotAccepted = errors.New("push_not_accepted")
-var errPushUnknown = errors.New("push_delivery_unknown")
+var (
+	errPushNotAccepted = errors.New("push_not_accepted")
+	errPushUnknown     = errors.New("push_delivery_unknown")
+)
 
 type websocketFrame struct {
 	payload []byte
@@ -342,7 +344,6 @@ func (c *WebSocketClient) WritePump() {
 				return
 			}
 		}
-
 	}()
 
 	for {

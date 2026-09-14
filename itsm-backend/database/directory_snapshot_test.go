@@ -37,11 +37,13 @@ func (c *snapshotSQLConn) Close() error                        { return nil }
 func (c *snapshotSQLConn) Begin() (driver.Tx, error) {
 	return c.BeginTx(context.Background(), driver.TxOptions{})
 }
+
 func (c *snapshotSQLConn) BeginTx(_ context.Context, options driver.TxOptions) (driver.Tx, error) {
 	c.state.begins++
 	c.state.readOnly = options.ReadOnly
 	return snapshotSQLTx{c.state}, nil
 }
+
 func (c *snapshotSQLConn) ExecContext(_ context.Context, q string, _ []driver.NamedValue) (driver.Result, error) {
 	if strings.HasPrefix(q, "SET TRANSACTION SNAPSHOT ") {
 		c.state.imports++
@@ -54,6 +56,7 @@ func (c *snapshotSQLConn) ExecContext(_ context.Context, q string, _ []driver.Na
 	}
 	return driver.RowsAffected(1), nil
 }
+
 func (c *snapshotSQLConn) QueryContext(_ context.Context, _ string, _ []driver.NamedValue) (driver.Rows, error) {
 	c.state.queries++
 	if c.state.failExport {

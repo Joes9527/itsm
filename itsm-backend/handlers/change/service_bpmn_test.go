@@ -4,11 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
-
 	"sync/atomic"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
@@ -36,6 +36,7 @@ func nextTestTicketNumber() string {
 func newTestChangeRepository(client *ent.Client, db *sql.DB) *EntRepository {
 	return NewEntRepository(client, db)
 }
+
 func createChangeWorkItemFixture(t *testing.T, client *ent.Client, tenantID, requesterID int, title string, statuses ...string) *ent.Ticket {
 	t.Helper()
 	status := "draft"
@@ -62,6 +63,7 @@ func newChangeBPMNEntClient(t *testing.T, dbName string) *ent.Client {
 	t.Cleanup(func() { client.Close() })
 	return client
 }
+
 func openChangeBPMNRawDB(t *testing.T, dbName string) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?mode=memory&cache=shared&_fk=1", dbName))
@@ -92,6 +94,7 @@ func setupChangeBPMNActor(t *testing.T, client *ent.Client, code string) (tenant
 	require.NoError(t, err)
 	return tenant.ID, actor.ID
 }
+
 func TestCompleteChangeApprovalTask_ApproveCompletesScheduleNode(t *testing.T) {
 	f := newGovernedChangeFixture(t, "normal")
 	f.submit(t)
@@ -103,8 +106,8 @@ func TestCompleteChangeApprovalTask_ApproveCompletesScheduleNode(t *testing.T) {
 	require.Equal(t, "approved", result.Result.Status)
 	require.Equal(t, "Activity_Schedule", f.client.ProcessInstance.Query().OnlyX(f.ctx).CurrentActivityID)
 	require.Equal(t, 1, f.client.ProcessApprovalDecision.Query().CountX(f.ctx))
-
 }
+
 func TestCompleteChangeApprovalTask_RejectEndsProcess(t *testing.T) {
 	f := newGovernedChangeFixture(t, "normal")
 	f.submit(t)
@@ -114,8 +117,8 @@ func TestCompleteChangeApprovalTask_RejectEndsProcess(t *testing.T) {
 	require.NotNil(t, result.Result)
 	require.Equal(t, "rejected", result.Result.Status)
 	require.Equal(t, "completed", f.client.ProcessInstance.Query().OnlyX(f.ctx).Status)
-
 }
+
 func TestCompleteChangeApprovalTask_WrongActorRejected(t *testing.T) {
 	f := newGovernedChangeFixture(t, "normal")
 	f.submit(t)
@@ -125,8 +128,8 @@ func TestCompleteChangeApprovalTask_WrongActorRejected(t *testing.T) {
 	require.Error(t, err)
 	require.Equal(t, "submitted", f.client.Ticket.GetX(f.ctx, f.record.WorkItemID).Status)
 	require.Zero(t, f.client.ProcessApprovalDecision.Query().CountX(f.ctx))
-
 }
+
 func TestCompleteChangeApprovalTask_FiltersDecoyTaskByDefinitionKey(t *testing.T) {
 	f := newGovernedChangeFixture(t, "normal")
 	f.submit(t)
@@ -141,8 +144,8 @@ func TestCompleteChangeApprovalTask_FiltersDecoyTaskByDefinitionKey(t *testing.T
 	result, err := f.svc.CompleteChangeTask(f.ctx, assessment)
 	require.NoError(t, err)
 	require.NotNil(t, result.Result)
-
 }
+
 func TestCompleteChangeApprovalTask_ResumesCascadeAfterInterruptedCall(t *testing.T) {
 	f := newGovernedChangeFixture(t, "normal")
 	f.submit(t)
@@ -173,8 +176,8 @@ func TestCompleteChangeApprovalTask_ResumesCascadeAfterInterruptedCall(t *testin
 	require.Equal(t, "completed", again.Progress)
 	require.Equal(t, result.Result.Version, again.Result.Version)
 	require.Equal(t, 1, f.client.ProcessApprovalDecision.Query().CountX(f.ctx))
-
 }
+
 func TestCompleteChangeApprovalTask_RetryAfterFullSuccessIsNoop(t *testing.T) {
 	f := newGovernedChangeFixture(t, "normal")
 	f.submit(t)
@@ -192,8 +195,8 @@ func TestCompleteChangeApprovalTask_RetryAfterFullSuccessIsNoop(t *testing.T) {
 	require.Equal(t, result.Result.Version, again.Result.Version)
 	require.Equal(t, result.ExecutionKey, again.ExecutionKey)
 	require.Equal(t, 1, f.client.ProcessApprovalDecision.Query().CountX(f.ctx))
-
 }
+
 func TestCompleteChangeApprovalTask_RetryWithMismatchedActionRejected(t *testing.T) {
 	f := newGovernedChangeFixture(t, "normal")
 	f.submit(t)
@@ -222,7 +225,6 @@ func TestTransitionStatus_Approve_UsesCompleteChangeApprovalTask(t *testing.T) {
 	require.Equal(t, "approved", result.Result.Status)
 	require.Equal(t, "Activity_Schedule", f.client.ProcessInstance.Query().OnlyX(f.ctx).CurrentActivityID)
 	require.Equal(t, 1, f.client.ProcessApprovalDecision.Query().CountX(f.ctx))
-
 }
 
 func TestTransitionStatus_Reject_RequiresComment(t *testing.T) {
@@ -245,15 +247,14 @@ func TestTransitionStatus_Approve_WrongActorRejected(t *testing.T) {
 	require.Error(t, err)
 	require.Equal(t, "submitted", f.client.Ticket.GetX(f.ctx, f.record.WorkItemID).Status)
 	require.Zero(t, f.client.ProcessApprovalDecision.Query().CountX(f.ctx))
-
 }
+
 func TestTransitionStatus_Approve_NoRunningProcessInstanceFailsClosed(t *testing.T) {
 	f := newGovernedChangeFixture(t, "normal")
 	_, err := f.svc.CompleteChangeTask(f.ctx, TaskCommand{Command: f.command("implement", f.requester), TaskID: "missing"})
 	require.Error(t, err)
 	require.Equal(t, "draft", f.client.Ticket.GetX(f.ctx, f.record.WorkItemID).Status)
 	require.Zero(t, f.client.ProcessCallbackOutbox.Query().CountX(f.ctx))
-
 }
 
 func TestSubmitChange_AutoCompletesAssessmentTask(t *testing.T) {
@@ -264,8 +265,8 @@ func TestSubmitChange_AutoCompletesAssessmentTask(t *testing.T) {
 	require.Equal(t, "change_normal_flow", instance.ProcessDefinitionKey)
 	require.Equal(t, "Activity_Assessment", instance.CurrentActivityID)
 	require.Zero(t, f.client.ProcessCallbackOutbox.Query().CountX(f.ctx))
-
 }
+
 func TestChangeServiceTaskHandler_CreateChange_DelegatesToRealServiceAndCreatesWorkItem(t *testing.T) {
 	client := newChangeBPMNEntClient(t, "change_bpmn_handler_create_real")
 	logger := zaptest.NewLogger(t).Sugar()

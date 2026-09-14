@@ -5,8 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"itsm-backend/common/tenantctx"
 	"time"
+
+	"itsm-backend/common/tenantctx"
 )
 
 // VerifiedCredential is an immutable token identity. Only successful signature,

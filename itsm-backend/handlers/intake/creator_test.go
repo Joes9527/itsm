@@ -3,9 +3,10 @@ package intake
 import (
 	"context"
 	"errors"
+	"testing"
+
 	"itsm-backend/ent"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"testing"
 )
 
 type fixtureCreator struct{ class string }
@@ -14,9 +15,11 @@ func (c *fixtureCreator) RecordClass() string { return c.class }
 func (c *fixtureCreator) Prepare(context.Context, *ent.Tx, creation.ResolvedIntake) (*creation.CreationPlan, error) {
 	panic("not used")
 }
+
 func (c *fixtureCreator) CreateExtension(context.Context, *ent.Tx, *ent.Ticket, *creation.CreationPlan) (*creation.ProfessionalReference, error) {
 	panic("not used")
 }
+
 func TestRegistryFailsClosed(t *testing.T) {
 	r := NewCreatorRegistry()
 	var typedNil *fixtureCreator

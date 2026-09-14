@@ -199,7 +199,8 @@ func (h *TicketServiceTaskHandler) updateTicketStatus(ctx context.Context, ticke
 
 	h.logger.Infow("Ticket status updated via BPMN", "ticket_id", ticketID, "new_status", newStatus)
 
-	return &CallbackEffect{Status: CallbackEffectApplied,
+	return &CallbackEffect{
+		Status:      CallbackEffectApplied,
 		Message:     fmt.Sprintf("工单 %d 状态已更新为 %s", ticketID, newStatus),
 		UpdatedData: additionalData,
 	}, nil
@@ -366,7 +367,8 @@ func (h *TicketServiceTaskHandler) assignTicket(ctx context.Context, ticketID in
 
 	h.logger.Infow("Ticket assigned via BPMN", "ticket_id", ticketID, "assignee_id", assigneeID)
 
-	return &CallbackEffect{Status: CallbackEffectApplied,
+	return &CallbackEffect{
+		Status:  CallbackEffectApplied,
 		Message: fmt.Sprintf("工单 %d 已分配给用户 %d", ticketID, assigneeID),
 	}, nil
 }

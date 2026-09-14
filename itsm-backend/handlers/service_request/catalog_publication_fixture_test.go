@@ -2,6 +2,8 @@ package service_request_test
 
 import (
 	"context"
+	"strconv"
+
 	"go.uber.org/zap"
 	"itsm-backend/config"
 	"itsm-backend/dto"
@@ -11,7 +13,6 @@ import (
 	sr "itsm-backend/handlers/service_request"
 	"itsm-backend/service"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"strconv"
 )
 
 func catalogCreateInput(name, category, description string, days int, status string, ci, cloud int, fields []service.FieldDefinitionInput, key, serviceType string) dto.CreateServiceCatalogRequest {
@@ -27,6 +28,7 @@ func catalogCreateInput(name, category, description string, days int, status str
 	}
 	return input
 }
+
 func configureCatalogPublicationForTest(ctx context.Context, client *ent.Client, tenantID int, catalog *service_catalog.Service) {
 	configureSRIntakeFixture(ctx, client, tenantID)
 	logger := zap.NewNop().Sugar()

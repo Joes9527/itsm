@@ -6,10 +6,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"

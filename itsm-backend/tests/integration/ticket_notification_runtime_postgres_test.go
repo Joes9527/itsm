@@ -5,9 +5,10 @@ package integration
 import (
 	"context"
 	"errors"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -34,6 +35,7 @@ func (g *notificationRuntimeGraph) SendMail(ctx context.Context, _ string, _ str
 	g.body = body
 	return g.err
 }
+
 func TestPostgresTicketNotificationRuntimeUsesQueueAndTenantCapabilities(t *testing.T) {
 	f := newIncidentEffectsFixture(t)
 	runtime, _ := runtimeClients(t, f)

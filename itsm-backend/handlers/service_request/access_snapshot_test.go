@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/ent/enttest"
@@ -13,7 +15,6 @@ import (
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"testing"
 )
 
 func TestAccessSnapshotTrustedRequesterAndFrozenTerms(t *testing.T) {
@@ -132,5 +133,4 @@ func TestAccessSnapshotTrustedRequesterAndFrozenTerms(t *testing.T) {
 	require.Error(t, err, "domain-reader database failure must abort the page")
 	var blocked *accessgrant.BlockedError
 	require.NotErrorAs(t, err, &blocked)
-
 }

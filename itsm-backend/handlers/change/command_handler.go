@@ -81,6 +81,7 @@ func bindChangeMutation(c *gin.Context, target any) bool {
 	}
 	return true
 }
+
 func changeHTTPIdentity(c *gin.Context) (int, workitemmutation.Meta, bool) {
 	id, ok := common.ParsePositiveID(c, "id")
 	if !ok {
@@ -148,6 +149,7 @@ func (h *Handler) AssignChange(c *gin.Context) {
 	}
 	common.Success(c, result)
 }
+
 func (h *Handler) UpdateRisk(c *gin.Context) {
 	id, meta, ok := changeHTTPIdentity(c)
 	if !ok {
@@ -169,10 +171,12 @@ func (h *Handler) UpdateRisk(c *gin.Context) {
 	}
 	common.Success(c, result)
 }
+
 func (h *Handler) ExecuteAction(c *gin.Context) {
 	parts := strings.Split(c.FullPath(), "/")
 	h.executeAction(c, parts[len(parts)-1])
 }
+
 func (h *Handler) executeAction(c *gin.Context, action string) {
 	id, meta, ok := changeHTTPIdentity(c)
 	if !ok {
@@ -207,6 +211,7 @@ func (h *Handler) executeAction(c *gin.Context, action string) {
 	}
 	respondChangeProgress(c, result)
 }
+
 func respondChangeProgress(c *gin.Context, result TaskProgress) {
 	code, message := common.SuccessCode, "success"
 	if result.HTTPStatus() == 409 {
@@ -214,6 +219,7 @@ func respondChangeProgress(c *gin.Context, result TaskProgress) {
 	}
 	c.JSON(result.HTTPStatus(), common.Response{Code: code, Message: message, Data: result})
 }
+
 func (h *Handler) GetTaskProgress(c *gin.Context) {
 	id, meta, ok := changeHTTPIdentity(c)
 	if !ok {

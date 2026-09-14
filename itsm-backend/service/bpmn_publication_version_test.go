@@ -2,10 +2,11 @@ package service
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 func TestPublicationWaitingInstanceRetainsDefinitionVersion(t *testing.T) {

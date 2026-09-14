@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
+	"time"
+
 	"itsm-backend/common"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/dto"
@@ -12,8 +15,6 @@ import (
 	"itsm-backend/ent/ticketcategory"
 	"itsm-backend/ent/user"
 	"itsm-backend/handlers/shared/workitemmutation"
-	"strings"
-	"time"
 )
 
 type MetadataCommand struct {

@@ -5,6 +5,11 @@ package integration
 import (
 	"context"
 	"fmt"
+	"os"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	"itsm-backend/common/tenantctx"
@@ -14,10 +19,6 @@ import (
 	"itsm-backend/handlers/shared/workflowcallback"
 	"itsm-backend/migration"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"os"
-	"sync"
-	"testing"
-	"time"
 )
 
 const srAuthorityVersion = "028_service_request_work_item_authority"
@@ -36,6 +37,7 @@ func consistentLegacyAuthority(t *testing.T, f *incidentEffectsFixture) {
  UPDATE service_requests sr SET tenant_id=w.tenant_id, requester_id=w.requester_id, processor_id=w.assignee_id, version=w.version, created_at=w.created_at, updated_at=w.updated_at, deleted_at=w.deleted_at FROM tickets w WHERE w.id=sr.ticket_id;`)
 	require.NoError(t, err)
 }
+
 func TestPostgresServiceRequestAuthorityRejectsSharedConflicts(t *testing.T) {
 	for _, col := range []string{"tenant_id", "requester_id", "processor_id", "version", "created_at", "updated_at", "deleted_at"} {
 		t.Run(col, func(t *testing.T) {
@@ -59,6 +61,7 @@ func TestPostgresServiceRequestAuthorityRejectsSharedConflicts(t *testing.T) {
 		})
 	}
 }
+
 func TestPostgresServiceRequestAuthorityApplyReapplyEntAndTenantScope(t *testing.T) {
 	f := newIncidentEffectsFixture(t)
 	wi, request := authorityRequest(t, f)

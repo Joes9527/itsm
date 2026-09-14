@@ -7,13 +7,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"github.com/redis/go-redis/v9"
-	"itsm-backend/authentication"
-	creation "itsm-backend/handlers/common/workitemcreation"
 	"math"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/redis/go-redis/v9"
+	"itsm-backend/authentication"
+	creation "itsm-backend/handlers/common/workitemcreation"
 )
 
 type IdentityAssertion struct {
@@ -99,6 +100,7 @@ func (s *IdentityExchangeService) verify(ctx context.Context, a IdentityAssertio
 	}
 	return nil
 }
+
 func containsIdentityValue(values []string, value string) bool {
 	for _, v := range values {
 		if v == value {
@@ -113,6 +115,7 @@ type RedisNonceStore struct{ client *redis.Client }
 func NewRedisNonceStore(client *redis.Client) *RedisNonceStore {
 	return &RedisNonceStore{client: client}
 }
+
 func (s *RedisNonceStore) Claim(ctx context.Context, key string, ttl time.Duration) (bool, error) {
 	if s == nil || s.client == nil {
 		return false, errors.New("nonce store unavailable")
@@ -120,9 +123,11 @@ func (s *RedisNonceStore) Claim(ctx context.Context, key string, ttl time.Durati
 	digest := sha256.Sum256([]byte(key))
 	return s.client.SetNX(ctx, "intake:identity-exchange:nonce:"+hex.EncodeToString(digest[:]), "1", ttl).Result()
 }
+
 func NewIdentityExchangeService(cfg IdentityExchangeConfig, nonces NonceStore, repository IdentityRepository, jwtSecret string) *IdentityExchangeService {
 	return &IdentityExchangeService{config: cfg, nonces: nonces, repository: repository, jwtSecret: jwtSecret, now: time.Now}
 }
+
 func (s *IdentityExchangeService) Exchange(ctx context.Context, a IdentityAssertion, purpose string) (*ExchangeResult, error) {
 	if s == nil || s.repository == nil || s.jwtSecret == "" {
 		return nil, creation.NewInfrastructureUnavailable("identity exchange unavailable", nil)

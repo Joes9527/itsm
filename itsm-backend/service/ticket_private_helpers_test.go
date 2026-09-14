@@ -26,6 +26,7 @@ func TestMapProcessStatusToDTO(t *testing.T) {
 		})
 	}
 }
+
 func TestGetEscalatedPriority(t *testing.T) {
 	for _, tc := range []struct{ current, want string }{{"low", "medium"}, {"medium", "high"}, {"high", "critical"}, {"critical", "critical"}} {
 		got, err := escalatedTicketPriority(tc.current)

@@ -1,11 +1,12 @@
 package service
 
 import (
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/ent"
-	"testing"
-	"time"
 )
 
 func TestResetSLACycle(t *testing.T) {
@@ -48,6 +49,7 @@ func TestSLACycleContractStatus(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) { require.Equal(t, tc.want, projectSLACycle(&tc.item, time.Now()).SLAStatus) })
 	}
 }
+
 func TestTicketSLADetailClosedRemainingFrozen(t *testing.T) {
 	client, _, ctx := setupIncidentTest(t)
 	defer client.Close()

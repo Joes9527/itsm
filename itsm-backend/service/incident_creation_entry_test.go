@@ -54,6 +54,7 @@ func TestIncidentService_CreateIncident_Success(t *testing.T) {
 	assert.Regexp(t, `^TKT-[0-9]{6}-[0-9]{6}$`, response.IncidentNumber)
 	assert.Equal(t, testTenant.ID, response.TenantID)
 }
+
 func TestIncidentService_CreationReturnsDurablePendingWorkflow(t *testing.T) {
 	client, owner, ctx := setupIncidentTest(t)
 	defer client.Close()
@@ -111,6 +112,7 @@ func TestIncidentService_CreateIncident_WithOptionalFields(t *testing.T) {
 	assert.NotNil(t, response.AssigneeID)
 	assert.Equal(t, assignee.ID, *response.AssigneeID)
 }
+
 func TestIncidentService_CreateIncidentRejectsCrossTenantAssigneeAtomically(t *testing.T) {
 	client, service, ctx := setupIncidentTest(t)
 	defer client.Close()
@@ -178,6 +180,7 @@ func TestIncidentService_CreateIncident_CreatesWorkItemInSameTransaction(t *test
 	require.NoError(t, err)
 	assert.Equal(t, workItem.ID, persistedIncident.WorkItemID, "incidents.work_item_id 必须指回新建的 WorkItem")
 }
+
 func TestIncidentService_CreateIncidentAllocatesSequentialWorkItemNumbers(t *testing.T) {
 	client, service, ctx := setupIncidentTest(t)
 	defer client.Close()

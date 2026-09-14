@@ -1,10 +1,11 @@
 package migration
 
 import (
-	"github.com/stretchr/testify/require"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestCatalogAuthorityOperationalSQLMatchesStream(t *testing.T) {

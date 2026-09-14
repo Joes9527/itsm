@@ -5,6 +5,9 @@ package integration
 import (
 	"context"
 	"errors"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
@@ -12,8 +15,6 @@ import (
 	"itsm-backend/ent/processdefinition"
 	"itsm-backend/handlers/shared/workflowcallback"
 	"itsm-backend/service/bpmn"
-	"testing"
-	"time"
 )
 
 func TestWorkItemChangeMetadataCallbackRequiresDurableIdentity(t *testing.T) {

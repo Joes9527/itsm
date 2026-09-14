@@ -7,6 +7,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/dto"
@@ -22,9 +26,6 @@ import (
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"sync"
-	"testing"
-	"time"
 )
 
 func newSubmittedChangeIntake(t *testing.T, kind string) (*changeLifecycleFixture, *intake.Service, creation.Identity, creation.CreateWorkItemCommand, *creation.CreateWorkItemResult) {
@@ -164,6 +165,7 @@ func TestChangeSubmitFrozenWorkflowFailures(t *testing.T) {
 		})
 	}
 }
+
 func TestChangeSubmitEmergencyFrozenBinding(t *testing.T) {
 	f, _, _, _, _ := newSubmittedChangeIntake(t, "emergency")
 	snapshot := f.client.IntakeResolutionSnapshot.Query().Where(intakeresolutionsnapshot.WorkItemID(f.c.WorkItemID)).OnlyX(f.ctx)
@@ -171,6 +173,7 @@ func TestChangeSubmitEmergencyFrozenBinding(t *testing.T) {
 	f.apply(t, f.command("submit", "submit"))
 	require.Equal(t, *snapshot.WorkflowDefinitionID, f.client.ProcessInstance.Query().OnlyX(f.ctx).ProcessDefinitionID)
 }
+
 func TestChangeSubmitRejectsGenericEngineStart(t *testing.T) {
 	for _, entry := range []string{"direct", "transaction", "trigger"} {
 		t.Run(entry, func(t *testing.T) {

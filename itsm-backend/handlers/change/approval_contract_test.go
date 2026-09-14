@@ -2,10 +2,11 @@ package change
 
 import (
 	"encoding/json"
-	"github.com/stretchr/testify/require"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestApprovalHistoryHTTPUsesCamelCaseContract(t *testing.T) {

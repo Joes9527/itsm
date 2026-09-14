@@ -2,10 +2,11 @@ package service
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
-	"itsm-backend/ent"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+	"itsm-backend/ent"
 )
 
 type mutableOrderedHandler struct{ ordered bool }
@@ -24,6 +25,7 @@ func TestOutboxRegistryFreezesOrderingDeclaration(t *testing.T) {
 		require.False(t, registry.SerialByAggregate("unknown"))
 	}
 }
+
 func TestOutboxOrderedClaimsRequireEventType(t *testing.T) {
 	repo := NewOutboxEventRepository(nil, nil)
 	_, err := repo.ClaimDueByEventType(context.Background(), time.Now(), 1, "", true)

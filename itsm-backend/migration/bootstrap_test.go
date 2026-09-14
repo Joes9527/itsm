@@ -101,6 +101,7 @@ func (m *recordingBootstrapMigrator) InspectMigrationTarget(context.Context) err
 	*m.events = append(*m.events, "inspect")
 	return m.inspectErr
 }
+
 func (m *recordingBootstrapMigrator) WithMigrationLock(ctx context.Context, fn func(context.Context) error) error {
 	return fn(ctx)
 }

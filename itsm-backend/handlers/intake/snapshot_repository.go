@@ -3,8 +3,9 @@ package intake
 import (
 	"context"
 	"encoding/json"
-	"itsm-backend/handlers/common/workitemcreation"
 	"strings"
+
+	"itsm-backend/handlers/common/workitemcreation"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/configurationitem"

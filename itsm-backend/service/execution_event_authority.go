@@ -25,6 +25,7 @@ type ExecutionEventAuthority struct {
 func NewExecutionEventAuthority(client *ent.Client, policy *database.ExecutionPolicy) *ExecutionEventAuthority {
 	return &ExecutionEventAuthority{client: client, policy: policy}
 }
+
 func (a *ExecutionEventAuthority) ValidateEvent(ctx context.Context, ref executionscope.Ref, env eventbus.Envelope) error {
 	if a == nil || a.client == nil || ctx == nil {
 		return executionscope.ErrDenied

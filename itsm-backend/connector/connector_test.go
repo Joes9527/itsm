@@ -3,10 +3,11 @@ package connector
 import (
 	"context"
 	"errors"
-	"itsm-backend/common/tenantctx"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"sync/atomic"
 	"testing"
+
+	"itsm-backend/common/tenantctx"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 )
 
 // fakeConnector 测试用连接器

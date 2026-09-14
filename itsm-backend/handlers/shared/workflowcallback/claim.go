@@ -13,6 +13,7 @@ type claimKey struct{}
 func WithClaim(ctx context.Context, claim Claim) context.Context {
 	return context.WithValue(ctx, claimKey{}, claim)
 }
+
 func CurrentClaim(ctx context.Context) (Claim, bool) {
 	if ctx == nil {
 		return Claim{}, false

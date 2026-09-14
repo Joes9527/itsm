@@ -2,11 +2,12 @@ package controller
 
 import (
 	"errors"
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/handlers/shared/workitemmutation"
-	"strconv"
 )
 
 func (c *IncidentController) StartIncident(ctx *gin.Context) { c.applyIncidentCommand(ctx, "start") }

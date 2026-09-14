@@ -3,8 +3,9 @@ package intake
 import (
 	"context"
 	"encoding/json"
-	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/ent/outboxevent"
 	creation "itsm-backend/handlers/common/workitemcreation"

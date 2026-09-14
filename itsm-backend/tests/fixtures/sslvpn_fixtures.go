@@ -3,11 +3,12 @@ package fixtures
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"itsm-backend/ent/catalogaccesspolicy"
 	"itsm-backend/ent/externalidentity"
 	"itsm-backend/ent/processdefinition"
 	"itsm-backend/handlers/common/accessgrant"
-	"strings"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/fielddefinition"

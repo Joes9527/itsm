@@ -117,6 +117,7 @@ func (h *WorkflowStartOutboxHandler) Deliver(ctx context.Context, event *ent.Out
 	}
 	return err
 }
+
 func workflowStartReferenceError(err error, reference string) error {
 	if ent.IsNotFound(err) {
 		return blockOutboxDelivery("workflow start " + reference + " mismatch")

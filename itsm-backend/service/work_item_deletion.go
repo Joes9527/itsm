@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"database/sql"
+	"time"
+
 	"itsm-backend/common"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/database"
@@ -10,7 +12,6 @@ import (
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/handlers/shared/workitemmutation"
-	"time"
 )
 
 func (s *TicketService) SetDirectorySnapshot(directory database.DirectorySnapshot) {

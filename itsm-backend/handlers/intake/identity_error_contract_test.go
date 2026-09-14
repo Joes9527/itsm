@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http/httptest"
+	"testing"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"itsm-backend/authentication"
 	"itsm-backend/authorization"
-	"net/http/httptest"
-	"testing"
-	"time"
 )
 
 func TestIdentityHTTPErrorDetailsStrictContract(t *testing.T) {
@@ -82,6 +83,7 @@ func TestIdentityHTTPErrorDetailsStrictContract(t *testing.T) {
 	require.Equal(t, 400, w.Code, w.Body.String())
 	assertIdentityErrorDetails(t, w, 1001, "InvalidCommand", false, true)
 }
+
 func assertIdentityErrorDetails(t *testing.T, w *httptest.ResponseRecorder, code int, errorCode string, retryable, nonempty bool) {
 	t.Helper()
 	var wire map[string]any

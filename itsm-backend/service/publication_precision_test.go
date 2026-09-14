@@ -3,10 +3,11 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/ent/enttest"
-	"testing"
 )
 
 func TestPublicationPersistedNumericOptionsAndRouting(t *testing.T) {

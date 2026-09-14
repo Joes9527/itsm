@@ -3,6 +3,8 @@ package integration
 import (
 	"context"
 	"fmt"
+	"testing"
+
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -10,7 +12,6 @@ import (
 	"itsm-backend/ent/enttest"
 	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/service"
-	"testing"
 )
 
 // Former persistence deletion tests now exercise the sole application owner.
@@ -45,12 +46,14 @@ func TestRepository_Delete(t *testing.T) {
 	require.NotNil(t, after.DeletedAt)
 	require.Equal(t, before+1, after.Version)
 }
+
 func TestRepository_Delete_WrongTenant(t *testing.T) {
 	ctx, c, s, m, ids := deletionTestFixture(t)
 	m.TenantID = 99999
 	require.Error(t, s.DeleteTicket(ctx, ids[0], m))
 	require.Nil(t, c.Ticket.GetX(ctx, ids[0]).DeletedAt)
 }
+
 func TestRepository_BatchDelete(t *testing.T) {
 	ctx, c, s, m, ids := deletionTestFixture(t)
 	before := map[int]int{}
@@ -64,10 +67,12 @@ func TestRepository_BatchDelete(t *testing.T) {
 		require.Equal(t, before[id]+1, c.Ticket.GetX(ctx, id).Version)
 	}
 }
+
 func TestRepository_BatchDelete_EmptyList(t *testing.T) {
 	ctx, _, s, m, _ := deletionTestFixture(t)
 	require.Error(t, s.BatchDeleteTickets(ctx, []int{}, m))
 }
+
 func TestRepository_BatchDelete_TenantIsolation(t *testing.T) {
 	ctx, c, s, m, ids := deletionTestFixture(t)
 	m.TenantID = 99999
