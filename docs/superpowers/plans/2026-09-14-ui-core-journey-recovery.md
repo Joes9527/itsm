@@ -128,3 +128,12 @@
 - 修正 MSP、流程覆盖及 PostgreSQL generic 场景的旧 write fixture，避免负例因错误缺少 create 而掩盖原本要验证的租户/流程权限。PostgreSQL 专项仅调整 fixture，未执行该数据库专项，不冒充已验证。
 - 授权与 Intake 包、完整 contract/RBAC 已通过；筛选的真实 Intake/飞书本地集成测试通过，使用隔离 fixture，无外部 provider 调用。独立复审无剩余发现。前端/API payload 未变化；共享 8080 尚未替换，当前修复不能记作开发环境普通求助已通过浏览器验收。
 - 用户确认后续服务请求协作范围：Helpdesk 仅处理本人当前已分配的服务请求，团队范围暂缓。该项另行实现，不与普通求助授权混为一项。
+
+
+### Requested Item 协作范围修复（源码 implemented，待部署验收）
+
+- 分支 `codex/fix/service-request-collaboration-scope`，基于 `e630d66b`。用户已明确 Helpdesk 仅对本人当前已分配的服务请求协作。共享评论创建/编辑及附件上传在原后端权限边界读取真实 Requested Item：要求 service_request:read，申请人须有 write；Helpdesk 须为当前 assignee 且有 provision。已有显式 service_request:* 管理权限继续有效。读、删除、专业字段更新、交付和审批命令未改；没有给任何角色增权，没有用 ticket 权限替代服务请求权限。
+- 前端附件仅做 service_request 权限的粗粒度入口判断；身份/分配范围以后端判断为准。原 ticket 附件适配器和接口保持复用。该政策仅应用于 Requested Item，其它 recordClass 保留现有策略。
+- 回归先红后绿：middleware 验证 requester/assigned Helpdesk 的 create/update、未分配/只读/缺 read/缺 actor/跨租户/旧 create-update 权限拒绝，以及资源管理员例外。真实 Intake + Gin/controller/service + SQLite/临时文件存储验证评论与附件持久化、自己的评论 PUT 编辑成功；转派完成后的新 POST/PUT 请求均 403，内容和记录数不变。这里不承诺请求执行途中并发转派的数据库原子撤权。
+- 前端 3 suites / 29 tests 通过；类型检查和生产构建通过；lint 无错误，仅保留 BPMNDesigner 既有 warning。后端 authorization/middleware/contract/RBAC 完整通过，Requested Item 定向 HTTP 集成通过。最初附件 fixture 使用默认 octet-stream，被既有类型验证拒绝，改用浏览器文本上传对应的 text/plain 后通过，未放宽生产文件验证。
+- 独立审查未发现阻断问题；已补其建议的真实 PUT、非 requester/assignee 的管理员，以及旧专业动作和通用 ticket 权限不能替代协作授权的回归。无共享数据库或账号权限修改，8080 仍是原部署；这些结果不能替代后续部署后的三角色浏览器验收。

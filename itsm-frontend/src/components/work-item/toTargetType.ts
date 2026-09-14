@@ -3,8 +3,8 @@ import type { WorkItemCommon } from './WorkItemTypes';
 
 // toTargetType 把 WorkItem 的 recordClass 映射到 detail-tabs 通用组件（CommentPanel/
 // AttachmentPanel）用的 TargetType。与后端 middleware.resourceForRecordClass
-// （itsm-backend/middleware/workitem_rbac.go）刻意保持同一组映射规则：incident/problem/
-// change_request 三个专业域各自对应，其余 recordClass 统一落到 "ticket"。
+// 的权限资源不是同一个概念：此函数仅选择展示/适配器目标，Requested Item
+// 仍复用 ticket 附件接口；权限资源在 getAttachmentPermissions 中单独处理。
 export function toTargetType(recordClass: WorkItemCommon['recordClass']): TargetType {
   switch (recordClass) {
     case 'incident':
@@ -34,6 +34,15 @@ export function getAttachmentPermissions(
   ];
   if (!recordClass || !registered.includes(recordClass))
     return { canRead: false, canUpload: false, canDelete: false };
+  if (recordClass === 'service_request_item') {
+    const canRead = hasPermission('service_request:read');
+    return {
+      canRead,
+      // Coarse affordance only: the server checks requester/current assignee on every write.
+      canUpload: canRead && (hasPermission('service_request:write') || hasPermission('service_request:provision')),
+      canDelete: hasPermission('service_request:delete'),
+    };
+  }
   const resource = toTargetType(recordClass as WorkItemCommon['recordClass']);
   return {
     canRead: hasPermission(`${resource}:read`),

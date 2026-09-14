@@ -51,7 +51,13 @@ func RequireWorkItemRecordClassPermission(action string) gin.HandlerFunc {
 			return
 		}
 
-		_, _, err = authorization.AuthorizeWorkItem(c.Request.Context(), client, id, tenantID, role.(string), action)
+		// create/update on shared routes mean comment write or attachment upload.
+		// Requested Item collaboration additionally uses the authenticated actor's row scope.
+		if action == "create" || action == "update" {
+			_, _, err = authorization.AuthorizeWorkItemCollaboration(c.Request.Context(), client, id, tenantID, c.GetInt("user_id"), role.(string), action)
+		} else {
+			_, _, err = authorization.AuthorizeWorkItem(c.Request.Context(), client, id, tenantID, role.(string), action)
+		}
 		if err != nil {
 			appErr, ok := err.(*common.AppError)
 			if !ok || appErr.Code == common.ErrCodeInternal {
