@@ -228,18 +228,6 @@ func callbackActionContractForHandler(handler bpmn.ServiceTaskHandlerInterface, 
 	return contract, nil
 }
 
-func cloneBPMNCallbackPayload(payload map[string]interface{}) (map[string]interface{}, error) {
-	clonedPayload := make(map[string]interface{}, len(payload))
-	for key, value := range payload {
-		cloned, err := cloneBPMNJSONValue(value, 0)
-		if err != nil {
-			return nil, fmt.Errorf("回调字段 %q 类型无效", key)
-		}
-		clonedPayload[key] = cloned
-	}
-	return clonedPayload, nil
-}
-
 // validateBPMNCallbackActionContract ensures a handler's declared callback
 // contract cannot carry system-owned identity or ambiguous fields into a
 // durable callback payload.

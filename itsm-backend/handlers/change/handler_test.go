@@ -564,15 +564,6 @@ func TestChangeController_GetRiskAssessment(t *testing.T) {
 	require.Contains(t, w.Body.String(), `"riskLevel":"medium"`)
 }
 
-// Helper functions
-func strPtr(s string) *string {
-	return &s
-}
-
-func ptrChangePriority(p dto.ChangePriority) *dto.ChangePriority {
-	return &p
-}
-
 // ===================== CMDB Impact Summary Helper Tests =====================
 
 func TestRecommendRiskLevel(t *testing.T) {

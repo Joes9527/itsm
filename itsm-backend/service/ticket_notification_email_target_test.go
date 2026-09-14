@@ -15,11 +15,12 @@ import (
 	"itsm-backend/connector"
 	"itsm-backend/connector/builtin/msgraph"
 
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	"itsm-backend/common/executionscope"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/dto"
+
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 func TestNotificationEmailTargetOriginalTransactionAndWorker(t *testing.T) {
@@ -230,7 +231,7 @@ func configureDurableGraphQueue(t *testing.T, f *durableNotificationFixture, pro
 			return
 		}
 		if err := probe.SendMail(r.Context(), "sender@example.test", payload.Message.ToRecipients[0].EmailAddress.Address, payload.Message.Subject, payload.Message.Body.Content, ""); err != nil {
-			http.Error(w, "private rejection", 503)
+			http.Error(w, "private rejection", http.StatusServiceUnavailable)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)

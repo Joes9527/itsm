@@ -171,15 +171,14 @@ func (c *CategoryCondition) Evaluate(ctx context.Context, incident *ent.Incident
 
 // EscalationAction 升级动作
 type EscalationAction struct {
-	execution      *database.ExecutionPolicy
-	Level          int
-	Reason         string
-	NotifyUsers    []int
-	AutoAssign     bool
-	client         *ent.Client
-	actorDirectory *ent.Client
-	logger         *zap.SugaredLogger
-	alertCreator   IncidentAlertCreator
+	execution    *database.ExecutionPolicy
+	Level        int
+	Reason       string
+	NotifyUsers  []int
+	AutoAssign   bool
+	client       *ent.Client
+	logger       *zap.SugaredLogger
+	alertCreator IncidentAlertCreator
 }
 
 func (a *EscalationAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
@@ -203,15 +202,14 @@ func (a *EscalationAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *
 
 // NotificationAction 通知动作
 type NotificationAction struct {
-	execution      *database.ExecutionPolicy
-	Channels       []string
-	Recipients     []string
-	Message        string
-	Severity       string
-	client         *ent.Client
-	actorDirectory *ent.Client
-	logger         *zap.SugaredLogger
-	alertCreator   IncidentAlertCreator
+	execution    *database.ExecutionPolicy
+	Channels     []string
+	Recipients   []string
+	Message      string
+	Severity     string
+	client       *ent.Client
+	logger       *zap.SugaredLogger
+	alertCreator IncidentAlertCreator
 }
 
 func (a *NotificationAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {

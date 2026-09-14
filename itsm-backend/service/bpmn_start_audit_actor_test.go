@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"testing"
 
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processinstance"
@@ -14,31 +13,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-type processStartTriggerCapture struct {
-	ctx context.Context
-	req *dto.ProcessTriggerRequest
-}
-
-func (c *processStartTriggerCapture) TriggerProcess(ctx context.Context, req *dto.ProcessTriggerRequest) (*dto.ProcessTriggerResponse, error) {
-	c.ctx = ctx
-	c.req = req
-	return &dto.ProcessTriggerResponse{}, nil
-}
-
-func (c *processStartTriggerCapture) TriggerByBusinessType(context.Context, dto.BusinessType, int, map[string]interface{}, string, int) (*dto.ProcessTriggerResponse, error) {
-	return nil, nil
-}
-
-func (c *processStartTriggerCapture) CancelProcess(context.Context, int, string) error { return nil }
-
-func (c *processStartTriggerCapture) SuspendProcess(context.Context, int, string) error { return nil }
-
-func (c *processStartTriggerCapture) ResumeProcess(context.Context, int) error { return nil }
-
-func (c *processStartTriggerCapture) GetProcessStatus(context.Context, int) (*dto.ProcessTriggerResponse, error) {
-	return nil, nil
-}
 
 func processStartAudit(t *testing.T, f *bpmnAuthorizationFixture, instance *ent.ProcessInstance) *ent.ProcessAuditLog {
 	t.Helper()

@@ -70,22 +70,6 @@ func findTaskByDefinitionKey(t *testing.T, client *ent.Client, ctx context.Conte
 	return task
 }
 
-func createUserTaskCallbackChange(t *testing.T, client *ent.Client, ctx context.Context, tenantID, requesterID int, number string) (*ent.Ticket, *ent.Change) {
-	t.Helper()
-	workItem := client.Ticket.Create().
-		SetTitle("User task callback change").
-		SetStatus("draft").
-		SetTicketNumber(number).
-		SetRecordClass("change_request").
-		SetRequesterID(requesterID).
-		SetTenantID(tenantID).
-		SaveX(ctx)
-	changeEntity := client.Change.Create().
-		SetWorkItemID(workItem.ID).
-		SaveX(ctx)
-	return workItem, changeEntity
-}
-
 // TestUserTaskWithServiceTaskTypeMetadataTriggersCallback 是回归测试：
 // change_normal_flow.bpmn 的 Activity_CABApproval 是 UserTask，但带了
 // service_task_type=change_task / action=approve_change 的 extensionElements metaData，

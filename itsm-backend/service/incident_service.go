@@ -431,6 +431,7 @@ func (s *IncidentService) updateIncident(ctx context.Context, tx *ent.Tx, id int
 // IsUnfinished uses the Incident owner's actionable/resolved/final boundary.
 func (s *IncidentService) IsUnfinished(_ context.Context, _ *ent.Client, item *ent.Ticket) (bool, error) {
 	if item == nil || item.RecordClass != "incident" {
+		//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 		return false, fmt.Errorf("Incident WorkItem is required")
 	}
 	switch item.Status {

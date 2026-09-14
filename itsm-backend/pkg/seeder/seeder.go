@@ -816,13 +816,6 @@ func (s *Seeder) deploymentMode() string {
 	return s.appConfig.Deployment.Mode
 }
 
-func nilIfEmpty(value string) *string {
-	if strings.TrimSpace(value) == "" {
-		return nil
-	}
-	return &value
-}
-
 func (s *Seeder) seedAdmin(ctx context.Context) {
 	t := s.tenant(ctx)
 	if t == nil {
@@ -2699,10 +2692,6 @@ func (s *Seeder) seedTicketTemplates(ctx context.Context) {
 
 		// 按序创建新定义
 		for i, fd := range tmpl.Fields {
-			opts := fd.Options
-			if opts == nil {
-				opts = []map[string]interface{}{}
-			}
 			sortOrder := fd.SortOrder
 			if sortOrder == 0 {
 				sortOrder = i

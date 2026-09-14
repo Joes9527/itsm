@@ -12,9 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"itsm-backend/authentication"
 	creation "itsm-backend/handlers/common/workitemcreation"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type IdentityAssertion struct {
@@ -121,7 +122,11 @@ func (s *RedisNonceStore) Claim(ctx context.Context, key string, ttl time.Durati
 		return false, errors.New("nonce store unavailable")
 	}
 	digest := sha256.Sum256([]byte(key))
-	return s.client.SetNX(ctx, "intake:identity-exchange:nonce:"+hex.EncodeToString(digest[:]), "1", ttl).Result()
+	result, err := s.client.SetArgs(ctx, "intake:identity-exchange:nonce:"+hex.EncodeToString(digest[:]), "1", redis.SetArgs{Mode: "NX", TTL: ttl}).Result()
+	if errors.Is(err, redis.Nil) {
+		return false, nil
+	}
+	return result == "OK", err
 }
 
 func NewIdentityExchangeService(cfg IdentityExchangeConfig, nonces NonceStore, repository IdentityRepository, jwtSecret string) *IdentityExchangeService {

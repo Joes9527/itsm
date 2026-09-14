@@ -25,6 +25,7 @@ func (h *IncidentServiceTaskHandler) applyLifecycle(ctx context.Context, action 
 		return BlockedEffect(CallbackBlockHandlerContract, "Incident lifecycle requires durable callback identity"), nil
 	}
 	if h.client == nil || h.incidentService == nil {
+		//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 		return nil, fmt.Errorf("Incident command service unavailable")
 	}
 	row, err := h.client.ProcessCallbackOutbox.Query().Where(processcallbackoutbox.ExecutionKey(key), processcallbackoutbox.TenantID(tenantID), processcallbackoutbox.HandlerID(h.GetHandlerID()), processcallbackoutbox.Action(action), processcallbackoutbox.Status("processing")).Only(ctx)

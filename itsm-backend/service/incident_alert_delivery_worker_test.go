@@ -390,6 +390,7 @@ func TestOutboxDeliveryWorkerDisabledPreservesEveryQueueState(t *testing.T) {
 			worker, err := NewOutboxDeliveryWorker(NewOutboxEventRepository(client, policy), OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: time.Second, MaxAttempts: 3}, zaptest.NewLogger(t).Sugar(), testOutboxRegistry(t, sender))
 			require.NoError(t, err)
 			require.ErrorIs(t, worker.DispatchOnce(ctx), executionscope.ErrDenied)
+			//lint:ignore SA1012 Deliberately verifies nil-context rejection.
 			require.ErrorIs(t, worker.DispatchOnce(nil), executionscope.ErrDenied)
 			cancelled, cancel := context.WithCancel(ctx)
 			cancel()

@@ -424,13 +424,6 @@ func validCompleteRequest(task *ent.ProcessTask, runID, stepID string) KafAction
 	}
 }
 
-func countKafActionLedgers(t *testing.T, client *ent.Client, tenantID int) int {
-	t.Helper()
-	count, err := client.KafTaskActionLedger.Query().Where(kaftaskactionledger.TenantIDEQ(tenantID)).Count(context.Background())
-	require.NoError(t, err)
-	return count
-}
-
 func TestExecuteAction_RecoversCompletedTaskAfterAuditFailureWithoutSecondEngineCall(t *testing.T) {
 	_, svc, task, ctx := newKafActionFixture(t)
 	req := validCompleteRequest(task, "run-1", "finish")

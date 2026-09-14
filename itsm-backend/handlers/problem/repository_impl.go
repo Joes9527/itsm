@@ -2,7 +2,6 @@ package problem
 
 import (
 	"context"
-	"fmt"
 
 	"itsm-backend/ent"
 	entpredicate "itsm-backend/ent/predicate"
@@ -85,13 +84,6 @@ func (r *EntRepository) toDomain(e *ent.Problem) *Problem {
 		p.WorkItemID = &id
 	}
 	return p
-}
-
-func rollbackProblemTx(tx *ent.Tx, cause error) error {
-	if rollbackErr := tx.Rollback(); rollbackErr != nil {
-		return fmt.Errorf("%w (rollback also failed: %v)", cause, rollbackErr)
-	}
-	return cause
 }
 
 func (r *EntRepository) Get(ctx context.Context, id int, tenantID int) (*Problem, error) {

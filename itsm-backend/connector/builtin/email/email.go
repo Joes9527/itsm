@@ -16,11 +16,11 @@ import (
 	"net/smtp"
 	"net/textproto"
 	"strings"
-	"sync"
 	"time"
 
-	"go.uber.org/zap"
 	"itsm-backend/connector"
+
+	"go.uber.org/zap"
 )
 
 func init() {
@@ -30,7 +30,6 @@ func init() {
 type EmailConnector struct {
 	cfg       connector.Config
 	logger    *zap.SugaredLogger
-	mu        sync.Mutex
 	cancel    context.CancelFunc
 	lastUID   uint32
 	pollCount int

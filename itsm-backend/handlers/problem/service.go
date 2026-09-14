@@ -10,8 +10,9 @@ import (
 	"itsm-backend/common/executionscope"
 	"itsm-backend/database"
 
-	"go.uber.org/zap"
 	"itsm-backend/ent"
+
+	"go.uber.org/zap"
 )
 
 type Service struct {
@@ -87,22 +88,6 @@ func (s *Service) IsUnfinished(_ context.Context, _ *ent.Client, item *ent.Ticke
 	default:
 		return false, fmt.Errorf("unsupported Problem status %q", item.Status)
 	}
-}
-
-func uniquePositiveIDs(ids []int) []int {
-	seen := make(map[int]struct{}, len(ids))
-	result := make([]int, 0, len(ids))
-	for _, id := range ids {
-		if id <= 0 {
-			continue
-		}
-		if _, exists := seen[id]; exists {
-			continue
-		}
-		seen[id] = struct{}{}
-		result = append(result, id)
-	}
-	return result
 }
 
 func (s *Service) GetStats(ctx context.Context, tenantID int) (*ProblemStats, error) {

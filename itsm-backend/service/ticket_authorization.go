@@ -12,10 +12,6 @@ import (
 	"itsm-backend/repository/ticket"
 )
 
-func isRequester(t *ticket.Ticket, actorUserID int) bool {
-	return t.RequesterID == actorUserID
-}
-
 // CanAssign：ticket:assign 权限 + 工单未结束，不排除本人（分配是路由工作，非职责分离场景）。
 func CanAssign(actor ActionActor, t *ticket.Ticket) dto.ActionPermission {
 	if isFinalStatus(t.Status) {

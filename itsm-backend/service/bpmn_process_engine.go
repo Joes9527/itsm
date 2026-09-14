@@ -1006,19 +1006,6 @@ func (e *CustomProcessEngine) authorizeTaskParticipantWithClient(ctx context.Con
 	return common.NewForbiddenError("当前用户不是该任务的审批人或候选人")
 }
 
-// authorizeKafAutomationActor 校验异步委派任务（如 kaf_delegate）只能被 kaf_automation
-// 角色的账号完成，任务必须处于 delegated 状态，且账号所属租户必须与任务所属租户一致。
-// assignee/candidateUsers 对机器完成的任务没有意义——同一租户下所有委派任务都由
-// 同一个账号处理，不存在"候选人"概念。无用户上下文时直接拒绝，不复用人工任务分支
-// "无上下文即放行"的口子：委派任务必须始终有明确的认证主体。
-func (e *CustomProcessEngine) authorizeKafAutomationActor(ctx context.Context, task *ent.ProcessTask) error {
-	scope, err := BPMNAccessScopeFromContext(ctx)
-	if err != nil {
-		return err
-	}
-	return e.authorizeKafAutomationActorWithClient(ctx, e.client, task, scope)
-}
-
 func (e *CustomProcessEngine) authorizeKafAutomationActorWithClient(ctx context.Context, client *ent.Client, task *ent.ProcessTask, scope BPMNAccessScope) error {
 	return e.authorizeKafAutomationActorForStatusWithClient(ctx, client, task, scope, common.ProcessTaskStatusDelegated)
 }
@@ -3329,27 +3316,6 @@ func (s *bpmnTaskService) authorizeTaskRead(ctx context.Context, task *ent.Proce
 		return common.NewForbiddenError("无权读取任务")
 	}
 	return nil
-}
-
-func (s *bpmnTaskService) authorizeTaskUpdate(ctx context.Context, task *ent.ProcessTask) (BPMNAccessScope, error) {
-	scope, err := BPMNAccessScopeFromContext(ctx)
-	if err != nil {
-		return BPMNAccessScope{}, err
-	}
-	if task == nil || task.TenantID != scope.TenantID {
-		return BPMNAccessScope{}, common.NewNotFoundError("process task")
-	}
-	if scope.CanUpdateAllTasks {
-		return scope, nil
-	}
-	if s.participationResolver == nil {
-		return BPMNAccessScope{}, common.NewForbiddenError("无权操作该流程任务")
-	}
-	actor, err := s.participationResolver.resolveActor(ctx, scope)
-	if err != nil || !s.participationResolver.matchesTask(task, actor) {
-		return BPMNAccessScope{}, common.NewForbiddenError("无权操作该流程任务")
-	}
-	return scope, nil
 }
 
 func (e *CustomProcessEngine) loadTaskMutationActor(ctx context.Context, client *ent.Client, scope BPMNAccessScope) (*ent.User, error) {

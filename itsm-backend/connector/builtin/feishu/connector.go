@@ -351,22 +351,6 @@ func mapPriorityToFeishu(itsmPriority string) string {
 	}
 }
 
-// mapPriorityFromFeishu maps Feishu task priority to ITSM ticket priority
-func mapPriorityFromFeishu(feishuPriority string) string {
-	switch strings.ToLower(feishuPriority) {
-	case "low":
-		return "low"
-	case "medium":
-		return "medium"
-	case "high":
-		return "high"
-	case "urgent":
-		return "critical"
-	default:
-		return "medium"
-	}
-}
-
 // mapStatusToFeishu maps ITSM ticket status to Feishu task status
 func mapStatusToFeishu(itsmStatus string) string {
 	switch strings.ToLower(itsmStatus) {
@@ -380,21 +364,5 @@ func mapStatusToFeishu(itsmStatus string) string {
 		return "canceled"
 	default:
 		return "not_started"
-	}
-}
-
-// mapStatusFromFeishu maps Feishu task status to ITSM ticket status
-func mapStatusFromFeishu(feishuStatus string) string {
-	switch strings.ToLower(feishuStatus) {
-	case "not_started":
-		return "open"
-	case "in_progress":
-		return "in_progress"
-	case "completed":
-		return "resolved"
-	case "canceled":
-		return "closed"
-	default:
-		return "open"
 	}
 }

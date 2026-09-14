@@ -7,8 +7,6 @@ import (
 
 	"itsm-backend/ent"
 
-	"itsm-backend/service"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -84,17 +82,6 @@ func TestSubmitChange_MarkSubmittedFailureCompensatesByCancellingProcess(t *test
 	require.Equal(t, "draft", f.client.Ticket.GetX(f.ctx, f.record.WorkItemID).Status)
 	require.Zero(t, f.client.ProcessInstance.Query().CountX(f.ctx))
 	require.Zero(t, f.client.ProcessTask.Query().CountX(f.ctx))
-}
-
-type cancelAlwaysFailsTriggerService struct {
-	*service.ProcessTriggerService
-	cancelCalls []int
-	cancelErr   error
-}
-
-func (w *cancelAlwaysFailsTriggerService) CancelProcess(ctx context.Context, processInstanceID int, reason string) error {
-	w.cancelCalls = append(w.cancelCalls, processInstanceID)
-	return w.cancelErr
 }
 
 func TestSubmitChange_MarkSubmittedFailure_CancelProcessAlsoFails_ReturnsOriginalError(t *testing.T) {

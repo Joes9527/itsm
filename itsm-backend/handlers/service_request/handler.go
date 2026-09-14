@@ -5,7 +5,6 @@ import (
 	"errors"
 	"strconv"
 	"strings"
-	"time"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
@@ -334,54 +333,6 @@ func (h *Handler) Delete(c *gin.Context) {
 	}
 
 	common.Success(c, nil)
-}
-
-func normalizeCreateServiceRequest(req *dto.CreateServiceRequestRequest) {
-	if req.FormData == nil {
-		req.FormData = map[string]any{}
-	}
-	if req.Title == "" {
-		if title, ok := req.FormData["title"].(string); ok {
-			req.Title = title
-		}
-	}
-	if req.Reason == "" {
-		if reason, ok := req.FormData["reason"].(string); ok {
-			req.Reason = reason
-		}
-	}
-	if req.CostCenter == "" {
-		if costCenter, ok := req.FormData["cost_center"].(string); ok {
-			req.CostCenter = costCenter
-		}
-	}
-	if req.DataClassification == "" {
-		if classification, ok := req.FormData["data_classification"].(string); ok {
-			req.DataClassification = classification
-		}
-	}
-	if req.DataClassification == "" {
-		req.DataClassification = "internal"
-	}
-	if len(req.SourceIPWhitelist) == 0 {
-		if whitelist, ok := req.FormData["source_ip_whitelist"].([]string); ok {
-			req.SourceIPWhitelist = whitelist
-		}
-	}
-	if req.ExpireAt == nil {
-		if expireAt, ok := req.FormData["expire_at"].(string); ok {
-			if parsed, err := time.Parse(time.RFC3339, expireAt); err == nil {
-				req.ExpireAt = &parsed
-			}
-		}
-	}
-	if req.ExpireAt == nil {
-		defaultExpireAt := time.Now().Add(30 * 24 * time.Hour)
-		req.ExpireAt = &defaultExpireAt
-	}
-	if ack, ok := req.FormData["compliance_ack"].(bool); ok {
-		req.ComplianceAck = ack
-	}
 }
 
 func normalizeUpdateServiceRequest(req *dto.UpdateServiceRequestRequest) {

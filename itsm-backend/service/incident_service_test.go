@@ -68,25 +68,6 @@ func createIncidentTestWorkItem(t *testing.T, ctx context.Context, client *ent.C
 	return workItem
 }
 
-func setIncidentFixtureWorkItemFields(t *testing.T, ctx context.Context, client *ent.Client, entity *ent.Incident, title, description, status, priority string) {
-	t.Helper()
-	_, err := client.Ticket.UpdateOneID(entity.WorkItemID).
-		SetTitle(title).SetDescription(description).SetStatus(status).SetPriority(priority).Save(ctx)
-	require.NoError(t, err)
-}
-
-type blockingIncidentProcessTrigger struct {
-	ProcessTriggerServiceInterface
-	entered chan struct{}
-	release chan struct{}
-}
-
-func (f *blockingIncidentProcessTrigger) TriggerProcess(context.Context, *dto.ProcessTriggerRequest) (*dto.ProcessTriggerResponse, error) {
-	close(f.entered)
-	<-f.release
-	return &dto.ProcessTriggerResponse{ProcessInstanceID: 1}, nil
-}
-
 // ==================== 创建事件测试 ====================
 
 // ==================== WorkItem 迁移测试（Wave 2） ====================

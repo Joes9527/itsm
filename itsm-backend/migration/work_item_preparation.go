@@ -10,8 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lib/pq"
 	"itsm-backend/common/workitemidentity"
+
+	"github.com/lib/pq"
 )
 
 // Retained columns are an explicit evidence registry, never a second write path.
@@ -201,7 +202,7 @@ func (m *Migrator) ApplyPreparation(ctx context.Context, e MigrationEvidence) er
 			return err
 		}
 		defer tx.Rollback()
-		inv, baseline, err := m.preparationInventory(ctx, tx)
+		inv, _, err := m.preparationInventory(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -228,7 +229,7 @@ func (m *Migrator) ApplyPreparation(ctx context.Context, e MigrationEvidence) er
 		if inv2 != inv {
 			return fmt.Errorf("preparation inventory changed while locking")
 		}
-		baseline = baseline2
+		baseline := baseline2
 		started := time.Now()
 		if err = validatePreparationShape(ctx, tx, inv.Target.Schema, false, m.controlConfig.ReviewedGrants); err != nil {
 			return err

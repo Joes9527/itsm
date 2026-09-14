@@ -81,6 +81,7 @@ func (s *TicketService) enqueueFeishuUpdate(ctx context.Context, tx *ent.Tx, ite
 	}
 	target, ok := conn.(FeishuTaskUpdater)
 	if !ok || target.TaskDestinationIdentity() == "" {
+		//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 		return nil, fmt.Errorf("Feishu update capability or destination unavailable")
 	}
 	item, err := tx.Ticket.Query().Where(ticket.IDEQ(itemID), ticket.TenantIDEQ(m.TenantID), ticket.DeletedAtIsNil()).Only(ctx)
@@ -89,11 +90,13 @@ func (s *TicketService) enqueueFeishuUpdate(ctx context.Context, tx *ent.Tx, ite
 	}
 	mapping, err := tx.FeishuTicketSync.Query().Where(feishuticketsync.TenantIDEQ(m.TenantID), feishuticketsync.TicketIDEQ(itemID)).Only(ctx)
 	if err != nil {
+		//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 		return nil, fmt.Errorf("Feishu update requires an existing task mapping: %w", err)
 	}
 	// The existing unique(tenant_id,feishu_task_id) protects participating targets
 	// only when both remote identity fields agree. Never repair legacy identities.
 	if mapping.FeishuTaskGUID == "" || mapping.FeishuTaskID != mapping.FeishuTaskGUID {
+		//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 		return nil, fmt.Errorf("Feishu mapping identity requires reconciliation")
 	}
 	task, err := prepareFeishuTask(ctx, tx.Client(), item)

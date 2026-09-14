@@ -638,6 +638,7 @@ func TestProcessInstanceMutationAuditMetadata(t *testing.T) {
 			if tt.prepare != nil {
 				instance = tt.prepare(t, f, instance)
 			}
+			//lint:ignore SA1029 Deliberately supplies a legacy raw key to verify typed authorization boundaries.
 			ctx := context.WithValue(f.scopedCtx(false, true, false, false), "user", f.outsider)
 			require.NoError(t, tt.mutate(f, ctx, instance))
 

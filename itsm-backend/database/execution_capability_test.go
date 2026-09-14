@@ -4,10 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"itsm-backend/common/executionscope"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/config"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestExecutionCapabilityRequiresFrozenExplicitPermission(t *testing.T) {
@@ -27,6 +28,7 @@ func TestExecutionCapabilityRequiresFrozenExplicitPermission(t *testing.T) {
 	require.ErrorIs(t, candidate.RequireCapability(context.Background(), 2, "cloud_discovery"), executionscope.ErrDenied)
 	var absent *ExecutionPolicy
 	require.ErrorIs(t, absent.RequireCapability(ctx, 1, "cloud_discovery"), executionscope.ErrDenied)
+	//lint:ignore SA1012 Deliberately verifies nil-context rejection.
 	require.ErrorIs(t, enabled.RequireCapability(nil, 1, "cloud_discovery"), executionscope.ErrDenied)
 	require.ErrorIs(t, enabled.RequireCapability(context.Background(), 1, "cloud_discovery"), executionscope.ErrDenied)
 	require.ErrorIs(t, enabled.RequireCapability(ctx, 2, "cloud_discovery"), executionscope.ErrDenied)
@@ -52,6 +54,7 @@ func TestStartupCapabilityRequiresExplicitStandardSystemContext(t *testing.T) {
 	require.ErrorIs(t, disabled.RequireStartupCapability(ctx, "connector_poll"), executionscope.ErrDenied)
 	require.ErrorIs(t, enabled.RequireStartupCapability(context.Background(), "connector_poll"), executionscope.ErrDenied)
 	require.ErrorIs(t, enabled.RequireStartupCapability(tenantctx.WithTenantID(ctx, 1), "connector_poll"), executionscope.ErrDenied)
+	//lint:ignore SA1012 Deliberately verifies nil-context rejection.
 	require.ErrorIs(t, enabled.RequireStartupCapability(nil, "connector_poll"), executionscope.ErrDenied)
 	require.ErrorIs(t, enabled.RequireStartupCapability(ctx, "unknown"), executionscope.ErrDenied)
 	require.ErrorIs(t, enabled.RequireStartupCapability(ctx, "embedding"), executionscope.ErrDenied)
@@ -84,6 +87,7 @@ func TestExecutionWorkerCapabilityRequiresExplicitFrozenPermission(t *testing.T)
 			require.ErrorIs(t, enabled.RequireWorkerCapability(ctx, "unknown"), executionscope.ErrDenied)
 			require.ErrorIs(t, enabled.RequireWorkerCapability(context.Background(), "outbox"), executionscope.ErrDenied)
 			require.ErrorIs(t, enabled.RequireWorkerCapability(tenantctx.WithTenantID(ctx, 1), "outbox"), executionscope.ErrDenied)
+			//lint:ignore SA1012 Deliberately verifies nil-context rejection.
 			require.ErrorIs(t, enabled.RequireWorkerCapability(nil, "outbox"), executionscope.ErrDenied)
 			cancelled, cancel := context.WithCancel(ctx)
 			cancel()

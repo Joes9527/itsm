@@ -243,7 +243,7 @@ func TestProblemServiceListAndFilters(t *testing.T) {
 	assert.Equal(t, p1.ID, list[0].ID)
 
 	// Pagination size limits
-	list, total, err = service.List(ctx, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"}, 0, 0, nil) // normalized to page 1, size 10
+	_, total, err = service.List(ctx, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"}, 0, 0, nil) // normalized to page 1, size 10
 	require.NoError(t, err)
 	assert.Equal(t, 2, total)
 }

@@ -2,10 +2,7 @@ package service_request
 
 import (
 	"context"
-	"fmt"
 	"time"
-
-	"itsm-backend/handlers/service_catalog"
 )
 
 // ServiceRequest represents the domain entity for a service request.
@@ -62,88 +59,4 @@ type Repository interface {
 	List(ctx context.Context, tenantID int, filters ListFilters) ([]*ServiceRequest, int, error)
 	Update(ctx context.Context, req *ServiceRequest) error
 	GetUserContext(ctx context.Context, userID, tenantID int) (department, name string, err error)
-}
-
-// amount 从 FormData 中提取预估金额（float64），常见键名：amount、cost、budget。
-// 返回 0 表示未填写金额或不涉及金额逻辑。
-func (sr *ServiceRequest) amount() float64 {
-	if sr == nil || sr.FormData == nil {
-		return 0
-	}
-	for _, key := range []string{"amount", "cost", "budget"} {
-		if v, ok := sr.FormData[key]; ok {
-			switch n := v.(type) {
-			case float64:
-				return n
-			case int:
-				return float64(n)
-			case string:
-				// 简单转换，忽略解析错误
-				var f float64
-				fmt.Sscanf(n, "%f", &f)
-				return f
-			}
-		}
-	}
-	return 0
-}
-
-// injectApprovalChain 将解析出的审批链步骤注入 FormData 的 _approval_chain 键中。
-// 若 steps 为 nil 则不注入，避免在 form_data 中留下空键。
-// hasApprovalChainSteps 判断审批链解析结果是否包含实际步骤。
-// resolvedSteps 在 service.go 中已通过 len(chain.Steps) > 0 过滤，非 nil 即有效。
-func hasApprovalChainSteps(steps interface{}) bool {
-	return steps != nil
-}
-
-func injectApprovalChain(formData map[string]interface{}, steps interface{}) map[string]interface{} {
-	if steps == nil {
-		return formData
-	}
-	if formData == nil {
-		formData = make(map[string]interface{})
-	}
-	formData["_approval_chain"] = steps
-	return formData
-}
-
-// stripStructuredFieldKeys 返回 formData 的浅拷贝，剔除已经通过 extractServiceRequestFieldValues
-// 摘出、即将写入 field_values 的结构化字段键，只保留 _approval_chain 这类系统流程上下文键
-// 和没有对应字段定义的自由内容（design doc §8.3："ServiceRequest.form_data 只保留尚未结构化
-// 的复合输入或流程上下文，不能与 field_values 同时成为同一字段的权威来源"）。
-//
-// fieldValues 是 extractServiceRequestFieldValues(formData) 的返回值，调用方在 Create() 里只
-// 提取一次、两处复用（校验必填 + 这里去重），避免同一逻辑跑两遍导致行为漂移。
-//
-// 两种输入形状分别处理（对齐 extractServiceRequestFieldValues 的两条路径）：
-//   - 数组形状：结构化字段值整体存在 formData["customFieldValues"] 这一个键下（[]{name,value}），
-//     这个数组已经原样转换进了 fieldValues/field_values，直接删除这一个顶层键即可；不能按
-//     fieldValues 的 key 逐个删，因为那些 key 是数组元素内部的值，不是 formData 的顶层键。
-//   - 兼容的旧 map 形状：field_values 里的每个 key 本来就是 formData 顶层键，逐个删除。
-func stripStructuredFieldKeys(formData map[string]interface{}, fieldValues map[string]interface{}) map[string]interface{} {
-	if formData == nil {
-		return nil
-	}
-	result := make(map[string]interface{}, len(formData))
-	for k, v := range formData {
-		result[k] = v
-	}
-	if len(fieldValues) == 0 {
-		return result
-	}
-	if _, arrayShape := formData["customFieldValues"]; arrayShape {
-		delete(result, "customFieldValues")
-		return result
-	}
-	for k := range fieldValues {
-		delete(result, k)
-	}
-	return result
-}
-
-// isIncidentCatalog 判断服务目录项的 WorkItem 目标类是否为事件——事件无需审批，
-// 直接分派给 Resolver，不走 SR→Ticket 审批流程。参数是 target_class（不是 itsm_type，
-// 按目录目标类判断）。
-func isIncidentCatalog(targetClass string) bool {
-	return targetClass == service_catalog.TargetClassIncident
 }

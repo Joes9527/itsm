@@ -8,10 +8,11 @@ import (
 	"strings"
 	"time"
 
-	entsql "entgo.io/ent/dialect/sql"
-	"go.uber.org/zap"
 	"itsm-backend/config"
 	"itsm-backend/ent"
+
+	entsql "entgo.io/ent/dialect/sql"
+	"go.uber.org/zap"
 )
 
 // RuntimeClients keeps the tenant execution pool separate from the restricted
@@ -76,6 +77,7 @@ func InitRuntimeDatabases(cfg *config.DatabaseConfig, rlsCfg *config.RLSConfig, 
 	}
 	if tenantDatabase != directoryDatabase || tenantSchema != directorySchema || tenantSchema == "" {
 		_ = tenant.Close()
+		//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 		return nil, fmt.Errorf("Intake snapshot pools require the same database and schema")
 	}
 	system := ent.NewClient(ent.Driver(entsql.OpenDB("postgres", systemDB)))

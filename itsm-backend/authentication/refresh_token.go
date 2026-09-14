@@ -142,11 +142,14 @@ func (s *redisRefreshTokenStore) Consume(ctx context.Context, token string, expi
 	if ttl <= 0 {
 		return ErrRefreshTokenConsumed
 	}
-	consumed, err := s.client.SetNX(ctx, refreshTokenConsumptionKey(token), "1", ttl).Result()
+	result, err := s.client.SetArgs(ctx, refreshTokenConsumptionKey(token), "1", redis.SetArgs{Mode: "NX", TTL: ttl}).Result()
+	if errors.Is(err, redis.Nil) {
+		return ErrRefreshTokenConsumed
+	}
 	if err != nil {
 		return &RefreshTokenStoreUnavailableError{Cause: err}
 	}
-	if !consumed {
+	if result != "OK" {
 		return ErrRefreshTokenConsumed
 	}
 	return nil

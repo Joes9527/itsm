@@ -26,17 +26,6 @@ func NewProblemInvestigationService(db *sql.DB, logger *zap.SugaredLogger) *Prob
 	}
 }
 
-func (s *ProblemInvestigationService) requireTenantUser(ctx context.Context, userID, tenantID int) error {
-	var exists bool
-	if err := s.db.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM users WHERE id = $1 AND tenant_id = $2)", userID, tenantID).Scan(&exists); err != nil {
-		return fmt.Errorf("验证用户失败: %v", err)
-	}
-	if !exists {
-		return fmt.Errorf("用户不存在")
-	}
-	return nil
-}
-
 // GetRootCauseAnalysis 获取根本原因分析
 func (s *ProblemInvestigationService) GetRootCauseAnalysis(ctx context.Context, id int, tenantID int) (*dto.RootCauseAnalysisResponse, error) {
 	scoped, release, scopeErr := s.tenantScope(ctx, tenantID)
@@ -158,29 +147,6 @@ func (s *ProblemInvestigationService) GetProblemInvestigation(ctx context.Contex
 }
 
 // UpdateProblemInvestigation 更新问题调查
-
-func (s *ProblemInvestigationService) getInvestigationStep(ctx context.Context, stepID, tenantID int) (*dto.InvestigationStepResponse, error) {
-	var step dto.InvestigationStepResponse
-	err := s.db.QueryRowContext(ctx, `
-		SELECT pis.id, pis.investigation_id, pis.step_number, pis.step_title, pis.step_description,
-		       pis.status, pis.assigned_to, u.name, pis.start_date, pis.completion_date, pis.notes,
-		       pis.created_at, pis.updated_at
-		FROM problem_investigation_steps pis
-		JOIN problem_investigations pi ON pis.investigation_id = pi.id
-		JOIN problems p ON pi.problem_id = p.id
-		LEFT JOIN users u ON pis.assigned_to = u.id AND u.tenant_id = (SELECT tenant_id FROM tickets WHERE id = p.work_item_id AND deleted_at IS NULL)
-		WHERE pis.id = $1 AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2 AND deleted_at IS NULL)
-	`, stepID, tenantID).Scan(
-		&step.ID, &step.InvestigationID, &step.StepNumber, &step.StepTitle, &step.StepDescription,
-		&step.Status, &step.AssignedTo, &step.AssignedToName, &step.StartDate, &step.CompletionDate, &step.Notes,
-		&step.CreatedAt, &step.UpdatedAt,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("获取调查步骤失败: %v", err)
-	}
-
-	return &step, nil
-}
 
 // CreateProblemSolution 创建问题解决方案
 

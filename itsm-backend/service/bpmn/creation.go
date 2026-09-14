@@ -108,7 +108,7 @@ func creationCommandFromCallback(values map[string]any, key, class string, actor
 		}
 	}
 	input := map[string]any{}
-	fieldMap := map[string]string{}
+	var fieldMap map[string]string
 	professional := "incident"
 	if class == creation.RecordClassIncident {
 		fieldMap = map[string]string{"type": "type", "severity": "severity", "impact": "impact", "urgency": "urgency", "category": "category", "subcategory": "subcategory", "detected_at": "detectedAt", "impact_analysis": "impactAnalysis", "metadata": "metadata", "source": "source"}

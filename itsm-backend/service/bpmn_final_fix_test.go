@@ -94,6 +94,7 @@ func configureStartProcessDefinition(t *testing.T, f *bpmnAuthorizationFixture, 
 func startProcessContext(f *bpmnAuthorizationFixture) context.Context {
 	ctx := context.WithValue(f.userCtx, bpmn.BPMNTenantIDContextKey, f.tenant.ID)
 	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, f.actor.ID)
+	//lint:ignore SA1029 Deliberately supplies a legacy raw key to verify typed authorization boundaries.
 	ctx = context.WithValue(ctx, "user", f.actor)
 	return WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: f.actor.ID, TenantID: f.tenant.ID})
 }

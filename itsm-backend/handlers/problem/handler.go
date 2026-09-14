@@ -406,24 +406,6 @@ func problemRequestContext(c *gin.Context) (int, int, bool) {
 	return id, tenantID, true
 }
 
-func (h *Handler) respondProblemMutation(c *gin.Context, updated *Problem, err error) {
-	if err != nil {
-		if _, ok := common.AsAppError(err); ok || common.IsVersionConflictError(err) {
-			RespondCommandError(c, err)
-			return
-		}
-		if ent.IsNotFound(err) {
-			common.Fail(c, common.NotFoundErrorCode, "Problem not found")
-		} else if strings.Contains(err.Error(), "required") {
-			common.Fail(c, common.ParamErrorCode, err.Error())
-		} else {
-			common.Fail(c, common.InternalErrorCode, err.Error())
-		}
-		return
-	}
-	common.Success(c, ToResponse(updated))
-}
-
 func (h *Handler) Delete(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
