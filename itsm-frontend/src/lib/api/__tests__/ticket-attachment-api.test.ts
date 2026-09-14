@@ -149,3 +149,19 @@ it('preserves structured server failure in the shared multipart transport', asyn
     httpClient.post('/upload', form, { onUploadProgress: jest.fn() })
   ).rejects.toBeInstanceOf(ApiError);
 });
+
+it('does not replay an upload when its caller becomes stale during CSRF recovery', async () => {
+  let current = true;
+  jest.mocked(security.csrf.getToken).mockResolvedValueOnce('initial').mockImplementationOnce(async () => { current = false; return 'renewed'; });
+  TestXHR.replies = [{ status: 403, body: { code: 4031, message: 'CSRF token mismatch' } }, {}];
+  await expect(TicketAttachmentApi.uploadAttachment(101, file(), jest.fn(), () => {
+    if (!current) throw new Error('identity changed');
+  })).rejects.toThrow('identity changed');
+  expect(TestXHR.sent).toHaveLength(1);
+});
+it('loads binary previews through the authenticated shared client', async () => {
+  const blob = new Blob(['preview'], { type: 'text/plain' });
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, headers: new Headers(), blob: async () => blob });
+  await expect(TicketAttachmentApi.previewAttachment(101, 17)).resolves.toBe(blob);
+  expect(global.fetch).toHaveBeenCalledWith('/api/v1/tickets/101/attachments/17/preview', expect.objectContaining({ credentials: 'include' }));
+});

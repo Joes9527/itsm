@@ -1,6 +1,6 @@
 import React from 'react';
 import { App } from 'antd';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AttachmentPanel } from '../AttachmentPanel';
 import type { AttachmentAdapter } from '../types';
@@ -11,7 +11,7 @@ const attachment = {
   id: 17,
   fileName: 'diagnostic.txt',
   fileSize: 3,
-  mimeType: 'text/plain',
+  mimeType: 'text/plain; charset=utf-8',
   createdAt: '2026-09-14T00:00:00Z',
 };
 const permissions = { canRead: true, canUpload: true, canDelete: true };
@@ -22,7 +22,7 @@ beforeEach(() => {
     upload: jest.fn().mockResolvedValue(attachment),
     remove: jest.fn().mockResolvedValue(undefined),
     getDownloadUrl: (id, att) => `/api/v1/tickets/${id}/attachments/${att}`,
-    getPreviewUrl: (id, att) => `/api/v1/tickets/${id}/attachments/${att}/preview`,
+    preview: jest.fn().mockResolvedValue({ type: 'text/plain', text: async () => 'visible preview proof' }),
   };
 });
 const mount = (access = permissions) =>
@@ -47,7 +47,7 @@ it('uploads from an empty list and shows the persisted result', async () => {
   const file = new File(['log'], 'diagnostic.txt', { type: 'text/plain' });
   await user.upload(container.querySelector('input[type=file]') as HTMLInputElement, file);
   expect(await screen.findByText('diagnostic.txt', { exact: true })).toBeVisible();
-  expect(adapter.upload).toHaveBeenCalledWith(101, file, expect.any(Function));
+  expect(adapter.upload).toHaveBeenCalledWith(101, file, expect.any(Function), expect.any(Function));
 });
 
 it('requires confirmation before deletion and refreshes the list', async () => {
@@ -68,7 +68,7 @@ it('requires confirmation before deletion and refreshes the list', async () => {
   await waitFor(() =>
     expect(screen.queryByText('diagnostic.txt', { exact: true })).not.toBeInTheDocument()
   );
-  expect(adapter.remove).toHaveBeenCalledWith(101, 17);
+  expect(adapter.remove).toHaveBeenCalledWith(101, 17, expect.any(Function));
 });
 
 it('does not grant deletion just because currentUserId is missing', async () => {
@@ -84,10 +84,8 @@ it('previews through the protected endpoint', async () => {
   mount();
   const user = userEvent.setup();
   await user.click(await screen.findByRole('button', { name: '预览' }));
-  expect(screen.getByTitle('diagnostic.txt')).toHaveAttribute(
-    'src',
-    '/api/v1/tickets/101/attachments/17/preview'
-  );
+  await waitFor(() => expect(screen.getByText('visible preview proof')).toBeVisible());
+  expect(adapter.preview).toHaveBeenCalledWith(101, 17, expect.any(Function));
 });
 
 it('keeps upload available after failure and can retry with the file', async () => {
@@ -168,4 +166,47 @@ it.each(['预览', '删除'])('closes the %s dialog when read permission is with
   expect(screen.queryByText('diagnostic.txt')).not.toBeInTheDocument();
   expect(onCountChange).toHaveBeenLastCalledWith(undefined);
   expect(adapter.remove).not.toHaveBeenCalled();
+});
+it('refuses active content even when the filename advertised a text preview', async () => {
+  (adapter.list as jest.Mock).mockResolvedValue([attachment]);
+  (adapter.preview as jest.Mock).mockResolvedValue({ type: 'text/html', text: async () => '<script>danger</script>' });
+  mount();
+  await userEvent.click(await screen.findByRole('button', { name: '预览' }));
+  expect(await screen.findByText('该文件类型不支持安全预览，请下载查看')).toBeInTheDocument();
+  expect(document.querySelector('iframe')).toBeNull();
+});
+
+it('clears the list when the protected preview endpoint denies access', async () => {
+  (adapter.list as jest.Mock).mockResolvedValue([attachment]);
+  (adapter.preview as jest.Mock).mockRejectedValue(new ApiError('预览权限撤销', 403));
+  mount();
+  await userEvent.click(await screen.findByRole('button', { name: '预览' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('预览权限撤销');
+  expect(screen.queryByText('diagnostic.txt')).not.toBeInTheDocument();
+});
+it('releases an image preview URL when the dialog closes', async () => {
+  const createURL = jest.fn().mockReturnValue('blob:preview');
+  const revokeURL = jest.fn();
+  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createURL });
+  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeURL });
+  (adapter.list as jest.Mock).mockResolvedValue([{ ...attachment, mimeType: 'image/png' }]);
+  (adapter.preview as jest.Mock).mockResolvedValue({ type: 'image/png' });
+  mount();
+  await userEvent.click(await screen.findByRole('button', { name: '预览' }));
+  expect(await screen.findByAltText('diagnostic.txt')).toHaveAttribute('src', 'blob:preview');
+  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /close/i }));
+  await waitFor(() => expect(revokeURL).toHaveBeenCalledWith('blob:preview'));
+});
+
+it('does not allocate an image URL for a preview that was closed while loading', async () => {
+  const createURL = jest.fn();
+  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createURL });
+  let finish!: (value: unknown) => void;
+  (adapter.list as jest.Mock).mockResolvedValue([{ ...attachment, mimeType: 'image/png' }]);
+  (adapter.preview as jest.Mock).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  mount();
+  await userEvent.click(await screen.findByRole('button', { name: '预览' }));
+  await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /close/i }));
+  await act(async () => finish({ type: 'image/png' }));
+  expect(createURL).not.toHaveBeenCalled();
 });

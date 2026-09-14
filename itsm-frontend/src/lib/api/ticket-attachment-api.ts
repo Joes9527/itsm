@@ -49,16 +49,16 @@ export class TicketAttachmentApi {
   static async uploadAttachment(
     ticketId: number,
     file: File,
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void,
+    assertSubmissionContext?: () => void
   ): Promise<TicketAttachment> {
     const formData = new FormData();
     formData.append('file', file);
 
-    return httpClient.post<TicketAttachment>(
-      `/api/v1/tickets/${ticketId}/attachments`,
-      formData,
-      onProgress ? { onUploadProgress: onProgress } : undefined
-    );
+    return httpClient.post<TicketAttachment>(`/api/v1/tickets/${ticketId}/attachments`, formData, {
+      onUploadProgress: onProgress,
+      assertSubmissionContext,
+    });
   }
 
   /**
@@ -75,11 +75,28 @@ export class TicketAttachmentApi {
     return `/api/v1/tickets/${ticketId}/attachments/${attachmentId}/preview`;
   }
 
+  static previewAttachment(
+    ticketId: number,
+    attachmentId: number,
+    assertSubmissionContext?: () => void
+  ): Promise<Blob> {
+    return httpClient.get<Blob>(this.getPreviewUrl(ticketId, attachmentId), undefined, {
+      responseType: 'blob',
+      assertSubmissionContext,
+    });
+  }
+
   /**
    * 删除附件
    */
-  static async deleteAttachment(ticketId: number, attachmentId: number): Promise<void> {
-    await httpClient.delete(`/api/v1/tickets/${ticketId}/attachments/${attachmentId}`);
+  static async deleteAttachment(
+    ticketId: number,
+    attachmentId: number,
+    assertSubmissionContext?: () => void
+  ): Promise<void> {
+    await httpClient.delete(`/api/v1/tickets/${ticketId}/attachments/${attachmentId}`, undefined, {
+      assertSubmissionContext,
+    });
   }
 
   /**

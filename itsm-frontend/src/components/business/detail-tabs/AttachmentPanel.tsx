@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
-import { Upload, Button, App, Typography, Progress, Modal, Space, Empty, Spin } from 'antd';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Upload, Button, App, Typography, Progress, Modal, Space, Empty, Spin, Alert } from 'antd';
 import type { RcFile } from 'antd/es/upload/interface';
 import {
   File as FileIcon,
@@ -86,16 +86,33 @@ const AttachmentPanelContent: React.FC<AttachmentPanelProps> = ({
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewName, setPreviewName] = useState<string>('');
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewText, setPreviewText] = useState<string | null>(null);
+  const [previewType, setPreviewType] = useState('');
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const previewRequest = useRef(0);
+  const closePreview = useCallback(() => {
+    previewRequest.current++;
+    setPreviewOpen(false);
+    setPreviewText(null);
+    setPreviewUrl(null);
+  }, []);
+  useEffect(
+    () => () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    },
+    [previewUrl]
+  );
 
   useEffect(() => {
     if (resource.denied) {
-      setPreviewUrl(null);
+      closePreview();
       confirmation.current?.destroy();
       setUploading(false);
       setUploadProgress(0);
       busy.current = false;
     }
-  }, [resource.denied]);
+  }, [resource.denied, closePreview]);
   useEffect(
     () => () => {
       confirmation.current?.destroy();
@@ -123,9 +140,16 @@ const AttachmentPanelContent: React.FC<AttachmentPanelProps> = ({
     setUploading(true);
     setUploadProgress(0);
     try {
-      await adapter.upload(targetId, file, p => {
-        if (current()) setUploadProgress(p);
-      });
+      await adapter.upload(
+        targetId,
+        file,
+        p => {
+          if (current()) setUploadProgress(p);
+        },
+        () => {
+          if (!current() || !access.current.canUpload) throw new Error('上传上下文已失效');
+        }
+      );
       if (!current()) return;
       options.onSuccess?.({});
       message.success(`${file.name} 上传成功`);
@@ -156,7 +180,9 @@ const AttachmentPanelContent: React.FC<AttachmentPanelProps> = ({
         if (!current() || busy.current || !access.current.canDelete) return;
         busy.current = true;
         try {
-          await adapter.remove(targetId, item.id);
+          await adapter.remove(targetId, item.id, () => {
+            if (!current() || !access.current.canDelete) throw new Error('删除上下文已失效');
+          });
           if (!current()) return;
           message.success('删除成功');
           await resource.reload();
@@ -185,18 +211,45 @@ const AttachmentPanelContent: React.FC<AttachmentPanelProps> = ({
     document.body.removeChild(a);
   };
 
-  const handlePreview = (item: AttachmentItem) => {
-    if (!adapter.getPreviewUrl) {
-      message.warning('该附件不支持预览');
-      return;
-    }
-    setPreviewUrl(adapter.getPreviewUrl(targetId, item.id));
-    setPreviewName(item.fileName);
-  };
-
   const isPreviewable = (mime: string) =>
-    mime.startsWith('image/') || mime.includes('pdf') || mime.startsWith('text/');
-
+    [
+      'text/plain',
+      'application/pdf',
+      'image/png',
+      'image/jpeg',
+      'image/gif',
+      'image/webp',
+      'image/avif',
+    ].includes(mime.split(';')[0].trim().toLowerCase());
+  const handlePreview = async (item: AttachmentItem) => {
+    if (!adapter.preview || !resource.ready || !access.current.canRead) return;
+    const current = resource.capture();
+    const request = ++previewRequest.current;
+    const assertCurrent = () => {
+      if (!current() || request !== previewRequest.current || !access.current.canRead)
+        throw new Error('预览上下文已失效');
+    };
+    setPreviewOpen(true);
+    setPreviewName(item.fileName);
+    setPreviewError(null);
+    setPreviewUrl(null);
+    setPreviewText(null);
+    try {
+      const blob = await adapter.preview(targetId, item.id, assertCurrent);
+      assertCurrent();
+      const mime = blob.type.split(';')[0].trim().toLowerCase();
+      if (!isPreviewable(mime)) throw new Error('该文件类型不支持安全预览，请下载查看');
+      const text = mime === 'text/plain' ? await blob.text() : null;
+      assertCurrent();
+      setPreviewType(mime);
+      if (text !== null) setPreviewText(text);
+      else setPreviewUrl(URL.createObjectURL(blob));
+    } catch (error) {
+      if (!current() || request !== previewRequest.current) return;
+      resource.deny(error);
+      setPreviewError(error instanceof Error ? error.message : '预览失败');
+    }
+  };
   const feedback = (
     <DetailReadState error={resource.error} loading={resource.loading} reload={resource.reload} />
   );
@@ -252,7 +305,7 @@ const AttachmentPanelContent: React.FC<AttachmentPanelProps> = ({
                 {formatDateTime(item.createdAt)}
               </Text>
               <Space wrap size='small'>
-                {adapter.getPreviewUrl && isPreviewable(item.mimeType) && (
+                {adapter.preview && isPreviewable(item.mimeType) && (
                   <Button size='small' icon={<Eye size={14} />} onClick={() => handlePreview(item)}>
                     预览
                   </Button>
@@ -281,18 +334,33 @@ const AttachmentPanelContent: React.FC<AttachmentPanelProps> = ({
       )}
       <Modal
         title={previewName}
-        open={!!previewUrl}
-        onCancel={() => setPreviewUrl(null)}
+        open={previewOpen}
+        onCancel={closePreview}
         footer={null}
         width={900}
       >
-        {previewUrl && (
-          <iframe
-            src={previewUrl}
-            style={{ width: '100%', height: '70vh', border: 0 }}
-            title={previewName}
-          />
+        {previewError && <Alert type='error' showIcon title={previewError} />}
+        {!previewError && previewText === null && !previewUrl && <Spin />}
+        {previewText !== null && (
+          <pre className='whitespace-pre-wrap break-all max-h-[70vh] overflow-auto'>
+            {previewText}
+          </pre>
         )}
+        {previewUrl &&
+          (previewType.startsWith('image/') ? (
+            // Authenticated safe-MIME object URL, revoked on close.
+            <img
+              src={previewUrl}
+              alt={previewName}
+              className='max-w-full max-h-[70vh] object-contain'
+            />
+          ) : (
+            <iframe
+              src={previewUrl}
+              style={{ width: '100%', height: '70vh', border: 0 }}
+              title={previewName}
+            />
+          ))}
       </Modal>
     </div>
   );

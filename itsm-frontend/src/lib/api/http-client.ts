@@ -452,7 +452,11 @@ class HttpClient {
     });
   }
 
-  async get<T>(endpoint: string, params?: object): Promise<T> {
+  async get<T>(
+    endpoint: string,
+    params?: object,
+    config?: Pick<RequestConfig, 'responseType' | 'assertSubmissionContext'>
+  ): Promise<T> {
     let url = endpoint;
     if (params) {
       const searchParams = new URLSearchParams();
@@ -466,6 +470,8 @@ class HttpClient {
 
     return this.requestInternal<T>(url, {
       method: 'GET',
+      responseType: config?.responseType,
+      assertSubmissionContext: config?.assertSubmissionContext,
     });
   }
 
@@ -494,10 +500,11 @@ class HttpClient {
   async put<T>(
     endpoint: string,
     data?: unknown,
-    config?: { skipCamelCaseBody?: boolean }
+    config?: { skipCamelCaseBody?: boolean; assertSubmissionContext?: () => void }
   ): Promise<T> {
     return this.requestInternal<T>(endpoint, {
       method: 'PUT',
+      assertSubmissionContext: config?.assertSubmissionContext,
       body: data ? JSON.stringify(data) : undefined,
       skipCamelCaseBody: config?.skipCamelCaseBody,
     });
@@ -510,9 +517,14 @@ class HttpClient {
     });
   }
 
-  async delete<T>(endpoint: string, data?: unknown): Promise<T> {
+  async delete<T>(
+    endpoint: string,
+    data?: unknown,
+    config?: { assertSubmissionContext?: () => void }
+  ): Promise<T> {
     return this.requestInternal<T>(endpoint, {
       method: 'DELETE',
+      assertSubmissionContext: config?.assertSubmissionContext,
       body: data ? JSON.stringify(data) : undefined,
     });
   }

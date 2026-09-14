@@ -12,7 +12,7 @@ import { useAuthStore } from '@/lib/store/auth-store';
 // ticketAttachmentAdapter，不需要 Phase 2 那样的迁移步骤。
 export function WorkItemAttachments({ workItemId }: { workItemId: number }) {
   const { workItem } = useWorkItemContext();
-  const hasPermission = useAuthStore(state => state.hasPermission);
+  const { hasPermission } = useAuthStore();
   return (
     <Card size='small' title='附件'>
       <AttachmentPanel

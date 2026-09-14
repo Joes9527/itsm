@@ -56,12 +56,15 @@ it('does not carry drafts or a late write result to another ticket', async () =>
   await screen.findByText('现有内容');
   await user.type(screen.getByRole('textbox'), '只属于101');
   await user.click(screen.getByRole('button', { name: /发送评论/ }));
+  const calls = (ticketCommentAdapter.create as jest.Mock).mock.calls;
+  const assertSubmissionContext = calls[calls.length - 1][2];
   rerender(
     <App>
       <TicketCommentStream ticketId={202} />
     </App>
   );
   expect(await screen.findByRole('textbox')).toHaveValue('');
+  expect(assertSubmissionContext).toThrow('操作上下文已失效');
   await user.type(screen.getByRole('textbox'), '202草稿');
   await act(async () => finish());
   expect(screen.getByRole('textbox')).toHaveValue('202草稿');

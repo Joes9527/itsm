@@ -68,13 +68,13 @@ const TicketCommentStreamContent: React.FC<TicketCommentStreamProps> = ({
     busy.current = false;
   }, [resource.denied]);
 
-  const mutate = async (write: () => Promise<unknown>, success: string, reset?: () => void) => {
+  const mutate = async (write: (assertCurrent: () => void) => Promise<unknown>, success: string, reset?: () => void) => {
     if (!resource.ready || busy.current) return;
     const current = resource.capture();
     busy.current = true;
     setSubmitting(true);
     try {
-      await write();
+      await write(() => { if (!current()) throw new Error('操作上下文已失效'); });
       if (!current()) return;
       reset?.();
       message.success(success);
@@ -93,12 +93,12 @@ const TicketCommentStreamContent: React.FC<TicketCommentStreamProps> = ({
   const handleSend = () => {
     if (!replyText.trim()) return;
     return mutate(
-      () =>
+      assertCurrent =>
         ticketCommentAdapter.create(ticketId, {
           content: replyText,
           isInternal: isInternalComment,
           mentions: mentionedUsers,
-        }),
+        }, assertCurrent),
       '评论已发布',
       () => {
         setReplyText('');
@@ -111,7 +111,7 @@ const TicketCommentStreamContent: React.FC<TicketCommentStreamProps> = ({
     const update = ticketCommentAdapter.update;
     if (!editingContent.trim() || !update) return;
     return mutate(
-      () => update(ticketId, commentId, { content: editingContent }),
+      assertCurrent => update(ticketId, commentId, { content: editingContent }, assertCurrent),
       '评论已更新',
       () => {
         setEditingId(null);
@@ -120,7 +120,7 @@ const TicketCommentStreamContent: React.FC<TicketCommentStreamProps> = ({
     );
   };
   const handleDelete = (commentId: number) =>
-    mutate(() => ticketCommentAdapter.remove(ticketId, commentId), '评论已删除');
+    mutate(assertCurrent => ticketCommentAdapter.remove(ticketId, commentId, assertCurrent), '评论已删除');
   const renderBadges = (comment: CommentItem) => (
     <>
       {comment.isInternal && (

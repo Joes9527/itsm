@@ -541,3 +541,15 @@ describe('权限常量', () => {
     expect(ROLES.END_USER).toBe('end_user');
   });
 });
+
+it('honors an explicit server wildcard without inferring grants from role names', async () => {
+  const { useAuthStore } = await import('../auth-store');
+  const user = { id: 1, username: 'admin', name: 'Admin', email: '', role: 'super_admin', tenantId: 1, actorTenantId: 1, permissions: [] as string[] };
+  useAuthStore.setState({ user });
+  expect(useAuthStore.getState().hasPermission('ticket:read')).toBe(false);
+  useAuthStore.setState({ user: { ...user, permissions: ['*'] } });
+  expect(useAuthStore.getState().hasPermission('ticket:read')).toBe(true);
+  expect(useAuthStore.getState().hasPermission('user:read')).toBe(true);
+  useAuthStore.getState().logout();
+  expect(useAuthStore.getState().hasPermission('ticket:read')).toBe(false);
+});
