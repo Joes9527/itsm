@@ -1,5 +1,21 @@
 # TC-WORKFLOW: 工作流/BPMN模块测试用例文档
 
+> 2026-09-14 SSLVPN 当前执行入口：[全流程手册](../sslvpn-manual-lifecycle-runbook.md)。人工审批用 `/approvals`；`/workflow/ticket-approval` 是设计器。旧日期的节点/自动化用例是覆盖清单，不能推断所有能力已部署；未知或未注册任务必须明确失败，不能静默跳过。
+
+## SSLVPN 双级审批与受控服务任务补充
+
+使用仓库 `itsm-backend/service/bpmn/sslvpn_approval_flow.bpmn` 发布副本，实际 policy ID 替换 `CATALOG_ACCESS_POLICY_REQUIRED` 后才发布。新版本通过管理员 `POST /api/v1/bpmn/versions` 创建，`/workflow/versions` 用于查看/激活返回版本。运行版本和目录绑定必须回读，不能只看画布。
+
+| 用例ID | 步骤 | 预期 | 主手册对应 |
+|---|---|---|---|
+| TC-WF-080 | 发布并激活含真实 policy 引用、两级候选组及两个 allowed actions 的定义，绑定目录后创建申请 | 新实例使用该版本/绑定；不会用默认流程代替 | W01–W03 |
+| TC-WF-081 | 主管领取、打开关联 WorkItem 核对字段并批准，网络运维随后领取 | 一级之前无二级可办任务；顺序与两个不同审批 actor 可查 | W04、P03–P04 |
+| TC-WF-082 | 分别在一级、二级拒绝；拒绝时先尝试空意见 | 空意见拒绝；有效拒绝结束对应路径，0 Graph add，无授权完成 | R01–R04 |
+| TC-WF-083 | 最终批准后观察 kaf_delegate 等待及真实验证回执 | fulfilling 到 completed；投递 ACK 不等于服务任务完成 | P04–P06 |
+| TC-WF-084 | 原完成回执重放、结果未知观察、未注册服务任务负向验证 | 成功不可降级、原时间不变、不重复 grant；unknown/未注册不伪成功 | X05–X07 |
+| TC-WF-085 | V1 实例运行中激活 V2 后新建独立拒绝测试申请 | 旧实例 V1、新实例 V2，旧定义未被重写 | W05 |
+| TC-WF-086 | 非候选账号尝试本轮任务决策；管理员终止独立未批准测试实例 | 越权拒绝；终止任务不可继续，专业投影/审计与流程一致 | X02、L06 |
+
 **项目**: ITSM (IT Service Management) 系统
 **模块**: 工作流/BPMN (Workflow Engine)
 **版本**: v1.0

@@ -4,6 +4,7 @@
 
 ## 当前入口
 
+- [SSLVPN 手工全流程测试手册](./sslvpn-manual-lifecycle-runbook.md)：先完成 WSL/ITSM/KAF/Worker 部署核对，再按角色测试自定义字段、BPMN 与 Ticket 生命周期；包含异常分支和执行记录模板。
 - [角色视角产品测试方案](./role-based-product-test-plan.md)
 - [测试用例目录](./test-cases/README.md)
 
