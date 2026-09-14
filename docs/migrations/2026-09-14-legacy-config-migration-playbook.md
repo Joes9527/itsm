@@ -87,6 +87,7 @@
 | `docs/review/2026-09-14-b2-dictionary-landing-evidence.md` | B2 字典选项落地证据（追加/归并/排除） |
 | `docs/review/2026-09-14-b4-sla-calendar-evidence.md` | B4 SLA 日历证据 + 能力差额（时区/午休/补班） |
 | `docs/review/2026-09-14-b3-priority-matrix-ledger.md` | B3 优先级/矩阵台账（BLOCKED + 能力差额） |
+| `docs/review/2026-09-14-b6-module-mapping-evidence.md` | B6 模块→recordClass 对照 + `ticket_types` 差额登记 |
 | `docs/review/2026-09-14-workitem-config-migration-handoff.md` | G-B 交接（消费固定 GARevision） |
 
 ## 7. 决策日志
@@ -109,6 +110,7 @@
 | S12 | **B2 字典选项落地已执行**：追加 25 个选项（`target_system` 9→16 ×3 模板；`service_type` 6→8；`operation` 5→7）；归并/排除仅登记不写；jsonb 包含性守卫，幂等复跑 0 新增 | 用户确认 + 实测 |
 | S13 | **B4 SLA 日历已写入**：7 条 `sla_definitions.business_hours` = 周一至五 **09:00–18:00** + 89 假日（2024=28/2025=28/2026=33）+ `Asia/Shanghai`；19 补班日单独登记。**截止计算验收 BLOCKED**：时区不消费、午休/补班不可表达（G7） | 用户确认 + 实测 |
 | S14 | **B3 记 BLOCKED**（不写目标）：优先级矩阵无持久化/无 API、维度 4×4 无模块；规则不支持 impact/urgency。交付 P0–P3 归一化映射与 86 条矩阵台账（`docs/review/2026-09-14-b3-priority-matrix-ledger.md`），列出 4 项产品决策 | 用户确认 + 实测 |
+| S15 | **B6 对照完成，无写入**：旧模块→recordClass（IN→incident、SR→service_request_item、SERVER→generic、KN→排除、问题→problem、变更→change_request）与目标一致；`ticket_types` 空表登记为"产品内置默认未初始化"差额（非旧数据迁移，本任务不迁工单历史） | 用户确认 + 实测 |
 
 ## 7.1 删除/排除登记（不得在后续批次再纳入）
 
