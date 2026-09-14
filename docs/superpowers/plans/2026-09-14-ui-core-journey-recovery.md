@@ -155,10 +155,10 @@
 
 - 统一 Intake 的 `resolver.go:ResolveWorkflow` 使用目录绑定或命令/流程解析规则选择流程；创建事务通过 Outbox 安排启动。创建回执不是流程已进入某节点的证明，页面应读取真实启动/任务状态。
 - `service/bpmn/sslvpn_approval_flow.bpmn` 是提交→主管初审→网络运维复审→KAF 授权验证；没有前置 Activity_Accept。先前真实测试卡住的目录请求走 `service_request_flow`，其 Activity_Accept 位于审批网关之前。这是两条不同流程，不能把后者的缺口推广到 SSLVPN。
-- `TicketWorkflowService.AcceptTicket` 修改工单分配、状态及响应时间并记录流转，不完成 BPMN ProcessTask。工单处理人与流程任务执行人不是同一字段，不可用工单 assignee 推导流程授权。
+- `TicketWorkflowService.AcceptTicket` 修改工单分配、状态及响应时间并记录流转，不完成 BPMN ProcessTask。工单处理人与流程任务执行人是不同职责字段，可以是同一人，也可以不同。此前 2026-08-25 设计及 2026-08-30 实施计划已经规定任务 assignee/candidateUsers/candidateGroups 和 elevated 权限的统一服务端授权；这是已有边界，不是本轮新缺口，不需重新设计或增加另一套权限判定。
 - 既有 BPMN 接口支持按 businessType/businessId 或 processInstanceId 查询任务、领取任务及完成任务。服务端限制租户、参与人和生命周期；机器委派任务另有执行边界。`ListUserTaskViews` 返回当前身份可见范围，空列表不能说明当前工单不存在流程。现有任务 DTO 包含 taskPurpose/formKey/参与人等，但未提供通用 allowedActions 投影，不能把「可读取」当作「可完成」。
 - Ticket 详情主要消费审批决策历史，`BPMNWorkflowApi.completeTask` 目前无页面调用者；审批中心已支持专门的领取与决策。历史记录不能替代当前任务展示，也不能把普通受理任务放进审批待办。
-- 前端 `CompleteTaskRequest` 声明 comment，后端 CompleteTask controller 仅接收 variables。未经明确后端持久化契约，不可直接添加看似保存成功的处理意见输入框。
+- 意见契约二次复核：审批使用既有 `/decisions`，controller 将 comment 转为 approvalComment，引擎写入 ProcessApprovalDecision.Comment；普通 `/complete` 接收的 variables 也由引擎合并保存。只有前端未被页面调用的 CompleteTaskRequest 顶层 comment 声明不被该 controller 绑定。不能把这个窄范围类型不一致概括为「意见无法保存」或已发生数据丢失，也不应以此阻塞整个 UI 接入；接线时复用对应的既有决策、变量或评论契约，不另建意见存储。
 
 #### 建议的最小接入顺序
 
@@ -171,3 +171,8 @@
 #### 本次核验
 
 只读源码复核并执行隔离 Go 测试：`go test ./service -run 'TestTaskServiceCompleteTask|TestBPMNTaskTerminalMutations|TestBPMNKafDelegatedTaskRejectsHumanMutations' -count=1 -v`，6 个顶层测试通过，包含领域状态校验、终态禁止变更及人工不能操作 KAF 委派任务。日志 `/tmp/ui-bpmn-task-contract-check.log`。没有改生产代码、共享 API、目录/角色/流程配置，没有执行真实审批或外部授权；三角色真实环境验收继续保持未完成。
+
+
+二次复核依据：`docs/superpowers/specs/2026-08-25-bpmn-task-instance-authorization-design.md` 第 2 节、`docs/superpowers/plans/2026-08-30-bpmn-instance-authorization.md`；历史提交 `28e5c6da`（工单审批契约收敛）、`5898e224`（BPMN 唯一审批权威）。当前源码 `SubmitTaskDecision`、`recordApprovalDecision` 与任务变量合并路径交叉核验，避免将旧设计稿的「待实现」状态当作当前实现缺失。此修订仅纠正核查结论，不修改既有授权与意见行为。
+
+二次复核验证：SubmitTaskDecision 五项 controller 测试、任务变量合并保存及审批历史租户/唯一性两项 service 测试，共 7 项通过；日志 `/tmp/ui-approval-recheck.log`。无共享环境变更。
