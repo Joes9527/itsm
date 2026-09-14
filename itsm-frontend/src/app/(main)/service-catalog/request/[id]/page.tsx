@@ -38,6 +38,10 @@ import { useAuthStore } from '@/lib/store/auth-store';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
+const creationResourceByClass = {
+  generic: 'ticket', incident: 'incident', problem: 'problem',
+  change_request: 'change', service_request_item: 'service_request',
+} as const;
 
 export default function ServiceCatalogRequestPage() {
   const params = useParams();
@@ -51,6 +55,7 @@ export default function ServiceCatalogRequestPage() {
   const [incompatibleAnswers, setIncompatibleAnswers] = useState<IncompatibleCatalogAnswer[]>([]);
   const creation = useWorkItemCreation();
   const serviceRequestTarget = catalog?.targetClass === 'service_request_item';
+  const requesterResource = catalog?.targetClass ? creationResourceByClass[catalog.targetClass as keyof typeof creationResourceByClass] : undefined;
   const [fetching, setFetching] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const user = useAuthStore(state => state.user);
@@ -209,7 +214,7 @@ export default function ServiceCatalogRequestPage() {
         <Divider />
 
         <Form form={form} layout="vertical" onFinish={onFinish} disabled={fetching || incompatibleAnswers.length > 0}>
-          <CreationRequester />
+          {requesterResource && <CreationRequester resource={requesterResource} />}
           <Alert type="info" title={`确认目标：${catalog?.targetClass || '未加载'}`} />
           {serviceRequestTarget && <>
           <div className="grid grid-cols-2 gap-4">

@@ -10,6 +10,13 @@ import (
 	"itsm-backend/ent/ticket"
 )
 
+// WorkItemLifecycleReader is implemented by each professional lifecycle owner.
+// The caller supplies an already authorized WorkItem and its transaction client;
+// this read projection neither authorizes writes nor grants delegation.
+type WorkItemLifecycleReader interface {
+	IsUnfinished(context.Context, *ent.Client, *ent.Ticket) (bool, error)
+}
+
 // WorkItemPolicy binds an immutable record class to both its professional ACL
 // resource and its canonical BPMN business type. BPMN business IDs are always
 // tickets.id (WorkItem ID).

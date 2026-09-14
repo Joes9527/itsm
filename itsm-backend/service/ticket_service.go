@@ -169,6 +169,22 @@ func isFinalStatus(s ticket.Status) bool {
 	return s == ticket.StatusResolved || s == ticket.StatusClosed || s == ticket.StatusCancelled
 }
 
+// IsUnfinished projects the generic lifecycle for an already authorized snapshot.
+// Approved/rejected remain actionable legacy states in IsValidTicketStatusTransition.
+func (s *TicketService) IsUnfinished(_ context.Context, _ *ent.Client, item *ent.Ticket) (bool, error) {
+	if item == nil || item.RecordClass != "generic" {
+		return false, fmt.Errorf("generic WorkItem is required")
+	}
+	switch item.Status {
+	case common.TicketStatusNew, common.TicketStatusOpen, common.TicketStatusAssigned,
+		common.TicketStatusInProgress, common.TicketStatusPending, common.TicketStatusApproved,
+		common.TicketStatusRejected, common.TicketStatusResolved, common.TicketStatusClosed, common.TicketStatusCancelled:
+		return !isFinalStatus(ticket.Status(item.Status)), nil
+	default:
+		return false, fmt.Errorf("unsupported generic WorkItem status %q", item.Status)
+	}
+}
+
 func getCategoryIDValue(categoryID *int) int {
 	if categoryID == nil {
 		return 0

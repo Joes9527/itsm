@@ -1,4 +1,6 @@
 'use client';
+import { WorkItemClassificationSelect } from '@/components/work-item/WorkItemClassificationSelect';
+import { classificationUpdate } from '@/components/work-item/classification';
 
 import { professionalCreationPath } from '@/lib/api/work-item-creation';
 
@@ -515,14 +517,8 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
 
   // 打开事件分类编辑弹窗
   const handleEditCategory = () => {
-    categoryForm.setFieldsValue({
-      category: classificationData?.category || data?.category || '',
-      subcategory: classificationData?.subcategory || data?.subcategory || '',
-      serviceType: classificationData?.serviceType || '',
-      failureType: classificationData?.failureType || '',
-      urgency: classificationData?.urgency || 'medium',
-      impact: classificationData?.impact || 'medium',
-    });
+    categoryForm.resetFields();
+    categoryForm.setFieldsValue({ urgency: data?.urgency || 'medium', impact: data?.impact || 'medium' });
     setCategoryModalVisible(true);
   };
 
@@ -531,31 +527,12 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
     if (!data) return;
     setSavingAnalysis(true);
     try {
-      const request = {
-        incidentId: data.id,
-        category: values.category,
-        subcategory: values.subcategory,
-        serviceType: values.serviceType,
-        failureType: values.failureType,
+      await IncidentAPI.updateIncident(data.id, {
+        ...classificationUpdate(values.classification, categoryForm.isFieldTouched('classification')),
         urgency: values.urgency,
         impact: values.impact,
-        classificationConfidence: 100,
-        autoClassified: false,
-      };
-
-      if (classificationData?.id) {
-        await IncidentAPI.updateIncidentClassification(classificationData.id, request);
-        message.success('事件分类已更新');
-      } else {
-        await IncidentAPI.createIncidentClassification(request);
-        message.success('事件分类已创建');
-      }
-
-      // 同时更新事件的基本分类信息
-      await IncidentAPI.updateIncident(data.id, {
-        category: values.category,
-        subcategory: values.subcategory,
       });
+      message.success('事件分类已更新');
 
       setCategoryModalVisible(false);
       loadAnalysisData();
@@ -605,7 +582,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
       <CreationAttempts creation={creation} />
       <Modal open={conversionOpen} title='创建关联问题' onCancel={() => setConversionOpen(false)} onOk={submitConversion} confirmLoading={converting}>
         <p>保留当前事件并创建关联问题，请确认申请人。</p>
-        <Form form={conversionForm}><CreationRequester /></Form>
+        <Form form={conversionForm}><CreationRequester resource="problem" /></Form>
       </Modal>
       <Space orientation='vertical' style={{ width: '100%' }} size='middle'>
         {/* 头部操作栏 */}
@@ -954,33 +931,33 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
               }
               extra={
                 <Button type='link' icon={<Pencil />} onClick={handleEditCategory}>
-                  {classificationData?.id ? '编辑' : '添加'}
+                  编辑
                 </Button>
               }
             >
-              {classificationData ? (
+              {data ? (
                 <Descriptions column={3} size='small'>
                   <Descriptions.Item label='分类'>
-                    {classificationData.category || '-'}
+                    {data.category || '-'}
                   </Descriptions.Item>
                   <Descriptions.Item label='子分类'>
-                    {classificationData.subcategory || '-'}
+                    {data.subcategory || '-'}
                   </Descriptions.Item>
                   <Descriptions.Item label='服务类型'>
-                    {classificationData.serviceType || '-'}
+                    {classificationData?.serviceType || '-'}
                   </Descriptions.Item>
                   <Descriptions.Item label='故障类型'>
-                    {classificationData.failureType || '-'}
+                    {classificationData?.failureType || '-'}
                   </Descriptions.Item>
                   <Descriptions.Item label='紧急程度'>
-                    {renderImpactTag(classificationData.urgency)}
+                    {renderImpactTag(data.urgency)}
                   </Descriptions.Item>
                   <Descriptions.Item label='影响程度'>
-                    {renderImpactTag(classificationData.impact)}
+                    {renderImpactTag(data.impact)}
                   </Descriptions.Item>
                   <Descriptions.Item label='创建时间' span={3}>
-                    {classificationData.createdAt
-                      ? dayjs(classificationData.createdAt).format('YYYY-MM-DD HH:mm')
+                    {classificationData?.createdAt
+                      ? dayjs(classificationData?.createdAt).format('YYYY-MM-DD HH:mm')
                       : '-'}
                   </Descriptions.Item>
                 </Descriptions>
@@ -1350,43 +1327,8 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
         width={600}
       >
         <Form form={categoryForm} layout='vertical' onFinish={handleSaveCategory}>
-          <Form.Item
-            name='category'
-            label='事件分类'
-            rules={[{ required: true, message: '请选择事件分类' }]}
-          >
-            <Select placeholder='选择事件分类'>
-              <Select.Option value='基础设施'>基础设施</Select.Option>
-              <Select.Option value='应用系统'>应用系统</Select.Option>
-              <Select.Option value='网络连接'>网络连接</Select.Option>
-              <Select.Option value='安全事件'>安全事件</Select.Option>
-              <Select.Option value='数据问题'>数据问题</Select.Option>
-              <Select.Option value='用户体验'>用户体验</Select.Option>
-              <Select.Option value='其他'>其他</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name='subcategory' label='子分类'>
-            <Input placeholder='请输入子分类' />
-          </Form.Item>
-          <Form.Item name='serviceType' label='服务类型'>
-            <Select placeholder='选择服务类型'>
-              <Select.Option value='计算'>计算</Select.Option>
-              <Select.Option value='存储'>存储</Select.Option>
-              <Select.Option value='网络'>网络</Select.Option>
-              <Select.Option value='数据库'>数据库</Select.Option>
-              <Select.Option value='中间件'>中间件</Select.Option>
-              <Select.Option value='应用服务'>应用服务</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name='failureType' label='故障类型'>
-            <Select placeholder='选择故障类型'>
-              <Select.Option value='性能下降'>性能下降</Select.Option>
-              <Select.Option value='服务不可用'>服务不可用</Select.Option>
-              <Select.Option value='功能异常'>功能异常</Select.Option>
-              <Select.Option value='数据丢失'>数据丢失</Select.Option>
-              <Select.Option value='安全漏洞'>安全漏洞</Select.Option>
-              <Select.Option value='配置错误'>配置错误</Select.Option>
-            </Select>
+          <Form.Item name="classification" label="事件分类">
+            <WorkItemClassificationSelect initialCategoryId={data?.categoryId} />
           </Form.Item>
           <Form.Item name='urgency' label='紧急程度' rules={[{ required: true }]}>
             <Select placeholder='选择紧急程度'>

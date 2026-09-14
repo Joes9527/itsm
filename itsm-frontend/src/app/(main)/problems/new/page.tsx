@@ -1,4 +1,7 @@
 'use client';
+import { WorkItemClassificationSelect } from '@/components/work-item/WorkItemClassificationSelect';
+import { classificationInput, classificationUpdate } from '@/components/work-item/classification';
+
 
 import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
 import { CreationAttempts } from '@/components/work-item/CreationAttempts';
@@ -44,7 +47,7 @@ const CreateProblemPageContent = () => {
         title: values.title,
         description: values.description,
         priority: values.priority,
-        category: values.category,
+        cti: classificationInput(values.classification),
         rootCause: values.rootCause,
         impact: values.impact,
         requesterId: values.requesterId,
@@ -64,15 +67,6 @@ const CreateProblemPageContent = () => {
     { value: ProblemPriority.CRITICAL, label: '紧急' },
   ];
 
-  const categoryOptions = [
-    { value: '系统问题', label: '系统问题' },
-    { value: '网络问题', label: '网络问题' },
-    { value: '数据库问题', label: '数据库问题' },
-    { value: '应用问题', label: '应用问题' },
-    { value: '安全问题', label: '安全问题' },
-    { value: '硬件问题', label: '硬件问题' },
-    { value: '其他', label: '其他' },
-  ];
 
   return (
     <div className="p-10 bg-gray-50 min-h-full">
@@ -97,10 +91,9 @@ const CreateProblemPageContent = () => {
           onFinish={handleSubmit}
           initialValues={{
             priority: ProblemPriority.MEDIUM,
-            category: '系统问题',
           }}
         >
-          <CreationRequester />
+          <CreationRequester resource="problem" />
           {searchParams.get('fromIncidentId') && (
             <Alert
               message={`此问题由事件 ${searchParams.get('fromIncidentId')} 触发`}
@@ -145,10 +138,10 @@ const CreateProblemPageContent = () => {
 
           <Form.Item
             label="分类"
-            name="category"
+            name="classification"
             rules={[{ required: true, message: '请选择分类' }]}
           >
-            <Select placeholder="选择分类" options={categoryOptions} />
+            <WorkItemClassificationSelect />
           </Form.Item>
 
           <Form.Item

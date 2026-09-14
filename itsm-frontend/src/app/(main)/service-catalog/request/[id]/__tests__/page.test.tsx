@@ -174,7 +174,7 @@ it('requires acknowledgment of service-request answers before confirming a reloa
 });
 
 it('preserves an explicitly selected authorized requester across a compatible Catalog reload', async () => {
-  useAuthStore.setState({ user: { id: 1, actorTenantId: 2, tenantId: 2, name: '申请人', email: 'user@example.com', permissions: ['user:read'] } as never });
+  useAuthStore.setState({ user: { id: 1, actorTenantId: 2, tenantId: 2, name: '申请人', email: 'user@example.com', permissions: ['user:read', 'service_request:create_on_behalf'] } as never });
   jest.mocked(UserApi.getUsers).mockResolvedValue({ users: [{ id: 9, tenantId: 2, name: '代申请人', active: true }] } as never);
   jest.mocked(ServiceCatalogApi.createServiceRequest).mockRejectedValueOnce(new ApiError('version conflict', 409));
   render(<Page />); await fill();
@@ -247,4 +247,17 @@ it.each(['compatible reload', 'target acknowledgment'])('keeps a new confirmatio
     expect(calls[2][0]).not.toHaveProperty('contactName');
   }
   expect(screen.getByRole('button', { name: '重试原申请' })).toBeEnabled();
+});
+
+it.each([
+  ['problem:create_on_behalf', true],
+  ['service_request:create_on_behalf', false],
+])('uses catalog target permission %s for requester selection', async (permission, visible) => {
+  useAuthStore.setState({ user: { id: 1, actorTenantId: 2, tenantId: 2, permissions: ['user:read', permission] } as never });
+  jest.mocked(ServiceCatalogApi.getService).mockResolvedValue({ ...catalog, targetClass: 'problem' } as never);
+  jest.mocked(UserApi.getUsers).mockResolvedValue({ users: [] } as never);
+  render(<Page />);
+  await screen.findByLabelText('申请标题');
+  if (visible) expect(screen.getByRole('combobox', { name: '申请人' })).toBeInTheDocument();
+  else expect(screen.queryByRole('combobox', { name: '申请人' })).not.toBeInTheDocument();
 });

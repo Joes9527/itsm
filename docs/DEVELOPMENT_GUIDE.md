@@ -24,6 +24,39 @@ npm run test:integration # 仅集成测试
 npm run test:e2e         # 运行 Playwright E2E 测试
 ```
 
+### 前端生产模式与工作流入口维护
+
+日常验收使用生产构建，避免 `next dev` 首次访问页面时按需编译。先在独立目录构建并验证，再停止已核对身份的前端进程并切换发布文件；不要在正在提供服务的 `.next` 目录执行构建。
+
+```bash
+# 在 itsm-frontend 中执行；API 代理目标必须在构建时提供。
+npm ci
+ITSM_BACKEND_URL=http://127.0.0.1:8080 NEXT_PUBLIC_API_URL='' npm run build
+NODE_ENV=production HOSTNAME=127.0.0.1 PORT=3301 npm start
+```
+
+`npm run build` 会准备 `.next/standalone`，包含 `server.js`、依赖、静态资源和 `public`。发布可复制该完整目录并执行 `NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3001 node server.js`；不要只复制 `server.js`。保留启动描述和上一发布目录，切换后验证登录、同源 `/api/v1/health`、静态资源及已登录业务页面。本机固定路径与启动描述见[本机开发环境](development-environment.md)。
+
+工作流分组使用 `/workflow`，该页面跳转 `/admin/workflows`。三个默认子入口为工作流管理、流程设计器和流程实例。审批链规则使用已有页面 `/admin/approval-chains`，旧 `/workflow/approval-chains` 跳转到该页面；`workflow` 菜单修复会同步迁移旧菜单地址，保留已有分组、权限和可见性配置。动态菜单仍由后端按租户、角色和权限过滤。升级已有租户的旧菜单时，使用定向命令，而非全量初始化：
+
+```bash
+# 在 itsm-backend 中构建，再使用目标环境既有配置运行该二进制。
+go build -o /tmp/itsm-reconcile-menus ./cmd/reconcile_menus
+/tmp/itsm-reconcile-menus -scope workflow -tenant-id 1 -requested-by '<operator identity>'
+# 服务目录管理入口与工单分类菜单权限修复：
+/tmp/itsm-reconcile-menus -scope catalog -tenant-id 1 -requested-by '<operator identity>'
+# 审批待办入口（修复旧 /approvals/pending）：
+/tmp/itsm-reconcile-menus -scope approvals -tenant-id 1 -requested-by '<operator identity>'
+```
+
+执行前核对目标数据库、schema、租户并协调共享环境写入。命令在单一事务中修复该租户的菜单，合并旧 `/workflow`、`/workflow/list` 重复入口，保留自定义子项与既有可见/启用状态；不改角色授权、不执行 schema 迁移。审计动作 `reconcile_workflow_menus` 保存操作者和菜单前后快照，可用于核对及受控恢复。首次初始化使用同一菜单修复逻辑。
+
+`-scope` 必须显式选择 `workflow`、`catalog` 或 `approvals`，未知值返回错误，不执行写入。`catalog` 仅维护“服务目录管理”和“工单分类”两个入口，权限分别为 `service_catalog:read`、`ticket_category:read`；保留已有菜单可见性、启用状态、父子关系和顺序，审计动作是 `reconcile_catalog_menus`。
+
+`approvals` 将“我的待办”统一到主导航 `/approvals`（BPMN 任务收件箱），修正旧 `/approvals/pending` 并合并重复记录，保留已有可见性与启用状态。菜单权限是 `task:read`，不是流程定义管理权限；审计动作是 `reconcile_approvals_menus`。
+
+产品用词：主导航“服务目录”用于浏览与申请；管理导航“服务目录管理”用于维护目录项、申请字段、流程和服务级别；“目录分类”是目录项的展示分组；“工单分类”是已产生工作的业务分类树。当前 `ServiceCatalog.category` 是字符串，`Ticket.category_id` 关联独立分类树，二者没有自动映射。自定义字段归属于目录项或工单模板，不从分类继承。
+
 ### 后端 (itsm-backend)
 
 ```bash
@@ -257,8 +290,46 @@ docker exec <container> wget -qO- http://localhost:8090/api/v1/health
 
 ### Intake identity exchange configuration
 
+Requester reference reads use `GET /api/v1/intake/work-item-references` under `intake:workitem:read`. Supply an exact `number` for one readable reference, or omit it for the current requester's unfinished page; pass only the returned `cursor` to continue. Numbers and cursors cannot be combined. `INTAKE_REFERENCE_PAGE_SIZE` (also supported with the `ITSM_` prefix) must be a positive integer and defaults to 50. Links use the configured `Server.FrontendURL` HTTP(S) origin. Unknown lifecycle owners or states fail closed.
+
 A6 routes use assertion v2 only. Set `INTAKE_IDENTITY_CONFIG_FILE` (or the existing `ITSM_` environment prefix) to an owner-only regular JSON file (mode 0600/0400). The file contains `providers` keyed by registered provider, each with a distinct `secret`, allowed `channels` and allowed `purposes` (`create`, `read`); optional `maxAge`, `futureSkew`, `tokenTTL` are whole-second durations. Defaults are 60s, 5s and 5m. Max age is 1s–5m, future skew 0–30s, token TTL 1s–15m. Secrets must differ from JWT/webhook/automation credentials and stay server-side. The application rejects reuse of its loaded JWT or KAF webhook secret. Missing configuration disables exchange; unavailable Redis rejects exchange instead of falling back to memory. Use the deployment's explicit Redis host/port/database.
 
 Create/read exchange share one atomic nonce namespace. Lost exchange responses require a fresh nonce and assertion; retain the business submission key. Only the corresponding Intake routes accept the resulting token. Every request checks current mapping version/active state and current session/target-tenant permissions. Mapping management uses native access-token tenant routes with `intake_identity_mapping:read`/`write`, and PATCH requires `version` plus `active`; immutable provider/workspace/subject/user identity is replaced through a new mapping rather than changed in place. Manage mappings with exact external subjects; email matching is unsupported.
 
 The requester WorkItem projection preserves professional status and returns `fulfillmentState: "unknown"` and `accessResult: null` until C1 installs its authoritative fulfillment/result projection. This is a C1 gate before A7/B1 acceptance, not evidence that access was granted. The shared test-only signature vector lives in [intake-identity-signature.json](contracts/fixtures/intake-identity-signature.json).
+
+菜单历史地址：`/workflow/automation` 跳转到 `/admin/tickets/automation-rules`，`workflow` 定向菜单修复同步迁移该地址并使用后端读取权限 `automation_rule:read`。已有分组和显示开关保留，不授予角色权限。知识库旧 `/knowledge/articles` 和 `/knowledge/articles/create` 分别跳转到 `/knowledge` 和 `/knowledge/articles/new`；静态菜单使用实际目标地址。
+
+
+### Incident creation classification
+
+`POST /api/v1/incidents` accepts the shared `cti` object (`categoryId`, optional `typeId` and `itemId`) for classification. IDs come from the authenticated tenant category tree; names are display metadata, not creation identifiers. Legacy `category`/`subcategory` creation fields are rejected by strict request binding. The backend validates active tenant-owned nodes and hierarchy before atomically creating the WorkItem and Incident. Workflow category/subcategory names are projected from the resolved records. Existing confirmed attempts retain their original payload; a changed classification requires a new confirmation. No schema migration or category seed is needed.
+### WorkItem classification in create and edit forms
+
+Ticket and Problem creation also accept shared `cti` IDs. New frontend callers obtain IDs from the authenticated tenant category tree instead of submitting category names or codes. Incident and Problem read responses expose the authoritative WorkItem `categoryId`. Their updates omit `categoryId` to preserve the existing classification, send `0` to clear it, or send a positive active tenant-owned ID to change it. Validation and WorkItem/professional-extension writes share a transaction. The shared frontend classification field reconstructs the selection by ID, excludes inactive branches, and resets edit state when the record changes. Ticket creation retains its existing public `categoryId` contract and rejects a conflict with the CTI leaf. No migration or category initialization is required.
+### Problem root cause and RCA metadata
+
+`problems.root_cause` is the authoritative root-cause body. RCA responses retain `rootCauseDescription` as a projection; analysis rows store method, evidence, confidence and review metadata only. RCA creation/update also advance the owning WorkItem version and timestamp in the same transaction. Metadata-only edits and deleting an RCA metadata record preserve the Problem root cause. Known Error publication defaults to this same Problem text.
+
+Before deploying this contract, stop Problem/RCA writers, back up the affected database, and execute [`20260909_problem_rca_authority.sql`](../itsm-backend/migrations/20260909_problem_rca_authority.sql) as the schema owner with the explicit application `search_path` and `psql -v ON_ERROR_STOP=1`. The migration bootstraps missing RCA metadata, rejects conflicting nonempty bodies, duplicate analyses and invalid ownership, backfills an empty Problem root from the old RCA body, then removes the duplicate column. Review conflicts manually; do not choose a value automatically. Grant the configured runtime role ordinary CRUD rights on the new metadata table and usage/select on its sequence, retaining tenant RLS. Do not run global auto-migration or seeding. Deploy the matching API binary with the tenant-scoped investigation service. Rolling back an existing-table migration requires restoring the backup and previous API together.
+
+Creation requester controls use the actual target resource's `create_on_behalf` permission plus directory read permission. Reading users, an admin-like role name or an MSP role alone does not authorize delegation. Same-tenant users without delegation submit for themselves; a cross-tenant actor must have an authorized customer requester. A rejected confirmed attempt remains immutable: change the form and explicitly confirm a new attempt when correcting its requester.
+
+### Unified support handoff acceptance
+
+KAF reference inspection uses authenticated requester read identity for exact-number
+lookup and paginated unfinished lists. Display number, current status, and frontend link;
+selection does not grant task execution or authorize ticket mutation. ITSM lifecycle owners
+remain authoritative when a reference closes or access changes.
+
+The intake idempotency index is tenant + actor + channel + operation + key. The same
+mapped actor across KAF workspaces replays the same immutable command/key; different
+actors and tenants remain isolated, and a changed command conflicts. Workspace identity
+mapping remains mandatory and cannot be replaced with client-supplied requester identity.
+
+Use isolated runtime/database manifests for live acceptance. Verify read-purpose tokens
+cannot create, current role permissions apply to every receipt/replay, exact/list isolation,
+professional extension ownership, and configured process/manual task persistence. A manual
+Catalog fixture may have unknown provider fulfillment projection; do not report it as
+access granted or completed. Ordinary association is read-only; a delegated failure uses
+only the original task's allowed action and original run/idempotency identity.

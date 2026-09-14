@@ -4,6 +4,9 @@ import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
 import { CreationAttempts } from '@/components/work-item/CreationAttempts';
 import { CreationRequester } from '@/components/work-item/CreationRequester';
 
+import { WorkItemClassificationSelect } from '@/components/work-item/WorkItemClassificationSelect';
+import { classificationInput } from '@/components/work-item/classification';
+
 import React, { useState, useEffect } from 'react';
 import { Button, Card, Form, Input, Select, Space, Row, Col, message, Tabs, Typography, Divider, Tag, Spin } from 'antd';
 import { ArrowLeft, Search, X } from 'lucide-react';
@@ -34,7 +37,7 @@ interface IncidentFormValues {
   source: 'manual' | 'user';
   requesterId?: number;
   type: 'incident' | 'service_request' | 'security_event' | 'alert';
-  category?: string;
+  classification?: number[];
   impact?: 'critical' | 'high' | 'medium' | 'low';
   urgency?: 'critical' | 'high' | 'medium' | 'low';
   assignedTo?: number;
@@ -121,7 +124,7 @@ export default function CreateIncidentPage() {
         priority: values.priority,
         source: values.source || 'manual',
         type: values.type || 'incident',
-        category: values.category,
+        cti: classificationInput(values.classification),
         impact: values.impact,
         urgency: values.urgency,
         assigneeId: values.assignedTo,
@@ -172,7 +175,7 @@ export default function CreateIncidentPage() {
                 type: 'incident',
               }}
             >
-              <CreationRequester />
+              <CreationRequester resource="incident" />
               <Tabs
                 activeKey={activeTab}
                 onChange={setActiveTab}
@@ -247,16 +250,10 @@ export default function CreateIncidentPage() {
                         <Row gutter={16}>
                           <Col span={12}>
                             <Form.Item
-                              name="category"
+                              name="classification"
                               label="事件分类"
                             >
-                              <Select placeholder="选择分类" options={[
-                                { value: 'hardware', label: '硬件故障' },
-                                { value: 'software', label: '软件故障' },
-                                { value: 'network', label: '网络问题' },
-                                { value: 'security', label: '安全问题' },
-                                { value: 'other', label: '其他' },
-                              ]} />
+                              <WorkItemClassificationSelect />
                             </Form.Item>
                           </Col>
                           <Col span={12}>

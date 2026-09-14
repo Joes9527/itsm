@@ -96,7 +96,7 @@ func (e *CustomProcessEngine) ValidateDefinitionForPublication(ctx context.Conte
 				approvals++
 			}
 			if strings.TrimSpace(t.Assignee) == "" && strings.TrimSpace(t.CandidateUsers) == "" && strings.TrimSpace(t.CandidateGroups) == "" && strings.TrimSpace(t.AssigneeRole) == "" && !t.AssigneeGmChain && t.AssigneeDeptId <= 0 && t.AssigneeTeamId <= 0 && t.AssigneeProjectId <= 0 && t.AssigneeTempTeamId <= 0 {
-				return fmt.Errorf("task %q requires candidate resolution configuration", t.ID)
+				return &bpmn.PublicationConfigurationError{Message: fmt.Sprintf("task %q requires candidate resolution configuration", t.ID)}
 			}
 			for _, source := range fixedScopeApproverSources(t, tenantID) {
 				candidates, err := source.resolver.Resolve(ctx, client, &source.context)

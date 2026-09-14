@@ -16,6 +16,9 @@ export interface Incident {
   reporterId?: number;
   assigneeId?: number;
   configurationItemId?: number;
+  categoryId?: number;
+  urgency?: string;
+  impact?: string;
   category: string;
   subcategory: string;
   impactAnalysis?: Record<string, any>;

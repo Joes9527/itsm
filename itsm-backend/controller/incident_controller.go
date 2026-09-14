@@ -89,7 +89,7 @@ func (c *IncidentController) CreateIncident(ctx *gin.Context) {
 	if req.RequesterID != nil {
 		requesterID = *req.RequesterID
 	}
-	intakehttp.Execute(ctx, c.creationApplication, tenantID, requesterID, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassIncident, IntakeKind: creation.IntakeKindIncident, Title: req.Title, Description: req.Description, Priority: req.Priority, AssigneeID: req.AssigneeID, CIIDs: req.ConfigurationItemIDs, Incident: &creation.IncidentInput{Type: req.Type, Severity: req.Severity, Impact: req.Impact, Urgency: req.Urgency, Category: req.Category, Subcategory: req.Subcategory, DetectedAt: detected, ImpactAnalysis: req.ImpactAnalysis, Metadata: req.Metadata, Source: req.Source}})
+	intakehttp.Execute(ctx, c.creationApplication, tenantID, requesterID, creation.CreateWorkItemCommand{CTI: req.CTI, RecordClass: creation.RecordClassIncident, IntakeKind: creation.IntakeKindIncident, Title: req.Title, Description: req.Description, Priority: req.Priority, AssigneeID: req.AssigneeID, CIIDs: req.ConfigurationItemIDs, Incident: &creation.IncidentInput{Type: req.Type, Severity: req.Severity, Impact: req.Impact, Urgency: req.Urgency, DetectedAt: detected, ImpactAnalysis: req.ImpactAnalysis, Metadata: req.Metadata, Source: req.Source}})
 }
 
 // GetIncident 获取事件详情
@@ -1297,12 +1297,7 @@ func (c *IncidentController) UpdateClassification(ctx *gin.Context) {
 		return
 	}
 
-	cat := req.Category
-	sub := req.Subcategory
-	_, err = c.incidentService.UpdateIncident(ctx.Request.Context(), id, &dto.UpdateIncidentRequest{
-		Category:    &cat,
-		Subcategory: &sub,
-	}, tenantID)
+	_, err = c.incidentService.UpdateClassification(ctx.Request.Context(), id, tenantID, req.Category, req.Subcategory)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			common.Fail(ctx, common.NotFoundErrorCode, "事件不存在")

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/ent"
+
 	"go.uber.org/zap"
 )
 
@@ -89,12 +91,10 @@ func (s *Service) Update(ctx context.Context, tenantID int, id int, p *Problem) 
 		}
 		existing.Priority = p.Priority
 	}
-	if p.Category != "" {
-		existing.Category = p.Category
-	}
-	if p.RootCause != "" {
-		existing.RootCause = p.RootCause
-	}
+	// Preserve omission so unrelated edits do not revalidate or rewrite classification.
+	existing.CategoryID = p.CategoryID
+	// Preserve root-cause omission; unrelated edits must not replay a stale RCA body.
+	existing.RootCause = p.RootCause
 	if p.Workaround != "" {
 		existing.Workaround = p.Workaround
 	}
@@ -178,6 +178,22 @@ func isValidProblemStatusTransition(current, next string) bool {
 
 func canCloseProblemStatus(status string) bool {
 	return strings.TrimSpace(status) == "resolved"
+}
+
+// IsUnfinished projects this owner's canonical lifecycle, including its supported
+// legacy in_progress state. A Problem has no cancelled state.
+func (s *Service) IsUnfinished(_ context.Context, _ *ent.Client, item *ent.Ticket) (bool, error) {
+	if item == nil || item.RecordClass != "problem" {
+		return false, fmt.Errorf("Problem WorkItem is required")
+	}
+	switch item.Status {
+	case "open", "investigating", "identified", "in_progress":
+		return true, nil
+	case "resolved", "closed":
+		return false, nil
+	default:
+		return false, fmt.Errorf("unsupported Problem status %q", item.Status)
+	}
 }
 
 func uniquePositiveIDs(ids []int) []int {

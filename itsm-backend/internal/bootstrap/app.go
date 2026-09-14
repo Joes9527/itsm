@@ -530,6 +530,8 @@ func NewApplication() *Application {
 	problemRepo := problem.NewEntRepository(client)
 	problemServiceDomain := problem.NewService(problemRepo, sugar)
 	problemHandler := problem.NewHandler(problemServiceDomain, client)
+	problemInvestigationService := service.NewTenantScopedProblemInvestigationService(database.GetRawDB(), sugar)
+	problemInvestigationController := controller.NewProblemInvestigationController(sugar, problemInvestigationService)
 	incidentController := controller.NewIncidentController(incidentService, incidentService.RuleEngine(), incidentMonitoringService, incidentAlertingService, rootCauseAnalysisService, sugar)
 
 	provisioningService := service.NewProvisioningService(client, sugar)
@@ -880,7 +882,13 @@ func NewApplication() *Application {
 	identityRepository := intake.NewIdentityRepository(client, systemClient, sessionReader)
 	identityExchange := intake.NewIdentityExchangeService(identityConfig, intake.NewRedisNonceStore(identityRedis), identityRepository, cfg.JWT.Secret)
 	intakeHandler := intake.NewHandler(identityExchange, intakeApplication)
-	intakeReaders := intake.NewReadService(sessionReader, scService, cfg.JWT.Secret)
+	intakeReaders := intake.NewReadService(sessionReader, scService, cfg.JWT.Secret, intake.ReferenceReadOptions{
+		FrontendURL: cfg.Server.FrontendURL, PageSize: cfg.IntakeRead.ReferencePageSize,
+		Lifecycle: intake.NewRequesterLifecycleReader(map[string]authorization.WorkItemLifecycleReader{
+			"ticket": ticketService, "incident": incidentService, "problem": problemServiceDomain,
+			"change": changeServiceDomain, "service_request": srService,
+		}),
+	})
 	intakeReaders.SetFulfillmentReader(srService)
 	intakeHandler.SetReaders(intakeReaders)
 	intakeHandler.SetMappings(intake.NewIdentityMappingService(sessionReader, identityProviders))
@@ -952,17 +960,18 @@ func NewApplication() *Application {
 		CloudController:        cloudController,
 
 		// Domain Handlers
-		ServiceCatalogHandler: scHandler,
-		ServiceRequestHandler: srHandler,
-		ProblemHandler:        problemHandler,
-		ChangeHandler:         changeHandler,
-		KnowledgeHandler:      knowledgeHandler,
-		SLAHandler:            slaHandler,
-		SLATemplateController: slaTemplateController,
-		AIHandler:             aiHandler, // Added AI domain handler
-		CommonHandler:         commonHandler,
-		AuthController:        authController,
-		RoleHandler:           roleHandler,
+		ServiceCatalogHandler:          scHandler,
+		ServiceRequestHandler:          srHandler,
+		ProblemHandler:                 problemHandler,
+		ProblemInvestigationController: problemInvestigationController,
+		ChangeHandler:                  changeHandler,
+		KnowledgeHandler:               knowledgeHandler,
+		SLAHandler:                     slaHandler,
+		SLATemplateController:          slaTemplateController,
+		AIHandler:                      aiHandler, // Added AI domain handler
+		CommonHandler:                  commonHandler,
+		AuthController:                 authController,
+		RoleHandler:                    roleHandler,
 
 		// Global Search
 		GlobalSearchController: globalSearchController,

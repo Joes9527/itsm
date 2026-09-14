@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/servicecatalog"
 	"itsm-backend/handlers/common/accessgrant"
 	"itsm-backend/service"
+	"itsm-backend/service/bpmn"
 	"math"
 	"strconv"
 	"strings"
@@ -113,8 +114,11 @@ func (s *Service) ValidatePublicationConfiguration(ctx context.Context, client *
 		return err
 	}
 	var p *accessgrant.Policy
-	if err = json.Unmarshal(raw, &p); err != nil || p == nil {
-		return fmt.Errorf("external grant policy is unavailable")
+	if err = json.Unmarshal(raw, &p); err != nil {
+		return err
+	}
+	if p == nil {
+		return &bpmn.PublicationConfigurationError{Message: "external grant policy is unavailable"}
 	}
 	row, err := client.CatalogAccessPolicy.Get(ctx, p.ID)
 	if err != nil {

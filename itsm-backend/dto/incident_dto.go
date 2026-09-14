@@ -51,6 +51,7 @@ type CIInfo struct {
 
 // 事件管理相关DTO
 type CreateIncidentRequest struct {
+	CTI                  *creation.CTIInput       `json:"cti,omitempty"`
 	RequesterID          *int                     `json:"requesterId,omitempty" binding:"omitempty,gt=0"` // 可选目标租户申请人
 	Title                string                   `json:"title" binding:"required" example:"服务器CPU使用率过高"`
 	Description          string                   `json:"description" binding:"omitempty,max=5000" example:"生产环境Web服务器CPU使用率持续超过90%"`
@@ -59,8 +60,6 @@ type CreateIncidentRequest struct {
 	Severity             string                   `json:"severity" binding:"omitempty,oneof=low medium high critical" example:"high"`
 	Impact               string                   `json:"impact" binding:"omitempty,oneof=low medium high critical" example:"medium"`
 	Urgency              string                   `json:"urgency" binding:"omitempty,oneof=low medium high critical" example:"medium"`
-	Category             string                   `json:"category" example:"performance"`
-	Subcategory          string                   `json:"subcategory" example:"cpu"`
 	ConfigurationItemIDs []int                    `json:"configurationItemIds"`
 	AssigneeID           *int                     `json:"assigneeId" example:"1"`
 	ImpactAnalysis       *creation.ImpactAnalysis `json:"impactAnalysis"`
@@ -77,8 +76,7 @@ type UpdateIncidentRequest struct {
 	Severity        *string                `json:"severity,omitempty" binding:"omitempty,oneof=low medium high critical"`
 	Impact          *string                `json:"impact,omitempty" binding:"omitempty,oneof=low medium high critical"`
 	Urgency         *string                `json:"urgency,omitempty" binding:"omitempty,oneof=low medium high critical"`
-	Category        *string                `json:"category,omitempty"`
-	Subcategory     *string                `json:"subcategory,omitempty"`
+	CategoryID      *int                   `json:"categoryId,omitempty" binding:"omitempty,gte=0"`
 	AssigneeID      *int                   `json:"assigneeId,omitempty"`
 	RelatedCIIDs    []int                  `json:"relatedCIIds,omitempty"`
 	ImpactAnalysis  *ImpactAnalysis        `json:"impactAnalysis,omitempty"`
@@ -102,6 +100,7 @@ type EscalateMajorIncidentRequest struct {
 }
 
 type IncidentResponse struct {
+	CategoryID          int                         `json:"categoryId"`
 	ID                  int                         `json:"id" example:"1"`
 	Title               string                      `json:"title" example:"服务器CPU使用率过高"`
 	Description         string                      `json:"description" binding:"omitempty,max=5000" example:"生产环境Web服务器CPU使用率持续超过90%"`

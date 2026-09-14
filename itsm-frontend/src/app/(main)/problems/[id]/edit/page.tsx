@@ -1,4 +1,7 @@
 'use client';
+import { WorkItemClassificationSelect } from '@/components/work-item/WorkItemClassificationSelect';
+import { classificationInput, classificationUpdate } from '@/components/work-item/classification';
+
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
@@ -23,30 +26,34 @@ export default function ProblemEditPage() {
   useEffect(() => {
     if (!id) return;
 
+    let cancelled = false;
     const fetchProblem = async () => {
       setFetching(true);
       try {
         const resp = await ProblemApi.getProblem(Number(id));
+        if (cancelled) return;
         const data = resp as any;
         setProblemData(data);
+        form.resetFields();
         form.setFieldsValue({
           title: data.title,
           description: data.description,
           priority: data.priority,
-          category: data.category,
           status: data.status,
           rootCause: data.rootCause,
           impact: data.impact,
         });
       } catch (error) {
+        if (cancelled) return;
         message.error(t('problems.getFailed'));
         router.push('/problems');
       } finally {
-        setFetching(false);
+        if (!cancelled) setFetching(false);
       }
     };
 
     fetchProblem();
+    return () => { cancelled = true; };
   }, [id, form, router]);
 
   const handleSubmit = async (values: any) => {
@@ -54,7 +61,8 @@ export default function ProblemEditPage() {
 
     setLoading(true);
     try {
-      await ProblemApi.updateProblem(Number(id), values);
+      const { classification, ...payload } = values;
+      await ProblemApi.updateProblem(Number(id), { ...payload, ...classificationUpdate(classification, form.isFieldTouched('classification')) });
       message.success(t('problems.updateSuccess'));
       router.push(`/problems/${id}`);
     } catch (error) {
@@ -131,8 +139,8 @@ export default function ProblemEditPage() {
 
           <Row gutter={24}>
             <Col span={24}>
-              <Form.Item name="category" label="分类">
-                <Select placeholder="请选择分类" allowClear options={[{ value: "系统问题", label: "系统问题" }, { value: "网络问题", label: "网络问题" }, { value: "数据库问题", label: "数据库问题" }, { value: "应用问题", label: "应用问题" }, { value: "安全问题", label: "安全问题" }, { value: "硬件问题", label: "硬件问题" }, { value: "其他", label: "其他" }]} />
+              <Form.Item name="classification" label="分类">
+                <WorkItemClassificationSelect initialCategoryId={problemData?.categoryId} />
               </Form.Item>
             </Col>
           </Row>

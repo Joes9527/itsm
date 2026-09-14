@@ -1,3 +1,4 @@
+import { TicketCategoryApi } from '@/lib/api/ticket-category-api';
 import { TicketApi } from '@/lib/api/ticket-api';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { creationReceipt } from '@/lib/api/creation.test-utils';
@@ -26,7 +27,7 @@ jest.mock('next/navigation', () => ({
 }));
 jest.mock('@/lib/api/ticket-category-api', () => ({
   TicketCategoryApi: {
-    getCategories: jest.fn().mockResolvedValue([]),
+    getCategoryTree: jest.fn().mockResolvedValue([]),
     list: jest.fn().mockResolvedValue({ categories: [] }),
   },
 }));
@@ -100,4 +101,25 @@ it('portal help opens the generic form without professional selection or AI tria
   await waitFor(() => expect(TicketApi.createTicket).toHaveBeenCalledTimes(1));
   expect(TicketApi.createTicket).toHaveBeenCalledWith(expect.objectContaining({ type: 'ticket', title: '需要服务台协助' }), expect.objectContaining({ idempotencyKey: expect.any(String) }));
   expect(push).toHaveBeenCalledWith('/tickets/41');
+});
+it('submits the selected tenant category ID instead of its code or name', async () => {
+  jest.mocked(TicketApi.getTemplates).mockResolvedValue({ templates: [] } as never);
+  jest.mocked(TicketCategoryApi.getCategoryTree).mockResolvedValue([
+    { id: 81, name: '租户专属分类', code: 'CUSTOM-81', isActive: true, parentId: null, children: [] },
+    { id: 90, name: '停用父分类', isActive: false, children: [
+      { id: 91, name: '不可选子分类', isActive: true, parentId: 90 },
+    ] },
+  ] as never);
+  jest.mocked(TicketApi.createTicket).mockResolvedValue(creationReceipt);
+  render(<Page />);
+  fireEvent.click(screen.getByRole('button', { name: '普通工单' }));
+  fireEvent.click(await screen.findByText('租户专属分类'));
+  expect(screen.queryByText('不可选子分类')).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText(/^标题/), { target: { value: '分类契约测试工单' } });
+  fireEvent.change(screen.getByLabelText(/^详细描述/), { target: { value: '通过真实分类树创建工单' } });
+  fireEvent.click(screen.getByRole('button', { name: '创建工单' }));
+  await waitFor(() => expect(TicketApi.createTicket).toHaveBeenCalledTimes(1));
+  const payload = jest.mocked(TicketApi.createTicket).mock.calls[0][0];
+  expect(payload.cti).toEqual({ categoryId: 81 });
+  expect(payload).not.toHaveProperty('category');
 });
