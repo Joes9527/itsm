@@ -2,7 +2,7 @@
 
 > 在维护者的 Windows/WSL 联调环境工作前，先读[本机开发环境](development-environment.md)。其中记录已迁移源码入口、固定运行副本、3001/8080/5173/8000 端口、ITSM 专用修复二进制和维护约束。下面的通用安装/初始化命令不用于直接重建现有验收实例。
 
-本文档汇集 ITSM 项目的日常开发命令、Docker 部署配置、历史分支复盘教训与通用规范。
+本文档维护 ITSM 项目的开发命令、部署运维和验证流程。API/DTO、前端和源文件命名的公共规则见[共享工程约定](engineering-conventions.md)，对所有开发者及 Coding Agent 同样适用；架构和领域约束见 [AGENTS.md](../AGENTS.md)。
 
 ## 候选执行范围前置修复（开发中，不能据此启动候选）
 
@@ -237,7 +237,7 @@ state 租户不一致、邮箱为空或租户内邮箱不唯一时均明确失�
 
 由此带来的实际约束：
 
-1. **DB/Redis 是共享基础设施，不是本机沙箱。** 本机执行的迁移、`-fresh` 重置、RLS 模式切换（`RLS_MODE=shadow/enforce`）、批量数据操作，影响的是所有连到 `192.168.31.66` 的开发者和 agent，不只是当前会话。执行破坏性操作前先确认没有其他人正在使用（参见 [CLAUDE.md](../CLAUDE.md) 中关于 `-fresh` migrate 的警告）。
+1. **DB/Redis 是共享基础设施，不是本机沙箱。** 本机执行的迁移、`-fresh` 重置、RLS 模式切换（`RLS_MODE=shadow/enforce`）、批量数据操作，影响的是所有连到 `192.168.31.66` 的开发者和 agent，不只是当前会话。执行破坏性操作前先确认没有其他人正在使用；`-fresh` 仅允许用于可丢弃的开发/测试库，禁止用于共享或生产数据库。
 2. **派发并行/后台任务前，先确认远端是否已有同名 worktree 在跑。** 已有过因未核对而重复排期的教训（KAF 委派链路），核对方法与纪律见 [architecture-assessment-remediation-execution-plan-design.md](superpowers/specs/2026-08-30-architecture-assessment-remediation-execution-plan-design.md) 的"五、执行纪律"一节。
 3. 连接 `192.168.31.66` 所需的跳板、端口、鉴权等个人 SSH 配置不进入本文档；需要登录该机器做运维/调试时，向持有该配置的开发者确认。
 

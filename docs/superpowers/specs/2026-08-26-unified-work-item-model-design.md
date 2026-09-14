@@ -1,8 +1,10 @@
 # 统一 Work Item 的标准 ITSM / ServiceNow 式领域模型设计
 
-> 状态：Proposed  
+> 状态：accepted（领域约束已纳入根契约；不表示全文实施与验收完成）
 > 日期：2026-08-26  
 > 适用范围：Ticket、Service Catalog、Service Request、Incident、Problem、Known Error、Change、履约任务及其共享能力
+
+> 当前权威与历史基线：实现约束以 [AGENTS.md](../../../AGENTS.md) 的 Unified Work Item domain contract 为准。下文“当前系统”的现状描述保留的是 2026-08-26 设计基线；Incident/Problem 等 schema 和统一 intake 已有后续实现，不能据此重新引入重复公共字段或旁路创建。各项实施、迁移、部署与真实路径验收需分别核对当前代码和验证证据；本文未宣告所有目标完成。
 
 ## 1. 摘要
 

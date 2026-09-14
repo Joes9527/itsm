@@ -7,9 +7,10 @@
 1. 仓库根目录的 `AGENTS.md` 是产品方向、架构、领域模型、安全和租户边界的权威来源。
 2. [`DEVELOPMENT_GUIDE.md`](./DEVELOPMENT_GUIDE.md) 是开发命令、测试、交付和运维流程的权威来源。
 3. 本文档规定 Coding Agent 的目录、分支、文档和交付纪律。
-4. `docs/` 保存长期有效的项目文档；一次性设计、任务过程稿和本地验证产物不得替代权威文档。
+4. [共享工程约定](engineering-conventions.md) 是 API/DTO、前端及源文件命名规则的公共来源，对所有开发者和 Coding Agent 生效。
+5. `docs/` 保存长期有效的项目文档；一次性设计、任务过程稿和本地验证产物不得替代权威文档。
 
-修改架构或领域约束时，必须同步 `AGENTS.md` 和 `CLAUDE.md` 的对应摘要；修改开发流程时，更新 `docs/DEVELOPMENT_GUIDE.md` 或本文档，其他文档只链接，不复制维护同一规则。
+修改架构或领域约束时，必须同步 `AGENTS.md` 和 `CLAUDE.md` 的对应摘要；修改开发流程时，更新 `docs/DEVELOPMENT_GUIDE.md` 或本文档；修改 API/前端/源文件约定时，更新 `docs/engineering-conventions.md`。其他文档只链接，不复制维护同一规则。
 
 ## 2. 目录与文件落点
 
