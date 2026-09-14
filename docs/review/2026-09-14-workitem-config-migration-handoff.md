@@ -1,10 +1,10 @@
 # 任务二交接：配置主数据适配统一 WorkItem 模型
 
 - **Gate:** G-B
-- **Status:** BLOCKED（G-B 未满足：B0 规范配置与规范流程初始化已准入并通过校验；B1–B6 与路由 20 个未解析用户 ID 仍未完成）
+- **Status:** BLOCKED（G-B 未满足：B0 规范配置、规范流程初始化、B1 分类/资产落位已准入并通过校验；B2–B6 与路由 20 个未解析用户 ID 仍未完成）
 - **日期:** 2026-09-14
 - **消费的 GARevision:** `d91b587fe3ab40cc863321346d217d258a3a96d8`。`docs/review/2026-09-14-database-reconciliation-handoff.md` 现已在磁盘存在且 `Status=PASS`；已独立复核固定制品、目标镜像、库/owner/schema、PG 与扩展、账本（36 条，head `046_auth_token_state`，无 R038）及 Phase 1 不变量。
-- **结论:** G-A 已核验并消费；**B0 规范 seed 配置已受控准入 `itsm_ga_ready`**（见 `docs/review/2026-09-14-b0-seed-admission-evidence.md`），**规范流程初始化批次已执行**（20 个内嵌模板 + 7 条绑定，无悬空绑定，见 `docs/review/2026-09-14-process-init-evidence.md`）。配置主数据映射已逐项与业务确认。因 B1–B6 与路由缺口未完成，G-B 仍未满足；不得据此对其它目标库写入、切换或验收。
+- **结论:** G-A 已核验并消费；**B0 规范 seed 配置已受控准入 `itsm_ga_ready`**（见 `docs/review/2026-09-14-b0-seed-admission-evidence.md`），**规范流程初始化批次已执行**（20 个内嵌模板 + 7 条绑定，无悬空绑定，见 `docs/review/2026-09-14-process-init-evidence.md`），**B1 分类/资产落位已执行**（46 个 CMDB CI + 3 个新分类，见 `docs/review/2026-09-14-b1-landing-evidence.md`）。配置主数据映射已逐项与业务确认。因 B2–B6 与路由缺口未完成，G-B 仍未满足；不得据此对其它目标库写入、切换或验收。
 
 ## 1. 门禁与上游边界
 
