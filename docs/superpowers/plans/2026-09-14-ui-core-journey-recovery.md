@@ -147,8 +147,27 @@
 - Chromium `approval-history-ui.spec.ts` 1 passed：通过环境变量指定既有可读工单 #10，真实登录与详情读取，审批决策 GET 使用隔离的 500/空数组响应，验证错误→重试→空态；390/1440 无页面横向溢出，并查看两张截图。没有提交评论、附件、审批决策或修改既有工单。该测试默认无指定工单时 skip，不依赖固定共享数据。
 - 浏览器运行本次 production build `OyguDF_KkyvUHmCORrE33`，私有 3016 前端、3017 同源代理；结束后停止本次私有服务。日志及截图位于 `/tmp/approval-history-*`，不提交。共享 8080 未更换；前两项后端修复仍待部署验证，本项浏览器结果不是三角色真实审批验收。
 
-### 后续最小接入点：既有 BPMN 受理任务（待设计与实施）
+### 通用 Ticket 与流程任务 UI 衔接（范围 accepted，具体接入设计 draft）
 
-再次核对现有源码：`TicketWorkflowService.AcceptTicket` 仅在事务中修改 assignee/status/first_response_at/version 并写流转记录，没有完成 BPMN ProcessTask；`BPMNWorkflowApi.completeTask` 当前没有页面调用者。标准服务请求 BPMN 的 `Activity_Accept` 位于审批网关之前，没有显式受理人配置，且不是 taskPurpose=approval。因此不能用「接单」状态变化或伪造 approve 命令代替完成受理任务。
+用户已确认：关注通用 Ticket 流程，不限于 SSLVPN。根据服务目录或流程绑定，允许提交后直接审批、先受理后审批以及无需审批的处理路径；不能将「请求受理」设为所有 Ticket 的必经步骤。保持当前 UI 重构主题，不重建 E2E 业务模型或审批引擎。
 
-下一项应围绕既有引擎核对受理任务的后端执行权限、分配配置和完成契约，再把真实受理动作接到 Helpdesk 页面；保留后端对当前执行人的授权、审计与专业域边界，成功后重新读取当前任务。不得把全部普通任务暴露到审批中心，也不新增审批引擎。先形成可验证的最小接入方案，再实施和审查；最后在后端修复实际部署后重跑 end user → Helpdesk → 管理层的真实路径。当前三角色验收仍未通过，团队负载、KB 与智能建单仍不进入本轮。
+#### 复核事实
+
+- 统一 Intake 的 `resolver.go:ResolveWorkflow` 使用目录绑定或命令/流程解析规则选择流程；创建事务通过 Outbox 安排启动。创建回执不是流程已进入某节点的证明，页面应读取真实启动/任务状态。
+- `service/bpmn/sslvpn_approval_flow.bpmn` 是提交→主管初审→网络运维复审→KAF 授权验证；没有前置 Activity_Accept。先前真实测试卡住的目录请求走 `service_request_flow`，其 Activity_Accept 位于审批网关之前。这是两条不同流程，不能把后者的缺口推广到 SSLVPN。
+- `TicketWorkflowService.AcceptTicket` 修改工单分配、状态及响应时间并记录流转，不完成 BPMN ProcessTask。工单处理人与流程任务执行人不是同一字段，不可用工单 assignee 推导流程授权。
+- 既有 BPMN 接口支持按 businessType/businessId 或 processInstanceId 查询任务、领取任务及完成任务。服务端限制租户、参与人和生命周期；机器委派任务另有执行边界。`ListUserTaskViews` 返回当前身份可见范围，空列表不能说明当前工单不存在流程。现有任务 DTO 包含 taskPurpose/formKey/参与人等，但未提供通用 allowedActions 投影，不能把「可读取」当作「可完成」。
+- Ticket 详情主要消费审批决策历史，`BPMNWorkflowApi.completeTask` 目前无页面调用者；审批中心已支持专门的领取与决策。历史记录不能替代当前任务展示，也不能把普通受理任务放进审批待办。
+- 前端 `CompleteTaskRequest` 声明 comment，后端 CompleteTask controller 仅接收 variables。未经明确后端持久化契约，不可直接添加看似保存成功的处理意见输入框。
+
+#### 建议的最小接入顺序
+
+1. 在既有详情布局中呈现「当前流程任务」，与「审批决策历史」区分。通过权威业务关联读取，展示实际节点、状态、处理人及启动/读取错误；无权限与无任务不得混同。申请人可见进展需要复用或补齐受控的进展投影，不能放宽全任务列表权限。
+2. 为 Helpdesk 接入后端允许的人工任务动作。沿用 BPMN 查询/领取/完成，不根据节点名称硬编码「受理」权限；先核对任务 action 投影、业务 ID 语义和 formKey/必要输入，未知或缺契约时显示明确限制。审批仍使用 decisions；自动化任务不可通过普通完成按钮执行。动作后重新读取真实任务与工单状态。
+3. 使用三类路径验收：直接审批（SSLVPN 仅作为示例）、先受理后审批、无需审批。覆盖未授权、转派后权限变化、重复提交、读取失败和待办刷新。第一阶段不执行真实外部授权；KAF/KB、团队负载仍保持既有范围。
+
+上述顺序是具体接入建议，尚未实现新任务面板或修改 BPMN 配置。完整可执行任务面板涉及服务端权限/输入投影时，应先确认契约设计，不能当成单纯加按钮。
+
+#### 本次核验
+
+只读源码复核并执行隔离 Go 测试：`go test ./service -run 'TestTaskServiceCompleteTask|TestBPMNTaskTerminalMutations|TestBPMNKafDelegatedTaskRejectsHumanMutations' -count=1 -v`，6 个顶层测试通过，包含领域状态校验、终态禁止变更及人工不能操作 KAF 委派任务。日志 `/tmp/ui-bpmn-task-contract-check.log`。没有改生产代码、共享 API、目录/角色/流程配置，没有执行真实审批或外部授权；三角色真实环境验收继续保持未完成。
