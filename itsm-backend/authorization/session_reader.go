@@ -210,3 +210,24 @@ func (session *SessionSnapshot) AuthorizeWorkItemAssignment(ctx context.Context,
 	}
 	return item, nil
 }
+
+// AuthorizeWorkItemForward preserves the workflow route permission and row
+// visibility. Transferring ownership additionally requires assignment ACLs.
+func (session *SessionSnapshot) AuthorizeWorkItemForward(ctx context.Context, id int) (*ent.Ticket, error) {
+	client := session.Tx.Client()
+	item, _, err := ResolveWorkItemIdentity(ctx, client, id, session.Identity.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	if !HasResourcePermission(client, session.Identity.Role, "workflow", "update", session.Identity.TenantID) {
+		return nil, fmt.Errorf("insufficient workflow permission")
+	}
+	visible, err := client.Ticket.Query().Where(ticket.ID(id), ticket.TenantID(session.Identity.TenantID), WorkItemRowScope(session.Actor.ID, session.Identity.Role)).Exist(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !visible {
+		return nil, fmt.Errorf("insufficient WorkItem row visibility")
+	}
+	return item, nil
+}

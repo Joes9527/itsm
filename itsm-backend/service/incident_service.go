@@ -1809,3 +1809,17 @@ func (s *IncidentService) mapProcessStatus(status string) dto.ProcessStatus {
 func (s *IncidentService) SetWorkflowAssignmentBoundary(boundary workflowcallback.AssignmentBoundary) {
 	s.workflowAssignment = boundary
 }
+
+func (s *IncidentService) AssignWorkItem(ctx context.Context, session *authorization.SessionSnapshot, item *ent.Ticket, target int, source string) (*ent.Ticket, error) {
+	owner := *s
+	owner.client = session.Tx.Client()
+	current, err := owner.client.Incident.Query().Where(incident.WorkItemID(item.ID), incidentTenantScope(item.TenantID)).Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+	_, err = owner.assignIncident(ctx, current.ID, target, item.TenantID, false, &incidentAssignmentMutation{writer: NewWorkItemAssignmentWriter(session), command: assignment.Command{TenantID: item.TenantID, ActorID: session.Actor.ID, ActorTenantID: session.Actor.TenantID, Source: source}})
+	if err != nil {
+		return nil, err
+	}
+	return owner.client.Ticket.Get(ctx, item.ID)
+}

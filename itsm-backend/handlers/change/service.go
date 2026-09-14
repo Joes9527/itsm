@@ -1029,3 +1029,17 @@ func (s *Service) DeletePIR(ctx context.Context, pirID, tenantID int) error {
 	}
 	return fmt.Errorf("PIR service not initialized")
 }
+
+func (s *Service) AssignWorkItem(ctx context.Context, session *authorization.SessionSnapshot, item *ent.Ticket, target int, source string) (*ent.Ticket, error) {
+	if _, err := session.Tx.Change.Query().Where(change.WorkItemID(item.ID)).Only(ctx); err != nil {
+		return nil, err
+	}
+	allowed, err := s.IsUnfinished(ctx, session.Tx.Client(), item)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, fmt.Errorf("professional WorkItem is not assignable")
+	}
+	return service.NewWorkItemAssignmentWriter(session).Apply(ctx, session.Tx.Client(), assignment.Command{WorkItemID: item.ID, TenantID: item.TenantID, ActorID: session.Actor.ID, ActorTenantID: session.Actor.TenantID, AssigneeID: target, ExpectedVersion: item.Version, Source: source})
+}

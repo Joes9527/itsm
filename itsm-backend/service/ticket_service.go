@@ -35,6 +35,7 @@ import (
 // 使用构造函数注入和 Repository 模式
 type TicketService struct {
 	workflowAssignment     workflowcallback.AssignmentBoundary
+	assignmentOwners       map[string]assignment.Owner
 	sessions               *authorization.SessionReader
 	repo                   ticket.Repository
 	client                 *ent.Client // 用于 ProcessInstance 等系统级查询（不走 Repository）
@@ -602,7 +603,15 @@ func (s *TicketService) updateTicket(ctx context.Context, id int, req *dto.Updat
 	// 状态变更时发送 ticket_updated 通知
 	if req.Status != "" && ticket.Status(req.Status) != current.Status {
 		if s.notificationSvc != nil {
-			if err := s.notificationSvc.NotifyTicketStatusChanged(ctx, id, string(current.Status), req.Status, tenantID); err != nil {
+			if session != nil {
+				item, err := session.Tx.Ticket.Get(ctx, id)
+				if err != nil {
+					return nil, err
+				}
+				if err := s.notificationSvc.enqueueStatusChangedTx(ctx, session.Tx, item, string(current.Status), req.Status); err != nil {
+					return nil, err
+				}
+			} else if err := s.notificationSvc.NotifyTicketStatusChanged(ctx, id, string(current.Status), req.Status, tenantID); err != nil {
 				s.logger.Warnw("Failed to send status change notification", "error", err, "ticket_id", id)
 			}
 		}
@@ -775,7 +784,16 @@ func (s *TicketService) AssignTicket(ctx context.Context, ticketID int, assignee
 		}
 		current := s.entToDomain(item)
 		if item.RecordClass != "generic" {
-			return fmt.Errorf("professional assignment must use its owning service")
+			owner := s.assignmentOwners[item.RecordClass]
+			if owner == nil {
+				return fmt.Errorf("professional assignment owner is not registered for %s", item.RecordClass)
+			}
+			updated, err := owner.AssignWorkItem(ctx, session, item, assigneeID, identity.Channel+".ticket.assign")
+			if err != nil {
+				return err
+			}
+			result = s.entToDomain(updated)
+			return nil
 		}
 		if err := current.Assign(assigneeID); err != nil {
 			return err
@@ -1031,12 +1049,12 @@ func (s *TicketService) ToTicketResponseWithCustomFields(ctx context.Context, t 
 // ToTicketResponseWithCustomFieldsAndActions 在 ToTicketResponseWithCustomFields 基础上
 // 额外组装 actions（批准/拒绝/分配/编辑/抄送/删除权限）。需要调用者身份（actorUserID/actorRole），
 // 只用于真正的详情响应场景——BuildTicketActions 内部会为 CanCC/CanDelete 各发起一次查询。
-func ToTicketResponseWithCustomFieldsAndActions(ctx context.Context, client *ent.Client, t *ticket.Ticket, actorUserID int, actorRole string) *dto.TicketResponse {
+func (s *TicketService) ToTicketResponseWithCustomFieldsAndActions(ctx context.Context, client *ent.Client, t *ticket.Ticket, actorUserID int, actorRole string) *dto.TicketResponse {
 	resp := ToTicketResponseWithCustomFields(ctx, client, t)
 	if resp == nil || client == nil {
 		return resp
 	}
-	actor := ActionActor{Client: client, TenantID: t.TenantID, UserID: actorUserID, Role: actorRole}
+	actor := ActionActor{Client: client, TenantID: t.TenantID, UserID: actorUserID, Role: actorRole, AssignmentAvailable: s.SupportsAssignment}
 	resp.Actions = BuildTicketActions(ctx, actor, t)
 	return resp
 }
@@ -2090,4 +2108,28 @@ func (s *TicketService) SetProcessTriggerService(owner ProcessTriggerServiceInte
 
 func (s *TicketService) SetWorkflowAssignmentBoundary(boundary workflowcallback.AssignmentBoundary) {
 	s.workflowAssignment = boundary
+}
+
+func (s *TicketService) RegisterAssignmentOwner(owner assignment.Owner) error {
+	if owner == nil {
+		return fmt.Errorf("assignment owner is required")
+	}
+	class := owner.RecordClass()
+	if class == "generic" {
+		return fmt.Errorf("generic assignment belongs to TicketService")
+	}
+	if _, err := authorization.ResolveWorkItemPolicy(class); err != nil {
+		return err
+	}
+	if s.assignmentOwners == nil {
+		s.assignmentOwners = map[string]assignment.Owner{}
+	}
+	if s.assignmentOwners[class] != nil {
+		return fmt.Errorf("assignment owner already registered for %s", class)
+	}
+	s.assignmentOwners[class] = owner
+	return nil
+}
+func (s *TicketService) SupportsAssignment(class string) bool {
+	return class == "generic" || s.assignmentOwners[class] != nil
 }

@@ -302,7 +302,9 @@ func TestAssignRouteUsesIncidentWritePermission(t *testing.T) {
 
 	const jwtSecret = "assign-route-secret"
 	logger := zaptest.NewLogger(t).Sugar()
-	incidentController := controller.NewIncidentController(service.NewIncidentService(client, logger), nil, nil, nil, nil, logger)
+	incidentService := service.NewIncidentService(client, logger)
+	incidentService.SetSessionReader(authorization.NewSessionReader(client, assignmentRouteDirectory{}))
+	incidentController := controller.NewIncidentController(incidentService, nil, nil, nil, nil, logger)
 	router := gin.New()
 	SetupRoutes(router, &RouterConfig{
 		JWTSecret: jwtSecret, Logger: logger, Client: client, TenantDirectoryClient: client, IncidentController: incidentController,
@@ -480,4 +482,10 @@ func TestSetupRoutes_DoesNotExposeRetiredWorkflowAliases(t *testing.T) {
 		key := route.Method + " " + route.Path
 		assert.False(t, retired[key], "retired workflow alias remains registered: %s", key)
 	}
+}
+
+type assignmentRouteDirectory struct{}
+
+func (assignmentRouteDirectory) Open(_ context.Context, tx *ent.Tx, _ int) (*ent.Client, func() error, error) {
+	return tx.Client(), func() error { return nil }, nil
 }

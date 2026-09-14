@@ -3,6 +3,8 @@ package service_request
 import (
 	"context"
 	"fmt"
+	"itsm-backend/ent/servicerequest"
+	assignment "itsm-backend/handlers/common/workitemassignment"
 	"itsm-backend/handlers/shared/workflowcallback"
 	"strconv"
 	"strings"
@@ -235,4 +237,18 @@ func extractServiceRequestFieldValues(formData map[string]interface{}) map[strin
 
 func (s *Service) SetWorkflowAssignmentBoundary(boundary workflowcallback.AssignmentBoundary) {
 	s.workflowAssignment = boundary
+}
+
+func (s *Service) AssignWorkItem(ctx context.Context, session *authorization.SessionSnapshot, item *ent.Ticket, target int, source string) (*ent.Ticket, error) {
+	if _, err := session.Tx.ServiceRequest.Query().Where(servicerequest.TicketID(item.ID)).Only(ctx); err != nil {
+		return nil, err
+	}
+	allowed, err := s.IsUnfinished(ctx, session.Tx.Client(), item)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, fmt.Errorf("professional WorkItem is not assignable")
+	}
+	return service.NewWorkItemAssignmentWriter(session).Apply(ctx, session.Tx.Client(), assignment.Command{WorkItemID: item.ID, TenantID: item.TenantID, ActorID: session.Actor.ID, ActorTenantID: session.Actor.TenantID, AssigneeID: target, ExpectedVersion: item.Version, Source: source})
 }

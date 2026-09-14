@@ -293,7 +293,7 @@ func (s *TicketNotificationService) dispatchClaimedDelivery(ctx context.Context,
 		return "delivery_target_invalid"
 	}
 	var userEntity *ent.User
-	if row.Type == "ticket_assigned" && row.DeliveryKey != nil && strings.HasPrefix(*row.DeliveryKey, "work-item-assigned:") {
+	if row.DeliveryKey != nil && workItemIdentityNotification(row.Type, *row.DeliveryKey) {
 		var tx *ent.Tx
 		tx, err = s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 		if err == nil {

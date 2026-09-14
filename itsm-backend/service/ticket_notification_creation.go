@@ -48,7 +48,7 @@ func (s *TicketNotificationService) enqueueTicketNotificationTx(ctx context.Cont
 	for _, recipientID := range recipients {
 		var recipient *ent.User
 		var err error
-		if eventType == "ticket_assigned" && strings.HasPrefix(deliveryKey, "work-item-assigned:") {
+		if workItemIdentityNotification(eventType, deliveryKey) {
 			recipient, err = s.assignmentRecipient(ctx, tx, recipientID, item.TenantID)
 		} else {
 			recipient, err = tx.User.Query().Where(user.IDEQ(recipientID), user.TenantIDEQ(item.TenantID), user.ActiveEQ(true)).Only(ctx)
@@ -119,4 +119,19 @@ func (s *TicketNotificationService) assignmentRecipient(ctx context.Context, tx 
 		return nil, err
 	}
 	return recipient, nil
+}
+
+// Status intent uses the final owner from the same transaction, so it neither
+// reads stale pool state nor delivers a message before the outer commit.
+func (s *TicketNotificationService) enqueueStatusChangedTx(ctx context.Context, tx *ent.Tx, item *ent.Ticket, oldStatus, newStatus string) error {
+	recipients := []int{item.RequesterID}
+	if item.AssigneeID > 0 {
+		recipients = append(recipients, item.AssigneeID)
+	}
+	key := fmt.Sprintf("work-item-status:%d:%d:%d", item.TenantID, item.ID, item.Version)
+	content := fmt.Sprintf("工单 #%s 状态已从 %s 变更为 %s", item.TicketNumber, oldStatus, newStatus)
+	return s.enqueueTicketNotificationTx(ctx, tx, item, "ticket_updated", content, key, recipients)
+}
+func workItemIdentityNotification(eventType, key string) bool {
+	return eventType == "ticket_assigned" && strings.HasPrefix(key, "work-item-assigned:") || eventType == "ticket_updated" && strings.HasPrefix(key, "work-item-status:")
 }

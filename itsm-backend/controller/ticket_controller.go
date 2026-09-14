@@ -45,7 +45,7 @@ func NewTicketController(ticketService *service.TicketService, ticketDependencyS
 // 薄封装：真正的转换逻辑统一收敛在 service.ToTicketResponseWithCustomFieldsAndActions，
 // controller 不再自己维护一份领域模型到 DTO 的映射。
 func (tc *TicketController) ticketToResponse(c *gin.Context, t *ticket.Ticket) *dto.TicketResponse {
-	return service.ToTicketResponseWithCustomFieldsAndActions(
+	return tc.ticketService.ToTicketResponseWithCustomFieldsAndActions(
 		c.Request.Context(), tc.client, t, c.GetInt("user_id"), c.GetString("role"),
 	)
 }
@@ -335,7 +335,7 @@ func (tc *TicketController) AssignTicket(c *gin.Context) {
 		common.Fail(c, common.NotFoundCode, "工单不存在")
 		return
 	}
-	actor := service.ActionActor{Client: tc.client, TenantID: tenantID, UserID: assignedBy, Role: c.GetString("role")}
+	actor := service.ActionActor{Client: tc.client, TenantID: tenantID, UserID: assignedBy, Role: c.GetString("role"), AssignmentAvailable: tc.ticketService.SupportsAssignment}
 	if perm := service.CanAssign(actor, current); !perm.Allowed {
 		common.Fail(c, common.ForbiddenCode, perm.Reason)
 		return

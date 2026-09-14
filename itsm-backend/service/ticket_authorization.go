@@ -17,11 +17,21 @@ func isRequester(t *ticket.Ticket, actorUserID int) bool {
 
 // CanAssign：ticket:assign 权限 + 工单未结束，不排除本人（分配是路由工作，非职责分离场景）。
 func CanAssign(actor ActionActor, t *ticket.Ticket) dto.ActionPermission {
+	if t.RecordClass != "generic" && (actor.AssignmentAvailable == nil || !actor.AssignmentAvailable(t.RecordClass)) {
+		return dto.ActionPermission{Allowed: false, Reason: "该专业类型尚未注册分配操作"}
+	}
+
 	if isFinalStatus(t.Status) {
 		return dto.ActionPermission{Allowed: false, Reason: "工单已结束，无法分配"}
 	}
 	if !authorization.HasResourcePermission(actor.Client, actor.Role, "ticket", "assign", actor.TenantID) {
 		return dto.ActionPermission{Allowed: false, Reason: "无分配权限"}
+	}
+	if t.RecordClass != "generic" {
+		policy, err := authorization.ResolveWorkItemPolicy(t.RecordClass)
+		if err != nil || !authorization.HasResourcePermission(actor.Client, actor.Role, policy.Resource, policy.FulfillmentAction(), actor.TenantID) {
+			return dto.ActionPermission{Allowed: false, Reason: "无专业工单分配权限"}
+		}
 	}
 	return dto.ActionPermission{Allowed: true}
 }

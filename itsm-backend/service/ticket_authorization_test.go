@@ -52,7 +52,7 @@ func TestCanAssign_NotExcludedForRequester(t *testing.T) {
 	require.NoError(t, err)
 	seedRolePermission(t, client, tenant.ID, "sd_manager", "ticket", "assign")
 
-	tk := &ticket.Ticket{ID: 1, RequesterID: 42, Status: ticket.StatusOpen}
+	tk := &ticket.Ticket{ID: 1, RequesterID: 42, Status: ticket.StatusOpen, RecordClass: "generic"}
 	actor := ActionActor{Client: client, TenantID: tenant.ID, UserID: 42, Role: "sd_manager"}
 
 	perm := CanAssign(actor, tk)
@@ -204,4 +204,12 @@ func TestCanProvision_DeniedForEndUserEvenNotRequester(t *testing.T) {
 	perm := CanProvision(client, tenant.ID, 99, "end_user", 42)
 	require.False(t, perm.Allowed)
 	require.Equal(t, "无交付权限", perm.Reason)
+}
+
+func TestCanAssignDoesNotAdvertiseUnregisteredProfessionalOwner(t *testing.T) {
+	actor := ActionActor{Role: "super_admin", AssignmentAvailable: func(string) bool { return false }}
+	for _, class := range []string{"", "catalog_task", "unknown", "service_request_item"} {
+		permission := CanAssign(actor, &ticket.Ticket{RecordClass: class, Status: ticket.StatusOpen})
+		require.False(t, permission.Allowed)
+	}
 }

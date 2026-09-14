@@ -123,11 +123,14 @@ func (s *TicketWorkflowService) ForwardTicket(ctx context.Context, req *dto.Forw
 		return fmt.Errorf("verified forwarding session is required")
 	}
 	return s.sessions.Write(ctx, identity, func(session *authorization.SessionSnapshot) error {
-		item, err := session.AuthorizeWorkItemAssignment(ctx, req.TicketID)
+		item, err := session.AuthorizeWorkItemForward(ctx, req.TicketID)
 		if err != nil {
 			return err
 		}
 		if req.TransferOwnership {
+			if _, err := session.AuthorizeWorkItemAssignment(ctx, req.TicketID); err != nil {
+				return err
+			}
 			if item.RecordClass != "generic" || (item.Status == "resolved" || item.Status == "closed" || item.Status == "cancelled") {
 				return fmt.Errorf("ticket is not eligible for forwarding")
 			}

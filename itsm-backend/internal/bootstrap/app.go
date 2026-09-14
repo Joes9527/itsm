@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"itsm-backend/handlers/common/workitemassignment"
 	intakecreation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/intake"
 	"log"
@@ -664,6 +665,11 @@ func NewApplication() *Application {
 		}
 	}
 
+	for _, owner := range []workitemassignment.Owner{incidentService, problemServiceDomain, changeServiceDomain, srService} {
+		if err := ticketService.RegisterAssignmentOwner(owner); err != nil {
+			log.Fatalf("Invalid assignment owner registry: %v", err)
+		}
+	}
 	creationRegistry := intake.NewCreatorRegistry()
 	for _, owner := range []intakecreation.ProfessionalCreator{ticketService, incidentService, problemServiceDomain, changeServiceDomain, srService} {
 		if err := creationRegistry.Register(owner); err != nil {

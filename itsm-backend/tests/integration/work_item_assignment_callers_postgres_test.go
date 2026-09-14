@@ -20,6 +20,7 @@ import (
 	change "itsm-backend/handlers/change"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	problem "itsm-backend/handlers/problem"
+	requestowner "itsm-backend/handlers/service_request"
 	repository "itsm-backend/repository/ticket"
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
@@ -74,7 +75,7 @@ func TestPostgresAssignmentCallerMSPSelfAssignmentRuntime(t *testing.T) {
 	f.client.RolePermission.Create().SetTenantID(f.tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).SaveX(f.ctx)
 	item := f.client.Ticket.Create().SetTitle("MSP self assign").SetTicketNumber("MSP-ASSIGN-1").SetRequesterID(actor.ID).SetTenantID(f.tenant.ID).SaveX(f.ctx)
 	clients, cfg := runtimeClients(t, f)
-	for _, grant := range []string{"SELECT,UPDATE ON process_instances,process_tasks", "SELECT,INSERT ON ticket_workflow_records", "USAGE ON SEQUENCE ticket_workflow_records_id_seq", "SELECT ON notification_preferences", "SELECT ON process_audit_logs,process_callback_outboxes"} {
+	for _, grant := range []string{"SELECT,UPDATE ON process_instances,process_tasks", "SELECT,INSERT ON ticket_workflow_records", "USAGE ON SEQUENCE ticket_workflow_records_id_seq", "SELECT ON notification_preferences", "SELECT ON process_audit_logs,process_callback_outboxes,service_requests"} {
 		_, err := f.db.ExecContext(f.ctx, "GRANT "+grant+" TO "+cfg.User)
 		require.NoError(t, err)
 	}
@@ -120,6 +121,22 @@ func TestPostgresAssignmentCallerMSPSelfAssignmentRuntime(t *testing.T) {
 		pending = append(pending, f.client.OutboxEvent.Query().Where(outboxevent.AggregateIDEQ(fmt.Sprint(next.ID)), outboxevent.EventTypeEQ("work_item.assigned")).OnlyX(f.ctx))
 	}
 	require.NoError(t, service.NewWorkItemAssignmentNotificationHandler(clients.Tenant, notifications).Deliver(ctx, pending[0]))
+	requestPermission := f.client.Permission.Create().SetTenantID(f.tenant.ID).SetCode("service_request:provision").SetName("Provision").SetResource("service_request").SetAction("provision").SaveX(f.ctx)
+	f.client.RolePermission.Create().SetTenantID(f.tenant.ID).SetRoleID(role.ID).SetPermissionID(requestPermission.ID).SaveX(f.ctx)
+	authorization.InvalidateAllPermissionCaches()
+	require.NoError(t, svc.RegisterAssignmentOwner(requestowner.NewService(nil, clients.Tenant, logger, nil)))
+	requested := f.client.Ticket.Create().SetTenantID(f.tenant.ID).SetRequesterID(actor.ID).SetTitle("MSP requested item").SetTicketNumber("MSP-REQUEST-1").SetRecordClass("service_request_item").SetStatus("open").SaveX(f.ctx)
+	f.client.ServiceRequest.Create().SetTicketID(requested.ID).SetCatalogID(1).SaveX(f.ctx)
+	proRecorder := httptest.NewRecorder()
+	proCtx, _ := gin.CreateTestContext(proRecorder)
+	proCtx.Params = gin.Params{{Key: "id", Value: fmt.Sprint(requested.ID)}}
+	proCtx.Set("user_id", actor.ID)
+	proCtx.Set("tenant_id", f.tenant.ID)
+	proCtx.Set("role", "msp_tech")
+	proCtx.Request = httptest.NewRequest("POST", "/msp/assign", bytes.NewBufferString(fmt.Sprintf(`{"customerTenantId":%d}`, f.tenant.ID))).WithContext(ctx)
+	proCtx.Request.Header.Set("Content-Type", "application/json")
+	handler.AssignMSPTechnician(proCtx)
+	require.Equal(t, actor.ID, f.client.Ticket.GetX(f.ctx, requested.ID).AssigneeID, proRecorder.Body.String())
 	// Actor and requested owner are independently checked against current scope.
 	customerTarget := f.client.User.Create().SetTenantID(f.tenant.ID).SetUsername("customer-target").SetName("Customer target").SetEmail("customer-target@example.test").SetPasswordHash("unused").SaveX(f.ctx)
 	foreign := f.client.User.Create().SetTenantID(provider.ID).SetUsername("ordinary-foreign").SetName("Foreign").SetEmail("foreign@example.test").SetPasswordHash("unused").SaveX(f.ctx)
