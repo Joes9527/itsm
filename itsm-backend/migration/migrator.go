@@ -185,7 +185,7 @@ func validateMigrationCatalog(active, legacy []Migration, sqlForVersion func(str
 	seen := make(map[string]string, len(active)+len(legacy))
 	validateSet := func(kind string, migrations []Migration, requireSQL bool) error {
 		previous := ""
-		for _, migration := range migrations {
+		for index, migration := range migrations {
 			if strings.TrimSpace(migration.Version) == "" || strings.TrimSpace(migration.Description) == "" {
 				return fmt.Errorf("%s migration must have version and description", kind)
 			}
@@ -196,7 +196,13 @@ func validateMigrationCatalog(active, legacy []Migration, sqlForVersion func(str
 			if orderVersion == WorkItemPrepareVersion {
 				orderVersion = "022_drop_professional_extension_shared_fields"
 			}
-			if previous != "" && orderVersion <= previous {
+			// Retirement is a terminal manual stage, not a numeric successor.
+			// Ordinary migrations added after 038 must still precede it.
+			retirement := kind == "active" && migration.Version == WorkItemRetireVersion
+			if retirement && index != len(migrations)-1 {
+				return fmt.Errorf("%s migrations must be strictly ordered: retirement must be last", kind)
+			}
+			if !retirement && previous != "" && orderVersion <= previous {
 				return fmt.Errorf("%s migrations must be strictly ordered: %q follows %q", kind, migration.Version, previous)
 			}
 			if requireSQL && strings.TrimSpace(sqlForVersion(migration.Version)) == "" {
