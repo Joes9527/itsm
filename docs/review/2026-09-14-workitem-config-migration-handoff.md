@@ -1,15 +1,15 @@
 # 任务二交接：配置主数据适配统一 WorkItem 模型
 
 - **Gate:** G-B
-- **Status:** BLOCKED
+- **Status:** BLOCKED（G-B 未满足：B0 规范配置已准入并通过校验；B1–B6、独立流程初始化批次、路由 20 个未解析用户 ID 仍未完成）
 - **日期:** 2026-09-14
-- **消费的 GARevision:** 无。`docs/review/2026-09-14-database-reconciliation-handoff.md` 在 ITSM/KAF 全部 git refs 与磁盘均不存在。
-- **结论:** 只读与离线准备完成，并交付两处独立可审阅加固变更；目标环境写入、目标模型映射与 G-B 业务验证**未执行**。本文件不表示迁移通过，不得据此对任何目标库写入、切换或验收。
+- **消费的 GARevision:** `d91b587fe3ab40cc863321346d217d258a3a96d8`。`docs/review/2026-09-14-database-reconciliation-handoff.md` 现已在磁盘存在且 `Status=PASS`；已独立复核固定制品、目标镜像、库/owner/schema、PG 与扩展、账本（36 条，head `046_auth_token_state`，无 R038）及 Phase 1 不变量。
+- **结论:** G-A 已核验并消费；**B0 规范 seed 配置已受控准入 `itsm_ga_ready`**（单事务 + 备份 + 幂等 + 校验，见 `docs/review/2026-09-14-b0-seed-admission-evidence.md`）。配置主数据映射已逐项与业务确认。因 B1–B6、流程初始化批次与路由缺口未完成，G-B 仍未满足；不得据此对其它目标库写入、切换或验收。
 
 ## 1. 门禁与上游边界
 
 - 依据总设计 §5 与任务二计划：目标写入必须等待任务一交付 `docs/review/2026-09-14-database-reconciliation-handoff.md`，且 `Status=PASS`，并提供固定 `GARevision`、目标制品、目标数据库身份与验证证据。
-- 上述交接**未交付**，因此本任务无法核验两个目标制品 SHA、目标库身份与指纹；相关项一律标为**待上游核实**，不自行认定目标版本或结构。
+- 上述交接**已交付且 `Status=PASS`**（`GARevision=d91b587fe3ab40cc863321346d217d258a3a96d8`）；已核验固定制品 SHA、目标镜像 `sha256:7ae6051efd0e…`、目标库身份（`itsm_ga_ready`/`ga_owner`/`public`）、PG 17.10 与扩展、账本及 Phase 1 不变量。B0 写入以此为唯一门禁。
 - `itsm_migration_20260914`（PG 17.10，容器 `itsm-postgres-dev`）仅作为既有**对照样本**，不是 G-A 准入目标；本任务未对其做任何写入。
 - 上游变化或缺陷一律回传任务一；本任务不生成、不绕过 G-A，不复制出第二份上游验收权威。
 

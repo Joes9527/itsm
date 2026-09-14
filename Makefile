@@ -99,7 +99,7 @@ build-frontend:    ## Build the frontend image only
 
 verify-scripts:    ## Validate build/start scripts without starting services
 	bash -n scripts/build-images.sh scripts/deploy-dev.sh scripts/deploy-prod.sh scripts/lib/common.sh scripts/clone_itsm_migration_db.sh
-	node --test scripts/__tests__/build-start-scripts.test.js scripts/__tests__/clone-itsm-migration-db.test.js
+	node --test scripts/__tests__/build-start-scripts.test.js scripts/__tests__/clone-itsm-migration-db.test.js scripts/__tests__/generate-seed-sql.test.js
 
 # Database
 db-migrate:         ## Apply registered post-schema migrations to an Ent-schema-ready database

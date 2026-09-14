@@ -1,6 +1,6 @@
 # B0 dry-run：规范 seed 配置准入 `itsm_ga_ready`
 
-- 状态：draft，供审查；**尚未执行任何写入**。
+- 状态：**已执行（EXECUTED，2026-09-14）**，结果与校验见 `docs/review/2026-09-14-b0-seed-admission-evidence.md`；以下为执行前定稿的纳入/排除/依赖与执行契约。
 - 权威源：固定制品 `0788a9bb` 的 `itsm-backend/config/seed/default.json`（sha256 `372d605235f45b597e5b4ba256683cdc904a8ea32e4a2939c074e423d89ac191`）。
 - 目标：`ga-itsm-20260914 / itsm_ga_ready / public`，owner/migration `ga_owner`。
 - 消费门禁：`GARevision=d91b587fe3ab40cc863321346d217d258a3a96d8`（已独立核验，见 spec §1）。
