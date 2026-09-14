@@ -1,5 +1,7 @@
 # Candidate PostgreSQL Auth State Implementation Plan
 
+> **2026-09-14 范围收口：** 当前剩余任务、优先级及完成状态唯一入口为[候选交付剩余清单](2026-09-14-itsm-candidate-remaining-delivery.md)。本文件保留技术合同与历史证据；旧未勾选复合项不能直接用于重新立项，后续待办不在此追加。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use executing-plans to implement this plan task-by-task. Do not spawn extra implementation agents. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 状态：accepted（书面设计已确认；实施未开始）。
