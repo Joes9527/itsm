@@ -20,6 +20,7 @@
 
 ## 核心文档
 
+- [从服务目录到工单流程与 SLA](./product/service-to-work-item-lifecycle.md)：模块职责、完整申请链路、SSL-VPN 示例和配置验收清单。
 - [SSLVPN WSL 部署与手工端到端验收](./deployment/sslvpn-wsl-deployment-and-manual-verification.md): 两仓配套部署、正常身份、双审批、授权验证与测试恢复。
 - [部署指南](./deployment.md): Docker Compose、生产部署、反向代理和发布部署建议。
 - [配置参考](./configuration.md): 环境变量、端口、数据库、Redis、AI 服务配置。
