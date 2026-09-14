@@ -80,6 +80,7 @@
 | `docs/review/2026-09-14-config-mapping-workbook.md` | 优先级/SLA 日历/模块/批次 |
 | `docs/review/2026-09-14-cti-mapping-worksheet.md` | CTI 节点分流与逐节点映射 |
 | `docs/review/2026-09-14-dictionary-option-reconciliation.md` | 字典→字段选项对账（已覆盖/差额/未接纳） |
+| `docs/migrations/2026-09-14-b0-seed-admission-dry-run.md` | B0 规范 seed 准入 dry-run（纳入/排除/依赖/契约） |
 | `docs/review/2026-09-14-workitem-config-migration-handoff.md` | G-B 交接（消费固定 GARevision） |
 
 ## 7. 决策日志
