@@ -35,6 +35,9 @@ jobs:
     timeout-minutes: 25
     env:
       DEPLOYMENT_MODE: private
+      # Compose interpolates inactive worker profiles; this job never starts it.
+      KAF_WEBHOOK_URL: http://127.0.0.1:9/disabled-ci-worker
+      KAF_WEBHOOK_SECRET: ci-only-unused-worker-secret-not-a-credential
       MAX_RETRIES: '120'
       RETRY_INTERVAL: '3'
     steps:
