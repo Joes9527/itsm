@@ -5,9 +5,10 @@
  * 以 BPMN ProcessTask 为唯一权威审批入口。
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   App,
+  Alert,
   Card,
   Table,
   Tag,
@@ -34,6 +35,7 @@ import {
 import Link from 'next/link';
 import { BPMNWorkflowApi, type UserTask } from '@/lib/api/bpmn-workflow-api';
 import { useAuthStore } from '@/lib/store/auth-store';
+import { useApprovalTasks } from '@/components/approvals/useApprovalTasks';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -45,7 +47,7 @@ const { TextArea } = Input;
 // ==================== BPMN 待办 ====================
 
 // 待处理任务状态（后端 status：created/assigned/started 均视为待办）
-const PENDING_TASK_STATUSES = new Set(['created', 'assigned', 'started', 'pending']);
+
 
 const taskStatusMap: Record<string, { text: string; color: string }> = {
   created: { text: '待领取', color: 'gold' },
@@ -80,12 +82,14 @@ function getBusinessLink(task: UserTask): { label: string; url: string } | null 
 }
 
 export default function ApprovalsCenterPage() {
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const { user } = useAuthStore();
 
   // BPMN 待办
-  const [taskLoading, setTaskLoading] = useState(false);
-  const [tasks, setTasks] = useState<UserTask[]>([]);
+  const resource = useApprovalTasks();
+  const tasks = resource.data ?? [];
+  const taskLoading = resource.loading;
+  const busy = useRef(false);
   const [claiming, setClaiming] = useState<number | null>(null);
   const [decision, setDecision] = useState<{
     task: UserTask;
@@ -94,68 +98,68 @@ export default function ApprovalsCenterPage() {
   const [decisionComment, setDecisionComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const loadTasks = useCallback(async () => {
-    setTaskLoading(true);
-    try {
-      const res = await BPMNWorkflowApi.listUserTasks({ page: 1, pageSize: 100 });
-      // 后端仅支持单状态过滤，这里客户端过滤出待处理任务
-      setTasks(res.items.filter((t) => PENDING_TASK_STATUSES.has((t.status || '').toLowerCase())));
-    } catch {
-      message.error('加载流程待办失败');
-    } finally {
-      setTaskLoading(false);
-    }
-  }, [message]);
-
   useEffect(() => {
-    loadTasks();
-  }, [loadTasks]);
+    setDecision(null); setDecisionComment(''); setSubmitting(false); setClaiming(null);
+    busy.current = false;
+  }, [resource.identity, resource.denied]);
+  const handleRefresh = () => { void resource.reload(); };
 
-  const handleRefresh = () => {
-    loadTasks();
-  };
-
-  // 领取任务（无负责人时）
   const handleClaim = async (task: UserTask) => {
+    if (busy.current || resource.loading || resource.error || !resource.ready) return;
+    busy.current = true;
+    const current = resource.capture();
+    const assertContext = () => { resource.assertContext(); if (!current()) throw new Error('审批上下文已变化'); };
     setClaiming(task.id);
     try {
-      await BPMNWorkflowApi.claimTask(task.id);
+      assertContext();
+      await BPMNWorkflowApi.claimTask(task.id, assertContext);
+      if (!current()) return;
       message.success('任务已领取');
-      loadTasks();
-    } catch (e) {
-      message.error(e instanceof Error ? e.message : '领取任务失败');
+      await resource.reload();
+    } catch (error) {
+      if (!current()) return;
+      if (resource.deny(error)) { busy.current = false; setClaiming(null); setDecision(null); }
+      message.error(error instanceof Error ? error.message : '领取任务失败');
     } finally {
-      setClaiming(null);
+      if (current()) { busy.current = false; setClaiming(null); }
     }
   };
 
   // 打开审批决策弹窗
   const openDecision = (task: UserTask, action: 'approve' | 'reject') => {
+    if (busy.current || resource.loading || resource.error || !resource.ready) return;
     setDecisionComment('');
     setDecision({ task, action });
   };
 
   // 提交审批决策：批准可不填意见，拒绝必须填写（与后端校验一致）
   const submitDecision = async () => {
-    if (!decision) return;
+    if (!decision || busy.current || !resource.ready || resource.loading || resource.error || !tasks.some(task => task.id === decision.task.id)) return;
     const comment = decisionComment.trim();
     if (decision.action === 'reject' && !comment) {
       message.warning('拒绝时必须填写审批意见');
       return;
     }
+    busy.current = true;
+    const current = resource.capture();
+    const assertContext = () => { resource.assertContext(); if (!current()) throw new Error('审批上下文已变化'); };
     setSubmitting(true);
     try {
+      assertContext();
       await BPMNWorkflowApi.submitApprovalDecision(decision.task.id, {
         action: decision.action,
         comment,
-      });
+      }, assertContext);
+      if (!current()) return;
       message.success(decision.action === 'approve' ? '已批准' : '已拒绝');
       setDecision(null);
-      loadTasks();
+      await resource.reload();
     } catch (e) {
+      if (!current()) return;
+      if (resource.deny(e)) { busy.current = false; setSubmitting(false); setDecision(null); }
       message.error(e instanceof Error ? e.message : '提交审批决策失败');
     } finally {
-      setSubmitting(false);
+      if (current()) { busy.current = false; setSubmitting(false); }
     }
   };
 
@@ -232,12 +236,13 @@ export default function ApprovalsCenterPage() {
       key: 'action',
       width: 220,
       render: (_: unknown, record: UserTask) => (
-        <Space size="small">
+        <Space size="small" wrap>
           {!record.assignee && (
             <Button
               size="small"
               icon={<Hand className="w-3 h-3" />}
               loading={claiming === record.id}
+              disabled={submitting || claiming !== null || !!resource.error || taskLoading}
               onClick={() => handleClaim(record)}
             >
               领取
@@ -247,6 +252,7 @@ export default function ApprovalsCenterPage() {
             type="primary"
             size="small"
             icon={<Check className="w-3 h-3" />}
+            disabled={submitting || claiming !== null || !!resource.error || taskLoading}
             onClick={() => openDecision(record, 'approve')}
             className="!bg-green-500 !border-green-500 hover:!bg-green-600 hover:!border-green-600"
           >
@@ -256,6 +262,7 @@ export default function ApprovalsCenterPage() {
             danger
             size="small"
             icon={<X className="w-3 h-3" />}
+            disabled={submitting || claiming !== null || !!resource.error || taskLoading}
             onClick={() => openDecision(record, 'reject')}
           >
             拒绝
@@ -284,7 +291,7 @@ export default function ApprovalsCenterPage() {
           <div>
             <Title level={3} className="!mb-0 !text-xl md:!text-2xl">审批中心</Title>
             <Text type="secondary" className="text-sm">
-              {user?.username ? `${user.username}，` : ''}您有 {tasks.length} 项流程待办
+              {user?.username ? `${user.username}，` : ''}当前授权范围内的审批待办{resource.ready ? `：${tasks.length} 项` : ''}
             </Text>
           </div>
         </div>
@@ -303,8 +310,8 @@ export default function ApprovalsCenterPage() {
           <Card className="border-l-4 border-l-blue-500">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs md:text-sm text-gray-500">流程待办</div>
-                <div className="text-2xl md:text-3xl font-bold text-blue-600">{tasks.length}</div>
+                <div className="text-xs md:text-sm text-gray-500">审批待办</div>
+                <div className="text-2xl md:text-3xl font-bold text-blue-600">{resource.ready ? tasks.length : '—'}</div>
               </div>
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-blue-50 flex items-center justify-center">
                 <GitBranch className="text-lg md:text-xl text-blue-500" />
@@ -318,7 +325,7 @@ export default function ApprovalsCenterPage() {
               <div>
                 <div className="text-xs md:text-sm text-gray-500">待领取</div>
                 <div className="text-2xl md:text-3xl font-bold text-amber-500">
-                  {tasks.filter((t) => !t.assignee).length}
+                  {resource.ready ? tasks.filter((t) => !t.assignee).length : '—'}
                 </div>
               </div>
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-amber-50 flex items-center justify-center">
@@ -330,10 +337,11 @@ export default function ApprovalsCenterPage() {
       </Row>
 
       {/* BPMN ProcessTask 是唯一审批数据源 */}
+      {resource.error && <Alert className="mb-4" type="error" showIcon title={resource.error} />}
       <Card>
         {taskLoading ? (
           <LoadingSkeleton />
-        ) : (
+        ) : resource.ready ? (
           <Table
             rowKey="id"
             dataSource={tasks}
@@ -344,25 +352,29 @@ export default function ApprovalsCenterPage() {
               emptyText: (
                 <div className="py-12 text-center">
                   <Clock className="mx-auto mb-3 text-gray-300 w-10 h-10" />
-                  <div className="text-gray-500 mb-1">暂无流程待办</div>
-                  <Text type="secondary" className="text-sm">当前没有分配给您或待您领取的审批任务</Text>
+                  <div className="text-gray-500 mb-1">暂无审批待办</div>
+                  <Text type="secondary" className="text-sm">当前授权范围内没有审批待办</Text>
                 </div>
               ),
             }}
           />
-        )}
+        ) : null}
       </Card>
 
       {/* 审批决策弹窗 */}
       <Modal
         title={decision?.action === 'approve' ? '批准任务' : '拒绝任务'}
-        open={!!decision}
+        open={!!decision && resource.ready && !resource.denied && tasks.some(task => task.id === decision.task.id)}
         onOk={submitDecision}
-        onCancel={() => setDecision(null)}
+        onCancel={() => { if (!submitting) setDecision(null); }}
+        closable={!submitting}
+        maskClosable={!submitting}
+        cancelButtonProps={{ disabled: submitting }}
         okText={decision?.action === 'approve' ? '确认批准' : '确认拒绝'}
         okButtonProps={{
           danger: decision?.action === 'reject',
           loading: submitting,
+          disabled: taskLoading || !!resource.error,
         }}
         cancelText="取消"
         destroyOnHidden
@@ -387,6 +399,7 @@ export default function ApprovalsCenterPage() {
                 审批意见{decision.action === 'reject' ? '（必填）' : '（选填）'}：
               </Text>
               <TextArea
+                aria-label="审批意见"
                 rows={3}
                 className="mt-1"
                 value={decisionComment}
