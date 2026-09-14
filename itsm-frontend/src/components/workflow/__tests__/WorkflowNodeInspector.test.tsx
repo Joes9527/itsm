@@ -253,4 +253,23 @@ describe('WorkflowNodeInspector — 审批语义 panel', () => {
     expect(await screen.findByText('不支持的分配来源（future_policy）')).toBeInTheDocument();
     expect(onUpdateProperties).not.toHaveBeenCalled();
   });
+
+  it('removes delegated-handler metadata through the same property update', async () => {
+    const onUpdateProperties = jest.fn().mockReturnValue(true);
+    const serviceType = { $type: 'bpmn:MetaData', name: 'service_task_type', value: 'ticket_task' };
+    const action = { $type: 'bpmn:MetaData', name: 'action', value: 'assign' };
+    const unknown = { $type: 'bpmn:MetaData', name: 'future_setting', value: 'keep-me' };
+    const create = jest.fn((_type, properties) => ({ $type: 'bpmn:ExtensionElements', ...properties }));
+    render(<WorkflowNodeInspector selection={buildUserTaskSelection({
+      taskPurpose: 'fulfillment',
+      extensionElements: { $type: 'bpmn:ExtensionElements', $model: { create }, values: [serviceType, action, unknown] },
+    })} onUpdateProperties={onUpdateProperties} />);
+
+    await userEvent.click(await screen.findByRole('combobox', { name: '任务分配来源' }));
+    await userEvent.click(await screen.findByText('工单当前处理人'));
+
+    const patch = onUpdateProperties.mock.calls[0][1];
+    expect(create).toHaveBeenCalledWith('bpmn:ExtensionElements', { values: [unknown] });
+    expect(patch.extensionElements.values).toEqual([unknown]);
+  });
 });

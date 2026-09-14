@@ -22,6 +22,7 @@ import { UserApi, type User as ApiUser } from '@/lib/api/user-api';
 import { RoleAPI } from '@/lib/api/role-api';
 import { departmentService, type Department } from '@/lib/services/department-service';
 import type { BpmnNodeSelection } from '../BPMNDesigner';
+import { buildWorkItemAssigneePatch } from './work-item-assignment-policy';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -571,17 +572,9 @@ export default function WorkflowNodeInspector({
                       ? [{ label: `不支持的分配来源（${currentAssigneeSource}）`, value: currentAssigneeSource, disabled: true }]
                       : []),
                   ]}
-                  onChange={value => apply(value === 'work_item_assignee' ? {
-                    assigneeSource: value,
-                    assignee: '', assigneeRole: '', assigneeDeptId: undefined,
-                    assigneeTeamId: undefined, assigneeProjectId: undefined,
-                    assigneeTempTeamId: undefined, assigneeGmChain: undefined,
-                    candidateUsers: '', candidateGroups: '',
-                    approvalMode: undefined, approvalThreshold: undefined,
-                    rejectStrategy: undefined, timeoutAction: undefined,
-                    allowDelegate: undefined, allowAddApprover: undefined,
-                    commentRequiredOnReject: undefined,
-                  } : { assigneeSource: undefined })}
+                  onChange={value => apply(value === 'work_item_assignee'
+                    ? buildWorkItemAssigneePatch(bo)
+                    : { assigneeSource: undefined })}
                   className="w-full"
                   size="small"
                 />
