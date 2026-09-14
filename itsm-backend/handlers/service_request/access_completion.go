@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/servicerequest"
@@ -17,7 +19,11 @@ import (
 // ContributeAccessCompletion owns verified professional fulfillment inside
 // BPMN's caller-owned transaction. It never commits, starts another transaction,
 // or invokes an external system.
-func (s *Service) ContributeAccessCompletion(ctx context.Context, client *ent.Client, task *ent.ProcessTask, ledger *ent.KafTaskActionLedger, raw json.RawMessage) error {
+func (s *Service) ContributeAccessCompletion(ctx context.Context, tx *ent.Tx, task *ent.ProcessTask, ledger *ent.KafTaskActionLedger, raw json.RawMessage) error {
+	if tx == nil {
+		return fmt.Errorf("access completion requires an owning transaction")
+	}
+	client := tx.Client()
 	if task == nil || ledger == nil || ledger.TaskID != task.TaskID || ledger.TenantID != task.TenantID || ledger.Action != "complete_bpmn_task" || ledger.ResultStatus != "executing" {
 		return fmt.Errorf("verified access requires the executing task action")
 	}
@@ -26,7 +32,7 @@ func (s *Service) ContributeAccessCompletion(ctx context.Context, client *ent.Cl
 	if actorID <= 0 || tenantID != task.TenantID {
 		return fmt.Errorf("verified access actor scope missing")
 	}
-	instance, err := client.ProcessInstance.Query().Where(processinstance.IDEQ(task.ProcessInstanceID), processinstance.TenantIDEQ(tenantID), processinstance.BusinessTypeEQ("service_request")).Only(ctx)
+	instance, err := client.ProcessInstance.Query().Where(processinstance.IDEQ(task.ProcessInstanceID), processinstance.TenantIDEQ(tenantID), processinstance.BusinessTypeEQ(string(dto.BusinessTypeServiceRequestItem))).Only(ctx)
 	if err != nil {
 		return fmt.Errorf("load verified access process: %w", err)
 	}
@@ -55,6 +61,9 @@ func (s *Service) ContributeAccessCompletion(ctx context.Context, client *ent.Cl
 	}
 	if exists {
 		return fmt.Errorf("verified access result already exists; replay its owning action")
+	}
+	if err := requireRequestExecutionTx(ctx, tx, s.execution, tenantID, item.ID); err != nil {
+		return err
 	}
 	if err := client.ServiceRequestAccessResult.Create().SetWorkItemID(item.ID).SetProcessTaskID(task.ID).
 		SetOutcome(servicerequestaccessresult.Outcome(result.Outcome)).SetProvider(servicerequestaccessresult.Provider(result.Provider)).
@@ -108,14 +117,26 @@ func (s *Service) ValidateAccessCompletionReplay(ctx context.Context, client *en
 		return unavailable
 	}
 	result, expiry, err := ValidateAccessResult(raw, *snapshot)
+	// PostgreSQL stores timestamps at microsecond precision. Compare the immutable
+	// receipt at that precision; the action digest still owns exact request replay.
 	if err != nil || result.EvidenceRef != ledger.IdempotencyKey || saved.EvidenceRef != result.EvidenceRef ||
 		string(saved.Outcome) != result.Outcome || string(saved.Baseline) != result.Baseline ||
 		string(saved.Provider) != string(result.Provider) || saved.SubjectID != result.SubjectID || saved.GroupID != result.GroupID ||
-		!saved.VerifiedAt.Equal(result.VerifiedAt) {
+		!accessReceiptTimestamp(saved.VerifiedAt).Equal(accessReceiptTimestamp(result.VerifiedAt)) {
 		return unavailable
 	}
-	if (expiry == nil) != (saved.ExpiresAt == nil) || (expiry != nil && !expiry.Equal(*saved.ExpiresAt)) {
+	if (expiry == nil) != (saved.ExpiresAt == nil) || (expiry != nil && !accessReceiptTimestamp(*expiry).Equal(accessReceiptTimestamp(*saved.ExpiresAt))) {
 		return unavailable
 	}
 	return nil
+}
+
+// PostgreSQL parses decimal fractional seconds as a float before scaling to
+// microseconds and rounding. Preserve that order: e.g. .0010005 becomes
+// 1000.5000000000001 microseconds, not the exact decimal tie 1000.5.
+// Round only the fraction to avoid UnixNano overflow for valid RFC3339 dates.
+func accessReceiptTimestamp(value time.Time) time.Time {
+	fraction := float64(value.Nanosecond()) / float64(time.Second)
+	micros := time.Duration(math.RoundToEven(fraction * float64(time.Second/time.Microsecond)))
+	return value.Truncate(time.Second).Add(micros * time.Microsecond)
 }

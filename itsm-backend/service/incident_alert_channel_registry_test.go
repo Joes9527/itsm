@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 
 	"itsm-backend/dto"
@@ -31,7 +32,7 @@ func TestIncidentRuleEngineRejectsUnregisteredNotificationChannelAtParse(t *test
 }
 
 func TestIncidentEscalationRuleRejectsUnsupportedChannelEvenWhenDisabled(t *testing.T) {
-	service := NewIncidentEscalationService(nil)
+	service := NewIncidentEscalationService(nil, executionfixture.Standard())
 	_, err := service.CreateEscalationRule(context.Background(), dto.CreateIncidentEscalationRuleRequest{
 		NotificationConfig: map[string]interface{}{"webhook": false},
 	})
@@ -40,7 +41,7 @@ func TestIncidentEscalationRuleRejectsUnsupportedChannelEvenWhenDisabled(t *test
 }
 
 func TestIncidentEscalationRuleRequiresEmailRecipientsAtSave(t *testing.T) {
-	service := NewIncidentEscalationService(nil)
+	service := NewIncidentEscalationService(nil, executionfixture.Standard())
 	_, err := service.CreateEscalationRule(context.Background(), dto.CreateIncidentEscalationRuleRequest{
 		NotificationConfig: map[string]interface{}{"email": true},
 	})
@@ -49,7 +50,7 @@ func TestIncidentEscalationRuleRequiresEmailRecipientsAtSave(t *testing.T) {
 }
 
 func TestSLAAlertRuleRejectsUnsupportedChannelBeforePersistence(t *testing.T) {
-	service := NewSLAAlertService(nil, zap.NewNop().Sugar())
+	service := NewSLAAlertService(nil, zap.NewNop().Sugar(), executionfixture.Standard())
 	_, err := service.CreateAlertRule(context.Background(), &dto.CreateSLAAlertRuleRequest{NotificationChannels: []string{"sms"}}, 7)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported alert channel: sms")
@@ -63,8 +64,10 @@ func TestNotificationRuleActionUsesAuthoritativeAlertCreator(t *testing.T) {
 	actor, err := createIncidentTestUser(ctx, client, tenant.ID, "notification-action")
 	require.NoError(t, err)
 	incident := createAutomationIncident(t, ctx, client, tenant.ID, actor.ID, "notification-action")
-	creator := NewIncidentAlertingService(client, zap.NewNop().Sugar())
-	action := &NotificationAction{Channels: []string{"email"}, Recipients: []string{actor.Email}, Message: "act", Severity: "high", alertCreator: creator, client: client}
+	creator := NewIncidentAlertingService(client, zap.NewNop().Sugar(), executionfixture.Standard())
+	ctx = configureIncidentAlertProducerTarget(t, ctx, creator, tenant.ID)
+	ctx = WithIncidentAlertActor(ctx, actor.ID, "user", "producer-fixture")
+	action := &NotificationAction{execution: executionfixture.Standard(), Channels: []string{"email"}, Recipients: []string{actor.Email}, Message: "act", Severity: "high", alertCreator: creator, client: client}
 	require.NoError(t, action.Execute(ctx, incident, tenant.ID))
 	require.Equal(t, incident.ID, client.IncidentAlert.Query().OnlyX(ctx).IncidentID)
 	require.Equal(t, "pending", client.OutboxEvent.Query().OnlyX(ctx).Status)
@@ -72,7 +75,36 @@ func TestNotificationRuleActionUsesAuthoritativeAlertCreator(t *testing.T) {
 func TestNotificationRuleActionRejectsIndependentAlertCreator(t *testing.T) {
 	client, _, ctx := setupIncidentTest(t)
 	defer client.Close()
-	action := &NotificationAction{client: client, alertCreator: &recordingIncidentAlertCreator{}}
+	action := &NotificationAction{execution: executionfixture.Standard(), client: client, alertCreator: &recordingIncidentAlertCreator{}}
 	require.ErrorContains(t, action.Execute(ctx, &ent.Incident{ID: 42}, 7), "not configured")
 	require.Zero(t, client.IncidentAlert.Query().CountX(ctx))
+}
+
+func TestIncidentAlertExecutionReferenceUsesWorkItemNotAlertOrIncidentID(t *testing.T) {
+	client, _, ctx := setupIncidentTest(t)
+	defer client.Close()
+	tenant, err := createIncidentTestTenant(ctx, client, "alert-reference")
+	require.NoError(t, err)
+	actor, err := createIncidentTestUser(ctx, client, tenant.ID, "alert-reference")
+	require.NoError(t, err)
+	for range 2 {
+		createIncidentTestWorkItem(t, ctx, client, tenant.ID, actor.ID, "offset", "new", "high")
+	}
+	incident := createAutomationIncident(t, ctx, client, tenant.ID, actor.ID, "reference")
+	creator := NewIncidentAlertingService(client, zap.NewNop().Sugar(), executionfixture.Standard())
+	ctx = configureIncidentAlertProducerTarget(t, ctx, creator, tenant.ID)
+	ctx = WithIncidentAlertActor(ctx, actor.ID, "user", "producer-fixture")
+	req := &dto.CreateIncidentAlertRequest{IncidentID: incident.ID, AlertType: "monitoring", AlertName: "reference", Message: "reference", Severity: "high"}
+	_, err = creator.CreateIncidentAlert(ctx, req, tenant.ID)
+	require.NoError(t, err)
+	req.Channels = []string{"email"}
+	req.Recipients = []string{actor.Email}
+	alert, err := creator.CreateIncidentAlert(ctx, req, tenant.ID)
+	require.NoError(t, err)
+	require.NotEqual(t, incident.ID, alert.ID)
+	require.NotEqual(t, incident.WorkItemID, alert.ID)
+	require.NotEqual(t, incident.WorkItemID, incident.ID)
+	event := client.OutboxEvent.Query().OnlyX(ctx)
+	require.NotNil(t, event.ExecutionWorkItemID)
+	require.Equal(t, incident.WorkItemID, *event.ExecutionWorkItemID)
 }

@@ -25,8 +25,8 @@ func TestStartProcessRejectsMissingTypedOrTrustedTenantScope(t *testing.T) {
 		context.Background(),
 		f.definition.Key,
 		"unscoped-start",
-		"ticket",
-		101,
+		"generic",
+		f.workItem(t, 101).ID,
 		map[string]interface{}{},
 	)
 
@@ -295,8 +295,8 @@ func TestCallbackOutboxDoesNotPersistArbitraryOrSensitiveProcessVariables(t *tes
 		startProcessContext(f),
 		f.definition.Key,
 		"allowlist-probe",
-		"ticket",
-		321,
+		"generic",
+		f.workItem(t, 321).ID,
 		map[string]interface{}{
 			"safe_form_value": "not declared by the handler",
 			"password":        "must-not-persist",
@@ -594,7 +594,7 @@ func TestCCCallbackAuthoritativeVariablesRequireValidInitiator(t *testing.T) {
 		SaveX(f.userCtx)
 	instance := f.createProcessInstance(t, f.tenant, "cc-callback-attribution")
 	instance = f.client.ProcessInstance.UpdateOne(instance).
-		SetBusinessType("ticket").
+		SetBusinessType("generic").
 		SetBusinessID(ticket.ID).
 		SetInitiator(strconv.Itoa(f.actor.ID)).
 		SaveX(f.userCtx)

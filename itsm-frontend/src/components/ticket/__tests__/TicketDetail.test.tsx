@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import userEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
 import TicketDetail from '../TicketDetail';
 
@@ -252,4 +252,77 @@ describe('TicketDetail', () => {
     await screen.findByText('#101 VPN 无法连接');
     expect(screen.queryByText('新建')).not.toBeInTheDocument();
   });
+  it('keeps a historical SLA breach visible during a fresh current cycle', async () => {
+    mockGetTicket.mockResolvedValueOnce({ ...baseTicket, status: 'open' });
+    mockGetSLA.mockResolvedValueOnce({
+      slaName: '冻结 SLA', cycleNumber: 2, isBreached: false,
+      responseTime: 60, resolutionTime: 60,
+      responseDeadline: null, resolutionDeadline: null,
+      responseTimeRemaining: 60, resolutionTimeRemaining: 60,
+      history: [{ number: 1, responseBreached: false, resolutionBreached: true }],
+    });
+    render(<TicketDetail />);
+    expect(await screen.findByText('当前周期 2')).toBeInTheDocument();
+    expect(screen.getByText('历史周期 1：已违约')).toBeInTheDocument();
+  });
+
+  describe('edit command retries through the real form', () => {
+    const update = TicketApi.updateTicket as jest.Mock;
+    let originalRandomUUID: typeof crypto.randomUUID;
+    beforeEach(() => {
+      originalRandomUUID = crypto.randomUUID;
+      let sequence = 0;
+      Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: jest.fn(() => `confirmed-edit-${++sequence}`) });
+      update.mockReset();
+      mockGetTicket.mockResolvedValue({ ...baseTicket, recordClass: 'generic', status: 'open' });
+    });
+    afterEach(() => Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: originalRandomUUID }));
+
+    it('keeps the form opening version across refresh and reuses the full uncertain request', async () => {
+      update.mockRejectedValueOnce(new Error('connection lost after submission')).mockResolvedValueOnce({ workItemId: 101, version: 2, status: 'open', replayed: true });
+      const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+      render(<TicketDetail />);
+      await user.click((await screen.findByText('编辑', { selector: 'span' })).closest('button')!);
+      let dialog = (await screen.findByText('编辑工单')).closest('[role="dialog"]')! as HTMLElement;
+      await user.clear(within(dialog).getByLabelText('工单标题'));
+      await user.type(within(dialog).getByLabelText('工单标题'), 'Confirmed title');
+      mockGetTicket.mockResolvedValue({ ...baseTicket, recordClass: 'generic', status: 'open', version: 9 });
+      fireEvent.keyDown(document.body, { key: 'r', altKey: true });
+      await waitFor(() => expect(mockGetTicket).toHaveBeenCalledTimes(2));
+      dialog = (await screen.findByText('编辑工单')).closest('[role="dialog"]')! as HTMLElement;
+      await user.click(within(dialog).getByText('保存修改').closest('button')!);
+      await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+      const first = update.mock.calls[0][1];
+      expect(first).toMatchObject({ title: 'Confirmed title', version: 1, operationId: 'confirmed-edit-1' });
+      await waitFor(() => expect(within(dialog).getByText('保存修改').closest('button')!).not.toHaveClass('ant-btn-loading'));
+      await user.click(within(dialog).getByText('保存修改').closest('button')!);
+      await waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+      expect(update.mock.calls[1]).toEqual([101, first]);
+      expect(crypto.randomUUID).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(mockGetTicket).toHaveBeenCalledTimes(3));
+    });
+
+    it('requires fresh confirmation after an explicit conflict and uses a new operation', async () => {
+      update.mockRejectedValueOnce(Object.assign(new Error('version conflict'), { status: 409, code: 4090 })).mockResolvedValueOnce({ workItemId: 101, version: 10, status: 'open', replayed: false });
+      const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+      render(<TicketDetail />);
+      await user.click((await screen.findByText('编辑', { selector: 'span' })).closest('button')!);
+      let dialog = (await screen.findByText('编辑工单')).closest('[role="dialog"]')! as HTMLElement;
+      await user.clear(within(dialog).getByLabelText('工单标题'));
+      await user.type(within(dialog).getByLabelText('工单标题'), 'Confirmed title');
+      mockGetTicket.mockResolvedValue({ ...baseTicket, recordClass: 'generic', status: 'open', version: 9 });
+      await user.click(within(dialog).getByText('保存修改').closest('button')!);
+      await waitFor(() => expect(mockGetTicket).toHaveBeenCalledTimes(2));
+      expect(update).toHaveBeenCalledTimes(1);
+      await user.click((await screen.findByText('编辑', { selector: 'span' })).closest('button')!);
+      dialog = (await screen.findByText('编辑工单')).closest('[role="dialog"]')! as HTMLElement;
+      await user.clear(within(dialog).getByLabelText('工单标题'));
+      await user.type(within(dialog).getByLabelText('工单标题'), 'Confirmed title');
+      await user.click(within(dialog).getByText('保存修改').closest('button')!);
+      await waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+      expect(update.mock.calls[0][1]).toMatchObject({ title: 'Confirmed title', version: 1, operationId: 'confirmed-edit-1' });
+      expect(update.mock.calls[1][1]).toMatchObject({ title: 'Confirmed title', version: 9, operationId: 'confirmed-edit-2' });
+    });
+  });
+
 });

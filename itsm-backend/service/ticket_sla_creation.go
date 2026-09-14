@@ -6,6 +6,7 @@ import (
 	"itsm-backend/ent/sladefinition"
 	"itsm-backend/ent/ticket"
 	creation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/handlers/shared/slacontract"
 )
 
 // ApplyCreationSLA persists both deadlines with the owning creation transaction.
@@ -29,9 +30,13 @@ func (s *TicketSLAService) ApplyCreationSLA(ctx context.Context, tx *ent.Tx, ite
 	if err != nil {
 		return creation.NewDomainValidationFailed("invalid SLA calendar", err)
 	}
-	_, err = tx.Ticket.UpdateOneID(item.ID).Where(ticket.TenantIDEQ(item.TenantID)).SetSLADefinitionID(definition.ID).SetSLAResponseDeadline(response).SetSLAResolutionDeadline(resolution).Save(ctx)
+	_, err = tx.Ticket.UpdateOneID(item.ID).Where(ticket.TenantIDEQ(item.TenantID)).SetSLADefinitionID(definition.ID).SetSLACycleNumber(1).SetSLACycleStartedAt(item.CreatedAt).SetSLAPausedMinutes(0).SetAppliedSLAPolicy(appliedSLAPolicy(definition)).SetSLAResponseDeadline(response).SetSLAResolutionDeadline(resolution).Save(ctx)
 	if err != nil {
 		return creation.NewInfrastructureUnavailable("could not persist creation SLA", err)
 	}
 	return nil
+}
+
+func appliedSLAPolicy(definition *ent.SLADefinition) *slacontract.Policy {
+	return &slacontract.Policy{SchemaVersion: 1, DefinitionID: definition.ID, DefinitionVersion: definition.UpdatedAt, Name: definition.Name, ServiceType: definition.ServiceType, ResponseMinutes: definition.ResponseTime, ResolutionMinutes: definition.ResolutionTime, BusinessHours: definition.BusinessHours}
 }

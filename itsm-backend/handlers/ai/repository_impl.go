@@ -2,6 +2,14 @@ package ai
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"itsm-backend/authorization"
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/database"
+	"itsm-backend/ent/user"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"time"
 
 	"itsm-backend/ent"
@@ -12,11 +20,15 @@ import (
 )
 
 type EntRepository struct {
-	client *ent.Client
+	execution *database.ExecutionPolicy
+	client    *ent.Client
 }
 
-func NewEntRepository(client *ent.Client) *EntRepository {
-	return &EntRepository{client: client}
+func NewEntRepository(client *ent.Client, execution *database.ExecutionPolicy) *EntRepository {
+	if client == nil || execution == nil {
+		panic("AI repository requires tenant client and execution policy")
+	}
+	return &EntRepository{client: client, execution: execution}
 }
 
 // Conversations
@@ -150,7 +162,22 @@ func toToolInvocationDomain(e *ent.ToolInvocation) *ToolInvocation {
 }
 
 func (r *EntRepository) CreateToolInvocation(ctx context.Context, i *ToolInvocation) (*ToolInvocation, error) {
-	e, err := r.client.ToolInvocation.Create().
+	if i == nil || i.TenantID <= 0 || ctx == nil || tenantctx.IsSystemBypass(ctx) {
+		return nil, fmt.Errorf("explicit tool invocation tenant required")
+	}
+	if tenantID, ok := tenantctx.TenantID(ctx); ok && tenantID != i.TenantID {
+		return nil, fmt.Errorf("tool invocation tenant mismatch")
+	}
+	ctx = tenantctx.WithTenantID(ctx, i.TenantID)
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if err := r.execution.BindEnt(ctx, tx, i.TenantID); err != nil {
+		return nil, err
+	}
+	e, err := tx.ToolInvocation.Create().
 		SetTenantID(i.TenantID).
 		SetToolName(i.ToolName).
 		SetArguments(i.Arguments).
@@ -166,6 +193,9 @@ func (r *EntRepository) CreateToolInvocation(ctx context.Context, i *ToolInvocat
 	if err != nil {
 		return nil, err
 	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
 	return toToolInvocationDomain(e), nil
 }
 
@@ -179,30 +209,73 @@ func (r *EntRepository) GetToolInvocation(ctx context.Context, id int, tenantID 
 	return toToolInvocationDomain(e), nil
 }
 
-func (r *EntRepository) UpdateToolInvocation(ctx context.Context, i *ToolInvocation) (*ToolInvocation, error) {
-	update := r.client.ToolInvocation.UpdateOneID(i.ID).
-		SetStatus(i.Status).
-		SetApprovalState(i.ApprovalState).
-		SetApprovalReason(i.ApprovalReason).
-		SetApprovedBy(i.ApprovedBy).
-		SetPermissionCheck(i.PermissionCheck).
-		SetPermissionReason(i.PermissionReason)
+var ErrToolApprovalConflict = errors.New("tool approval decision conflicts with current state")
 
-	if i.Result != nil {
-		update.SetResult(*i.Result)
+// DecideToolInvocation is the sole transactional write of a tool approval.
+func (r *EntRepository) DecideToolInvocation(ctx context.Context, id, tenantID, actorID int, approve bool, reason string) (*ToolInvocation, error) {
+	if ctx == nil || id <= 0 || tenantID <= 0 || actorID <= 0 || tenantctx.IsSystemBypass(ctx) {
+		return nil, fmt.Errorf("explicit tool approval identity required")
 	}
-	if i.Error != nil {
-		update.SetError(*i.Error)
+	if current, ok := tenantctx.TenantID(ctx); ok && current != tenantID {
+		return nil, fmt.Errorf("tool approval tenant mismatch")
 	}
-	if i.ApprovedAt != nil {
-		update.SetApprovedAt(*i.ApprovedAt)
-	}
-
-	e, err := update.Save(ctx)
+	ctx = tenantctx.WithTenantID(ctx, tenantID)
+	tx, err := r.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return nil, err
 	}
-	return toToolInvocationDomain(e), nil
+	defer tx.Rollback()
+	if err = r.execution.BindEnt(ctx, tx, tenantID); err != nil {
+		return nil, err
+	}
+	if err = r.execution.RequireEntToolInvocation(ctx, tx, tenantID, id, actorID); err != nil {
+		return nil, err
+	}
+	actor, err := tx.User.Query().Where(user.IDEQ(actorID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).Only(ctx)
+	if ent.IsNotFound(err) {
+		return nil, creation.NewPermissionDenied("active tool approver required", err)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err = authorization.RequireCurrentPermission(ctx, tx, creation.Identity{TenantID: tenantID, ActorID: actorID, RequesterID: actorID, Role: actor.Role}, "ai", "write"); err != nil {
+		return nil, err
+	}
+	current, err := tx.ToolInvocation.Query().Where(toolinvocation.IDEQ(id), toolinvocation.TenantIDEQ(tenantID)).Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+	target := "rejected"
+	if approve {
+		target = "approved"
+	}
+	if !current.NeedsApproval || current.DryRun {
+		return nil, ErrToolApprovalConflict
+	}
+	if current.ApprovalState == target && current.ApprovedBy == actorID && current.ApprovalReason == reason && !current.ApprovedAt.IsZero() {
+		if err = tx.Commit(); err != nil {
+			return nil, err
+		}
+		return toToolInvocationDomain(current), nil
+	}
+	if current.ApprovalState != "pending" || current.Status != "pending" {
+		return nil, ErrToolApprovalConflict
+	}
+	count, err := tx.ToolInvocation.Update().Where(toolinvocation.IDEQ(id), toolinvocation.TenantIDEQ(tenantID), toolinvocation.ApprovalStateEQ("pending"), toolinvocation.StatusEQ("pending"), toolinvocation.NeedsApprovalEQ(true), toolinvocation.DryRunEQ(false)).SetApprovalState(target).SetApprovalReason(reason).SetApprovedBy(actorID).SetApprovedAt(time.Now().UTC()).Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if count != 1 {
+		return nil, ErrToolApprovalConflict
+	}
+	saved, err := tx.ToolInvocation.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	return toToolInvocationDomain(saved), nil
 }
 
 // Root Cause Analysis

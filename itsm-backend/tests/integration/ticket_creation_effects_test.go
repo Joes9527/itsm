@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"testing"
 
@@ -20,13 +21,13 @@ func configuredCreationTicketOwner(client *ent.Client, logger *zap.SugaredLogger
 	return configuredCreationTicketOwnerWithConnector(client, logger, nil)
 }
 func configuredCreationTicketOwnerWithConnector(client *ent.Client, logger *zap.SugaredLogger, manager *connector.Manager) *service.TicketService {
-	notifications := service.NewTicketNotificationService(client, logger)
+	notifications := service.NewTicketNotificationService(client, logger, executionfixture.Standard())
 	notifications.SetEmailService(service.NewEmailService(service.EmailConfig{}, logger))
 	assignment := service.NewTicketAssignmentService(client, logger)
 	rules := service.NewTicketAutomationRuleService(client, logger)
 	rules.SetAssignmentService(assignment)
 	rules.SetNotificationService(notifications)
-	return service.NewTicketService(&service.TicketServiceConfig{Client: client, Logger: logger, ConnectorManager: manager, Repository: repositoryticket.NewEntRepository(client, logger), NotificationService: notifications, AutomationRuleService: rules})
+	return service.NewTicketService(&service.TicketServiceConfig{Client: client, Logger: logger, Execution: executionfixture.Standard(), ConnectorManager: manager, Repository: repositoryticket.NewEntRepository(client, logger), NotificationService: notifications, AutomationRuleService: rules})
 }
 func TestIntakeGenericCreationUsesConfiguredEffectsAtomically(t *testing.T) {
 	f := newUnifiedIntakeFixture(t, configuredCreationTicketOwner)
@@ -37,7 +38,7 @@ func TestIntakeGenericCreationUsesConfiguredEffectsAtomically(t *testing.T) {
 	sla := f.client.SLADefinition.Create().SetTenantID(f.identity.TenantID).SetName("Critical SLA").SetResponseTime(15).SetResolutionTime(60).SaveX(ctx)
 	deployment := f.client.ProcessDeployment.Create().SetTenantID(f.identity.TenantID).SetDeploymentID("rule-workflow").SetDeploymentName("Rule workflow").SaveX(ctx)
 	definition := f.client.ProcessDefinition.Create().SetTenantID(f.identity.TenantID).SetDeploymentID(deployment.ID).SetKey("ruleflow").SetName("Rule flow").SetVersion("1").SetIsActive(true).SetIsLatest(true).SetBpmnXML([]byte("<definitions/>")).SaveX(ctx)
-	f.client.ProcessBinding.Create().SetTenantID(f.identity.TenantID).SetBusinessType("ticket").SetProcessDefinitionKey("ruleflow").SetPriority(100).SetConditions(map[string]interface{}{"priority": "critical", "status": "pending", "assignee_id": assignee.ID}).SetSLAPolicyID(strconv.Itoa(sla.ID)).SaveX(ctx)
+	f.client.ProcessBinding.Create().SetTenantID(f.identity.TenantID).SetBusinessType("generic").SetProcessDefinitionKey("ruleflow").SetPriority(100).SetConditions(map[string]interface{}{"priority": "critical", "status": "pending", "assignee_id": assignee.ID}).SetSLAPolicyID(strconv.Itoa(sla.ID)).SaveX(ctx)
 	first, err := f.app.Create(ctx, f.identity, f.command)
 	require.NoError(t, err)
 	item := f.client.Ticket.GetX(ctx, first.WorkItemID)

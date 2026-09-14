@@ -20,9 +20,9 @@ type ticketCreationNotification struct {
 	RecipientIDs []int
 }
 type ticketCreationEffects struct {
-	FeishuDestination string
-	RuleIDs           []int
-	Notifications     []ticketCreationNotification
+	FeishuTarget  *FeishuTarget
+	RuleIDs       []int
+	Notifications []ticketCreationNotification
 }
 
 func (s *TicketAutomationRuleService) prepareCreationRules(ctx context.Context, tx *ent.Tx, item *ent.Ticket) (*ticketCreationEffects, error) {

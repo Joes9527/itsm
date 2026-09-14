@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 
 	"itsm-backend/dto"
@@ -60,7 +61,7 @@ func TestReleaseFlow_ProcessTaskDecisionDrivesLifecycleEndToEnd(t *testing.T) {
 	require.NoError(t, NewProcessBindingService(client).InitDefaultBindings(ctx, tenant.ID))
 
 	releaseService := NewReleaseService(client, zap.NewNop().Sugar())
-	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar())
+	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard())
 	releaseService.SetProcessEngine(engine)
 	releaseService.SetProcessTriggerService(NewProcessTriggerService(client, engine))
 	engine.(*CustomProcessEngine).CallbackRegistry().
@@ -179,7 +180,7 @@ func TestReleaseFlow_RejectApproval_EndsFlowAndCancelsRelease(t *testing.T) {
 	require.NoError(t, NewProcessBindingService(client).InitDefaultBindings(ctx, tenant.ID))
 
 	releaseService := NewReleaseService(client, zap.NewNop().Sugar())
-	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar())
+	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard())
 	releaseService.SetProcessEngine(engine)
 	releaseService.SetProcessTriggerService(NewProcessTriggerService(client, engine))
 	engine.(*CustomProcessEngine).CallbackRegistry().
@@ -244,7 +245,7 @@ func TestReleaseService_CreateRelease_TriggersWorkflow(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, NewProcessBindingService(client).InitDefaultBindings(ctx, tenant.ID))
 
-	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar())
+	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard())
 	triggerSvc := NewProcessTriggerService(client, engine)
 
 	releaseService := NewReleaseService(client, zap.NewNop().Sugar())
@@ -284,7 +285,7 @@ func TestReleaseFlow_BPMNDefinitionAlwaysCreatesApprovalTask(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, NewProcessBindingService(client).InitDefaultBindings(ctx, tenant.ID))
 
-	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar())
+	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard())
 	trigger := NewProcessTriggerService(client, engine)
 	svc := NewReleaseService(client, zap.NewNop().Sugar())
 	svc.SetProcessEngine(engine)

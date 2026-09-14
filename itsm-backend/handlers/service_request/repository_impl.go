@@ -4,6 +4,7 @@ import (
 	"context"
 	"entgo.io/ent/dialect/sql"
 	"fmt"
+	"itsm-backend/database"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/ticket"
 	"time"
@@ -14,11 +15,12 @@ import (
 )
 
 type EntRepository struct {
-	client *ent.Client
+	execution *database.ExecutionPolicy
+	client    *ent.Client
 }
 
-func NewEntRepository(client *ent.Client) *EntRepository {
-	return &EntRepository{client: client}
+func NewEntRepository(client *ent.Client, execution *database.ExecutionPolicy) *EntRepository {
+	return &EntRepository{client: client, execution: execution}
 }
 
 // toDomain converts Ent model to Domain entity
@@ -145,7 +147,7 @@ func (r *EntRepository) Update(ctx context.Context, req *ServiceRequest) error {
 		return err
 	}
 	defer tx.Rollback()
-	if err := casRequestWorkItem(ctx, tx, req, false); err != nil {
+	if err := casRequestWorkItem(ctx, tx, r.execution, req); err != nil {
 		return err
 	}
 	update := tx.ServiceRequest.UpdateOneID(req.ID).Where(requestScope(req.TenantID), servicerequest.TicketID(req.TicketID)).
@@ -159,27 +161,16 @@ func (r *EntRepository) Update(ctx context.Context, req *ServiceRequest) error {
 	}
 	return tx.Commit()
 }
-func casRequestWorkItem(ctx context.Context, tx *ent.Tx, req *ServiceRequest, deleted bool) error {
+func casRequestWorkItem(ctx context.Context, tx *ent.Tx, policy *database.ExecutionPolicy, req *ServiceRequest) error {
 	// Verify extension identity before touching its owning WorkItem.
 	if _, err := tx.ServiceRequest.Query().Where(servicerequest.ID(req.ID), servicerequest.TicketID(req.TicketID), requestScope(req.TenantID)).Only(ctx); err != nil {
 		return err
 	}
+	if err := requireRequestExecutionTx(ctx, tx, policy, req.TenantID, req.TicketID); err != nil {
+		return err
+	}
 	update := tx.Ticket.UpdateOneID(req.TicketID).Where(ticket.TenantID(req.TenantID), ticket.RecordClassEQ("service_request_item"), ticket.DeletedAtIsNil(), ticket.VersionEQ(req.Version)).AddVersion(1).SetUpdatedAt(time.Now())
-	if deleted {
-		update.SetDeletedAt(time.Now())
-	}
 	return update.Exec(ctx)
-}
-func (r *EntRepository) Delete(ctx context.Context, req *ServiceRequest) error {
-	tx, err := r.client.Tx(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if err := casRequestWorkItem(ctx, tx, req, true); err != nil {
-		return err
-	}
-	return tx.Commit()
 }
 
 // GetUserContext returns User department (needed for filtering)

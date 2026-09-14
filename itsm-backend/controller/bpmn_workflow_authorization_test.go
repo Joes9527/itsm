@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -96,11 +97,11 @@ func TestGetBPMNTenantContextBuildsTrustedScope(t *testing.T) {
 func TestStartProcessPassesAuthenticatedActorScope(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := &startContextCapturingProcessEngine{fakeProcessEngine: &fakeProcessEngine{taskSvc: &fakeTaskService{}}}
-	controller := NewBPMNWorkflowController(engine, nil)
+	controller := NewBPMNWorkflowController(engine, nil, executionfixture.Standard())
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/v1/bpmn/process-instances", strings.NewReader(`{
-		"processDefinitionKey":"flow","businessKey":"ticket:1",
+		"processDefinitionKey":"flow","businessKey":"generic:1",
 		"variables":{"triggered_by":"999"}
 	}`))
 	ctx.Request.Header.Set("Content-Type", "application/json")
@@ -268,7 +269,7 @@ func TestProcessInstanceListAndStatsPassWorkflowContext(t *testing.T) {
 	controller := NewBPMNWorkflowController(&fakeProcessEngine{
 		taskSvc:            &fakeTaskService{},
 		processInstanceSvc: instanceSvc,
-	}, nil)
+	}, nil, executionfixture.Standard())
 
 	for path, handler := range map[string]gin.HandlerFunc{
 		"/api/v1/bpmn/process-instances": controller.ListProcessInstances,
@@ -301,7 +302,7 @@ func TestTaskListAndStatsPassWorkflowContext(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:bpmn_controller_task_context?mode=memory&cache=shared&_fk=1")
 	t.Cleanup(func() { _ = client.Close() })
 	taskSvc := &fakeTaskService{}
-	controller := NewBPMNWorkflowController(&fakeProcessEngine{taskSvc: taskSvc}, nil)
+	controller := NewBPMNWorkflowController(&fakeProcessEngine{taskSvc: taskSvc}, nil, executionfixture.Standard())
 
 	for path, handler := range map[string]gin.HandlerFunc{
 		"/api/v1/bpmn/tasks":       controller.ListUserTasks,
@@ -396,8 +397,8 @@ func TestListUserTasksHTTPRejectsFilterOverride(t *testing.T) {
 	createTask("controller-task-mine", strconv.Itoa(actor.ID))
 	createTask("controller-task-other", strconv.Itoa(other.ID))
 
-	engine := service.NewCustomProcessEngine(client, zap.NewNop().Sugar())
-	controller := NewBPMNWorkflowController(engine, nil)
+	engine := service.NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard())
+	controller := NewBPMNWorkflowController(engine, nil, executionfixture.Standard())
 	recorder := httptest.NewRecorder()
 	ginCtx, _ := gin.CreateTestContext(recorder)
 	path := "/api/v1/bpmn/tasks?userId=" + strconv.Itoa(other.ID) + "&Assignee=" + strconv.Itoa(other.ID)
@@ -523,8 +524,8 @@ func newBPMNHTTPAuthorizationFixture(t *testing.T) *bpmnHTTPAuthorizationFixture
 		Save(dbCtx)
 	require.NoError(t, err)
 
-	engine := service.NewCustomProcessEngine(client, zap.NewNop().Sugar())
-	controller := NewBPMNWorkflowController(engine, nil)
+	engine := service.NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard())
+	controller := NewBPMNWorkflowController(engine, nil, executionfixture.Standard())
 	router := gin.New()
 	api := router.Group("/api/v1")
 	api.Use(func(ctx *gin.Context) {

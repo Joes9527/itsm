@@ -61,50 +61,42 @@ describe('IncidentAPI', () => {
   describe('updateIncident', () => {
     it('should update an incident', async () => {
       mockPut.mockResolvedValue({ id: 1, title: 'Updated' });
-      const result = await IncidentAPI.updateIncident(1, { title: 'Updated' });
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/incidents/1', { title: 'Updated' });
+      const result = await IncidentAPI.updateIncident(1, { title: 'Updated', version: 7 });
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/incidents/1', { title: 'Updated', version: 7 });
       expect(result.title).toBe('Updated');
-    });
-  });
-
-  describe('updateIncidentStatus', () => {
-    it('should update status', async () => {
-      mockPut.mockResolvedValue({ id: 1, status: 'resolved' });
-      const result = await IncidentAPI.updateIncidentStatus(1, { status: 'resolved' });
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/incidents/1/status', { status: 'resolved' });
     });
   });
 
   describe('resolveIncident', () => {
     it('should resolve an incident', async () => {
       mockPost.mockResolvedValue({ id: 1, status: 'resolved' });
-      await IncidentAPI.resolveIncident(1, { resolution: 'Fixed the server' });
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/resolve', { resolution: 'Fixed the server' });
+      await IncidentAPI.resolveIncident(1, { version: 7, operationId: 'resolve-key', resolution: 'Fixed the server' });
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/resolve', { version: 7, operationId: 'resolve-key', resolution: 'Fixed the server' });
     });
   });
 
   describe('assignIncident', () => {
     it('should assign an incident', async () => {
       mockPost.mockResolvedValue({ id: 1, assigneeId: 5 });
-      await IncidentAPI.assignIncident(1, 5);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/assign', { assigneeId: 5 });
+      await IncidentAPI.assignIncident(4, { assigneeId: 5, version: 7, operationId: 'assign-key', reason: 'handover' });
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/4/assign', { assigneeId: 5, version: 7, operationId: 'assign-key', reason: 'handover' });
     });
   });
 
   describe('acknowledgeIncident', () => {
     it('should acknowledge incident', async () => {
-      mockPost.mockResolvedValue({ message: 'acknowledged' });
-      const result = await IncidentAPI.acknowledgeIncident(1);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/acknowledge', {});
-      expect(result.message).toBe('acknowledged');
+      mockPost.mockResolvedValue({ workItemId: 1, version: 8, status: 'acknowledged', replayed: false });
+      const result = await IncidentAPI.acknowledgeIncident(1, { version: 7, operationId: 'ack-key' });
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/acknowledge', { version: 7, operationId: 'ack-key' });
+      expect(result.status).toBe('acknowledged');
     });
   });
 
   describe('closeIncident', () => {
     it('should close an incident', async () => {
       mockPost.mockResolvedValue({ message: 'closed' });
-      await IncidentAPI.closeIncident(1, { closeNotes: 'Done' });
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/close', { closeNotes: 'Done' });
+      await IncidentAPI.closeIncident(1, { version: 7, operationId: 'close-key', reason: 'Done' });
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/close', { version: 7, operationId: 'close-key', reason: 'Done' });
     });
   });
 
@@ -136,8 +128,8 @@ describe('IncidentAPI', () => {
   describe('reopenIncident', () => {
     it('should reopen an incident', async () => {
       mockPost.mockResolvedValue({ id: 1, status: 'in_progress' });
-      await IncidentAPI.reopenIncident(1);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/reopen', {});
+      await IncidentAPI.reopenIncident(1, { version: 7, operationId: 'reopen-key' });
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/reopen', { version: 7, operationId: 'reopen-key' });
     });
   });
 

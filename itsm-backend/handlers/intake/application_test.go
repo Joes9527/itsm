@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/handlers/common/workitemcreation"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 )
@@ -59,7 +60,7 @@ func intakeFixture(t *testing.T) (*ent.Client, *Service, workitemcreation.Identi
 	creator := &preparedCreator{}
 	require.NoError(t, registry.Register(creator))
 	allocator := &testAllocator{}
-	return client, NewService(client, preparedResolver{}, registry, NewWorkItemCreator(allocator), sameTransactionDirectory{}), identity, cmd, allocator, creator
+	return client, NewService(client, preparedResolver{}, registry, NewWorkItemCreator(allocator), sameTransactionDirectory{}, executionfixture.Standard()), identity, cmd, allocator, creator
 }
 func TestApplicationGenericAtomicCreationReplayAndConflict(t *testing.T) {
 	client, s, i, c, n, _ := intakeFixture(t)
@@ -225,4 +226,13 @@ func TestApplicationReplayRechecksCurrentPermissions(t *testing.T) {
 
 func (preparedResolver) ResolveWorkflow(context.Context, *ent.Tx, *workitemcreation.CreationPlan) error {
 	return nil
+}
+
+func TestApplicationMissingExecutionPolicyRejectsBeforeWrites(t *testing.T) {
+	client, s, i, c, _, _ := intakeFixture(t)
+	s.execution = nil
+	_, err := s.Create(context.Background(), i, c)
+	require.Error(t, err)
+	require.Zero(t, client.Ticket.Query().CountX(context.Background()))
+	require.Zero(t, client.IntakeRequest.Query().CountX(context.Background()))
 }

@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"itsm-backend/common/executionscope"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticketassignmentrule"
@@ -48,12 +50,12 @@ func (s *TicketService) prepareCreationEffects(ctx context.Context, tx *ent.Tx, 
 		return err
 	}
 	if s.connectorManager != nil && plan.Resolved.Command.FeishuTask == nil {
-		if connector, configured := s.connectorManager.Get(item.TenantID, "feishu"); configured {
-			tasks, ok := connector.(FeishuTaskCreator)
-			if !ok || tasks.TaskDestinationIdentity() == "" {
-				return creation.NewDomainValidationFailed("configured Feishu connector has no task creation capability", nil)
+		effects.FeishuTarget, err = describeFeishuTarget(ctx, tx, item.TenantID, s.connectorManager, s.execution)
+		if err != nil {
+			if errors.Is(err, executionscope.ErrDenied) {
+				return creation.NewPermissionDenied("configured Feishu destination is not permitted", err)
 			}
-			effects.FeishuDestination = tasks.TaskDestinationIdentity()
+			return creation.NewInfrastructureUnavailable("could not resolve Feishu destination", err)
 		}
 	}
 	plan.ProfessionalInput = effects
@@ -105,8 +107,8 @@ func (s *TicketService) writeCreationEffects(ctx context.Context, tx *ent.Tx, it
 			return err
 		}
 	}
-	if effects.FeishuDestination != "" {
-		if err := enqueueFeishuCreation(ctx, tx, item, plan.Resolved.Identity.ActorID, effects.FeishuDestination, feishuOriginIntake); err != nil {
+	if effects.FeishuTarget != nil {
+		if err := enqueueFeishuCreation(ctx, tx, item, plan.Resolved.Identity.ActorID, *effects.FeishuTarget, feishuOriginIntake); err != nil {
 			return err
 		}
 	}

@@ -49,22 +49,6 @@ export default function MSPManagementPage() {
     }
   };
 
-  if (accessError) {
-    return (
-      <div style={{ padding: 24 }}>
-        <Alert message={accessError} type="error" showIcon />
-      </div>
-    );
-  }
-
-  if (!hasAccess) {
-    return (
-      <div style={{ padding: 24, textAlign: 'center' }}>
-        <Spin size="large" />
-      </div>
-    );
-  }
-
   const loadData = async () => {
     setLoading(true);
     try {
@@ -99,6 +83,22 @@ export default function MSPManagementPage() {
       setLoading(false);
     }
   };
+
+  if (accessError) {
+    return (
+      <div style={{ padding: 24 }}>
+        <Alert message={accessError} type="error" showIcon />
+      </div>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <div style={{ padding: 24, textAlign: 'center' }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
 
   const handleCreate = async (values: CreateAllocationRequest) => {
     try {

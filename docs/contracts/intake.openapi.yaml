@@ -481,21 +481,39 @@ components:
           items:
             type: string
             pattern: ^\s*\+?0*[1-9][0-9]*\s*$
-        relatedTickets:
-          type: array
-          items: *id009
         standardTemplateId:
           type: integer
           minimum: 1
-        relatedTicketNumbers:
-          type: array
-          items:
-            type: string
-            minLength: 1
+    SourceRelationInput:
+      type: object
+      additionalProperties: false
+      required: [sourceWorkItemId, relationType, expectedVersion]
+      description: Each source appears once. Versions are caller observed; no latest-version translation. Nulls and duplicate or unknown JSON keys are rejected. Required is valid only for resolved_by_change.
+      properties:
+        sourceWorkItemId:
+          type: integer
+          minimum: 1
+        relationType:
+          type: string
+          enum: [related_to, investigated_by, caused_by, resolved_by_change, requested_change, fulfilled_by, duplicate_of, parent_child]
+        expectedVersion:
+          type: integer
+          minimum: 1
+        metadata:
+          type: object
+          additionalProperties: false
+          properties:
+            required:
+              type: boolean
+              default: false
     CreateWorkItemCommand:
       type: object
       additionalProperties: false
       properties:
+        sourceRelations:
+          type: array
+          items:
+            $ref: '#/components/schemas/SourceRelationInput'
         recordClass:
           type: string
           enum: &id010
@@ -749,7 +767,15 @@ components:
           $ref: '#/components/schemas/ProfessionalReference'
         workflowStartStatus:
           type: string
-          description: Authoritative workflow start state. Pending or blocked must
+          enum:
+          - active
+          - not_required
+          - pending
+          - awaiting_submit
+          - manual_intervention_required
+          description: Authoritative workflow start state. A Change with a frozen
+            workflow returns awaiting_submit until its professional submit command
+            starts that exact definition. Pending, awaiting_submit or blocked must
             not be presented as started.
         replayed:
           type: boolean

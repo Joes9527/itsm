@@ -79,37 +79,148 @@ const PERMISSION_ACTIONS = {
 } as const;
 
 // 权限模块配置
-const MODULE_CONFIG: Record<string, { label: string; icon: string; description: string; category: string }> = {
-  [PERMISSION_MODULES.DASHBOARD]: { label: '仪表盘', icon: '📊', description: '系统仪表盘和概览信息', category: '核心功能' },
-  [PERMISSION_MODULES.TICKETS]: { label: '工单管理', icon: '🎫', description: '工单的创建、处理和管理', category: '核心功能' },
-  [PERMISSION_MODULES.INCIDENTS]: { label: '事件管理', icon: '🚨', description: 'IT事件的记录和处理', category: '核心功能' },
-  [PERMISSION_MODULES.PROBLEMS]: { label: '问题管理', icon: '🔧', description: '根本原因分析和问题解决', category: '核心功能' },
-  [PERMISSION_MODULES.CHANGES]: { label: '变更管理', icon: '🔄', description: 'IT变更的规划和实施', category: '核心功能' },
-  [PERMISSION_MODULES.SERVICE_CATALOG]: { label: '服务目录', icon: '📋', description: 'IT服务目录管理', category: '服务管理' },
-  [PERMISSION_MODULES.SERVICE_REQUEST]: { label: '服务请求', icon: '🧾', description: '服务请求提交、审批和履约', category: '服务管理' },
-  [PERMISSION_MODULES.KNOWLEDGE_BASE]: { label: '知识库', icon: '📚', description: '知识文档和解决方案', category: '服务管理' },
-  [PERMISSION_MODULES.CMDB]: { label: 'CMDB', icon: '🧩', description: '配置项、关系和拓扑管理', category: '核心功能' },
-  [PERMISSION_MODULES.ASSETS]: { label: '资产管理', icon: '💻', description: 'IT资产和许可证管理', category: '核心功能' },
-  [PERMISSION_MODULES.RELEASES]: { label: '发布管理', icon: '🚀', description: '发布计划和发布执行', category: '核心功能' },
-  [PERMISSION_MODULES.REPORTS]: { label: '报告分析', icon: '📈', description: '数据报告和分析功能', category: '分析工具' },
-  [PERMISSION_MODULES.ADMIN]: { label: '系统管理', icon: '⚙️', description: '系统管理和配置', category: '系统管理' },
-  [PERMISSION_MODULES.USERS]: { label: '用户管理', icon: '👥', description: '用户账户管理', category: '系统管理' },
-  [PERMISSION_MODULES.ROLES]: { label: '角色管理', icon: '🛡️', description: '角色和权限管理', category: '系统管理' },
-  [PERMISSION_MODULES.GROUPS]: { label: '用户组管理', icon: '👪', description: '用户组和候选组管理', category: '系统管理' },
-  [PERMISSION_MODULES.ORG]: { label: '组织架构', icon: '🏢', description: '部门、团队和组织架构管理', category: '系统管理' },
-  [PERMISSION_MODULES.WORKFLOWS]: { label: '工作流', icon: '🔀', description: '业务流程配置', category: '系统管理' },
-  [PERMISSION_MODULES.SYSTEM_CONFIG]: { label: '系统配置', icon: '🔧', description: '系统参数和设置', category: '系统管理' },
-  [PERMISSION_MODULES.AI]: { label: 'AI能力', icon: '🤖', description: 'AI 辅助与智能自动化能力', category: '系统管理' },
+const MODULE_CONFIG: Record<
+  string,
+  { label: string; icon: string; description: string; category: string }
+> = {
+  [PERMISSION_MODULES.DASHBOARD]: {
+    label: '仪表盘',
+    icon: '📊',
+    description: '系统仪表盘和概览信息',
+    category: '核心功能',
+  },
+  [PERMISSION_MODULES.TICKETS]: {
+    label: '工单管理',
+    icon: '🎫',
+    description: '工单的创建、处理和管理',
+    category: '核心功能',
+  },
+  [PERMISSION_MODULES.INCIDENTS]: {
+    label: '事件管理',
+    icon: '🚨',
+    description: 'IT事件的记录和处理',
+    category: '核心功能',
+  },
+  [PERMISSION_MODULES.PROBLEMS]: {
+    label: '问题管理',
+    icon: '🔧',
+    description: '根本原因分析和问题解决',
+    category: '核心功能',
+  },
+  [PERMISSION_MODULES.CHANGES]: {
+    label: '变更管理',
+    icon: '🔄',
+    description: 'IT变更的规划和实施',
+    category: '核心功能',
+  },
+  [PERMISSION_MODULES.SERVICE_CATALOG]: {
+    label: '服务目录',
+    icon: '📋',
+    description: 'IT服务目录管理',
+    category: '服务管理',
+  },
+  [PERMISSION_MODULES.SERVICE_REQUEST]: {
+    label: '服务请求',
+    icon: '🧾',
+    description: '服务请求提交、审批和履约',
+    category: '服务管理',
+  },
+  [PERMISSION_MODULES.KNOWLEDGE_BASE]: {
+    label: '知识库',
+    icon: '📚',
+    description: '知识文档和解决方案',
+    category: '服务管理',
+  },
+  [PERMISSION_MODULES.CMDB]: {
+    label: 'CMDB',
+    icon: '🧩',
+    description: '配置项、关系和拓扑管理',
+    category: '核心功能',
+  },
+  [PERMISSION_MODULES.ASSETS]: {
+    label: '资产管理',
+    icon: '💻',
+    description: 'IT资产和许可证管理',
+    category: '核心功能',
+  },
+  [PERMISSION_MODULES.RELEASES]: {
+    label: '发布管理',
+    icon: '🚀',
+    description: '发布计划和发布执行',
+    category: '核心功能',
+  },
+  [PERMISSION_MODULES.REPORTS]: {
+    label: '报告分析',
+    icon: '📈',
+    description: '数据报告和分析功能',
+    category: '分析工具',
+  },
+  [PERMISSION_MODULES.ADMIN]: {
+    label: '系统管理',
+    icon: '⚙️',
+    description: '系统管理和配置',
+    category: '系统管理',
+  },
+  [PERMISSION_MODULES.USERS]: {
+    label: '用户管理',
+    icon: '👥',
+    description: '用户账户管理',
+    category: '系统管理',
+  },
+  [PERMISSION_MODULES.ROLES]: {
+    label: '角色管理',
+    icon: '🛡️',
+    description: '角色和权限管理',
+    category: '系统管理',
+  },
+  [PERMISSION_MODULES.GROUPS]: {
+    label: '用户组管理',
+    icon: '👪',
+    description: '用户组和候选组管理',
+    category: '系统管理',
+  },
+  [PERMISSION_MODULES.ORG]: {
+    label: '组织架构',
+    icon: '🏢',
+    description: '部门、团队和组织架构管理',
+    category: '系统管理',
+  },
+  [PERMISSION_MODULES.WORKFLOWS]: {
+    label: '工作流',
+    icon: '🔀',
+    description: '业务流程配置',
+    category: '系统管理',
+  },
+  [PERMISSION_MODULES.SYSTEM_CONFIG]: {
+    label: '系统配置',
+    icon: '🔧',
+    description: '系统参数和设置',
+    category: '系统管理',
+  },
+  [PERMISSION_MODULES.AI]: {
+    label: 'AI能力',
+    icon: '🤖',
+    description: 'AI 辅助与智能自动化能力',
+    category: '系统管理',
+  },
 };
 
 // 权限操作配置
 const ACTION_CONFIG: Record<string, { label: string; color: string; description: string }> = {
   [PERMISSION_ACTIONS.READ]: { label: '读取', color: 'blue', description: '读取和浏览权限' },
   [PERMISSION_ACTIONS.CREATE]: { label: '创建', color: 'green', description: '创建新记录权限' },
-  [PERMISSION_ACTIONS.WRITE]: { label: '写入', color: 'orange', description: '创建或修改业务数据权限' },
+  [PERMISSION_ACTIONS.WRITE]: {
+    label: '写入',
+    color: 'orange',
+    description: '创建或修改业务数据权限',
+  },
   [PERMISSION_ACTIONS.UPDATE]: { label: '更新', color: 'orange', description: '更新现有记录权限' },
   [PERMISSION_ACTIONS.DELETE]: { label: '删除', color: 'red', description: '删除记录权限' },
-  [PERMISSION_ACTIONS.MANAGE]: { label: '管理', color: 'magenta', description: '管理配置和成员关系权限' },
+  [PERMISSION_ACTIONS.MANAGE]: {
+    label: '管理',
+    color: 'magenta',
+    description: '管理配置和成员关系权限',
+  },
   [PERMISSION_ACTIONS.APPROVE]: { label: '审批', color: 'purple', description: '审批和批准权限' },
   [PERMISSION_ACTIONS.ASSIGN]: { label: '分配', color: 'cyan', description: '分配和指派权限' },
   [PERMISSION_ACTIONS.VIEW]: { label: '查看', color: 'geekblue', description: '兼容旧版查看权限' },
@@ -212,7 +323,9 @@ const PermissionConfiguration = () => {
   const { message } = App.useApp();
   const [roles, setRoles] = useState<Role[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
-  const [permissionState, setPermissionState] = useState<PermissionState>(createDefaultPermissionState());
+  const [permissionState, setPermissionState] = useState<PermissionState>(
+    createDefaultPermissionState()
+  );
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [hasChanges, setHasChanges] = useState(false);
@@ -301,9 +414,7 @@ const PermissionConfiguration = () => {
         ...prev,
         [moduleId]: {
           isEnabled: newEnabled,
-          actions: Object.fromEntries(
-            Object.keys(current.actions).map(k => [k, newEnabled])
-          ),
+          actions: Object.fromEntries(Object.keys(current.actions).map(k => [k, newEnabled])),
         },
       };
     });
@@ -380,8 +491,14 @@ const PermissionConfiguration = () => {
   const stats = {
     totalModules: Object.keys(MODULE_CONFIG).length,
     enabledModules: Object.values(permissionState).filter(m => m.isEnabled).length,
-    totalActions: Object.values(permissionState).reduce((sum, m) => sum + Object.keys(m.actions).length, 0),
-    enabledActions: Object.values(permissionState).reduce((sum, m) => sum + Object.values(m.actions).filter(v => v).length, 0),
+    totalActions: Object.values(permissionState).reduce(
+      (sum, m) => sum + Object.keys(m.actions).length,
+      0
+    ),
+    enabledActions: Object.values(permissionState).reduce(
+      (sum, m) => sum + Object.values(m.actions).filter(v => v).length,
+      0
+    ),
     catalogPermissions: permissionCatalogCount,
   };
 
@@ -462,10 +579,18 @@ const PermissionConfiguration = () => {
                   <Badge count={categoryModuleKeys.length} color="blue" />
                 </div>
                 <Space>
-                  <Button size="small" type="link" onClick={() => handleBatchToggle(category.id, true)}>
+                  <Button
+                    size="small"
+                    type="link"
+                    onClick={() => handleBatchToggle(category.id, true)}
+                  >
                     全部启用
                   </Button>
-                  <Button size="small" type="link" onClick={() => handleBatchToggle(category.id, false)}>
+                  <Button
+                    size="small"
+                    type="link"
+                    onClick={() => handleBatchToggle(category.id, false)}
+                  >
                     全部禁用
                   </Button>
                 </Space>
@@ -486,7 +611,7 @@ const PermissionConfiguration = () => {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <span>{moduleConfig.icon}</span>
-                            <span className="text-sm">{moduleConfig.label}</span>
+                            <span className="text-[13px]">{moduleConfig.label}</span>
                           </div>
                           <Switch
                             size="small"
@@ -496,7 +621,7 @@ const PermissionConfiguration = () => {
                         </div>
                       }
                     >
-                      <Text type="secondary" className="text-xs mb-3 block">
+                      <Text type="secondary" className="text-[12px] mb-3 block">
                         {moduleConfig.description}
                       </Text>
                       <div className="space-y-2">
@@ -504,8 +629,10 @@ const PermissionConfiguration = () => {
                           <div key={actionKey} className="flex items-center justify-between">
                             <Tooltip title={actionConf.description}>
                               <Tag
-                                color={moduleState?.actions[actionKey] ? actionConf.color : 'default'}
-                                className="text-xs cursor-help"
+                                color={
+                                  moduleState?.actions[actionKey] ? actionConf.color : 'default'
+                                }
+                                className="text-[12px] cursor-help"
                               >
                                 {actionConf.label}
                               </Tag>
@@ -562,7 +689,7 @@ const PermissionConfiguration = () => {
           <Col xs={24} md={6}>
             <Input
               placeholder="搜索模块或权限..."
-              prefix={<Search className="w-4 h-4 text-gray-400" />}
+              prefix={<Search className="w-4 h-4 text-muted" />}
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               allowClear
@@ -666,7 +793,7 @@ const PermissionConfiguration = () => {
               value={((stats.enabledModules / stats.totalModules) * 100).toFixed(1)}
               suffix="%"
               prefix={<CheckCircle className="w-5 h-5" />}
-              styles={{ content: { color: '#722ed1' } }}
+              styles={{ content: { color: 'var(--color-text-primary)' } }}
             />
           </Card>
         </Col>

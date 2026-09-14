@@ -56,13 +56,18 @@ const taskStatusMap: Record<string, { text: string; color: string }> = {
   cancelled: { text: '已取消', color: 'default' },
 };
 
-// 业务类型 → 展示名 + 详情路由
+// 业务类型 → 展示名 + 详情路由。
+//
+// 键是规范 recordClass（设计 §15.2.2：businessType = WorkItem.recordClass）。
+// Wave-1 旧词表（ticket/change/service_request）不在此映射内：遇到旧值时不构造业务链接，
+// 退化为流程实例链接，避免把退役身份当成新身份。
 const businessTypeMap: Record<string, { label: string; url: (id: number) => string }> = {
-  ticket: { label: '工单', url: (id) => `/tickets/${id}` },
-  change: { label: '变更', url: (id) => `/changes/${id}` },
+  generic: { label: '工单', url: (id) => `/tickets/${id}` },
+  change_request: { label: '变更', url: (id) => `/changes/${id}` },
   incident: { label: '事件', url: (id) => `/incidents/${id}` },
   problem: { label: '问题', url: (id) => `/problems/${id}` },
-  service_request: { label: '服务请求', url: (id) => `/service-requests/${id}` },
+  service_request_item: { label: '服务请求', url: (id) => `/service-requests/${id}` },
+  catalog_task: { label: '服务请求任务', url: (id) => `/service-requests/${id}` },
   release: { label: '发布', url: (id) => `/releases/${id}` },
 };
 
@@ -165,11 +170,12 @@ export default function ApprovalsCenterPage() {
       title: '任务',
       dataIndex: 'taskName',
       key: 'taskName',
+      width: 280,
       render: (text: string, record: UserTask) => (
-        <div>
-          <div className="font-medium text-gray-900">{text || record.taskDefinitionKey}</div>
+        <div className="min-w-[220px]">
+          <div className="font-medium text-foreground">{text || record.taskDefinitionKey}</div>
           {record.taskPurpose && (
-            <Text type="secondary" className="text-xs">{record.taskPurpose}</Text>
+            <Text type="secondary" className="text-[12px]">{record.taskPurpose}</Text>
           )}
         </div>
       ),
@@ -223,7 +229,7 @@ export default function ApprovalsCenterPage() {
       responsive: ['xl'] as any,
       render: (t: string) => t ? (
         <Tooltip title={dayjs(t).format('YYYY-MM-DD HH:mm:ss')}>
-          <span className="text-gray-500">{dayjs(t).fromNow()}</span>
+          <span className="text-muted">{dayjs(t).fromNow()}</span>
         </Tooltip>
       ) : '-',
     },
@@ -274,7 +280,7 @@ export default function ApprovalsCenterPage() {
   );
 
   return (
-    <div className="p-4 md:p-6">
+    <div style={{ padding: 24, fontSize: 13 }}>
       {/* 头部区域 */}
       <div className="mb-4 md:mb-6 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div className="flex items-center gap-3">
@@ -282,8 +288,8 @@ export default function ApprovalsCenterPage() {
             <CheckCircle className="text-xl md:text-2xl text-blue-500" />
           </div>
           <div>
-            <Title level={3} className="!mb-0 !text-xl md:!text-2xl">审批中心</Title>
-            <Text type="secondary" className="text-sm">
+            <Title level={3} className="!mb-0 !text-[24px] !font-semibold">审批中心</Title>
+            <Text type="secondary" className="text-[12px]">
               {user?.username ? `${user.username}，` : ''}您有 {tasks.length} 项流程待办
             </Text>
           </div>
@@ -303,7 +309,7 @@ export default function ApprovalsCenterPage() {
           <Card className="border-l-4 border-l-blue-500">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs md:text-sm text-gray-500">流程待办</div>
+                <div className="text-[12px] text-muted md:text-[13px]">流程待办</div>
                 <div className="text-2xl md:text-3xl font-bold text-blue-600">{tasks.length}</div>
               </div>
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-blue-50 flex items-center justify-center">
@@ -316,7 +322,7 @@ export default function ApprovalsCenterPage() {
           <Card className="border-l-4 border-l-gold-500">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs md:text-sm text-gray-500">待领取</div>
+                <div className="text-[12px] text-muted md:text-[13px]">待领取</div>
                 <div className="text-2xl md:text-3xl font-bold text-amber-500">
                   {tasks.filter((t) => !t.assignee).length}
                 </div>
@@ -339,13 +345,13 @@ export default function ApprovalsCenterPage() {
             dataSource={tasks}
             columns={taskColumns}
             pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 项` }}
-            scroll={{ x: 900 }}
+            scroll={{ x: 1200 }}
             locale={{
               emptyText: (
                 <div className="py-12 text-center">
-                  <Clock className="mx-auto mb-3 text-gray-300 w-10 h-10" />
-                  <div className="text-gray-500 mb-1">暂无流程待办</div>
-                  <Text type="secondary" className="text-sm">当前没有分配给您或待您领取的审批任务</Text>
+                  <Clock className="mx-auto mb-3 h-10 w-10 text-muted" />
+                  <div className="mb-1 text-muted">暂无流程待办</div>
+                  <Text type="secondary" className="text-[12px]">当前没有分配给您或待您领取的审批任务</Text>
                 </div>
               ),
             }}

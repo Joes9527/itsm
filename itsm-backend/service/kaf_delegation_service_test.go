@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 
@@ -40,7 +41,7 @@ func newDelegationFixture(t *testing.T) (*CustomProcessEngine, *KafDelegationSer
 	client := enttest.Open(t, "sqlite3", "file:kaf_delegation_service?mode=memory&cache=shared&_fk=1")
 	t.Cleanup(func() { client.Close() })
 
-	engineIface := NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar())
+	engineIface := NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	engine, ok := engineIface.(*CustomProcessEngine)
 	require.True(t, ok)
 
@@ -962,4 +963,32 @@ func TestKafAccessResultParticipatesInActionDigest(t *testing.T) {
 	require.NoError(t, json.Unmarshal(raw, &second))
 	_, _, err = svc.ClaimKafAction(ctx, task, second)
 	require.ErrorIs(t, err, ErrKafActionConflict)
+}
+
+func TestDelegationInheritsStructuredExecutionReferenceInBothPaths(t *testing.T) {
+	for _, direct := range []bool{false, true} {
+		t.Run(fmt.Sprint(direct), func(t *testing.T) {
+			_, svc, ctx, old := newDelegationFixture(t)
+			current := svc.client.ProcessInstance.Create().SetProcessInstanceID("new-scoped").SetProcessDefinitionKey(old.ProcessDefinitionKey).SetProcessDefinitionID(old.ProcessDefinitionID).SetBusinessKey(old.BusinessKey).SetBusinessType(old.BusinessType).SetBusinessID(old.BusinessID).SetTenantID(old.TenantID).SetExecutionWorkItemID(old.BusinessID).SaveX(ctx)
+			var task *ent.ProcessTask
+			var err error
+			if direct {
+				tx, e := svc.client.Tx(ctx)
+				require.NoError(t, e)
+				defer tx.Rollback()
+				task, err = svc.CreateDelegatedTaskTx(ctx, tx, current.ID, kafDelegateTask("complete_bpmn_task"))
+				require.NoError(t, err)
+				require.NoError(t, tx.Commit())
+			} else {
+				task, err = svc.CreateDelegatedTask(ctx, current.ID, kafDelegateTask("complete_bpmn_task"))
+				require.NoError(t, err)
+			}
+			event := svc.client.OutboxEvent.Query().Where(outboxevent.AggregateIDEQ(task.TaskID)).OnlyX(ctx)
+			require.NotNil(t, event.ExecutionWorkItemID)
+			require.Equal(t, current.BusinessID, *event.ExecutionWorkItemID)
+			legacy, err := svc.CreateDelegatedTask(ctx, old.ID, kafDelegateTask("complete_bpmn_task"))
+			require.NoError(t, err)
+			require.Nil(t, svc.client.OutboxEvent.Query().Where(outboxevent.AggregateIDEQ(legacy.TaskID)).OnlyX(ctx).ExecutionWorkItemID)
+		})
+	}
 }

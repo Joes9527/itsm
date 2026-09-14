@@ -121,10 +121,13 @@ func (s *EscalationMatrixService) InvalidateCache(tenantID int) {
 // GetMatrixBySLA 从 SLADefinition.escalation_rules 读取升级矩阵。
 // 若 SLA 未配置升级规则，返回 DefaultEscalationMatrix。
 func (s *EscalationMatrixService) GetMatrixBySLA(ctx context.Context, tenantID, slaDefinitionID int) (EscalationMatrix, error) {
-	if s.client == nil || slaDefinitionID <= 0 {
+	return loadSLAEscalationMatrix(ctx, s.client, tenantID, slaDefinitionID)
+}
+func loadSLAEscalationMatrix(ctx context.Context, client *ent.Client, tenantID, slaDefinitionID int) (EscalationMatrix, error) {
+	if client == nil || slaDefinitionID <= 0 {
 		return nil, fmt.Errorf("SLA matrix database and definition are required")
 	}
-	sla, err := s.client.SLADefinition.Query().Where(sladefinition.IDEQ(slaDefinitionID), sladefinition.TenantIDEQ(tenantID)).Only(ctx)
+	sla, err := client.SLADefinition.Query().Where(sladefinition.IDEQ(slaDefinitionID), sladefinition.TenantIDEQ(tenantID)).Only(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("SLA escalation definition unavailable: %w", err)
 	}
@@ -175,6 +178,19 @@ func parseSLAEscalationMatrix(rules map[string]interface{}) (EscalationMatrix, e
 				}
 			}
 
+			if rawIDs, exists := values["notifyUserIDs"]; exists {
+				ids, ok := rawIDs.([]interface{})
+				if !ok {
+					return nil, fmt.Errorf("invalid SLA escalation user IDs")
+				}
+				for _, rawID := range ids {
+					id, err := slaConfigurationInteger(rawID, 1, int(^uint(0)>>1))
+					if err != nil {
+						return nil, err
+					}
+					item.NotifyUserIDs = append(item.NotifyUserIDs, id)
+				}
+			}
 			matrix[priority] = append(matrix[priority], item)
 		}
 	}
@@ -194,6 +210,9 @@ func (s *EscalationMatrixService) FindNextEscalationLevel(ctx context.Context, t
 	} else {
 		matrix = s.GetMatrix(tenantID)
 	}
+	return nextEscalationLevel(matrix, priority, elapsedMinutes, currentMaxLevel)
+}
+func nextEscalationLevel(matrix EscalationMatrix, priority string, elapsedMinutes, currentMaxLevel int) (*EscalationLevel, error) {
 	levels, ok := matrix[priority]
 	if !ok {
 		// 未知 priority 降级到 medium

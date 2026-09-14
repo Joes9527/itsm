@@ -190,7 +190,7 @@ export const CommentPanel: React.FC<CommentPanelProps> = ({
                   />
                   <label
                     htmlFor={`internal-${targetId}`}
-                    className="text-sm text-gray-600"
+                    className="text-sm text-muted"
                   >
                     仅内部可见
                   </label>
@@ -326,8 +326,8 @@ export const CommentPanel: React.FC<CommentPanelProps> = ({
         ))}
 
         {comments.length === 0 && !loading && (
-          <div className="text-center py-8 text-gray-500">
-            <MessageSquare className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+          <div className="text-center py-8 text-muted">
+            <MessageSquare className="w-16 h-16 mx-auto mb-4 text-muted" />
             <Text>暂无评论</Text>
           </div>
         )}

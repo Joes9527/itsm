@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	relationmetadata "itsm-backend/common/workitemrelation"
 	"itsm-backend/ent/workitemrelation"
 	"time"
 
@@ -53,8 +54,16 @@ func (_c *WorkItemRelationCreate) SetCreatedByID(v int) *WorkItemRelationCreate 
 }
 
 // SetMetadata sets the "metadata" field.
-func (_c *WorkItemRelationCreate) SetMetadata(v map[string]interface{}) *WorkItemRelationCreate {
+func (_c *WorkItemRelationCreate) SetMetadata(v relationmetadata.Metadata) *WorkItemRelationCreate {
 	_c.mutation.SetMetadata(v)
+	return _c
+}
+
+// SetNillableMetadata sets the "metadata" field if the given value is not nil.
+func (_c *WorkItemRelationCreate) SetNillableMetadata(v *relationmetadata.Metadata) *WorkItemRelationCreate {
+	if v != nil {
+		_c.SetMetadata(*v)
+	}
 	return _c
 }
 
@@ -368,7 +377,7 @@ func (u *WorkItemRelationUpsert) AddCreatedByID(v int) *WorkItemRelationUpsert {
 }
 
 // SetMetadata sets the "metadata" field.
-func (u *WorkItemRelationUpsert) SetMetadata(v map[string]interface{}) *WorkItemRelationUpsert {
+func (u *WorkItemRelationUpsert) SetMetadata(v relationmetadata.Metadata) *WorkItemRelationUpsert {
 	u.Set(workitemrelation.FieldMetadata, v)
 	return u
 }
@@ -554,7 +563,7 @@ func (u *WorkItemRelationUpsertOne) UpdateCreatedByID() *WorkItemRelationUpsertO
 }
 
 // SetMetadata sets the "metadata" field.
-func (u *WorkItemRelationUpsertOne) SetMetadata(v map[string]interface{}) *WorkItemRelationUpsertOne {
+func (u *WorkItemRelationUpsertOne) SetMetadata(v relationmetadata.Metadata) *WorkItemRelationUpsertOne {
 	return u.Update(func(s *WorkItemRelationUpsert) {
 		s.SetMetadata(v)
 	})
@@ -912,7 +921,7 @@ func (u *WorkItemRelationUpsertBulk) UpdateCreatedByID() *WorkItemRelationUpsert
 }
 
 // SetMetadata sets the "metadata" field.
-func (u *WorkItemRelationUpsertBulk) SetMetadata(v map[string]interface{}) *WorkItemRelationUpsertBulk {
+func (u *WorkItemRelationUpsertBulk) SetMetadata(v relationmetadata.Metadata) *WorkItemRelationUpsertBulk {
 	return u.Update(func(s *WorkItemRelationUpsert) {
 		s.SetMetadata(v)
 	})

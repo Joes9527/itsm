@@ -23,6 +23,20 @@ type OutboxEventCreate struct {
 	conflict []sql.ConflictOption
 }
 
+// SetExecutionWorkItemID sets the "execution_work_item_id" field.
+func (_c *OutboxEventCreate) SetExecutionWorkItemID(v int) *OutboxEventCreate {
+	_c.mutation.SetExecutionWorkItemID(v)
+	return _c
+}
+
+// SetNillableExecutionWorkItemID sets the "execution_work_item_id" field if the given value is not nil.
+func (_c *OutboxEventCreate) SetNillableExecutionWorkItemID(v *int) *OutboxEventCreate {
+	if v != nil {
+		_c.SetExecutionWorkItemID(*v)
+	}
+	return _c
+}
+
 // SetEventID sets the "event_id" field.
 func (_c *OutboxEventCreate) SetEventID(v string) *OutboxEventCreate {
 	_c.mutation.SetEventID(v)
@@ -244,6 +258,11 @@ func (_c *OutboxEventCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *OutboxEventCreate) check() error {
+	if v, ok := _c.mutation.ExecutionWorkItemID(); ok {
+		if err := outboxevent.ExecutionWorkItemIDValidator(v); err != nil {
+			return &ValidationError{Name: "execution_work_item_id", err: fmt.Errorf(`ent: validator failed for field "OutboxEvent.execution_work_item_id": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.EventID(); !ok {
 		return &ValidationError{Name: "event_id", err: errors.New(`ent: missing required field "OutboxEvent.event_id"`)}
 	}
@@ -329,6 +348,10 @@ func (_c *OutboxEventCreate) createSpec() (*OutboxEvent, *sqlgraph.CreateSpec) {
 		_spec = sqlgraph.NewCreateSpec(outboxevent.Table, sqlgraph.NewFieldSpec(outboxevent.FieldID, field.TypeInt))
 	)
 	_spec.OnConflict = _c.conflict
+	if value, ok := _c.mutation.ExecutionWorkItemID(); ok {
+		_spec.SetField(outboxevent.FieldExecutionWorkItemID, field.TypeInt, value)
+		_node.ExecutionWorkItemID = &value
+	}
 	if value, ok := _c.mutation.EventID(); ok {
 		_spec.SetField(outboxevent.FieldEventID, field.TypeString, value)
 		_node.EventID = value
@@ -396,7 +419,7 @@ func (_c *OutboxEventCreate) createSpec() (*OutboxEvent, *sqlgraph.CreateSpec) {
 // of the `INSERT` statement. For example:
 //
 //	client.OutboxEvent.Create().
-//		SetEventID(v).
+//		SetExecutionWorkItemID(v).
 //		OnConflict(
 //			// Update the row with the new values
 //			// the was proposed for insertion.
@@ -405,7 +428,7 @@ func (_c *OutboxEventCreate) createSpec() (*OutboxEvent, *sqlgraph.CreateSpec) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.OutboxEventUpsert) {
-//			SetEventID(v+v).
+//			SetExecutionWorkItemID(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *OutboxEventCreate) OnConflict(opts ...sql.ConflictOption) *OutboxEventUpsertOne {
@@ -638,6 +661,9 @@ func (u *OutboxEventUpsert) UpdateUpdatedAt() *OutboxEventUpsert {
 func (u *OutboxEventUpsertOne) UpdateNewValues() *OutboxEventUpsertOne {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
 	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.ExecutionWorkItemID(); exists {
+			s.SetIgnore(outboxevent.FieldExecutionWorkItemID)
+		}
 		if _, exists := u.create.mutation.EventID(); exists {
 			s.SetIgnore(outboxevent.FieldEventID)
 		}
@@ -1027,7 +1053,7 @@ func (_c *OutboxEventCreateBulk) ExecX(ctx context.Context) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.OutboxEventUpsert) {
-//			SetEventID(v+v).
+//			SetExecutionWorkItemID(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *OutboxEventCreateBulk) OnConflict(opts ...sql.ConflictOption) *OutboxEventUpsertBulk {
@@ -1068,6 +1094,9 @@ func (u *OutboxEventUpsertBulk) UpdateNewValues() *OutboxEventUpsertBulk {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
 	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
 		for _, b := range u.create.builders {
+			if _, exists := b.mutation.ExecutionWorkItemID(); exists {
+				s.SetIgnore(outboxevent.FieldExecutionWorkItemID)
+			}
 			if _, exists := b.mutation.EventID(); exists {
 				s.SetIgnore(outboxevent.FieldEventID)
 			}

@@ -17,6 +17,8 @@ type ProcessCallbackOutbox struct {
 // Fields of the ProcessCallbackOutbox.
 func (ProcessCallbackOutbox) Fields() []ent.Field {
 	return []ent.Field{
+		field.Int("actor_id").Optional().Positive().Immutable(),
+		field.String("actor_source").Optional().Immutable(),
 		field.String("execution_key").Unique().NotEmpty(),
 		field.Int("tenant_id").Positive(),
 		field.Int("process_instance_id").Positive(),

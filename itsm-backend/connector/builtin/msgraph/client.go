@@ -64,7 +64,7 @@ func NewClient(tenantID, clientID, clientSecret, aadBaseURL, graphBaseURL string
 		clientID:     clientID,
 		clientSecret: clientSecret,
 		logger:       zap.S().Named("connector.msgraph"),
-		hc:           &http.Client{Timeout: 15 * time.Second},
+		hc:           &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
 	}
 }
 
@@ -112,6 +112,9 @@ func (c *Client) Token(ctx context.Context) (string, error) {
 	if out.Error != "" {
 		return "", fmt.Errorf("msgraph: token error: %s - %s", out.Error, out.ErrorDesc)
 	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("msgraph: token request rejected (status %d)", resp.StatusCode)
+	}
 	if out.AccessToken == "" {
 		return "", fmt.Errorf("msgraph: empty access token in response (status %d)", resp.StatusCode)
 	}
@@ -142,7 +145,7 @@ func (c *Client) getJSON(ctx context.Context, absoluteURL string, out interface{
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("msgraph: GET %s: status %d: %s", absoluteURL, resp.StatusCode, string(raw))
 	}
 	if out != nil {
@@ -176,7 +179,7 @@ func (c *Client) postJSON(ctx context.Context, path string, payload interface{})
 		return &deliveryOutcomeError{stage: stage, outcome: outcome, err: fmt.Errorf("msgraph: POST %s: %w", path, err)}
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		raw, _ := io.ReadAll(resp.Body)
 		return &deliveryOutcomeError{stage: "rejected", outcome: "not_accepted", err: fmt.Errorf("msgraph: POST %s: status %d: %s", path, resp.StatusCode, string(raw))}
 	}
@@ -414,7 +417,7 @@ func (c *Client) DownloadAttachment(ctx context.Context, mailbox, messageID, att
 		return nil, fmt.Errorf("msgraph: GET %s: %w", path, err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		raw, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("msgraph: GET %s: status %d: %s", path, resp.StatusCode, string(raw))
 	}

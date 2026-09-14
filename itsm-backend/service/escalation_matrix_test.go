@@ -287,33 +287,33 @@ func stringHasSubstr(s, substr string) bool {
 	return false
 }
 
-// TestNewEscalationService 验证创建时自动初始化 matrix service
-func TestNewEscalationService(t *testing.T) {
-	es := NewEscalationService(nil, nil)
-	if es.MatrixService() == nil {
-		t.Error("MatrixService should be auto-initialized")
-	}
-}
-
-// TestEscalationService_SetMatrixService 验证依赖注入
-func TestEscalationService_SetMatrixService(t *testing.T) {
-	es := NewEscalationService(nil, nil)
-	custom := NewEscalationMatrixService(nil)
-	custom.SetMatrix(1, EscalationMatrix{
-		"critical": {{Level: 1, AfterMinutes: 999}},
-	})
-	es.SetMatrixService(custom)
-
-	if got := es.MatrixService().GetMatrix(1)["critical"][0].AfterMinutes; got != 999 {
-		t.Errorf("expected custom 999, got %d", got)
-	}
-}
-
-// TestEscalationService_SetMatrixService_NilSafe 验证 nil 输入安全
-func TestEscalationService_SetMatrixService_NilSafe(t *testing.T) {
-	es := NewEscalationService(nil, nil)
-	es.SetMatrixService(nil) // 不应改变 matrix service
-	if es.MatrixService() == nil {
-		t.Error("matrix service should not become nil after SetMatrixService(nil)")
+// Explicit recipients must survive the persisted SLA JSON round trip.
+func TestEscalationMatrixExplicitRecipients(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		ids   interface{}
+		valid bool
+	}{
+		{"valid", []interface{}{float64(7), float64(11)}, true},
+		{"zero", []interface{}{float64(0)}, false},
+		{"fraction", []interface{}{float64(1.5)}, false},
+		{"wrong type", "7", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			matrix, err := parseSLAEscalationMatrix(map[string]interface{}{"medium": []interface{}{map[string]interface{}{"level": float64(1), "afterMinutes": float64(0), "notifyUserIDs": tc.ids}}})
+			if !tc.valid {
+				if err == nil {
+					t.Fatal("invalid recipient accepted")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			ids := matrix["medium"][0].NotifyUserIDs
+			if len(ids) != 2 || ids[0] != 7 || ids[1] != 11 {
+				t.Fatalf("recipients lost: %v", ids)
+			}
+		})
 	}
 }

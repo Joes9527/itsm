@@ -464,11 +464,11 @@ export interface CreateServiceRequestRequest {
   ciIds?: number[];
   generic?: { type?: string; typeId?: string; source?: string; category?: string };
   incident?: Omit<CreateIncidentRequest, 'title' | 'description' | 'priority' | 'requesterId' | 'assigneeId' | 'configurationItemIds'>;
-  problem?: { category?: string; rootCause?: string; impact?: string; sourceIncidentId?: number };
+  problem?: { category?: string; rootCause?: string; impact?: string };
   change?: {
     category?: string; justification?: string; type?: string; impactScope?: string; riskLevel?: string;
     plannedStartDate?: string; plannedEndDate?: string; implementationPlan?: string; rollbackPlan?: string;
-    affectedCis?: string[]; relatedTickets?: number[]; relatedTicketNumbers?: string[];
+    affectedCis?: string[];
   };
   contactName?: string;
   contactEmail?: string;

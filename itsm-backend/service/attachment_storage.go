@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -68,7 +69,7 @@ type MinioAttachmentStorage struct {
 	bucket string
 }
 
-// NewMinioAttachmentStorage 创建 MinIO 附件存储，并确保 bucket 存在。
+// NewMinioAttachmentStorage verifies explicitly provisioned storage without creating resources.
 func NewMinioAttachmentStorage(endpoint, accessKey, secretKey, bucket string, useSSL bool) (*MinioAttachmentStorage, error) {
 	client, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
@@ -77,15 +78,14 @@ func NewMinioAttachmentStorage(endpoint, accessKey, secretKey, bucket string, us
 	if err != nil {
 		return nil, fmt.Errorf("create minio client: %w", err)
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	exists, err := client.BucketExists(ctx, bucket)
 	if err != nil {
 		return nil, fmt.Errorf("check bucket: %w", err)
 	}
 	if !exists {
-		if err := client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{}); err != nil {
-			return nil, fmt.Errorf("create bucket: %w", err)
-		}
+		return nil, fmt.Errorf("configured attachment bucket does not exist; explicit provisioning required")
 	}
 	return &MinioAttachmentStorage{client: client, bucket: bucket}, nil
 }

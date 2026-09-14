@@ -3,7 +3,6 @@ package bpmn
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
@@ -41,76 +40,29 @@ func (h *ChangeServiceTaskHandler) Execute(ctx context.Context, task *ent.Proces
 	case "create_change":
 		return h.createChange(ctx, variables)
 	case "approve_change":
-		return h.approveChange(ctx, task, variables)
+		return h.applyChangeLifecycle(ctx, action)
 	case "notify_stakeholders":
 		return h.notifyStakeholders(ctx, variables)
-	case "update_change", "reject_change", "schedule_change", "implement_change", "verify_change", "close_change", "assess_risk":
-		if h.changeService == nil {
-			return nil, fmt.Errorf("change service is not injected")
-		}
-		if _, err := RequireTenantID(ctx, variables); err != nil {
-			return nil, err
-		}
-		command, effect := bindChangeWorkflowCommand(ctx, action, variables)
-		if effect != nil {
-			return effect, nil
-		}
-		result, err := h.changeService.ApplyChangeWorkflowCallback(ctx, command)
-		if err != nil {
-			return nil, err
-		}
-		return callbackEffectFromWorkflowResult(result)
+	case "reject_change", "authorize_change", "schedule_change", "implement_change", "verify_change", "review_change", "close_change", "assess_risk", "cancel_change":
+		return h.applyChangeLifecycle(ctx, action)
+	case "update_change":
+		return h.applyChangeLifecycle(ctx, action)
 	default:
 		return BlockedEffect(CallbackBlockHandlerContract, "unsupported change callback action"), nil
 	}
 }
 
-func bindChangeWorkflowCommand(ctx context.Context, action string, variables map[string]interface{}) (workflowcallback.ChangeCommand, *CallbackEffect) {
-	tenantID, err := RequireTenantID(ctx, variables)
-	if err != nil {
-		return workflowcallback.ChangeCommand{}, BlockedEffect(CallbackBlockHandlerContract, err.Error())
-	}
-	command := workflowcallback.ChangeCommand{Action: action, ChangeID: GetIntFromVars(variables, "change_id"), TenantID: tenantID}
-	if command.ChangeID <= 0 {
-		return command, BlockedEffect(CallbackBlockTargetMissing, "change_id is required")
-	}
-	if action == "update_change" {
-		if status, ok := variables["status"].(string); ok && status != "" {
-			return command, BlockedEffect(CallbackBlockHandlerContract, "update_change cannot mutate lifecycle status")
-		}
-		if value, ok := variables["title"].(string); ok && value != "" {
-			command.Title = &value
-		}
-		if value, ok := variables["description"].(string); ok && value != "" {
-			command.Description = &value
-		}
-	}
-	if action == "schedule_change" {
-		if raw, ok := variables["planned_start_date"].(string); ok && raw != "" {
-			value, parseErr := time.Parse(time.RFC3339, raw)
-			if parseErr != nil {
-				return command, BlockedEffect(CallbackBlockHandlerContract, "planned_start_date must be RFC3339")
-			}
-			command.PlannedStart = &value
-		}
-		if raw, ok := variables["planned_end_date"].(string); ok && raw != "" {
-			value, parseErr := time.Parse(time.RFC3339, raw)
-			if parseErr != nil {
-				return command, BlockedEffect(CallbackBlockHandlerContract, "planned_end_date must be RFC3339")
-			}
-			command.PlannedEnd = &value
-		}
-	}
-	if action == "verify_change" {
-		command.VerificationResult, _ = variables["verification_result"].(string)
-		if command.VerificationResult != "" && command.VerificationResult != "passed" && command.VerificationResult != "failed" {
-			return command, BlockedEffect(CallbackBlockHandlerContract, "unsupported verification_result")
-		}
-	}
-	return command, nil
-}
-
 func callbackEffectFromWorkflowResult(result workflowcallback.Result) (*CallbackEffect, error) {
+	if result.LifecycleResult != nil {
+		effect := &CallbackEffect{Status: CallbackEffectApplied, Message: result.Message, LifecycleResult: result.LifecycleResult}
+		if result.Status == workflowcallback.StatusIdempotent {
+			effect.Status = CallbackEffectIdempotent
+		}
+		if result.Status != workflowcallback.StatusApplied && result.Status != workflowcallback.StatusIdempotent {
+			return nil, fmt.Errorf("invalid lifecycle callback status")
+		}
+		return effect, nil
+	}
 	switch result.Status {
 	case workflowcallback.StatusApplied:
 		return AppliedEffect(result.Message, result.Output), nil
@@ -133,18 +85,6 @@ func (h *ChangeServiceTaskHandler) SetCreationApplication(app creation.Applicati
 }
 func (h *ChangeServiceTaskHandler) createChange(ctx context.Context, _ map[string]interface{}) (*CallbackEffect, error) {
 	return executeWorkItemCreation(ctx, h.client, h.creationDirectory, h.creationApplication, h.GetHandlerID(), "create_change", creation.RecordClassChangeRequest)
-}
-
-func (h *ChangeServiceTaskHandler) approveChange(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error) {
-	changeID := GetIntFromVars(variables, "change_id")
-	tenantID, err := RequireTenantID(ctx, variables)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := h.client.Change.Query().Where(change.ID(changeID), change.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil())).Only(ctx); err != nil {
-		return nil, fmt.Errorf("load change approval target: %w", err)
-	}
-	return persistedApprovalDecisionEffect(ctx, h.client, task, variables, fmt.Sprintf("change %d approval decision persisted", changeID))
 }
 
 func (h *ChangeServiceTaskHandler) notifyStakeholders(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {

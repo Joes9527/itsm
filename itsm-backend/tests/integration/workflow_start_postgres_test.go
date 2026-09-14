@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/url"
 	"os"
 	"sync"
@@ -53,7 +54,7 @@ func TestPostgresWorkflowStartConcurrentReplay(t *testing.T) {
 	definition := client.ProcessDefinition.Create().SetTenantID(tenant.ID).SetDeploymentID(deployment.ID).SetKey("start").SetName("start").SetIsActive(true).SetIsLatest(false).SetBpmnXML([]byte(`<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="test"><bpmn:process id="p" isExecutable="true"><bpmn:startEvent id="start"/><bpmn:endEvent id="end"/><bpmn:sequenceFlow id="flow" sourceRef="start" targetRef="end"/></bpmn:process></bpmn:definitions>`)).SaveX(ctx)
 	ctx = service.WithTrustedBPMNTenantContext(ctx, tenant.ID)
 	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, actor.ID)
-	engine := service.NewCustomProcessEngine(client, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
+	engine := service.NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard()).(*service.CustomProcessEngine)
 	type outcome struct {
 		item *ent.ProcessInstance
 		err  error
@@ -66,7 +67,7 @@ func TestPostgresWorkflowStartConcurrentReplay(t *testing.T) {
 		go func() {
 			ready.Done()
 			<-start
-			item, err := engine.StartProcessByDefinitionID(ctx, service.FreezeProcessDefinition(definition), "ticket:91", "ticket", 91, nil, "workflow-start:91:1")
+			item, err := engine.StartProcessByDefinitionID(ctx, service.FreezeProcessDefinition(definition), "generic:91", "ticket", 91, nil, "workflow-start:91:1")
 			outcomes <- outcome{item, err}
 		}()
 	}
@@ -85,7 +86,7 @@ func TestPostgresWorkflowStartConcurrentReplay(t *testing.T) {
 	require.Equal(t, 1, client.ProcessInstance.Query().CountX(ctx))
 	require.Equal(t, 1, client.ProcessAuditLog.Query().CountX(ctx))
 	// Restarted engine sees the committed identity after acknowledgement loss.
-	replay, err := service.NewCustomProcessEngine(client, zap.NewNop().Sugar()).(*service.CustomProcessEngine).StartProcessByDefinitionID(ctx, service.FreezeProcessDefinition(definition), "ticket:91", "ticket", 91, nil, "workflow-start:91:1")
+	replay, err := service.NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard()).(*service.CustomProcessEngine).StartProcessByDefinitionID(ctx, service.FreezeProcessDefinition(definition), "generic:91", "ticket", 91, nil, "workflow-start:91:1")
 	require.NoError(t, err)
 	require.Equal(t, first, replay.ID)
 }

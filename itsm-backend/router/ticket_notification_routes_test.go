@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -105,7 +106,7 @@ func setupTicketNotificationRouteEnv(t *testing.T, roleCode string, permissions 
 	require.NoError(t, err)
 
 	logger := zaptest.NewLogger(t).Sugar()
-	ticketNotifications := controller.NewTicketNotificationController(service.NewTicketNotificationService(client, logger), logger)
+	ticketNotifications := controller.NewTicketNotificationController(service.NewTicketNotificationService(client, logger, executionfixture.Standard()), logger)
 	genericNotifications := controller.NewNotificationController(service.NewNotificationService(client))
 	router := gin.New()
 	SetupRoutes(router, &RouterConfig{

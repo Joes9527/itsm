@@ -11,6 +11,7 @@ import (
 	"itsm-backend/handlers/common/accessgrant"
 	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"os"
 	"strings"
 	"testing"
@@ -35,7 +36,7 @@ func TestAccessPolicyPublicationRequiresExactDeclaredCapability(t *testing.T) {
 				require.NoError(t, err)
 				require.Empty(t, cfg.KAFOutbox.WebhookSecret)
 				require.ErrorContains(t, config.ValidateKAFWorkerStartupConfig(cfg), "KAF_WEBHOOK_SECRET")
-				engine := service.NewCustomProcessEngine(fx.client, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
+				engine := service.NewCustomProcessEngine(fx.client, zap.NewNop().Sugar(), executionfixture.Standard()).(*service.CustomProcessEngine)
 				engine.SetPublicationKAFConfig(cfg)
 				owner.SetPublicationEngine(engine)
 			}
@@ -63,7 +64,7 @@ func TestAccessPolicyPublicationRequiresExactDeclaredCapability(t *testing.T) {
 				ref = fmt.Sprint(otherPolicy.ID)
 			}
 			if kind == "unverifiable_worker" {
-				owner.SetPublicationEngine(service.NewCustomProcessEngine(fx.client, zap.NewNop().Sugar()).(*service.CustomProcessEngine))
+				owner.SetPublicationEngine(service.NewCustomProcessEngine(fx.client, zap.NewNop().Sugar(), executionfixture.Standard()).(*service.CustomProcessEngine))
 			}
 			action := accessgrant.Capability
 			if kind == "unknown_action" {

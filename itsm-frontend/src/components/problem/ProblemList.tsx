@@ -221,8 +221,8 @@ const ProblemList: React.FC<ProblemListProps> = ({
       {showHeader && (
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">问题管理</h1>
-            <p className="text-gray-500 mt-1">识别、分析和消除事件发生的根本原因</p>
+            <h1 className="text-[24px] font-semibold text-foreground">问题管理</h1>
+            <p className="mt-1 text-[12px] text-muted">识别、分析和消除事件发生的根本原因</p>
           </div>
           <Button
             type="primary"
@@ -235,13 +235,13 @@ const ProblemList: React.FC<ProblemListProps> = ({
         </div>
       )}
 
-      <Card className="rounded-lg shadow-sm border border-gray-200">
+      <Card className="rounded-[8px] border border-border shadow-none">
         <Form form={form} layout="inline" className="mb-6 flex-wrap gap-y-4">
           <Form.Item name="keyword" className="mb-0">
             <Input
               placeholder="搜索标题或内容"
               allowClear
-              prefix={<Search className="text-gray-400" />}
+              prefix={<Search className="text-muted" />}
               className="w-64"
             />
           </Form.Item>

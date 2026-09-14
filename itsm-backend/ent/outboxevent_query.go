@@ -262,12 +262,12 @@ func (_q *OutboxEventQuery) Clone() *OutboxEventQuery {
 // Example:
 //
 //	var v []struct {
-//		EventID string `json:"event_id,omitempty"`
+//		ExecutionWorkItemID int `json:"execution_work_item_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.OutboxEvent.Query().
-//		GroupBy(outboxevent.FieldEventID).
+//		GroupBy(outboxevent.FieldExecutionWorkItemID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *OutboxEventQuery) GroupBy(field string, fields ...string) *OutboxEventGroupBy {
@@ -285,11 +285,11 @@ func (_q *OutboxEventQuery) GroupBy(field string, fields ...string) *OutboxEvent
 // Example:
 //
 //	var v []struct {
-//		EventID string `json:"event_id,omitempty"`
+//		ExecutionWorkItemID int `json:"execution_work_item_id,omitempty"`
 //	}
 //
 //	client.OutboxEvent.Query().
-//		Select(outboxevent.FieldEventID).
+//		Select(outboxevent.FieldExecutionWorkItemID).
 //		Scan(ctx, &v)
 func (_q *OutboxEventQuery) Select(fields ...string) *OutboxEventSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

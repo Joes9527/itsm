@@ -11,6 +11,7 @@ import (
 type recordingBootstrapMigrator struct {
 	t             *testing.T
 	events        *[]string
+	inspectErr    error
 	ensureErr     error
 	runErr        error
 	invariantsErr error
@@ -51,7 +52,7 @@ func TestRunCanonicalBootstrapOrdersEveryPhase(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, []string{"prepare", "schema", "ledger", "post-schema", "invariants", "seed"}, events)
+	require.Equal(t, []string{"inspect", "ledger", "prepare", "schema", "inspect", "ledger", "post-schema", "invariants", "seed"}, events)
 }
 
 func TestRunCanonicalBootstrapFailsClosedBeforePostSchemaWithoutSchema(t *testing.T) {
@@ -94,4 +95,30 @@ func TestRunCanonicalBootstrapDoesNotSeedAfterInvariantFailure(t *testing.T) {
 	})
 	require.ErrorContains(t, err, "reconcile schema invariants")
 	require.False(t, seeded)
+}
+
+func (m *recordingBootstrapMigrator) InspectMigrationTarget(context.Context) error {
+	*m.events = append(*m.events, "inspect")
+	return m.inspectErr
+}
+func (m *recordingBootstrapMigrator) WithMigrationLock(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
+}
+
+func TestControlledBootstrapRejectsBeforeEveryWrite(t *testing.T) {
+	for _, reason := range []string{"invalid ledger", "existing target missing ledger"} {
+		t.Run(reason, func(t *testing.T) {
+			var events []string
+			runner := &recordingBootstrapMigrator{t: t, events: &events, inspectErr: errors.New(reason)}
+			write := func(context.Context) error { events = append(events, "WRITE"); return nil }
+			err := RunCanonicalBootstrap(context.Background(), CanonicalBootstrap{Prepare: write, CreateSchema: write, Migrator: runner, Seed: write})
+			require.ErrorContains(t, err, reason)
+			require.Equal(t, []string{"inspect"}, events)
+		})
+	}
+}
+
+func (m *recordingBootstrapMigrator) InspectRuntimeMigrations(context.Context) error { return nil }
+func (m *recordingBootstrapMigrator) NeedsSchemaBootstrap(context.Context) (bool, error) {
+	return true, nil
 }

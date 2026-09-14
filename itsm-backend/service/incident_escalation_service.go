@@ -2,12 +2,20 @@ package service
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
+	"itsm-backend/common"
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/database"
+	"itsm-backend/handlers/shared/workitemmutation"
+	"strings"
 	"time"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/incident"
+	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/slaviolation"
 	"itsm-backend/ent/ticket"
 
@@ -16,9 +24,15 @@ import (
 
 // IncidentEscalationService 事件升级服务
 type IncidentEscalationService struct {
+	execution    *database.ExecutionPolicy
+	directory    database.DirectorySnapshot
 	client       *ent.Client
 	logger       *zap.SugaredLogger
 	alertCreator IncidentAlertCreator
+}
+
+func (s *IncidentEscalationService) SetDirectorySnapshot(directory database.DirectorySnapshot) {
+	s.directory = directory
 }
 
 func (s *IncidentEscalationService) SetAlertCreator(creator IncidentAlertCreator) {
@@ -26,8 +40,8 @@ func (s *IncidentEscalationService) SetAlertCreator(creator IncidentAlertCreator
 }
 
 // NewIncidentEscalationService 创建事件升级服务
-func NewIncidentEscalationService(client *ent.Client) *IncidentEscalationService {
-	return &IncidentEscalationService{
+func NewIncidentEscalationService(client *ent.Client, execution *database.ExecutionPolicy) *IncidentEscalationService {
+	return &IncidentEscalationService{execution: execution,
 		client: client,
 		logger: zap.L().Sugar(),
 	}
@@ -154,11 +168,21 @@ func (s *IncidentEscalationService) DeleteEscalationRule(ctx context.Context, id
 }
 
 // CheckAndEscalate 检查事件是否需要升级
-func (s *IncidentEscalationService) CheckAndEscalate(ctx context.Context, incidentID int) (*ent.Incident, error) {
-	incidentEnt, err := s.client.Incident.Query().Where(incident.IDEQ(incidentID)).WithWorkItem(withIncidentWorkItemProjection).Only(ctx)
+func (s *IncidentEscalationService) CheckAndEscalate(ctx context.Context, incidentID int, meta workitemmutation.Meta) (*ent.Incident, error) {
+	if meta.ActorID <= 0 || meta.TenantID <= 0 || meta.ExpectedVersion <= 0 || strings.TrimSpace(meta.Source) == "" || strings.TrimSpace(meta.OperationID) == "" {
+		return nil, fmt.Errorf("trusted escalation actor, tenant, version, source and operationId required")
+	}
+	if scoped, ok := tenantctx.TenantID(ctx); ok && scoped != meta.TenantID {
+		return nil, fmt.Errorf("tenant context mismatch")
+	}
+	ctx = tenantctx.WithTenantID(ctx, meta.TenantID)
+	ctx = WithIncidentAlertActor(ctx, meta.ActorID, meta.Source, meta.OperationID)
+	incidentEnt, err := s.client.Incident.Query().Where(incident.IDEQ(incidentID), incidentTenantScope(meta.TenantID)).WithWorkItem(withIncidentWorkItemProjection).Only(ctx)
 	if err != nil {
 		return nil, err
 	}
+
+	incidentEnt.Edges.WorkItem.Version = meta.ExpectedVersion
 
 	// 获取匹配的升级规则
 	rules, err := s.getMatchingRules(ctx, incidentEnt)
@@ -223,24 +247,50 @@ func (s *IncidentEscalationService) shouldEscalate(ctx context.Context, incident
 		elapsedMinutes := time.Since(incidentEnt.DetectedAt).Minutes()
 		return elapsedMinutes >= float64(rule.TriggerMinutes), nil
 	case "sla_breach":
-		// 基于SLA违规升级 - 检查是否存在未解决的SLA违规
-		violations, err := s.client.SLAViolation.Query().
-			Where(
-				slaviolation.TenantIDEQ(incidentEnt.Edges.WorkItem.TenantID),
-				slaviolation.IsResolved(false),
-			).
-			All(ctx)
+		// SLAViolation.ticket_id references the WorkItem, not the professional Incident ID.
+		// An unresolved violation on another item must never trigger this Incident.
+		if incidentEnt.Edges.WorkItem == nil || incidentEnt.WorkItemID <= 0 {
+			return false, fmt.Errorf("SLA escalation requires an Incident WorkItem")
+		}
+		item := incidentEnt.Edges.WorkItem
+		current := projectSLACycle(item, time.Now())
+		// A delayed monitor snapshot can be written after reopen. Require the
+		// corresponding current clock to be breached, not just a recent insert.
+		var breaches []predicate.SLAViolation
+		for _, clock := range []struct {
+			kind     string
+			breached bool
+			deadline time.Time
+		}{
+			{"response_time", current.ResponseBreached, item.SLAResponseDeadline},
+			{"resolution_time", current.ResolutionBreached, item.SLAResolutionDeadline},
+		} {
+			if !clock.breached {
+				continue
+			}
+			start := slaCycleStart(item)
+			if clock.deadline.After(start) {
+				start = clock.deadline
+			}
+			breaches = append(breaches, slaviolation.And(
+				slaviolation.ViolationTypeEQ(clock.kind),
+				slaviolation.ViolationTimeGTE(start),
+				slaviolation.ViolationOccurredAtGTE(start),
+			))
+		}
+		if len(breaches) == 0 {
+			return false, nil
+		}
+		exists, err := s.client.SLAViolation.Query().Where(
+			slaviolation.TenantIDEQ(item.TenantID),
+			slaviolation.TicketIDEQ(incidentEnt.WorkItemID),
+			slaviolation.IsResolved(false),
+			slaviolation.Or(breaches...),
+		).Exist(ctx)
 		if err != nil {
 			return false, fmt.Errorf("failed to query SLA violations: %w", err)
 		}
-		// 检查是否有针对此事件的未解决违规
-		for _, v := range violations {
-			if !v.IsResolved {
-				// 存在未解决的SLA违规，触发升级
-				return true, nil
-			}
-		}
-		return false, nil
+		return exists, nil
 	case "manual":
 		// 手动升级
 		return false, nil
@@ -250,75 +300,76 @@ func (s *IncidentEscalationService) shouldEscalate(ctx context.Context, incident
 
 // escalateIncident 执行事件升级
 func (s *IncidentEscalationService) escalateIncident(ctx context.Context, incidentEnt *ent.Incident, rule *ent.IncidentEscalationRule) (*ent.Incident, error) {
-	tx, err := s.client.Tx(ctx)
+	actor, ok := ctx.Value(incidentAlertActorContextKey{}).(incidentAlertActor)
+	if !ok || actor.ID <= 0 || actor.Source == "" || actor.CorrelationID == "" || incidentEnt.Edges.WorkItem == nil {
+		return nil, fmt.Errorf("escalation requires trusted actor, source, stable operation identity and WorkItem")
+	}
+	item := incidentEnt.Edges.WorkItem
+	tenantID := item.TenantID
+	if rule.TenantID != tenantID || (rule.ToStatus != "" && rule.ToStatus != "escalated") {
+		return nil, fmt.Errorf("invalid escalation tenant or lifecycle target")
+	}
+	if rule.TargetAssigneeID > 0 && rule.TargetAssigneeType != "user" {
+		return nil, fmt.Errorf("unsupported escalation assignee type")
+	}
+	if rule.TargetGroup != "" {
+		return nil, fmt.Errorf("unsupported escalation group assignment")
+	}
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return nil, err
 	}
-	fail := func(cause error) (*ent.Incident, error) {
-		_ = tx.Rollback()
-		return nil, cause
-	}
-	tenantID := incidentEnt.Edges.WorkItem.TenantID
-	update := tx.Incident.UpdateOneID(incidentEnt.ID).
-		Where(incidentTenantScope(tenantID)).
-		SetEscalatedAt(time.Now()).
-		SetEscalationLevel(rule.EscalationLevel)
-
-	workItemUpdate := tx.Ticket.UpdateOneID(incidentEnt.WorkItemID).
-		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(incidentEnt.Edges.WorkItem.Version)).
-		SetUpdatedAt(time.Now()).
-		AddVersion(1)
-	if rule.ToStatus != "" {
-		workItemUpdate.SetStatus(rule.ToStatus)
-	}
-
-	if rule.TargetAssigneeID > 0 {
-		workItemUpdate.SetAssigneeID(rule.TargetAssigneeID)
-	}
-	workItem, err := workItemUpdate.Save(ctx)
+	defer tx.Rollback()
+	owner := NewIncidentService(s.client, s.logger, s.execution)
+	owner.SetDirectorySnapshot(s.directory)
+	reason := fmt.Sprintf("escalation rule %d (%s), trigger %s after %d minutes, level %d", rule.ID, rule.Name, rule.TriggerType, rule.TriggerMinutes, rule.EscalationLevel)
+	cmd := dto.IncidentCommand{IncidentID: incidentEnt.ID, Action: "escalate", EscalationLevel: rule.EscalationLevel, AssigneeID: rule.TargetAssigneeID, Reason: reason, Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: actor.ID, ExpectedVersion: item.Version, Source: actor.Source, OperationID: actor.CorrelationID + ":escalate", CorrelationID: actor.CorrelationID}}
+	digest, err := incidentCommandDigest(cmd)
 	if err != nil {
-		return fail(err)
+		return nil, err
 	}
-
-	updatedIncident, err := update.Save(ctx)
+	// The escalation receipt binds the complete composition, including durable notification intent.
+	digest, err = workitemmutation.Digest([]any{digest, rule.NotificationConfig})
 	if err != nil {
-		return fail(err)
+		return nil, err
 	}
-
-	// 记录升级日志
-	_, err = tx.IncidentEvent.Create().
-		SetIncidentID(incidentEnt.ID).
-		SetEventType("escalation").
-		SetEventName("事件升级").
-		SetDescription(fmt.Sprintf("事件升级到L%d: %s", rule.EscalationLevel, rule.Name)).
-		SetStatus("active").
-		SetSeverity("high").
-		SetSource("system").
-		SetTenantID(tenantID).
-		SetOccurredAt(time.Now()).
-		SetCreatedAt(time.Now()).
-		SetUpdatedAt(time.Now()).
-		Save(ctx)
+	result, err := owner.applyIncidentCommandTx(ctx, tx, cmd, digest)
 	if err != nil {
-		return fail(err)
+		return nil, err
 	}
-	if err := tx.Commit(); err != nil {
-		return fail(err)
+	if !result.Replayed && rule.TargetAssigneeID > 0 && rule.TargetAssigneeID != item.AssigneeID {
+		cmd.Action = "assign"
+		cmd.Meta.ExpectedVersion = result.Version
+		cmd.Meta.OperationID = actor.CorrelationID + ":assign"
+		digest, err = incidentCommandDigest(cmd)
+		if err != nil {
+			return nil, err
+		}
+		if _, err = owner.applyIncidentCommandTx(ctx, tx, cmd, digest); err != nil {
+			return nil, err
+		}
 	}
-	updatedIncident.Edges.WorkItem = workItem
+	updatedIncident, err := tx.Incident.Query().Where(incident.ID(incidentEnt.ID), incidentTenantScope(tenantID)).WithWorkItem(withIncidentWorkItemProjection).Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if result.Replayed {
+		return updatedIncident, nil
+	}
 	channels, err := channelsFromNotificationConfig(rule.NotificationConfig)
 	if err != nil {
 		return nil, err
 	}
 	if len(channels) > 0 {
-		if s.alertCreator == nil {
-			return nil, fmt.Errorf("incident alerting service is not configured")
+		creator, ok := s.alertCreator.(IncidentAlertTransactionCreator)
+		if !ok {
+			return nil, fmt.Errorf("transactional incident alerting service is not configured")
 		}
 		recipients, err := recipientsFromNotificationConfig(rule.NotificationConfig)
 		if err != nil {
 			return nil, err
 		}
-		if _, err := s.alertCreator.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
+		if _, err := creator.CreateIncidentAlertTx(ctx, tx, &dto.CreateIncidentAlertRequest{
 			IncidentID: incidentEnt.ID, AlertType: "escalation", AlertName: "事件升级告警",
 			Message:  fmt.Sprintf("事件 #%d 已升级到 L%d: %s", incidentEnt.ID, rule.EscalationLevel, rule.Name),
 			Severity: "high", Channels: channels, Recipients: recipients,
@@ -327,31 +378,60 @@ func (s *IncidentEscalationService) escalateIncident(ctx context.Context, incide
 		}
 	}
 
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
 	return updatedIncident, nil
 }
 
 // ProcessEscalations 批量处理升级检查
 // 由定时任务调用
 func (s *IncidentEscalationService) ProcessEscalations(ctx context.Context, tenantID int) error {
-	// 查询所有待处理的事件
-	incidents, err := s.client.Incident.Query().
-		Where(
-			incidentTenantScope(tenantID, ticket.StatusIn("new", "investigating")),
-		).
-		WithWorkItem(withIncidentWorkItemProjection).All(ctx)
+	actor, ok := ctx.Value(incidentAlertActorContextKey{}).(incidentAlertActor)
+	if !ok || actor.ID <= 0 || actor.Source == "" || actor.CorrelationID == "" {
+		return fmt.Errorf("batch escalation requires trusted actor and stable run identity")
+	}
+	if scoped, ok := tenantctx.TenantID(ctx); ok && scoped != tenantID {
+		return fmt.Errorf("tenant context mismatch")
+	}
+	ctx = tenantctx.WithTenantID(ctx, tenantID)
+	incidents, err := s.client.Incident.Query().Where(incidentTenantScope(tenantID, ticket.DeletedAtIsNil())).WithWorkItem(withIncidentWorkItemProjection).All(ctx)
 	if err != nil {
 		return err
 	}
-
-	for _, incidentEnt := range incidents {
-		_, err := s.CheckAndEscalate(ctx, incidentEnt.ID)
+	var failures []error
+	for _, inc := range incidents {
+		if !common.IsValidIncidentStatusTransition(inc.Edges.WorkItem.Status, common.IncidentStatusEscalated) {
+			continue
+		}
+		rules, err := s.getMatchingRules(ctx, inc)
 		if err != nil {
-			// 记录错误但继续处理其他事件
-			s.logger.Errorw("处理事件升级失败", "incidentID", incidentEnt.ID, "error", err)
+			failures = append(failures, err)
+			continue
+		}
+		for _, rule := range rules {
+			if !rule.AutoEscalate || rule.EscalationLevel <= inc.EscalationLevel {
+				continue
+			}
+			eligible, err := s.shouldEscalate(ctx, inc, rule)
+			if err != nil {
+				failures = append(failures, err)
+				break
+			}
+			if !eligible {
+				continue
+			}
+			// Each candidate is an observation, not a replay with a silently refreshed version.
+			key := fmt.Sprintf("%s:rule:%d:incident:%d:version:%d", actor.CorrelationID, rule.ID, inc.ID, inc.Edges.WorkItem.Version)
+			_, err = s.escalateIncident(WithIncidentAlertActor(ctx, actor.ID, actor.Source, key), inc, rule)
+			if err != nil {
+				failures = append(failures, fmt.Errorf("incident %d: %w", inc.ID, err))
+			}
+			break
 		}
 	}
 
-	return nil
+	return errors.Join(failures...)
 }
 
 // GetEscalationHistory 获取事件升级历史
@@ -363,7 +443,7 @@ func (s *IncidentEscalationService) GetEscalationHistory(ctx context.Context, in
 
 	var result []*ent.IncidentEvent
 	for _, event := range all {
-		if event.IncidentID == incidentID && event.EventType == "escalation" {
+		if event.IncidentID == incidentID && (event.EventName == "escalate" || event.EventType == "escalation") {
 			result = append(result, event)
 		}
 	}

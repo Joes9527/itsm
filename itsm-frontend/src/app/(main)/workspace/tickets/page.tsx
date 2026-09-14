@@ -97,26 +97,26 @@ export default function WorkspaceTicketsPage() {
   return (
     <div className="h-[calc(100vh-100px)] flex flex-col md:flex-row gap-4 overflow-hidden animate-in fade-in duration-200">
       {/* ================= 1. 左栏：工单队列与列表 (300px) ================= */}
-      <div className="w-full md:w-80 flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex-shrink-0">
+      <div className="w-full md:w-80 flex flex-col bg-surface rounded-[8px] border border-border shadow-none overflow-hidden flex-shrink-0">
         {/* 队列选择 */}
-        <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+        <div className="p-3 border-b border-border bg-raised">
           <div className="grid grid-cols-2 gap-1.5">
             {QUEUE_FILTERS.map((q) => (
               <button
                 key={q.id}
                 onClick={() => setSelectedQueue(q.id)}
-                className={`flex items-center justify-between p-2 rounded-xl text-xs font-semibold transition-all text-left ${
+                className={`flex items-center justify-between p-2 rounded-[8px] text-[12px] font-semibold transition-all text-left ${
                   selectedQueue === q.id
-                    ? 'bg-white dark:bg-slate-800 text-primary-600 shadow-sm border border-slate-200/80 dark:border-slate-700'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-white/60'
+                    ? 'bg-surface  text-foreground shadow-none border border-border '
+                    : 'text-muted  hover:bg-surface'
                 }`}
               >
                 <span className="truncate">{q.name}</span>
                 <span
                   className={`px-1.5 py-0.5 rounded-full text-[10px] ${
                     q.alert
-                      ? 'bg-red-100 dark:bg-red-950 text-red-600 font-bold'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                      ? 'bg-red-100 dark:bg-red-950 text-red-600 font-semibold'
+                      : 'bg-raised  text-muted'
                   }`}
                 >
                   {q.count}
@@ -134,20 +134,20 @@ export default function WorkspaceTicketsPage() {
               onClick={() => setSelectedTicket(tkt)}
               className={`p-3.5 cursor-pointer transition-all ${
                 selectedTicket.id === tkt.id
-                  ? 'bg-primary-50/40 dark:bg-primary-950/20 border-l-4 border-primary-600'
-                  : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                  ? 'bg-selected  border-l-4 border-primary-600'
+                  : 'hover:bg-raised '
               }`}
             >
               <div className="flex items-center justify-between gap-1 mb-1">
-                <span className="font-mono text-xs font-semibold text-slate-400">{tkt.id}</span>
+                <span className="font-mono text-[12px] font-semibold text-muted">{tkt.id}</span>
                 <Tag color={tkt.priority === 'high' ? 'red' : 'blue'} className="mr-0 text-[10px]">
                   {tkt.priority === 'high' ? '高优 P2' : '中优 P3'}
                 </Tag>
               </div>
-              <div className="text-xs font-bold text-slate-800 dark:text-slate-200 line-clamp-2 mb-1.5">
+              <div className="text-[12px] font-semibold text-foreground line-clamp-2 mb-1.5">
                 {tkt.title}
               </div>
-              <div className="flex items-center justify-between text-[11px] text-slate-400">
+              <div className="flex items-center justify-between text-[11px] text-muted">
                 <span>{tkt.requester}</span>
                 <span>{tkt.createdAt}</span>
               </div>
@@ -157,17 +157,17 @@ export default function WorkspaceTicketsPage() {
       </div>
 
       {/* ================= 2. 中栏：工单核心上下文与处理工作台 (Flex-1) ================= */}
-      <div className="flex-1 flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden min-w-0">
+      <div className="flex-1 flex flex-col bg-surface rounded-[8px] border border-border shadow-none overflow-hidden min-w-0">
         {/* 顶部标题与 SLA / 快捷动作栏 */}
-        <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+        <div className="p-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-mono text-xs font-bold text-primary-600">{selectedTicket.id}</span>
-              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 m-0 line-clamp-1">
+              <span className="font-mono text-[12px] font-semibold text-foreground">{selectedTicket.id}</span>
+              <h2 className="text-[15px] font-semibold text-foreground m-0 line-clamp-1">
                 {selectedTicket.title}
               </h2>
             </div>
-            <div className="text-xs text-slate-400 mt-1 flex items-center gap-2">
+            <div className="text-[12px] text-muted mt-1 flex items-center gap-2">
               <span>申请人：{selectedTicket.requester}</span>
               <span>•</span>
               <span>所属：{selectedTicket.department}</span>
@@ -186,7 +186,7 @@ export default function WorkspaceTicketsPage() {
             <Button
               size="small"
               type="primary"
-              className="bg-emerald-600 hover:bg-emerald-500 border-none"
+              className=""
               icon={<CheckCircle size={14} />}
               onClick={() => message.success('工单已完结，已自动记录执行履约结果！')}
             >
@@ -198,9 +198,9 @@ export default function WorkspaceTicketsPage() {
         {/* 沟通流与详情区域 */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {/* AI 智能工单摘要卡片 */}
-          <div className="p-3.5 rounded-xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200/80 dark:border-purple-900/40">
+          <div className="p-3.5 rounded-[8px] bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200/80 dark:border-purple-900/40">
             <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-purple-900 dark:text-purple-300">
+              <div className="flex items-center gap-1.5 text-[12px] font-semibold text-purple-900 dark:text-purple-300">
                 <Sparkles size={15} className="text-purple-600" />
                 <span>AI 智能工单速读与交接摘要</span>
               </div>
@@ -209,50 +209,50 @@ export default function WorkspaceTicketsPage() {
                 type="link"
                 loading={summaryLoading}
                 onClick={handleGenerateSummary}
-                className="text-xs text-purple-600 font-semibold p-0 h-auto"
+                className="text-[12px] text-purple-600 font-semibold p-0 h-auto"
               >
                 {summaryText ? '重新生成' : '一键提取摘要'}
               </Button>
             </div>
-            <div className="text-xs text-purple-900/80 dark:text-purple-200/90 whitespace-pre-line leading-relaxed font-sans">
+            <div className="text-[12px] text-purple-900/80 dark:text-purple-200/90 whitespace-pre-line leading-relaxed font-sans">
               {summaryText ||
                 '点击右上角“一键提取摘要”，AI 将快速汇总用户诉求、已排除原因与当前交接点。'}
             </div>
           </div>
 
           {/* 工单初始描述 */}
-          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300">
-            <div className="font-bold text-slate-900 dark:text-slate-100 mb-1">工单详情描述：</div>
+          <div className="p-4 rounded-[8px] bg-raised border border-border text-[13px] text-foreground">
+            <div className="font-semibold text-foreground mb-1">工单详情描述：</div>
             {selectedTicket.description}
           </div>
         </div>
 
         {/* 底部回复输入区 */}
-        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/20 space-y-2">
+        <div className="p-4 border-t border-border bg-raised space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setReplyType('public')}
-                className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors ${
+                className={`text-[12px] font-semibold px-2.5 h-[29px] rounded-[6px] transition-colors ${
                   replyType === 'public'
-                    ? 'bg-primary-600 text-white'
-                    : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    ? 'bg-selected text-foreground'
+                    : 'text-muted hover:bg-raised '
                 }`}
               >
                 公开回复申请人
               </button>
               <button
                 onClick={() => setReplyType('internal')}
-                className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors ${
+                className={`text-[12px] font-semibold px-2.5 h-[29px] rounded-[6px] transition-colors ${
                   replyType === 'internal'
                     ? 'bg-amber-600 text-white'
-                    : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    : 'text-muted hover:bg-raised '
                 }`}
               >
                 内部技术协作备注 (私密)
               </button>
             </div>
-            <span className="text-[11px] text-slate-400">Ctrl + Enter 快捷发送</span>
+            <span className="text-[11px] text-muted">Ctrl + Enter 快捷发送</span>
           </div>
 
           <Input.TextArea
@@ -264,7 +264,7 @@ export default function WorkspaceTicketsPage() {
                 ? '输入回复内容告知用户处理进展...'
                 : '输入内部技术排障备注，仅技术团队可见...'
             }
-            className="rounded-xl"
+            className="rounded-[8px]"
           />
 
           <div className="flex items-center justify-between pt-1">
@@ -277,7 +277,7 @@ export default function WorkspaceTicketsPage() {
                 );
                 message.success('AI 已帮您生成专业客服回复草稿');
               }}
-              className="text-xs"
+              className="text-[12px]"
             >
               AI 润色/生成标准回复
             </Button>
@@ -287,7 +287,7 @@ export default function WorkspaceTicketsPage() {
               size="small"
               icon={<Send size={13} />}
               onClick={handleSendReply}
-              className="text-xs"
+              className="text-[12px]"
             >
               发送回复
             </Button>
@@ -298,33 +298,33 @@ export default function WorkspaceTicketsPage() {
       {/* ================= 3. 右栏：申请人画像与 AI 排障辅助 Panel (340px) ================= */}
       <div className="w-full md:w-80 flex flex-col gap-4 overflow-y-auto flex-shrink-0">
         {/* 申请人 360 画像 */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-          <div className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">
+        <div className="bg-surface rounded-[8px] p-[16px] border border-border shadow-none space-y-3">
+          <div className="text-[15px] font-semibold text-foreground">
             申请人 360° 画像
           </div>
           <div className="flex items-center gap-3">
-            <Avatar size={40} className="bg-primary-600 font-bold">
+            <Avatar size={40} className="bg-primary-600 font-semibold">
               {selectedTicket.requester.charAt(0)}
             </Avatar>
             <div>
-              <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
+              <div className="text-[13px] font-semibold text-foreground">
                 {selectedTicket.requester}
               </div>
-              <div className="text-xs text-slate-400">siyuan.li@company.com</div>
+              <div className="text-[12px] text-muted">siyuan.li@company.com</div>
             </div>
           </div>
 
-          <div className="space-y-1.5 text-xs text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-800">
+          <div className="space-y-1.5 text-[12px] text-muted pt-1 border-t border-border">
             <div className="flex items-center gap-2">
-              <Building size={13} className="text-slate-400" />
+              <Building size={13} className="text-muted" />
               <span>部门：{selectedTicket.department}</span>
             </div>
             <div className="flex items-center gap-2">
-              <User size={13} className="text-slate-400" />
+              <User size={13} className="text-muted" />
               <span>直属主管：王建国 (总监)</span>
             </div>
             <div className="flex items-center gap-2">
-              <Laptop size={13} className="text-slate-400" />
+              <Laptop size={13} className="text-muted" />
               <span>关联资产 CI：MacBook Pro 16 (资产编号: HW-8802)</span>
             </div>
           </div>

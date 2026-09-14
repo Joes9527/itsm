@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"os"
 	"testing"
 
@@ -94,7 +95,7 @@ func TestBPMNTemplateService_DeployAndStartTicketUrgentFlow(t *testing.T) {
 	require.NoError(t, err, "ticket_urgent_flow 模板应该能正常部署")
 
 	logger := zaptest.NewLogger(t).Sugar()
-	engineIface := NewCustomProcessEngine(client, logger)
+	engineIface := NewCustomProcessEngine(client, logger, executionfixture.Standard())
 	engine, ok := engineIface.(*CustomProcessEngine)
 	require.True(t, ok)
 
@@ -145,7 +146,7 @@ func TestBPMNTemplateService_DeployAndStartChangeEmergencyFlow(t *testing.T) {
 	require.NoError(t, err, "change_emergency_flow 模板应该能正常部署")
 
 	logger := zaptest.NewLogger(t).Sugar()
-	engineIface := NewCustomProcessEngine(client, logger)
+	engineIface := NewCustomProcessEngine(client, logger, executionfixture.Standard())
 	engine, ok := engineIface.(*CustomProcessEngine)
 	require.True(t, ok)
 
@@ -202,12 +203,12 @@ func TestBPMNTemplateService_ChangeNormalFlow_ApprovalGatewayConditionCompiles(t
 		switch flow.TargetRef {
 		case "Activity_CABApproval":
 			approvalFlow = flow
-		case "Activity_Schedule":
+		case "Activity_PolicyAuthorization":
 			scheduleFlow = flow
 		}
 	}
 	require.NotNil(t, approvalFlow, "Gateway_Approval 应该有一条指向 Activity_CABApproval 的出边（approval_required==true）")
-	require.NotNil(t, scheduleFlow, "Gateway_Approval 应该有一条指向 Activity_Schedule 的出边（approval_required!=true）")
+	require.NotNil(t, scheduleFlow, "Gateway_Approval 应该有一条指向 Activity_PolicyAuthorization 的出边（approval_required!=true）")
 	require.NotNil(t, approvalFlow.ConditionExpression)
 	require.NotNil(t, scheduleFlow.ConditionExpression)
 
@@ -222,7 +223,7 @@ func TestBPMNTemplateService_ChangeNormalFlow_ApprovalGatewayConditionCompiles(t
 
 	result, err = engine.EvaluateCondition(scheduleFlow.ConditionExpression.Expression, approvalRequiredTrue)
 	require.NoError(t, err, "approval_required!=true 分支的条件表达式应该能正常编译求值，而不是解析失败")
-	assert.False(t, result, "approval_required=true 时，指向 Activity_Schedule 的分支应该判定为不满足")
+	assert.False(t, result, "approval_required=true 时，指向 Activity_PolicyAuthorization 的分支应该判定为不满足")
 }
 
 func TestBPMNTemplateService_ServiceRequestFlows_ApprovalNodeMarked(t *testing.T) {

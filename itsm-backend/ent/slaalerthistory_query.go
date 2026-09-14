@@ -334,12 +334,12 @@ func (_q *SLAAlertHistoryQuery) WithAlertRule(opts ...func(*SLAAlertRuleQuery)) 
 // Example:
 //
 //	var v []struct {
-//		TicketID int `json:"ticket_id,omitempty"`
+//		NotificationTrackingVersion int `json:"notification_tracking_version,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.SLAAlertHistory.Query().
-//		GroupBy(slaalerthistory.FieldTicketID).
+//		GroupBy(slaalerthistory.FieldNotificationTrackingVersion).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *SLAAlertHistoryQuery) GroupBy(field string, fields ...string) *SLAAlertHistoryGroupBy {
@@ -357,11 +357,11 @@ func (_q *SLAAlertHistoryQuery) GroupBy(field string, fields ...string) *SLAAler
 // Example:
 //
 //	var v []struct {
-//		TicketID int `json:"ticket_id,omitempty"`
+//		NotificationTrackingVersion int `json:"notification_tracking_version,omitempty"`
 //	}
 //
 //	client.SLAAlertHistory.Query().
-//		Select(slaalerthistory.FieldTicketID).
+//		Select(slaalerthistory.FieldNotificationTrackingVersion).
 //		Scan(ctx, &v)
 func (_q *SLAAlertHistoryQuery) Select(fields ...string) *SLAAlertHistorySelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

@@ -109,6 +109,12 @@ func (_u *IntakeResolutionSnapshotUpdate) sqlSave(ctx context.Context) (_node in
 	if _u.mutation.WorkflowDefinitionVersionCleared() {
 		_spec.ClearField(intakeresolutionsnapshot.FieldWorkflowDefinitionVersion, field.TypeString)
 	}
+	if _u.mutation.WorkflowDefinitionDigestCleared() {
+		_spec.ClearField(intakeresolutionsnapshot.FieldWorkflowDefinitionDigest, field.TypeString)
+	}
+	if _u.mutation.WorkflowVariablesCleared() {
+		_spec.ClearField(intakeresolutionsnapshot.FieldWorkflowVariables, field.TypeJSON)
+	}
 	if _u.mutation.SLADefinitionIDCleared() {
 		_spec.ClearField(intakeresolutionsnapshot.FieldSLADefinitionID, field.TypeInt)
 	}
@@ -243,6 +249,12 @@ func (_u *IntakeResolutionSnapshotUpdateOne) sqlSave(ctx context.Context) (_node
 	}
 	if _u.mutation.WorkflowDefinitionVersionCleared() {
 		_spec.ClearField(intakeresolutionsnapshot.FieldWorkflowDefinitionVersion, field.TypeString)
+	}
+	if _u.mutation.WorkflowDefinitionDigestCleared() {
+		_spec.ClearField(intakeresolutionsnapshot.FieldWorkflowDefinitionDigest, field.TypeString)
+	}
+	if _u.mutation.WorkflowVariablesCleared() {
+		_spec.ClearField(intakeresolutionsnapshot.FieldWorkflowVariables, field.TypeJSON)
 	}
 	if _u.mutation.SLADefinitionIDCleared() {
 		_spec.ClearField(intakeresolutionsnapshot.FieldSLADefinitionID, field.TypeInt)

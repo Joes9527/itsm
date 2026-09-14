@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"itsm-backend/common"
+	"itsm-backend/common/executionscope"
 	"strconv"
 	"strings"
 	"time"
@@ -23,8 +24,9 @@ import (
 )
 
 type TicketWorkflowService struct {
-	client *ent.Client
-	logger *zap.SugaredLogger
+	notifications *TicketNotificationService
+	client        *ent.Client
+	logger        *zap.SugaredLogger
 }
 
 func NewTicketWorkflowService(client *ent.Client, logger *zap.SugaredLogger) *TicketWorkflowService {
@@ -32,6 +34,10 @@ func NewTicketWorkflowService(client *ent.Client, logger *zap.SugaredLogger) *Ti
 		client: client,
 		logger: logger,
 	}
+}
+
+func (s *TicketWorkflowService) SetNotificationService(notifications *TicketNotificationService) {
+	s.notifications = notifications
 }
 
 func (s *TicketWorkflowService) withClient(client *ent.Client) *TicketWorkflowService {
@@ -50,6 +56,9 @@ func (s *TicketWorkflowService) AcceptTicket(ctx context.Context, req *dto.Accep
 		return err
 	}
 
+	if err := rejectProfessionalTicketMutation(tk.RecordClass); err != nil {
+		return err
+	}
 	if tk.Status != "new" && tk.Status != "open" {
 		return fmt.Errorf("工单当前状态不允许接单: %s", tk.Status)
 	}
@@ -71,7 +80,7 @@ func (s *TicketWorkflowService) AcceptTicket(ctx context.Context, req *dto.Accep
 	// 更新工单状态和分配人
 	// P1-07 修复：接单同时设置 first_response_at，供 SLA 计时使用
 	now := time.Now()
-	_, err = txClient.Ticket.UpdateOneID(req.TicketID).
+	_, err = txClient.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
 		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(tk.Version), ticket.StatusIn("new", "open")).
 		SetAssigneeID(userID).
 		SetStatus("in_progress").
@@ -113,6 +122,9 @@ func (s *TicketWorkflowService) WithdrawTicket(ctx context.Context, req *dto.Wit
 	if err != nil {
 		return err
 	}
+	if err := rejectProfessionalTicketMutation(tk.RecordClass); err != nil {
+		return err
+	}
 
 	// 检查是否是工单创建者
 	if tk.RequesterID != userID {
@@ -124,7 +136,7 @@ func (s *TicketWorkflowService) WithdrawTicket(ctx context.Context, req *dto.Wit
 	}
 
 	// 更新工单状态
-	_, err = s.client.Ticket.UpdateOneID(req.TicketID).
+	_, err = s.client.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
 		SetStatus("cancelled").
 		Save(ctx)
 	if err != nil {
@@ -150,14 +162,18 @@ func (s *TicketWorkflowService) WithdrawTicket(ctx context.Context, req *dto.Wit
 func (s *TicketWorkflowService) ForwardTicket(ctx context.Context, req *dto.ForwardTicketRequest, userID, tenantID int) error {
 	s.logger.Infow("Forwarding ticket", "ticket_id", req.TicketID, "to_user_id", req.ToUserID, "user_id", userID)
 
-	_, err := s.getTicket(ctx, req.TicketID, tenantID)
+	tk, err := s.getTicket(ctx, req.TicketID, tenantID)
 	if err != nil {
 		return err
 	}
 
 	// 如果转移所有权，更新assignee
 	if req.TransferOwnership {
-		_, err = s.client.Ticket.UpdateOneID(req.TicketID).
+		if err := rejectProfessionalTicketMutation(tk.RecordClass); err != nil {
+			return err
+		}
+
+		_, err = s.client.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
 			SetAssigneeID(req.ToUserID).
 			Save(ctx)
 		if err != nil {
@@ -280,7 +296,7 @@ func (s *TicketWorkflowService) CCTicket(ctx context.Context, req *dto.CCTicketR
 	}
 
 	if len(addedUserIDs) > 0 {
-		if err := txService.createCCNotifications(ctx, tk, addedUserIDs, notifyChannels, tenantID); err != nil {
+		if err := txService.createCCNotifications(ctx, tx, tk, addedUserIDs, notifyChannels, tenantID); err != nil {
 			return err
 		}
 	}
@@ -366,6 +382,9 @@ func (s *TicketWorkflowService) ResolveTicket(ctx context.Context, req *dto.Reso
 	if err != nil {
 		return err
 	}
+	if err := rejectProfessionalTicketMutation(tk.RecordClass); err != nil {
+		return err
+	}
 
 	// 开启事务，保证原子性
 	tx, err := s.client.Tx(ctx)
@@ -382,7 +401,7 @@ func (s *TicketWorkflowService) ResolveTicket(ctx context.Context, req *dto.Reso
 	txClient := tx.Client()
 
 	// 更新工单状态
-	_, err = txClient.Ticket.UpdateOneID(req.TicketID).
+	_, err = txClient.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
 		SetStatus("resolved").
 		SetResolution(req.Resolution).
 		SetResolutionCategory(req.ResolutionCategory).
@@ -425,6 +444,9 @@ func (s *TicketWorkflowService) CloseTicket(ctx context.Context, req *dto.CloseT
 	if err != nil {
 		return err
 	}
+	if err := rejectProfessionalTicketMutation(tk.RecordClass); err != nil {
+		return err
+	}
 
 	if tk.Status != "resolved" {
 		return fmt.Errorf("只有已解决的工单才能关闭")
@@ -445,7 +467,7 @@ func (s *TicketWorkflowService) CloseTicket(ctx context.Context, req *dto.CloseT
 	txClient := tx.Client()
 
 	// 更新工单状态
-	_, err = txClient.Ticket.UpdateOneID(req.TicketID).
+	_, err = txClient.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
 		SetStatus("closed").
 		SetClosedAt(time.Now()).
 		Save(ctx)
@@ -485,6 +507,9 @@ func (s *TicketWorkflowService) ReopenTicket(ctx context.Context, req *dto.Reope
 	if err != nil {
 		return err
 	}
+	if err := rejectProfessionalTicketMutation(tk.RecordClass); err != nil {
+		return err
+	}
 
 	if tk.Status != "closed" && tk.Status != "resolved" {
 		return fmt.Errorf("只有已关闭或已解决的工单才能重开")
@@ -505,7 +530,7 @@ func (s *TicketWorkflowService) ReopenTicket(ctx context.Context, req *dto.Reope
 	txClient := tx.Client()
 
 	// 更新工单状态
-	_, err = txClient.Ticket.UpdateOneID(req.TicketID).
+	_, err = txClient.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
 		SetStatus("open").
 		Save(ctx)
 	if err != nil {
@@ -775,7 +800,7 @@ func normalizeNotifyChannels(channels []string) ([]string, error) {
 	return result, nil
 }
 
-func (s *TicketWorkflowService) createCCNotifications(ctx context.Context, tk *ent.Ticket, userIDs []int, channels []string, tenantID int) error {
+func (s *TicketWorkflowService) createCCNotifications(ctx context.Context, tx *ent.Tx, tk *ent.Ticket, userIDs []int, channels []string, tenantID int) error {
 	now := time.Now()
 	content := fmt.Sprintf("工单 %s「%s」已抄送给你", tk.TicketNumber, tk.Title)
 	users, err := s.client.User.Query().Where(user.IDIn(uniqueInts(userIDs)...), user.TenantID(tenantID)).All(ctx)
@@ -805,6 +830,14 @@ func (s *TicketWorkflowService) createCCNotifications(ctx context.Context, tk *e
 				create.SetStatus("sent").SetSentAt(now)
 			} else {
 				create.SetDeliveryKey("ticket-notification-" + uuid.NewString()).SetNextAttemptAt(now)
+			}
+			if channel == "email" || notificationConnectorChannel(channel) {
+				if s.notifications == nil {
+					return executionscope.ErrDenied
+				}
+				if err := s.notifications.BindNotificationTargetTx(ctx, tx, tenantID, channel, create); err != nil {
+					return err
+				}
 			}
 			_, err := create.Save(ctx)
 			if err != nil {

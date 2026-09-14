@@ -2,6 +2,7 @@ package service_request
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"itsm-backend/ent/ticket"
 	"itsm-backend/handlers/common/intakehttp"
 	creation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
 
@@ -24,6 +26,17 @@ type Handler struct {
 }
 
 func failServiceRequest(c *gin.Context, err error) {
+	var intake *creation.IntakeError
+	if errors.As(err, &intake) {
+		intakehttp.Fail(c, err)
+		return
+	}
+	var state interface{ SQLState() string }
+	if errors.As(err, &state) && (state.SQLState() == "40001" || state.SQLState() == "40P01") {
+		common.Conflict(c, "Service request mutation conflicts with current state", nil)
+		return
+	}
+
 	if appErr, ok := common.AsAppError(err); ok {
 		switch appErr.Code {
 		case common.ErrCodeBadRequest, common.ErrCodeValidation:
@@ -45,7 +58,7 @@ func failServiceRequest(c *gin.Context, err error) {
 		common.Fail(c, common.NotFoundErrorCode, "Service request not found")
 		return
 	}
-	common.Fail(c, common.InternalErrorCode, err.Error())
+	common.Fail(c, common.InternalErrorCode, "Service request operation failed")
 }
 
 func NewHandler(service *Service) *Handler {
@@ -314,7 +327,7 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 
-	err = h.service.Delete(c.Request.Context(), id, tenantID, c.GetInt("user_id"), c.GetString("role"))
+	err = h.service.Delete(c.Request.Context(), id, workitemmutation.Meta{TenantID: tenantID, ActorID: c.GetInt("user_id"), Source: "http"})
 	if err != nil {
 		failServiceRequest(c, err)
 		return

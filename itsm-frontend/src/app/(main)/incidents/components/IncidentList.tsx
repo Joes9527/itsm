@@ -138,10 +138,10 @@ export const IncidentList: React.FC<IncidentListProps> = ({
             <AlertTriangle size={20} style={{ color: '#1890ff' }} />
           </div>
           <div>
-            <div style={{ fontWeight: 'medium', color: '#000', marginBottom: 4 }}>
+            <div style={{ fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>
               {record.title}
             </div>
-            <div style={{ fontSize: 'small', color: '#666' }}>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
               #{record.incidentNumber || (record as unknown as { incidentNumber?: string }).incidentNumber || '-'} • {record.category}
             </div>
           </div>
@@ -155,9 +155,9 @@ export const IncidentList: React.FC<IncidentListProps> = ({
       width: 120,
       render: (status: string) => {
         const config = statusConfig[status] || {
-          color: '#666',
+          color: 'var(--color-text-muted)',
           text: status || t('incidents.unknown'),
-          backgroundColor: '#f5f5f5',
+          backgroundColor: 'var(--color-bg-tertiary)',
         };
         return (
           <span
@@ -182,9 +182,9 @@ export const IncidentList: React.FC<IncidentListProps> = ({
       width: 100,
       render: (priority: string) => {
         const config = priorityConfig[priority] || {
-          color: '#666',
+          color: 'var(--color-text-muted)',
           text: priority || t('incidents.unknown'),
-          backgroundColor: '#f5f5f5',
+          backgroundColor: 'var(--color-bg-tertiary)',
         };
         return (
           <span
@@ -235,7 +235,7 @@ export const IncidentList: React.FC<IncidentListProps> = ({
       key: 'createdAt',
       width: 150,
       render: (created_at: string) => (
-        <div style={{ fontSize: 'small', color: '#666' }}>
+        <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
           {created_at ? dayjs(created_at).format('YYYY-MM-DD HH:mm') : '-'}
         </div>
       ),

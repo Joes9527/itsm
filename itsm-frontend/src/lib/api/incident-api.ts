@@ -4,8 +4,13 @@ import type { ListQueryParams, PaginationResponse } from './types';
 import { API_URLS } from './types';
 import type { WorkItemActionState } from '@/components/work-item/WorkItemTypes';
 
+export interface IncidentCommandMeta { version: number; operationId: string; }
+export interface IncidentCommandResult { workItemId: number; version: number; status: string; replayed: boolean; }
+
 // 事件管理API接口
 export interface Incident {
+  version: number;
+  categoryId?: number;
   id: number;
   title: string;
   description: string;
@@ -15,6 +20,7 @@ export interface Incident {
   source: string;
   type: string;
   incidentNumber?: string;
+  number: string;
   /** 关联的 WorkItem（tickets.id）。后端 CreateIncident 在同一事务内建立；
    * 缺失表示开发数据违反 WorkItem 创建不变量。 */
   workItemId?: number;
@@ -103,8 +109,7 @@ export interface CreateIncidentRequest {
   type: string;
   assigneeId?: number;
   configurationItemIds?: number[];
-  category?: string;
-  subcategory?: string;
+  cti?: { categoryId: number; typeId?: number; itemId?: number };
   severity?: string;
   impact?: string;
   urgency?: string;
@@ -205,15 +210,15 @@ export interface CreateIncidentClassificationRequest {
 }
 
 export interface UpdateIncidentRequest {
+  urgency?: string;
+  impact?: string;
   title?: string;
   description?: string;
   priority?: string;
   type?: string;
-  status?: string;
   assigneeId?: number;
   isMajorIncident?: boolean;
-  category?: string;
-  subcategory?: string;
+  categoryId?: number;
   resolution?: string;
   resolutionNotes?: string;
   suspendReason?: string;
@@ -221,14 +226,10 @@ export interface UpdateIncidentRequest {
   closedAt?: string;
   formFields?: Record<string, string | number | boolean>;
   /** 版本号（用于乐观锁冲突检测） */
-  version?: number;
+  version: number;
 }
 
-export interface UpdateIncidentStatusRequest {
-  status: string;
-  resolutionNote?: string;
-  suspendReason?: string;
-}
+
 
 export interface ListIncidentsRequest extends ListQueryParams {
   status?: string;
@@ -399,13 +400,7 @@ export class IncidentAPI {
   }
 
   // 更新事件状态
-  static async updateIncidentStatus(
-    id: number,
-    data: UpdateIncidentStatusRequest
-  ): Promise<Incident> {
-    const response = await httpClient.put<Incident>(`/api/v1/incidents/${id}/status`, data);
-    return response;
-  }
+
 
   /**
    * 解决事件（ITIL 合规）
@@ -415,19 +410,18 @@ export class IncidentAPI {
   static async resolveIncident(
     id: number,
     data: {
+      version: number;
+      operationId: string;
       resolution: string;
-      resolutionCode?: string;
-      rootCause?: string;
-      problemId?: number;
     }
-  ): Promise<Incident> {
-    const response = await httpClient.post<Incident>(`/api/v1/incidents/${id}/resolve`, data);
+  ): Promise<IncidentCommandResult> {
+    const response = await httpClient.post<IncidentCommandResult>(`/api/v1/incidents/${id}/resolve`, data);
     return response;
   }
 
   // 分配事件
-  static async assignIncident(id: number, assigneeId: number): Promise<Incident> {
-    const response = await httpClient.post<Incident>(`/api/v1/incidents/${id}/assign`, { assigneeId });
+  static async assignIncident(id: number, data: IncidentCommandMeta & { assigneeId: number; reason?: string }): Promise<IncidentCommandResult> {
+    const response = await httpClient.post<IncidentCommandResult>(`/api/v1/incidents/${id}/assign`, data);
     return response;
   }
 
@@ -458,12 +452,16 @@ export class IncidentAPI {
    * 将事件状态从 New 流转到 Acknowledged
    * 后端: POST /api/v1/incidents/:id/acknowledge
    */
-  static async acknowledgeIncident(id: number): Promise<{ message: string }> {
-    const response = await httpClient.post<{ message: string }>(
+  static async acknowledgeIncident(id: number, data: IncidentCommandMeta): Promise<IncidentCommandResult> {
+    const response = await httpClient.post<IncidentCommandResult>(
       `/api/v1/incidents/${id}/acknowledge`,
-      {}
+      data
     );
     return response;
+  }
+
+  static async startIncident(id: number, data: IncidentCommandMeta): Promise<IncidentCommandResult> {
+    return httpClient.post<IncidentCommandResult>(`/api/v1/incidents/${id}/start`, data);
   }
 
   /**
@@ -475,9 +473,9 @@ export class IncidentAPI {
    */
   static async closeIncident(
     id: number,
-    data: { closeNotes?: string } = {}
-  ): Promise<{ message: string }> {
-    const response = await httpClient.post<{ message: string }>(
+    data: IncidentCommandMeta & { reason: string }
+  ): Promise<IncidentCommandResult> {
+    const response = await httpClient.post<IncidentCommandResult>(
       `/api/v1/incidents/${id}/close`,
       data
     );
@@ -489,7 +487,7 @@ export class IncidentAPI {
    * 后端: POST /api/v1/incidents/:id/convert-to-problem
    * 返回: CreateWorkItemResult
    */
-  static async convertToProblem(id: number, data: { title?: string; description?: string; requesterId?: number }, options: CreationRequestOptions): Promise<CreateWorkItemResult> {
+  static async convertToProblem(id: number, data: { expectedVersion: number; title?: string; description?: string; requesterId?: number }, options: CreationRequestOptions): Promise<CreateWorkItemResult> {
     return createWorkItem(`/api/v1/incidents/${id}/convert-to-problem`, data, options);
   }
 
@@ -498,8 +496,8 @@ export class IncidentAPI {
    * 将已解决或已关闭的事件恢复为处理中
    * 后端: POST /api/v1/incidents/:id/reopen
    */
-  static async reopenIncident(id: number): Promise<Incident> {
-    const response = await httpClient.post<Incident>(`/api/v1/incidents/${id}/reopen`, {});
+  static async reopenIncident(id: number, data: IncidentCommandMeta): Promise<IncidentCommandResult> {
+    const response = await httpClient.post<IncidentCommandResult>(`/api/v1/incidents/${id}/reopen`, data);
     return response;
   }
 
@@ -575,7 +573,7 @@ export class IncidentAPI {
 
   static async updateRootCauseAnalysis(
     id: number,
-    request: Partial<CreateRootCauseAnalysisRequest>
+    request: Partial<CreateRootCauseAnalysisRequest> & { version: number }
   ): Promise<RootCauseAnalysis> {
     try {
       const response = await httpClient.put<RootCauseAnalysis>(
@@ -619,7 +617,7 @@ export class IncidentAPI {
 
   static async updateImpactAssessment(
     id: number,
-    request: Partial<CreateImpactAssessmentRequest>
+    request: Partial<CreateImpactAssessmentRequest> & { version: number }
   ): Promise<ImpactAssessment> {
     try {
       const response = await httpClient.put<ImpactAssessment>(
@@ -663,7 +661,7 @@ export class IncidentAPI {
 
   static async updateIncidentClassification(
     id: number,
-    request: Partial<CreateIncidentClassificationRequest>
+    request: Partial<CreateIncidentClassificationRequest> & { version: number }
   ): Promise<IncidentClassification> {
     try {
       const response = await httpClient.put<IncidentClassification>(

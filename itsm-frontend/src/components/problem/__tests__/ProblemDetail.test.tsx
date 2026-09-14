@@ -8,7 +8,7 @@ import { ProblemStatus } from '@/constants/problem';
 import type { Problem } from '@/lib/api/problem-api';
 
 const mockGetProblem = jest.fn();
-const mockUpdateProblem = jest.fn();
+const mockCommand = jest.fn();
 const mockPush = jest.fn();
 
 jest.mock('next/navigation', () => ({
@@ -19,7 +19,7 @@ jest.mock('next/navigation', () => ({
 jest.mock('@/lib/api/', () => ({
   ProblemApi: {
     getProblem: (...args: unknown[]) => mockGetProblem(...args),
-    updateProblem: (...args: unknown[]) => mockUpdateProblem(...args),
+    command: (...args: unknown[]) => mockCommand(...args),
   },
 }));
 
@@ -34,6 +34,7 @@ jest.mock('../BasicInfoCard', () => ({
 }));
 
 const workItem: WorkItemCommon = {
+  version: 1,
   id: 401,
   number: 'PRB-202608-000401',
   recordClass: 'problem',
@@ -46,6 +47,7 @@ const workItem: WorkItemCommon = {
 };
 
 const problem = {
+ version: 1,
   id: 401,
   title: '重复性网络抖动',
   description: '多个站点出现重复性网络抖动',
@@ -92,6 +94,7 @@ function renderWithRefreshingProvider(initialActions: Record<string, WorkItemAct
     const [summaryProblem, setSummaryProblem] = React.useState<Problem>({
       ...problem,
       actions: initialActions,
+      number: 'PRB-101',
       workItemId: workItem.id,
     });
     const providerWorkItem: WorkItemCommon = {
@@ -136,8 +139,9 @@ async function expectDisabledAction(label: string, reason: string) {
 describe('ProblemDetail action eligibility', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    Object.defineProperty(globalThis.crypto, 'randomUUID', { configurable: true, value: jest.fn(() => 'problem-operation-uuid') });
     mockGetProblem.mockResolvedValue(problem);
-    mockUpdateProblem.mockResolvedValue({ ...problem, status: ProblemStatus.INVESTIGATING });
+    mockCommand.mockResolvedValue({ ...problem, status: ProblemStatus.INVESTIGATING });
   });
 
   it('starts investigation with the canonical investigating status', async () => {
@@ -147,11 +151,36 @@ describe('ProblemDetail action eligibility', () => {
     await user.click(await screen.findByRole('button', { name: '开始调查' }));
 
     await waitFor(() =>
-      expect(mockUpdateProblem).toHaveBeenCalledWith(
+      expect(mockCommand).toHaveBeenCalledWith(
         401,
-        expect.objectContaining({ status: ProblemStatus.INVESTIGATING })
+        'investigate',
+        expect.objectContaining({ version: 1, operationId: expect.any(String) })
       )
     );
+  });
+
+  it('submits verification evidence with the current version and retains the operation key on retry', async () => {
+    mockGetProblem.mockResolvedValue({ ...problem, version: 7, actions: { verifyResolution: { allowed: true } } });
+    mockCommand.mockRejectedValueOnce(new Error('connection interrupted')).mockResolvedValueOnce({ workItemId: 401, version: 8, status: 'investigating', replayed: true });
+    renderWithoutProvider();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: '验证永久方案' }));
+    await user.type(screen.getByRole('textbox', { name: '验证说明' }), 'WMS regression passed');
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /确.*定|OK/ }));
+    await waitFor(() => expect(mockCommand).toHaveBeenCalledTimes(1));
+    expect(mockCommand.mock.calls[0]).toEqual([401, 'verify-resolution', { version: 7, operationId: expect.any(String), verificationNote: 'WMS regression passed' }]);
+    await user.click(within(dialog).getByRole('button', { name: /确.*定|OK/ }));
+    await waitFor(() => expect(mockCommand).toHaveBeenCalledTimes(2));
+    expect(mockCommand.mock.calls[1]).toEqual(mockCommand.mock.calls[0]);
+  });
+
+  it('reopens through the domain command with an explicit version', async () => {
+    mockGetProblem.mockResolvedValue({ ...problem, version: 9, status: 'closed', actions: { reopen: { allowed: true } } });
+    renderWithoutProvider();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: '重新打开' }));
+    await waitFor(() => expect(mockCommand).toHaveBeenCalledWith(401, 'reopen', { version: 9, operationId: expect.any(String) }));
   });
 
   it('refreshes provider actions after detail refetch so resolve replaces stale startInvestigation eligibility', async () => {
@@ -169,9 +198,10 @@ describe('ProblemDetail action eligibility', () => {
     await user.click(await screen.findByRole('button', { name: '开始调查' }));
 
     await waitFor(() =>
-      expect(mockUpdateProblem).toHaveBeenCalledWith(
+      expect(mockCommand).toHaveBeenCalledWith(
         401,
-        expect.objectContaining({ status: ProblemStatus.INVESTIGATING })
+        'investigate',
+        expect.objectContaining({ version: 1, operationId: expect.any(String) })
       )
     );
 

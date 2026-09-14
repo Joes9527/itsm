@@ -58,8 +58,6 @@ const (
 	EdgeParentIncident = "parent_incident"
 	// EdgeConfigurationItems holds the string denoting the configuration_items edge name in mutations.
 	EdgeConfigurationItems = "configuration_items"
-	// EdgeProblems holds the string denoting the problems edge name in mutations.
-	EdgeProblems = "problems"
 	// Table holds the table name of the incident in the database.
 	Table = "incidents"
 	// WorkItemTable is the table that holds the work_item relation/edge.
@@ -99,11 +97,6 @@ const (
 	// ConfigurationItemsInverseTable is the table name for the ConfigurationItem entity.
 	// It exists in this package in order to avoid circular dependency with the "configurationitem" package.
 	ConfigurationItemsInverseTable = "configuration_items"
-	// ProblemsTable is the table that holds the problems relation/edge. The primary key declared below.
-	ProblemsTable = "problem_incidents"
-	// ProblemsInverseTable is the table name for the Problem entity.
-	// It exists in this package in order to avoid circular dependency with the "problem" package.
-	ProblemsInverseTable = "problems"
 )
 
 // Columns holds all SQL columns for incident fields.
@@ -136,9 +129,6 @@ var (
 	// ConfigurationItemsPrimaryKey and ConfigurationItemsColumn2 are the table columns denoting the
 	// primary key for the configuration_items relation (M2M).
 	ConfigurationItemsPrimaryKey = []string{"configuration_item_id", "incident_id"}
-	// ProblemsPrimaryKey and ProblemsColumn2 are the table columns denoting the
-	// primary key for the problems relation (M2M).
-	ProblemsPrimaryKey = []string{"problem_id", "incident_id"}
 )
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -327,20 +317,6 @@ func ByConfigurationItems(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOptio
 		sqlgraph.OrderByNeighborTerms(s, newConfigurationItemsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
-
-// ByProblemsCount orders the results by problems count.
-func ByProblemsCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newProblemsStep(), opts...)
-	}
-}
-
-// ByProblems orders the results by problems terms.
-func ByProblems(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newProblemsStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
 func newWorkItemStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -388,12 +364,5 @@ func newConfigurationItemsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(ConfigurationItemsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2M, true, ConfigurationItemsTable, ConfigurationItemsPrimaryKey...),
-	)
-}
-func newProblemsStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ProblemsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2M, true, ProblemsTable, ProblemsPrimaryKey...),
 	)
 }

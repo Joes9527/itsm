@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common/workitemidentity"
 	"itsm-backend/ent"
 )
 
@@ -34,17 +35,23 @@ type BPMNTaskResponse struct {
 	CreatedTime          time.Time              `json:"createdTime"`
 }
 
-// parseBusinessKey 解析 "ticket:123" 形式的 businessKey
+// parseBusinessKey 解析规范业务键 "{recordClass}:{workItemId}"。
+//
+// 失败关闭：Wave-1 旧词表（ticket/change/service_request）与畸形键一律不解释，返回空身份，
+// 使新运行时不会把旧实例身份当成自己的。Release 保留其显式遗留值。
 func parseBusinessKey(businessKey string) (businessType string, businessID int) {
-	parts := strings.SplitN(businessKey, ":", 2)
-	if len(parts) != 2 {
+	class, rawID, found := strings.Cut(businessKey, ":")
+	if !found || rawID == "" {
 		return "", 0
 	}
-	id, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return parts[0], 0
+	id, err := strconv.Atoi(rawID)
+	if err != nil || id <= 0 {
+		return "", 0
 	}
-	return parts[0], id
+	if !workitemidentity.IsKnownProcessIdentity(class) {
+		return "", 0
+	}
+	return class, id
 }
 
 // ToBPMNTaskResponse 转换任务实体；instance 允许为 nil（历史数据缺实例时业务上下文留空）

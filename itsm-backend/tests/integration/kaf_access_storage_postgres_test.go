@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"os"
 	"testing"
 	"time"
@@ -75,7 +76,7 @@ func TestC2AccessInitializeStorageUpgradeAndRestart(t *testing.T) {
 	req := service.KafActionRequest{Action: "complete_bpmn_task", ExpectedVersion: 1,
 		Execution: service.KafActionExecution{RunID: "run", StepID: "finish", IdempotencyKey: "1:legacy-access:run:finish", CorrelationID: "corr", ProcedureRef: "graph_vpn_access_grant", ProcedureVersion: "1"},
 		Payload:   service.KafActionPayload{ResultSummary: "granted", AccessResult: json.RawMessage(`{"outcome":"granted"}`)}}
-	_, _, err = service.NewKafDelegationService(client).ClaimKafAction(ctx, task, req)
+	_, _, err = service.NewKafDelegationService(client, executionfixture.Standard()).ClaimKafAction(ctx, task, req)
 	require.ErrorIs(t, err, service.ErrKafActionConflict)
 	t.Log(fmt.Sprintf("legacy applied access action %d with empty digest rejected for verified replay", legacy.ID))
 }

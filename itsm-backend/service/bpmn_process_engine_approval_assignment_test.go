@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"testing"
 	"time"
@@ -32,10 +33,9 @@ func newApprovalAssignmentFixture(t *testing.T) *approvalAssignmentFixture {
 	client := enttest.Open(t, "sqlite3", "file:approval_assignment_test?mode=memory&cache=shared&_fk=1")
 	t.Cleanup(func() { client.Close() })
 	logger := zaptest.NewLogger(t).Sugar()
-	engineIface := NewCustomProcessEngine(client, logger)
+	engineIface := NewCustomProcessEngine(client, logger, executionfixture.Standard())
 	engine, ok := engineIface.(*CustomProcessEngine)
 	require.True(t, ok, "expected ProcessEngine to be *CustomProcessEngine")
-	injectEngineChangeCallbackTestService(t, engine, client)
 
 	ctx := context.Background()
 	tenant, err := client.Tenant.Create().
@@ -981,48 +981,7 @@ func TestCreateUserTask_Approval_AssigneeTeamId_TenantIsolation(t *testing.T) {
 // ==================== 端到端：真实部署 change_normal_flow，
 // CAB 审批候选人应包含 role=change_manager 的用户 ====================
 
-func TestCABApprovalAssignsChangeManagerRole(t *testing.T) {
-	fx := newApprovalAssignmentFixture(t)
-	ctx := context.WithValue(fx.ctx, bpmn.BPMNTenantIDContextKey, fx.tenant.ID)
-
-	deploySvc := NewBPMNTemplateService(fx.client)
-	_, err := deploySvc.LoadAndDeployTemplates(ctx, fx.tenant.ID)
-	require.NoError(t, err)
-
-	// 建一个 role=change_manager 的用户
-	cmUser := fx.createUserWithRole(t, "cm_user", "change_manager", 0)
-
-	// 申请人自己不是 change_manager，避免被排除逻辑误判
-	requester := fx.createUser(t, "requester_cab", 0)
-	ctx = WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: requester.ID, TenantID: fx.tenant.ID, CanReadAllTasks: true})
-
-	workItem, _ := createUserTaskCallbackChange(t, fx.client, ctx, fx.tenant.ID, requester.ID, "CHG-CAB-ASSIGN")
-	instance, err := fx.engine.StartProcess(ctx, "change_normal_flow", "test-cab-approval", "change", workItem.ID, map[string]interface{}{
-		"approval_required": true,
-		"requester_id":      float64(requester.ID),
-	})
-	require.NoError(t, err)
-
-	// 完成"变更评估"任务，让网关推进到 CAB 审批节点
-	tasks, _, err := fx.engine.TaskService().ListUserTasks(ctx, &ListUserTasksRequest{
-		ProcessInstanceID: instance.ID,
-		PageSize:          10,
-	})
-	require.NoError(t, err)
-	require.Len(t, tasks, 1, "启动流程后应该恰好有一个待办任务（变更评估）")
-
-	err = fx.engine.CompleteTask(ctx, tasks[0].TaskID, map[string]interface{}{})
-	require.NoError(t, err)
-
-	updated, err := fx.client.ProcessInstance.Get(ctx, instance.ID)
-	require.NoError(t, err)
-	require.Equal(t, "Activity_CABApproval", updated.CurrentActivityID,
-		"approval_required=true 应该推进到 CAB 审批节点")
-
-	task := fx.getCreatedTask(t, instance.ID, "Activity_CABApproval")
-	require.Contains(t, task.CandidateUsers, cmUser.Username,
-		"CAB 审批候选人必须包含 role=change_manager 的用户")
-}
+// TestCABApprovalAssignsChangeManagerRole moved to tests/integration/workitem_change_consumers_postgres_test.go.
 
 // ==================== Task 7.5: Gateway_ApprovalResult 必须按 approvalAction 决策路由，
 // 不能无条件路由到驳回。回归背景：Gateway_ApprovalResult 自己声明的 <outgoing> 里的
@@ -1030,94 +989,9 @@ func TestCABApprovalAssignsChangeManagerRole(t *testing.T) {
 // sequenceFlow ID），导致 Gateway_ApprovalResult 真正生效的出边只有无条件的 Flow_Reject——
 // CAB 审批不管 approve 还是 reject 都会被路由到 Activity_Reject。====================
 
-func TestCABApprovalGatewayRoutesToScheduleOnApprove(t *testing.T) {
-	fx := newApprovalAssignmentFixture(t)
-	ctx := context.WithValue(fx.ctx, bpmn.BPMNTenantIDContextKey, fx.tenant.ID)
+// TestCABApprovalGatewayRoutesToScheduleOnApprove moved to tests/integration/workitem_change_consumers_postgres_test.go.
 
-	deploySvc := NewBPMNTemplateService(fx.client)
-	_, err := deploySvc.LoadAndDeployTemplates(ctx, fx.tenant.ID)
-	require.NoError(t, err)
-
-	cmUser := fx.createUserWithRole(t, "cm_user_approve", "change_manager", 0)
-	requester := fx.createUser(t, "requester_cab_approve", 0)
-	ctx = WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: requester.ID, TenantID: fx.tenant.ID, CanReadAllTasks: true})
-
-	workItem, _ := createUserTaskCallbackChange(t, fx.client, ctx, fx.tenant.ID, requester.ID, "CHG-CAB-APPROVE")
-	instance, err := fx.engine.StartProcess(ctx, "change_normal_flow", "test-cab-decision-approve", "change", workItem.ID, map[string]interface{}{
-		"approval_required": true,
-		"requester_id":      float64(requester.ID),
-	})
-	require.NoError(t, err)
-
-	// 完成"变更评估"，推进到 CAB 审批节点
-	tasks, _, err := fx.engine.TaskService().ListUserTasks(ctx, &ListUserTasksRequest{
-		ProcessInstanceID: instance.ID,
-		PageSize:          10,
-	})
-	require.NoError(t, err)
-	require.Len(t, tasks, 1)
-	require.NoError(t, fx.engine.CompleteTask(ctx, tasks[0].TaskID, map[string]interface{}{}))
-
-	cabTask := fx.getCreatedTask(t, instance.ID, "Activity_CABApproval")
-
-	// change_manager 身份完成 CAB 审批，决策为通过
-	actorCtx := WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: cmUser.ID, TenantID: fx.tenant.ID})
-	err = fx.engine.CompleteTask(actorCtx, cabTask.TaskID, map[string]interface{}{
-		"approvalAction":  "approve",
-		"approvalResult":  "approved",
-		"approvalComment": "looks good",
-	})
-	require.NoError(t, err)
-
-	updated, err := fx.client.ProcessInstance.Get(ctx, instance.ID)
-	require.NoError(t, err)
-	assert.Equal(t, "Activity_Schedule", updated.CurrentActivityID,
-		"CAB 审批通过应该路由到变更排期节点，不是变更驳回")
-}
-
-func TestCABApprovalGatewayRoutesToRejectOnReject(t *testing.T) {
-	fx := newApprovalAssignmentFixture(t)
-	ctx := context.WithValue(fx.ctx, bpmn.BPMNTenantIDContextKey, fx.tenant.ID)
-
-	deploySvc := NewBPMNTemplateService(fx.client)
-	_, err := deploySvc.LoadAndDeployTemplates(ctx, fx.tenant.ID)
-	require.NoError(t, err)
-
-	cmUser := fx.createUserWithRole(t, "cm_user_reject", "change_manager", 0)
-	requester := fx.createUser(t, "requester_cab_reject", 0)
-	ctx = WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: requester.ID, TenantID: fx.tenant.ID, CanReadAllTasks: true})
-
-	workItem, _ := createUserTaskCallbackChange(t, fx.client, ctx, fx.tenant.ID, requester.ID, "CHG-CAB-REJECT")
-	instance, err := fx.engine.StartProcess(ctx, "change_normal_flow", "test-cab-decision-reject", "change", workItem.ID, map[string]interface{}{
-		"approval_required": true,
-		"requester_id":      float64(requester.ID),
-	})
-	require.NoError(t, err)
-
-	tasks, _, err := fx.engine.TaskService().ListUserTasks(ctx, &ListUserTasksRequest{
-		ProcessInstanceID: instance.ID,
-		PageSize:          10,
-	})
-	require.NoError(t, err)
-	require.Len(t, tasks, 1)
-	require.NoError(t, fx.engine.CompleteTask(ctx, tasks[0].TaskID, map[string]interface{}{}))
-
-	cabTask := fx.getCreatedTask(t, instance.ID, "Activity_CABApproval")
-
-	// change_manager 身份完成 CAB 审批，决策为驳回
-	actorCtx := WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: cmUser.ID, TenantID: fx.tenant.ID})
-	err = fx.engine.CompleteTask(actorCtx, cabTask.TaskID, map[string]interface{}{
-		"approvalAction":  "reject",
-		"approvalResult":  "rejected",
-		"approvalComment": "insufficient risk assessment",
-	})
-	require.NoError(t, err)
-
-	updated, err := fx.client.ProcessInstance.Get(ctx, instance.ID)
-	require.NoError(t, err)
-	assert.Equal(t, "Activity_Reject", updated.CurrentActivityID,
-		"CAB 审批驳回应该路由到变更驳回节点")
-}
+// TestCABApprovalGatewayRoutesToRejectOnReject moved to tests/integration/workitem_change_consumers_postgres_test.go.
 
 func TestCreateUserTask_Approval_AssigneeProjectId_TenantIsolation(t *testing.T) {
 	fx := newApprovalAssignmentFixture(t)

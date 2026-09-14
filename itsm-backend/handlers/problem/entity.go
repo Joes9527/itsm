@@ -1,45 +1,42 @@
 package problem
 
 import (
+	relationmeta "itsm-backend/common/workitemrelation"
 	"time"
 )
 
 // Problem domain entity
 type Problem struct {
-	ID          int
-	Title       string
-	Description string
-	Status      string
-	Priority    string
-	Category    string
-	RootCause   string
-	Workaround  string
-	Resolution  string
-	Impact      string
-	AssigneeID  *int
-	CreatedBy   int
-	TenantID    int
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	ResolvedAt  *time.Time
-	ClosedAt    *time.Time
+	Number             string
+	Version            int
+	VerificationDigest string
+	VerifiedBy         int
+	VerifiedAt         time.Time
+	VerifiedVersion    int
+	VerificationNote   string
+	ID                 int
+	Title              string
+	Description        string
+	Status             string
+	Priority           string
+	Category           string
+	CategoryID         *int
+	RootCause          string
+	Workaround         string
+	Resolution         string
+	Impact             string
+	AssigneeID         *int
+	CreatedBy          int
+	TenantID           int
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	ResolvedAt         *time.Time
+	ClosedAt           *time.Time
 	// WorkItemID 关联的 WorkItem（tickets.id）。统一 WorkItem 领域模型宪章 §3.2：
 	// Problem 创建时必须在同一事务内建好对应的 tickets 行并回填这个字段；nil 表示
 	// 开发数据违反 WorkItem 创建不变量，调用方必须 fail closed。
 	WorkItemID *int
-	// 关联数据 (eager-loaded)
-	Tickets   []*AssociatedItem
-	Incidents []*AssociatedItem
-	Changes   []*AssociatedItem
-}
-
-// AssociatedItem 关联项
-type AssociatedItem struct {
-	ID     int
-	Title  string
-	Status string
-	Number string
-	Type   string
+	Relations  []relationmeta.View
 }
 
 // ProblemStats domain entity

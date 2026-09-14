@@ -10,6 +10,7 @@ import (
 	"itsm-backend/handlers/service_catalog"
 	sr "itsm-backend/handlers/service_request"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 )
 
@@ -30,11 +31,11 @@ func configureCatalogPublicationForTest(ctx context.Context, client *ent.Client,
 	configureSRIntakeFixture(ctx, client, tenantID)
 	logger := zap.NewNop().Sugar()
 	registry := intake.NewCreatorRegistry()
-	if err := registry.Register(sr.NewService(sr.NewEntRepository(client), client, logger, service.NewApprovalChainResolver(client, logger))); err != nil {
+	if err := registry.Register(sr.NewService(sr.NewEntRepository(client, executionfixture.Standard()), client, logger, service.NewApprovalChainResolver(client, logger), executionfixture.Standard())); err != nil {
 		panic(err)
 	}
 	catalog.SetCreatorRegistry(registry)
-	engine := service.NewCustomProcessEngine(client, logger).(*service.CustomProcessEngine)
+	engine := service.NewCustomProcessEngine(client, logger, executionfixture.Standard()).(*service.CustomProcessEngine)
 	engine.SetPublicationKAFConfig(&config.Config{KAFOutbox: config.KAFOutboxConfig{WebhookURL: "http://127.0.0.1:1"}})
 	catalog.SetPublicationEngine(engine)
 }

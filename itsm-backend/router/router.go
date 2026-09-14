@@ -183,12 +183,13 @@ func dashboardWidgetByID(widgetID string) gin.H {
 
 // RouterConfig 路由配置
 type RouterConfig struct {
-	IntakeHandler         *intake.Handler
-	TenantDirectoryClient *ent.Client
-	JWTSecret             string
-	Logger                *zap.SugaredLogger
-	Client                *ent.Client
-	RawDB                 *sql.DB
+	WorkItemRelationController *controller.WorkItemRelationController
+	IntakeHandler              *intake.Handler
+	TenantDirectoryClient      *ent.Client
+	JWTSecret                  string
+	Logger                     *zap.SugaredLogger
+	Client                     *ent.Client
+	RawDB                      *sql.DB
 
 	// CSRF configuration
 	CSRFEnabled bool
@@ -507,6 +508,14 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 			config.IntakeHandler.RegisterMappingRoutes(tenant)
 		}
 
+		if config.WorkItemRelationController != nil {
+			tenant.GET("/work-items/:id/relation-context", middleware.RequireWorkItemRecordClassPermission("read"), config.WorkItemRelationController.Context)
+			relations := tenant.(*gin.RouterGroup).Group("/work-items/:id/relations")
+			relations.GET("", middleware.RequireWorkItemRecordClassPermission("read"), config.WorkItemRelationController.List)
+			relations.POST("", middleware.RequireWorkItemRecordClassPermission("update"), config.WorkItemRelationController.Add)
+			relations.DELETE("", middleware.RequireWorkItemRecordClassPermission("update"), config.WorkItemRelationController.Remove)
+		}
+
 		// ==================== Ticket Categories & Tags ====================
 		if config.TicketCategoryController != nil {
 			categories := tenant.(*gin.RouterGroup).Group("/ticket-categories")
@@ -805,6 +814,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				// 事件操作
 				inc.POST("/:id/escalate", middleware.RequirePermission("incident", "write"), config.IncidentController.EscalateIncident)
 				inc.POST("/:id/acknowledge", middleware.RequirePermission("incident", "write"), config.IncidentController.AcknowledgeIncident)
+				inc.POST("/:id/start", middleware.RequirePermission("incident", "write"), config.IncidentController.StartIncident)
 				inc.POST("/:id/resolve", middleware.RequirePermission("incident", "write"), config.IncidentController.ResolveIncident)
 				inc.POST("/:id/close", middleware.RequirePermission("incident", "write"), config.IncidentController.CloseIncident)
 				inc.POST("/:id/reopen", middleware.RequirePermission("incident", "write"), config.IncidentController.ReopenIncident)
@@ -909,17 +919,18 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				problems.PUT("/:id", middleware.RequirePermission("problem", "write"), config.ProblemHandler.Update)
 				problems.DELETE("/:id", middleware.RequirePermission("problem", "delete"), config.ProblemHandler.Delete)
 				problems.POST("/:id/investigate", middleware.RequirePermission("problem", "write"), config.ProblemHandler.InvestigateProblem)
+				problems.POST("/:id/select-resolution", middleware.RequirePermission("problem", "write"), config.ProblemHandler.SelectResolution)
 				problems.PUT("/:id/root-cause", middleware.RequirePermission("problem", "write"), config.ProblemHandler.UpdateRootCause)
 				problems.PUT("/:id/solution", middleware.RequirePermission("problem", "write"), config.ProblemHandler.UpdateSolution)
+				problems.POST("/:id/resolve", middleware.RequirePermission("problem", "write"), config.ProblemHandler.ResolveProblem)
+				problems.POST("/:id/verify-resolution", middleware.RequirePermission("problem", "write"), config.ProblemHandler.VerifyResolution)
+				problems.POST("/:id/reopen", middleware.RequirePermission("problem", "write"), config.ProblemHandler.ReopenProblem)
 				problems.POST("/:id/close", middleware.RequirePermission("problem", "write"), config.ProblemHandler.CloseProblem)
 				// 问题 → 已知错误 (KEDB) 联动
 				if config.KnownErrorHandler != nil {
 					problems.POST("/:id/known-error", middleware.RequirePermission("problem", "write"), config.KnownErrorHandler.CreateFromProblem)
 				}
 				// 关联管理
-				problems.GET("/:id/associations", middleware.RequirePermission("problem", "read"), config.ProblemHandler.GetAssociations)
-				problems.POST("/:id/associations", middleware.RequirePermission("problem", "write"), config.ProblemHandler.AddAssociation)
-				problems.DELETE("/:id/associations", middleware.RequirePermission("problem", "write"), config.ProblemHandler.RemoveAssociation)
 			}
 		}
 
@@ -933,16 +944,21 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				changes.GET("/:id", middleware.RequirePermission("change", "read"), config.ChangeHandler.GetChange)
 				changes.PUT("/:id", middleware.RequirePermission("change", "write"), config.ChangeHandler.UpdateChange)
 				changes.DELETE("/:id", middleware.RequirePermission("change", "delete"), config.ChangeHandler.DeleteChange)
-				changes.POST("/:id/submit", middleware.RequirePermission("change", "write"), config.ChangeHandler.SubmitChange)
+				changes.POST("/:id/submit", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
 				changes.POST("/:id/assign", middleware.RequirePermission("change", "write"), config.ChangeHandler.AssignChange)
-				// 状态转换：approve/reject 需要独立审批权限，rollback 需要独立回滚权限（H-15 修复：禁止 write 权限泛化为审批/回滚）
-				changes.POST("/:id/approve", middleware.RequirePermission("change", "approve"), config.ChangeHandler.TransitionStatus)
-				changes.POST("/:id/reject", middleware.RequirePermission("change", "approve"), config.ChangeHandler.TransitionStatus)
-				changes.POST("/:id/start", middleware.RequirePermission("change", "write"), config.ChangeHandler.TransitionStatus)
-				changes.POST("/:id/complete", middleware.RequirePermission("change", "write"), config.ChangeHandler.TransitionStatus)
-				changes.POST("/:id/rollback", middleware.RequirePermission("change", "rollback"), config.ChangeHandler.TransitionStatus)
-				changes.POST("/:id/cancel", middleware.RequirePermission("change", "write"), config.ChangeHandler.TransitionStatus)
+				// CAB decisions retain independent approval permission; stages use the Change write owner.
+				changes.POST("/:id/approve", middleware.RequirePermission("change", "approve"), config.ChangeHandler.ExecuteAction)
+				changes.POST("/:id/reject", middleware.RequirePermission("change", "approve"), config.ChangeHandler.ExecuteAction)
+				changes.POST("/:id/assess", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
+				changes.POST("/:id/schedule", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
+				changes.POST("/:id/implement", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
+				changes.POST("/:id/record-outcome", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
+				changes.POST("/:id/review", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
+				changes.POST("/:id/close", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
+
+				changes.POST("/:id/cancel", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
 				// 审批
+				changes.GET("/:id/task-progress", middleware.RequirePermission("change", "read"), config.ChangeHandler.GetTaskProgress)
 				changes.GET("/:id/approvals", middleware.RequirePermission("change", "read"), config.ChangeHandler.GetApprovals)
 				// 风险评估（同时支持 /risk 和 /risk-assessment 两个路径）
 				changes.GET("/:id/risk-assessment", middleware.RequirePermission("change", "read"), config.ChangeHandler.GetRiskAssessment)
@@ -1382,13 +1398,16 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				// 调查步骤管理
 				problemInvestigation.POST("/steps", middleware.RequirePermission("step", "create"), config.ProblemInvestigationController.CreateInvestigationStep)
 				problemInvestigation.PUT("/steps/:id", middleware.RequirePermission("step", "update"), config.ProblemInvestigationController.UpdateInvestigationStep)
-				problemInvestigation.GET("/investigations/:investigation_id/steps", middleware.RequirePermission("investigation", "read"), config.ProblemInvestigationController.GetInvestigationSteps)
+				problemInvestigation.GET("/investigations/:id/steps", middleware.RequirePermission("investigation", "read"), config.ProblemInvestigationController.GetInvestigationSteps)
 
 				// 根本原因分析
 				problemInvestigation.POST("/root-cause-analysis", middleware.RequirePermission("root_cause", "create"), config.ProblemInvestigationController.CreateRootCauseAnalysis)
+				problemInvestigation.PUT("/root-cause-analysis/:id", middleware.RequirePermission("root_cause", "create"), config.ProblemInvestigationController.UpdateRootCauseAnalysis)
 
 				// 解决方案管理
 				problemInvestigation.POST("/solutions", middleware.RequirePermission("solution", "create"), config.ProblemInvestigationController.CreateProblemSolution)
+				problemInvestigation.PUT("/solutions/:id", middleware.RequirePermission("problem", "update"), config.ProblemInvestigationController.UpdateProblemSolution)
+				problemInvestigation.DELETE("/solutions/:id", middleware.RequirePermission("problem", "update"), config.ProblemInvestigationController.DeleteProblemSolution)
 				problemInvestigation.GET("/problems/:id/solutions", middleware.RequirePermission("problem", "read"), config.ProblemInvestigationController.GetProblemSolutions)
 
 				// 问题调查摘要
@@ -1457,6 +1476,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				conns.POST("/:name/send", middleware.RequirePermission("connector", "write"), config.ConnectorController.Send)
 				conns.POST("/:name/test", middleware.RequirePermission("connector", "write"), config.ConnectorController.Test)
 				conns.GET("/health", middleware.RequirePermission("connector", "read"), config.ConnectorController.Health)
+				conns.POST("/health", middleware.RequirePermission("connector", "write"), config.ConnectorController.RefreshHealth)
 			}
 		}
 

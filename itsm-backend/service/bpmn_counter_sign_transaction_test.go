@@ -75,7 +75,7 @@ func startAutomaticCounterSignProcess(t *testing.T, approvalMode string) (*bpmnA
 		strconv.Itoa(f.actor.ID)+","+strconv.Itoa(f.outsider.ID),
 	))
 	ctx := f.typedTaskScopeOnlyCtx(f.actor, false)
-	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "counter-sign", "ticket", 1, map[string]interface{}{"before": "kept"})
+	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "counter-sign", "generic", f.workItem(t, 1).ID, map[string]interface{}{"before": "kept"})
 	require.NoError(t, err)
 	source := f.client.ProcessTask.Query().Where(
 		processtask.ProcessInstanceID(instance.ID),

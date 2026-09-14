@@ -55,6 +55,11 @@ func IDLTE(id int) predicate.SLAAlertHistory {
 	return predicate.SLAAlertHistory(sql.FieldLTE(FieldID, id))
 }
 
+// NotificationTrackingVersion applies equality check predicate on the "notification_tracking_version" field. It's identical to NotificationTrackingVersionEQ.
+func NotificationTrackingVersion(v int) predicate.SLAAlertHistory {
+	return predicate.SLAAlertHistory(sql.FieldEQ(FieldNotificationTrackingVersion, v))
+}
+
 // TicketID applies equality check predicate on the "ticket_id" field. It's identical to TicketIDEQ.
 func TicketID(v int) predicate.SLAAlertHistory {
 	return predicate.SLAAlertHistory(sql.FieldEQ(FieldTicketID, v))
@@ -118,6 +123,56 @@ func CreatedAt(v time.Time) predicate.SLAAlertHistory {
 // ResolvedAt applies equality check predicate on the "resolved_at" field. It's identical to ResolvedAtEQ.
 func ResolvedAt(v time.Time) predicate.SLAAlertHistory {
 	return predicate.SLAAlertHistory(sql.FieldEQ(FieldResolvedAt, v))
+}
+
+// NotificationTrackingVersionEQ applies the EQ predicate on the "notification_tracking_version" field.
+func NotificationTrackingVersionEQ(v int) predicate.SLAAlertHistory {
+	return predicate.SLAAlertHistory(sql.FieldEQ(FieldNotificationTrackingVersion, v))
+}
+
+// NotificationTrackingVersionNEQ applies the NEQ predicate on the "notification_tracking_version" field.
+func NotificationTrackingVersionNEQ(v int) predicate.SLAAlertHistory {
+	return predicate.SLAAlertHistory(sql.FieldNEQ(FieldNotificationTrackingVersion, v))
+}
+
+// NotificationTrackingVersionIn applies the In predicate on the "notification_tracking_version" field.
+func NotificationTrackingVersionIn(vs ...int) predicate.SLAAlertHistory {
+	return predicate.SLAAlertHistory(sql.FieldIn(FieldNotificationTrackingVersion, vs...))
+}
+
+// NotificationTrackingVersionNotIn applies the NotIn predicate on the "notification_tracking_version" field.
+func NotificationTrackingVersionNotIn(vs ...int) predicate.SLAAlertHistory {
+	return predicate.SLAAlertHistory(sql.FieldNotIn(FieldNotificationTrackingVersion, vs...))
+}
+
+// NotificationTrackingVersionGT applies the GT predicate on the "notification_tracking_version" field.
+func NotificationTrackingVersionGT(v int) predicate.SLAAlertHistory {
+	return predicate.SLAAlertHistory(sql.FieldGT(FieldNotificationTrackingVersion, v))
+}
+
+// NotificationTrackingVersionGTE applies the GTE predicate on the "notification_tracking_version" field.
+func NotificationTrackingVersionGTE(v int) predicate.SLAAlertHistory {
+	return predicate.SLAAlertHistory(sql.FieldGTE(FieldNotificationTrackingVersion, v))
+}
+
+// NotificationTrackingVersionLT applies the LT predicate on the "notification_tracking_version" field.
+func NotificationTrackingVersionLT(v int) predicate.SLAAlertHistory {
+	return predicate.SLAAlertHistory(sql.FieldLT(FieldNotificationTrackingVersion, v))
+}
+
+// NotificationTrackingVersionLTE applies the LTE predicate on the "notification_tracking_version" field.
+func NotificationTrackingVersionLTE(v int) predicate.SLAAlertHistory {
+	return predicate.SLAAlertHistory(sql.FieldLTE(FieldNotificationTrackingVersion, v))
+}
+
+// NotificationTrackingVersionIsNil applies the IsNil predicate on the "notification_tracking_version" field.
+func NotificationTrackingVersionIsNil() predicate.SLAAlertHistory {
+	return predicate.SLAAlertHistory(sql.FieldIsNull(FieldNotificationTrackingVersion))
+}
+
+// NotificationTrackingVersionNotNil applies the NotNil predicate on the "notification_tracking_version" field.
+func NotificationTrackingVersionNotNil() predicate.SLAAlertHistory {
+	return predicate.SLAAlertHistory(sql.FieldNotNull(FieldNotificationTrackingVersion))
 }
 
 // TicketIDEQ applies the EQ predicate on the "ticket_id" field.

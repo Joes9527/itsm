@@ -7,6 +7,7 @@ import (
 
 	"itsm-backend/authorization"
 	"itsm-backend/common"
+	"itsm-backend/database"
 	"itsm-backend/ent"
 	"itsm-backend/repository/ticket"
 	"itsm-backend/service"
@@ -15,14 +16,16 @@ import (
 )
 
 type Service struct {
+	execution     *database.ExecutionPolicy
+	directory     database.DirectorySnapshot
 	repo          Repository
 	client        *ent.Client
 	logger        *zap.SugaredLogger
 	chainResolver *service.ApprovalChainResolver
 }
 
-func NewService(repo Repository, client *ent.Client, logger *zap.SugaredLogger, chainResolver *service.ApprovalChainResolver) *Service {
-	return &Service{repo: repo, client: client, logger: logger, chainResolver: chainResolver}
+func NewService(repo Repository, client *ent.Client, logger *zap.SugaredLogger, chainResolver *service.ApprovalChainResolver, execution *database.ExecutionPolicy) *Service {
+	return &Service{execution: execution, repo: repo, client: client, logger: logger, chainResolver: chainResolver}
 }
 
 // Client exposes the underlying ent client so the handler layer can query
@@ -124,31 +127,14 @@ func (s *Service) Update(ctx context.Context, id, tenantID, actorID int, actorRo
 
 	// 3. Save
 	if err := s.repo.Update(ctx, req); err != nil {
+		if appErr, ok := common.AsAppError(err); ok {
+			return nil, appErr
+		}
 		s.logger.Errorw("Failed to update service request", "error", err)
 		return nil, common.NewInternalError("Failed to update service request", err)
 	}
 
 	return s.repo.Get(ctx, id, tenantID)
-}
-
-// Delete deletes a service request
-func (s *Service) Delete(ctx context.Context, id, tenantID, actorID int, actorRole string) error {
-	// 1. Get existing request
-	req, err := s.repo.Get(ctx, id, tenantID)
-	if err != nil {
-		return common.NewNotFoundError("Service Request not found")
-	}
-	if actorID != req.RequesterID && !s.canManageServiceRequest(ctx, actorRole, tenantID) {
-		return common.NewForbiddenError("Only the requester or an administrator can delete this request")
-	}
-
-	// 2. Delete
-	if err := s.repo.Delete(ctx, req); err != nil {
-		s.logger.Errorw("Failed to delete service request", "error", err)
-		return common.NewInternalError("Failed to delete service request", err)
-	}
-
-	return nil
 }
 
 // canManageServiceRequest 判断角色是否有 service_request:write 权限（按权限而非角色名判断）。

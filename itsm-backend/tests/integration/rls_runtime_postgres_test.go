@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 
@@ -39,12 +40,12 @@ func TestPostgresRLSRuntimeConsumer(t *testing.T) {
 	clients, _ := runtimeClients(t, f)
 	client := clients.Tenant
 	db := database.GetRawDB()
-	owner := service.NewIncidentService(client, zap.NewNop().Sugar())
+	owner := service.NewIncidentService(client, zap.NewNop().Sugar(), executionfixture.Standard())
 	owner.RuleEngine().SetActorDirectory(clients.System)
-	owner.SetAlertCreator(service.NewIncidentAlertingService(client, zap.NewNop().Sugar()))
+	owner.SetAlertCreator(service.NewIncidentAlertingService(client, zap.NewNop().Sugar(), executionfixture.Standard()))
 	registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{owner.RuleEngine()}, "incident_alert_delivery")
 	require.NoError(t, err)
-	worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(clients.System), service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 10 * time.Second, MaxAttempts: 5}, zap.NewNop().Sugar(), registry)
+	worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(clients.System, executionfixture.Standard()), service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 10 * time.Second, MaxAttempts: 5}, zap.NewNop().Sugar(), registry)
 	require.NoError(t, err)
 	require.NoError(t, worker.DispatchOnce(f.ctx))
 	require.Equal(t, "published", f.client.OutboxEvent.GetX(f.ctx, f.event.ID).Status, f.client.OutboxEvent.GetX(f.ctx, f.event.ID).LastError)
@@ -69,6 +70,7 @@ func TestPostgresRLSRuntimeConsumer(t *testing.T) {
 
 func runtimeRLSDriver(t *testing.T, f *incidentEffectsFixture) (*rls.Driver, *sql.DB) {
 	t.Helper()
+	parsed := migrationEntryTarget(t)
 	var schema string
 	require.NoError(t, f.db.QueryRowContext(f.ctx, "SELECT current_schema()").Scan(&schema))
 	role := fmt.Sprintf("entry_rls_%d", time.Now().UnixNano())
@@ -102,7 +104,11 @@ func runtimeRLSDriver(t *testing.T, f *incidentEffectsFixture) (*rls.Driver, *sq
 		}
 	}
 
-	db, err := sql.Open("postgres", "host=127.0.0.1 port=36444 user=postgres dbname=sslvpn_test sslmode=disable search_path="+schema+" role="+role)
+	params := parsed.Query()
+	params.Set("search_path", schema)
+	params.Set("role", role)
+	parsed.RawQuery = params.Encode()
+	db, err := sql.Open("postgres", parsed.String())
 	require.NoError(t, err)
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
@@ -323,7 +329,7 @@ func TestPostgresRLSRuntimeKAFTransport(t *testing.T) {
 	var sent atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { sent.Add(1); w.WriteHeader(200) }))
 	defer server.Close()
-	dispatcher, err := service.NewKafOutboxDispatcher(service.NewOutboxEventRepository(queue), service.KafOutboxConfig{WebhookURL: server.URL, WebhookSecret: "runtime-test", BatchSize: 10, PollInterval: time.Second, MaxAttempts: 5})
+	dispatcher, err := service.NewKafOutboxDispatcher(service.NewOutboxEventRepository(queue, executionfixture.Standard()), service.KafOutboxConfig{WebhookURL: server.URL, WebhookSecret: "runtime-test", BatchSize: 10, PollInterval: time.Second, MaxAttempts: 5})
 	require.NoError(t, err)
 	require.NoError(t, dispatcher.DispatchOnce(f.ctx))
 	require.NoError(t, dispatcher.DispatchOnce(f.ctx))
@@ -361,7 +367,7 @@ func TestPostgresRLSRuntimeCallbackSweep(t *testing.T) {
 	clients, cfg := runtimeClients(t, f)
 	_, err := f.db.ExecContext(f.ctx, "GRANT SELECT,UPDATE ON process_callback_outboxes TO "+cfg.User)
 	require.NoError(t, err)
-	engine := service.NewCustomProcessEngine(clients.Tenant, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
+	engine := service.NewCustomProcessEngine(clients.Tenant, zap.NewNop().Sugar(), executionfixture.Standard()).(*service.CustomProcessEngine)
 	engine.SetCallbackCandidateClient(clients.System)
 	count, err := engine.ProcessPendingCallbacks(context.Background(), "a7-callback-worker", 10)
 	require.NoError(t, err)

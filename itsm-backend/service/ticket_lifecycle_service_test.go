@@ -4,7 +4,13 @@ import (
 	"context"
 	"testing"
 
+	"go.uber.org/zap"
+	"itsm-backend/dto"
+	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/handlers/shared/workitemmutation"
+	ticketrepo "itsm-backend/repository/ticket"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -332,7 +338,7 @@ func TestTicketLifecycleService_EscalateTicket(t *testing.T) {
 	defer client.Close()
 
 	logger := zaptest.NewLogger(t).Sugar()
-	lifecycleService := NewTicketLifecycleService(client, logger)
+	lifecycleService := newManualEscalationTestOwner(client, logger)
 
 	ctx := context.Background()
 
@@ -350,7 +356,7 @@ func TestTicketLifecycleService_EscalateTicket(t *testing.T) {
 		SetEmail("test@example.com").
 		SetName("Test User").
 		SetPasswordHash("hashedpassword").
-		SetRole("end_user").
+		SetRole("super_admin").
 		SetActive(true).
 		SetTenantID(testTenant.ID).
 		Save(ctx)
@@ -427,15 +433,19 @@ func TestTicketLifecycleService_EscalateTicket(t *testing.T) {
 				SetPriority(tt.initialPriority).
 				Exec(ctx)
 
-			updatedTicket, err := lifecycleService.EscalateTicket(ctx, tt.ticketID, tt.reason, tt.tenantID, tt.escalatedBy)
+			before := client.Ticket.GetX(ctx, tt.ticketID)
+			result, err := lifecycleService.EscalateTicket(ctx, dto.TicketEscalationCommand{WorkItemID: tt.ticketID, Reason: tt.reason, Meta: workitemmutation.Meta{TenantID: tt.tenantID, ActorID: tt.escalatedBy, ExpectedVersion: before.Version, OperationID: tt.initialPriority, Source: "test"}})
+			updatedTicket := client.Ticket.GetX(ctx, tt.ticketID)
 
 			if tt.expectedError {
 				assert.Error(t, err)
-				assert.Nil(t, updatedTicket)
+				assert.Zero(t, result.WorkItemID)
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, updatedTicket)
 				assert.Equal(t, tt.expectedPriority, updatedTicket.Priority)
+				assert.Equal(t, before.Version+1, result.Version)
+				assert.Equal(t, before.AssigneeID, updatedTicket.AssigneeID)
 			}
 		})
 	}
@@ -583,4 +593,10 @@ func TestTicketLifecycleService_CancelWorkflow(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Historical lifecycle tests now exercise the sole manual command owner.
+func newManualEscalationTestOwner(client *ent.Client, logger *zap.SugaredLogger) *TicketService {
+	policy := executionfixture.Standard()
+	return NewTicketService(&TicketServiceConfig{Client: client, Repository: ticketrepo.NewEntRepository(client, logger), Logger: logger, Execution: policy, NotificationService: NewTicketNotificationService(client, logger, policy)})
 }

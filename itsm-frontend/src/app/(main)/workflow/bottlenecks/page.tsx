@@ -239,7 +239,7 @@ export default function BottlenecksPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Title level={3} style={{ marginBottom: 4 }}>
+        <Title level={2} className="!text-[24px] !font-semibold" style={{ marginBottom: 4 }}>
           <BarChart3 style={{ marginRight: 8 }} />
           BPMN 节点停留时间分析
         </Title>
@@ -301,7 +301,7 @@ export default function BottlenecksPage() {
         </Card>
       ) : (
         <>
-          <Row gutter={[16, 16]}>
+          <Row gutter={[14, 14]}>
             <Col xs={24} sm={6}>
               <Card>
                 <Statistic

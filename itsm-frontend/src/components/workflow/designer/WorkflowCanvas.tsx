@@ -36,7 +36,7 @@ const WorkflowCanvas = forwardRef<BpmnDesignerApi, WorkflowCanvasProps>(function
   _ref
 ) {
   return (
-    <div className="h-[calc(100vh-200px)] bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+    <div className="h-[calc(100vh-200px)] bg-surface rounded-[8px] shadow-none border border-border overflow-hidden">
       <BPMNDesigner
         xml={currentXML}
         onSave={onSave}

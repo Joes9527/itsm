@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"sync"
 	"testing"
@@ -186,7 +187,7 @@ func TestCounterSignDistinctChildVotesConvergePostgres(t *testing.T) {
 			release: release,
 		}
 		clients[i].ProcessTask.Intercept(barriers[i].interceptor())
-		engines[i] = NewCustomProcessEngine(clients[i], zap.NewNop().Sugar()).(*CustomProcessEngine)
+		engines[i] = NewCustomProcessEngine(clients[i], zap.NewNop().Sugar(), executionfixture.Standard()).(*CustomProcessEngine)
 	}
 
 	results := make(chan error, 2)
@@ -224,7 +225,7 @@ func TestCounterSignDistinctChildVotesConvergePostgres(t *testing.T) {
 
 	persistedParent := setupClient.ProcessTask.GetX(ctx, parent.ID)
 	require.Equal(t, common.ProcessTaskStatusCompleted, persistedParent.Status)
-	require.Equal(t, 1, persistedParent.AggregationVersion, "the final parent transition increments its version exactly once")
+	require.Equal(t, 3, persistedParent.AggregationVersion, "two accepted votes and the sole final parent transition advance the fence")
 	require.Equal(t, "parent-summary", persistedParent.TaskVariables["preserved"])
 	for key, expected := range map[string]int{
 		"threshold": 2,

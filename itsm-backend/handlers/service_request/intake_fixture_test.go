@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http/httptest"
 	"strconv"
 
@@ -44,12 +45,12 @@ func NewService(repo sr.Repository, client *ent.Client, logger *zap.SugaredLogge
 	if chain == nil {
 		chain = service.NewApprovalChainResolver(client, logger)
 	}
-	owner := sr.NewService(repo, client, logger, chain)
+	owner := sr.NewService(repo, client, logger, chain, executionfixture.Standard())
 	registry := intake.NewCreatorRegistry()
 	if err := registry.Register(owner); err != nil {
 		panic(err)
 	}
-	incident := service.NewIncidentService(client, logger)
+	incident := service.NewIncidentService(client, logger, executionfixture.Standard())
 	incident.SetPriorityMatrixService(service.NewPriorityMatrixService(logger))
 	if err := registry.Register(incident); err != nil {
 		panic(err)
@@ -58,7 +59,7 @@ func NewService(repo sr.Repository, client *ent.Client, logger *zap.SugaredLogge
 	for _, tenant := range client.Tenant.Query().AllX(context.Background()) {
 		configureSRIntakeFixture(context.Background(), client, tenant.ID)
 	}
-	return &Service{owner, intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}), client}
+	return &Service{owner, intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard()), client}
 }
 func NewHandler(owner *Service) *Handler {
 	h := sr.NewHandler(owner.Service)
@@ -138,9 +139,9 @@ func (s *Service) SubmitCatalog(ctx context.Context, tenantID, actorID, catalogI
 	return &response.Data, nil
 }
 func configureSRIntakeFixture(ctx context.Context, client *ent.Client, tenantID int) {
-	for _, business := range []string{"service_request", "incident"} {
+	for _, business := range []string{"service_request_item", "incident"} {
 		if !client.ProcessBinding.Query().Where(processbinding.TenantIDEQ(tenantID), processbinding.BusinessTypeEQ(business)).ExistX(ctx) {
-			if business == "service_request" {
+			if business == "service_request_item" {
 				deployment := client.ProcessDeployment.Create().SetTenantID(tenantID).SetDeploymentID(fmt.Sprintf("sr-fixture-%d", tenantID)).SetDeploymentName("Request approval fixture").SaveX(ctx)
 				client.ProcessDefinition.Create().SetTenantID(tenantID).SetDeploymentID(deployment.ID).SetKey("sr_fixture_approval").SetName("Request approval").SetVersion("1").SetIsActive(true).SetIsLatest(true).SetBpmnXML([]byte(`<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:camunda="http://camunda.org/schema/1.0/bpmn"><process id="sr_fixture_approval" isExecutable="true"><startEvent id="start"/><userTask id="approval" taskPurpose="approval" camunda:assignee="${requester_id}"/><endEvent id="end"/><sequenceFlow id="a" sourceRef="start" targetRef="approval"/><sequenceFlow id="b" sourceRef="approval" targetRef="end"/></process></definitions>`)).SaveX(ctx)
 				client.ProcessBinding.Create().SetTenantID(tenantID).SetBusinessType(business).SetIsDefault(true).SetProcessDefinitionKey("sr_fixture_approval").SaveX(ctx)
@@ -190,5 +191,5 @@ func createSRRepositoryFixture(ctx context.Context, client *ent.Client, input *S
 	if err != nil {
 		return nil, err
 	}
-	return NewEntRepository(client).Get(ctx, record.ID, input.TenantID)
+	return NewEntRepository(client, executionfixture.Standard()).Get(ctx, record.ID, input.TenantID)
 }

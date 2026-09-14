@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"strings"
 	"testing"
@@ -27,6 +28,7 @@ import (
 )
 
 type bpmnAuthorizationFixture struct {
+	workItems   map[int]*ent.Ticket
 	client      *ent.Client
 	engine      *CustomProcessEngine
 	resolver    *bpmnParticipationResolver
@@ -37,6 +39,22 @@ type bpmnAuthorizationFixture struct {
 	outsider    *ent.User
 	otherActor  *ent.User
 	definition  *ent.ProcessDefinition
+}
+
+// workItem gives each historical test identity a real canonical record, created
+// only when a start-path test needs it. Other fixture users keep their own rows.
+func (f *bpmnAuthorizationFixture) workItem(t *testing.T, key int) *ent.Ticket {
+	t.Helper()
+	if item := f.workItems[key]; item != nil {
+		return item
+	}
+	item := f.client.Ticket.Create().
+		SetTicketNumber("BPMN-AUTH-" + strconv.Itoa(key)).
+		SetTitle("Workflow authorization fixture").
+		SetRecordClass("generic").SetRequesterID(f.actor.ID).
+		SetTenantID(f.tenant.ID).SaveX(f.userCtx)
+	f.workItems[key] = item
+	return item
 }
 
 func newBPMNAuthorizationFixture(t *testing.T) *bpmnAuthorizationFixture {
@@ -136,10 +154,12 @@ func newBPMNAuthorizationFixtureWithClient(t *testing.T, client *ent.Client) *bp
 		SetIsLatest(true).
 		Save(ctx)
 	require.NoError(t, err)
-	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar()).(*CustomProcessEngine)
-	injectEngineChangeCallbackTestService(t, engine, client)
+	workItems := make(map[int]*ent.Ticket)
+
+	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard()).(*CustomProcessEngine)
 
 	return &bpmnAuthorizationFixture{
+		workItems:   workItems,
 		client:      client,
 		engine:      engine,
 		resolver:    &bpmnParticipationResolver{client: client, groupResolver: bpmn.NewGroupResolver(client)},
@@ -259,7 +279,7 @@ func TestStartProcessPersistsAuthenticatedInitiator(t *testing.T) {
 	ctx := context.WithValue(f.userCtx, bpmn.BPMNTenantIDContextKey, f.tenant.ID)
 	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, f.actor.ID)
 	ctx = WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: f.actor.ID, TenantID: f.tenant.ID})
-	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket-1", "ticket", 1, map[string]interface{}{
+	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket-1", "generic", f.workItem(t, 1).ID, map[string]interface{}{
 		"requester_id": f.outsider.ID,
 	})
 	require.NoError(t, err)
@@ -270,7 +290,7 @@ func TestStartProcessUsesTrustedRequesterFallback(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	ctx := context.WithValue(f.userCtx, bpmn.BPMNTenantIDContextKey, f.tenant.ID)
 	ctx = WithTrustedBPMNTenantContext(ctx, f.tenant.ID)
-	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket-2", "ticket", 2, map[string]interface{}{
+	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket-2", "generic", f.workItem(t, 2).ID, map[string]interface{}{
 		"requester_id": float64(f.actor.ID),
 		"triggered_by": strconv.Itoa(f.actor.ID),
 	})
@@ -283,7 +303,7 @@ func TestStartProcessUsesRequesterFallbackForZeroActor(t *testing.T) {
 	ctx := context.WithValue(f.userCtx, bpmn.BPMNTenantIDContextKey, f.tenant.ID)
 	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, 0)
 	ctx = WithTrustedBPMNTenantContext(ctx, f.tenant.ID)
-	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket-3", "ticket", 3, map[string]interface{}{
+	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket-3", "generic", f.workItem(t, 3).ID, map[string]interface{}{
 		"requesterId":  f.actor.ID,
 		"triggered_by": strconv.Itoa(f.actor.ID),
 	})

@@ -28,6 +28,93 @@ func (_u *AuditLogUpdate) Where(ps ...predicate.AuditLog) *AuditLogUpdate {
 	return _u
 }
 
+// SetOperationID sets the "operation_id" field.
+func (_u *AuditLogUpdate) SetOperationID(v string) *AuditLogUpdate {
+	_u.mutation.SetOperationID(v)
+	return _u
+}
+
+// SetNillableOperationID sets the "operation_id" field if the given value is not nil.
+func (_u *AuditLogUpdate) SetNillableOperationID(v *string) *AuditLogUpdate {
+	if v != nil {
+		_u.SetOperationID(*v)
+	}
+	return _u
+}
+
+// ClearOperationID clears the value of the "operation_id" field.
+func (_u *AuditLogUpdate) ClearOperationID() *AuditLogUpdate {
+	_u.mutation.ClearOperationID()
+	return _u
+}
+
+// SetRequestDigest sets the "request_digest" field.
+func (_u *AuditLogUpdate) SetRequestDigest(v string) *AuditLogUpdate {
+	_u.mutation.SetRequestDigest(v)
+	return _u
+}
+
+// SetNillableRequestDigest sets the "request_digest" field if the given value is not nil.
+func (_u *AuditLogUpdate) SetNillableRequestDigest(v *string) *AuditLogUpdate {
+	if v != nil {
+		_u.SetRequestDigest(*v)
+	}
+	return _u
+}
+
+// ClearRequestDigest clears the value of the "request_digest" field.
+func (_u *AuditLogUpdate) ClearRequestDigest() *AuditLogUpdate {
+	_u.mutation.ClearRequestDigest()
+	return _u
+}
+
+// SetResultVersion sets the "result_version" field.
+func (_u *AuditLogUpdate) SetResultVersion(v int) *AuditLogUpdate {
+	_u.mutation.ResetResultVersion()
+	_u.mutation.SetResultVersion(v)
+	return _u
+}
+
+// SetNillableResultVersion sets the "result_version" field if the given value is not nil.
+func (_u *AuditLogUpdate) SetNillableResultVersion(v *int) *AuditLogUpdate {
+	if v != nil {
+		_u.SetResultVersion(*v)
+	}
+	return _u
+}
+
+// AddResultVersion adds value to the "result_version" field.
+func (_u *AuditLogUpdate) AddResultVersion(v int) *AuditLogUpdate {
+	_u.mutation.AddResultVersion(v)
+	return _u
+}
+
+// ClearResultVersion clears the value of the "result_version" field.
+func (_u *AuditLogUpdate) ClearResultVersion() *AuditLogUpdate {
+	_u.mutation.ClearResultVersion()
+	return _u
+}
+
+// SetResultStatus sets the "result_status" field.
+func (_u *AuditLogUpdate) SetResultStatus(v string) *AuditLogUpdate {
+	_u.mutation.SetResultStatus(v)
+	return _u
+}
+
+// SetNillableResultStatus sets the "result_status" field if the given value is not nil.
+func (_u *AuditLogUpdate) SetNillableResultStatus(v *string) *AuditLogUpdate {
+	if v != nil {
+		_u.SetResultStatus(*v)
+	}
+	return _u
+}
+
+// ClearResultStatus clears the value of the "result_status" field.
+func (_u *AuditLogUpdate) ClearResultStatus() *AuditLogUpdate {
+	_u.mutation.ClearResultStatus()
+	return _u
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_u *AuditLogUpdate) SetCreatedAt(v time.Time) *AuditLogUpdate {
 	_u.mutation.SetCreatedAt(v)
@@ -268,6 +355,33 @@ func (_u *AuditLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
+	if value, ok := _u.mutation.OperationID(); ok {
+		_spec.SetField(auditlog.FieldOperationID, field.TypeString, value)
+	}
+	if _u.mutation.OperationIDCleared() {
+		_spec.ClearField(auditlog.FieldOperationID, field.TypeString)
+	}
+	if value, ok := _u.mutation.RequestDigest(); ok {
+		_spec.SetField(auditlog.FieldRequestDigest, field.TypeString, value)
+	}
+	if _u.mutation.RequestDigestCleared() {
+		_spec.ClearField(auditlog.FieldRequestDigest, field.TypeString)
+	}
+	if value, ok := _u.mutation.ResultVersion(); ok {
+		_spec.SetField(auditlog.FieldResultVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedResultVersion(); ok {
+		_spec.AddField(auditlog.FieldResultVersion, field.TypeInt, value)
+	}
+	if _u.mutation.ResultVersionCleared() {
+		_spec.ClearField(auditlog.FieldResultVersion, field.TypeInt)
+	}
+	if value, ok := _u.mutation.ResultStatus(); ok {
+		_spec.SetField(auditlog.FieldResultStatus, field.TypeString, value)
+	}
+	if _u.mutation.ResultStatusCleared() {
+		_spec.ClearField(auditlog.FieldResultStatus, field.TypeString)
+	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(auditlog.FieldCreatedAt, field.TypeTime, value)
 	}
@@ -340,6 +454,93 @@ type AuditLogUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *AuditLogMutation
+}
+
+// SetOperationID sets the "operation_id" field.
+func (_u *AuditLogUpdateOne) SetOperationID(v string) *AuditLogUpdateOne {
+	_u.mutation.SetOperationID(v)
+	return _u
+}
+
+// SetNillableOperationID sets the "operation_id" field if the given value is not nil.
+func (_u *AuditLogUpdateOne) SetNillableOperationID(v *string) *AuditLogUpdateOne {
+	if v != nil {
+		_u.SetOperationID(*v)
+	}
+	return _u
+}
+
+// ClearOperationID clears the value of the "operation_id" field.
+func (_u *AuditLogUpdateOne) ClearOperationID() *AuditLogUpdateOne {
+	_u.mutation.ClearOperationID()
+	return _u
+}
+
+// SetRequestDigest sets the "request_digest" field.
+func (_u *AuditLogUpdateOne) SetRequestDigest(v string) *AuditLogUpdateOne {
+	_u.mutation.SetRequestDigest(v)
+	return _u
+}
+
+// SetNillableRequestDigest sets the "request_digest" field if the given value is not nil.
+func (_u *AuditLogUpdateOne) SetNillableRequestDigest(v *string) *AuditLogUpdateOne {
+	if v != nil {
+		_u.SetRequestDigest(*v)
+	}
+	return _u
+}
+
+// ClearRequestDigest clears the value of the "request_digest" field.
+func (_u *AuditLogUpdateOne) ClearRequestDigest() *AuditLogUpdateOne {
+	_u.mutation.ClearRequestDigest()
+	return _u
+}
+
+// SetResultVersion sets the "result_version" field.
+func (_u *AuditLogUpdateOne) SetResultVersion(v int) *AuditLogUpdateOne {
+	_u.mutation.ResetResultVersion()
+	_u.mutation.SetResultVersion(v)
+	return _u
+}
+
+// SetNillableResultVersion sets the "result_version" field if the given value is not nil.
+func (_u *AuditLogUpdateOne) SetNillableResultVersion(v *int) *AuditLogUpdateOne {
+	if v != nil {
+		_u.SetResultVersion(*v)
+	}
+	return _u
+}
+
+// AddResultVersion adds value to the "result_version" field.
+func (_u *AuditLogUpdateOne) AddResultVersion(v int) *AuditLogUpdateOne {
+	_u.mutation.AddResultVersion(v)
+	return _u
+}
+
+// ClearResultVersion clears the value of the "result_version" field.
+func (_u *AuditLogUpdateOne) ClearResultVersion() *AuditLogUpdateOne {
+	_u.mutation.ClearResultVersion()
+	return _u
+}
+
+// SetResultStatus sets the "result_status" field.
+func (_u *AuditLogUpdateOne) SetResultStatus(v string) *AuditLogUpdateOne {
+	_u.mutation.SetResultStatus(v)
+	return _u
+}
+
+// SetNillableResultStatus sets the "result_status" field if the given value is not nil.
+func (_u *AuditLogUpdateOne) SetNillableResultStatus(v *string) *AuditLogUpdateOne {
+	if v != nil {
+		_u.SetResultStatus(*v)
+	}
+	return _u
+}
+
+// ClearResultStatus clears the value of the "result_status" field.
+func (_u *AuditLogUpdateOne) ClearResultStatus() *AuditLogUpdateOne {
+	_u.mutation.ClearResultStatus()
+	return _u
 }
 
 // SetCreatedAt sets the "created_at" field.
@@ -611,6 +812,33 @@ func (_u *AuditLogUpdateOne) sqlSave(ctx context.Context) (_node *AuditLog, err 
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.OperationID(); ok {
+		_spec.SetField(auditlog.FieldOperationID, field.TypeString, value)
+	}
+	if _u.mutation.OperationIDCleared() {
+		_spec.ClearField(auditlog.FieldOperationID, field.TypeString)
+	}
+	if value, ok := _u.mutation.RequestDigest(); ok {
+		_spec.SetField(auditlog.FieldRequestDigest, field.TypeString, value)
+	}
+	if _u.mutation.RequestDigestCleared() {
+		_spec.ClearField(auditlog.FieldRequestDigest, field.TypeString)
+	}
+	if value, ok := _u.mutation.ResultVersion(); ok {
+		_spec.SetField(auditlog.FieldResultVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedResultVersion(); ok {
+		_spec.AddField(auditlog.FieldResultVersion, field.TypeInt, value)
+	}
+	if _u.mutation.ResultVersionCleared() {
+		_spec.ClearField(auditlog.FieldResultVersion, field.TypeInt)
+	}
+	if value, ok := _u.mutation.ResultStatus(); ok {
+		_spec.SetField(auditlog.FieldResultStatus, field.TypeString, value)
+	}
+	if _u.mutation.ResultStatusCleared() {
+		_spec.ClearField(auditlog.FieldResultStatus, field.TypeString)
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(auditlog.FieldCreatedAt, field.TypeTime, value)

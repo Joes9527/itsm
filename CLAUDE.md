@@ -135,7 +135,21 @@ All APIs return `{ code: number, message: string, data: any }`:
 
 Full statement: [AGENTS.md § Domain Ownership](AGENTS.md), plus the Unified Work Item Domain Contract below. Ticket/Incident/Problem/Change/Release/Service Request stay distinct professional domains — reuse shared helpers, don't collapse their lifecycle rules into one generic abstraction. BPMN is the orchestration layer for approvals/fulfillment/escalation. CMDB is not an asset table. Knowledge/RAG must keep source attribution, versioning, and tenant/permission filtering. MSP/tenant behavior applies to every new table, query, API, menu item, and background job. The Unified Work Item Domain Contract below governs how these domains relate at the data-model level — read it before adding fields, relations, or lifecycle logic to any of them.
 
-## Unified Work Item Domain Contract (Summary)
+## Unified Work Item Domain Contract
+
+Runtime controlled-migration admission uses an independently configured, read-only inspection identity bound to the same database/schema/deployment, with ledger/evidence SELECT only; the business identity receives no global evidence access. Runtime structural admission is distinct from full privileged P/R data verification and business acceptance. Existing targets advance through the canonical migration stream without Ent overlays.
+
+
+> Accepted controlled retirement design (code and isolated validation implemented; Tasks 1–6 reviewed; final scoped rereview completed as a successor review (PASS, not an independent third-party review); I2 deferred as BL-WI-PROCESS-AUDIT-CONTINUITY, so general pre-P active-process retirement remains unaccepted; current-HEAD isolated full-flow rerun workitem-v1-e27375881582 passed 27/27 covering observation, R(038), recovery and business V1; a shared itsm-postgres-dev dedicated-database run completed real CLI admission/P/ordinary migration and was cleaned up; real target deployment/retirement remains unauthorized and unexecuted): [design](docs/superpowers/specs/2026-09-11-workitem-controlled-retirement-design.md); [plan](docs/superpowers/plans/2026-09-11-workitem-controlled-retirement.md). Preserve historical SQL/checksums and truthful receipts. Separate transactional structure preparation from later full business acceptance and controlled retirement. All migration write paths, including rollback/reset, enforce stage dependencies; read-only classification precedes any bootstrap writes. Environment deployment and deletion require their own authorization.
+ (Summary)
+
+> Accepted convergence design: [WorkItem convergence](docs/superpowers/specs/2026-09-09-workitem-convergence-design.md); [implementation plan](docs/superpowers/plans/2026-09-09-workitem-convergence.md). Incident recovery is independent of Problem completion. Problem resolution requires a verified permanent fix. Authorized reopen starts a zeroed SLA cycle while preserving prior results and original creation time. For this convergence only, historical business data is not migrated; schema changes remain required. Retire old structures after sole-path cutover, validation and observation. No parallel lifecycle, relationship, SLA or approval implementation is permitted.
+
+> Confirmed cross-domain development input: [WorkItem next development input](docs/superpowers/specs/2026-09-11-workitem-convergence-development-input.md). It covers Incident, Problem, Change and shared capabilities; the accepted Incident decision below is only one sub-decision. Open questions are not approved implementation requirements.
+
+> Confirmed follow-up decisions (code and isolated validation implemented; target deployment pending): Change reassignment preserves stage and approval results without replacing task actors; Problem reassignment preserves progress and evidence. Every reassignment requires a reason and audit. Change multi-WorkOrder execution is backlog BL-CHG-WO-01. See the [decision record](docs/superpowers/specs/2026-09-11-workitem-convergence-development-input.md). The [next-stage design](docs/superpowers/specs/2026-09-11-workitem-convergence-next-stage-design.md) is accepted; use the [next-stage implementation plan](docs/superpowers/plans/2026-09-11-workitem-next-stage.md) to track remaining work. Code and isolated validation are recorded in the implementation plan; candidate integration and target deployment require their own current-version evidence.
+
+> Accepted Incident assignment decision (code and isolated validation implemented; target deployment pending): [assignment convergence](docs/superpowers/specs/2026-09-11-workitem-incident-assignment-convergence-design.md). First assignment of a new Incident moves it to assigned; later reassignment preserves its current allowed nonterminal state. Starting work does not require a prior acknowledge action; acknowledge remains optional. All entrypoints share Incident domain rules and versioned transactional receipts. First-response measurement is backlog BL-RESP-01: do not change existing response recording or implicitly mark assignment/start as a response. Existing SLA cycle and reopen guarantees remain required.
 
 Full contract: [AGENTS.md § Unified Work Item Domain Contract](AGENTS.md). Core invariants to hold for any Ticket/Incident/Problem/Change/Service Request work:
 
@@ -145,6 +159,7 @@ Full contract: [AGENTS.md § Unified Work Item Domain Contract](AGENTS.md). Core
 - `recordClass` identifies the professional class and is immutable once an extension exists.
 - A relationship is not a lifecycle conversion — Incident does not become Problem by changing a type; create the target WorkItem and an explicit relation instead, preserving the source record and history.
 - Shared operations (assignment, comments, attachments, SLA projection, audit) live on WorkItem; `IncidentService`/`ProblemService`/`ChangeService`/`ServiceRequestService` own their own professional transitions — do not build a generic `switch recordClass` state machine.
+- Process identity is recordClass: at every BPMN boundary the business type is the WorkItem record class and the key is `{recordClass}:{workItemId}` with a WorkItem ID. The legacy vocabulary (`ticket`/`change`/`service_request`) is retired — never write it, never re-interpret it, and never add a second mapping that translates recordClass back to it (single authority: `common/workitemidentity`). Release keeps `release` and is not a WorkItem.
 
 ## Important Patterns
 
@@ -188,6 +203,7 @@ Full contract: [AGENTS.md § Unified Work Item Domain Contract](AGENTS.md). Core
 - SLA timers and escalations must be computed from authoritative timestamps and policy bindings, not from UI-derived state.
 - Change management must preserve risk, CAB/approval, release window, implementation result, and PIR concepts.
 - Problem management must preserve root cause, workaround, known error, and linked incident relationships.
+- Problem root-cause text has one authoritative write location: `problems.root_cause`. RCA records own analysis metadata (method, evidence, confidence, reviewer), and expose the Problem root cause as a projection. RCA mutations update the Problem text and analysis metadata atomically; Known Error creation reads that same Problem text. Do not restore a second RCA root-cause text column or dual writes.
 
 ## Fail-Closed Dispatch For Unknown Behavior
 
@@ -526,6 +542,12 @@ src/
 - ❌ `ticket-list-api.ts` → ✅ `ticketApi.ts` 或 `TicketApi.ts`
 
 ## 工程要求摘要
+
+### Runtime lifecycle and candidate execution
+
+- Service construction must not start consumers, deploy default workflows, create storage resources, or initialize schema. Runtime startup is explicit; cancellation and worker completion precede dependency shutdown.
+- Candidate execution scope is an additional deployment restriction, never a replacement for tenant/RBAC or professional lifecycle authorization. Only new WorkItems may be enrolled in their creation transaction; historical records must not be enrolled, claimed, acknowledged, or rewritten to enable acceptance.
+- Execution configuration and database role bindings must agree. Unknown capabilities fail closed; disabled required journeys remain unvalidated. A configured attachment backend must not silently fall back to another storage location.
 
 ### 必须遵守的规则
 

@@ -19,6 +19,7 @@ import (
 	"itsm-backend/ent/workitemnumbersequence"
 	"itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/repository/workitemnumber"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"os"
 	"sync"
 	"testing"
@@ -46,7 +47,7 @@ func TestPostgresConcurrentApplicationCreation(t *testing.T) {
 	c := workitemcreation.CreateWorkItemCommand{RecordClass: "generic", IntakeKind: "generic", Confirmation: "confirmed", IdempotencyKey: "concurrent", Title: "VPN"}
 	registry := NewCreatorRegistry()
 	require.NoError(t, registry.Register(&preparedCreator{}))
-	service := NewService(client, preparedResolver{}, registry, NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})
+	service := NewService(client, preparedResolver{}, registry, NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard())
 	type outcome struct {
 		result *workitemcreation.CreateWorkItemResult
 		err    error

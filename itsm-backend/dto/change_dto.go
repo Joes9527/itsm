@@ -1,12 +1,17 @@
 package dto
 
-import "time"
+import (
+	relationmeta "itsm-backend/common/workitemrelation"
+	creation "itsm-backend/handlers/common/workitemcreation"
+	"time"
+)
 
 // ChangeStatus 变更状态
 type ChangeStatus string
 
 const (
 	ChangeStatusDraft      ChangeStatus = "draft"       // 草稿
+	ChangeStatusSubmitted  ChangeStatus = "submitted"   // 已提交待审批
 	ChangeStatusPending    ChangeStatus = "pending"     // 待审批
 	ChangeStatusApproved   ChangeStatus = "approved"    // 已批准
 	ChangeStatusRejected   ChangeStatus = "rejected"    // 已拒绝
@@ -57,24 +62,27 @@ const (
 
 // CreateChangeRequest 创建变更请求
 type CreateChangeRequest struct {
-	RequesterID        *int       `json:"requesterId,omitempty" binding:"omitempty,gt=0"` // 可选目标租户申请人
-	Title              string     `json:"title" binding:"required"`                       // 变更标题
-	Description        string     `json:"description"`                                    // 变更描述
-	Justification      string     `json:"justification"`                                  // 变更理由
-	Type               string     `json:"type"`                                           // 变更类型: normal, standard, emergency
-	Priority           string     `json:"priority"`                                       // 优先级: low, medium, high, critical
-	ImpactScope        string     `json:"impactScope"`                                    // 影响范围: low, medium, high
-	RiskLevel          string     `json:"riskLevel"`                                      // 风险等级: low, medium, high
-	PlannedStartDate   *time.Time `json:"plannedStartDate"`                               // 计划开始时间
-	PlannedEndDate     *time.Time `json:"plannedEndDate"`                                 // 计划结束时间
-	ImplementationPlan string     `json:"implementationPlan"`                             // 实施计划
-	RollbackPlan       string     `json:"rollbackPlan"`                                   // 回滚计划
-	AffectedCIs        []string   `json:"affectedCis"`                                    // 受影响的配置项
-	RelatedTickets     []string   `json:"relatedTickets"`                                 // 相关工单编号
+	SourceRelations    creation.SourceRelations `json:"sourceRelations,omitempty"`
+	RequesterID        *int                     `json:"requesterId,omitempty" binding:"omitempty,gt=0"` // 可选目标租户申请人
+	Title              string                   `json:"title" binding:"required"`                       // 变更标题
+	Description        string                   `json:"description"`                                    // 变更描述
+	Justification      string                   `json:"justification"`                                  // 变更理由
+	Type               string                   `json:"type"`                                           // 变更类型: normal, standard, emergency
+	Priority           string                   `json:"priority"`                                       // 优先级: low, medium, high, critical
+	ImpactScope        string                   `json:"impactScope"`                                    // 影响范围: low, medium, high
+	RiskLevel          string                   `json:"riskLevel"`                                      // 风险等级: low, medium, high
+	PlannedStartDate   *time.Time               `json:"plannedStartDate"`                               // 计划开始时间
+	PlannedEndDate     *time.Time               `json:"plannedEndDate"`                                 // 计划结束时间
+	ImplementationPlan string                   `json:"implementationPlan"`                             // 实施计划
+	RollbackPlan       string                   `json:"rollbackPlan"`                                   // 回滚计划
+	AffectedCIs        []string                 `json:"affectedCis"`                                    // 受影响的配置项
 }
 
 // UpdateChangeRequest 更新变更请求
 type UpdateChangeRequest struct {
+	AssignmentReason string `json:"assignmentReason"`
+	AssigneeID       *int   `json:"assigneeId"`
+	ChangeRiskPatch
 	Title              *string         `json:"title"`              // 变更标题
 	Description        *string         `json:"description"`        // 变更描述
 	Justification      *string         `json:"justification"`      // 变更理由
@@ -87,40 +95,57 @@ type UpdateChangeRequest struct {
 	ImplementationPlan *string         `json:"implementationPlan"` // 实施计划
 	RollbackPlan       *string         `json:"rollbackPlan"`       // 回滚计划
 	AffectedCIs        []string        `json:"affectedCis"`        // 受影响的配置项
-	RelatedTickets     []string        `json:"relatedTickets"`     // 相关工单
+}
+
+type ChangeRiskPatch struct {
+	RiskDescription    *string    `json:"riskDescription"`
+	ImpactAnalysis     *string    `json:"impactAnalysis"`
+	MitigationMeasures *string    `json:"mitigationMeasures"`
+	ContingencyPlan    *string    `json:"contingencyPlan"`
+	RiskOwner          *string    `json:"riskOwner"`
+	RiskReviewDate     *time.Time `json:"riskReviewDate"`
 }
 
 // ChangeResponse 变更响应
 type ChangeResponse struct {
-	ID                 int            `json:"id"`                 // 变更ID
-	Title              string         `json:"title"`              // 变更标题
-	Description        string         `json:"description"`        // 变更描述
-	Justification      string         `json:"justification"`      // 变更理由
-	Type               ChangeType     `json:"type"`               // 变更类型
-	Status             ChangeStatus   `json:"status"`             // 状态
-	Priority           ChangePriority `json:"priority"`           // 优先级
-	ImpactScope        ChangeImpact   `json:"impactScope"`        // 影响范围
-	RiskLevel          ChangeRisk     `json:"riskLevel"`          // 风险等级
-	AssigneeID         *int           `json:"assigneeId"`         // 处理人ID
-	AssigneeName       *string        `json:"assigneeName"`       // 处理人姓名
-	CreatedBy          int            `json:"createdBy"`          // 创建人ID
-	CreatedByName      string         `json:"createdByName"`      // 创建人姓名
-	TenantID           int            `json:"tenantId"`           // 租户ID
-	PlannedStartDate   *time.Time     `json:"plannedStartDate"`   // 计划开始时间
-	PlannedEndDate     *time.Time     `json:"plannedEndDate"`     // 计划结束时间
-	ActualStartDate    *time.Time     `json:"actualStartDate"`    // 实际开始时间
-	ActualEndDate      *time.Time     `json:"actualEndDate"`      // 实际结束时间
-	ImplementationPlan string         `json:"implementationPlan"` // 实施计划
-	RollbackPlan       string         `json:"rollbackPlan"`       // 回滚计划
-	AffectedCIs        []string       `json:"affectedCis"`        // 受影响的配置项
-	RelatedTickets     []string       `json:"relatedTickets"`     // 相关工单（Wave 2 起从 WorkItemRelation 动态解析，不再是存量 JSON 列的直接回显）
-	CreatedAt          time.Time      `json:"createdAt"`          // 创建时间
-	UpdatedAt          time.Time      `json:"updatedAt"`          // 更新时间
+	Number             string              `json:"number"`
+	Version            int                 `json:"version"`
+	Outcome            string              `json:"outcome"`
+	OutcomeEvidence    string              `json:"outcomeEvidence"`
+	ReviewEvidence     string              `json:"reviewEvidence"`
+	ReviewedBy         int                 `json:"reviewedBy"`
+	ReviewedAt         *time.Time          `json:"reviewedAt"`
+	StandardTemplateID int                 `json:"standardTemplateId"`
+	ID                 int                 `json:"id"`                 // 变更ID
+	Title              string              `json:"title"`              // 变更标题
+	Description        string              `json:"description"`        // 变更描述
+	Justification      string              `json:"justification"`      // 变更理由
+	Type               ChangeType          `json:"type"`               // 变更类型
+	Status             ChangeStatus        `json:"status"`             // 状态
+	Priority           ChangePriority      `json:"priority"`           // 优先级
+	ImpactScope        ChangeImpact        `json:"impactScope"`        // 影响范围
+	RiskLevel          ChangeRisk          `json:"riskLevel"`          // 风险等级
+	AssigneeID         *int                `json:"assigneeId"`         // 处理人ID
+	AssigneeName       *string             `json:"assigneeName"`       // 处理人姓名
+	CreatedBy          int                 `json:"createdBy"`          // 创建人ID
+	CreatedByName      string              `json:"createdByName"`      // 创建人姓名
+	TenantID           int                 `json:"tenantId"`           // 租户ID
+	PlannedStartDate   *time.Time          `json:"plannedStartDate"`   // 计划开始时间
+	PlannedEndDate     *time.Time          `json:"plannedEndDate"`     // 计划结束时间
+	ActualStartDate    *time.Time          `json:"actualStartDate"`    // 实际开始时间
+	ActualEndDate      *time.Time          `json:"actualEndDate"`      // 实际结束时间
+	ImplementationPlan string              `json:"implementationPlan"` // 实施计划
+	RollbackPlan       string              `json:"rollbackPlan"`       // 回滚计划
+	AffectedCIs        []string            `json:"affectedCis"`        // 受影响的配置项
+	Relations          []relationmeta.View `json:"relations"`
+	CreatedAt          time.Time           `json:"createdAt"` // 创建时间
+	UpdatedAt          time.Time           `json:"updatedAt"` // 更新时间
 	// WorkItemID 关联的 WorkItem（tickets.id）。Change 创建事务保证该值存在；nil 表示
 	// 开发数据违反 WorkItem 创建不变量。与 dto.IncidentResponse.WorkItemID /
 	// dto.ProblemResponse.WorkItemID 同一模式，供前端 WorkItemShell 使用。
-	WorkItemID *int                        `json:"workItemId,omitempty"`
-	Actions    map[string]ActionPermission `json:"actions,omitempty"`
+	WorkItemID   *int                        `json:"workItemId,omitempty"`
+	Actions      map[string]ActionPermission `json:"actions,omitempty"`
+	CurrentTasks map[string]string           `json:"currentTasks"`
 }
 
 // ChangeListResponse 变更列表响应
@@ -133,28 +158,20 @@ type ChangeListResponse struct {
 
 // ChangeStatsResponse 变更统计响应
 type ChangeStatsResponse struct {
-	Total      int `json:"total"`      // 总变更数
-	Pending    int `json:"pending"`    // 待审批
-	Approved   int `json:"approved"`   // 已批准
-	Scheduled  int `json:"scheduled"`  // 已排期
-	InProgress int `json:"inProgress"` // 实施中
-	Completed  int `json:"completed"`  // 已完成
-	Failed     int `json:"failed"`     // 实施失败
-	RolledBack int `json:"rolledBack"` // 已回滚
-	Rejected   int `json:"rejected"`   // 已拒绝
-	Cancelled  int `json:"cancelled"`  // 已取消
-}
-
-// ChangeApprovalRequest 变更审批请求
-type ChangeApprovalRequest struct {
-	Status  ChangeApprovalStatus `json:"status" binding:"required"` // 审批状态
-	Comment *string              `json:"comment"`                   // 审批意见
-}
-
-// ChangeStatusUpdateRequest 变更状态更新请求
-type ChangeStatusUpdateRequest struct {
-	Status  ChangeStatus `json:"status" binding:"required"` // 新状态
-	Comment *string      `json:"comment"`                   // 状态变更说明
+	Draft              int `json:"draft"`
+	SuccessfulOutcomes int `json:"successfulOutcomes"`
+	FailedOutcomes     int `json:"failedOutcomes"`
+	RolledBackOutcomes int `json:"rolledBackOutcomes"`
+	Total              int `json:"total"`      // 总变更数
+	Pending            int `json:"pending"`    // 待审批
+	Approved           int `json:"approved"`   // 已批准
+	Scheduled          int `json:"scheduled"`  // 已排期
+	InProgress         int `json:"inProgress"` // 实施中
+	Completed          int `json:"completed"`  // 已完成
+	Failed             int `json:"failed"`     // 实施失败
+	RolledBack         int `json:"rolledBack"` // 已回滚
+	Rejected           int `json:"rejected"`   // 已拒绝
+	Cancelled          int `json:"cancelled"`  // 已取消
 }
 
 // ChangeApproval 变更审批记录
@@ -377,15 +394,6 @@ type ChangeRollbackExecutionResponse struct {
 	Comments        string     `json:"comments"`        // 备注
 	CreatedAt       time.Time  `json:"createdAt"`       // 创建时间
 	UpdatedAt       time.Time  `json:"updatedAt"`       // 更新时间
-}
-
-// SubmitChangeRequest 提交变更审批请求
-//
-// 审批人不再由提交方指定——BPMN 流程的 CAB 审批节点按 assigneeRole="change_manager"
-// 解析候选人（租户内所有 change_manager 角色的用户），旧版本这里的 ApproverIDs
-// 字段已经不生效，删除避免误导调用方以为传了就有用。
-type SubmitChangeRequest struct {
-	Comment string `json:"comment"` // 提交说明（可选）
 }
 
 // ChangeCalendarRequest 日历视图请求

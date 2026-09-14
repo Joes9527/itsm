@@ -3,6 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"itsm-backend/database"
+	"itsm-backend/dto"
+	"itsm-backend/handlers/shared/slacontract"
 	"strings"
 	"time"
 
@@ -33,17 +36,22 @@ type TicketSLAServiceInterface interface {
 
 // TicketSLAInfoResult 工单SLA信息（计算结果）
 type TicketSLAInfoResult struct {
-	TicketID           int        `json:"ticketId"`
-	TicketNumber       string     `json:"ticketNumber"`
-	Priority           string     `json:"priority"`
-	TicketType         string     `json:"ticketType"`
-	ResponseDeadline   *time.Time `json:"responseDeadline"`
-	ResolutionDeadline *time.Time `json:"resolutionDeadline"`
-	ResponseTimeUsed   int        `json:"responseTimeUsed"`   // 分钟
-	ResolutionTimeUsed int        `json:"resolutionTimeUsed"` // 分钟
-	ResponseBreached   bool       `json:"responseBreached"`
-	ResolutionBreached bool       `json:"resolutionBreached"`
-	SLAStatus          string     `json:"slaStatus"` // ok, warning, breached
+	CycleNumber        int                  `json:"cycleNumber"`
+	CycleStartedAt     *time.Time           `json:"cycleStartedAt"`
+	PausedMinutes      int                  `json:"pausedMinutes"`
+	AppliedPolicy      *slacontract.Policy  `json:"appliedPolicy"`
+	History            []dto.SLACycleResult `json:"history"`
+	TicketID           int                  `json:"ticketId"`
+	TicketNumber       string               `json:"ticketNumber"`
+	Priority           string               `json:"priority"`
+	TicketType         string               `json:"ticketType"`
+	ResponseDeadline   *time.Time           `json:"responseDeadline"`
+	ResolutionDeadline *time.Time           `json:"resolutionDeadline"`
+	ResponseTimeUsed   int                  `json:"responseTimeUsed"`   // 分钟
+	ResolutionTimeUsed int                  `json:"resolutionTimeUsed"` // 分钟
+	ResponseBreached   bool                 `json:"responseBreached"`
+	ResolutionBreached bool                 `json:"resolutionBreached"`
+	SLAStatus          string               `json:"slaStatus"` // ok, warning, breached
 }
 
 // SLADeadlineResult SLA截止时间计算结果
@@ -67,8 +75,9 @@ type TicketStats struct {
 
 // TicketSLAService 工单SLA服务
 type TicketSLAService struct {
-	client *ent.Client
-	logger *zap.SugaredLogger
+	directory database.DirectorySnapshot
+	client    *ent.Client
+	logger    *zap.SugaredLogger
 }
 
 // NewTicketSLAService 创建工单SLA服务
@@ -90,109 +99,30 @@ func (s *TicketSLAService) GetTicketSLAInfo(ctx context.Context, ticketID int, t
 		return nil, err
 	}
 
-	// 计算已用时间
-	responseTimeUsed := int(time.Since(t.CreatedAt).Minutes())
-	resolutionTimeUsed := int(time.Since(t.CreatedAt).Minutes())
-
-	// 如果已有首次响应时间或解决时间，使用实际时间
-	if !t.FirstResponseAt.IsZero() {
-		responseTimeUsed = int(t.FirstResponseAt.Sub(t.CreatedAt).Minutes())
-	}
-	if !t.ResolvedAt.IsZero() {
-		resolutionTimeUsed = int(t.ResolvedAt.Sub(t.CreatedAt).Minutes())
-	}
-	slaDef, err := s.getSLADefinition(ctx, tenantID, common.WorkItemLegacyType(t.RecordClass, t.GenericSubtype), t.Priority, 0)
+	result := projectSLACycle(t, time.Now())
+	result.TicketType = common.WorkItemLegacyType(t.RecordClass, t.GenericSubtype)
+	result.History, err = s.cycleHistory(ctx, t)
 	if err != nil {
-		s.logger.Warnw("Failed to get SLA definition", "error", err)
-		// 返回没有SLA信息的结果
-		return &TicketSLAInfoResult{
-			TicketID:           t.ID,
-			TicketNumber:       t.TicketNumber,
-			Priority:           t.Priority,
-			TicketType:         common.WorkItemLegacyType(t.RecordClass, t.GenericSubtype),
-			ResponseTimeUsed:   responseTimeUsed,
-			ResolutionTimeUsed: resolutionTimeUsed,
-			SLAStatus:          "unknown",
-		}, nil
+		return nil, err
 	}
-
-	// 计算截止时间。
-	// 阻断7/C-8 修复：统一读取 slaDef.BusinessHours 配置，与 CalculateSLADeadlineFromRequest
-	// 使用同一口径，消除"建单落库调整 / 查询展示不调整"的两路径结论相反问题。
-	var responseDeadline, resolutionDeadline *time.Time
-	if slaDef.ResponseTime > 0 {
-		respDeadline, err := s.calculateDeadlineWithBusinessHours(t.CreatedAt, slaDef.ResponseTime, slaDef.BusinessHours)
-		if err != nil {
-			return nil, err
-		}
-		responseDeadline = &respDeadline
-	}
-	if slaDef.ResolutionTime > 0 {
-		resDeadline, err := s.calculateDeadlineWithBusinessHours(t.CreatedAt, slaDef.ResolutionTime, slaDef.BusinessHours)
-		if err != nil {
-			return nil, err
-		}
-		resolutionDeadline = &resDeadline
-	}
-
-	// 判断是否违规
-	responseBreached := false
-	resolutionBreached := false
-	slaStatus := "ok"
-
-	if responseDeadline != nil && time.Now().After(*responseDeadline) {
-		responseBreached = true
-		slaStatus = "breached"
-	}
-
-	if resolutionDeadline != nil && time.Now().After(*resolutionDeadline) {
-		resolutionBreached = true
-		slaStatus = "breached"
-	}
-
-	// 检查警告状态（默认30分钟警告）
-	if !responseBreached && !resolutionBreached && responseDeadline != nil {
-		timeLeft := time.Until(*responseDeadline)
-		if timeLeft.Minutes() < 30 {
-			slaStatus = "warning"
-		}
-	}
-
-	return &TicketSLAInfoResult{
-		TicketID:           t.ID,
-		TicketNumber:       t.TicketNumber,
-		Priority:           t.Priority,
-		TicketType:         common.WorkItemLegacyType(t.RecordClass, t.GenericSubtype),
-		ResponseDeadline:   responseDeadline,
-		ResolutionDeadline: resolutionDeadline,
-		ResponseTimeUsed:   responseTimeUsed,
-		ResolutionTimeUsed: resolutionTimeUsed,
-		ResponseBreached:   responseBreached,
-		ResolutionBreached: resolutionBreached,
-		SLAStatus:          slaStatus,
-	}, nil
+	return &result, nil
 }
 
 // GetOverdueTickets 获取逾期工单
 func (s *TicketSLAService) GetOverdueTickets(ctx context.Context, tenantID int) ([]*ent.Ticket, error) {
-	// SLA 截止时间在建单时已落库，直接由数据库筛选，避免逐工单查询 SLA 定义的 N+1。
-	now := time.Now()
-	tickets, err := s.client.Ticket.Query().
-		Where(
-			ticket.TenantID(tenantID),
-			ticket.DeletedAtIsNil(),
-			ticket.StatusNEQ(common.TicketStatusClosed),
-			ticket.StatusNEQ(common.TicketStatusResolved),
-			ticket.SLAResolutionDeadlineNotNil(),
-			ticket.SLAResolutionDeadlineLT(now),
-		).
-		All(ctx)
+	// Persisted deadlines already include pauses; keep the active deadline filter
+	// in SQL rather than scanning every unresolved WorkItem in the tenant.
+	items, err := s.client.Ticket.Query().Where(ticket.TenantID(tenantID), ticket.DeletedAtIsNil(), ticket.ResolvedAtIsNil(), ticket.ClosedAtIsNil(), ticket.SLAResolutionDeadlineLT(time.Now())).All(ctx)
 	if err != nil {
-		s.logger.Errorw("Failed to query tickets", "error", err)
 		return nil, err
 	}
-
-	return tickets, nil
+	result := make([]*ent.Ticket, 0)
+	for _, item := range items {
+		if projectSLACycle(item, time.Now()).ResolutionBreached {
+			result = append(result, item)
+		}
+	}
+	return result, nil
 }
 
 // GetTicketStats 获取工单统计
@@ -247,6 +177,17 @@ func (s *TicketSLAService) GetTicketStats(ctx context.Context, tenantID int) (*T
 		return nil, err
 	}
 	stats.OverdueTickets = len(overdueTickets)
+
+	items, err := s.client.Ticket.Query().Where(ticket.TenantID(tenantID), ticket.DeletedAtIsNil()).All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range items {
+		p := projectSLACycle(item, time.Now())
+		if p.ResponseBreached || p.ResolutionBreached {
+			stats.BreachedTickets++
+		}
+	}
 
 	return stats, nil
 }
@@ -583,4 +524,8 @@ func mapTicketTypeToServiceType(ticketType string) string {
 // toPointer 返回指针（辅助函数）
 func toPointer[T any](v T) *T {
 	return &v
+}
+
+func (s *TicketSLAService) SetDirectorySnapshot(directory database.DirectorySnapshot) {
+	s.directory = directory
 }

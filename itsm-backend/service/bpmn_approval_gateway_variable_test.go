@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 
 	"itsm-backend/ent/enttest"
@@ -40,8 +41,7 @@ func TestApprovalGatewayReadsApplicationVariableName(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := zap.NewNop().Sugar()
-	engine := NewCustomProcessEngine(client, logger)
-	injectEngineChangeCallbackTestService(t, engine, client)
+	engine := NewCustomProcessEngine(client, logger, executionfixture.Standard())
 
 	deploymentSvc := NewBPMNTemplateService(client)
 
@@ -58,17 +58,12 @@ func TestApprovalGatewayReadsApplicationVariableName(t *testing.T) {
 		skipNode     string
 	}{
 		{"service_request_flow", "Activity_Approval", "Activity_Execute"},
-		{"change_normal_flow", "Activity_CABApproval", "Activity_Schedule"},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.processKey, func(t *testing.T) {
 			businessType := ""
 			businessID := 0
-			if tc.processKey == "change_normal_flow" {
-				workItem, _ := createUserTaskCallbackChange(t, client, ctx, tenant.ID, reader.ID, "CHG-GATE-"+tc.processKey)
-				businessType, businessID = "change", workItem.ID
-			}
 			// Test case 1: approval_required=true should route to approval node
 			t.Run("approval_required=true", func(t *testing.T) {
 				instance, err := engine.StartProcess(ctx, tc.processKey, "test-business-key-approval-true-"+tc.processKey, businessType, businessID, map[string]interface{}{

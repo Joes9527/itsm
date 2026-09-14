@@ -261,7 +261,7 @@ export default function WorkflowInstancesPage() {
         title: '实例 ID',
         dataIndex: 'id',
         key: 'id',
-        render: (value: string) => <span className="font-mono text-xs">{value}</span>,
+        render: (value: string) => <span className="font-mono text-[12px]">{value}</span>,
         width: 180,
       },
       {
@@ -405,7 +405,7 @@ export default function WorkflowInstancesPage() {
         dataIndex: 'id',
         key: 'id',
         width: 120,
-        render: (value: string) => <span className="font-mono text-xs">{value}</span>,
+        render: (value: string) => <span className="font-mono text-[12px]">{value}</span>,
       },
       {
         title: '节点名称',
@@ -459,7 +459,7 @@ export default function WorkflowInstancesPage() {
       children: selectedInstance && (
         <Descriptions column={1} bordered size="small">
           <Descriptions.Item label="实例 ID">
-            <span className="font-mono text-xs">{selectedInstance.id}</span>
+            <span className="font-mono text-[12px]">{selectedInstance.id}</span>
           </Descriptions.Item>
           <Descriptions.Item label="流程 Key">{selectedInstance.processDefinitionKey}</Descriptions.Item>
           <Descriptions.Item label="业务键">{selectedInstance.businessKey}</Descriptions.Item>
@@ -526,19 +526,19 @@ export default function WorkflowInstancesPage() {
                       <div className="flex justify-between items-center mb-1">
                         <Space>
                           <Badge color={actionColor} />
-                          <span className="font-medium text-sm">
+                          <span className="font-medium text-[13px]">
                             {log.action.replace('_', ' ')}
                           </span>
                           {log.activityName && (
                             <Tag>{log.activityName}</Tag>
                           )}
                         </Space>
-                        <span className="text-xs text-gray-500">
+                        <span className="text-[12px] text-muted">
                           {formatDateTime(log.timestamp)}
                         </span>
                       </div>
                       
-                      <div className="text-xs text-gray-600 mb-1 pl-5">
+                      <div className="text-[12px] text-muted mb-1 pl-5">
                         {log.userName && (
                           <span className="mr-3">
                             <User className="w-3 h-3 inline mr-1" />
@@ -560,17 +560,17 @@ export default function WorkflowInstancesPage() {
                       </div>
 
                       {log.comment && (
-                        <div className="text-xs bg-gray-50 p-2 rounded ml-5 mb-1">
-                          <MessageSquare className="w-3 h-3 inline mr-1 text-gray-400" />
+                        <div className="text-[12px] bg-raised p-2 rounded ml-5 mb-1">
+                          <MessageSquare className="w-3 h-3 inline mr-1 text-muted" />
                           {log.comment}
                         </div>
                       )}
 
                       {(log.variablesAfter && Object.keys(log.variablesAfter).length > 0) && (
-                        <div className="text-xs ml-5 mt-1">
+                        <div className="text-[12px] ml-5 mt-1">
                           <details className="cursor-pointer">
                             <summary className="text-blue-500">变量变更</summary>
-                            <pre className="mt-1 p-2 bg-gray-50 rounded overflow-x-auto text-[10px]">
+                            <pre className="mt-1 p-2 bg-raised rounded overflow-x-auto text-[10px]">
                               {JSON.stringify(log.variablesAfter, null, 2)}
                             </pre>
                           </details>
@@ -647,7 +647,7 @@ export default function WorkflowInstancesPage() {
         }
       />
 
-      <Card className="rounded-xl shadow-sm">
+      <Card className="rounded-[8px] shadow-none">
         <LoadingEmptyError
           state={loading ? 'loading' : instances.length === 0 ? 'empty' : 'success'}
           loadingText="正在加载工作流实例..."

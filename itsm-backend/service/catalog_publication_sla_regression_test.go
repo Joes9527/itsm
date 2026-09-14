@@ -84,7 +84,7 @@ func TestA5FixSLAEscalationJobRejectsInvalidStoredLevel(t *testing.T) {
 	user, err := createEscalationTestUser(ctx, client, tenant.ID, "invalid-level")
 	require.NoError(t, err)
 	sla := client.SLADefinition.Create().SetTenantID(tenant.ID).SetName("Invalid escalation").SetEscalationRules(map[string]interface{}{"high": []interface{}{map[string]interface{}{"level": json.Number("1.5"), "afterMinutes": 30}}}).SaveX(ctx)
-	item := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(user.ID).SetTitle("Escalation").SetTicketNumber("ESC-INVALID").SetPriority("high").SetSLADefinitionID(sla.ID).SaveX(ctx)
+	item := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(user.ID).SetTitle("Escalation").SetTicketNumber("ESC-INVALID").SetCreatedAt(time.Now().Add(-time.Hour)).SetPriority("high").SetSLADefinitionID(sla.ID).SaveX(ctx)
 	rule := client.SLAAlertRule.Create().SetTenantID(tenant.ID).SetName("Rule").SetSLADefinitionID(sla.ID).SetEscalationEnabled(true).SaveX(ctx)
 	alert := client.SLAAlertHistory.Create().SetTenantID(tenant.ID).SetTicketID(item.ID).SetTicketNumber(item.TicketNumber).SetTicketTitle(item.Title).SetAlertRuleID(rule.ID).SetAlertRuleName(rule.Name).SetCreatedAt(time.Now().Add(-40 * time.Minute)).SaveX(ctx)
 	require.Error(t, owner.ProcessEscalations(ctx, tenant.ID))

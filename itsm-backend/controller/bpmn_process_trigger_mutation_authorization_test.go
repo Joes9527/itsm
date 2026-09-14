@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -105,7 +106,7 @@ func newProcessTriggerMutationHTTPFixture(t *testing.T) *processTriggerMutationH
 		SetTenantID(tenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
-	engine := service.NewCustomProcessEngine(client, zap.NewNop().Sugar())
+	engine := service.NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard())
 	triggerService := service.NewProcessTriggerService(client, engine)
 	return &processTriggerMutationHTTPFixture{
 		client:      client,

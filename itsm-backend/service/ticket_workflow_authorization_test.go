@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 
@@ -67,7 +68,7 @@ func newTicketWorkflowAuthorizationFixture(t *testing.T) *ticketWorkflowAuthoriz
 	require.NoError(t, err)
 	instance, err := client.ProcessInstance.Create().
 		SetProcessInstanceID(fmt.Sprintf("ticket-workflow-instance-%d", time.Now().UnixNano())).
-		SetBusinessKey(fmt.Sprintf("ticket:%d", ticket.ID)).
+		SetBusinessKey(fmt.Sprintf("generic:%d", ticket.ID)).
 		SetProcessDefinitionKey(definition.Key).
 		SetProcessDefinitionID(definition.ID).
 		SetCurrentActivityID("approval").
@@ -76,7 +77,7 @@ func newTicketWorkflowAuthorizationFixture(t *testing.T) *ticketWorkflowAuthoriz
 		Save(ctx)
 	require.NoError(t, err)
 	logger := zap.NewNop().Sugar()
-	engine := NewCustomProcessEngine(client, logger)
+	engine := NewCustomProcessEngine(client, logger, executionfixture.Standard())
 	triggerService := NewProcessTriggerService(client, engine)
 	ticketService := NewTicketServiceForTest(client, logger)
 	ticketService.SetProcessTriggerService(triggerService)

@@ -17,6 +17,12 @@ type TicketNotification struct {
 // Fields of the TicketNotification.
 func (TicketNotification) Fields() []ent.Field {
 	return []ent.Field{
+		field.String("target_transport").Optional().Nillable().Immutable().StructTag(`json:"-"`).Comment("Frozen email transport; NULL for legacy and non-email protocols"),
+		field.Int("target_protocol_version").Optional().Nillable().Immutable().StructTag(`json:"-"`).Comment("Frozen connector delivery protocol; NULL preserves unbound historical intents"),
+		field.String("target_connector_name").Optional().Nillable().Immutable().StructTag(`json:"-"`),
+		field.String("target_connector_provider").Optional().Nillable().Immutable().StructTag(`json:"-"`),
+		field.String("target_destination_digest").Optional().Nillable().Immutable().StructTag(`json:"-"`),
+		field.Int("sla_alert_history_id").Optional().Nillable().Immutable().Positive().Comment("Owning SLA alert; immutable structured delivery provenance"),
 		field.Int("ticket_id").
 			Comment("工单ID").
 			Positive(),
@@ -98,6 +104,7 @@ func (TicketNotification) Edges() []ent.Edge {
 // Indexes of the TicketNotification.
 func (TicketNotification) Indexes() []ent.Index {
 	return []ent.Index{
+		index.Fields("tenant_id", "sla_alert_history_id"),
 		index.Fields("tenant_id", "delivery_key", "ticket_id", "user_id", "channel").Unique(),
 		index.Fields("tenant_id", "status", "next_attempt_at"),
 		index.Fields("tenant_id", "status", "lease_expires_at"),

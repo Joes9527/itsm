@@ -3,6 +3,8 @@ package connector
 import (
 	"context"
 	"errors"
+	"itsm-backend/common/tenantctx"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"sync/atomic"
 	"testing"
 )
@@ -69,9 +71,9 @@ func TestRegistry_DuplicatePanics(t *testing.T) {
 func TestManager_SendError(t *testing.T) {
 	r := NewRegistry()
 	r.Register(func() Connector { return &errorConnector{} })
-	mgr := NewManager(r, nil)
+	mgr := NewManager(r, nil, executionfixture.Standard())
 	cfg := Config{TenantID: 9, Name: "error-c", Enabled: true}
-	if err := mgr.Provision(context.Background(), cfg); err != nil {
+	if err := mgr.Provision(tenantctx.WithTenantID(context.Background(), cfg.TenantID), cfg); err != nil {
 		t.Fatalf("Provision: %v", err)
 	}
 	if err := mgr.Send(context.Background(), 9, "failing", &Message{Channel: "c"}); err == nil {
@@ -82,9 +84,9 @@ func TestManager_SendError(t *testing.T) {
 func TestManager_ProvisionAndSend(t *testing.T) {
 	r := NewRegistry()
 	r.Register(func() Connector { return &fakeConnector{} })
-	mgr := NewManager(r, nil)
+	mgr := NewManager(r, nil, executionfixture.Standard())
 	cfg := Config{TenantID: 7, Name: "fake", Enabled: true, Credentials: map[string]string{}}
-	if err := mgr.Provision(context.Background(), cfg); err != nil {
+	if err := mgr.Provision(tenantctx.WithTenantID(context.Background(), cfg.TenantID), cfg); err != nil {
 		t.Fatalf("Provision: %v", err)
 	}
 	if err := mgr.Send(context.Background(), 7, "fake", &Message{Channel: "c", Content: "hi"}); err != nil {
@@ -99,10 +101,12 @@ func TestManager_ProvisionAndSend(t *testing.T) {
 func TestManager_Revoke(t *testing.T) {
 	r := NewRegistry()
 	r.Register(func() Connector { return &fakeConnector{} })
-	mgr := NewManager(r, nil)
+	mgr := NewManager(r, nil, executionfixture.Standard())
 	cfg := Config{TenantID: 1, Name: "fake", Enabled: true}
-	_ = mgr.Provision(context.Background(), cfg)
-	mgr.Revoke(cfg)
+	_ = mgr.Provision(tenantctx.WithTenantID(context.Background(), cfg.TenantID), cfg)
+	if err := mgr.Revoke(tenantctx.WithTenantID(context.Background(), cfg.TenantID), cfg); err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := mgr.Get(1, "fake"); ok {
 		t.Fatal("expected revoked instance to be gone")
 	}

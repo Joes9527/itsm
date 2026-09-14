@@ -120,9 +120,7 @@ export function CatalogProfessionalFields({ targetClass }: { targetClass?: WorkI
           <Form.Item name={['change', 'affectedCis']} label='受影响配置项'>
             <Select mode='tags' tokenSeparators={[',']} />
           </Form.Item>
-          <Form.Item name={['change', 'relatedTicketNumbers']} label='关联工单编号'>
-            <Select mode='tags' tokenSeparators={[',']} />
-          </Form.Item>
+
         </>
       )}
     </>

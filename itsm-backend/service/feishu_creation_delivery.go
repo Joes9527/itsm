@@ -32,24 +32,24 @@ type FeishuTaskCreator interface {
 }
 type FeishuTaskProvider func(int) (FeishuTaskCreator, bool)
 type feishuCreationPayload struct {
-	Origin      string            `json:"origin"`
-	TenantID    int               `json:"tenantId"`
-	WorkItemID  int               `json:"workItemId"`
-	ActorID     int               `json:"actorId"`
-	Destination string            `json:"destination"`
-	Task        feishu.FeishuTask `json:"task"`
+	Origin     string            `json:"origin"`
+	TenantID   int               `json:"tenantId"`
+	WorkItemID int               `json:"workItemId"`
+	ActorID    int               `json:"actorId"`
+	Target     FeishuTarget      `json:"target"`
+	Task       feishu.FeishuTask `json:"task"`
 }
 
-func enqueueFeishuCreation(ctx context.Context, tx *ent.Tx, item *ent.Ticket, actorID int, destination, origin string) error {
+func enqueueFeishuCreation(ctx context.Context, tx *ent.Tx, item *ent.Ticket, actorID int, target FeishuTarget, origin string) error {
 	task, err := prepareFeishuTask(ctx, tx.Client(), item)
 	if err != nil {
 		return creation.NewInfrastructureUnavailable("could not freeze Feishu task", err)
 	}
-	payload, err := json.Marshal(feishuCreationPayload{Origin: origin, TenantID: item.TenantID, WorkItemID: item.ID, ActorID: actorID, Destination: destination, Task: *task})
+	payload, err := json.Marshal(feishuCreationPayload{Origin: origin, TenantID: item.TenantID, WorkItemID: item.ID, ActorID: actorID, Target: target, Task: *task})
 	if err != nil {
 		return creation.NewInternalFailure("could not encode Feishu creation", err)
 	}
-	_, err = NewOutboxEventRepository(tx.Client()).Enqueue(ctx, tx, NewOutboxEvent{TenantID: item.TenantID, EventID: fmt.Sprintf("feishu-create:%d", item.ID), EventType: FeishuCreationRequestedEventType, AggregateType: "work_item", AggregateID: fmt.Sprint(item.ID), Payload: payload})
+	_, err = enqueueOutboxEvent(ctx, tx.Client(), tx, NewOutboxEvent{ExecutionWorkItemID: item.ID, TenantID: item.TenantID, EventID: fmt.Sprintf("feishu-create:%d", item.ID), EventType: FeishuCreationRequestedEventType, AggregateType: "work_item", AggregateID: fmt.Sprint(item.ID), Payload: payload})
 	if err != nil {
 		return creation.NewInfrastructureUnavailable("could not persist Feishu creation intent", err)
 	}
@@ -85,7 +85,7 @@ func (h *FeishuCreationDeliveryHandler) Deliver(ctx context.Context, event *ent.
 	if decoder.Decode(&trailing) != io.EOF {
 		return blockOutboxDelivery("invalid Feishu creation payload")
 	}
-	if payload.TenantID <= 0 || payload.ActorID <= 0 || payload.WorkItemID <= 0 || event.TenantID != payload.TenantID || event.AggregateType != "work_item" || event.AggregateID != fmt.Sprint(payload.WorkItemID) || event.EventID != fmt.Sprintf("feishu-create:%d", payload.WorkItemID) || payload.Destination == "" || payload.Task.Name == "" || payload.Task.GUID != "" {
+	if payload.Target.Validate() != nil || payload.TenantID <= 0 || payload.ActorID <= 0 || payload.WorkItemID <= 0 || event.TenantID != payload.TenantID || event.AggregateType != "work_item" || event.AggregateID != fmt.Sprint(payload.WorkItemID) || event.EventID != fmt.Sprintf("feishu-create:%d", payload.WorkItemID) || payload.Task.Name == "" || payload.Task.GUID != "" {
 		return blockOutboxDelivery("Feishu creation event identity mismatch")
 	}
 	tx, err := h.owner.client.Tx(ctx)
@@ -144,7 +144,7 @@ func (h *FeishuCreationDeliveryHandler) Deliver(ctx context.Context, event *ent.
 		return err
 	}
 	provider, ok := h.provider(payload.TenantID)
-	if !ok || provider == nil || provider.TaskDestinationIdentity() != payload.Destination {
+	if !ok || provider == nil || provider.TaskDestinationIdentity() != payload.Target.DestinationDigest {
 		return blockOutboxDelivery("Feishu destination changed or is unavailable")
 	}
 	task, err := provider.CreateTask(ctx, &payload.Task)

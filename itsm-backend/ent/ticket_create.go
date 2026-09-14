@@ -19,6 +19,7 @@ import (
 	"itsm-backend/ent/tickettag"
 	"itsm-backend/ent/ticketworkflowrecord"
 	"itsm-backend/ent/user"
+	"itsm-backend/handlers/shared/slacontract"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -279,6 +280,54 @@ func (_c *TicketCreate) SetNillableParentTicketID(v *int) *TicketCreate {
 	if v != nil {
 		_c.SetParentTicketID(*v)
 	}
+	return _c
+}
+
+// SetSLACycleNumber sets the "sla_cycle_number" field.
+func (_c *TicketCreate) SetSLACycleNumber(v int) *TicketCreate {
+	_c.mutation.SetSLACycleNumber(v)
+	return _c
+}
+
+// SetNillableSLACycleNumber sets the "sla_cycle_number" field if the given value is not nil.
+func (_c *TicketCreate) SetNillableSLACycleNumber(v *int) *TicketCreate {
+	if v != nil {
+		_c.SetSLACycleNumber(*v)
+	}
+	return _c
+}
+
+// SetSLACycleStartedAt sets the "sla_cycle_started_at" field.
+func (_c *TicketCreate) SetSLACycleStartedAt(v time.Time) *TicketCreate {
+	_c.mutation.SetSLACycleStartedAt(v)
+	return _c
+}
+
+// SetNillableSLACycleStartedAt sets the "sla_cycle_started_at" field if the given value is not nil.
+func (_c *TicketCreate) SetNillableSLACycleStartedAt(v *time.Time) *TicketCreate {
+	if v != nil {
+		_c.SetSLACycleStartedAt(*v)
+	}
+	return _c
+}
+
+// SetSLAPausedMinutes sets the "sla_paused_minutes" field.
+func (_c *TicketCreate) SetSLAPausedMinutes(v int) *TicketCreate {
+	_c.mutation.SetSLAPausedMinutes(v)
+	return _c
+}
+
+// SetNillableSLAPausedMinutes sets the "sla_paused_minutes" field if the given value is not nil.
+func (_c *TicketCreate) SetNillableSLAPausedMinutes(v *int) *TicketCreate {
+	if v != nil {
+		_c.SetSLAPausedMinutes(*v)
+	}
+	return _c
+}
+
+// SetAppliedSLAPolicy sets the "applied_sla_policy" field.
+func (_c *TicketCreate) SetAppliedSLAPolicy(v *slacontract.Policy) *TicketCreate {
+	_c.mutation.SetAppliedSLAPolicy(v)
 	return _c
 }
 
@@ -799,6 +848,14 @@ func (_c *TicketCreate) defaults() {
 		v := ticket.DefaultPriority
 		_c.mutation.SetPriority(v)
 	}
+	if _, ok := _c.mutation.SLACycleNumber(); !ok {
+		v := ticket.DefaultSLACycleNumber
+		_c.mutation.SetSLACycleNumber(v)
+	}
+	if _, ok := _c.mutation.SLAPausedMinutes(); !ok {
+		v := ticket.DefaultSLAPausedMinutes
+		_c.mutation.SetSLAPausedMinutes(v)
+	}
 	if _, ok := _c.mutation.Version(); !ok {
 		v := ticket.DefaultVersion
 		_c.mutation.SetVersion(v)
@@ -858,6 +915,22 @@ func (_c *TicketCreate) check() error {
 	if v, ok := _c.mutation.TenantID(); ok {
 		if err := ticket.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "Ticket.tenant_id": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.SLACycleNumber(); !ok {
+		return &ValidationError{Name: "sla_cycle_number", err: errors.New(`ent: missing required field "Ticket.sla_cycle_number"`)}
+	}
+	if v, ok := _c.mutation.SLACycleNumber(); ok {
+		if err := ticket.SLACycleNumberValidator(v); err != nil {
+			return &ValidationError{Name: "sla_cycle_number", err: fmt.Errorf(`ent: validator failed for field "Ticket.sla_cycle_number": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.SLAPausedMinutes(); !ok {
+		return &ValidationError{Name: "sla_paused_minutes", err: errors.New(`ent: missing required field "Ticket.sla_paused_minutes"`)}
+	}
+	if v, ok := _c.mutation.SLAPausedMinutes(); ok {
+		if err := ticket.SLAPausedMinutesValidator(v); err != nil {
+			return &ValidationError{Name: "sla_paused_minutes", err: fmt.Errorf(`ent: validator failed for field "Ticket.sla_paused_minutes": %w`, err)}
 		}
 	}
 	if v, ok := _c.mutation.Rating(); ok {
@@ -979,6 +1052,22 @@ func (_c *TicketCreate) createSpec() (*Ticket, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ParentTicketID(); ok {
 		_spec.SetField(ticket.FieldParentTicketID, field.TypeInt, value)
 		_node.ParentTicketID = value
+	}
+	if value, ok := _c.mutation.SLACycleNumber(); ok {
+		_spec.SetField(ticket.FieldSLACycleNumber, field.TypeInt, value)
+		_node.SLACycleNumber = value
+	}
+	if value, ok := _c.mutation.SLACycleStartedAt(); ok {
+		_spec.SetField(ticket.FieldSLACycleStartedAt, field.TypeTime, value)
+		_node.SLACycleStartedAt = value
+	}
+	if value, ok := _c.mutation.SLAPausedMinutes(); ok {
+		_spec.SetField(ticket.FieldSLAPausedMinutes, field.TypeInt, value)
+		_node.SLAPausedMinutes = value
+	}
+	if value, ok := _c.mutation.AppliedSLAPolicy(); ok {
+		_spec.SetField(ticket.FieldAppliedSLAPolicy, field.TypeJSON, value)
+		_node.AppliedSLAPolicy = value
 	}
 	if value, ok := _c.mutation.SLADefinitionID(); ok {
 		_spec.SetField(ticket.FieldSLADefinitionID, field.TypeInt, value)
@@ -1670,6 +1759,78 @@ func (u *TicketUpsert) AddParentTicketID(v int) *TicketUpsert {
 // ClearParentTicketID clears the value of the "parent_ticket_id" field.
 func (u *TicketUpsert) ClearParentTicketID() *TicketUpsert {
 	u.SetNull(ticket.FieldParentTicketID)
+	return u
+}
+
+// SetSLACycleNumber sets the "sla_cycle_number" field.
+func (u *TicketUpsert) SetSLACycleNumber(v int) *TicketUpsert {
+	u.Set(ticket.FieldSLACycleNumber, v)
+	return u
+}
+
+// UpdateSLACycleNumber sets the "sla_cycle_number" field to the value that was provided on create.
+func (u *TicketUpsert) UpdateSLACycleNumber() *TicketUpsert {
+	u.SetExcluded(ticket.FieldSLACycleNumber)
+	return u
+}
+
+// AddSLACycleNumber adds v to the "sla_cycle_number" field.
+func (u *TicketUpsert) AddSLACycleNumber(v int) *TicketUpsert {
+	u.Add(ticket.FieldSLACycleNumber, v)
+	return u
+}
+
+// SetSLACycleStartedAt sets the "sla_cycle_started_at" field.
+func (u *TicketUpsert) SetSLACycleStartedAt(v time.Time) *TicketUpsert {
+	u.Set(ticket.FieldSLACycleStartedAt, v)
+	return u
+}
+
+// UpdateSLACycleStartedAt sets the "sla_cycle_started_at" field to the value that was provided on create.
+func (u *TicketUpsert) UpdateSLACycleStartedAt() *TicketUpsert {
+	u.SetExcluded(ticket.FieldSLACycleStartedAt)
+	return u
+}
+
+// ClearSLACycleStartedAt clears the value of the "sla_cycle_started_at" field.
+func (u *TicketUpsert) ClearSLACycleStartedAt() *TicketUpsert {
+	u.SetNull(ticket.FieldSLACycleStartedAt)
+	return u
+}
+
+// SetSLAPausedMinutes sets the "sla_paused_minutes" field.
+func (u *TicketUpsert) SetSLAPausedMinutes(v int) *TicketUpsert {
+	u.Set(ticket.FieldSLAPausedMinutes, v)
+	return u
+}
+
+// UpdateSLAPausedMinutes sets the "sla_paused_minutes" field to the value that was provided on create.
+func (u *TicketUpsert) UpdateSLAPausedMinutes() *TicketUpsert {
+	u.SetExcluded(ticket.FieldSLAPausedMinutes)
+	return u
+}
+
+// AddSLAPausedMinutes adds v to the "sla_paused_minutes" field.
+func (u *TicketUpsert) AddSLAPausedMinutes(v int) *TicketUpsert {
+	u.Add(ticket.FieldSLAPausedMinutes, v)
+	return u
+}
+
+// SetAppliedSLAPolicy sets the "applied_sla_policy" field.
+func (u *TicketUpsert) SetAppliedSLAPolicy(v *slacontract.Policy) *TicketUpsert {
+	u.Set(ticket.FieldAppliedSLAPolicy, v)
+	return u
+}
+
+// UpdateAppliedSLAPolicy sets the "applied_sla_policy" field to the value that was provided on create.
+func (u *TicketUpsert) UpdateAppliedSLAPolicy() *TicketUpsert {
+	u.SetExcluded(ticket.FieldAppliedSLAPolicy)
+	return u
+}
+
+// ClearAppliedSLAPolicy clears the value of the "applied_sla_policy" field.
+func (u *TicketUpsert) ClearAppliedSLAPolicy() *TicketUpsert {
+	u.SetNull(ticket.FieldAppliedSLAPolicy)
 	return u
 }
 
@@ -2493,6 +2654,90 @@ func (u *TicketUpsertOne) UpdateParentTicketID() *TicketUpsertOne {
 func (u *TicketUpsertOne) ClearParentTicketID() *TicketUpsertOne {
 	return u.Update(func(s *TicketUpsert) {
 		s.ClearParentTicketID()
+	})
+}
+
+// SetSLACycleNumber sets the "sla_cycle_number" field.
+func (u *TicketUpsertOne) SetSLACycleNumber(v int) *TicketUpsertOne {
+	return u.Update(func(s *TicketUpsert) {
+		s.SetSLACycleNumber(v)
+	})
+}
+
+// AddSLACycleNumber adds v to the "sla_cycle_number" field.
+func (u *TicketUpsertOne) AddSLACycleNumber(v int) *TicketUpsertOne {
+	return u.Update(func(s *TicketUpsert) {
+		s.AddSLACycleNumber(v)
+	})
+}
+
+// UpdateSLACycleNumber sets the "sla_cycle_number" field to the value that was provided on create.
+func (u *TicketUpsertOne) UpdateSLACycleNumber() *TicketUpsertOne {
+	return u.Update(func(s *TicketUpsert) {
+		s.UpdateSLACycleNumber()
+	})
+}
+
+// SetSLACycleStartedAt sets the "sla_cycle_started_at" field.
+func (u *TicketUpsertOne) SetSLACycleStartedAt(v time.Time) *TicketUpsertOne {
+	return u.Update(func(s *TicketUpsert) {
+		s.SetSLACycleStartedAt(v)
+	})
+}
+
+// UpdateSLACycleStartedAt sets the "sla_cycle_started_at" field to the value that was provided on create.
+func (u *TicketUpsertOne) UpdateSLACycleStartedAt() *TicketUpsertOne {
+	return u.Update(func(s *TicketUpsert) {
+		s.UpdateSLACycleStartedAt()
+	})
+}
+
+// ClearSLACycleStartedAt clears the value of the "sla_cycle_started_at" field.
+func (u *TicketUpsertOne) ClearSLACycleStartedAt() *TicketUpsertOne {
+	return u.Update(func(s *TicketUpsert) {
+		s.ClearSLACycleStartedAt()
+	})
+}
+
+// SetSLAPausedMinutes sets the "sla_paused_minutes" field.
+func (u *TicketUpsertOne) SetSLAPausedMinutes(v int) *TicketUpsertOne {
+	return u.Update(func(s *TicketUpsert) {
+		s.SetSLAPausedMinutes(v)
+	})
+}
+
+// AddSLAPausedMinutes adds v to the "sla_paused_minutes" field.
+func (u *TicketUpsertOne) AddSLAPausedMinutes(v int) *TicketUpsertOne {
+	return u.Update(func(s *TicketUpsert) {
+		s.AddSLAPausedMinutes(v)
+	})
+}
+
+// UpdateSLAPausedMinutes sets the "sla_paused_minutes" field to the value that was provided on create.
+func (u *TicketUpsertOne) UpdateSLAPausedMinutes() *TicketUpsertOne {
+	return u.Update(func(s *TicketUpsert) {
+		s.UpdateSLAPausedMinutes()
+	})
+}
+
+// SetAppliedSLAPolicy sets the "applied_sla_policy" field.
+func (u *TicketUpsertOne) SetAppliedSLAPolicy(v *slacontract.Policy) *TicketUpsertOne {
+	return u.Update(func(s *TicketUpsert) {
+		s.SetAppliedSLAPolicy(v)
+	})
+}
+
+// UpdateAppliedSLAPolicy sets the "applied_sla_policy" field to the value that was provided on create.
+func (u *TicketUpsertOne) UpdateAppliedSLAPolicy() *TicketUpsertOne {
+	return u.Update(func(s *TicketUpsert) {
+		s.UpdateAppliedSLAPolicy()
+	})
+}
+
+// ClearAppliedSLAPolicy clears the value of the "applied_sla_policy" field.
+func (u *TicketUpsertOne) ClearAppliedSLAPolicy() *TicketUpsertOne {
+	return u.Update(func(s *TicketUpsert) {
+		s.ClearAppliedSLAPolicy()
 	})
 }
 
@@ -3547,6 +3792,90 @@ func (u *TicketUpsertBulk) UpdateParentTicketID() *TicketUpsertBulk {
 func (u *TicketUpsertBulk) ClearParentTicketID() *TicketUpsertBulk {
 	return u.Update(func(s *TicketUpsert) {
 		s.ClearParentTicketID()
+	})
+}
+
+// SetSLACycleNumber sets the "sla_cycle_number" field.
+func (u *TicketUpsertBulk) SetSLACycleNumber(v int) *TicketUpsertBulk {
+	return u.Update(func(s *TicketUpsert) {
+		s.SetSLACycleNumber(v)
+	})
+}
+
+// AddSLACycleNumber adds v to the "sla_cycle_number" field.
+func (u *TicketUpsertBulk) AddSLACycleNumber(v int) *TicketUpsertBulk {
+	return u.Update(func(s *TicketUpsert) {
+		s.AddSLACycleNumber(v)
+	})
+}
+
+// UpdateSLACycleNumber sets the "sla_cycle_number" field to the value that was provided on create.
+func (u *TicketUpsertBulk) UpdateSLACycleNumber() *TicketUpsertBulk {
+	return u.Update(func(s *TicketUpsert) {
+		s.UpdateSLACycleNumber()
+	})
+}
+
+// SetSLACycleStartedAt sets the "sla_cycle_started_at" field.
+func (u *TicketUpsertBulk) SetSLACycleStartedAt(v time.Time) *TicketUpsertBulk {
+	return u.Update(func(s *TicketUpsert) {
+		s.SetSLACycleStartedAt(v)
+	})
+}
+
+// UpdateSLACycleStartedAt sets the "sla_cycle_started_at" field to the value that was provided on create.
+func (u *TicketUpsertBulk) UpdateSLACycleStartedAt() *TicketUpsertBulk {
+	return u.Update(func(s *TicketUpsert) {
+		s.UpdateSLACycleStartedAt()
+	})
+}
+
+// ClearSLACycleStartedAt clears the value of the "sla_cycle_started_at" field.
+func (u *TicketUpsertBulk) ClearSLACycleStartedAt() *TicketUpsertBulk {
+	return u.Update(func(s *TicketUpsert) {
+		s.ClearSLACycleStartedAt()
+	})
+}
+
+// SetSLAPausedMinutes sets the "sla_paused_minutes" field.
+func (u *TicketUpsertBulk) SetSLAPausedMinutes(v int) *TicketUpsertBulk {
+	return u.Update(func(s *TicketUpsert) {
+		s.SetSLAPausedMinutes(v)
+	})
+}
+
+// AddSLAPausedMinutes adds v to the "sla_paused_minutes" field.
+func (u *TicketUpsertBulk) AddSLAPausedMinutes(v int) *TicketUpsertBulk {
+	return u.Update(func(s *TicketUpsert) {
+		s.AddSLAPausedMinutes(v)
+	})
+}
+
+// UpdateSLAPausedMinutes sets the "sla_paused_minutes" field to the value that was provided on create.
+func (u *TicketUpsertBulk) UpdateSLAPausedMinutes() *TicketUpsertBulk {
+	return u.Update(func(s *TicketUpsert) {
+		s.UpdateSLAPausedMinutes()
+	})
+}
+
+// SetAppliedSLAPolicy sets the "applied_sla_policy" field.
+func (u *TicketUpsertBulk) SetAppliedSLAPolicy(v *slacontract.Policy) *TicketUpsertBulk {
+	return u.Update(func(s *TicketUpsert) {
+		s.SetAppliedSLAPolicy(v)
+	})
+}
+
+// UpdateAppliedSLAPolicy sets the "applied_sla_policy" field to the value that was provided on create.
+func (u *TicketUpsertBulk) UpdateAppliedSLAPolicy() *TicketUpsertBulk {
+	return u.Update(func(s *TicketUpsert) {
+		s.UpdateAppliedSLAPolicy()
+	})
+}
+
+// ClearAppliedSLAPolicy clears the value of the "applied_sla_policy" field.
+func (u *TicketUpsertBulk) ClearAppliedSLAPolicy() *TicketUpsertBulk {
+	return u.Update(func(s *TicketUpsert) {
+		s.ClearAppliedSLAPolicy()
 	})
 }
 

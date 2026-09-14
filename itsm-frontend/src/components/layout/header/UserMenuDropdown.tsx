@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Dropdown, Avatar, Tag, Button } from 'antd';
+import { Dropdown, Avatar, Button } from 'antd';
 import type { MenuProps } from 'antd';
 import { User, Settings, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -26,7 +26,7 @@ export const UserMenuDropdown: React.FC<UserMenuDropdownProps> = ({
   if (!user) {
     return (
       <Button
-        type="primary"
+        type='primary'
         icon={<User size={16} />}
         onClick={() => router.push('/login')}
         style={{
@@ -43,10 +43,6 @@ export const UserMenuDropdown: React.FC<UserMenuDropdownProps> = ({
 
   const displayName = user?.name || user?.username || '';
   const userInitial = displayName.charAt(0).toUpperCase() || 'U';
-  const roleText =
-    user?.role === 'admin' ? '管理员' : user?.role === 'super_admin' ? '超级管理员' : '用户';
-  const roleColor = user?.role === 'admin' || user?.role === 'super_admin' ? '#F06820' : '#64748b';
-
   const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
     if (key === 'logout') {
       onLogout();
@@ -102,30 +98,33 @@ export const UserMenuDropdown: React.FC<UserMenuDropdownProps> = ({
   return (
     <Dropdown
       menu={{ items: menuItems, onClick: handleMenuClick }}
-      placement="bottomRight"
+      placement='bottomRight'
       trigger={['click']}
       open={open}
       onOpenChange={onOpenChange}
       styles={{ root: { padding: 0 } }}
     >
-      <div
+      <button
+        type='button'
+        aria-label={`用户菜单：${displayName}`}
+        title={displayName}
         className={styles.userMenuTrigger}
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: 10,
-          padding: '6px 12px 6px 6px',
-          borderRadius: DESIGN.radius.full,
-          background: DESIGN.colors.bgSubtle,
+          padding: '2px 6px 2px 2px',
+          borderRadius: DESIGN.radius.md,
+          background: 'transparent',
           cursor: 'pointer',
           transition: 'all 0.2s',
-          border: `1px solid ${open ? DESIGN.colors.accent : 'transparent'}`,
+          border: `1px solid ${open ? 'var(--color-primary)' : 'transparent'}`,
         }}
       >
         <Avatar
-          size={32}
+          size={27}
           style={{
-            background: `linear-gradient(135deg, ${DESIGN.colors.accent} 0%, #B84A08 100%)`,
+            background: 'var(--color-primary)',
             fontSize: 14,
             fontWeight: 600,
           }}
@@ -133,38 +132,26 @@ export const UserMenuDropdown: React.FC<UserMenuDropdownProps> = ({
           {userInitial}
         </Avatar>
         <div className={styles.userMenuDetails} style={{ lineHeight: 1.3 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: DESIGN.colors.text }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-header)' }}>
             {displayName}
           </div>
-          <Tag
-            color={roleColor}
-            style={{
-              fontSize: 10,
-              padding: '0 6px',
-              lineHeight: '16px',
-              margin: 0,
-              border: 'none',
-            }}
-          >
-            {roleText}
-          </Tag>
         </div>
         <svg
           className={styles.userMenuChevron}
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
+          width='14'
+          height='14'
+          viewBox='0 0 24 24'
+          fill='none'
           stroke={DESIGN.colors.textMuted}
-          strokeWidth="2"
+          strokeWidth='2'
           style={{
             transition: 'transform 0.2s',
             transform: open ? 'rotate(180deg)' : 'none',
           }}
         >
-          <path d="M6 9l6 6 6-6" />
+          <path d='M6 9l6 6 6-6' />
         </svg>
-      </div>
+      </button>
     </Dropdown>
   );
 };

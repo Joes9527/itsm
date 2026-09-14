@@ -4,6 +4,7 @@ package integration
 
 import (
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -66,11 +67,11 @@ func TestPostgresRequesterAdaptersSignedMSPHTTP(t *testing.T) {
 		}
 	}
 	registry := intake.NewCreatorRegistry()
-	for _, owner := range []creation.ProfessionalCreator{service.NewIncidentService(clients.Tenant, logger), problemdomain.NewService(problemdomain.NewEntRepository(clients.Tenant), logger), changedomain.NewService(nil, clients.Tenant, logger)} {
+	for _, owner := range []creation.ProfessionalCreator{service.NewIncidentService(clients.Tenant, logger, executionfixture.Standard()), problemdomain.NewService(problemdomain.NewEntRepository(clients.Tenant), logger, executionfixture.Standard()), changedomain.NewService(nil, clients.Tenant, logger, executionfixture.Standard())} {
 		require.NoError(t, registry.Register(owner))
 	}
 	resolver := intake.NewResolver(catalogdomain.NewService(nil, clients.Tenant, logger, nil), service.NewProcessBindingService(clients.Tenant), service.NewConfigurationItemService(clients.Tenant, logger, nil, nil), service.NewTicketCategoryService(clients.Tenant))
-	app := intake.NewService(clients.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), clients.IntakeDirectorySnapshot())
+	app := intake.NewService(clients.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), clients.IntakeDirectorySnapshot(), executionfixture.Standard())
 	adapters := requesterAdapters(t, f.client, app, f.tenant.ID, f.actor.ID)
 	const secret = "isolated-requester-adapter-signing-key"
 	auth := service.NewAuthService(clients.Tenant, clients.System, secret, logger)

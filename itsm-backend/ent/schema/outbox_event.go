@@ -18,6 +18,7 @@ type OutboxEvent struct {
 // Fields of the OutboxEvent.
 func (OutboxEvent) Fields() []ent.Field {
 	return []ent.Field{
+		field.Int("execution_work_item_id").Optional().Nillable().Immutable().Positive().Comment("Immutable execution WorkItem reference; historical rows remain NULL; FK managed by migration 039"),
 		field.String("event_id").
 			Comment("Immutable cross-system event identifier").
 			Unique().

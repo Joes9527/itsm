@@ -62,7 +62,7 @@ func NewClient(baseURL, appID, appSecret, verifyTok, encryptKey string) *Client 
 		verifyTok:  verifyTok,
 		encryptKey: encryptKey,
 		logger:     zap.S().Named("connector.feishu"),
-		hc:         &http.Client{Timeout: 8 * time.Second},
+		hc:         &http.Client{Timeout: 8 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
 	}
 }
 
@@ -85,6 +85,9 @@ func (c *Client) Token(ctx context.Context) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("feishu: token endpoint status %d", resp.StatusCode)
+	}
 	raw, _ := io.ReadAll(resp.Body)
 	var out struct {
 		Code              int    `json:"code"`
@@ -121,6 +124,9 @@ func (c *Client) doJSON(ctx context.Context, method, path string, in, out interf
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("feishu: API endpoint status %d", resp.StatusCode)
+	}
 	raw, _ := io.ReadAll(resp.Body)
 	if out != nil {
 		if err := json.Unmarshal(raw, out); err != nil {

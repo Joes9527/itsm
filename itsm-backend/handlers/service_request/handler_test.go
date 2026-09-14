@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -122,7 +123,7 @@ func srSetup(t *testing.T) (*gin.Engine, *ent.Client, int, int, int) {
 	cat, err := scSvc.Create(ctx, tenant.ID, catalogCreateInput("SRCatalog-"+srUID(), "software", "for test", 0, "enabled", 0, 0, nil, "", ""))
 	require.NoError(t, err)
 
-	repo := NewEntRepository(client)
+	repo := NewEntRepository(client, executionfixture.Standard())
 	svc := NewService(repo, client, logger, nil)
 	h := NewHandler(svc)
 
@@ -267,7 +268,7 @@ func TestServiceRequestCreateDefersNewCIUntilProvisioning(t *testing.T) {
 	configureCatalogPublicationForTest(ctx, client, tenant.ID, scSvc)
 	catalog, err := scSvc.Create(ctx, tenant.ID, catalogCreateInput("VM Request", "infrastructure", "Provision VM", 24, "enabled", ciType.ID, 0, nil, "", ""))
 	require.NoError(t, err)
-	srSvc := NewService(NewEntRepository(client), client, logger, nil)
+	srSvc := NewService(NewEntRepository(client, executionfixture.Standard()), client, logger, nil)
 	expireAt := time.Now().Add(30 * 24 * time.Hour)
 
 	created, err := srSvc.SubmitCreation(ctx, tenant.ID, user.ID, catalog.ID, &ServiceRequest{
@@ -355,6 +356,9 @@ func TestServiceRequestHandler_PartialUpdatePreservesBooleanFields(t *testing.T)
 func TestServiceRequestHandler_Delete(t *testing.T) {
 	r, client, _, _, catID := srSetup(t)
 	id := srCreateOne(t, r, catID)
+	wi := client.ServiceRequest.GetX(context.Background(), id)
+	requester := client.Ticket.GetX(context.Background(), wi.TicketID).RequesterID
+	client.User.UpdateOneID(requester).SetRole("super_admin").ExecX(context.Background())
 	resp := srDoReq(t, r, "DELETE", "/api/v1/service-requests/"+strconv.Itoa(id), nil)
 	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", srStr(resp))
 	// 删除后再查应 404

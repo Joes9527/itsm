@@ -26,10 +26,10 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-page">
       <Result
         status="500"
-        title="页面出错了"
+        title={<span className="text-[24px] font-semibold">页面出错了</span>}
         subTitle="抱歉，页面遇到了一个意外错误。请尝试重试或返回仪表盘。"
         extra={[
           <Button key="retry" type="primary" icon={<RotateCcw />} onClick={() => reset()}>

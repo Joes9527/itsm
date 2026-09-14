@@ -51,6 +51,7 @@ type CIInfo struct {
 
 // 事件管理相关DTO
 type CreateIncidentRequest struct {
+	CTI                  *creation.CTIInput       `json:"cti,omitempty"`
 	RequesterID          *int                     `json:"requesterId,omitempty" binding:"omitempty,gt=0"` // 可选目标租户申请人
 	Title                string                   `json:"title" binding:"required" example:"服务器CPU使用率过高"`
 	Description          string                   `json:"description" binding:"omitempty,max=5000" example:"生产环境Web服务器CPU使用率持续超过90%"`
@@ -59,8 +60,6 @@ type CreateIncidentRequest struct {
 	Severity             string                   `json:"severity" binding:"omitempty,oneof=low medium high critical" example:"high"`
 	Impact               string                   `json:"impact" binding:"omitempty,oneof=low medium high critical" example:"medium"`
 	Urgency              string                   `json:"urgency" binding:"omitempty,oneof=low medium high critical" example:"medium"`
-	Category             string                   `json:"category" example:"performance"`
-	Subcategory          string                   `json:"subcategory" example:"cpu"`
 	ConfigurationItemIDs []int                    `json:"configurationItemIds"`
 	AssigneeID           *int                     `json:"assigneeId" example:"1"`
 	ImpactAnalysis       *creation.ImpactAnalysis `json:"impactAnalysis"`
@@ -77,21 +76,23 @@ type UpdateIncidentRequest struct {
 	Severity        *string                `json:"severity,omitempty" binding:"omitempty,oneof=low medium high critical"`
 	Impact          *string                `json:"impact,omitempty" binding:"omitempty,oneof=low medium high critical"`
 	Urgency         *string                `json:"urgency,omitempty" binding:"omitempty,oneof=low medium high critical"`
-	Category        *string                `json:"category,omitempty"`
-	Subcategory     *string                `json:"subcategory,omitempty"`
+	CategoryID      *int                   `json:"categoryId,omitempty" binding:"omitempty,gte=0"`
 	AssigneeID      *int                   `json:"assigneeId,omitempty"`
 	RelatedCIIDs    []int                  `json:"relatedCIIds,omitempty"`
 	ImpactAnalysis  *ImpactAnalysis        `json:"impactAnalysis,omitempty"`
 	RootCause       *RootCause             `json:"rootCause,omitempty"`
 	ResolutionSteps []ResolutionStep       `json:"resolutionSteps,omitempty"`
 	Metadata        map[string]interface{} `json:"metadata,omitempty"`
-	Version         int                    `json:"version"` // 版本号（乐观锁）
-	Force           bool                   `json:"force"`   // 是否强制更新（忽略版本检查）
+	Version         int                    `json:"version" binding:"required,gt=0"` // 必填预期版本
+	Force           bool                   `json:"force"`                           // 是否强制更新（忽略版本检查）
 }
 
 // AssignIncidentRequest 分配事件请求
 type AssignIncidentRequest struct {
-	AssigneeID int `json:"assigneeId" binding:"required"`
+	AssigneeID  int    `json:"assigneeId" binding:"required,gt=0"`
+	Version     int    `json:"version" binding:"required,gt=0"`
+	OperationID string `json:"operationId" binding:"required,max=200"`
+	Reason      string `json:"reason"`
 }
 
 // EscalateMajorIncidentRequest 升级为重大事件请求
@@ -102,6 +103,8 @@ type EscalateMajorIncidentRequest struct {
 }
 
 type IncidentResponse struct {
+	Number              string                      `json:"number"`
+	CategoryID          int                         `json:"categoryId"`
 	ID                  int                         `json:"id" example:"1"`
 	Title               string                      `json:"title" example:"服务器CPU使用率过高"`
 	Description         string                      `json:"description" binding:"omitempty,max=5000" example:"生产环境Web服务器CPU使用率持续超过90%"`
@@ -376,8 +379,9 @@ type IncidentStatsResponse struct {
 
 // ConvertIncidentToProblemRequest 将事件转换为问题的请求
 type ConvertIncidentToProblemRequest struct {
-	RequesterID *int   `json:"requesterId,omitempty" binding:"omitempty,gt=0"` // 可选目标租户申请人
-	Title       string `json:"title" binding:"omitempty"`                      // 可选自定义标题
-	Description string `json:"description" binding:"omitempty"`                // 可选自定义描述
-	RootCause   string `json:"rootCause" binding:"omitempty"`                  // 根因分析
+	ExpectedVersion int    `json:"expectedVersion" binding:"required,gt=0"`
+	RequesterID     *int   `json:"requesterId,omitempty" binding:"omitempty,gt=0"` // 可选目标租户申请人
+	Title           string `json:"title" binding:"omitempty"`                      // 可选自定义标题
+	Description     string `json:"description" binding:"omitempty"`                // 可选自定义描述
+	RootCause       string `json:"rootCause" binding:"omitempty"`                  // 根因分析
 }

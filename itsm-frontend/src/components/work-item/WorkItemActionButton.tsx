@@ -33,7 +33,7 @@ export function WorkItemActionButton({
         {children}
       </Button>
       {!action.allowed && action.reason && (
-        <span id={reasonId} role='note' style={{ color: '#8c8c8c', fontSize: 12 }}>
+        <span id={reasonId} role='note' style={{ color: 'var(--color-text-secondary)', fontSize: 12 }}>
           {action.reason}
         </span>
       )}

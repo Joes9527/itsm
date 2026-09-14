@@ -66,16 +66,16 @@ export const AISimilarSolutionsPanel: React.FC<AISimilarSolutionsPanelProps> = (
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+    <div className="bg-surface rounded-[8px] p-[16px] border border-border shadow-none space-y-3">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-sm font-bold text-slate-800 dark:text-slate-100">
+        <div className="flex items-center gap-1.5 text-[15px] font-semibold text-foreground">
           <Lightbulb size={16} className="text-amber-500" />
           <span>AI 相似历史故障与解决方案</span>
         </div>
         <AIConfidenceBadge confidence={94} label="推荐方案" />
       </div>
 
-      <p className="text-xs text-slate-400 m-0">
+      <p className="text-[12px] text-muted m-0">
         基于向量数据库（SimilarIncidents）匹配历史已解决工单库
       </p>
 
@@ -88,25 +88,25 @@ export const AISimilarSolutionsPanel: React.FC<AISimilarSolutionsPanelProps> = (
           {solutions.map((item) => (
             <div
               key={item.id}
-              className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 hover:border-primary-300 transition-all text-xs"
+              className="p-3 rounded-[8px] bg-raised border border-border hover:border-primary-300 transition-all text-[12px]"
             >
               <div className="flex items-center justify-between mb-1.5">
-                <span className="font-mono font-semibold text-primary-600 dark:text-primary-400">
+                <span className="font-mono font-semibold text-foreground">
                   {item.ticketNumber}
                 </span>
                 <AIConfidenceBadge confidence={item.confidence} label="匹配度" />
               </div>
 
-              <div className="font-bold text-slate-800 dark:text-slate-200 mb-1">
+              <div className="font-semibold text-foreground mb-1">
                 {item.title}
               </div>
 
-              <div className="text-slate-500 mb-1.5">
-                <span className="font-medium text-slate-700 dark:text-slate-300">根因：</span>
+              <div className="text-muted mb-1.5">
+                <span className="font-medium text-foreground">根因：</span>
                 {item.rootCause}
               </div>
 
-              <div className="p-2 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-800/80 mb-2 font-mono text-[11px] leading-relaxed">
+              <div className="p-2 rounded bg-surface text-foreground border border-border mb-2 font-mono text-[11px] leading-relaxed">
                 {item.solution}
               </div>
 
@@ -116,7 +116,7 @@ export const AISimilarSolutionsPanel: React.FC<AISimilarSolutionsPanelProps> = (
                   type={appliedId === item.id ? 'default' : 'primary'}
                   onClick={() => handleApply(item)}
                   icon={appliedId === item.id ? <Check size={13} /> : <Copy size={13} />}
-                  className="text-xs h-7"
+                  className="text-[12px] h-[29px]"
                 >
                   {appliedId === item.id ? '已引用' : '引用为回复方案'}
                 </Button>

@@ -1,7 +1,9 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -88,13 +90,31 @@ type WebSocketMessage struct {
 	Payload interface{} `json:"payload"`
 }
 
+var errPushNotAccepted = errors.New("push_not_accepted")
+var errPushUnknown = errors.New("push_delivery_unknown")
+
+type websocketFrame struct {
+	payload []byte
+	receipt chan<- error
+	ctx     context.Context
+}
+
+func (f websocketFrame) finish(err error) {
+	if f.receipt != nil {
+		select {
+		case f.receipt <- err:
+		default:
+		}
+	}
+}
+
 // WebSocketClient WebSocket客户端
 type WebSocketClient struct {
 	ID       string
 	UserID   int
 	TenantID int
 	Conn     *websocket.Conn
-	Send     chan []byte
+	Send     chan websocketFrame
 	Hub      *WebSocketHub
 	IsClosed bool
 }
@@ -134,6 +154,7 @@ func (h *WebSocketHub) Run() {
 			h.mu.Lock()
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
+				client.IsClosed = true
 				close(client.Send)
 				h.logger.Infow("WebSocket client unregistered", "user_id", client.UserID)
 			}
@@ -145,8 +166,9 @@ func (h *WebSocketHub) Run() {
 			h.mu.Lock()
 			for client := range h.clients {
 				select {
-				case client.Send <- message:
+				case client.Send <- websocketFrame{payload: message}:
 				default:
+					client.IsClosed = true
 					close(client.Send)
 					delete(h.clients, client)
 				}
@@ -166,26 +188,70 @@ func (h *WebSocketHub) UnregisterClient(client *WebSocketClient) {
 	h.unregister <- client
 }
 
-// SendToUser 发送消息给指定用户
-func (h *WebSocketHub) SendToUser(userID int, message WebSocketMessage) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-
-	msgBytes, err := json.Marshal(message)
+// SendToUser is best-effort only; durable owners use DeliverToUser.
+func (h *WebSocketHub) SendToUser(tenantID, userID int, message WebSocketMessage) {
+	payload, err := json.Marshal(message)
 	if err != nil {
-		h.logger.Errorw("Failed to marshal websocket message", "error", err)
 		return
 	}
+	h.enqueueUser(context.Background(), tenantID, userID, payload, false)
+}
 
+// enqueueUser is the only user-target selection path for both kinds of send.
+func (h *WebSocketHub) enqueueUser(ctx context.Context, tenantID, userID int, payload []byte, acknowledge bool) (<-chan error, int) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	var receipts chan error
+	if acknowledge {
+		receipts = make(chan error, len(h.clients))
+	}
+	enqueued := 0
+	if tenantID <= 0 || userID <= 0 {
+		return receipts, enqueued
+	}
 	for client := range h.clients {
-		if client.UserID == userID && !client.IsClosed {
-			select {
-			case client.Send <- msgBytes:
-			default:
-				h.logger.Warnw("Failed to send message to user", "user_id", userID)
-			}
+		if client.TenantID != tenantID || client.UserID != userID || client.IsClosed {
+			continue
+		}
+		select {
+		case client.Send <- websocketFrame{payload: payload, receipt: receipts, ctx: ctx}:
+			enqueued++
+		default:
 		}
 	}
+	return receipts, enqueued
+}
+
+// DeliverToUser waits for socket write acceptance from at least one connection
+// belonging to the exact tenant/user. It does not imply browser consumption.
+func (h *WebSocketHub) DeliverToUser(ctx context.Context, tenantID, userID int, message WebSocketMessage) error {
+	if ctx == nil || tenantID <= 0 || userID <= 0 {
+		return errPushNotAccepted
+	}
+	if err := ctx.Err(); err != nil {
+		return errors.Join(errPushNotAccepted, err)
+	}
+	payload, err := json.Marshal(message)
+	if err != nil {
+		return errors.Join(errPushNotAccepted, err)
+	}
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	receipts, enqueued := h.enqueueUser(ctx, tenantID, userID, payload, true)
+	if enqueued == 0 {
+		return errPushNotAccepted
+	}
+	for i := 0; i < enqueued; i++ {
+		select {
+		case err := <-receipts:
+			if err == nil {
+				return nil
+			}
+		case <-ctx.Done():
+			return errors.Join(errPushUnknown, ctx.Err())
+		}
+	}
+	return errPushUnknown
 }
 
 // SendToTenant 发送消息给租户所有用户
@@ -202,7 +268,7 @@ func (h *WebSocketHub) SendToTenant(tenantID int, message WebSocketMessage) {
 	for client := range h.clients {
 		if client.TenantID == tenantID && !client.IsClosed {
 			select {
-			case client.Send <- msgBytes:
+			case client.Send <- websocketFrame{payload: msgBytes}:
 			default:
 				h.logger.Warnw("Failed to send message to tenant user", "user_id", client.UserID)
 			}
@@ -259,31 +325,50 @@ func (c *WebSocketClient) WritePump() {
 	defer func() {
 		ticker.Stop()
 		c.Conn.Close()
+		// Serialize closure with all Hub producers and release queued waiters.
+		c.Hub.mu.Lock()
+		c.IsClosed = true
+		delete(c.Hub.clients, c)
+		for {
+			select {
+			case frame, ok := <-c.Send:
+				if !ok {
+					c.Hub.mu.Unlock()
+					return
+				}
+				frame.finish(errPushUnknown)
+			default:
+				c.Hub.mu.Unlock()
+				return
+			}
+		}
+
 	}()
 
 	for {
 		select {
-		case message, ok := <-c.Send:
-			c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		case frame, ok := <-c.Send:
 			if !ok {
-				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
-
+			if frame.ctx != nil && frame.ctx.Err() != nil {
+				frame.finish(frame.ctx.Err())
+				continue
+			}
+			if err := c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+				frame.finish(err)
+				return
+			}
 			w, err := c.Conn.NextWriter(websocket.TextMessage)
 			if err != nil {
+				frame.finish(err)
 				return
 			}
-			w.Write(message)
-
-			// 添加队列中的消息
-			n := len(c.Send)
-			for i := 0; i < n; i++ {
-				w.Write([]byte{'\n'})
-				w.Write(<-c.Send)
-			}
-
-			if err := w.Close(); err != nil {
+			_, writeErr := w.Write(frame.payload)
+			closeErr := w.Close()
+			err = errors.Join(writeErr, closeErr)
+			frame.finish(err)
+			if err != nil {
 				return
 			}
 
@@ -302,7 +387,14 @@ func (c *WebSocketClient) handleMessage(msg WebSocketMessage) {
 	case "ping":
 		response := WebSocketMessage{Type: "pong", Payload: nil}
 		msgBytes, _ := json.Marshal(response)
-		c.Send <- msgBytes
+		c.Hub.mu.RLock()
+		if !c.IsClosed {
+			select {
+			case c.Send <- websocketFrame{payload: msgBytes}:
+			default:
+			}
+		}
+		c.Hub.mu.RUnlock()
 	case "subscribe":
 		// 处理订阅
 		c.Hub.logger.Infow("Client subscribed", "client_id", c.ID)
@@ -347,7 +439,7 @@ func (s *WebSocketService) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 		UserID:   userID,
 		TenantID: tenantID,
 		Conn:     conn,
-		Send:     make(chan []byte, 256),
+		Send:     make(chan websocketFrame, 256),
 		Hub:      s.hub,
 	}
 
@@ -390,10 +482,10 @@ func (s *WebSocketService) NotifyTicketAssigned(tenantID int, ticket *dto.Ticket
 		},
 	}
 	// 发送给创建者
-	s.hub.SendToUser(ticket.RequesterID, msg)
+	s.hub.SendToUser(tenantID, ticket.RequesterID, msg)
 	// 发送给被分配人
 	if assigneeID != ticket.RequesterID {
-		s.hub.SendToUser(assigneeID, msg)
+		s.hub.SendToUser(tenantID, assigneeID, msg)
 	}
 }
 
@@ -420,9 +512,9 @@ func (s *WebSocketService) NotifySLABreached(tenantID int, ticket *dto.TicketRes
 	}
 	// 发送给相关人员
 	if ticket.AssigneeID > 0 {
-		s.hub.SendToUser(ticket.AssigneeID, msg)
+		s.hub.SendToUser(tenantID, ticket.AssigneeID, msg)
 	}
-	s.hub.SendToUser(ticket.RequesterID, msg)
+	s.hub.SendToUser(tenantID, ticket.RequesterID, msg)
 }
 
 // NotifyApprovalRequired 通知需要审批
@@ -431,5 +523,5 @@ func (s *WebSocketService) NotifyApprovalRequired(tenantID int, userID int, appr
 		Type:    "approval_required",
 		Payload: approvalInfo,
 	}
-	s.hub.SendToUser(userID, msg)
+	s.hub.SendToUser(tenantID, userID, msg)
 }

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common/workitemidentity"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/assetlicense"
 	"itsm-backend/ent/change"
@@ -517,12 +519,13 @@ func getEmbeddedConfig() *SeedConfig {
 			{TargetClass: "service_request_item", Name: "API网关", Description: "API接口管理", Category: "开发", ServiceType: "custom", RequiresApproval: true, DeliveryTime: 3},
 		},
 		ProcessBindings: []ProcessBindingSeed{
-			{BusinessType: "ticket", BusinessSubType: "incident", ProcessDefinitionKey: "incident_emergency_flow", IsDefault: true},
-			{BusinessType: "ticket", BusinessSubType: "problem", ProcessDefinitionKey: "problem_management_flow", IsDefault: true},
-			{BusinessType: "ticket", BusinessSubType: "change", ProcessDefinitionKey: "change_normal_flow", IsDefault: true},
-			{BusinessType: "ticket", BusinessSubType: "service_request", ProcessDefinitionKey: "service_request_flow", IsDefault: true},
-			{BusinessType: "ticket", BusinessSubType: "improvement", ProcessDefinitionKey: "ticket_general_flow", IsDefault: true},
-			{BusinessType: "ticket", ProcessDefinitionKey: "ticket_general_flow", IsDefault: true},
+			{BusinessType: "incident", ProcessDefinitionKey: "incident_emergency_flow", IsDefault: true},
+			{BusinessType: "problem", ProcessDefinitionKey: "problem_management_flow", IsDefault: true},
+			{BusinessType: "change_request", ProcessDefinitionKey: "change_normal_flow", IsDefault: true},
+			{BusinessType: "change_request", BusinessSubType: "emergency", ProcessDefinitionKey: "change_emergency_flow", IsDefault: false},
+			{BusinessType: "service_request_item", ProcessDefinitionKey: "service_request_flow", IsDefault: true},
+			{BusinessType: "generic", BusinessSubType: "improvement", ProcessDefinitionKey: "ticket_general_flow", IsDefault: true},
+			{BusinessType: "generic", ProcessDefinitionKey: "ticket_general_flow", IsDefault: true},
 		},
 		TicketViews: []TicketViewSeed{
 			{Name: "我的待办工单", Desc: "分配给我的未关闭工单", IsShared: false, Columns: []string{"id", "title", "priority", "status", "assignee", "created_at"}},
@@ -535,7 +538,10 @@ func getEmbeddedConfig() *SeedConfig {
 }
 
 // SeedAll runs all seeding operations
-func (s *Seeder) SeedAll(ctx context.Context) {
+func (s *Seeder) SeedAll(ctx context.Context) error {
+	if err := s.validateProcessBindingIdentities(); err != nil {
+		return err
+	}
 	// 解析目标租户（默认 default；SeedForTenant 可切换为其他租户）
 	s.tenant(ctx)
 	s.seedDepartments(ctx)
@@ -548,8 +554,10 @@ func (s *Seeder) SeedAll(ctx context.Context) {
 	// 使用配置的初始化数据
 	s.seedSLADefinitions(ctx)
 	s.seedSLAAlertRules(ctx)
-	s.seedProcessBindings(ctx)
-	s.seedBPMNWorkflows(ctx) // 部署BPMN工作流模板
+	s.seedBPMNWorkflows(ctx) // 绑定前部署并验证可执行流程
+	if err := s.seedProcessBindings(ctx); err != nil {
+		return err
+	}
 	s.seedTicketViews(ctx)
 	s.seedServiceCatalog(ctx)
 	s.seedTicketTypes(ctx)            // 新增：初始化工单类型
@@ -561,6 +569,7 @@ func (s *Seeder) SeedAll(ctx context.Context) {
 	s.seedTicketTags(ctx)             // 新增：初始化标签
 	s.seedMenuAndPermissionFixes(ctx) // 修复：更新菜单路径和补充缺失权限
 	s.seedRolePermissions(ctx)        // 新增：为角色分配权限
+	return nil
 }
 
 // SeedProduction applies product defaults and then verifies the minimum
@@ -569,7 +578,9 @@ func (s *Seeder) SeedAll(ctx context.Context) {
 // success when a required tenant, identity, RBAC, menu, or product template
 // was only partially initialized.
 func (s *Seeder) SeedProduction(ctx context.Context) error {
-	s.SeedAll(ctx)
+	if err := s.SeedAll(ctx); err != nil {
+		return err
+	}
 	return s.VerifyProduction(ctx)
 }
 
@@ -795,8 +806,7 @@ func (s *Seeder) SeedForTenant(ctx context.Context, target *ent.Tenant) error {
 	}
 	s.targetTenant = target
 	s.sugar.Infow("seeding for tenant", "tenant_id", target.ID, "tenant_code", target.Code)
-	s.SeedAll(ctx)
-	return nil
+	return s.SeedAll(ctx)
 }
 
 func (s *Seeder) deploymentMode() string {
@@ -1090,37 +1100,42 @@ func (s *Seeder) seedSLAAlertRules(ctx context.Context) {
 // seedApprovalWorkflows 曾负责创建 legacy ApprovalWorkflow 默认模板，已随引擎下线移除（见 Task 6）。
 // 审批能力现在完全由 seedBPMNWorkflows + seedProcessBindings 提供。
 
-func (s *Seeder) seedProcessBindings(ctx context.Context) {
+func (s *Seeder) validateProcessBindingIdentities() error {
+	if s.config == nil {
+		return fmt.Errorf("seed configuration is required")
+	}
+	for _, binding := range s.config.ProcessBindings {
+		if !workitemidentity.IsKnownProcessIdentity(binding.BusinessType) {
+			return fmt.Errorf("unsupported seed process business type %q", binding.BusinessType)
+		}
+	}
+	return nil
+}
+
+func (s *Seeder) seedProcessBindings(ctx context.Context) error {
+	if err := s.validateProcessBindingIdentities(); err != nil {
+		return err
+	}
 	t := s.tenant(ctx)
 	if t == nil {
-		s.sugar.Warnw("tenant not found; skip seed")
-		return
+		return fmt.Errorf("tenant required for process binding seed")
 	}
-
 	existing, err := s.client.ProcessBinding.Query().Where(processbinding.TenantIDEQ(t.ID)).Count(ctx)
 	if err != nil {
-		s.sugar.Warnw("check existing process bindings failed", "error", err)
-		return
+		return fmt.Errorf("check existing process bindings: %w", err)
 	}
 	if existing > 0 {
-		s.sugar.Infow("process bindings already seeded")
-		return
+		return nil
 	}
-
+	owner := service.NewProcessBindingService(s.client)
 	for _, b := range s.config.ProcessBindings {
-		_, err := s.client.ProcessBinding.Create().
-			SetBusinessType(b.BusinessType).
-			SetNillableBusinessSubType(nilIfEmpty(b.BusinessSubType)).
-			SetProcessDefinitionKey(b.ProcessDefinitionKey).
-			SetIsDefault(b.IsDefault).
-			SetIsActive(true).
-			SetTenantID(t.ID).
-			Save(ctx)
+		_, err := owner.CreateBinding(ctx, &dto.ProcessBinding{BusinessType: dto.BusinessType(b.BusinessType), BusinessSubType: b.BusinessSubType, ProcessDefinitionKey: b.ProcessDefinitionKey, IsDefault: b.IsDefault, IsActive: true, TenantID: t.ID})
 		if err != nil {
-			s.sugar.Warnw("seed process binding failed", "error", err, "business_type", b.BusinessType)
+			return fmt.Errorf("seed process binding %s: %w", b.BusinessType, err)
 		}
 	}
 	s.sugar.Infow("process bindings seeded", "count", len(s.config.ProcessBindings))
+	return nil
 }
 
 // seedBPMNWorkflows 部署BPMN工作流模板

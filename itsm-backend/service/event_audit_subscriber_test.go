@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"itsm-backend/ent/enttest"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,7 +17,7 @@ func TestEventAuditSubscriber_HandleWritesAuditLog(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:event_audit_test?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 
-	sub := NewEventAuditSubscriber(client, zaptest.NewLogger(t).Sugar())
+	sub := NewEventAuditSubscriber(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 
 	event := map[string]interface{}{
 		"eventType":  "sla.breached",
@@ -47,7 +48,7 @@ func TestEventAuditSubscriber_HandleRejectsWrongShape(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:event_audit_shape_test?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 
-	sub := NewEventAuditSubscriber(client, zaptest.NewLogger(t).Sugar())
+	sub := NewEventAuditSubscriber(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	err := sub.Handle("not-a-map")
 	require.Error(t, err)
 
@@ -59,7 +60,7 @@ func TestEventAuditSubscriber_HandleMissingEventType(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:event_audit_missing_type_test?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 
-	sub := NewEventAuditSubscriber(client, zaptest.NewLogger(t).Sugar())
+	sub := NewEventAuditSubscriber(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	err := sub.Handle(map[string]interface{}{"tenantId": "1"})
 	require.Error(t, err)
 

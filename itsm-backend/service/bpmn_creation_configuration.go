@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"itsm-backend/common/workitemidentity"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processbinding"
 	"itsm-backend/ent/sladefinition"
@@ -46,8 +47,9 @@ type creationConfigurationRecords struct {
 func loadCreationConfiguration(ctx context.Context, tx *ent.Tx, tenantID int, class, key string) (creationConfigurationRecords, error) {
 	result := creationConfigurationRecords{}
 	if key == "" {
-		business := map[string]string{"generic": "ticket", "incident": "incident", "problem": "problem", "change_request": "change", "service_request_item": "service_request"}[class]
-		if business != "" {
+		// 绑定匹配词表就是 recordClass，与实例身份同源，不再翻回 Wave-1 旧词表。
+		if workitemidentity.IsRecordClass(class) {
+			business := class
 			rows, err := tx.ProcessBinding.Query().Where(processbinding.TenantIDEQ(tenantID), processbinding.BusinessTypeEQ(business), processbinding.IsActiveEQ(true)).Order(ent.Asc(processbinding.FieldID)).All(ctx)
 			if err != nil {
 				return result, err

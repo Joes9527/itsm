@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"itsm-backend/common/executionscope"
 	"time"
 
 	"itsm-backend/common"
@@ -26,7 +28,8 @@ import (
 // concrete type) purely so tests can substitute a fake without spinning up
 // real polling goroutines.
 type emailPollingCoordinator interface {
-	Start(ctx context.Context, tenantID int, conn *msgraphpkg.GraphConnector)
+	Start(ctx context.Context, tenantID int, conn *msgraphpkg.GraphConnector) error
+	Close()
 	Stop(tenantID int)
 }
 
@@ -78,7 +81,10 @@ func (c *ConnectorController) ListMarket(ctx *gin.Context) {
 		installed[cfg.Name] = true
 		enabled[cfg.Name] = cfg.Enabled
 	}
-	health := c.manager.HealthCheckAll(ctx.Request.Context())
+	health, ok := c.healthSnapshot(ctx)
+	if !ok {
+		return
+	}
 	out := make([]dto.ConnectorManifestDTO, 0, len(mfs))
 	for _, m := range mfs {
 		healthy, checkedAt, lastErr := healthForManifest(health, tenantID, m.Name)
@@ -115,7 +121,10 @@ func (c *ConnectorController) ListMarket(ctx *gin.Context) {
 func (c *ConnectorController) ListConfigs(ctx *gin.Context) {
 	tenantID := ctx.GetInt("tenant_id")
 	cfgs := c.manager.ListByTenant(tenantID)
-	health := c.manager.HealthCheckAll(ctx.Request.Context())
+	health, ok := c.healthSnapshot(ctx)
+	if !ok {
+		return
+	}
 	out := make([]dto.ConnectorConfigDTO, 0, len(cfgs))
 	for _, cfg := range cfgs {
 		out = append(out, maskConfig(cfg, health))
@@ -125,6 +134,9 @@ func (c *ConnectorController) ListConfigs(ctx *gin.Context) {
 
 // Provision 创建/更新一个连接器实例
 func (c *ConnectorController) Provision(ctx *gin.Context) {
+	if !c.requireIntegrationManagement(ctx) {
+		return
+	}
 	var req dto.ProvisionConnectorRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		common.Fail(ctx, common.ParamErrorCode, err.Error())
@@ -182,18 +194,48 @@ func (c *ConnectorController) Provision(ctx *gin.Context) {
 				// context.WithoutCancel preserves any request-scoped values
 				// while detaching from the request's cancellation signal, so
 				// the poller isn't killed within microseconds of starting.
-				c.emailCoordinator.Start(context.WithoutCancel(ctx.Request.Context()), tenantID, gc)
+				if err := c.emailCoordinator.Start(context.WithoutCancel(ctx.Request.Context()), tenantID, gc); err != nil {
+					common.Fail(ctx, common.InternalErrorCode, "邮件轮询启动失败")
+					return
+				}
 			}
 		}
 	}
-	common.Success(ctx, maskConfig(cfg, c.manager.HealthCheckAll(ctx.Request.Context())))
+	health, ok := c.healthSnapshot(ctx)
+	if !ok {
+		return
+	}
+	common.Success(ctx, maskConfig(cfg, health))
+}
+
+func (c *ConnectorController) requireIntegrationManagement(ctx *gin.Context) bool {
+	if err := c.manager.RequireIntegrationManagement(ctx.Request.Context(), ctx.GetInt("tenant_id")); err != nil {
+		if errors.Is(err, executionscope.ErrDenied) {
+			common.Forbidden(ctx, "当前执行环境不允许修改集成配置")
+		} else {
+			common.Fail(ctx, common.InternalErrorCode, "连接器配置准入检查未完成")
+		}
+		return false
+	}
+	return true
 }
 
 // Revoke 停用并移除一个连接器实例
 func (c *ConnectorController) Revoke(ctx *gin.Context) {
+	if !c.requireIntegrationManagement(ctx) {
+		return
+	}
 	name := ctx.Param("name")
 	tenantID := ctx.GetInt("tenant_id")
-	c.manager.Revoke(connector.Config{TenantID: tenantID, Name: name})
+	// The name-scoped endpoint removes the same tenant/name set as deleteConfig.
+	for _, cfg := range c.manager.ListByTenant(tenantID) {
+		if cfg.Name == name {
+			if err := c.manager.Revoke(ctx.Request.Context(), cfg); err != nil {
+				common.Fail(ctx, common.InternalErrorCode, "连接器停用未完成")
+				return
+			}
+		}
+	}
 	// 从数据库删除配置
 	if err := c.deleteConfig(ctx.Request.Context(), tenantID, name); err != nil {
 		c.logger.Warnw("Failed to delete connector config", "error", err, "tenant", tenantID, "name", name)
@@ -261,9 +303,12 @@ func (c *ConnectorController) Test(ctx *gin.Context) {
 	common.Success(ctx, gin.H{"name": name, "channel": channel, "sent": true})
 }
 
-// Health 所有运行实例健康检查
+// Health reads the current tenant's observed health snapshots without probing.
 func (c *ConnectorController) Health(ctx *gin.Context) {
-	res := c.manager.HealthCheckAll(context.Background())
+	res, ok := c.healthSnapshot(ctx)
+	if !ok {
+		return
+	}
 	out := make(map[string]dto.ConnectorHealthDTO, len(res))
 	for k, v := range res {
 		out[k] = dto.ConnectorHealthDTO{
@@ -275,6 +320,28 @@ func (c *ConnectorController) Health(ctx *gin.Context) {
 		}
 	}
 	common.Success(ctx, out)
+}
+
+func (c *ConnectorController) healthSnapshot(ctx *gin.Context) (map[string]connector.HealthStatus, bool) {
+	health, err := c.manager.HealthSnapshot(ctx.GetInt("tenant_id"))
+	if err != nil {
+		common.Fail(ctx, common.InternalErrorCode, "无法读取连接器健康状态")
+		return nil, false
+	}
+	return health, true
+}
+
+// RefreshHealth explicitly requests tenant-scoped diagnostics.
+func (c *ConnectorController) RefreshHealth(ctx *gin.Context) {
+	if err := c.manager.RefreshHealth(ctx.Request.Context(), ctx.GetInt("tenant_id")); err != nil {
+		if errors.Is(err, executionscope.ErrDenied) {
+			common.Forbidden(ctx, "当前执行环境不允许连接器诊断")
+		} else {
+			common.Fail(ctx, common.InternalErrorCode, "连接器诊断未完成")
+		}
+		return
+	}
+	c.Health(ctx)
 }
 
 // Lifecycle returns a tenant-scoped connector lifecycle view for GA readiness checks.
@@ -289,7 +356,10 @@ func (c *ConnectorController) Lifecycle(ctx *gin.Context) {
 	for _, cfg := range configs {
 		configByName[cfg.Name] = cfg
 	}
-	health := c.manager.HealthCheckAll(ctx.Request.Context())
+	health, ok := c.healthSnapshot(ctx)
+	if !ok {
+		return
+	}
 	manifests := reg.List()
 	out := make([]dto.ConnectorLifecycleDTO, 0, len(manifests))
 	for _, m := range manifests {
@@ -482,6 +552,9 @@ func (c *ConnectorController) deleteConfig(ctx context.Context, tenantID int, na
 // LoadAll 从数据库加载所有已启用的连接器配置并自动 provision。
 // 供 bootstrap 在启动时调用，恢复因进程重启而丢失的连接器实例。
 func (c *ConnectorController) LoadAll(ctx context.Context) error {
+	if err := c.manager.RequireRestore(ctx); err != nil {
+		return err
+	}
 	if c.restoreClient == nil {
 		return fmt.Errorf("connector restore database capability is required")
 	}
@@ -513,17 +586,25 @@ func (c *ConnectorController) LoadAll(ctx context.Context) error {
 			CreatedAt:   cfg.CreatedAt,
 			UpdatedAt:   cfg.UpdatedAt,
 		}); err != nil {
-			c.logger.Warnw("Failed to restore connector from DB", "error", err, "tenant", cfg.TenantID, "name", cfg.Name)
-			continue
+			return fmt.Errorf("restore connector %s for tenant %d: %w", cfg.Name, cfg.TenantID, err)
 		}
 		// 恢复 msgraph-email 的邮件轮询
 		if cfg.Name == "msgraph-email" && cfg.Enabled && c.emailCoordinator != nil {
 			if conn, ok := c.manager.Get(cfg.TenantID, "msgraph-email"); ok {
 				if gc, ok := conn.(*msgraphpkg.GraphConnector); ok {
-					c.emailCoordinator.Start(tenantCtx, cfg.TenantID, gc)
+					if err := c.emailCoordinator.Start(tenantCtx, cfg.TenantID, gc); err != nil {
+						return fmt.Errorf("start email polling: %w", err)
+					}
 				}
 			}
 		}
 	}
 	return nil
+}
+
+// ClosePolling waits before connector and database dependencies are closed.
+func (c *ConnectorController) ClosePolling() {
+	if c.emailCoordinator != nil {
+		c.emailCoordinator.Close()
+	}
 }

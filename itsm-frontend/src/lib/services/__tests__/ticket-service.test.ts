@@ -17,6 +17,7 @@
  */
 
 import { ticketService } from '../ticket-service-v2';
+import { ticketService as legacyTicketService } from '../ticket-service';
 
 jest.mock('@/lib/security', () => ({
   security: {
@@ -84,12 +85,12 @@ describe('ticketService', () => {
 
     it('updateTicket calls PUT /api/v1/tickets/:id with the body', async () => {
       mockSuccess({ id: 1 });
-      await ticketService.updateTicket(1, { title: 'Updated' });
+      await ticketService.updateTicket(1, { title: 'Updated', version: 4, operationId: 'edit-test' });
 
       const [url, init] = fetchMock.mock.calls[0];
       expect(url).toContain('/api/v1/tickets/1');
       expect(init.method).toBe('PUT');
-      expect(JSON.parse(init.body as string).title).toBe('Updated');
+      expect(JSON.parse(init.body as string)).toEqual({ title: 'Updated', version: 4, operationId: 'edit-test' });
     });
 
     it('deleteTicket calls DELETE /api/v1/tickets/:id', async () => {
@@ -268,6 +269,20 @@ describe('ticketService', () => {
     });
   });
 
+  describe.each([['v2', ticketService], ['legacy', legacyTicketService]])('%s edit version', (_name, client) => {
+    it.each([undefined, 0, -1, 1.5, NaN])('rejects version %s without sending a request', async version => {
+      await expect(client.updateTicket(1, { title: 'Updated', version } as any)).rejects.toThrow('工单版本');
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+    it('sends the observed version without fetching a newer one', async () => {
+      mockSuccess({ id: 1 });
+      await client.updateTicket(1, { title: 'Updated', version: 4, operationId: 'edit-test' });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0][1].method).toBe('PUT');
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ title: 'Updated', version: 4, operationId: 'edit-test' });
+    });
+  });
+
   describe('error propagation', () => {
     it('propagates backend error message on non-zero code', async () => {
       fetchMock.mockResolvedValueOnce(
@@ -275,7 +290,7 @@ describe('ticketService', () => {
       );
 
       await expect(
-        ticketService.updateTicket(1, { title: '' })
+        ticketService.updateTicket(1, { title: '', version: 4, operationId: 'edit-test' })
       ).rejects.toThrow('标题不能为空');
     });
 

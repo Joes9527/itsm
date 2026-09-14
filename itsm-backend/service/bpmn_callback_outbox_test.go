@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 
@@ -50,9 +51,10 @@ func openBPMNCallbackOutboxClient(t *testing.T) *ent.Client {
 
 func newBPMNCallbackOutboxForTest(client *ent.Client, executor bpmnCallbackExecutor, now time.Time) *bpmnCallbackOutbox {
 	return &bpmnCallbackOutbox{
-		client:   client,
-		executor: executor,
-		now:      func() time.Time { return now },
+		execution: executionfixture.Standard(),
+		client:    client,
+		executor:  executor,
+		now:       func() time.Time { return now },
 	}
 }
 
@@ -87,7 +89,7 @@ func enqueueBPMNCallbackOutboxForTest(t *testing.T, outbox *bpmnCallbackOutbox, 
 		TaskType:          "fake_task",
 		ElementID:         "Activity_Notify",
 		Variables:         map[string]interface{}{"bpmn_callback_execution_key": "client-value"},
-	})
+	}, nil)
 	require.NoError(t, err)
 	return row
 }

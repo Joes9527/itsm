@@ -1,6 +1,7 @@
 package schema
 
 import (
+	relation "itsm-backend/common/workitemrelation"
 	"time"
 
 	"entgo.io/ent"
@@ -42,7 +43,7 @@ func (WorkItemRelation) Fields() []ent.Field {
 		field.Int("created_by_id").
 			Comment("创建人ID").
 			Positive(),
-		field.JSON("metadata", map[string]interface{}{}).
+		field.JSON("metadata", relation.Metadata{}).
 			Comment("少量关系专属元数据，不存业务主体").
 			Optional(),
 		field.Time("created_at").

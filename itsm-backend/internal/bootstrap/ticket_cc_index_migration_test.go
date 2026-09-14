@@ -3,6 +3,10 @@ package bootstrap
 import (
 	"context"
 	"database/sql"
+	"itsm-backend/common/executionscope"
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/config"
+	"itsm-backend/database"
 	"strconv"
 	"strings"
 	"testing"
@@ -130,7 +134,7 @@ func TestPrepareTicketNotificationMigrationSQLiteUpgradesPopulatedLegacyRows(t *
 	require.NoError(t, client.Schema.Create(ctx, migrate.WithForeignKeys(false)))
 
 	assertLegacyTicketNotificationUpgrade(t, ctx, db, "?")
-	assertMigratedTicketNotificationsArePickedUp(t, ctx, db, client, [3]string{"?", "?", "?"})
+	assertMigratedTicketNotificationsRequireTarget(t, ctx, db, client, [3]string{"?", "?", "?"})
 }
 
 func openLegacyTicketCCSQLite(t *testing.T, name string) *sql.DB {
@@ -270,7 +274,7 @@ func (c *migratedNotificationConnector) HealthCheck(context.Context) connector.H
 }
 func (c *migratedNotificationConnector) Close() error { return nil }
 
-func assertMigratedTicketNotificationsArePickedUp(
+func assertMigratedTicketNotificationsRequireTarget(
 	t *testing.T,
 	ctx context.Context,
 	db *sql.DB,
@@ -323,7 +327,10 @@ func assertMigratedTicketNotificationsArePickedUp(
 			}
 		})
 	}
-	manager := connector.NewManager(registry, zap.NewNop().Sugar())
+	policy, policyErr := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "migration-test", Capabilities: map[string]string{"notification": "enabled"}})
+	require.NoError(t, policyErr)
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
+	manager := connector.NewManager(registry, zap.NewNop().Sugar(), policy)
 	t.Cleanup(manager.CloseAll)
 	for _, channel := range []string{"webhook", "sms"} {
 		require.NoError(t, manager.Provision(ctx, connector.Config{
@@ -334,16 +341,22 @@ func assertMigratedTicketNotificationsArePickedUp(
 			Enabled:  true,
 		}))
 	}
-	notifications := service.NewTicketNotificationService(client, zap.NewNop().Sugar())
+	notifications := service.NewTicketNotificationService(client, zap.NewNop().Sugar(), policy)
 	notifications.SetConnectorManager(manager)
 	notifications.SetDeliveryQueueClient(client)
 	completed, err := notifications.ProcessPendingDeliveries(ctx, "migration-test-worker", 10)
-	require.NoError(t, err)
-	require.Equal(t, 2, completed)
-	require.ElementsMatch(t, []string{
-		"ticket-notification-legacy-1",
-		"ticket-notification-legacy-2",
-	}, recorder.messageIDs)
+	require.ErrorIs(t, err, executionscope.ErrDenied)
+	require.Zero(t, completed)
+	require.Empty(t, recorder.messageIDs, "old unbound intents must not adopt the current connector")
+	for _, id := range []int{1, 2} {
+		row := client.TicketNotification.GetX(ctx, id)
+		require.Equal(t, "failed", row.Status)
+		require.Equal(t, "delivery_target_invalid", row.LastErrorClass)
+		require.Nil(t, row.TargetProtocolVersion)
+		require.Nil(t, row.TargetConnectorName)
+		require.Nil(t, row.TargetConnectorProvider)
+		require.Nil(t, row.TargetDestinationDigest)
+	}
 }
 
 func migrateTicketCCSQLite(t *testing.T, db *sql.DB) {

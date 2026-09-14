@@ -118,9 +118,13 @@ func validateSystemPrivileges(ctx context.Context, db *sql.DB) error {
 			_ = rows.Close()
 			return err
 		}
-		allowed := ns == schema && strings.Contains(","+systemTablePrivileges[table]+",", ","+priv+",")
+		required := ns == schema && strings.Contains(","+systemTablePrivileges[table]+",", ","+priv+",")
+		// Candidate transport may read admission metadata. Standard deployments do
+		// not require these grants; write privileges remain forbidden in both modes.
+		optionalScopeRead := ns == schema && priv == "SELECT" && (table == "execution_scopes" || table == "execution_scope_members" || table == "execution_runtime_bindings")
+		allowed := required || optionalScopeRead
 		auditID := ns == schema && table == "audit_logs" && priv == "SELECT" && !tableAccess
-		if owner || (allowed && !tableAccess) || (!allowed && (tableAccess || columnAccess) && !auditID) {
+		if owner || (required && !tableAccess) || (!allowed && (tableAccess || columnAccess) && !auditID && !(ns == schema && table == "process_instances" && priv == "SELECT" && !tableAccess)) {
 			mismatch = fmt.Sprintf("%s.%s %s", ns, table, priv)
 			break
 		}
@@ -131,6 +135,15 @@ func validateSystemPrivileges(ctx context.Context, db *sql.DB) error {
 	}
 	if mismatch != "" {
 		return fmt.Errorf("system database privileges differ from restricted contract: %s", mismatch)
+	}
+	// Process callback discovery needs identity columns only, never workflow
+	// variables or business state. No grants are required in standard mode.
+	var unexpectedInstanceRead bool
+	if err := db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='process_instances'::regclass AND attnum>0 AND NOT attisdropped AND attname NOT IN ('id','tenant_id','execution_work_item_id') AND has_column_privilege('process_instances',attname,'SELECT'))`).Scan(&unexpectedInstanceRead); err != nil {
+		return err
+	}
+	if unexpectedInstanceRead {
+		return fmt.Errorf("system process instance read capability exceeds execution identity")
 	}
 	var auditOK bool
 	if err := db.QueryRowContext(ctx, `SELECT bool_and(has_column_privilege('audit_logs',attname,'SELECT')=(attname='id')) FROM pg_attribute WHERE attrelid='audit_logs'::regclass AND attnum>0 AND NOT attisdropped`).Scan(&auditOK); err != nil {

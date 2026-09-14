@@ -239,7 +239,7 @@ func TestService_Search_PopulatesFieldDefinitions(t *testing.T) {
 	repo := NewEntRepository(client)
 	svc := newCatalogPublisher(repo, client, zaptest.NewLogger(t).Sugar(), nil)
 
-	client.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType("ticket").SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
+	client.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType("generic").SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
 	created, err := svc.Create(ctx, tenant.ID, catalogCreateInput("云主机申请搜索测试", "云服务", "desc", 1, "enabled", 0, 0, []service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", ""))
 	require.NoError(t, err)
 

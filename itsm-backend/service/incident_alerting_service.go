@@ -2,17 +2,24 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"itsm-backend/common/executionscope"
 	"net/mail"
 	"strings"
 	"time"
 
+	"itsm-backend/common"
+	"itsm-backend/database"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/incidentalert"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
 
 	"github.com/google/uuid"
@@ -20,6 +27,8 @@ import (
 )
 
 type IncidentAlertingService struct {
+	execution        *database.ExecutionPolicy
+	emailService     *EmailService
 	client           *ent.Client
 	outboxRepository *OutboxEventRepository
 	logger           *zap.SugaredLogger
@@ -27,26 +36,35 @@ type IncidentAlertingService struct {
 
 const incidentAlertDeliveryEventType = "incident_alert_delivery"
 
-func NewIncidentAlertingService(client *ent.Client, logger *zap.SugaredLogger) *IncidentAlertingService {
+func NewIncidentAlertingService(client *ent.Client, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) *IncidentAlertingService {
 	return &IncidentAlertingService{
+		execution:        execution,
 		client:           client,
-		outboxRepository: NewOutboxEventRepository(client),
+		outboxRepository: NewOutboxEventRepository(client, execution),
 		logger:           logger,
 	}
 }
 
+// SetEmailService wires the existing delivery owner before serving requests.
+func (s *IncidentAlertingService) SetEmailService(emailService *EmailService) {
+	s.emailService = emailService
+}
+
 type incidentAlertDeliveryPayload struct {
-	Version       int      `json:"version"`
-	EventID       string   `json:"eventId"`
-	TenantID      int      `json:"tenantId"`
-	AlertID       int      `json:"alertId"`
-	Channel       string   `json:"channel"`
-	Recipients    []string `json:"recipients"`
-	Subject       string   `json:"subject"`
-	Message       string   `json:"message"`
-	ActorID       int      `json:"actorId,omitempty"`
-	Source        string   `json:"source"`
-	CorrelationID string   `json:"correlationId"`
+	WorkItemID    int         `json:"workItemId"`
+	IncidentID    int         `json:"incidentId"`
+	Target        EmailTarget `json:"target"`
+	Version       int         `json:"version"`
+	EventID       string      `json:"eventId"`
+	TenantID      int         `json:"tenantId"`
+	AlertID       int         `json:"alertId"`
+	Channel       string      `json:"channel"`
+	Recipients    []string    `json:"recipients"`
+	Subject       string      `json:"subject"`
+	Message       string      `json:"message"`
+	ActorID       int         `json:"actorId,omitempty"`
+	Source        string      `json:"source"`
+	CorrelationID string      `json:"correlationId"`
 }
 
 type incidentAlertActorContextKey struct{}
@@ -90,6 +108,12 @@ func (s *IncidentAlertingService) CreateIncidentAlert(ctx context.Context, req *
 }
 
 func (s *IncidentAlertingService) CreateIncidentAlertTx(ctx context.Context, tx *ent.Tx, req *dto.CreateIncidentAlertRequest, tenantID int) (*dto.IncidentAlertResponse, error) {
+	if s == nil || tx == nil || s.execution == nil {
+		return nil, common.NewForbiddenError("incident alert execution policy and transaction required")
+	}
+	if req == nil {
+		return nil, common.NewValidationError("incident alert request required", nil)
+	}
 	owner := *s
 	owner.client = tx.Client()
 	return owner.createIncidentAlertTx(ctx, tx, req, tenantID)
@@ -100,12 +124,21 @@ func (s *IncidentAlertingService) createIncidentAlertTx(ctx context.Context, tx 
 	if err := s.validateAlertRequest(ctx, req, tenantID); err != nil {
 		return nil, err
 	}
+	if err := requireIncidentExecutionTx(ctx, tx, s.execution, req.IncidentID, tenantID); err != nil {
+		return nil, err
+	}
 	triggeredAt := time.Now()
 	if req.TriggeredAt != nil {
 		triggeredAt = *req.TriggeredAt
 	}
 
 	actor := resolveIncidentAlertActor(ctx)
+	if actor.ID <= 0 || strings.TrimSpace(actor.Source) == "" {
+		return nil, common.NewForbiddenError("explicit incident alert actor and source required")
+	}
+	if err := s.validateAlertActor(ctx, actor.ID, tenantID); err != nil {
+		return nil, err
+	}
 	if actor.CorrelationID == "" {
 		actor.CorrelationID = uuid.NewString()
 	}
@@ -133,20 +166,21 @@ func (s *IncidentAlertingService) createIncidentAlertTx(ctx context.Context, tx 
 	if err := s.createSystemNotification(ctx, tx, alert, tenantID); err != nil {
 		return nil, fmt.Errorf("create incident alert in-app notification: %w", err)
 	}
-	deliveryAccepted := false
+	var accepted []incidentAlertIntentReceipt
 	for _, channel := range req.Channels {
 		if channel != "email" {
 			continue
 		}
 		for _, recipient := range req.Recipients {
-			if err := s.enqueueAlertDelivery(ctx, tx, alert, channel, recipient, actor); err != nil {
+			intent, err := s.enqueueAlertDelivery(ctx, tx, alert, channel, recipient, actor)
+			if err != nil {
 				return nil, fmt.Errorf("enqueue incident alert delivery: %w", err)
 			}
+			accepted = append(accepted, intent)
 		}
-		deliveryAccepted = true
 	}
-	if deliveryAccepted {
-		if err := recordIncidentAlertDeliveryAudit(ctx, tx, alert, actor); err != nil {
+	if len(accepted) > 0 {
+		if err := recordIncidentAlertDeliveryAudit(ctx, tx, alert, actor, accepted); err != nil {
 			return nil, fmt.Errorf("audit incident alert delivery acceptance: %w", err)
 		}
 	}
@@ -154,13 +188,28 @@ func (s *IncidentAlertingService) createIncidentAlertTx(ctx context.Context, tx 
 	return s.toIncidentAlertResponse(alert), nil
 }
 
-func (s *IncidentAlertingService) enqueueAlertDelivery(ctx context.Context, tx *ent.Tx, alert *ent.IncidentAlert, channel, recipient string, actor incidentAlertActor) error {
+func (s *IncidentAlertingService) enqueueAlertDelivery(ctx context.Context, tx *ent.Tx, alert *ent.IncidentAlert, channel, recipient string, actor incidentAlertActor) (incidentAlertIntentReceipt, error) {
+	if s.emailService == nil {
+		return incidentAlertIntentReceipt{}, executionscope.ErrDenied
+	}
+	target, err := s.emailService.DescribeDeliveryTarget(ctx, tx, alert.TenantID, "outbox")
+	if err != nil {
+		return incidentAlertIntentReceipt{}, err
+	}
+	if err = target.Validate(); err != nil {
+		return incidentAlertIntentReceipt{}, err
+	}
+	incidentRecord, err := tx.Incident.Query().Where(incident.IDEQ(alert.IncidentID), incident.HasWorkItemWith(ticket.TenantIDEQ(alert.TenantID))).Only(ctx)
+	if err != nil {
+		return incidentAlertIntentReceipt{}, fmt.Errorf("resolve alert execution WorkItem: %w", err)
+	}
 	eventID := uuid.NewString()
 	if actor.CorrelationID == "" {
 		actor.CorrelationID = eventID
 	}
-	payload, err := json.Marshal(incidentAlertDeliveryPayload{
-		Version:       1,
+	envelope := incidentAlertDeliveryPayload{
+		WorkItemID: incidentRecord.WorkItemID, IncidentID: incidentRecord.ID, Target: target,
+		Version:       2,
 		EventID:       eventID,
 		TenantID:      alert.TenantID,
 		AlertID:       alert.ID,
@@ -171,45 +220,92 @@ func (s *IncidentAlertingService) enqueueAlertDelivery(ctx context.Context, tx *
 		ActorID:       actor.ID,
 		Source:        actor.Source,
 		CorrelationID: actor.CorrelationID,
-	})
-	if err != nil {
-		return fmt.Errorf("encode incident alert delivery: %w", err)
 	}
-	_, err = s.outboxRepository.Enqueue(ctx, tx, NewOutboxEvent{
+	payload, err := json.Marshal(envelope)
+	if err != nil {
+		return incidentAlertIntentReceipt{}, err
+	}
+	_, err = s.outboxRepository.Enqueue(ctx, tx, NewOutboxEvent{ExecutionWorkItemID: incidentRecord.WorkItemID,
 		EventID:       eventID,
 		EventType:     incidentAlertDeliveryEventType,
+		NextAttemptAt: time.Now().UTC(),
 		TenantID:      alert.TenantID,
 		AggregateType: "incident_alert",
 		AggregateID:   fmt.Sprint(alert.ID),
 		Payload:       payload,
 	})
-	return err
+	if err != nil {
+		return incidentAlertIntentReceipt{}, err
+	}
+	digest, err := incidentAlertJSONDigest(envelope)
+	if err != nil {
+		return incidentAlertIntentReceipt{}, err
+	}
+	return incidentAlertIntentReceipt{EventID: eventID, PayloadDigest: digest}, nil
 }
 
 func resolveIncidentAlertActor(ctx context.Context) incidentAlertActor {
-	actor := incidentAlertActor{Source: "system"}
+	actor := incidentAlertActor{}
 	if carried, ok := ctx.Value(incidentAlertActorContextKey{}).(incidentAlertActor); ok {
 		actor = carried
-	}
-	if actor.Source == "" {
-		actor.Source = "system"
 	}
 	return actor
 }
 
-func recordIncidentAlertDeliveryAudit(ctx context.Context, tx *ent.Tx, alert *ent.IncidentAlert, actor incidentAlertActor) error {
-	create := tx.AuditLog.Create().
-		SetTenantID(alert.TenantID).
-		SetRequestID(actor.CorrelationID).
-		SetResource("incident_alert").
-		SetAction("incident_alert.delivery_accepted").
-		SetPath("incident_alerts/delivery").
-		SetMethod("OUTBOX").
-		SetStatusCode(202)
-	if actor.ID > 0 {
-		create.SetUserID(actor.ID)
+type incidentAlertIntentReceipt struct {
+	EventID       string `json:"eventId"`
+	PayloadDigest string `json:"payloadDigest"`
+}
+
+type incidentAlertAcceptanceReceipt struct {
+	Version       int                          `json:"version"`
+	TenantID      int                          `json:"tenantId"`
+	WorkItemID    int                          `json:"workItemId"`
+	IncidentID    int                          `json:"incidentId"`
+	AlertID       int                          `json:"alertId"`
+	ActorID       int                          `json:"actorId"`
+	Source        string                       `json:"source"`
+	CorrelationID string                       `json:"correlationId"`
+	Intents       []incidentAlertIntentReceipt `json:"intents"`
+}
+
+func incidentAlertJSONDigest(value interface{}) (string, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return "", err
 	}
-	return create.Exec(ctx)
+	decoder := json.NewDecoder(bytes.NewReader(encoded))
+	decoder.UseNumber()
+	var canonical interface{}
+	if err = decoder.Decode(&canonical); err != nil {
+		return "", err
+	}
+	encoded, err = json.Marshal(canonical)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(encoded)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+func recordIncidentAlertDeliveryAudit(ctx context.Context, tx *ent.Tx, alert *ent.IncidentAlert, actor incidentAlertActor, intents []incidentAlertIntentReceipt) error {
+	source, err := tx.Incident.Query().Where(incident.IDEQ(alert.IncidentID), incident.HasWorkItemWith(ticket.TenantIDEQ(alert.TenantID))).Only(ctx)
+	if err != nil {
+		return err
+	}
+	receipt := incidentAlertAcceptanceReceipt{Version: 2, TenantID: alert.TenantID, WorkItemID: source.WorkItemID, IncidentID: source.ID, AlertID: alert.ID, ActorID: actor.ID, Source: actor.Source, CorrelationID: actor.CorrelationID, Intents: intents}
+	encoded, err := json.Marshal(receipt)
+	if err != nil {
+		return err
+	}
+	digest, err := incidentAlertJSONDigest(receipt)
+	if err != nil {
+		return err
+	}
+	return tx.AuditLog.Create().SetTenantID(alert.TenantID).SetUserID(actor.ID).
+		SetOperationID("incident_alert_accept:" + fmt.Sprint(alert.ID)).SetRequestID(actor.CorrelationID).
+		SetResource("incident_alert").SetAction("incident_alert.delivery_accepted").SetPath("incident_alerts/delivery").
+		SetMethod("OUTBOX").SetStatusCode(202).SetResultStatus("accepted").SetRequestDigest(digest).SetRequestBody(string(encoded)).Exec(ctx)
 }
 
 func (s *IncidentAlertingService) validateAlertRequest(ctx context.Context, req *dto.CreateIncidentAlertRequest, tenantID int) error {
@@ -284,13 +380,31 @@ func (s *IncidentAlertingService) createSystemNotification(ctx context.Context, 
 
 // AcknowledgeAlert 确认告警
 func (s *IncidentAlertingService) AcknowledgeAlert(ctx context.Context, alertID int, userID int, tenantID int) error {
+	if s == nil || s.client == nil || s.execution == nil {
+		return common.NewForbiddenError("incident alert execution policy required")
+	}
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	owner := *s
+	owner.client = tx.Client()
+
 	s.logger.Infow("Acknowledging alert", "alert_id", alertID, "user_id", userID)
-	if err := s.validateAlertActor(ctx, userID, tenantID); err != nil {
+	if err := owner.validateAlertActor(ctx, userID, tenantID); err != nil {
 		return err
 	}
 
+	current, err := tx.IncidentAlert.Query().Where(incidentalert.IDEQ(alertID), incidentalert.TenantIDEQ(tenantID)).Only(ctx)
+	if err != nil {
+		return err
+	}
+	if err := requireIncidentExecutionTx(ctx, tx, s.execution, current.IncidentID, tenantID); err != nil {
+		return err
+	}
 	now := time.Now()
-	alert, err := s.client.IncidentAlert.UpdateOneID(alertID).
+	alert, err := tx.IncidentAlert.UpdateOneID(alertID).
 		Where(incidentalert.TenantIDEQ(tenantID), incidentalert.StatusEQ("active")).
 		SetStatus("acknowledged").
 		SetAcknowledgedAt(now).
@@ -306,21 +420,41 @@ func (s *IncidentAlertingService) AcknowledgeAlert(ctx context.Context, alertID 
 	}
 
 	// 记录确认活动
-	s.createAlertEvent(ctx, alert, "acknowledged", fmt.Sprintf("告警已被用户 %d 确认", userID), userID, tenantID)
+	if err := owner.createAlertEvent(ctx, alert, "acknowledged", fmt.Sprintf("告警已被用户 %d 确认", userID), userID, tenantID); err != nil {
+		return err
+	}
 
 	s.logger.Infow("Alert acknowledged successfully", "alert_id", alertID)
-	return nil
+	return tx.Commit()
 }
 
 // ResolveAlert 解决告警
 func (s *IncidentAlertingService) ResolveAlert(ctx context.Context, alertID int, userID int, tenantID int) error {
+	if s == nil || s.client == nil || s.execution == nil {
+		return common.NewForbiddenError("incident alert execution policy required")
+	}
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	owner := *s
+	owner.client = tx.Client()
+
 	s.logger.Infow("Resolving alert", "alert_id", alertID, "user_id", userID)
-	if err := s.validateAlertActor(ctx, userID, tenantID); err != nil {
+	if err := owner.validateAlertActor(ctx, userID, tenantID); err != nil {
 		return err
 	}
 
+	current, err := tx.IncidentAlert.Query().Where(incidentalert.IDEQ(alertID), incidentalert.TenantIDEQ(tenantID)).Only(ctx)
+	if err != nil {
+		return err
+	}
+	if err := requireIncidentExecutionTx(ctx, tx, s.execution, current.IncidentID, tenantID); err != nil {
+		return err
+	}
 	now := time.Now()
-	alert, err := s.client.IncidentAlert.UpdateOneID(alertID).
+	alert, err := tx.IncidentAlert.UpdateOneID(alertID).
 		Where(incidentalert.TenantIDEQ(tenantID), incidentalert.StatusIn("active", "acknowledged")).
 		SetStatus("resolved").
 		SetResolvedAt(now).
@@ -335,14 +469,16 @@ func (s *IncidentAlertingService) ResolveAlert(ctx context.Context, alertID int,
 	}
 
 	// 记录解决活动
-	s.createAlertEvent(ctx, alert, "resolved", fmt.Sprintf("告警已被用户 %d 解决", userID), userID, tenantID)
+	if err := owner.createAlertEvent(ctx, alert, "resolved", fmt.Sprintf("告警已被用户 %d 解决", userID), userID, tenantID); err != nil {
+		return err
+	}
 
 	s.logger.Infow("Alert resolved successfully", "alert_id", alertID)
-	return nil
+	return tx.Commit()
 }
 
 // createAlertEvent 创建告警活动记录
-func (s *IncidentAlertingService) createAlertEvent(ctx context.Context, alert *ent.IncidentAlert, eventType, description string, userID, tenantID int) {
+func (s *IncidentAlertingService) createAlertEvent(ctx context.Context, alert *ent.IncidentAlert, eventType, description string, userID, tenantID int) error {
 	_, err := s.client.IncidentEvent.Create().
 		SetIncidentID(alert.IncidentID).
 		SetEventType("alert_" + eventType).
@@ -357,8 +493,9 @@ func (s *IncidentAlertingService) createAlertEvent(ctx context.Context, alert *e
 		SetData(map[string]interface{}{"alertId": alert.ID}).
 		Save(ctx)
 	if err != nil {
-		s.logger.Errorw("Failed to create alert audit event", "error", err, "alert_id", alert.ID)
+		return fmt.Errorf("create alert audit event: %w", err)
 	}
+	return nil
 }
 
 func (s *IncidentAlertingService) validateAlertActor(ctx context.Context, userID, tenantID int) error {
@@ -369,7 +506,7 @@ func (s *IncidentAlertingService) validateAlertActor(ctx context.Context, userID
 		return fmt.Errorf("failed to validate alert actor: %w", err)
 	}
 	if !exists {
-		return fmt.Errorf("alert actor not found or inactive")
+		return common.NewForbiddenError("alert actor not found or inactive")
 	}
 	return nil
 }

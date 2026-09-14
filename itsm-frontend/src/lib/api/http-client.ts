@@ -35,6 +35,8 @@ export interface RequestConfig {
   // 改名成后端 handler 读不到的 key（GetIntFromVars(variables, "request_id") 拿到
   // "requestId" 的值就是 0，报"无效的请求ID"）。设为 true 跳过这次请求的 body 转换。
   skipCamelCaseBody?: boolean;
+  preserveResponseKeys?: boolean;
+  validateResponse?: (data: unknown, status: number) => void;
   assertSubmissionContext?: () => void;
 }
 
@@ -64,7 +66,11 @@ export class ApiError extends Error {
     public readonly retryable?: boolean,
     public readonly fieldErrors?: unknown,
     public readonly requestId?: string,
-  ) { super(message); this.name = 'ApiError'; }
+    public readonly data?: unknown
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
 }
 
 class HttpClient {
@@ -268,19 +274,36 @@ class HttpClient {
       }
 
       let responseData: ApiResponse<T> | undefined;
-      try { responseData = await response.json() as ApiResponse<T>; } catch (error) {
-        if (response.ok) throw config.assertSubmissionContext ? new Error('服务器响应无法解析，提交结果未知') : error;
+      try {
+        responseData = (await response.json()) as ApiResponse<T>;
+      } catch (error) {
+        if (response.ok)
+          throw config.assertSubmissionContext
+            ? new Error('服务器响应无法解析，提交结果未知')
+            : error;
       }
       if (!response.ok || (responseData?.code != null && responseData.code !== 0)) {
         const rid = response.headers?.get('X-Request-Id') || '';
-        const details = responseData?.data as { errorCode?: string; retryable?: boolean; fieldErrors?: unknown } | undefined;
+        const details = responseData?.data as
+          | { errorCode?: string; retryable?: boolean; fieldErrors?: unknown }
+          | undefined;
         throw new ApiError(
-          (responseData?.message || `HTTP error! status: ${response.status}`) + (rid ? ` [RID: ${rid}]` : ''),
-          response.status, responseData?.code, details?.errorCode, details?.retryable, details?.fieldErrors, rid,
+          (responseData?.message || `HTTP error! status: ${response.status}`) +
+            (rid ? ` [RID: ${rid}]` : ''),
+          response.status,
+          responseData?.code,
+          details?.errorCode,
+          details?.retryable,
+          details?.fieldErrors,
+          rid,
+          responseData?.data
         );
       }
       // 自动转换响应数据 key 为 camelCase
-      return toCamelCase(responseData?.data) as T;
+      config.validateResponse?.(responseData?.data, response.status);
+      return (
+        config.preserveResponseKeys ? responseData?.data : toCamelCase(responseData?.data)
+      ) as T;
     } catch (error: unknown) {
       // AbortError 是正常的中止请求，不记录错误日志
       if (error instanceof Error && error.name === 'AbortError') {
@@ -362,6 +385,8 @@ class HttpClient {
       timeout: cfg.timeout,
       skipCamelCaseBody: cfg.skipCamelCaseBody,
       assertSubmissionContext: cfg.assertSubmissionContext,
+      preserveResponseKeys: cfg.preserveResponseKeys,
+      validateResponse: cfg.validateResponse,
     });
   }
 

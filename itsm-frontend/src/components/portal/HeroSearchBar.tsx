@@ -78,8 +78,8 @@ export const HeroSearchBar: React.FC = () => {
   return (
     <div className="relative w-full max-w-3xl mx-auto my-8">
       {/* 搜索框 */}
-      <div className="relative flex items-center bg-white dark:bg-slate-900 rounded-2xl shadow-lg hover:shadow-xl transition-all border border-slate-200 dark:border-slate-800 p-2">
-        <div className="pl-3 pr-2 text-primary-500">
+      <div className="relative flex items-center bg-surface rounded-[8px] shadow-none transition-all border border-border p-2">
+        <div className="pl-3 pr-2 text-foreground">
           <Search size={22} />
         </div>
         <input
@@ -90,7 +90,7 @@ export const HeroSearchBar: React.FC = () => {
             setDeflected(false);
           }}
           placeholder="遇到了什么问题？搜索知识库或输入服务需求（如：申请 VPN、Copilot 许可证、重置密码）..."
-          className="w-full bg-transparent border-none outline-none text-slate-800 dark:text-slate-100 placeholder-slate-400 text-base px-2 py-1.5"
+          className="w-full bg-transparent border-none outline-none text-foreground placeholder-slate-400 text-[13px] px-2 py-1.5"
         />
         {loading && (
           <div className="pr-3">
@@ -101,11 +101,11 @@ export const HeroSearchBar: React.FC = () => {
 
       {/* AI 推荐与自愈拦截 Panel (Deflection Card) */}
       {results && (results.articles.length > 0 || results.suggestedCatalogs.length > 0) && (
-        <div className="absolute top-full left-0 right-0 mt-3 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-5 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="absolute top-full left-0 right-0 mt-3 bg-surface rounded-[8px] shadow-none border border-border p-5 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center justify-between pb-3 border-b border-border">
             <div className="flex items-center gap-2">
-              <Sparkles size={16} className="text-primary-600" />
-              <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+              <Sparkles size={16} className="text-foreground" />
+              <span className="text-[15px] font-semibold text-foreground">
                 AI 智能自愈与推荐建议
               </span>
             </div>
@@ -115,7 +115,7 @@ export const HeroSearchBar: React.FC = () => {
           {/* 知识库自愈文档推荐 */}
           {results.articles.length > 0 && (
             <div className="mt-3">
-              <div className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
+              <div className="text-[12px] font-medium text-muted uppercase tracking-wider mb-2">
                 推荐自愈排障指南 (无需提单即可解决)
               </div>
               <div className="space-y-2">
@@ -123,20 +123,20 @@ export const HeroSearchBar: React.FC = () => {
                   <div
                     key={art.id}
                     onClick={() => router.push(`/knowledge/articles/${art.id}`)}
-                    className="group p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 hover:bg-primary-50 dark:hover:bg-primary-950/30 border border-slate-100 dark:border-slate-800/80 cursor-pointer transition-all flex items-start justify-between"
+                    className="group p-3 rounded-[8px] bg-raised hover:bg-selected border border-border cursor-pointer transition-all flex items-start justify-between"
                   >
                     <div className="flex items-start gap-2.5">
-                      <BookOpen size={16} className="text-primary-600 mt-0.5 group-hover:scale-110 transition-transform" />
+                      <BookOpen size={16} className="text-foreground mt-0.5 group-hover:scale-110 transition-transform" />
                       <div>
-                        <div className="text-sm font-semibold text-slate-800 dark:text-slate-200 group-hover:text-primary-600">
+                        <div className="text-[15px] font-semibold text-foreground group-hover:text-foreground">
                           {art.title}
                         </div>
-                        <div className="text-xs text-slate-500 line-clamp-1 mt-0.5">
+                        <div className="text-[12px] text-muted line-clamp-1 mt-0.5">
                           {art.snippet || '点击查看排障详情与完整指引...'}
                         </div>
                       </div>
                     </div>
-                    <ArrowRight size={14} className="text-slate-400 group-hover:text-primary-600 group-hover:translate-x-0.5 transition-all mt-1" />
+                    <ArrowRight size={14} className="text-muted group-hover:text-foreground group-hover:translate-x-0.5 transition-all mt-1" />
                   </div>
                 ))}
               </div>
@@ -146,7 +146,7 @@ export const HeroSearchBar: React.FC = () => {
           {/* 关联服务目录 */}
           {results.suggestedCatalogs.length > 0 && (
             <div className="mt-4">
-              <div className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
+              <div className="text-[12px] font-medium text-muted uppercase tracking-wider mb-2">
                 相关快捷服务申请
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -154,10 +154,10 @@ export const HeroSearchBar: React.FC = () => {
                   <div
                     key={cat.id}
                     onClick={() => router.push(`/service-catalog`)}
-                    className="p-3 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-50 border border-blue-100 dark:border-blue-900/40 cursor-pointer transition-all"
+                    className="p-3 rounded-[8px] bg-raised hover:bg-selected border border-border cursor-pointer transition-all"
                   >
-                    <div className="text-sm font-semibold text-blue-900 dark:text-blue-300">{cat.name}</div>
-                    <div className="text-xs text-blue-600/70 dark:text-blue-400 line-clamp-1 mt-0.5">{cat.description}</div>
+                    <div className="text-[15px] font-semibold text-foreground">{cat.name}</div>
+                    <div className="text-[12px] text-muted line-clamp-1 mt-0.5">{cat.description}</div>
                   </div>
                 ))}
               </div>
@@ -165,7 +165,7 @@ export const HeroSearchBar: React.FC = () => {
           )}
 
           {/* 自愈反馈条 */}
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500">
+          <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-[12px] text-muted">
             {deflected ? (
               <div className="flex items-center gap-1.5 text-emerald-600 font-medium">
                 <CheckCircle2 size={15} />

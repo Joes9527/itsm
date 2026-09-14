@@ -20,16 +20,7 @@ import {
   Statistic,
   Empty,
 } from 'antd';
-import {
-  Plus,
-  Edit,
-  Trash2,
-  Users,
-  RefreshCw,
-  Search,
-  Folder,
-  FileText,
-} from 'lucide-react';
+import { Plus, Edit, Trash2, Users, RefreshCw, Search, Folder, FileText } from 'lucide-react';
 import type { ColumnsType } from 'antd/es/table';
 import type { Department, CreateDepartmentRequest } from '@/lib/services/department-service';
 import { departmentService } from '@/lib/services/department-service';
@@ -54,7 +45,8 @@ export default function DepartmentManagement() {
   // 构建符合 TreeSelect / Left Tree 结构的节点
   const buildTreeData = (depts: Department[]): Department[] => {
     return depts.map(dept => {
-      const children = dept.children && dept.children.length > 0 ? buildTreeData(dept.children) : undefined;
+      const children =
+        dept.children && dept.children.length > 0 ? buildTreeData(dept.children) : undefined;
       return {
         ...dept,
         key: dept.id,
@@ -63,7 +55,7 @@ export default function DepartmentManagement() {
         icon: children ? (
           <Folder size={14} className="text-amber-500" />
         ) : (
-          <FileText size={14} className="text-gray-400" />
+          <FileText size={14} className="text-muted" />
         ),
         children,
       };
@@ -132,7 +124,9 @@ export default function DepartmentManagement() {
           (dept.description || '').toLowerCase().includes(keyword)
         );
       })
-    : (selectedNode ? getSubTreeList(selectedNode) : flattenAll(departments));
+    : selectedNode
+      ? getSubTreeList(selectedNode)
+      : flattenAll(departments);
 
   function flattenAll(depts: Department[]): Department[] {
     const res: Department[] = [];
@@ -247,11 +241,7 @@ export default function DepartmentManagement() {
       width: 120,
       render: (_: unknown, record: Department) => (
         <Space size="small">
-          <Button
-            type="text"
-            icon={<Edit size={16} />}
-            onClick={() => handleEdit(record)}
-          />
+          <Button type="text" icon={<Edit size={16} />} onClick={() => handleEdit(record)} />
           <Popconfirm
             title="确认删除"
             description={`确定要删除部门"${record.name}"吗？`}
@@ -324,9 +314,11 @@ export default function DepartmentManagement() {
               onSelect={setSelectedNode}
               height={520}
             />
-            <div className="mt-4 p-3 bg-gray-50 rounded border text-xs text-gray-500">
+            <div className="mt-4 p-3 bg-raised rounded border text-[12px] text-muted">
               <p className="font-semibold mb-1">提示：</p>
-              <p>点击左侧树中的节点展开/收起，或直接点选分公司、大区、部门节点，右侧表格自动联动过滤该节点下辖的子部门与仓库；点选"组织架构"根节点查看全量部门。用顶部搜索框可跨全量部门按名称/编码/描述搜索。</p>
+              <p>
+                点击左侧树中的节点展开/收起，或直接点选分公司、大区、部门节点，右侧表格自动联动过滤该节点下辖的子部门与仓库；点选"组织架构"根节点查看全量部门。用顶部搜索框可跨全量部门按名称/编码/描述搜索。
+              </p>
             </div>
           </Card>
         </Col>
@@ -398,10 +390,7 @@ export default function DepartmentManagement() {
           >
             <Input placeholder="请输入部门编码（如：DEPT001）" />
           </Form.Item>
-          <Form.Item
-            label="上级部门"
-            name="parentId"
-          >
+          <Form.Item label="上级部门" name="parentId">
             <TreeSelect
               placeholder="选择上级部门（可选）"
               treeData={treeData.filter(dept => dept.id !== selectedDepartment?.id)}
@@ -410,10 +399,7 @@ export default function DepartmentManagement() {
               style={{ width: '100%' }}
             />
           </Form.Item>
-          <Form.Item
-            label="部门经理"
-            name="managerId"
-          >
+          <Form.Item label="部门经理" name="managerId">
             <Select
               placeholder="选择部门经理"
               options={users}
@@ -421,10 +407,7 @@ export default function DepartmentManagement() {
               style={{ width: '100%' }}
             />
           </Form.Item>
-          <Form.Item
-            label="描述"
-            name="description"
-          >
+          <Form.Item label="描述" name="description">
             <TextArea rows={3} placeholder="请输入部门描述" />
           </Form.Item>
         </Form>

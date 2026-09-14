@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"itsm-backend/ent/intakeresolutionsnapshot"
 	"itsm-backend/ent/ticket"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"testing"
 	"time"
@@ -35,11 +36,11 @@ func TestAuthoritativeProfessionalGraph(t *testing.T) {
 			case "generic":
 				domain = &service.TicketService{}
 			case "problem":
-				domain = problemhandler.NewService(nil, zap.NewNop().Sugar())
+				domain = problemhandler.NewService(nil, zap.NewNop().Sugar(), executionfixture.Standard())
 				command.Problem = &workitemcreation.ProblemInput{RootCause: "route failure", Impact: "employees"}
 			case "incident":
 				identity.Channel = "http"
-				domain = service.NewIncidentService(client, zap.NewNop().Sugar())
+				domain = service.NewIncidentService(client, zap.NewNop().Sugar(), executionfixture.Standard())
 				command.Incident = &workitemcreation.IncidentInput{Type: "security", Impact: "critical", Urgency: "high", Severity: "critical", DetectedAt: "2026-09-04T01:00:00Z", ImpactAnalysis: &workitemcreation.ImpactAnalysis{BusinessImpact: &workitemcreation.BusinessImpact{RevenueImpact: json.Number("9007199254740993.125")}, TechnicalImpact: "vpn gateway"}}
 				parent := client.TicketCategory.Create().SetTenantID(identity.TenantID).SetCode("network").SetName("Network").SaveX(context.Background())
 				client.TicketCategory.Create().SetTenantID(identity.TenantID).SetCode("vpn").SetName("VPN").SetParentID(parent.ID).SaveX(context.Background())
@@ -47,7 +48,7 @@ func TestAuthoritativeProfessionalGraph(t *testing.T) {
 				command.Incident.Subcategory = "VPN"
 
 			case "service_request_item":
-				domain = srhandler.NewService(nil, client, zap.NewNop().Sugar(), service.NewApprovalChainResolver(client, zap.NewNop().Sugar()))
+				domain = srhandler.NewService(nil, client, zap.NewNop().Sugar(), service.NewApprovalChainResolver(client, zap.NewNop().Sugar()), executionfixture.Standard())
 				catalog := client.ServiceCatalog.Create().SetTenantID(identity.TenantID).SetName("VPN").SetTargetClass("service_request_item").SetRequiresApproval(false).SaveX(context.Background())
 				command.CatalogItemID = &catalog.ID
 				command.CatalogVersion = "1"
@@ -55,10 +56,11 @@ func TestAuthoritativeProfessionalGraph(t *testing.T) {
 				command.IntakeKind = "catalog_item"
 				command.ServiceRequest = &workitemcreation.ServiceRequestInput{CostCenter: "IT", ContactEmail: "user@example.test", Amount: json.Number("9007199254740993.125")}
 			case "change_request":
-				domain = changehandler.NewService(nil, client, zap.NewNop().Sugar())
+				domain = changehandler.NewService(nil, client, zap.NewNop().Sugar(), executionfixture.Standard())
 				command.Change = &workitemcreation.ChangeInput{Type: "normal", ImpactScope: "low", RiskLevel: "medium", Justification: "security patch", ImplementationPlan: "deploy", RollbackPlan: "restore", PlannedStartDate: "2026-09-07T01:00:00Z", PlannedEndDate: "2026-09-07T02:00:00Z"}
 			}
-			business := map[string]string{"generic": "ticket", "problem": "problem", "incident": "incident", "change_request": "change", "service_request_item": "service_request"}[class]
+			// 绑定匹配词表就是 recordClass（与实例身份同源）。
+			business := class
 			client.ProcessBinding.Create().SetTenantID(identity.TenantID).SetBusinessType(business).SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(context.Background())
 			catalogOwner := cataloghandler.NewService(nil, client, zap.NewNop().Sugar(), nil)
 			app.resolver = NewResolver(catalogOwner, service.NewProcessBindingService(client), service.NewConfigurationItemService(client, zap.NewNop().Sugar(), nil, nil), service.NewTicketCategoryService(client))
@@ -132,7 +134,7 @@ func TestIncidentNumbersAreScopedByWorkItemTenant(t *testing.T) {
 	identity.Channel = "http"
 	ctx := context.Background()
 	app.registry = NewCreatorRegistry()
-	require.NoError(t, app.registry.Register(service.NewIncidentService(client, zap.NewNop().Sugar())))
+	require.NoError(t, app.registry.Register(service.NewIncidentService(client, zap.NewNop().Sugar(), executionfixture.Standard())))
 	app.workItems = NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator())
 	command.RecordClass = "incident"
 	command.IntakeKind = "incident"
@@ -194,20 +196,20 @@ func TestRoutingConsumesDomainEffectiveValues(t *testing.T) {
 			command.RecordClass, command.IntakeKind = class, class
 			app.registry = NewCreatorRegistry()
 			app.resolver = NewResolver(cataloghandler.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
-			business, subtype, priority := "ticket", "improvement", "medium"
+			business, subtype, priority := "generic", "improvement", "medium"
 			conditions := map[string]any{"no_process": true, "priority": "medium"}
 			typeID := ""
 			switch class {
 			case "incident":
 				identity.Channel = "http"
-				owner := service.NewIncidentService(client, logger)
+				owner := service.NewIncidentService(client, logger, executionfixture.Standard())
 				owner.SetPriorityMatrixService(service.NewPriorityMatrixService(logger))
 				require.NoError(t, app.registry.Register(owner))
 				business, subtype, priority = "incident", "incident", "critical"
 				conditions = map[string]any{"no_process": true, "priority": "critical", "severity": "medium", "impact": "critical", "urgency": "high"}
 			case "change_request":
-				require.NoError(t, app.registry.Register(changehandler.NewService(nil, client, logger)))
-				business, subtype = "change", "normal"
+				require.NoError(t, app.registry.Register(changehandler.NewService(nil, client, logger, executionfixture.Standard())))
+				business, subtype = "change_request", "normal"
 				conditions["riskLevel"] = "medium"
 			case "generic":
 				require.NoError(t, app.registry.Register(&service.TicketService{}))

@@ -11,10 +11,12 @@ import (
 	"go.uber.org/zap"
 	"io"
 	"itsm-backend/common"
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/connector"
 	feishu "itsm-backend/connector/builtin/feishu"
 	"itsm-backend/dto"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -26,8 +28,8 @@ import (
 func webhookFixture(t *testing.T) (*FeishuController, *gin.Engine) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	manager := connector.NewManager(nil, zap.NewNop().Sugar())
-	require.NoError(t, manager.Provision(context.Background(), connector.Config{Name: "feishu", TenantID: 17, Enabled: true, Credentials: map[string]string{"app_id": "test-app", "app_secret": "test-secret", "encrypt_key": "test-key", "verification_token": "test-token"}, Settings: map[string]interface{}{"callbackInstanceId": "c83503e86cc5468aaab482cd204f30fa"}}))
+	manager := connector.NewManager(nil, zap.NewNop().Sugar(), executionfixture.Standard())
+	require.NoError(t, manager.Provision(tenantctx.WithTenantID(context.Background(), 17), connector.Config{Name: "feishu", TenantID: 17, Enabled: true, Credentials: map[string]string{"app_id": "test-app", "app_secret": "test-secret", "encrypt_key": "test-key", "verification_token": "test-token"}, Settings: map[string]interface{}{"callbackInstanceId": "c83503e86cc5468aaab482cd204f30fa"}}))
 	c := NewFeishuController(manager, nil, nil, zap.NewNop().Sugar())
 	r := gin.New()
 	r.POST("/api/v1/feishu/webhook/:instance_id", c.Webhook)
@@ -168,4 +170,25 @@ func TestFeishuWebhookAmbiguousTaskNeverDispatches(t *testing.T) {
 	r.ServeHTTP(w, signedWebhook(`{"header":{"event_type":"task.created"},"event":{"task_guid":"first","task_guid":"second"}}`))
 	require.Equal(t, 400, w.Code)
 	require.Zero(t, sideEffects.calls)
+}
+
+func TestUnconfiguredFeishuRoutesDoNotReachSyncOwner(t *testing.T) {
+	manager := connector.NewManager(connector.NewRegistry(), zap.NewNop().Sugar(), executionfixture.Standard())
+	defer manager.CloseAll()
+	c := NewFeishuController(manager, nil, nil, zap.NewNop().Sugar())
+	// A missing side-effect owner would panic if either route dispatched.
+	r := gin.New()
+	r.Use(func(ctx *gin.Context) { ctx.Set("tenant_id", 17); ctx.Set("user_id", 23); ctx.Next() })
+	r.POST("/sync/:ticket_id", c.SyncTicketToFeishu)
+	r.POST("/webhook/:instance_id", c.Webhook)
+	for _, path := range []string{"/sync/1", "/webhook/unconfigured-instance"} {
+		t.Run(path, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			require.NotPanics(t, func() { r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))) })
+			var response common.Response
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+			require.NotEqual(t, common.SuccessCode, response.Code)
+		})
+	}
+	require.Empty(t, manager.ListByTenant(17))
 }

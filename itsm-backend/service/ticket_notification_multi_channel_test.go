@@ -6,6 +6,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
@@ -29,7 +30,7 @@ func (g *graphSenderSpy) SendMail(_ context.Context, _ string, to, _, _, _ strin
 func setupTicketNotificationTest(t *testing.T) (*ent.Client, *TicketNotificationService, context.Context) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	logger := zaptest.NewLogger(t).Sugar()
-	svc := NewTicketNotificationService(client, logger)
+	svc := NewTicketNotificationService(client, logger, standardNotificationPolicy(t))
 	return client, svc, context.Background()
 }
 
@@ -60,6 +61,7 @@ func TestSendNotification_MultiChannelRouting(t *testing.T) {
 	defer client.Close()
 
 	tenant, user, ticket := createNotifTestData(t, client, ctx)
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
 
 	// 偏好：comment_added 启用 email + in_app，禁用 sms + push
 	_, err := client.NotificationPreference.Create().
@@ -70,12 +72,7 @@ func TestSendNotification_MultiChannelRouting(t *testing.T) {
 
 	// 注入偏好服务 + email 服务（Graph spy）
 	svc.SetNotificationPreferenceService(NewNotificationPreferenceService(client, zaptest.NewLogger(t).Sugar()))
-	spy := &graphSenderSpy{}
-	emailSvc := NewEmailService(EmailConfig{}, zaptest.NewLogger(t).Sugar())
-	emailSvc.SetGraphProvider(func(_ int) (GraphMailSender, string, bool) {
-		return spy, "ai-support@example.com", true
-	})
-	svc.SetEmailService(emailSvc)
+	_, calls := configureNotificationSMTPProbe(svc)
 
 	_, err = svc.SendNotification(ctx, ticket.ID, &dto.SendTicketNotificationRequest{
 		UserIDs:   []int{user.ID},
@@ -84,9 +81,17 @@ func TestSendNotification_MultiChannelRouting(t *testing.T) {
 	}, tenant.ID)
 	require.NoError(t, err)
 
-	// email 渠道被调用一次（收件人为 end user）
-	assert.Len(t, spy.calls, 1, "email 渠道应调用一次")
-	assert.Equal(t, "enduser@example.com", spy.calls[0])
+	// Request persists the intent; only the real worker invokes the local spy.
+	require.Empty(t, *calls)
+	pending := client.TicketNotification.Query().Where(ticketnotification.ChannelEQ("email")).OnlyX(ctx)
+	require.Equal(t, "pending", pending.Status)
+	require.True(t, pending.SentAt.IsZero())
+	svc.SetDeliveryQueueClient(client)
+	n, err := svc.ProcessPendingDeliveries(ctx, "direct-notification-test", 10)
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+	require.Len(t, *calls, 1)
+	assert.Equal(t, "enduser@example.com", (*calls)[0])
 
 	// in_app 渠道创建 1 条站内通知记录
 	cnt, err := client.TicketNotification.Query().
@@ -101,6 +106,7 @@ func TestSendNotification_InAppDisabledNoRecord(t *testing.T) {
 	defer client.Close()
 
 	tenant, user, ticket := createNotifTestData(t, client, ctx)
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
 
 	// 偏好：全部禁用
 	_, err := client.NotificationPreference.Create().
@@ -125,6 +131,7 @@ func TestSendNotification_ZeroRecipientsReturnsBlockedEvidence(t *testing.T) {
 	client, svc, ctx := setupTicketNotificationTest(t)
 	defer client.Close()
 	tenant, _, ticket := createNotifTestData(t, client, ctx)
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
 
 	result, err := svc.SendNotification(ctx, ticket.ID, &dto.SendTicketNotificationRequest{
 		EventType: "ticket_updated",
@@ -141,14 +148,11 @@ func TestSendNotification_DefaultPreferenceWhenNoRecord(t *testing.T) {
 	defer client.Close()
 
 	tenant, user, ticket := createNotifTestData(t, client, ctx)
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
 
 	// 不创建偏好记录 → 走默认偏好（email+in_app）
 	svc.SetNotificationPreferenceService(NewNotificationPreferenceService(client, zaptest.NewLogger(t).Sugar()))
-	emailService := NewEmailService(EmailConfig{}, zaptest.NewLogger(t).Sugar())
-	emailService.SetGraphProvider(func(_ int) (GraphMailSender, string, bool) {
-		return &graphSenderSpy{}, "ai-support@example.com", true
-	})
-	svc.SetEmailService(emailService)
+	configureNotificationSMTPProbe(svc)
 
 	result, err := svc.SendNotification(ctx, ticket.ID, &dto.SendTicketNotificationRequest{
 		UserIDs:   []int{user.ID},
@@ -156,9 +160,11 @@ func TestSendNotification_DefaultPreferenceWhenNoRecord(t *testing.T) {
 		Content:   "x",
 	}, tenant.ID)
 	require.NoError(t, err)
-	require.Equal(t, dto.TicketNotificationEffectApplied, result.Effect)
+	require.Equal(t, dto.TicketNotificationEffectQueued, result.Effect)
+	require.Equal(t, 1, result.QueuedCount)
+	require.Equal(t, 1, result.AppliedCount)
 
 	cnt, err := client.TicketNotification.Query().Count(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, 1, cnt, "无偏好记录时应按默认偏好（in_app=true）创建站内记录")
+	assert.Equal(t, 2, cnt, "默认偏好创建站内记录及邮件意图")
 }

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"itsm-backend/common/workitemidentity"
+	relationmeta "itsm-backend/common/workitemrelation"
 	"itsm-backend/handlers/common/accessgrant"
 	"reflect"
 	"strings"
@@ -18,12 +20,13 @@ const (
 	IntakeKindGeneric       = "generic"
 	IntakeKindProblem       = "problem"
 	IntakeKindChangeRequest = "change_request"
-	RecordClassGeneric      = "generic"
-	RecordClassProblem      = "problem"
+	// 词汇表的唯一权威是 common/workitemidentity；这里是别名，不再重复定义字面量。
+	RecordClassGeneric = workitemidentity.RecordClassGeneric
+	RecordClassProblem = workitemidentity.RecordClassProblem
 
-	RecordClassServiceRequestItem = "service_request_item"
-	RecordClassIncident           = "incident"
-	RecordClassChangeRequest      = "change_request"
+	RecordClassServiceRequestItem = workitemidentity.RecordClassServiceRequestItem
+	RecordClassIncident           = workitemidentity.RecordClassIncident
+	RecordClassChangeRequest      = workitemidentity.RecordClassChangeRequest
 )
 
 type CTIInput struct {
@@ -81,10 +84,9 @@ type GenericInput struct {
 	Category string `json:"category,omitempty"`
 }
 type ProblemInput struct {
-	SourceIncidentID *int   `json:"sourceIncidentId,omitempty"`
-	Category         string `json:"category,omitempty"`
-	RootCause        string `json:"rootCause,omitempty"`
-	Impact           string `json:"impact,omitempty"`
+	Category  string `json:"category,omitempty"`
+	RootCause string `json:"rootCause,omitempty"`
+	Impact    string `json:"impact,omitempty"`
 }
 type ServiceRequestInput struct {
 	Amount             json.Number `json:"amount,omitempty"`
@@ -114,19 +116,17 @@ type IncidentInput struct {
 }
 
 type ChangeInput struct {
-	Category             string   `json:"category,omitempty"`
-	StandardTemplateID   *int     `json:"standardTemplateId,omitempty"`
-	RelatedTicketNumbers []string `json:"relatedTicketNumbers,omitempty"`
-	Justification        string   `json:"justification,omitempty"`
-	Type                 string   `json:"type,omitempty"`
-	ImpactScope          string   `json:"impactScope,omitempty"`
-	RiskLevel            string   `json:"riskLevel,omitempty"`
-	PlannedStartDate     string   `json:"plannedStartDate,omitempty"`
-	PlannedEndDate       string   `json:"plannedEndDate,omitempty"`
-	ImplementationPlan   string   `json:"implementationPlan,omitempty"`
-	RollbackPlan         string   `json:"rollbackPlan,omitempty"`
-	AffectedCIs          []string `json:"affectedCis,omitempty"`
-	RelatedTickets       []int    `json:"relatedTickets,omitempty"`
+	Category           string   `json:"category,omitempty"`
+	StandardTemplateID *int     `json:"standardTemplateId,omitempty"`
+	Justification      string   `json:"justification,omitempty"`
+	Type               string   `json:"type,omitempty"`
+	ImpactScope        string   `json:"impactScope,omitempty"`
+	RiskLevel          string   `json:"riskLevel,omitempty"`
+	PlannedStartDate   string   `json:"plannedStartDate,omitempty"`
+	PlannedEndDate     string   `json:"plannedEndDate,omitempty"`
+	ImplementationPlan string   `json:"implementationPlan,omitempty"`
+	RollbackPlan       string   `json:"rollbackPlan,omitempty"`
+	AffectedCIs        []string `json:"affectedCis,omitempty"`
 }
 
 // Identity is supplied separately by trusted adapters, never by command JSON.
@@ -135,7 +135,36 @@ type AdHocFieldDefinition struct {
 	Name  string `json:"name"`
 	Label string `json:"label"`
 }
+
+// SourceRelationInput creates a link from an existing WorkItem to the new target.
+// Each source occurs once: its caller-observed version is never inferred.
+type SourceRelationInput struct {
+	SourceWorkItemID int                   `json:"sourceWorkItemId"`
+	RelationType     string                `json:"relationType"`
+	ExpectedVersion  int                   `json:"expectedVersion"`
+	Metadata         relationmeta.Metadata `json:"metadata"`
+}
+
+// SourceRelations preserves the strict shared intake wire contract in professional HTTP DTOs.
+// Explicit nulls, duplicate keys and unknown fields must not become omitted/default values.
+type SourceRelations []SourceRelationInput
+
+func (r *SourceRelations) UnmarshalJSON(raw []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if err := validateWireValue(decoder, reflect.TypeOf([]SourceRelationInput{})); err != nil {
+		return err
+	}
+	var values []SourceRelationInput
+	if err := json.Unmarshal(raw, &values); err != nil {
+		return err
+	}
+	*r = values
+	return nil
+}
+
 type CreateWorkItemCommand struct {
+	SourceRelations       SourceRelations        `json:"sourceRelations,omitempty"`
 	TemplateID            *int                   `json:"templateId,omitempty"`
 	ParentTicketID        *int                   `json:"parentTicketId,omitempty"`
 	TagIDs                []int                  `json:"tagIds,omitempty"`
@@ -209,6 +238,7 @@ type ResolvedCatalog struct {
 
 type ResolvedCTI struct {
 	CategoryName string
+	TypeName     string
 	CategoryID   *int
 	TypeID       *int
 	ItemID       *int

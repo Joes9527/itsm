@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -19,14 +20,14 @@ func TestIntakeIncidentConfiguredMatrixAndReplay(t *testing.T) {
 	restrictEntryPermissions(t, f)
 	ctx := context.Background()
 	logger := zap.NewNop().Sugar()
-	owner := service.NewIncidentService(f.client, logger)
+	owner := service.NewIncidentService(f.client, logger, executionfixture.Standard())
 	matrix := service.NewPriorityMatrixService(logger)
 	require.NoError(t, matrix.SetMatrix(f.identity.TenantID, service.PriorityMatrix{"medium": {"medium": "critical"}}))
 	owner.SetPriorityMatrixService(matrix)
 	registry := intake.NewCreatorRegistry()
 	require.NoError(t, registry.Register(owner))
 	resolver := intake.NewResolver(catalogdomain.NewService(nil, f.client, logger, nil), service.NewProcessBindingService(f.client), service.NewConfigurationItemService(f.client, logger, nil, nil), service.NewTicketCategoryService(f.client))
-	f.app = intake.NewService(f.client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})
+	f.app = intake.NewService(f.client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard())
 	h := controller.NewIncidentController(owner, owner.RuleEngine(), nil, nil, nil, logger)
 	h.SetCreationApplication(f.app)
 	body := `{"title":"Matrix decision","description":"Configured incident priority","impact":"medium","urgency":"medium"}`

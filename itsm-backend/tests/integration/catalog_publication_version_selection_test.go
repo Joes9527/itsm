@@ -13,6 +13,7 @@ import (
 	"itsm-backend/handlers/intake"
 	catalog "itsm-backend/handlers/service_catalog"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 )
 
@@ -20,7 +21,7 @@ func TestA5FixCatalogKeepsExecutableVersionWhenSavingDraft(t *testing.T) {
 	f := newUnifiedIntakeFixture(t)
 	ctx := service.WithBPMNAccessScope(context.Background(), service.BPMNAccessScope{TenantID: f.identity.TenantID, UserID: f.identity.ActorID})
 	logger := zap.NewNop().Sugar()
-	engine := service.NewCustomProcessEngine(f.client, logger).(*service.CustomProcessEngine)
+	engine := service.NewCustomProcessEngine(f.client, logger, executionfixture.Standard()).(*service.CustomProcessEngine)
 	xml := `<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><process id="flow" isExecutable="true"><startEvent id="start"/><userTask id="work" assignee="${requester_id}"/><endEvent id="end"/><sequenceFlow id="a" sourceRef="start" targetRef="work"/><sequenceFlow id="b" sourceRef="work" targetRef="end"/></process></definitions>`
 	definition, err := engine.ProcessDefinitionService().CreateProcessDefinition(ctx, &service.CreateProcessDefinitionRequest{Key: "catalog-flow", Name: "Flow", BPMNXML: xml, TenantID: f.identity.TenantID})
 	require.NoError(t, err)

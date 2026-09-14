@@ -13,6 +13,7 @@ import (
 	srhandler "itsm-backend/handlers/service_request"
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"testing"
 
@@ -40,13 +41,13 @@ func resolverFixtureWithClient(t *testing.T, client *ent.Client, identity creati
 	sla := client.SLADefinition.Create().SetTenantID(identity.TenantID).SetName("Access SLA").SetResponseTime(30).SetResolutionTime(240).SaveX(ctx)
 	deployment := client.ProcessDeployment.Create().SetTenantID(identity.TenantID).SetDeploymentID("workflow-" + strconv.Itoa(identity.TenantID)).SetDeploymentName("Workflow").SaveX(ctx)
 	client.ProcessDefinition.Create().SetTenantID(identity.TenantID).SetDeploymentID(deployment.ID).SetKey("vpn").SetName("VPN").SetVersion("1").SetIsActive(true).SetIsLatest(true).SetBpmnXML([]byte("<definitions/>")).SaveX(ctx)
-	client.ProcessBinding.Create().SetTenantID(identity.TenantID).SetBusinessType("service_request").SetIsDefault(true).SetProcessDefinitionKey("vpn").SetSLAPolicyID(strconv.Itoa(sla.ID)).SaveX(ctx)
+	client.ProcessBinding.Create().SetTenantID(identity.TenantID).SetBusinessType("service_request_item").SetIsDefault(true).SetProcessDefinitionKey("vpn").SetSLAPolicyID(strconv.Itoa(sla.ID)).SaveX(ctx)
 	logger := zap.NewNop().Sugar()
 	resolver := NewResolver(cataloghandler.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
 	registry := NewCreatorRegistry()
-	domain := srhandler.NewService(nil, client, logger, service.NewApprovalChainResolver(client, logger))
+	domain := srhandler.NewService(nil, client, logger, service.NewApprovalChainResolver(client, logger), executionfixture.Standard())
 	require.NoError(t, registry.Register(domain))
-	return &resolverFixture{client: client, actor: identity, catalog: catalog, app: NewService(client, resolver, registry, NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})}
+	return &resolverFixture{client: client, actor: identity, catalog: catalog, app: NewService(client, resolver, registry, NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard())}
 }
 func (f *resolverFixture) catalogCommand(t *testing.T) creation.CreateWorkItemCommand {
 	t.Helper()
@@ -200,7 +201,7 @@ func TestRealResolverRoutingUsesRequestAmount(t *testing.T) {
 func TestRealResolverUnknownRoutingOperatorCannotFallThrough(t *testing.T) {
 	f := newResolverFixture(t)
 	ctx := context.Background()
-	f.client.ProcessBinding.Create().SetTenantID(f.actor.TenantID).SetBusinessType("service_request").SetProcessDefinitionKey("vpn").SetPriority(1000).SetConditions(map[string]any{"amount": map[string]any{"unknown": 1}}).SaveX(ctx)
+	f.client.ProcessBinding.Create().SetTenantID(f.actor.TenantID).SetBusinessType("service_request_item").SetProcessDefinitionKey("vpn").SetPriority(1000).SetConditions(map[string]any{"amount": map[string]any{"unknown": 1}}).SaveX(ctx)
 	command := f.catalogCommand(t)
 	_, err := f.app.Create(ctx, f.actor, command)
 	require.ErrorIs(t, err, creation.ErrDomainValidationFailed)

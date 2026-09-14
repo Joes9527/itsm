@@ -30,8 +30,8 @@ describe('Design System Colors', () => {
     });
 
     it('should have functional colors', () => {
-      expect(colors.functional.background.primary).toBe('#ffffff');
-      expect(colors.functional.text.primary).toBe('#0f172a');
+      expect(colors.functional.background.primary).toBe('#FFFFFF');
+      expect(colors.functional.text.primary).toBe('#354153');
       expect(colors.functional.border.focus).toBe('#F06820');
     });
   });
@@ -42,8 +42,8 @@ describe('Design System Colors', () => {
     });
 
     it('should have dark theme functional colors', () => {
-      expect(darkColors.functional.background.primary).toBe('#0f172a');
-      expect(darkColors.functional.text.primary).toBe('#f8fafc');
+      expect(darkColors.functional.background.primary).toBe('#252A30');
+      expect(darkColors.functional.text.primary).toBe('#D2D9E2');
     });
   });
 
@@ -157,12 +157,12 @@ describe('Design System Spacing', () => {
     });
 
     it('should have sidebar widths', () => {
-      expect(layout.sidebar.width.md).toBe('280px');
-      expect(layout.sidebar.collapsedWidth).toBe('64px');
+      expect(layout.sidebar.width.md).toBe('224px');
+      expect(layout.sidebar.collapsedWidth).toBe('0px');
     });
 
     it('should have header heights', () => {
-      expect(layout.header.height.md).toBe('64px');
+      expect(layout.header.height.md).toBe('60px');
     });
   });
 
@@ -183,8 +183,8 @@ describe('Design System Spacing', () => {
 
   describe('fontSize', () => {
     it('should have font size values', () => {
-      expect(fontSize.base).toBe('16px');
-      expect(fontSize.sm).toBe('14px');
+      expect(fontSize.base).toBe('13px');
+      expect(fontSize.sm).toBe('13px');
       expect(fontSize.xs).toBe('12px');
     });
   });
@@ -267,23 +267,23 @@ describe('Design System - Theme', () => {
     expect(themeConfig).toBeDefined();
     expect(themeConfig.token).toBeDefined();
     expect(themeConfig.token.colorPrimary).toBe('#F06820');
-    expect(themeConfig.token.colorBgContainer).toBe('#ffffff');
+    expect(themeConfig.token.colorBgContainer).toBe('#FFFFFF');
     expect(themeConfig.components).toBeDefined();
   });
 
   it('getAntdTheme returns dark theme config', async () => {
     const { getAntdTheme } = await import('../theme');
     const themeConfig = getAntdTheme(true);
-    expect(themeConfig.token.colorBgContainer).toBe('#0f172a');
-    expect(themeConfig.token.colorText).toBe('#f8fafc');
+    expect(themeConfig.token.colorBgContainer).toBe('#252A30');
+    expect(themeConfig.token.colorText).toBe('#D2D9E2');
   });
 
   it('generateCSSVariables returns light CSS variables', async () => {
     const { generateCSSVariables } = await import('../theme');
     const vars = generateCSSVariables(false);
     expect(vars['--color-primary-500']).toBe('#F06820');
-    expect(vars['--color-background-primary']).toBe('#ffffff');
-    expect(vars['--color-text-primary']).toBe('#0f172a');
+    expect(vars['--color-background-primary']).toBe('var(--color-bg-primary)');
+    expect(vars['--color-text-primary']).toBe('#354153');
     expect(vars['--spacing-md']).toBeDefined();
     expect(vars['--border-radius-lg']).toBeDefined();
     expect(vars['--font-size-base']).toBeDefined();
@@ -292,8 +292,8 @@ describe('Design System - Theme', () => {
   it('generateCSSVariables returns dark CSS variables', async () => {
     const { generateCSSVariables } = await import('../theme');
     const vars = generateCSSVariables(true);
-    expect(vars['--color-background-primary']).toBe('#0f172a');
-    expect(vars['--color-text-primary']).toBe('#f8fafc');
+    expect(vars['--color-background-primary']).toBe('var(--color-bg-primary)');
+    expect(vars['--color-text-primary']).toBe('#D2D9E2');
   });
 
   it('applyCSSVariables applies variables to document', async () => {
@@ -312,5 +312,42 @@ describe('Design System - Theme', () => {
     
     setPropertySpy.mockRestore();
     addSpy.mockRestore();
+  });
+});
+
+describe('Theme token consumer consistency', () => {
+  it.each([false, true])('keeps runtime variables consistent with emitted CSS for dark=%s', async isDark => {
+    const { readFileSync } = await import('node:fs');
+    const { generateCSSVariables } = await import('../theme');
+    const css = readFileSync(`${process.cwd()}/src/styles/generated-theme-tokens.css`, 'utf8');
+    const parseBlock = (selector: string) => {
+      const block = css.split(`${selector} {`)[1].split('}')[0];
+      return Object.fromEntries([...block.matchAll(/(--[\w-]+):\s*([^;]+);/g)].map(match => [match[1], match[2]]));
+    };
+    const emitted = { ...parseBlock(':root'), ...(isDark ? parseBlock('.dark') : {}) };
+    expect(generateCSSVariables(isDark)).toEqual(emitted);
+  });
+});
+
+describe('Resolved Ant Design brand color', () => {
+  it.each([false, true])('preserves the configured brand after algorithm resolution for dark=%s', async isDark => {
+    const { theme } = await import('antd');
+    const { getAntdTheme } = await import('../theme');
+    const config = getAntdTheme(isDark);
+    const resolved = theme.getDesignToken(config);
+    expect(resolved.colorPrimary.toLowerCase()).toBe(config.token.colorPrimary.toLowerCase());
+  });
+
+  it.each([false, true])('retains semantic derivation for dark=%s', async isDark => {
+    const { theme } = await import('antd');
+    const { getAntdTheme } = await import('../theme');
+    const config = getAntdTheme(isDark);
+    const baseline = theme.getDesignToken({ ...config, algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm });
+    const resolved = theme.getDesignToken(config);
+    // Brand preservation must not replace professional success/warning/error palettes.
+    const semanticColors = (values: typeof resolved) => Object.fromEntries(
+      Object.entries(values).filter(([key]) => /^color(Success|Warning|Error|Info)/.test(key))
+    );
+    expect(semanticColors(resolved)).toEqual(semanticColors(baseline));
   });
 });

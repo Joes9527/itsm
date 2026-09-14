@@ -62,10 +62,18 @@ type RefreshTokenIdentity struct {
 // ValidatedRefreshToken is an opaque, signed refresh token that may be
 // authorized by the application before its one-time consumption.
 type ValidatedRefreshToken struct {
-	consumer  *RefreshTokenConsumer
-	token     string
-	expiresAt time.Time
-	identity  RefreshTokenIdentity
+	credential *VerifiedCredential
+	consumer   *RefreshTokenConsumer
+	token      string
+	expiresAt  time.Time
+	identity   RefreshTokenIdentity
+}
+
+func (t *ValidatedRefreshToken) Credential() *VerifiedCredential {
+	if t == nil {
+		return nil
+	}
+	return t.credential
 }
 
 func (t *ValidatedRefreshToken) Identity() RefreshTokenIdentity {
@@ -94,9 +102,10 @@ func (c *RefreshTokenConsumer) Validate(token string) (*ValidatedRefreshToken, e
 		return nil, errors.New("refresh token session identity is incomplete")
 	}
 	return &ValidatedRefreshToken{
-		consumer:  c,
-		token:     token,
-		expiresAt: claims.ExpiresAt.Time,
+		credential: claims.credential,
+		consumer:   c,
+		token:      token,
+		expiresAt:  claims.ExpiresAt.Time,
 		identity: RefreshTokenIdentity{
 			UserID: claims.UserID, Username: claims.Username, Role: claims.Role, TenantID: claims.TenantID,
 		},
@@ -110,7 +119,11 @@ func (c *RefreshTokenConsumer) Consume(ctx context.Context, token *ValidatedRefr
 	if token == nil || token.consumer != c || token.token == "" {
 		return errors.New("refresh token was not validated by this consumer")
 	}
-	return c.store.Consume(ctx, token.token, token.expiresAt)
+	scoped, err := credentialContext(ctx, token.credential, "refresh")
+	if err != nil {
+		return err
+	}
+	return c.store.Consume(scoped, token.token, token.expiresAt)
 }
 
 type redisRefreshTokenStore struct {

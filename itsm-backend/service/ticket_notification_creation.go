@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"itsm-backend/common/executionscope"
 	"net/mail"
 	"strings"
 
@@ -69,7 +71,7 @@ func (s *TicketNotificationService) EnqueueCreationTx(ctx context.Context, tx *e
 			if s.connectorManager == nil {
 				return creation.NewDomainValidationFailed("configured SMS notification has no delivery owner", nil)
 			}
-			if _, ok := s.connectorManager.Get(item.TenantID, "sms"); !ok || strings.TrimSpace(recipient.Phone) == "" {
+			if strings.TrimSpace(recipient.Phone) == "" {
 				return creation.NewDomainValidationFailed("configured SMS notification target is unavailable", nil)
 			}
 			channels = append(channels, "sms")
@@ -81,7 +83,14 @@ func (s *TicketNotificationService) EnqueueCreationTx(ctx context.Context, tx *e
 			channels = append(channels, "push")
 		}
 		for _, channel := range channels {
-			if err := tx.TicketNotification.Create().SetTenantID(item.TenantID).SetTicketID(item.ID).SetUserID(recipient.ID).SetType(eventType).SetChannel(channel).SetContent(content).SetDeliveryKey(deliveryKey).SetStatus(ticketNotificationStatusPending).SetNextAttemptAt(s.clock()).Exec(ctx); err != nil {
+			create := tx.TicketNotification.Create().SetTenantID(item.TenantID).SetTicketID(item.ID).SetUserID(recipient.ID).SetType(eventType).SetChannel(channel).SetContent(content).SetDeliveryKey(deliveryKey).SetStatus(ticketNotificationStatusPending).SetNextAttemptAt(s.clock())
+			if err := s.BindNotificationTargetTx(ctx, tx, item.TenantID, channel, create); err != nil {
+				if errors.Is(err, executionscope.ErrDenied) {
+					return creation.NewPermissionDenied("notification target is not permitted", err)
+				}
+				return creation.NewInfrastructureUnavailable("notification target resolution failed", err)
+			}
+			if err := create.Exec(ctx); err != nil {
 				return creation.NewInfrastructureUnavailable(fmt.Sprintf("could not persist %s creation notification", channel), err)
 			}
 		}

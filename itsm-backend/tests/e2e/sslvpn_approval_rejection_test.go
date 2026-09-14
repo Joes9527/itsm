@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -54,7 +55,7 @@ func startSSLVPNApprovalRequest(t *testing.T, h *sslvpnTestHarness) (creation.Cr
 	require.NoError(t, json.Unmarshal(result.Data, &created))
 	event := h.client.OutboxEvent.Query().Where(outboxevent.EventTypeEQ("workflow.start.requested"), outboxevent.AggregateIDEQ(fmt.Sprint(created.WorkItemID))).OnlyX(ctx)
 	require.NoError(t, service.NewWorkflowStartOutboxHandler(h.client, h.engine.(*service.CustomProcessEngine), h.client).Deliver(ctx, event))
-	instance := h.client.ProcessInstance.Query().Where(processinstance.TenantIDEQ(h.tenant.ID), processinstance.BusinessTypeEQ("service_request"), processinstance.BusinessIDEQ(created.WorkItemID)).OnlyX(ctx)
+	instance := h.client.ProcessInstance.Query().Where(processinstance.TenantIDEQ(h.tenant.ID), processinstance.BusinessTypeEQ("service_request_item"), processinstance.BusinessIDEQ(created.WorkItemID)).OnlyX(ctx)
 	require.NotEqual(t, h.fixture.Users.Supervisor.ID, h.fixture.Users.Lixin.ID)
 	require.Equal(t, "dept_manager", h.fixture.Users.Supervisor.Role)
 	require.Equal(t, "network_eng", h.fixture.Users.Lixin.Role)
@@ -74,7 +75,7 @@ func assertSSLVPNDispatchCount(t *testing.T, h *sslvpnTestHarness, expected int3
 	var calls atomic.Int32
 	receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1); w.WriteHeader(http.StatusAccepted) }))
 	defer receiver.Close()
-	dispatcher, err := service.NewKafOutboxDispatcher(service.NewOutboxEventRepository(h.client), service.KafOutboxConfig{WebhookURL: receiver.URL, WebhookSecret: "isolated-rejection-test", BatchSize: 10, PollInterval: time.Second})
+	dispatcher, err := service.NewKafOutboxDispatcher(service.NewOutboxEventRepository(h.client, executionfixture.Standard()), service.KafOutboxConfig{WebhookURL: receiver.URL, WebhookSecret: "isolated-rejection-test", BatchSize: 10, PollInterval: time.Second})
 	require.NoError(t, err)
 	require.NoError(t, dispatcher.DispatchOnce(context.Background()))
 	assert.Equal(t, expected, calls.Load(), "mock KAF HTTP dispatches; no real KAF or provider is connected")
@@ -122,7 +123,7 @@ func TestSSLVPNApprovalRejectionNeverDelegates(t *testing.T) {
 			if level == "manager" {
 				assert.Zero(t, h.client.ProcessTask.Query().Where(processtask.ProcessInstanceIDEQ(instance.ID), processtask.TaskDefinitionKeyEQ("UserTask_L2NetworkOpsApproval")).CountX(ctx))
 			}
-			owner := sr.NewService(sr.NewEntRepository(h.client), h.client, zap.NewNop().Sugar(), nil)
+			owner := sr.NewService(sr.NewEntRepository(h.client, executionfixture.Standard()), h.client, zap.NewNop().Sugar(), nil, executionfixture.Standard())
 			item := h.client.Ticket.GetX(ctx, created.WorkItemID)
 			fulfillment, err := owner.ReadFulfillment(ctx, h.client, item)
 			require.NoError(t, err)

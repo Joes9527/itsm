@@ -14,6 +14,18 @@ const (
 	Label = "ticket_notification"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldTargetTransport holds the string denoting the target_transport field in the database.
+	FieldTargetTransport = "target_transport"
+	// FieldTargetProtocolVersion holds the string denoting the target_protocol_version field in the database.
+	FieldTargetProtocolVersion = "target_protocol_version"
+	// FieldTargetConnectorName holds the string denoting the target_connector_name field in the database.
+	FieldTargetConnectorName = "target_connector_name"
+	// FieldTargetConnectorProvider holds the string denoting the target_connector_provider field in the database.
+	FieldTargetConnectorProvider = "target_connector_provider"
+	// FieldTargetDestinationDigest holds the string denoting the target_destination_digest field in the database.
+	FieldTargetDestinationDigest = "target_destination_digest"
+	// FieldSLAAlertHistoryID holds the string denoting the sla_alert_history_id field in the database.
+	FieldSLAAlertHistoryID = "sla_alert_history_id"
 	// FieldTicketID holds the string denoting the ticket_id field in the database.
 	FieldTicketID = "ticket_id"
 	// FieldUserID holds the string denoting the user_id field in the database.
@@ -71,6 +83,12 @@ const (
 // Columns holds all SQL columns for ticketnotification fields.
 var Columns = []string{
 	FieldID,
+	FieldTargetTransport,
+	FieldTargetProtocolVersion,
+	FieldTargetConnectorName,
+	FieldTargetConnectorProvider,
+	FieldTargetDestinationDigest,
+	FieldSLAAlertHistoryID,
 	FieldTicketID,
 	FieldUserID,
 	FieldType,
@@ -100,6 +118,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// SLAAlertHistoryIDValidator is a validator for the "sla_alert_history_id" field. It is called by the builders before save.
+	SLAAlertHistoryIDValidator func(int) error
 	// TicketIDValidator is a validator for the "ticket_id" field. It is called by the builders before save.
 	TicketIDValidator func(int) error
 	// UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
@@ -132,6 +152,36 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByTargetTransport orders the results by the target_transport field.
+func ByTargetTransport(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTargetTransport, opts...).ToFunc()
+}
+
+// ByTargetProtocolVersion orders the results by the target_protocol_version field.
+func ByTargetProtocolVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTargetProtocolVersion, opts...).ToFunc()
+}
+
+// ByTargetConnectorName orders the results by the target_connector_name field.
+func ByTargetConnectorName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTargetConnectorName, opts...).ToFunc()
+}
+
+// ByTargetConnectorProvider orders the results by the target_connector_provider field.
+func ByTargetConnectorProvider(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTargetConnectorProvider, opts...).ToFunc()
+}
+
+// ByTargetDestinationDigest orders the results by the target_destination_digest field.
+func ByTargetDestinationDigest(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTargetDestinationDigest, opts...).ToFunc()
+}
+
+// BySLAAlertHistoryID orders the results by the sla_alert_history_id field.
+func BySLAAlertHistoryID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSLAAlertHistoryID, opts...).ToFunc()
 }
 
 // ByTicketID orders the results by the ticket_id field.

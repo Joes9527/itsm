@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"itsm-backend/common/tenantctx"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/smtp"
 	"strconv"
 	"strings"
@@ -19,6 +21,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/ent/ticketnotification"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -313,7 +316,7 @@ func TestCCTicketDoesNotDispatchConnectorBeforeTransactionCommit(t *testing.T) {
 	require.NoError(t, err)
 	tk, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
 	require.NoError(t, err)
-	notificationService := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar())
+	notificationService := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	fake := &durableNotificationConnector{}
 	configureDurableNotificationConnector(t, notificationService, tenant.ID, fake)
 	client.Use(func(next ent.Mutator) ent.Mutator {
@@ -325,11 +328,16 @@ func TestCCTicketDoesNotDispatchConnectorBeforeTransactionCommit(t *testing.T) {
 		})
 	})
 
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
+	mailOwner := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar(), standardNotificationPolicy(t))
+	_, mailCalls := configureNotificationSMTPProbe(mailOwner)
+	service.SetNotificationService(mailOwner)
 	err = service.CCTicket(ctx, &dto.CCTicketRequest{
 		TicketID:       tk.ID,
 		CCUsers:        []int{recipient.ID},
 		NotifyChannels: []string{"email"},
 	}, operator.ID, tenant.ID)
+	require.Empty(t, *mailCalls)
 
 	require.ErrorContains(t, err, "injected history failure before connector dispatch")
 	assert.Empty(t, fake.sentMessages())
@@ -350,15 +358,20 @@ func TestCCTicketPersistsExternalDeliveryWithoutDispatch(t *testing.T) {
 	require.NoError(t, err)
 	tk, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
 	require.NoError(t, err)
-	notificationService := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar())
+	notificationService := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	fake := &durableNotificationConnector{}
 	configureDurableNotificationConnector(t, notificationService, tenant.ID, fake)
 
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
+	mailOwner := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar(), standardNotificationPolicy(t))
+	_, mailCalls := configureNotificationSMTPProbe(mailOwner)
+	service.SetNotificationService(mailOwner)
 	err = service.CCTicket(ctx, &dto.CCTicketRequest{
 		TicketID:       tk.ID,
 		CCUsers:        []int{recipient.ID},
 		NotifyChannels: []string{"email"},
 	}, operator.ID, tenant.ID)
+	require.Empty(t, *mailCalls)
 
 	require.NoError(t, err)
 	assert.Empty(t, fake.sentMessages())
@@ -383,11 +396,16 @@ func TestCCTicketPersistsExternalDeliveryWhenConnectorManagerUnavailable(t *test
 	tk, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
 	require.NoError(t, err)
 
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
+	mailOwner := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar(), standardNotificationPolicy(t))
+	_, mailCalls := configureNotificationSMTPProbe(mailOwner)
+	service.SetNotificationService(mailOwner)
 	err = service.CCTicket(ctx, &dto.CCTicketRequest{
 		TicketID:       tk.ID,
 		CCUsers:        []int{recipient.ID},
 		NotifyChannels: []string{"email"},
 	}, operator.ID, tenant.ID)
+	require.Empty(t, *mailCalls)
 
 	require.NoError(t, err)
 	notification := client.TicketNotification.Query().OnlyX(ctx)
@@ -447,16 +465,28 @@ func TestEmailAndCCLogsContainOnlyFixedErrorClasses(t *testing.T) {
 	require.NoError(t, err)
 	ticketEntity, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
 	require.NoError(t, err)
-	notificationService := NewTicketNotificationService(client, logger)
+	notificationService := NewTicketNotificationService(client, logger, standardNotificationPolicy(t))
+	emailService.config.DeliveryTransport = "smtp"
+	emailService.SetDeliveryTargetDependencies(nil, notificationService.execution)
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
 	notificationService.SetEmailService(emailService)
-	smtpErr = errors.New(smtpErrSentinel)
+	smtpErr = newEmailTransportError("smtp", "connect", emailNotAccepted, errors.New(smtpErrSentinel))
 	result, err := notificationService.SendNotification(ctx, ticketEntity.ID, &dto.SendTicketNotificationRequest{
 		UserIDs:   []int{recipient.ID},
 		EventType: "ticket_cc",
 		Content:   contentSentinel,
 	}, tenant.ID)
+	require.NoError(t, err)
+	require.Equal(t, dto.TicketNotificationEffectQueued, result.Effect)
+	notificationService.SetDeliveryQueueClient(client)
+	n, err := notificationService.ProcessPendingDeliveries(ctx, "sanitized-notification", 10)
 	require.Error(t, err)
-	require.Nil(t, result)
+	require.Zero(t, n)
+	require.NotContains(t, err.Error(), graphErrSentinel)
+	require.NotContains(t, err.Error(), smtpErrSentinel)
+	pending := client.TicketNotification.Query().Where(ticketnotification.ChannelEQ("email")).OnlyX(ctx)
+	require.Equal(t, "connector_send", pending.LastErrorClass)
+	require.Equal(t, 1, pending.AttemptCount)
 	require.NoError(t, workflow.CCTicket(ctx, &dto.CCTicketRequest{
 		TicketID: ticketEntity.ID,
 		CCUsers:  []int{recipient.ID},
@@ -464,9 +494,8 @@ func TestEmailAndCCLogsContainOnlyFixedErrorClasses(t *testing.T) {
 	}, operator.ID, tenant.ID))
 
 	allowedErrorClasses := map[string]struct{}{
-		"graph_send_failed":     {},
-		"smtp_send_failed":      {},
-		"email_delivery_failed": {},
+		"graph_send_failed": {},
+		"smtp_send_failed":  {},
 	}
 	seenErrorClasses := make(map[string]struct{})
 	for _, entry := range observed.All() {
@@ -496,7 +525,6 @@ func TestEmailAndCCLogsContainOnlyFixedErrorClasses(t *testing.T) {
 	}
 	require.Contains(t, seenErrorClasses, "graph_send_failed")
 	require.Contains(t, seenErrorClasses, "smtp_send_failed")
-	require.Contains(t, seenErrorClasses, "email_delivery_failed")
 	require.False(t, strings.Contains(fmt.Sprint(observed.AllUntimed()), recipientSentinel))
 }
 
@@ -525,11 +553,16 @@ func TestCCTicketRejectsUnknownNotifyChannelsBeforeEffects(t *testing.T) {
 			ticket, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
 			require.NoError(t, err)
 
+			ctx = tenantctx.WithTenantID(ctx, tenant.ID)
+			mailOwner := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar(), standardNotificationPolicy(t))
+			_, mailCalls := configureNotificationSMTPProbe(mailOwner)
+			service.SetNotificationService(mailOwner)
 			err = service.CCTicket(ctx, &dto.CCTicketRequest{
 				TicketID:       ticket.ID,
 				CCUsers:        []int{recipient.ID},
 				NotifyChannels: tt.channels,
 			}, operator.ID, tenant.ID)
+			require.Empty(t, *mailCalls)
 			if tt.wantError {
 				require.ErrorContains(t, err, "通知渠道")
 				assert.Zero(t, client.TicketCC.Query().CountX(ctx))
@@ -936,7 +969,7 @@ func TestTicketWorkflowService_GetApprovalDecisions_ReturnsOrderedByCreatedAt(t 
 		SetProcessInstanceID("PI-ticket_general_flow-gad-1").
 		SetProcessDefinitionKey("ticket_general_flow").
 		SetProcessDefinitionID(def.ID).
-		SetBusinessKey(fmt.Sprintf("ticket:%d", tkt.ID)).
+		SetBusinessKey(fmt.Sprintf("generic:%d", tkt.ID)).
 		SetStatus("running").SetTenantID(tenant.ID).SetVariables(map[string]interface{}{}).
 		Save(ctx)
 	require.NoError(t, err)
@@ -971,7 +1004,7 @@ func TestTicketWorkflowService_GetApprovalDecisions_ReturnsOrderedByCreatedAt(t 
 		SetProcessInstanceID(instance.ID).SetProcessTaskID(task.ID).
 		SetProcessInstanceKey(instance.ProcessInstanceID).SetTaskID(task.TaskID).
 		SetProcessDefinitionKey("ticket_general_flow").SetNodeKey("Activity_Approve").
-		SetBusinessType("ticket").SetBusinessID(strconv.Itoa(tkt.ID)).
+		SetBusinessType("generic").SetBusinessID(strconv.Itoa(tkt.ID)).
 		SetActorID(actor.ID).SetActorName(actor.Name).SetAction("approve").SetDecision("approved").
 		SetComment("同意").SetTenantID(tenant.ID).
 		SetCreatedAt(time.Now().Add(-time.Hour)).
@@ -982,7 +1015,7 @@ func TestTicketWorkflowService_GetApprovalDecisions_ReturnsOrderedByCreatedAt(t 
 		SetProcessInstanceID(instance.ID).SetProcessTaskID(task2.ID).
 		SetProcessInstanceKey(instance.ProcessInstanceID).SetTaskID(task2.TaskID).
 		SetProcessDefinitionKey("ticket_general_flow").SetNodeKey("Activity_Approve2").
-		SetBusinessType("ticket").SetBusinessID(strconv.Itoa(tkt.ID)).
+		SetBusinessType("generic").SetBusinessID(strconv.Itoa(tkt.ID)).
 		SetActorID(actor.ID).SetActorName(actor.Name).SetAction("approve").SetDecision("approved").
 		SetComment("二级同意").SetTenantID(tenant.ID).
 		Save(ctx)
@@ -993,7 +1026,7 @@ func TestTicketWorkflowService_GetApprovalDecisions_ReturnsOrderedByCreatedAt(t 
 		SetProcessInstanceID(instance.ID).SetProcessTaskID(taskOther.ID).
 		SetProcessInstanceKey(instance.ProcessInstanceID).SetTaskID(taskOther.TaskID).
 		SetProcessDefinitionKey("ticket_general_flow").SetNodeKey("Activity_Approve").
-		SetBusinessType("ticket").SetBusinessID(strconv.Itoa(tkt.ID + 999)).
+		SetBusinessType("generic").SetBusinessID(strconv.Itoa(tkt.ID + 999)).
 		SetActorID(actor.ID).SetAction("approve").SetDecision("approved").
 		SetTenantID(tenant.ID).
 		Save(ctx)
@@ -1033,7 +1066,7 @@ func TestTicketWorkflowService_GetApprovalDecisions_ReturnsOrderedByCreatedAt(t 
 		SetProcessInstanceID("PI-ticket_general_flow-gad-2").
 		SetProcessDefinitionKey("ticket_general_flow").
 		SetProcessDefinitionID(def2.ID).
-		SetBusinessKey(fmt.Sprintf("ticket:%d", tkt.ID)).
+		SetBusinessKey(fmt.Sprintf("generic:%d", tkt.ID)).
 		SetStatus("running").SetTenantID(tenant2.ID).SetVariables(map[string]interface{}{}).
 		Save(ctx)
 	require.NoError(t, err)
@@ -1050,7 +1083,7 @@ func TestTicketWorkflowService_GetApprovalDecisions_ReturnsOrderedByCreatedAt(t 
 		SetProcessInstanceID(instance2.ID).SetProcessTaskID(task2Tenant2.ID).
 		SetProcessInstanceKey(instance2.ProcessInstanceID).SetTaskID(task2Tenant2.TaskID).
 		SetProcessDefinitionKey("ticket_general_flow").SetNodeKey("Activity_Approve").
-		SetBusinessType("ticket").SetBusinessID(strconv.Itoa(tkt.ID)).
+		SetBusinessType("generic").SetBusinessID(strconv.Itoa(tkt.ID)).
 		SetActorID(actor2.ID).SetActorName(actor2.Name).SetAction("approve").SetDecision("approved").
 		SetComment("租户2的同名业务ID决策").SetTenantID(tenant2.ID).
 		Save(ctx)

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -20,6 +21,8 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
+	"itsm-backend/ent"
+	"itsm-backend/ent/predicate"
 	"itsm-backend/middleware"
 )
 
@@ -29,7 +32,7 @@ func setupTestHandler(t *testing.T) (*gin.Engine, *Handler, *mockRepository) {
 
 	logger := zaptest.NewLogger(t).Sugar()
 	repo := newMockRepository()
-	svc := NewService(repo, nil, logger)
+	svc := NewService(repo, nil, logger, executionfixture.Standard())
 	handler := NewHandler(svc)
 
 	r := gin.New()
@@ -83,7 +86,7 @@ func setupTestHandler(t *testing.T) (*gin.Engine, *Handler, *mockRepository) {
 	r.PUT("/api/v1/changes/:id", handler.UpdateChange)
 	r.DELETE("/api/v1/changes/:id", handler.DeleteChange)
 	r.GET("/api/v1/changes/stats", handler.GetStats)
-	r.POST("/api/v1/changes/:id/submit", handler.SubmitChange)
+	r.POST("/api/v1/changes/:id/submit", handler.ExecuteAction)
 	r.POST("/api/v1/changes/:id/assign", handler.AssignChange)
 	r.GET("/api/v1/changes/:id/risk-assessment", handler.GetRiskAssessment)
 	r.GET("/api/v1/changes/:id/cmdb-impact", handler.GetCMDBImpactSummary)
@@ -97,7 +100,6 @@ type mockRepository struct {
 	approvals  map[int]*ApprovalRecord
 	riskAssess map[int]*RiskAssessment
 	nextID     int
-	submitErr  error
 }
 
 func newMockRepository() *mockRepository {
@@ -126,7 +128,7 @@ func (m *mockRepository) Get(ctx context.Context, id int, tenantID int) (*Change
 	return c, nil
 }
 
-func (m *mockRepository) List(ctx context.Context, tenantID int, page, size int, status, search, riskLevel string) ([]*Change, int, error) {
+func (m *mockRepository) List(ctx context.Context, tenantID int, page, size int, status, search, riskLevel string, scope ...predicate.Ticket) ([]*Change, int, error) {
 	var result []*Change
 	for _, c := range m.changes {
 		if c.TenantID != tenantID {
@@ -141,21 +143,6 @@ func (m *mockRepository) List(ctx context.Context, tenantID int, page, size int,
 		result = append(result, c)
 	}
 	return result, len(result), nil
-}
-
-func (m *mockRepository) Update(ctx context.Context, c *Change) (*Change, error) {
-	c.UpdatedAt = time.Now()
-	m.changes[c.ID] = c
-	return c, nil
-}
-
-func (m *mockRepository) Delete(ctx context.Context, id int, tenantID int) error {
-	c, ok := m.changes[id]
-	if !ok || c.TenantID != tenantID {
-		return http.ErrMissingFile
-	}
-	delete(m.changes, id)
-	return nil
 }
 
 func (m *mockRepository) GetStats(ctx context.Context, tenantID int) (*Stats, error) {
@@ -184,18 +171,6 @@ func (m *mockRepository) GetStats(ctx context.Context, tenantID int) (*Stats, er
 	return stats, nil
 }
 
-func (m *mockRepository) MarkSubmittedForApproval(ctx context.Context, changeID, tenantID int) error {
-	if m.submitErr != nil {
-		return m.submitErr
-	}
-	c, ok := m.changes[changeID]
-	if !ok || c.TenantID != tenantID || c.Status != "draft" {
-		return fmt.Errorf("change is not an editable draft")
-	}
-	c.Status = "pending"
-	return nil
-}
-
 func (m *mockRepository) GetApprovalHistory(ctx context.Context, changeID int, tenantID int) ([]*ApprovalRecord, error) {
 	var result []*ApprovalRecord
 	for _, a := range m.approvals {
@@ -204,32 +179,6 @@ func (m *mockRepository) GetApprovalHistory(ctx context.Context, changeID int, t
 		}
 	}
 	return result, nil
-}
-
-func (m *mockRepository) CreateRiskAssessment(ctx context.Context, ra *RiskAssessment) (*RiskAssessment, error) {
-	ra.ID = m.nextID
-	m.nextID++
-	ra.CreatedAt = time.Now()
-	ra.UpdatedAt = time.Now()
-	m.riskAssess[ra.ChangeID] = ra
-	return ra, nil
-}
-
-func (m *mockRepository) GetRiskAssessment(ctx context.Context, changeID int, tenantID int) (*RiskAssessment, error) {
-	ra, ok := m.riskAssess[changeID]
-	if !ok {
-		return nil, nil
-	}
-	if ra.TenantID != 0 && ra.TenantID != tenantID {
-		return nil, nil
-	}
-	return ra, nil
-}
-
-func (m *mockRepository) UpdateRiskAssessment(ctx context.Context, ra *RiskAssessment) (*RiskAssessment, error) {
-	ra.UpdatedAt = time.Now()
-	m.riskAssess[ra.ChangeID] = ra
-	return ra, nil
 }
 
 func (m *mockRepository) ListByDateRange(ctx context.Context, tenantID int, startDate, endDate, status string) ([]*Change, error) {
@@ -269,10 +218,7 @@ func createTestChange(repo *mockRepository, tenantID, userID int) *Change {
 
 // TestChangeController_ListChanges tests GET /api/v1/changes
 func TestChangeController_ListChanges(t *testing.T) {
-	r, _, repo := setupTestHandler(t)
-
-	// Create test data
-	createTestChange(repo, 1, 1)
+	_, r := newGovernedHandlerFixture(t)
 
 	tests := []struct {
 		name           string
@@ -339,7 +285,7 @@ func TestChangeService_GetCMDBImpactSummary_WithoutEntClient(t *testing.T) {
 	repo := newMockRepository()
 	createTestChange(repo, 1, 1)
 
-	svc := NewService(repo, nil, logger)
+	svc := NewService(repo, nil, logger, executionfixture.Standard())
 	_, err := svc.GetCMDBImpactSummary(context.Background(), 1, 1)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "CMDB impact summary unavailable")
@@ -428,343 +374,121 @@ func TestChangeController_CreateChange(t *testing.T) {
 
 // TestChangeController_GetChange tests GET /api/v1/changes/:id
 func TestChangeController_GetChange(t *testing.T) {
-	r, _, repo := setupTestHandler(t)
-
-	// Create test data
-	change := createTestChange(repo, 1, 1)
-
-	tests := []struct {
-		name           string
-		changeID       string
-		expectedStatus int
-		expectedCode   int
-	}{
-		{
-			name:           "成功获取变更",
-			changeID:       strconv.Itoa(change.ID),
-			expectedStatus: http.StatusOK,
-			expectedCode:   common.SuccessCode,
-		},
-		{
-			name:           "无效的变更ID应返回400",
-			changeID:       "invalid",
-			expectedStatus: http.StatusBadRequest,
-			expectedCode:   common.ParamErrorCode,
-		},
-		{
-			name:           "非正数ID应返回400",
-			changeID:       "0",
-			expectedStatus: http.StatusBadRequest,
-			expectedCode:   common.ParamErrorCode,
-		},
-		{
-			name:           "获取不存在的变更应返回404",
-			changeID:       "999",
-			expectedStatus: http.StatusNotFound,
-			expectedCode:   common.NotFoundCode,
-		},
+	f, r := newGovernedHandlerFixture(t)
+	for _, test := range []struct {
+		id   string
+		code int
+	}{{fmt.Sprint(f.record.ID), 200}, {"invalid", 400}, {"0", 400}, {"99999", 404}} {
+		w := governedHTTP(r, "GET", "/api/v1/changes/"+test.id, "", nil)
+		require.Equal(t, test.code, w.Code, w.Body.String())
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req, _ := http.NewRequest("GET", "/api/v1/changes/"+tt.changeID, nil)
-			w := httptest.NewRecorder()
-			r.ServeHTTP(w, req)
-
-			assert.Equal(t, tt.expectedStatus, w.Code)
-
-			var response common.Response
-			err := json.Unmarshal(w.Body.Bytes(), &response)
-			require.NoError(t, err)
-			assert.Equal(t, tt.expectedCode, response.Code)
-		})
-	}
 }
 
 func TestChangeController_GetChangeIncludesDetailActionsOnly(t *testing.T) {
-	r, _, repo := setupTestHandler(t)
-	change := createTestChange(repo, 1, 42)
+	f, r := newGovernedHandlerFixture(t)
+	w := governedHTTP(r, "GET", fmt.Sprintf("/api/v1/changes/%d", f.record.ID), "", nil)
+	require.Equal(t, 200, w.Code, w.Body.String())
+	var body struct {
+		Data dto.ChangeResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	require.Equal(t, 1, body.Data.Version)
+	require.True(t, body.Data.Actions["submit"].Allowed)
+	require.False(t, body.Data.Actions["approve"].Allowed)
+	require.Empty(t, body.Data.CurrentTasks)
+	w = governedHTTP(r, "GET", "/api/v1/changes", "", nil)
+	require.Equal(t, 200, w.Code, w.Body.String())
+	require.NotContains(t, w.Body.String(), `"actions"`)
 
-	detailReq, err := http.NewRequest("GET", "/api/v1/changes/"+strconv.Itoa(change.ID), nil)
-	require.NoError(t, err)
-	detailReq.Header.Set("X-User-Role", "super_admin")
-
-	detailResp := httptest.NewRecorder()
-	r.ServeHTTP(detailResp, detailReq)
-	require.Equal(t, http.StatusOK, detailResp.Code)
-
-	var detail common.Response
-	require.NoError(t, json.Unmarshal(detailResp.Body.Bytes(), &detail))
-	detailData := detail.Data.(map[string]interface{})
-	actions, ok := detailData["actions"].(map[string]interface{})
-	require.True(t, ok, "detail response should include actions")
-	require.Len(t, actions, 5)
-	require.Contains(t, actions, "submitForApproval")
-	require.Contains(t, actions, "approve")
-	require.Contains(t, actions, "reject")
-	require.Contains(t, actions, "startImplementation")
-	require.Contains(t, actions, "completeImplementation")
-
-	listReq, err := http.NewRequest("GET", "/api/v1/changes", nil)
-	require.NoError(t, err)
-	listReq.Header.Set("X-User-Role", "super_admin")
-
-	listResp := httptest.NewRecorder()
-	r.ServeHTTP(listResp, listReq)
-	require.Equal(t, http.StatusOK, listResp.Code)
-
-	var list common.Response
-	require.NoError(t, json.Unmarshal(listResp.Body.Bytes(), &list))
-	listData := list.Data.(map[string]interface{})
-	changes := listData["changes"].([]interface{})
-	first := changes[0].(map[string]interface{})
-	require.NotContains(t, first, "actions", "list response should omit detail-only actions")
 }
 
 func TestChangeController_GetChangeUsesResolvedMSPTenant(t *testing.T) {
-	r, _, repo := setupTestHandler(t)
-	change := createTestChange(repo, 200, 42)
+	f, r := newGovernedHandlerFixture(t)
+	headers := governedMSPHeaders(t, f)
+	w := governedHTTP(r, "GET", fmt.Sprintf("/api/v1/changes/%d", f.record.ID), "", headers)
+	require.Equal(t, 404, w.Code, w.Body.String(), "allocation does not grant row scope for an unassigned request")
+	actorID, parseErr := strconv.Atoi(headers["X-User-ID"])
+	require.NoError(t, parseErr)
+	f.client.User.UpdateOneID(actorID).SetRole("super_admin").ClearMspRole().ExecX(f.ctx)
+	w = governedHTTP(r, "GET", fmt.Sprintf("/api/v1/changes/%d", f.record.ID), "", headers)
+	require.Equal(t, 200, w.Code, w.Body.String())
+	var body struct {
+		Data dto.ChangeResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	require.Equal(t, f.tenant, body.Data.TenantID)
 
-	req, err := http.NewRequest("GET", "/api/v1/changes/"+strconv.Itoa(change.ID), nil)
-	require.NoError(t, err)
-	req.Header.Set("X-Tenant-ID", "500")
-	req.Header.Set("X-User-ID", "7")
-	req.Header.Set("X-User-Role", "super_admin")
-	req.Header.Set("X-MSP-Customer-ID", "200")
-	req.Header.Set("X-MSP-Allowed-Customer-ID", "200")
-
-	resp := httptest.NewRecorder()
-	r.ServeHTTP(resp, req)
-	require.Equal(t, http.StatusOK, resp.Code)
-
-	var body common.Response
-	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
-	require.Equal(t, common.SuccessCode, body.Code)
-	data := body.Data.(map[string]interface{})
-	require.Equal(t, float64(200), data["tenantId"])
-
-	sameTenantReq, err := http.NewRequest("GET", "/api/v1/changes/"+strconv.Itoa(change.ID), nil)
-	require.NoError(t, err)
-	sameTenantReq.Header.Set("X-Tenant-ID", "200")
-	sameTenantReq.Header.Set("X-User-ID", "7")
-	sameTenantReq.Header.Set("X-User-Role", "super_admin")
-	sameTenantResp := httptest.NewRecorder()
-	r.ServeHTTP(sameTenantResp, sameTenantReq)
-	require.Equal(t, http.StatusOK, sameTenantResp.Code)
 }
 
 func TestChangeController_GetChangeDeniesUnauthorizedMSPTenant(t *testing.T) {
-	r, _, repo := setupTestHandler(t)
-	change := createTestChange(repo, 200, 42)
+	f, r := newGovernedHandlerFixture(t)
+	headers := governedMSPHeaders(t, f)
+	f.client.MSPAllocation.Update().SetDeassignedAt(time.Now()).ExecX(f.ctx)
+	w := governedHTTP(r, "GET", fmt.Sprintf("/api/v1/changes/%d", f.record.ID), "", headers)
+	require.Equal(t, 403, w.Code, w.Body.String())
 
-	req, err := http.NewRequest("GET", "/api/v1/changes/"+strconv.Itoa(change.ID), nil)
-	require.NoError(t, err)
-	req.Header.Set("X-Tenant-ID", "500")
-	req.Header.Set("X-User-ID", "7")
-	req.Header.Set("X-User-Role", "super_admin")
-	req.Header.Set("X-MSP-Customer-ID", "200")
-	req.Header.Set("X-MSP-Allowed-Customer-ID", "300")
-
-	resp := httptest.NewRecorder()
-	r.ServeHTTP(resp, req)
-	require.Equal(t, http.StatusForbidden, resp.Code)
-
-	var body common.Response
-	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
-	require.Equal(t, 2003, body.Code)
 }
 
 func TestChangeControllerMutationsUseResolvedMSPTenant(t *testing.T) {
-	r, _, repo := setupTestHandler(t)
-	const homeTenantID = 1
-	const customerTenantID = 2
+	f, r := newGovernedHandlerFixture(t)
+	headers := governedMSPHeaders(t, f)
+	base := fmt.Sprintf("/api/v1/changes/%d", f.record.ID)
+	w := governedHTTP(r, "PUT", base, `{"expectedVersion":1,"operationId":"msp-edit","title":"MSP title"}`, headers)
+	require.Equal(t, 200, w.Code, w.Body.String())
+	require.Equal(t, "MSP title", f.client.Ticket.GetX(f.ctx, f.record.WorkItemID).Title)
+	w = governedHTTP(r, "POST", base+"/assign", fmt.Sprintf(`{"expectedVersion":2,"operationId":"msp-assign","assigneeId":%d}`, f.requester), headers)
+	require.Equal(t, 200, w.Code, w.Body.String())
+	require.Equal(t, f.requester, f.client.Ticket.GetX(f.ctx, f.record.WorkItemID).AssigneeID)
 
-	t.Run("update", func(t *testing.T) {
-		change := createTestChange(repo, customerTenantID, 1)
-		body, err := json.Marshal(dto.UpdateChangeRequest{Title: strPtr("MSP updated change")})
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/changes/"+strconv.Itoa(change.ID), bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-Tenant-ID", strconv.Itoa(homeTenantID))
-		req.Header.Set("X-MSP-Customer-ID", strconv.Itoa(customerTenantID))
-		req.Header.Set("X-MSP-Allowed-Customer-ID", strconv.Itoa(customerTenantID))
-
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-		require.Equal(t, "MSP updated change", repo.changes[change.ID].Title)
-	})
-
-	t.Run("assign", func(t *testing.T) {
-		change := createTestChange(repo, customerTenantID, 1)
-		body := bytes.NewBufferString(`{"assigneeId":42}`)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/changes/"+strconv.Itoa(change.ID)+"/assign", body)
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-Tenant-ID", strconv.Itoa(homeTenantID))
-		req.Header.Set("X-MSP-Customer-ID", strconv.Itoa(customerTenantID))
-		req.Header.Set("X-MSP-Allowed-Customer-ID", strconv.Itoa(customerTenantID))
-
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-		require.NotNil(t, repo.changes[change.ID].AssigneeID)
-		require.Equal(t, 42, *repo.changes[change.ID].AssigneeID)
-	})
 }
 
 func TestChangeController_GetChangeRejectsInvalidActionActorContext(t *testing.T) {
-	r, _, repo := setupTestHandler(t)
-	change := createTestChange(repo, 1, 1)
-
-	tests := []struct {
-		name   string
-		header func(*http.Request)
-	}{
-		{
-			name: "missing tenant",
-			header: func(req *http.Request) {
-				req.Header.Set("X-User-ID", "1")
-				req.Header.Set("X-User-Role", "super_admin")
-				req.Header.Set("X-Tenant-ID", "bad")
-			},
-		},
-		{
-			name: "missing user",
-			header: func(req *http.Request) {
-				req.Header.Set("X-Tenant-ID", "1")
-				req.Header.Set("X-User-ID", "0")
-				req.Header.Set("X-User-Role", "super_admin")
-			},
-		},
-		{
-			name: "missing role",
-			header: func(req *http.Request) {
-				req.Header.Set("X-Tenant-ID", "1")
-				req.Header.Set("X-User-ID", "1")
-				req.Header.Set("X-User-Role", " ")
-			},
-		},
+	f, r := newGovernedHandlerFixture(t)
+	base := fmt.Sprintf("/api/v1/changes/%d", f.record.ID)
+	for _, headers := range []map[string]string{{"X-User-ID": "0"}, {"X-User-ID": "invalid"}, {"X-Tenant-ID": "bad"}} {
+		w := governedHTTP(r, "GET", base, "", headers)
+		require.Equal(t, 401, w.Code, w.Body.String())
 	}
+	w := governedHTTP(r, "GET", base, "", map[string]string{"X-User-Role": "stale-role"})
+	require.Equal(t, 200, w.Code, w.Body.String(), "current persisted role owns authorization")
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req, err := http.NewRequest("GET", "/api/v1/changes/"+strconv.Itoa(change.ID), nil)
-			require.NoError(t, err)
-			tt.header(req)
-
-			resp := httptest.NewRecorder()
-			r.ServeHTTP(resp, req)
-			require.Equal(t, http.StatusUnauthorized, resp.Code)
-
-			var body common.Response
-			require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
-			require.Equal(t, common.AuthErrorCode, body.Code)
-		})
-	}
 }
 
 // TestChangeController_UpdateChange tests PUT /api/v1/changes/:id
 func TestChangeController_UpdateChange(t *testing.T) {
-	r, _, repo := setupTestHandler(t)
+	f, r := newGovernedHandlerFixture(t)
+	base := fmt.Sprintf("/api/v1/changes/%d", f.record.ID)
+	w := governedHTTP(r, "PUT", base, `{"expectedVersion":1,"operationId":"edit","title":"Updated"}`, nil)
+	require.Equal(t, 200, w.Code, w.Body.String())
+	require.Equal(t, "Updated", f.client.Ticket.GetX(f.ctx, f.record.WorkItemID).Title)
+	replay := governedHTTP(r, "PUT", base, `{"expectedVersion":1,"operationId":"edit","title":"Updated"}`, nil)
+	require.Equal(t, 200, replay.Code, replay.Body.String())
+	require.Contains(t, replay.Body.String(), `"replayed":true`)
+	w = governedHTTP(r, "PUT", base, `{"expectedVersion":1,"operationId":"stale","title":"Other"}`, nil)
+	require.Equal(t, 409, w.Code, w.Body.String())
+	w = governedHTTP(r, "PUT", base, `{"title":"No key"}`, nil)
+	require.Equal(t, 400, w.Code, w.Body.String())
 
-	// Create test data
-	change := createTestChange(repo, 1, 1)
-
-	tests := []struct {
-		name           string
-		changeID       string
-		request        dto.UpdateChangeRequest
-		expectedStatus int
-		expectedCode   int
-	}{
-		{
-			name:     "成功更新变更",
-			changeID: strconv.Itoa(change.ID),
-			request: dto.UpdateChangeRequest{
-				Title:       strPtr("更新后的标题"),
-				Description: strPtr("更新后的描述"),
-				Priority:    ptrChangePriority(dto.ChangePriorityHigh),
-			},
-			expectedStatus: http.StatusOK,
-			expectedCode:   common.SuccessCode,
-		},
-		{
-			name:     "更新不存在的变更应返回404",
-			changeID: "999",
-			request: dto.UpdateChangeRequest{
-				Title: strPtr("不存在的变更"),
-			},
-			expectedStatus: http.StatusNotFound,
-			expectedCode:   common.NotFoundCode,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			requestBody, err := json.Marshal(tt.request)
-			require.NoError(t, err)
-
-			req, _ := http.NewRequest("PUT", "/api/v1/changes/"+tt.changeID, bytes.NewBuffer(requestBody))
-			req.Header.Set("Content-Type", "application/json")
-
-			w := httptest.NewRecorder()
-			r.ServeHTTP(w, req)
-
-			assert.Equal(t, tt.expectedStatus, w.Code)
-		})
-	}
 }
 
 // TestChangeController_DeleteChange tests DELETE /api/v1/changes/:id
 func TestChangeController_DeleteChange(t *testing.T) {
-	r, _, repo := setupTestHandler(t)
-
-	// Create test data
-	change := createTestChange(repo, 1, 1)
-
-	tests := []struct {
-		name           string
-		changeID       string
-		expectedStatus int
-		expectedCode   int
-	}{
-		{
-			name:           "成功删除变更",
-			changeID:       strconv.Itoa(change.ID),
-			expectedStatus: http.StatusOK,
-			expectedCode:   common.SuccessCode,
-		},
-		{
-			name:           "删除不存在的变更应返回500",
-			changeID:       "999",
-			expectedStatus: http.StatusInternalServerError,
-			expectedCode:   common.InternalErrorCode,
-		},
-		{
-			name:           "无效ID应返回400",
-			changeID:       "invalid",
-			expectedStatus: http.StatusBadRequest,
-			expectedCode:   common.ParamErrorCode,
-		},
+	f, r := newGovernedHandlerFixture(t)
+	for _, tc := range []struct {
+		id     string
+		status int
+	}{{"invalid", 400}, {"99999", 404}, {fmt.Sprint(f.record.ID), 200}} {
+		w := governedHTTP(r, "DELETE", "/api/v1/changes/"+tc.id, "", nil)
+		require.Equal(t, tc.status, w.Code, w.Body.String())
+		var response common.Response
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+		expected := map[int]int{200: common.SuccessCode, 400: common.ParamErrorCode, 404: common.NotFoundErrorCode}
+		require.Equal(t, expected[tc.status], response.Code)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req, _ := http.NewRequest("DELETE", "/api/v1/changes/"+tt.changeID, nil)
-			w := httptest.NewRecorder()
-			r.ServeHTTP(w, req)
-
-			assert.Equal(t, tt.expectedStatus, w.Code)
-
-			var response common.Response
-			err := json.Unmarshal(w.Body.Bytes(), &response)
-			require.NoError(t, err)
-			assert.Equal(t, tt.expectedCode, response.Code)
-		})
-	}
+	require.NotNil(t, f.client.Ticket.GetX(f.ctx, f.record.WorkItemID).DeletedAt)
 }
 
-// TestChangeController_GetStats tests GET /api/v1/changes/stats
 func TestChangeController_GetStats(t *testing.T) {
 	r, _, repo := setupTestHandler(t)
 
@@ -800,104 +524,54 @@ func TestChangeController_GetStats(t *testing.T) {
 
 // TestChangeController_SubmitChange tests POST /api/v1/changes/:id/submit
 func TestChangeController_SubmitChange(t *testing.T) {
-	r, _, repo := setupTestHandler(t)
+	f, r := newGovernedHandlerFixture(t)
+	w := governedHTTP(r, "POST", fmt.Sprintf("/api/v1/changes/%d/submit", f.record.ID), `{"expectedVersion":1,"operationId":"submit"}`, nil)
+	require.Equal(t, 200, w.Code, w.Body.String())
+	require.Contains(t, w.Body.String(), `"status":"submitted"`)
+	require.Equal(t, "Activity_Assessment", f.client.ProcessInstance.Query().OnlyX(f.ctx).CurrentActivityID)
 
-	// Create test data - change must be in draft status
-	change := createTestChange(repo, 1, 1)
-
-	req := dto.SubmitChangeRequest{
-		Comment: "请审批",
-	}
-	requestBody, err := json.Marshal(req)
-	require.NoError(t, err)
-
-	httpReq, _ := http.NewRequest("POST", "/api/v1/changes/"+strconv.Itoa(change.ID)+"/submit", bytes.NewBuffer(requestBody))
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httpReq)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var response common.Response
-	err = json.Unmarshal(w.Body.Bytes(), &response)
-	require.NoError(t, err)
-	assert.Equal(t, common.SuccessCode, response.Code)
-
-	// Verify response data
-	if response.Code == common.SuccessCode {
-		data := response.Data.(map[string]interface{})
-		assert.Equal(t, "pending", data["status"])
-	}
 }
 
 // TestChangeController_AssignChange tests POST /api/v1/changes/:id/assign
 func TestChangeController_AssignChange(t *testing.T) {
-	r, _, repo := setupTestHandler(t)
+	f, r := newGovernedHandlerFixture(t)
+	base := fmt.Sprintf("/api/v1/changes/%d/assign", f.record.ID)
+	w := governedHTTP(r, "POST", base, fmt.Sprintf(`{"expectedVersion":1,"operationId":"assign","assigneeId":%d}`, f.approver), nil)
+	require.Equal(t, 200, w.Code, w.Body.String())
+	require.Equal(t, f.approver, f.client.Ticket.GetX(f.ctx, f.record.WorkItemID).AssigneeID)
+	w = governedHTTP(r, "POST", base, `{"expectedVersion":2,"operationId":"invalid","assigneeId":999}`, nil)
+	require.Equal(t, 400, w.Code, w.Body.String())
 
-	// Create test data
-	change := createTestChange(repo, 1, 1)
-
-	// Use camelCase field name as per API contract
-	assignReq := map[string]interface{}{
-		"assigneeId": 2,
-	}
-	requestBody, err := json.Marshal(assignReq)
-	require.NoError(t, err)
-
-	req, _ := http.NewRequest("POST", "/api/v1/changes/"+strconv.Itoa(change.ID)+"/assign", bytes.NewBuffer(requestBody))
-	req.Header.Set("Content-Type", "application/json")
-
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var response common.Response
-	err = json.Unmarshal(w.Body.Bytes(), &response)
-	require.NoError(t, err)
-	assert.Equal(t, common.SuccessCode, response.Code)
-
-	// Verify assignment was successful
-	if response.Code == common.SuccessCode {
-		data := response.Data.(map[string]interface{})
-		assert.Equal(t, float64(2), data["assigneeId"])
-	}
 }
 
 func TestSubmitChangeAtomicFailureLeavesDraftUnchanged(t *testing.T) {
-	logger := zaptest.NewLogger(t).Sugar()
-	repo := newMockRepository()
-	repo.changes[1] = &Change{ID: 1, TenantID: 1, CreatedBy: 1, Status: "draft"}
-	repo.submitErr = errors.New("injected transaction failure")
-	svc := NewService(repo, nil, logger)
-
-	_, err := svc.SubmitChange(context.Background(), 1, 1, 1, &dto.SubmitChangeRequest{
-		Comment: "review",
+	f := newGovernedChangeFixture(t, "normal")
+	f.client.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if _, ok := m.(*ent.AuditLogMutation); ok {
+				return nil, errors.New("receipt unavailable")
+			}
+			return next.Mutate(ctx, m)
+		})
 	})
+	_, err := f.svc.ApplyCommand(f.ctx, f.command("submit", f.requester))
+	require.ErrorContains(t, err, "receipt unavailable")
+	require.Equal(t, "draft", f.client.Ticket.GetX(f.ctx, f.record.WorkItemID).Status)
+	require.Zero(t, f.client.ProcessInstance.Query().CountX(f.ctx))
 
-	require.ErrorContains(t, err, "提交变更审批失败")
-	require.Equal(t, "draft", repo.changes[1].Status)
-	require.Empty(t, repo.approvals)
 }
 
 // TestChangeController_GetRiskAssessment tests GET /api/v1/changes/:id/risk-assessment
 func TestChangeController_GetRiskAssessment(t *testing.T) {
-	r, _, repo := setupTestHandler(t)
+	f, r := newGovernedHandlerFixture(t)
 
-	// Create test data
-	change := createTestChange(repo, 1, 1)
-
-	req, _ := http.NewRequest("GET", "/api/v1/changes/"+strconv.Itoa(change.ID)+"/risk-assessment", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var response common.Response
-	err := json.Unmarshal(w.Body.Bytes(), &response)
+	_, err := f.client.ExecContext(f.ctx, `INSERT INTO change_risk_assessments(id,change_id,tenant_id,risk_description,created_at,updated_at) VALUES(1,$1,$2,'observed',$3,$3)`, f.record.ID, f.tenant, time.Now())
 	require.NoError(t, err)
-	assert.Equal(t, common.SuccessCode, response.Code)
+	w := governedHTTP(r, "GET", fmt.Sprintf("/api/v1/changes/%d/risk-assessment", f.record.ID), "", nil)
+	require.Equal(t, 200, w.Code, w.Body.String())
+	require.Contains(t, w.Body.String(), `"riskDescription":"observed"`)
+	require.Contains(t, w.Body.String(), `"riskLevel":"medium"`)
+
 }
 
 // Helper functions

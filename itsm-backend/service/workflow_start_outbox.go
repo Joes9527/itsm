@@ -99,6 +99,9 @@ func (h *WorkflowStartOutboxHandler) Deliver(ctx context.Context, event *ent.Out
 	if err != nil {
 		return blockOutboxDelivery("unsupported workflow business identity")
 	}
+	if policy.WorkflowStartTiming != authorization.WorkflowStartOnCreation {
+		return blockOutboxDelivery("workflow start belongs to the professional submit command")
+	}
 	actor, err := loadIntakeActor(ctx, h.directory, receipt)
 	if err != nil {
 		return err

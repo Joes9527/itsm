@@ -12,7 +12,7 @@ export interface CreateWorkItemResult {
   number: string;
   recordClass: WorkItemRecordClass;
   professionalReference: { type: string; id: number };
-  workflowStartStatus: 'active' | 'not_required' | 'pending' | 'manual_intervention_required';
+  workflowStartStatus: 'active' | 'awaiting_submit' | 'not_required' | 'pending' | 'manual_intervention_required';
   replayed: boolean;
 }
 export interface CreationRequestOptions {
@@ -34,6 +34,7 @@ export function createWorkItem(
 export function creationReceiptMessage(receipt: CreateWorkItemResult): string {
   const statuses = {
     active: '流程已启动',
+    awaiting_submit: '等待提交后启动流程',
     not_required: '无需启动流程',
     pending: '流程启动排队中',
     manual_intervention_required: '流程启动需要人工处理',

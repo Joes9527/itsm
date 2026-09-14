@@ -63,6 +63,7 @@ export const ChangeRiskLabels: Record<ChangeRisk, string> = {
 
 // 向后兼容的映射
 export const ChangeStatusLabels: Record<ChangeStatus, string> = {
+  [ChangeStatus.SUBMITTED]: '待审批',
   [ChangeStatus.DRAFT]: '草稿',
   [ChangeStatus.PENDING]: '待审批',
   [ChangeStatus.APPROVED]: '已批准',

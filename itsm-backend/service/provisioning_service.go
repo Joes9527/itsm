@@ -94,7 +94,10 @@ func (s *ProvisioningService) CreateTaskFromServiceRequest(ctx context.Context, 
 
 	approved, err := tx.ProcessApprovalDecision.Query().
 		Where(
-			processapprovaldecision.BusinessType("ticket"),
+			// 审批决策由流程引擎按实例业务类型写入（bpmn_process_engine.go: businessType :=
+			// instance.BusinessType），ServiceRequest 实例恒为 service_request_item；
+			// 这里必须查同一个值，否则该 Exist 永远不成立、手工交付被永久拒绝。
+			processapprovaldecision.BusinessType(string(dto.BusinessTypeServiceRequestItem)),
 			processapprovaldecision.BusinessID(strconv.Itoa(sr.TicketID)),
 			processapprovaldecision.Decision("approved"),
 			processapprovaldecision.TenantID(tenantID),

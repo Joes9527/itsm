@@ -26,7 +26,7 @@ describe('ApprovalWorkflowPanel — 真实审批决策展示', () => {
         taskId: 'TASK-1',
         processDefinitionKey: 'ticket_general_flow',
         nodeKey: 'Activity_Approve',
-        businessType: 'ticket',
+        businessType: 'generic',
         businessId: '5',
         actorId: 7,
         actorName: '张三',

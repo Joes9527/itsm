@@ -2,20 +2,18 @@ package problem
 
 import (
 	"context"
-	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/intakerequest"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/workitemrelation"
 	creation "itsm-backend/handlers/common/workitemcreation"
 )
 
 type problemCreationDraft struct {
-	Input            creation.ProblemInput
-	SourceWorkItemID int
+	Input   creation.ProblemInput
+	Sources []*ent.Incident
 }
 
 func (*Service) RecordClass() string { return creation.RecordClassProblem }
@@ -33,12 +31,18 @@ func (s *Service) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedI
 	}
 	plan := creation.NewPlan(in, "open", priority, in.Identity.Channel)
 	draft := problemCreationDraft{}
-	if input.SourceIncidentID != nil {
-		source, err := prepareIncidentConversion(ctx, tx, in.Identity, *input.SourceIncidentID)
+	for _, relation := range in.Command.SourceRelations {
+		if relation.RelationType != "investigated_by" {
+			continue
+		}
+		source, err := prepareIncidentConversion(ctx, tx, in.Identity, relation.SourceWorkItemID)
 		if err != nil {
 			return nil, err
 		}
-		draft.SourceWorkItemID = source.WorkItemID
+		draft.Sources = append(draft.Sources, source)
+		if len(in.Command.SourceRelations) != 1 {
+			continue
+		}
 		if plan.WorkItem.Title == "" {
 			plan.WorkItem.Title = "问题-" + source.Edges.WorkItem.Title
 		}
@@ -73,8 +77,8 @@ func (*Service) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.Ticke
 	if err != nil {
 		return nil, creation.NewInfrastructureUnavailable("could not create problem extension", err)
 	}
-	if input.SourceIncidentID != nil {
-		if err := writeIncidentConversion(ctx, tx, plan, *input.SourceIncidentID, draft.SourceWorkItemID, record.ID, item.ID); err != nil {
+	for _, source := range draft.Sources {
+		if err := writeIncidentConversion(ctx, tx, plan, source.ID, source.WorkItemID, record.ID, item.ID); err != nil {
 			return nil, err
 		}
 	}
@@ -84,13 +88,8 @@ func (*Service) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.Ticke
 
 var _ creation.ProfessionalCreator = (*Service)(nil)
 
-func prepareIncidentConversion(ctx context.Context, tx *ent.Tx, identity creation.Identity, incidentID int) (*ent.Incident, error) {
-	for _, action := range []string{"read", "write"} {
-		if err := authorization.RequireCurrentPermission(ctx, tx, identity, "incident", action); err != nil {
-			return nil, err
-		}
-	}
-	source, err := tx.Incident.Query().Where(incident.IDEQ(incidentID), incident.HasWorkItemWith(ticket.TenantIDEQ(identity.TenantID), ticket.RecordClassEQ("incident"), ticket.DeletedAtIsNil())).WithWorkItem().Only(ctx)
+func prepareIncidentConversion(ctx context.Context, tx *ent.Tx, identity creation.Identity, sourceWorkItemID int) (*ent.Incident, error) {
+	source, err := tx.Incident.Query().Where(incident.WorkItemIDEQ(sourceWorkItemID), incident.HasWorkItemWith(ticket.TenantIDEQ(identity.TenantID), ticket.RecordClassEQ("incident"), ticket.DeletedAtIsNil())).WithWorkItem().Only(ctx)
 	if ent.IsNotFound(err) {
 		return nil, creation.NewReferenceNotFound("source incident is unavailable", err)
 	}
@@ -100,28 +99,20 @@ func prepareIncidentConversion(ctx context.Context, tx *ent.Tx, identity creatio
 	if common.IsIncidentFinalStatus(source.Edges.WorkItem.Status) {
 		return nil, creation.NewDomainValidationFailed("final incident cannot be converted to a problem", nil)
 	}
-	exists, err := tx.WorkItemRelation.Query().Where(workitemrelation.TenantIDEQ(identity.TenantID), workitemrelation.SourceWorkItemIDEQ(source.WorkItemID), workitemrelation.RelationTypeEQ(common.WorkItemRelationInvestigatedBy), workitemrelation.DeletedAtIsNil()).Exist(ctx)
-	if err != nil {
-		return nil, creation.NewInfrastructureUnavailable("could not check incident relation", err)
-	}
-	if exists {
-		return nil, creation.NewDomainValidationFailed("incident is already investigated by a problem", nil)
-	}
 	return source, nil
 }
 
 func writeIncidentConversion(ctx context.Context, tx *ent.Tx, plan *creation.CreationPlan, incidentID, sourceWorkItemID, problemID, workItemID int) error {
 	identity := plan.Resolved.Identity
-	_, err := tx.WorkItemRelation.Create().SetTenantID(identity.TenantID).SetSourceWorkItemID(sourceWorkItemID).SetTargetWorkItemID(workItemID).SetRelationType(common.WorkItemRelationInvestigatedBy).SetCreatedByID(identity.ActorID).Save(ctx)
-	if err != nil {
-		return creation.NewInfrastructureUnavailable("could not create incident problem relation", err)
-	}
-	_, err = tx.IncidentEvent.Create().SetIncidentID(incidentID).SetTenantID(identity.TenantID).SetUserID(identity.ActorID).SetSource("incident_conversion").SetEventType("conversion").SetEventName("convert_to_problem").SetData(map[string]any{"problem_id": problemID, "problem_work_item_id": workItemID}).Save(ctx)
+	_, err := tx.IncidentEvent.Create().SetIncidentID(incidentID).SetTenantID(identity.TenantID).SetUserID(identity.ActorID).SetSource("incident_conversion").SetEventType("conversion").SetEventName("convert_to_problem").SetData(map[string]any{"problem_id": problemID, "problem_work_item_id": workItemID}).Save(ctx)
 	if err != nil {
 		return creation.NewInfrastructureUnavailable("could not create incident conversion timeline", err)
 	}
 	command := plan.Resolved.Command
-	request := dto.ConvertIncidentToProblemRequest{Title: command.Title, Description: command.Description, RootCause: command.Problem.RootCause}
+	request := dto.ConvertIncidentToProblemRequest{Title: command.Title, Description: command.Description}
+	if command.Problem != nil {
+		request.RootCause = command.Problem.RootCause
+	}
 	receipt, err := tx.IntakeRequest.Query().Where(intakerequest.TenantIDEQ(identity.TenantID), intakerequest.ActorIDEQ(identity.ActorID), intakerequest.ActorTenantIDEQ(identity.ActorTenantID), intakerequest.ChannelEQ(identity.Channel), intakerequest.IdempotencyKeyEQ(plan.Resolved.Command.IdempotencyKey)).Only(ctx)
 	if err != nil {
 		return creation.NewInfrastructureUnavailable("conversion receipt provenance unavailable", err)
