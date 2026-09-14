@@ -19,7 +19,7 @@
 
 ## 未完成项
 
-1. 产品默认 `ticket_types` 定向初始化：开发中。只补产品预置配置，真实管理员授权，原子审计，不运行整套 seed，不修改身份/初始化账本。数据库计数和 Prepare 测试不等于新建E2E。
+1. 产品默认 `ticket_types` 定向初始化代码已完成并独立复审：源提交 `8ba80e186322d878d6801ff95b320b718f5fc356`，本分支集成 `99909766`。真实隔离 PG 6 顶层测试与 9 子例、CLI 2 例通过；真实 Prepare 消费验证通过。只补产品预置配置，真实有效管理员授权，原子审计，不运行整套 seed，不修改身份/初始化账本。**尚未在 G-A 执行，目标仍为 0 类型**；数据库计数和 Prepare 测试不等于新建E2E。
 2. SLA 实际启用：已确认 G-A 七个流程 binding 的 `sla_policy_id` 全空，当前创建路径不生成 deadline。已向用户询问采用现有 SLA 覆盖范围（Incident四档、Change两档、服务请求标准；其它类别暂不计时），回答前不应用依赖配置。
 3. 运行时重新准入：G-A 的 `ga_runtime` 当前只有四个核心表的 DML；只读抽查配置、类型、流程、评论、附件及审计表均无该角色权限。这是 G-A 原结构准入范围，不能通过改用 owner 启动来绕过。需要明确最小运行权限并验证新的 EnvironmentRevision。
 4. 实际新建、分派、规范流程、SLA、重启恢复验收；G-B 尚未通过，任务三物理PG合并未启动。
@@ -29,3 +29,12 @@
 旧候选应用和存储容器仍为停止状态，本次未启动。G-A目标未写入修复后的配置或产品类型。隔离测试实例 `gb-remediation-test-pg-20260914` 的三个测试库已登记到开发文档，均不能作为业务目标。
 
 目前不合 main，不清理源数据，不修改旧交付 worktree；所有新运行时集成与验证均在独立目录完成。
+
+
+## 首批里程碑（2026-09-14，未超过60分钟）
+
+迁移审查 R1–R8 已关闭；SLA 日历和产品类型初始化代码完成且独立复审通过，并合入本独立分支。下一阶段仍依赖用户确认 SLA 覆盖范围，不推定未回复为批准。新 EnvironmentRevision、目标受控写入、应用启动与真实验收尚未执行。
+
+绑定选择的独立证据位于 `/home/administrator/.local/state/itsm-task2-remediation-20260914/sla-binding-evidence/`：固定0788源码，四档优先级精确匹配、Change normal/emergency、默认绑定不截获均通过；显式流程key路径的SLA为空也已复现。G-A的八个默认目录流程key均为空，不触发此旁路；后续显式配置流程key需另行处理。
+
+合并后验证：go build ./...、go test ./service -run ^TestSLACalendar -count=1、go test ./cmd/initialize_ticket_types -count=1 均通过。未运行或宣称全后端测试通过；旧基线全量测试差额见工具修复证据。
