@@ -18,7 +18,7 @@
 | 路径 | 已有实现与历史证据 | 本次结论 |
 | --- | --- | --- |
 | 门户与目录建单 | `itsm-frontend/src/app/(main)/portal/page.tsx` 读取发布目录；`service-catalog/request/[id]/page.tsx` 经 ServiceCatalogApi 提交 `/service-requests`，携带确认版本及字段，按 receipt.workItemId 导航；后端 `handlers/service_request/handler.go` 进入统一 Intake。`e9d5f52c` 修门户真实数据，`25306d3f` 统一创建，`6f106fd2` 保留重载表单答案 | 已实现，应保护和回归；不是新建 E2E 项目 |
-| 门户搜索 | `itsm-frontend/src/components/portal/HeroSearchBar.tsx:47` 使用 GET knowledge/search，但 `itsm-backend/router/router.go` 注册 POST，handler 要求 JSON query；同组件固定 VPN/Copilot 目录、92% 匹配度和本地 setState 的“已记录自愈成功” | `b838464b` 初次角色 UI 接入的未完成实现，此后未改；是本轮 UI 完成度问题，不是后来后端修改造成的回归。下一项修复 |
+| 门户搜索 | `itsm-frontend/src/components/portal/HeroSearchBar.tsx:47` 使用 GET knowledge/search，但 `itsm-backend/router/router.go` 注册 POST，handler 要求 JSON query；同组件固定 VPN/Copilot 目录、92% 匹配度和本地 setState 的“已记录自愈成功” | `b838464b` 初次角色 UI 接入的未完成实现，此后未改；是本轮 UI 完成度问题，不是后来后端修改造成的回归。按用户后续确认移除演示行为，知识能力转入 KAF backlog |
 | 搜索失败后的建单可达性 | HeroSearchBar 的人工提单入口依赖有搜索结果；读取失败只有 console.error，未隔离迟到响应 | 搜索失败可隐藏该入口，但门户目录卡片仍可提单；不能夸大为全站无法建单 |
 | Helpdesk 列表与详情 | 原 `/tickets`、TicketList、TicketDetail 仍在；分配、评论、附件、编辑调用真实 API。详情状态编辑经 PUT tickets/:id；TicketService.UpdateTicket 校验流转及解决方案，拒绝以普通更新推进审批 | 不能因为缺独立 resolve 按钮就断言没有处理能力。前端 isValidTransition 从 `f1e00efa` 已存在，不能归因于当前工作台重构；专业流转的实际操作仍需按场景验证 |
 | 工程师角色入口 | `/workspace/tickets` 的原型来自 `b838464b`；2A 已替换为本人真实分页队列并复用 TicketDetail | 已完成的 UI 接入，保留 2A；历史验收覆盖队列、评论、转派后移除与 guest 拒绝，不代表所有专业生命周期均已浏览器验收 |
@@ -37,11 +37,11 @@
 - [x] 1A：附件、读取状态、分配搜索恢复，见[原验收](2026-09-14-ui-workbench-1a-recovery.md)。PR #19 尚不等同已合并。
 - [x] 2A：工程师真实队列与详情复用，见[原验收](2026-09-14-engineer-workspace-real-data.md)。PR #20 依赖 #19；合并时先 #19，再调整 #20 base 并检查差异。
 - [x] 核对建单、处理、审批已有设计和实现，修订优先级。
-- [ ] 下一项：修复 HeroSearchBar 的真实知识搜索接入，复用 `src/lib/api/knowledge-base-api.ts` 的现有搜索方法与 DTO；移除硬编码目录和虚假置信度/持久化成功。真实目录复用既有发布目录入口，不新建关键词推荐器；没有推荐契约时直接提供目录导航。人工提单入口在空结果和失败时仍可达。增加 loading/empty/error/retry、键盘可用性及查询/会话/租户变化后的迟到响应隔离。不得新增自愈反馈服务或 AI 引擎。
+- [x] 当前项：保留门户布局，搜索位置明确显示暂未开放；“提交问题 / 寻求帮助”与“申请服务”始终可达，通用求助通过 `/tickets/create?entry=help` 进入现有普通工单表单，跳过专业类型选择，分类/模板可选，由 Helpdesk 后续分类；此入口隐藏已有 AI 分类卡片。移除硬编码推荐、固定匹配度、虚假自愈成功和本轮尝试的知识查询接入。沿用真实目录、表单和近期请求，聚焦可访问性、状态反馈与移动端操作。KB 与智能建单均转入下述 KAF 集成 backlog。
 - [ ] 然后：核验并修复审批中心待办遗漏和审批/普通任务展示边界，沿用已有分页、任务类型、claim/decision 契约；不把所有 user task 改成审批任务，不扩大角色授权。为门户增加明确的完整审批列表入口。测试超过 100 条及混合状态、非审批任务、认领、驳回理由、失败重试和后端拒绝。后端字段若不足，先记录具体契约阻塞，不前端猜测。
 - [ ] 最后：在上述 UI 修复版本复用三角色真实路径验收。end user 从门户进入目录并持久化建单；实际 Helpdesk 账号打开可见工单、处理/评论/附件并重新读取；被配置的审批人在既有流程完成认领与决策并核对历史。按工单类别验证合法处理动作，不将审批绕到普通状态更新。发现的问题先分类，再补直接阻塞 UI 操作的修复。
 
-每个实现交付使用独立可审查变更和相邻行为测试。聚焦回归之后运行相称的类型、静态、构建及契约门禁，完成独立审查再推进下一项。本轮仅更新文档，不宣称上述未执行项通过。
+每个实现交付使用独立可审查变更和相邻行为测试。聚焦回归之后运行相称的类型、静态、构建及契约门禁，完成独立审查再推进下一项。初次复核仅更新文档；后续实现与验证另记于下文，不宣称未执行项通过。
 
 ## 4. 环境、验证与完成边界
 
@@ -50,3 +50,22 @@
 本轮源码/历史复核无共享 API 写入。新运行窄测试：门户与目录 API 3 suites / 34 tests；审批组件、审批中心、BPMN API 和 persona 4 suites / 21 tests 均通过。首次误用 Jest 复数筛选参数启动的扩大运行已中止，不作为验收证据；该运行中申请页 15 tests PASS 仅作观察。存在 standalone 模块名碰撞和 AntD 弃用提示。Helpdesk 的 TicketDetail、workflow-state-machine、useAssignedTickets 窄测试 3 suites / 44 tests 通过，退出码 0。本轮三个定向运行合计 10 suites / 99 tests 通过；不代表全局覆盖率门禁。
 
 未重新执行浏览器或后端流程测试；历史验收不能证明当前 API 8080 源码版本、所有角色或所有专业流程。未运行全量构建，因为本次变更仅文档；1A/2A 的完整门禁仍以各自记录为准。
+
+## 5. KAF 集成 backlog（2026-09-14 用户确认）
+
+- 状态：backlog，暂不实施；不影响上述核心 UI 交付。
+- KB / 知识搜索由 KAF 提供。本轮不建设 ITSM 自有搜索、推荐、自愈反馈或检索引擎，也不接入现有知识查询作为临时替代。门户预留原位置并诚实显示未开放；已有其他页面的知识功能不在本次变更范围。
+- 智能建单由 KAF 提供。本轮不深入意图识别、智能填表、自动分类等场景，保留手工求助及目录申请。后续复用已有 KAF → 统一 Intake 设计与验收资产。
+- 集成准入时再核验 KAF 的真实契约、身份/租户/可见范围、请求上下文、错误反馈、结果来源与审计。知识检索需核验检索前与输出前权限过滤；建单副作用继续通过既有 Intake/领域流程，不新建审批或状态机。
+- 集成验收包括真实知识结果、空/失败状态、跨身份结果隔离，以及用户确认建单、唯一 WorkItem 回执与重试语义。本轮不实现这些能力，不展示模拟结果或伪造成功。
+
+产品约束：用户认可现有员工门户布局；参考 Freshservice/HaloITSM/Jira Service Management 的入口与反馈实践，保持搜索与提单并列，不强制先搜索，也不要求员工先掌握 ITSM 分类。
+
+### 门户入口修订验证
+
+- 分支：`codex/fix/portal-search-entry`，基于文档提交 `49b022a9`。仅修改门户、现有建单页入口模式、相邻测试与浏览器导航用例；无后端/API/权限策略变更。
+- HeroSearchBar 不再调用 KB 或 AI；保留搜索区域的未开放说明及两条真实导航。求助模式只显式选择已有普通工单目标，不推断专业分类、不改变创建回执或后端授权。
+- TDD：不可用搜索状态和直接求助表单用例先失败；修复后 4 suites / 19 tests 通过，包含无分类/模板时提交标题与描述、普通工单 payload 与 WorkItem 回执跳转。类型检查通过；lint 无错误，保留 BPMNDesigner 既有未使用 eslint-disable 警告；最终生产构建通过。
+- 独立审查提出求助入口仍要求专业类型选择，已修复并复审，无剩余发现。
+- Chromium 导航用例 `tests/e2e/flows/portal-help-entry.spec.ts` 1 passed：管理员登录当前 API，390/1440 宽度无横向溢出，键盘进入普通工单表单、AI 卡片不显示、目录跳转正常，无 pageerror/知识搜索请求。检查了移动端截图。此验证不替代 end user/Helpdesk/审批三角色真实流程验收。
+- 浏览器服务为本分支最终生产构建，私有 3016 前端、3017 临时同源代理到现有 8080 API；未替换共享服务。仅登录和读取/导航，无建单、审批、KB/KAF 调用或数据库迁移。浏览器完成后停止本次私有服务。截图与日志留系统临时目录，不提交。

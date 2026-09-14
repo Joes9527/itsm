@@ -8,7 +8,7 @@
 - Worktree：`/home/administrator/project/itsm/.worktrees/ui-workbench-completion`
 - 当前交付：1A 已完成并验收；1B 尚未满足准入条件，第二阶段 2A 工程师个人队列与详情复用已完成
 
-> 当前后续顺序：优先完成 end user 建单入口、Helpdesk 处理体验与 IT 管理层审批 UI。已有 E2E 无需重设计；主管 2B 暂缓。最新证据分类及执行顺序见 [UI 核心路径复核与修复计划](../plans/2026-09-14-ui-core-journey-recovery.md)，其优先级取代本文原阶段排列，1A/2A 已完成状态和 1B 准入条件保持有效。
+> 当前后续顺序：优先完成 end user 建单入口、Helpdesk 处理体验与 IT 管理层审批 UI。已有 E2E 无需重设计；主管 2B 暂缓。KB 与智能建单由 KAF 提供，列为后续集成 backlog；本轮关注界面、真实数据与用户体验。最新证据分类及执行顺序见 [UI 核心路径复核与修复计划](../plans/2026-09-14-ui-core-journey-recovery.md)，其优先级取代本文原阶段排列，1A/2A 已完成状态和 1B 准入条件保持有效。
 
 ## 1. 决策背景与权威来源
 

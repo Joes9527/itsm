@@ -145,6 +145,7 @@ export default function CreateTicketPage() {
   const creation = useWorkItemCreation();
   const [genericChosen, setGenericChosen] = useState(false);
   const searchParams = useSearchParams();
+  const helpEntry = searchParams.get('entry') === 'help';
   const { message } = App.useApp();
   const { t } = useI18n();
   const [form] = Form.useForm();
@@ -419,7 +420,7 @@ export default function CreateTicketPage() {
   // --- 渲染 ---
   const isLoading = categoriesLoading || templatesLoading;
 
-  if (!genericChosen) return <Card className="m-6" title="选择创建目标">
+  if (!genericChosen && !helpEntry) return <Card className="m-6" title="选择创建目标">
     <p className="mb-4">先选择工作类型，再填写对应表单。模板名称和分类不会决定专业类型。</p>
     <Space wrap>
       <Button onClick={() => setGenericChosen(true)}>普通工单</Button>
@@ -432,7 +433,7 @@ export default function CreateTicketPage() {
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-6" role="main" aria-label="创建工单页面">
-      <Alert type="info" title="当前目标：普通工单" description="模板提供普通工单字段；专业工作请返回创建入口重新选择。" />
+      <Alert type="info" title={helpEntry ? "提交问题 / 寻求帮助" : "当前目标：普通工单"} description={helpEntry ? "描述您遇到的问题，服务台将协助分类和处理。" : "模板提供普通工单字段；专业工作请返回创建入口重新选择。"} />
       <CreationAttempts creation={creation} />
       <Space orientation="vertical" size={16} style={{ width: '100%' }}>
         {/* 页面头部 */}
@@ -441,7 +442,7 @@ export default function CreateTicketPage() {
             <Button icon={<ArrowLeft className="w-4 h-4" />} onClick={() => router.back()}>返回</Button>
             <div style={{ flex: 1 }}>
               <Title level={4} style={{ marginBottom: 4 }}>新建工单</Title>
-              <Text type="secondary">选择服务分类 → 选择模板 → 填写信息 → 提交</Text>
+              <Text type="secondary">{helpEntry ? "填写问题描述并提交，分类和模板可选。" : "选择服务分类 → 选择模板 → 填写信息 → 提交"}</Text>
             </div>
           </Space>
         </Card>
@@ -574,7 +575,7 @@ export default function CreateTicketPage() {
                     type="info" showIcon className="mb-4"
                     message={activeSelection
                       ? '标题/描述留空将根据所选模板自动生成。'
-                      : '请先从左侧选择服务分类，或直接选择模板开始。'}
+                      : helpEntry ? '直接填写标题与描述即可，分类和模板可选。' : '请先从左侧选择服务分类，或直接选择模板开始。'}
                   />
 
                   <Form.Item
@@ -676,7 +677,7 @@ export default function CreateTicketPage() {
                 </Space>
 
                 {/* AI 智能分类 */}
-                <Card size="small" className="mt-4"
+                {!helpEntry && <Card size="small" className="mt-4"
                   title={<span className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-yellow-500" />AI 智能分类</span>}
                 >
                   <Spin spinning={aiLoading}>
@@ -694,7 +695,7 @@ export default function CreateTicketPage() {
                   <Button type="default" icon={<Sparkles className="w-4 h-4" />} onClick={handleAITriage} loading={aiLoading} className="mt-2" block>
                     获取 AI 建议
                   </Button>
-                </Card>
+                </Card>}
 
                 {/* Cloud Ops 预设（折叠，不干扰主流程） */}
                 <Collapse

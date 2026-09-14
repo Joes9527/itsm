@@ -135,13 +135,13 @@ export default function PortalPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
-      {/* 1. 欢迎横幅 & 智能自愈搜索框 */}
+      {/* 1. 欢迎横幅与服务入口 */}
       <div className="text-center pt-4">
         <h1 className="text-3xl font-extrabold text-slate-900 dark:text-slate-50 tracking-tight">
           您好，{userName}！有什么我们可以帮您？
         </h1>
         <p className="text-sm text-slate-500 mt-1 max-w-xl mx-auto">
-          快速搜索企业知识库自愈排障、提报 IT 服务申请或实时跟踪您的工单进展
+          提交问题、申请 IT 服务，或跟踪您的工单处理进展
         </p>
         <HeroSearchBar />
       </div>
