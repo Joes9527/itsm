@@ -2,6 +2,8 @@
 
 > 在维护者的 Windows/WSL 联调环境工作前，先读[本机开发环境](development-environment.md)。其中记录已迁移源码入口、固定运行副本、3001/8080/5173/8000 端口、ITSM 专用修复二进制和维护约束。下面的通用安装/初始化命令不用于直接重建现有验收实例。
 
+> **数据库操作入口（2026-09-14）：**先读[当前数据库状态与 Agent 边界](development-environment.md#agent-必读当前数据库状态2026-09-14)和[全量数据库清单](review/2026-09-14-postgresql-database-register.md)。任务二的唯一 ITSM 目标为 `ga-itsm-20260914 / itsm_ga_ready / public`；G-A 版本、保留源、备份范围及未决项以该状态页和固定交接为准。下列通用命令不是现有共享库的执行授权。
+
 本文档汇集 ITSM 项目的日常开发命令、Docker 部署配置、历史分支复盘教训与通用规范。
 
 ---

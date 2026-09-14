@@ -1,6 +1,7 @@
 # ITSM 文档中心
 
 - [KAF / ITSM 本机 WSL 开发环境](development-environment.md)：当前源码入口、运行关联、启动来源、共享基础设施和回滚材料。
+- [本地 PostgreSQL 数据库总清单](review/2026-09-14-postgresql-database-register.md)：实例、库名、用途、任务归属及待核项；操作边界见[开发环境状态](development-environment.md)。
 
 这个目录包含产品说明、部署运维、开发协作、测试报告和阶段性评审文档。为了避免新用户在大量历史文档中迷路，建议先从本页按角色阅读。
 
