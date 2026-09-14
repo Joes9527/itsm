@@ -58,7 +58,7 @@
 
 'use strict';
 
-const { execSync } = require('node:child_process');
+const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const reviewedMappings = require('./test-coverage-mappings.json');
@@ -152,8 +152,8 @@ function changedFiles(base, head) {
   // about modified-or-added files for test-coverage purposes.
   // `--name-only` keeps the output tiny and easy to parse.
   try {
-    const out = execSync(
-      `git diff --name-only --diff-filter=ACMR ${shellQuote(base)} ${shellQuote(head)}`,
+    const out = execFileSync(
+      'git', ['diff', '--name-only', '--diff-filter=ACMR', base, head, '--'],
       { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
     );
     return out
@@ -164,8 +164,8 @@ function changedFiles(base, head) {
     // Fall back to `git log` if the base ref doesn't exist (initial branch).
     if (/unknown revision|not a tree/.test(String(err.stderr || err.message))) {
       try {
-        const out = execSync(
-          `git log --pretty=format: --name-only --diff-filter=ACMR ${shellQuote(head)}`,
+        const out = execFileSync(
+          'git', ['log', '--pretty=format:', '--name-only', '--diff-filter=ACMR', head, '--'],
           { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
         );
         return Array.from(new Set(out.split('\n').map((s) => s.trim()).filter(Boolean)));
@@ -175,12 +175,6 @@ function changedFiles(base, head) {
     }
     return null;
   }
-}
-
-function shellQuote(s) {
-  // Git refs can include characters that the shell would interpret. We avoid
-  // spawning a shell so this is mostly paranoia, but escape anyway.
-  return `'${String(s).replace(/'/g, "'\\''")}'`;
 }
 
 // ---------- classification ----------
@@ -332,8 +326,8 @@ function parseRemovalOnlyFiles(numstat) {
 }
 function removalOnlyFiles(base, head) {
   try {
-    return parseRemovalOnlyFiles(execSync(
-      `git diff --numstat ${shellQuote(base)} ${shellQuote(head)}`,
+    return parseRemovalOnlyFiles(execFileSync(
+      'git', ['diff', '--numstat', base, head, '--'],
       { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
     ));
   } catch { return new Set(); }
