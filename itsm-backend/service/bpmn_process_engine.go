@@ -3602,8 +3602,11 @@ func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksR
 			return nil, 0, common.NewForbiddenError("无权读取任务")
 		}
 		actor, err = s.participationResolver.resolveActor(ctx, scope)
-		if err != nil {
+		if ent.IsNotFound(err) {
 			return nil, 0, common.NewForbiddenError("无权读取任务")
+		}
+		if err != nil {
+			return nil, 0, err
 		}
 	} else if req.UserID > 0 {
 		requestedScope := scope
@@ -3665,7 +3668,10 @@ func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksR
 	for _, task := range tasks {
 		if task.AssigneeSource != "" {
 			if err := s.authorizeTaskRead(ctx, task, scope); err != nil {
-				continue
+				if isBPMNTaskAccessDenial(err) {
+					continue
+				}
+				return nil, 0, err
 			}
 			projected, err := s.engine.projectTaskAssignment(ctx, task)
 			if err != nil {
@@ -3674,8 +3680,14 @@ func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksR
 			if actor != nil && !s.participationResolver.matchesTask(projected, actor) {
 				continue
 			}
-			if actor == nil && req.Assignee != "" && !s.engine.boundAssignmentMatchesIdentity(ctx, projected, req.Assignee) {
-				continue
+			if actor == nil && req.Assignee != "" {
+				matches, err := s.engine.boundAssignmentMatchesIdentity(ctx, projected, req.Assignee)
+				if err != nil {
+					return nil, 0, err
+				}
+				if !matches {
+					continue
+				}
 			}
 			filtered = append(filtered, projected)
 		} else if actor == nil || s.participationResolver.matchesTask(task, actor) {

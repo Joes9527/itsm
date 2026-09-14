@@ -128,7 +128,10 @@ func (r *bpmnParticipationResolver) participatingInstanceIDs(ctx context.Context
 			engine := &CustomProcessEngine{client: r.client}
 			scope := BPMNAccessScope{UserID: actor.UserID, TenantID: actor.TenantID}
 			if err := engine.authorizeBoundTask(ctx, r.client, task, scope, ""); err != nil {
-				continue
+				if isBPMNTaskAccessDenial(err) {
+					continue
+				}
+				return nil, err
 			}
 		} else if !r.matchesTask(task, actor) {
 			continue

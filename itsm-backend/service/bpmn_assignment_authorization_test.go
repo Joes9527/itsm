@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"testing"
 
@@ -308,4 +309,121 @@ func TestBPMNBoundAssignmentCancellationConsumesExistingAuditAction(t *testing.T
 	require.NoError(t, err)
 	require.Equal(t, strconv.Itoa(f.actor.ID), projection.Assignee)
 	require.Equal(t, f.outsider.ID, projection.ActorID)
+}
+
+func installBoundAssignmentReadFault(f *bpmnAuthorizationFixture, task *ent.ProcessTask, stage string, fault error) {
+	listed := false
+	userQueries := 0
+	f.client.ProcessTask.Intercept(ent.InterceptFunc(func(next ent.Querier) ent.Querier {
+		return ent.QuerierFunc(func(ctx context.Context, q ent.Query) (ent.Value, error) {
+			value, err := next.Query(ctx, q)
+			if err == nil {
+				if rows, ok := value.([]*ent.ProcessTask); ok {
+					listed = true
+					for _, row := range rows {
+						if row.ID == task.ID && stage == "source" {
+							row.AssigneeSource = "unsupported_source"
+						}
+					}
+				}
+			}
+			return value, err
+		})
+	}))
+	fail := ent.InterceptFunc(func(next ent.Querier) ent.Querier {
+		return ent.QuerierFunc(func(ctx context.Context, q ent.Query) (ent.Value, error) {
+			if listed {
+				if stage == "owner" || stage == "identity" {
+					userQueries++
+					target := 2
+					if stage == "identity" {
+						target = 4
+					}
+					if userQueries == target {
+						return nil, fault
+					}
+				} else {
+					return nil, fault
+				}
+			}
+			return next.Query(ctx, q)
+		})
+	})
+	switch stage {
+	case "actor", "owner", "identity":
+		f.client.User.Intercept(fail)
+	case "instance":
+		f.client.ProcessInstance.Intercept(fail)
+	case "workitem":
+		f.client.Ticket.Intercept(fail)
+	case "audit":
+		f.client.ProcessAuditLog.Intercept(fail)
+	}
+}
+
+func TestBPMNBoundAssignmentListPropagatesResolutionFailure(t *testing.T) {
+	for _, api := range []string{"list", "views", "statistics"} {
+		for _, stage := range []string{"source", "actor", "owner", "identity", "instance", "workitem", "audit"} {
+			for _, failure := range []string{"storage", "cancelled"} {
+				t.Run(api+"/"+stage+"/"+failure, func(t *testing.T) {
+					f := newBPMNAuthorizationFixture(t)
+					grantBoundPermissions(t, f, f.actor, "service_request", "read", "task", "read")
+					_, task := seedBoundAssignment(t, f, "read-failure")
+					f.seedNonParticipantApprovalTask(t, "earlier-list-row")
+					if stage == "audit" {
+						task = f.client.ProcessTask.UpdateOne(task).SetStatus("completed").SaveX(f.userCtx)
+					}
+					fault := errors.New("owned fixture storage failure")
+					if failure == "cancelled" {
+						fault = context.Canceled
+					}
+					installBoundAssignmentReadFault(f, task, stage, fault)
+					ctx := WithBPMNAccessScope(f.userCtx, BPMNAccessScope{UserID: f.actor.ID, TenantID: f.tenant.ID, CanReadAllTasks: true})
+					var err error
+					listRequest := &ListUserTasksRequest{}
+					statsRequest := &TaskStatisticsRequest{}
+					if stage == "identity" {
+						listRequest.Assignee = f.actor.Username
+						statsRequest.Assignee = f.actor.Username
+					}
+					switch api {
+					case "list":
+						rows, total, listErr := f.engine.TaskService().ListUserTasks(ctx, listRequest)
+						err = listErr
+						require.Empty(t, rows)
+						require.Zero(t, total)
+					case "views":
+						rows, total, listErr := f.engine.TaskService().ListUserTaskViews(ctx, listRequest)
+						err = listErr
+						require.Empty(t, rows)
+						require.Zero(t, total)
+					case "statistics":
+						stats, statsErr := f.engine.TaskService().GetTaskStatistics(ctx, statsRequest)
+						err = statsErr
+						require.Nil(t, stats)
+					}
+					if stage == "source" {
+						require.ErrorContains(t, err, "unsupported")
+					} else {
+						require.ErrorIs(t, err, fault)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestBPMNBoundAssignmentMissingActorIsDenialNotPartialFailure(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	grantBoundPermissions(t, f, f.actor, "service_request", "read", "task", "read")
+	_, task := seedBoundAssignment(t, f, "missing-actor")
+	f.client.User.UpdateOne(f.actor).SetActive(false).SaveX(f.userCtx)
+	scope := BPMNAccessScope{UserID: f.actor.ID, TenantID: f.tenant.ID, CanReadAllTasks: true}
+	var denial *common.AppError
+	require.ErrorAs(t, f.engine.authorizeBoundTask(f.userCtx, f.client, task, scope, ""), &denial)
+	require.Equal(t, common.ErrCodeForbidden, denial.Code)
+	rows, total, err := f.engine.TaskService().ListUserTasks(WithBPMNAccessScope(f.userCtx, scope), &ListUserTasksRequest{})
+	require.NoError(t, err)
+	require.Empty(t, rows)
+	require.Zero(t, total)
 }

@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strconv"
 
 	"itsm-backend/authorization"
@@ -13,25 +15,45 @@ import (
 	"itsm-backend/ent/user"
 )
 
+// Only explicit actor/permission/participant denials may remove a row from a
+// successful result. A forbidden error from identity/configuration resolution
+// is not evidence of an ordinary row denial.
+type bpmnTaskAccessDenial struct{ cause error }
+
+func (e *bpmnTaskAccessDenial) Error() string { return e.cause.Error() }
+func (e *bpmnTaskAccessDenial) Unwrap() error { return e.cause }
+
+func denyBPMNTaskAccess(message string) error {
+	return &bpmnTaskAccessDenial{cause: common.NewForbiddenError(message)}
+}
+
+func isBPMNTaskAccessDenial(err error) bool {
+	var denial *bpmnTaskAccessDenial
+	return errors.As(err, &denial)
+}
+
 // authorizeBoundTask intersects existing tenant, row, professional and BPMN
 // authorities. Elevated task capabilities waive only the participant check.
 func (e *CustomProcessEngine) authorizeBoundTask(ctx context.Context, client *ent.Client, task *ent.ProcessTask, scope BPMNAccessScope, command BPMNTaskCommand) error {
 	if task == nil || task.TenantID != scope.TenantID {
-		return common.NewForbiddenError("bound task tenant mismatch")
+		return denyBPMNTaskAccess("bound task tenant mismatch")
 	}
 	if task.AssigneeSource != BPMNAssigneeSourceWorkItem {
-		return common.NewForbiddenError("unsupported task assignment source")
+		return fmt.Errorf("unsupported task assignment source %q", task.AssigneeSource)
 	}
 	switch command {
 	case "", BPMNTaskCommandComplete, BPMNTaskCommandCancel, BPMNTaskCommandSetVariables:
 	case BPMNTaskCommandAssign, BPMNTaskCommandClaim, BPMNTaskCommandDelegate, BPMNTaskCommandCreateCounterSign, BPMNTaskCommandVote:
-		return common.NewForbiddenError("bound task assignment is owned by WorkItem")
+		return denyBPMNTaskAccess("bound task assignment is owned by WorkItem")
 	default:
-		return common.NewForbiddenError("unsupported bound task command")
+		return fmt.Errorf("unsupported bound task command %q", command)
 	}
 	actor, err := loadTaskMutationActor(ctx, client, scope)
+	if ent.IsNotFound(err) {
+		return denyBPMNTaskAccess("bound task actor unavailable")
+	}
 	if err != nil {
-		return common.NewForbiddenError("bound task actor unavailable")
+		return err
 	}
 	item, policy, err := resolveBoundTaskWorkItem(ctx, client, task)
 	if err != nil {
@@ -42,7 +64,7 @@ func (e *CustomProcessEngine) authorizeBoundTask(ctx context.Context, client *en
 		return err
 	}
 	if !visible {
-		return common.NewForbiddenError("insufficient WorkItem row visibility")
+		return denyBPMNTaskAccess("insufficient WorkItem row visibility")
 	}
 	taskAction := "read"
 	elevated := scope.CanReadAllTasks
@@ -52,20 +74,20 @@ func (e *CustomProcessEngine) authorizeBoundTask(ctx context.Context, client *en
 	}
 	if !authorization.HasResourcePermission(client, actor.Role, "task", taskAction, scope.TenantID) ||
 		!authorization.HasResourcePermission(client, actor.Role, policy.Resource, "read", scope.TenantID) {
-		return common.NewForbiddenError("insufficient bound task read permission")
+		return denyBPMNTaskAccess("insufficient bound task read permission")
 	}
 	if command != "" && !authorization.HasResourcePermission(client, actor.Role, policy.Resource, policy.FulfillmentAction(), scope.TenantID) {
-		return common.NewForbiddenError("insufficient professional fulfillment permission")
+		return denyBPMNTaskAccess("insufficient professional fulfillment permission")
 	}
 	assignment, err := e.resolveTaskAssignment(ctx, client, task)
 	if err != nil {
 		return err
 	}
 	if command == BPMNTaskCommandComplete && assignment.State != "assigned" {
-		return common.NewForbiddenError("bound task has no available responsible user")
+		return denyBPMNTaskAccess("bound task has no available responsible user")
 	}
 	if !elevated && assignment.ResponsibleUserID != scope.UserID {
-		return common.NewForbiddenError("actor is not the current bound task participant")
+		return denyBPMNTaskAccess("actor is not the current bound task participant")
 	}
 	return nil
 }
@@ -106,16 +128,22 @@ func (s *bpmnTaskService) ProjectTaskView(ctx context.Context, task *ent.Process
 	return result, nil
 }
 
-func (e *CustomProcessEngine) boundAssignmentMatchesIdentity(ctx context.Context, task *ent.ProcessTask, identity string) bool {
+func (e *CustomProcessEngine) boundAssignmentMatchesIdentity(ctx context.Context, task *ent.ProcessTask, identity string) (bool, error) {
 	tokens := map[string]struct{}{}
 	addToken(tokens, identity)
 	if containsToken(task.Assignee, tokens) {
-		return true
+		return true, nil
 	}
 	id, err := strconv.Atoi(task.Assignee)
 	if err != nil || id <= 0 {
-		return false
+		return false, nil
 	}
 	owner, err := e.client.User.Query().Where(user.ID(id), user.TenantID(task.TenantID)).Only(ctx)
-	return err == nil && (containsToken(owner.Username, tokens) || containsToken(owner.Email, tokens))
+	if ent.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return containsToken(owner.Username, tokens) || containsToken(owner.Email, tokens), nil
 }
