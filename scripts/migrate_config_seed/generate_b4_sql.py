@@ -5,9 +5,9 @@ Writes ``sla_definitions.business_hours`` for tenant 1 from the reviewable data
 file ``data/b4_business_hours.json`` (work days Mon-Fri, 09:00-18:00 as chosen by
 the maintainer, Asia/Shanghai, 89 national holiday dates for 2024-2026).
 
-Known capability gaps (registered in the evidence doc, not worked around here):
-the runtime parser ignores ``time_zone``, cannot express a lunch break (single
-continuous period) and cannot express weekend make-up workdays.
+Requires the reviewed SLA runtime change e290fd97 or its integrated descendant
+for time_zone, makeup_days and bounded coverage. The original 0788 runtime does
+not consume those fields. First release retains one continuous 09:00-18:00 period.
 """
 
 from __future__ import annotations
