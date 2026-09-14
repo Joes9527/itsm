@@ -40,7 +40,7 @@ function runGenerator(seed) {
   const seedPath = path.join(dir, 'seed.json');
   const outPath = path.join(dir, 'out.sql');
   fs.writeFileSync(seedPath, JSON.stringify(seed), 'utf8');
-  execFileSync('python3', [generator, '--seed', seedPath, '--tenant-id', '1', '--created-by', '1', '--out', outPath], { encoding: 'utf8' });
+  execFileSync('python3', [generator, '--seed', seedPath, '--tenant-id', '1', '--created-by', '1', '--out', outPath, '--batch-context', path.join(__dirname, 'fixtures/batch-context.json')], { encoding: 'utf8' });
   return fs.readFileSync(outPath, 'utf8');
 }
 

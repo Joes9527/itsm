@@ -14,7 +14,7 @@ function run(businessHours) {
   const dataPath = path.join(dir, 'bh.json');
   fs.writeFileSync(dataPath, JSON.stringify(businessHours), 'utf8');
   const outPath = path.join(dir, 'out.sql');
-  execFileSync('python3', [generator, '--business-hours', dataPath, '--tenant-id', '1', '--out', outPath], { encoding: 'utf8' });
+  execFileSync('python3', [generator, '--business-hours', dataPath, '--tenant-id', '1', '--out', outPath, '--batch-context', path.join(__dirname, 'fixtures/batch-context.json')], { encoding: 'utf8' });
   return fs.readFileSync(outPath, 'utf8');
 }
 

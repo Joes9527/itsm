@@ -3,7 +3,9 @@
 
 Used by handoff B0 (see docs/migrations/2026-09-14-b0-seed-admission-dry-run.md).
 Read-only against the source seed; it only *generates* SQL. Apply the output with
-psql in a single transaction (`psql -1 -v ON_ERROR_STOP=1`).
+psql with `-X -v ON_ERROR_STOP=1`; the generated artifact owns its transaction.
+The CLI requires a reviewed destination context and emits an atomic receipt.
+``build_dml`` is only the internal, unprotected statement builder.
 
 Scope: the non-binding config sections only. departments/teams/roles, history and
 process_bindings are deliberately excluded.
@@ -13,8 +15,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import hashlib
 from pathlib import Path
 from typing import Any
+from batch_receipt import add_context_argument, write_batch
 
 EXCLUDED = {
     "departments", "teams", "roles", "process_bindings", "sla_policies",
@@ -42,7 +46,8 @@ def _cols(pairs: list[tuple[str, str]]) -> tuple[str, str]:
 
 
 def require_sql(condition: str, message: str) -> str:
-    return f"DO $guard$ BEGIN IF NOT ({condition}) THEN RAISE EXCEPTION {lit(message)}; END IF; END $guard$;"
+    delimiter = '$guard_' + hashlib.sha256((condition + message).encode()).hexdigest() + '$'
+    return f"DO {delimiter} BEGIN IF NOT ({condition}) THEN RAISE EXCEPTION {lit(message)}; END IF; END {delimiter};"
 
 
 def category_lookup(code: str, tenant_id: int) -> str:
@@ -60,7 +65,7 @@ def category_insert(cols: list[tuple[str, str]]) -> str:
         f"INSERT INTO ticket_categories ({names}) VALUES ({values}) ON CONFLICT (code) DO NOTHING;")
 
 
-def build_sql(seed: dict[str, Any], tenant_id: int, created_by: int) -> str:
+def build_dml(seed: dict[str, Any], tenant_id: int, created_by: int) -> str:
     out: list[str] = ["-- B0 seed admission (idempotent). Generated, do not hand-edit.", "BEGIN;", ""]
 
     def insert(table: str, cols: list[tuple[str, str]], guard: str) -> None:
@@ -192,20 +197,36 @@ def build_sql(seed: dict[str, Any], tenant_id: int, created_by: int) -> str:
     return "\n".join(out)
 
 
+def seed_targets(seed, tenant_id):
+    targets = [('ticket_categories', f"code={lit(c['code'])}") for c in seed['ticket_categories']]
+    for section, table, key in [('ticket_templates','ticket_templates','name'),
+                               ('sla_definitions','sla_definitions','name'),
+                               ('service_catalog','service_catalogs','name'), ('ci_types','ci_types','name'),
+                               ('standard_changes','standard_changes','title'), ('known_errors','known_errors','title'),
+                               ('ticket_tags','ticket_tags','name'), ('ticket_views','ticket_views','name')]:
+        targets.extend((table, f"tenant_id={tenant_id} AND {key}={lit(row[key])}") for row in seed[section])
+    for t in seed['ticket_templates']:
+        targets.extend(('field_definitions', f"tenant_id={tenant_id} AND entity_type='ticket_template' "
+                        f"AND entity_id=(SELECT id FROM ticket_templates WHERE tenant_id={tenant_id} AND name={lit(t['name'])}) "
+                        f"AND name={lit(f['name'])}") for f in t.get('fields', []))
+    return targets
+
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Generate idempotent B0 seed-admission SQL")
     p.add_argument("--seed", required=True)
     p.add_argument("--tenant-id", type=int, default=1)
     p.add_argument("--created-by", type=int, default=1)
     p.add_argument("--out", required=True)
+    add_context_argument(p)
     return p.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     seed = json.loads(Path(args.seed).read_text(encoding="utf-8"))
-    sql = build_sql(seed, args.tenant_id, args.created_by)
-    Path(args.out).write_text(sql, encoding="utf-8")
+    sql = build_dml(seed, args.tenant_id, args.created_by)
+    write_batch(args, sql, 'B0-seed-20260914', seed, seed_targets(seed, args.tenant_id), {'seed': args.seed}, new_objects=True)
     print(f"wrote {args.out} ({len(sql.splitlines())} lines)")
     return 0
 

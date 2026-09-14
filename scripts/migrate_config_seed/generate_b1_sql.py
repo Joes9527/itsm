@@ -22,6 +22,7 @@ import json
 from pathlib import Path
 
 from generate_seed_sql import json_lit, lit, category_lookup, category_insert, require_sql
+from batch_receipt import add_context_argument, write_batch
 
 SOURCE_SYSTEM = "keas-itsm-test"
 
@@ -36,7 +37,7 @@ NEW_CATEGORIES: tuple[dict, ...] = (
 )
 
 
-def build_sql(assets: list[dict], tenant_id: int) -> str:
+def build_dml(assets: list[dict], tenant_id: int) -> str:
     out: list[str] = ["-- B1 category/asset landing (idempotent).", "BEGIN;", ""]
 
     # B1b: new categories (parent resolved by code)
@@ -76,19 +77,26 @@ def build_sql(assets: list[dict], tenant_id: int) -> str:
     return "\n".join(out)
 
 
+def batch_targets(assets, tenant_id):
+    return [('ticket_categories', f"code={lit(c['code'])}") for c in NEW_CATEGORIES] + [
+        ('configuration_items', f"tenant_id={tenant_id} AND attributes->>'legacyCtiId'={lit(a['legacyCtiId'])}") for a in assets]
+
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Generate idempotent B1 category/asset SQL")
     p.add_argument("--assets", required=True)
     p.add_argument("--tenant-id", type=int, default=1)
     p.add_argument("--out", required=True)
+    add_context_argument(p)
     return p.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     assets = json.loads(Path(args.assets).read_text(encoding="utf-8"))
-    sql = build_sql(assets, args.tenant_id)
-    Path(args.out).write_text(sql, encoding="utf-8")
+    sql = build_dml(assets, args.tenant_id)
+    write_batch(args, sql, 'B1-config-20260914', assets, batch_targets(assets, args.tenant_id),
+                {'assets': args.assets}, new_objects=True, dependency_tables=('ci_types',) if assets else ())
     print(f"wrote {args.out} ({len(sql.splitlines())} lines)")
     return 0
 

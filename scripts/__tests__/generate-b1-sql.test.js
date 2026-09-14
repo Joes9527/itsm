@@ -18,7 +18,7 @@ function run(assets) {
   const assetsPath = path.join(dir, 'assets.json');
   fs.writeFileSync(assetsPath, JSON.stringify(assets), 'utf8');
   const outPath = path.join(dir, 'out.sql');
-  execFileSync('python3', [generator, '--assets', assetsPath, '--tenant-id', '1', '--out', outPath], { encoding: 'utf8' });
+  execFileSync('python3', [generator, '--assets', assetsPath, '--tenant-id', '1', '--out', outPath, '--batch-context', path.join(__dirname, 'fixtures/batch-context.json')], { encoding: 'utf8' });
   return fs.readFileSync(outPath, 'utf8');
 }
 

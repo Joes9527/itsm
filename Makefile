@@ -101,6 +101,9 @@ verify-scripts:    ## Validate build/start scripts without starting services
 	bash -n scripts/build-images.sh scripts/deploy-dev.sh scripts/deploy-prod.sh scripts/lib/common.sh scripts/clone_itsm_migration_db.sh
 	node --test scripts/__tests__/build-start-scripts.test.js scripts/__tests__/clone-itsm-migration-db.test.js scripts/__tests__/generate-seed-sql.test.js scripts/__tests__/generate-process-sql.test.js scripts/__tests__/generate-b1-sql.test.js scripts/__tests__/generate-b2-sql.test.js scripts/__tests__/generate-b4-sql.test.js
 
+verify-config-migration-postgres: ## Run migration semantics against an explicitly selected disposable PG container
+	python3 scripts/__tests__/config_migration_semantics_test.py
+
 # Database
 db-migrate:         ## Apply registered post-schema migrations to an Ent-schema-ready database
 	cd itsm-backend && go run -tags migrate ./cmd/migrate -up
@@ -126,5 +129,5 @@ check-contracts:    ## Validate cross-file API, deployment, Docker, and docs con
         prod-init prod-start prod-stop prod-deploy prod-status prod-health prod-logs \
         prod-restart prod-rollback prod-backup prod-down \
         db-migrate db-seed \
-        release build-images build-backend build-frontend verify-scripts \
+        release build-images build-backend build-frontend verify-scripts verify-config-migration-postgres \
         logs-backend logs-frontend logs-postgres check-contracts

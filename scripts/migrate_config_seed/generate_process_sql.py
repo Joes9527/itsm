@@ -21,6 +21,7 @@ import json
 from pathlib import Path
 
 from generate_seed_sql import json_lit, lit  # same package directory
+from batch_receipt import add_context_argument, write_batch
 
 # Mirrors the switch in service/bpmn_template_service.go listTemplates().
 TEMPLATE_META: dict[str, tuple[str, str, str]] = {
@@ -42,7 +43,7 @@ def template_meta(key: str) -> tuple[str, str, str]:
     return TEMPLATE_META.get(key, (key, "default", ""))
 
 
-def build_sql(bpmn_dir: Path, bindings: list[dict], tenant_id: int) -> str:
+def build_dml(bpmn_dir: Path, bindings: list[dict], tenant_id: int) -> str:
     out: list[str] = ["-- Canonical process initialization (idempotent).", "BEGIN;", ""]
     files = sorted(bpmn_dir.glob("*.bpmn"))
     if not files:
@@ -96,20 +97,37 @@ def build_sql(bpmn_dir: Path, bindings: list[dict], tenant_id: int) -> str:
     return "\n".join(out)
 
 
+def batch_targets(bpmn_dir, bindings, tenant_id):
+    targets = []
+    for path in sorted(bpmn_dir.glob('*.bpmn')):
+        targets.extend([('process_deployments', f"deployment_id={lit(path.stem + '-v1')}"),
+                        ('process_definitions', f"tenant_id={tenant_id} AND key={lit(path.stem)}")])
+    targets.extend(('process_bindings', f"tenant_id={tenant_id} AND business_type={lit(b['business_type'])} "
+                    f"AND business_sub_type IS NOT DISTINCT FROM {lit(b.get('business_sub_type'))} "
+                    f"AND process_definition_key={lit(b['process_definition_key'])}") for b in bindings)
+    return targets
+
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Generate idempotent canonical process-init SQL")
     p.add_argument("--bpmn-dir", required=True)
     p.add_argument("--seed", required=True, help="fixed seed JSON providing process_bindings")
     p.add_argument("--tenant-id", type=int, default=1)
     p.add_argument("--out", required=True)
+    add_context_argument(p)
     return p.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     seed = json.loads(Path(args.seed).read_text(encoding="utf-8"))
-    sql = build_sql(Path(args.bpmn_dir), seed.get("process_bindings", []), args.tenant_id)
-    Path(args.out).write_text(sql, encoding="utf-8")
+    sql = build_dml(Path(args.bpmn_dir), seed.get("process_bindings", []), args.tenant_id)
+    files = {p.name: p for p in sorted(Path(args.bpmn_dir).glob('*.bpmn'))}
+    source = {'bindings': seed.get('process_bindings', []),
+              'bpmn': {name: path.read_text(encoding='utf-8') for name, path in files.items()}}
+    write_batch(args, sql, 'B0-process-20260914', source,
+                batch_targets(Path(args.bpmn_dir), seed.get('process_bindings', []), args.tenant_id),
+                {'seed': args.seed, **files}, new_objects=True)
     print(f"wrote {args.out} ({len(sql.splitlines())} lines)")
     return 0
 

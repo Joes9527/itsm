@@ -18,6 +18,7 @@ import argparse
 from pathlib import Path
 
 from generate_seed_sql import json_lit, lit, require_sql
+from batch_receipt import add_context_argument, write_batch
 
 # (template name, field name, option label, option value) - accepted "new option" rows.
 ADDITIONS: tuple[tuple[str, str, str, str], ...] = (
@@ -52,7 +53,7 @@ ADDITIONS: tuple[tuple[str, str, str, str], ...] = (
 )
 
 
-def build_sql(additions, tenant_id: int) -> str:
+def build_dml(additions, tenant_id: int) -> str:
     out: list[str] = ["-- B2 dictionary option landing (idempotent).", "BEGIN;", ""]
     for template, field, label, value in additions:
         target = (f"f.tenant_id={lit(tenant_id)} AND f.entity_type='ticket_template' AND f.name={lit(field)} "
@@ -72,17 +73,25 @@ def build_sql(additions, tenant_id: int) -> str:
     return "\n".join(out)
 
 
+def batch_targets(additions, tenant_id):
+    return [('field_definitions', f"tenant_id={tenant_id} AND entity_type='ticket_template' AND name={lit(field)} "
+             f"AND entity_id=(SELECT id FROM ticket_templates WHERE tenant_id={tenant_id} AND name={lit(template)})")
+            for template, field, _, _ in additions]
+
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Generate idempotent B2 option-add SQL")
     p.add_argument("--tenant-id", type=int, default=1)
     p.add_argument("--out", required=True)
+    add_context_argument(p)
     return p.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    sql = build_sql(ADDITIONS, args.tenant_id)
-    Path(args.out).write_text(sql, encoding="utf-8")
+    sql = build_dml(ADDITIONS, args.tenant_id)
+    write_batch(args, sql, 'B2-options-20260914', ADDITIONS, batch_targets(ADDITIONS, args.tenant_id),
+                {'mapping': __file__}, dependency_tables=('ticket_templates',))
     print(f"wrote {args.out} ({len(sql.splitlines())} lines, {len(ADDITIONS)} additions)")
     return 0
 
