@@ -6,7 +6,7 @@
 - 基线：`origin/main` / `a25e108d2a08a55469fa5ad547aac5a9adc251ff`
 - 分支：`codex/fix/ui-workbench-completion`
 - Worktree：`/home/administrator/project/itsm/.worktrees/ui-workbench-completion`
-- 当前交付：设计文档；尚未实施第一阶段修复
+- 当前交付：1A 已完成并验收；1B 尚未满足准入条件，第二阶段进入独立设计
 
 ## 1. 决策背景与权威来源
 
@@ -180,3 +180,10 @@
 - 这些修复仍属于 1A 操作恢复；R3/1B 关系写入、角色工作台假操作和全仓主题迁移保持后续范围。
 
 1A 已完成实现、独立复审和 Chromium 真实路径验收，源码提交 `2d4d7578`；完整门禁、运行环境指纹、测试数据保留及未覆盖边界统一记录在 [1A 实施计划](../plans/2026-09-14-ui-workbench-1a-recovery.md#task-5-最终验收)。本文整体仍为 accepted，1B 及后续阶段未完成。
+
+
+### 后续依赖复核（2026-09-14）
+
+执行 `git fetch origin` 后，`origin/main` 仍为 `a25e108d`；`git merge-base --is-ancestor 4660633019f10ec23835e23c7fa43578daa7ff57 origin/main` 退出码 1。统一关系候选尚未进入主线。当前开发 API 8080 登录后，GET `/api/v1/work-items/8/relation-context` 与 `/api/v1/work-items/8/relations` 均返回 404。未执行关系写入、迁移或服务替换。
+
+历史独立审查指出 B/C1 尚有整改项，后续候选集成分支已包含进一步工作；本次未重新审查这些完整候选，不能将历史问题直接认定为最新候选仍未修复。但“主线未集成”和“目标环境缺接口”已经足以判定本环境 1B 不准入。继续保持只读关系，并准备 [工程师工作台 2A 设计](2026-09-14-engineer-workspace-real-data-design.md)。
