@@ -231,6 +231,7 @@ export interface UpdateStatusRequest {
 }
 
 export interface GetTicketsParams {
+  assigneeId?: number;
   page?: number;
   pageSize?: number;
   size?: number;
