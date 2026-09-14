@@ -52,7 +52,7 @@ func TestPostgresIdentityExchangeRestrictedPoolsMappingAndMSP(t *testing.T) {
 	i, err := repo.Validate(ctx, claims)
 	require.NoError(t, err)
 	require.Equal(t, f.tenant.ID, i.ActorTenantID)
-	view, err := intake.NewReadService(sessions, nil, "test-cursor").WorkItem(ctx, i, f.inc.WorkItemID)
+	view, err := intake.NewReadService(sessions, nil, "test-cursor", intake.ReferenceReadOptions{}).WorkItem(ctx, i, f.inc.WorkItemID)
 	require.NoError(t, err)
 	require.Equal(t, "incident", view.RecordClass)
 	require.Equal(t, "new", view.Status)

@@ -95,7 +95,13 @@ func authorizeWorkItemCreationForActor(ctx context.Context, tx *ent.Tx, actor *e
 	if resource == "" {
 		return nil, creation.NewUnsupportedRecordClass("unsupported creation class", nil)
 	}
-	for _, action := range []string{"write", "read"} {
+	// Generic ticket routes and role grants use granular create/update verbs.
+	// Professional creation retains its domain write contract.
+	creationAction := "write"
+	if command.RecordClass == creation.RecordClassGeneric {
+		creationAction = "create"
+	}
+	for _, action := range []string{creationAction, "read"} {
 		if err := RequireCurrentPermission(ctx, tx, identity, resource, action); err != nil {
 			return nil, err
 		}

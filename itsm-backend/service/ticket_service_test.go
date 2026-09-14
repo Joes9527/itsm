@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"fmt"
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/handlers/shared/workitemmutation"
 	domain "itsm-backend/service"
 	executionfixture "itsm-backend/tests/fixtures/execution"
@@ -839,7 +840,12 @@ func TestTicketService_UpdateTicket(t *testing.T) {
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketService := NewTicketServiceForTest(client, logger)
 
-	ticketService.SetNotificationService(domain.NewTicketNotificationService(client, logger, executionfixture.Standard()))
+	policy := executionfixture.Standard()
+	notifications := domain.NewTicketNotificationService(client, logger, policy)
+	mail := domain.NewEmailService(domain.EmailConfig{DeliveryTransport: "smtp", Host: "smtp.example.invalid", Port: 2525, Username: "fixture", From: "fixture@example.invalid"}, logger)
+	mail.SetDeliveryTargetDependencies(nil, policy)
+	notifications.SetEmailService(mail)
+	ticketService.SetNotificationService(notifications)
 
 	ctx := context.Background()
 
@@ -851,6 +857,7 @@ func TestTicketService_UpdateTicket(t *testing.T) {
 		SetStatus("active").
 		Save(ctx)
 	require.NoError(t, err)
+	ctx = tenantctx.WithTenantID(ctx, testTenant.ID)
 
 	testUser, err := client.User.Create().
 		SetUsername("testuser").

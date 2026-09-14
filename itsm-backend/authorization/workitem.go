@@ -11,6 +11,13 @@ import (
 	"itsm-backend/ent/ticket"
 )
 
+// WorkItemLifecycleReader is implemented by each professional lifecycle owner.
+// The caller supplies an already authorized WorkItem and its transaction client;
+// this read projection neither authorizes writes nor grants delegation.
+type WorkItemLifecycleReader interface {
+	IsUnfinished(context.Context, *ent.Client, *ent.Ticket) (bool, error)
+}
+
 // WorkItemPolicy binds an immutable record class to both its professional ACL
 // resource and its canonical BPMN business type. BPMN business IDs are always
 // tickets.id (WorkItem ID).
@@ -102,4 +109,33 @@ func AuthorizeWorkItem(ctx context.Context, client *ent.Client, workItemID, tena
 		return nil, WorkItemPolicy{}, common.NewForbiddenError("insufficient WorkItem permission")
 	}
 	return workItem, policy, nil
+}
+
+// AuthorizeWorkItemCollaboration covers shared comment creation/editing and attachment
+// upload, not professional updates, provisioning, approval or deletion.
+func AuthorizeWorkItemCollaboration(ctx context.Context, client *ent.Client, workItemID, tenantID, actorID int, roleName, action string) (*ent.Ticket, WorkItemPolicy, error) {
+	if action != "create" && action != "update" {
+		return nil, WorkItemPolicy{}, common.NewForbiddenError("unsupported collaboration action")
+	}
+	item, policy, err := ResolveWorkItemIdentity(ctx, client, workItemID, tenantID)
+	if err != nil {
+		return nil, WorkItemPolicy{}, err
+	}
+	if item.RecordClass != "service_request_item" {
+		if !HasResourcePermission(client, roleName, policy.Resource, policy.ResolveAction(action), tenantID) {
+			return nil, WorkItemPolicy{}, common.NewForbiddenError("insufficient WorkItem permission")
+		}
+		return item, policy, nil
+	}
+	if actorID <= 0 || !HasResourcePermission(client, roleName, policy.Resource, "read", tenantID) {
+		return nil, WorkItemPolicy{}, common.NewForbiddenError("insufficient collaboration permission")
+	}
+	// An explicit resource-wide administrative grant keeps its existing authority.
+	admin := HasResourcePermission(client, roleName, policy.Resource, "*", tenantID)
+	requester := item.RequesterID == actorID && HasResourcePermission(client, roleName, policy.Resource, "write", tenantID)
+	assigned := item.AssigneeID == actorID && HasResourcePermission(client, roleName, policy.Resource, "provision", tenantID)
+	if !admin && !requester && !assigned {
+		return nil, WorkItemPolicy{}, common.NewForbiddenError("service request collaboration requires requester or current assignment")
+	}
+	return item, policy, nil
 }

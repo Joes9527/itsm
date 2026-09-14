@@ -19,7 +19,7 @@ const response = (data: unknown, status = 200, code = 0): Response =>
     ok: status < 400,
     status,
     headers: new Headers({ 'X-Request-Id': 'rid-41' }),
-    json: async () => ({ code, message: status === 403 ? 'CSRF token invalid' : 'conflict', data }),
+    json: async () => ({ code, message: status === 403 ? 'CSRF token mismatch' : 'conflict', data }),
     clone: () => response(data, status, code),
   }) as Response;
 const fetchMock = jest.fn();

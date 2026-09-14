@@ -248,16 +248,17 @@ func TestGetBPMNTenantContextRejectsRequestSelectedTenantForTenantlessJWT(t *tes
 	c.Set("client", client)
 
 	middleware.AuthMiddleware(jwtSecret)(c)
-	require.False(t, c.IsAborted())
-	authenticatedTenantID, ok := middleware.AuthenticatedTenantIDFromContext(c.Request.Context())
-	require.True(t, ok)
-	require.Zero(t, authenticatedTenantID)
-	middleware.TenantMiddleware(client)(c)
-	require.False(t, c.IsAborted())
-	require.Equal(t, requestTenant.ID, c.GetInt("tenant_id"))
-	require.Equal(t, "header", c.GetString("tenant_source"))
+	require.True(t, c.IsAborted(), "tenantless JWT must be rejected before request tenant selection")
+}
 
-	_, _, ok = getBPMNTenantContext(c)
+func TestGetBPMNTenantContextRejectsRequestTenantWithoutAuthenticatedTenant(t *testing.T) {
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/bpmn/tasks", nil)
+	c.Request = c.Request.WithContext(middleware.WithAuthenticatedTenantID(c.Request.Context(), 0))
+	c.Set("tenant_id", 42)
+	c.Set("tenant_source", "header")
+	c.Set("user_id", 7)
+	_, _, ok := getBPMNTenantContext(c)
 	assert.False(t, ok)
 }
 

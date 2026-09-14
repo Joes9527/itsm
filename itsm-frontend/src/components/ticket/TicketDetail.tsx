@@ -9,10 +9,10 @@ import { ticketEditVersion, prepareTicketEdit, isTicketEditConflict, type Ticket
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { TicketProcessTasks } from './TicketProcessTasks';
 import { useParams } from 'next/navigation';
 import { TicketApi, type TicketSLAInfo } from '@/lib/api/ticket-api';
 import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
-import { TicketRelationsApi } from '@/lib/api/ticket-relations-api';
 import { UserApi } from '@/lib/api/user-api';
 import type { Ticket } from '@/lib/api/api-config';
 import type { User } from '@/lib/api/user-api';
@@ -44,6 +44,7 @@ import {
   Input,
   Tabs,
   Skeleton,
+  Alert,
 } from 'antd';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { useErrorHandler } from '@/lib/hooks/useErrorHandler';
@@ -52,14 +53,15 @@ import { SafeTextBlock } from '@/components/common/SafeContent';
 import { AISuggestionPanel } from '@/components/business/AISuggestionPanel';
 import { isValidTransition, isFinalStatus } from '@/lib/utils/workflow-state-machine';
 import { TicketStatus, TicketStatusConfig, getPriorityConfig } from '@/constants/taxonomy';
-import { ticketCommentAdapter, ticketAttachmentAdapter } from '@/components/business/detail-tabs';
+import { ticketAttachmentAdapter } from '@/components/business/detail-tabs';
 import { ApprovalMiniStepper } from '@/components/business/detail-tabs/ApprovalMiniStepper';
 import ServiceRequestPanel from './ServiceRequestPanel';
 import ServiceCatalogApprovalChain from './ServiceCatalogApprovalChain';
 import { CIContextCard } from './CIContextCard';
 import { KBRecommendCard } from './KBRecommendCard';
 import { TicketCommentStream } from './TicketCommentStream';
-import { TicketAttachmentGrid } from './TicketAttachmentGrid';
+import { AttachmentPanel } from '@/components/business/detail-tabs';
+import { getAttachmentPermissions } from '@/components/work-item/toTargetType';
 import { TicketHistoryList } from './TicketHistoryList';
 import { ProcessApprovalDecisionCards } from './ProcessApprovalDecisionCards';
 import { TicketRelationCards } from './TicketRelationCards';
@@ -107,7 +109,14 @@ const formatHours = (minutes: number): string => (minutes / 60).toFixed(1);
 
 const DISABLED_ACTION_CLASS = 'opacity-40 cursor-not-allowed pointer-events-auto';
 
-export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
+import { useDetailIdentity } from '@/components/business/detail-tabs/useDetailResource';
+
+export const TicketDetail: React.FC<{ id?: string }> = props => {
+  const params = useParams();
+  const identity = useDetailIdentity(props.id ?? (params?.ticketId as string) ?? '');
+  return <TicketDetailContent key={identity} {...props} />;
+};
+const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
   const params = useParams();
   // 支持通过 props 传入 id，或通过 useParams 获取
   const ticketId = parseInt((propId ?? (params?.ticketId as string)) || '');
@@ -133,6 +142,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
   const [assigning, setAssigning] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [ccing, setCCing] = useState(false);
@@ -145,6 +155,10 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
     history?: number;
     relations?: number;
   }>({});
+
+  const updateCount = useCallback((tab: 'comments' | 'attachments' | 'relations', count: number | undefined) => {
+    setTabCounts(previous => ({ ...previous, [tab]: count }));
+  }, []);
 
   const [assignForm] = Form.useForm();
   const [editForm] = Form.useForm();
@@ -175,14 +189,17 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
   // Get users for assignment
   const fetchUsers = useCallback(async () => {
     if (!hasPermission('user:read')) {
+      setUsersError('无权读取人员列表');
       setUsers([]);
       return;
     }
     try {
       setLoadingUsers(true);
+      setUsersError(null);
       const data = await UserApi.getUsers({ pageSize: 100 });
-      setUsers(data.users || []);
+      setUsers(hasPermission('user:read') ? data.users || [] : []);
     } catch (error) {
+      setUsersError(error instanceof Error ? error.message : '人员列表加载失败');
       setUsers([]);
     } finally {
       setLoadingUsers(false);
@@ -218,12 +235,9 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
     let cancelled = false;
     (async () => {
       try {
-        const [comments, attachments, approvals, history, relations] = await Promise.allSettled([
-          ticketCommentAdapter.list(ticketId),
-          ticketAttachmentAdapter.list(ticketId),
+        const [approvals, history] = await Promise.allSettled([
           BPMNWorkflowApi.getTicketApprovalDecisions(ticketId),
           TicketApi.getTicketHistory(ticketId),
-          TicketRelationsApi.getRelationStats(ticketId),
         ]);
         if (cancelled) return;
 
@@ -234,25 +248,13 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
           history?: number;
           relations?: number;
         } = {};
-        if (comments.status === 'fulfilled' && typeof comments.value?.total === 'number') {
-          next.comments = comments.value.total;
-        }
-        if (attachments.status === 'fulfilled' && Array.isArray(attachments.value)) {
-          next.attachments = attachments.value.length;
-        }
         if (approvals.status === 'fulfilled' && Array.isArray(approvals.value)) {
           next.approvals = approvals.value.length;
         }
         if (history.status === 'fulfilled' && Array.isArray(history.value)) {
           next.history = history.value.length;
         }
-        if (
-          relations.status === 'fulfilled' &&
-          typeof relations.value?.totalRelations === 'number'
-        ) {
-          next.relations = relations.value.totalRelations;
-        }
-        setTabCounts(next);
+        setTabCounts(previous => ({ ...previous, ...next }));
       } catch {
         // 任一数据源异常都静默处理，不阻塞详情页
       }
@@ -418,7 +420,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   if (loading) {
     return (
-      <div className="p-6">
+      <div className='p-6'>
         <Card>
           <Skeleton active title={{ width: '45%' }} paragraph={{ rows: 10 }} />
         </Card>
@@ -428,16 +430,16 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   if (error) {
     return (
-      <div className="p-6">
+      <div className='p-6'>
         <Card>
-          <div className="text-center py-8">
-            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-            <Title level={4} className="text-red-600 mb-2">
+          <div className='text-center py-8'>
+            <AlertCircle className='w-12 h-12 text-red-500 mx-auto mb-4' />
+            <Title level={4} className='text-red-600 mb-2'>
               加载失败
             </Title>
-            <Text type="secondary">{error}</Text>
-            <div className="mt-4">
-              <Button type="primary" onClick={fetchTicket}>
+            <Text type='secondary'>{error}</Text>
+            <div className='mt-4'>
+              <Button type='primary' onClick={fetchTicket}>
                 重试
               </Button>
             </div>
@@ -449,17 +451,17 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   if (!ticket) {
     return (
-      <div className="p-6">
+      <div className='p-6'>
         <Card>
           <div className="text-center py-8">
             <XCircle className="w-12 h-12 text-muted mx-auto mb-4" />
             <Title level={4} className="text-muted mb-2">
               未找到工单
             </Title>
-            <Text type="secondary">未找到指定的工单</Text>
-            <div className="mt-4">
-              <Link href="/tickets">
-                <Button type="primary">返回工单列表</Button>
+            <Text type='secondary'>未找到指定的工单</Text>
+            <div className='mt-4'>
+              <Link href='/tickets'>
+                <Button type='primary'>返回工单列表</Button>
               </Link>
             </div>
           </div>
@@ -520,9 +522,9 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
           </div>
 
           {/* 右侧：规范动作按钮控制台 */}
-          <div className="flex flex-wrap items-center gap-2 self-start lg:self-center shrink-0">
+          <div className='flex flex-wrap items-center gap-2 self-start lg:self-center shrink-0'>
             <button
-              type="button"
+              type='button'
               onClick={handleAssign}
               disabled={!ticket.actions?.assign?.allowed}
               title={ticket.actions?.assign?.reason || ''}
@@ -535,7 +537,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
             </button>
 
             <button
-              type="button"
+              type='button'
               onClick={handleUpdate}
               disabled={!ticket.actions?.edit?.allowed}
               title={ticket.actions?.edit?.reason || ''}
@@ -548,7 +550,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
             </button>
 
             <button
-              type="button"
+              type='button'
               onClick={() => setCCModalVisible(true)}
               disabled={!ticket.actions?.cc?.allowed}
               title={ticket.actions?.cc?.reason || ''}
@@ -561,7 +563,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
             </button>
 
             <button
-              type="button"
+              type='button'
               onClick={handleDeleteClick}
               disabled={!ticket.actions?.delete?.allowed}
               title={ticket.actions?.delete?.reason || ''}
@@ -569,7 +571,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                 !ticket.actions?.delete?.allowed ? DISABLED_ACTION_CLASS : ''
               }`}
             >
-              <Trash2 size={13} className="text-red-500" />
+              <Trash2 size={13} className='text-red-500' />
               <span>删除</span>
             </button>
           </div>
@@ -583,9 +585,9 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
       </div>
 
       {/* ================= 主体工作台栅格: 左侧 8 列 + 右侧 4 列 ================= */}
-      <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+      <div className='w-full grid grid-cols-1 lg:grid-cols-12 gap-5 items-start'>
         {/* 左侧 8 列: 诉求描述 -> 服务目录交付规格 -> 底部 Tabs 协作流 */}
-        <div className="lg:col-span-8 space-y-5 min-w-0">
+        <div className='lg:col-span-8 space-y-5 min-w-0'>
           {/* 1. 核心诉求描述卡片 */}
           <div className="bg-surface rounded-[8px] border border-border p-5 shadow-none space-y-4">
             <div className="flex items-center justify-between border-b border-border pb-3">
@@ -636,6 +638,8 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
             </div>
           )}
 
+          <TicketProcessTasks ticketId={ticket.id} recordClass={ticket.recordClass ?? ""} onTaskChange={fetchTicket} />
+
           {/* 3. 底部协作 Tabs（评论/附件/审批链/历史/关联/通知） */}
           <TicketDetailTabs
             ticketId={ticketId}
@@ -643,13 +647,14 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
             currentUserId={currentUser?.id}
             ticketAssigneeId={ticket.assigneeId}
             tabCounts={tabCounts}
+            updateCount={updateCount}
             canReadNotifications={hasPermission('notification:read')}
             canSendNotifications={hasPermission('notification:create')}
           />
         </div>
 
         {/* 右侧 4 列: 【高密度运维工具箱 + 悬浮跟随】 */}
-        <div className="lg:col-span-4 flex flex-col gap-4 sticky top-4 min-w-0">
+        <div className='lg:col-span-4 flex flex-col gap-4 sticky top-4 min-w-0'>
           {/* 1. 工单上下文属性 (置顶) */}
           <div className="bg-surface rounded-[8px] border border-border p-[16px] shadow-none space-y-3 text-[12px]">
             <span className="font-semibold text-foreground block border-b border-border pb-2 text-[15px]">
@@ -784,8 +789,8 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                 )}
 
                 {slaInfo.isBreached && (
-                  <div className="pt-1">
-                    <Tag color="red" className="w-full text-center">
+                  <div className='pt-1'>
+                    <Tag color='red' className='w-full text-center'>
                       SLA 已违规
                     </Tag>
                   </div>
@@ -803,7 +808,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                     </div>
                     <Progress
                       percent={getSLAPercent(slaInfo.responseTime, slaInfo.responseTimeRemaining)}
-                      size="small"
+                      size='small'
                       strokeColor={
                         slaInfo.responseTimeRemaining !== null && slaInfo.responseTimeRemaining < 0
                           ? '#ff4d4f'
@@ -878,7 +883,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
       <Modal
         title={
           <Space>
-            <UserCheck className="w-5 h-5 text-blue-600" />
+            <UserCheck className='w-5 h-5 text-blue-600' />
             分配工单
           </Space>
         }
@@ -890,38 +895,43 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
         footer={null}
         width={500}
       >
-        <Form form={assignForm} layout="vertical" onFinish={handleAssignSubmit}>
+        <Form form={assignForm} layout='vertical' onFinish={handleAssignSubmit}>
+          {usersError && <Alert title={usersError} type="error" showIcon action={
+            hasPermission('user:read') ? <Button aria-label="重试人员列表" size="small" loading={loadingUsers} onClick={() => void fetchUsers()}>重试</Button> : undefined
+          } className="mb-4" />}
           <Form.Item
-            label="分配给"
-            name="assigneeId"
+            label='分配给'
+            name='assigneeId'
             rules={[{ required: true, message: '请选择处理人' }]}
           >
             <Select
-              placeholder="请选择处理人"
+              placeholder='请选择处理人'
               loading={loadingUsers}
+              disabled={!hasPermission('user:read') || !!usersError}
               showSearch
               filterOption={(input, option) =>
-                (option?.label as unknown as string)?.toLowerCase().includes(input.toLowerCase())
+                (option?.searchText ?? '').toLowerCase().includes(input.toLowerCase())
               }
               options={users.map(user => ({
                 value: user.id,
+                searchText: [user.name, user.username].filter(Boolean).join(' '),
                 label: (
                   <Space>
                     <span>{user.name}</span>
                     <Text type="secondary" className="text-[12px]">
                       ({user.username})
                     </Text>
-                    {user.department && <Tag color="blue">{user.department}</Tag>}
+                    {user.department && <Tag color='blue'>{user.department}</Tag>}
                   </Space>
                 ),
               }))}
             />
           </Form.Item>
-          <Form.Item label="备注" name="comment">
-            <TextArea rows={3} placeholder="请输入分配备注（可选）" maxLength={500} showCount />
+          <Form.Item label='备注' name='comment'>
+            <TextArea rows={3} placeholder='请输入分配备注（可选）' maxLength={500} showCount />
           </Form.Item>
-          <Form.Item className="mb-0">
-            <Space className="w-full justify-end">
+          <Form.Item className='mb-0'>
+            <Space className='w-full justify-end'>
               <Button
                 icon={<X />}
                 onClick={() => {
@@ -931,7 +941,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               >
                 取消
               </Button>
-              <Button type="primary" htmlType="submit" icon={<Save />} loading={assigning}>
+              <Button type='primary' htmlType='submit' icon={<Save />} loading={assigning}>
                 确认分配
               </Button>
             </Space>
@@ -943,7 +953,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
       <Modal
         title={
           <Space>
-            <Edit className="w-5 h-5 text-green-600" />
+            <Edit className='w-5 h-5 text-green-600' />
             编辑工单
           </Space>
         }
@@ -955,54 +965,54 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
         footer={null}
         width={600}
       >
-        <Form form={editForm} layout="vertical" onFinish={handleEditSubmit}>
+        <Form form={editForm} layout='vertical' onFinish={handleEditSubmit}>
           <Form.Item
-            label="工单标题"
-            name="title"
+            label='工单标题'
+            name='title'
             rules={[
               { required: true, message: '请输入工单标题' },
               { max: 100, message: '标题不能超过100个字符' },
             ]}
           >
-            <Input placeholder="请输入工单标题" />
+            <Input placeholder='请输入工单标题' />
           </Form.Item>
           <Form.Item
-            label="工单描述"
-            name="description"
+            label='工单描述'
+            name='description'
             rules={[
               { required: true, message: '请输入工单描述' },
               { max: 2000, message: '描述不能超过2000个字符' },
             ]}
           >
-            <TextArea rows={6} placeholder="请输入工单描述" showCount maxLength={2000} />
+            <TextArea rows={6} placeholder='请输入工单描述' showCount maxLength={2000} />
           </Form.Item>
-          <div className="grid grid-cols-2 gap-4">
+          <div className='grid grid-cols-2 gap-4'>
             <Form.Item
-              label="优先级"
-              name="priority"
+              label='优先级'
+              name='priority'
               rules={[{ required: true, message: '请选择优先级' }]}
             >
               <Select
-                placeholder="请选择优先级"
+                placeholder='请选择优先级'
                 options={[
                   {
                     value: 'low',
-                    label: <Tag color="green">低优先级</Tag>,
+                    label: <Tag color='green'>低优先级</Tag>,
                   },
                   {
                     value: 'medium',
-                    label: <Tag color="orange">中优先级</Tag>,
+                    label: <Tag color='orange'>中优先级</Tag>,
                   },
                   {
                     value: 'high',
-                    label: <Tag color="red">高优先级</Tag>,
+                    label: <Tag color='red'>高优先级</Tag>,
                   },
                 ]}
               />
             </Form.Item>
             <Form.Item
-              label="状态"
-              name="status"
+              label='状态'
+              name='status'
               rules={[{ required: true, message: '请选择状态' }]}
               extra={
                 ticket
@@ -1011,7 +1021,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               }
             >
               <Select
-                placeholder="请选择状态"
+                placeholder='请选择状态'
                 options={[
                   { value: 'new', label: '待处理' },
                   { value: 'in_progress', label: '处理中' },
@@ -1022,8 +1032,8 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               />
             </Form.Item>
           </div>
-          <Form.Item className="mb-0">
-            <Space className="w-full justify-end">
+          <Form.Item className='mb-0'>
+            <Space className='w-full justify-end'>
               <Button
                 icon={<X />}
                 onClick={() => {
@@ -1033,7 +1043,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               >
                 取消
               </Button>
-              <Button type="primary" htmlType="submit" icon={<Save />} loading={updating}>
+              <Button type='primary' htmlType='submit' icon={<Save />} loading={updating}>
                 保存修改
               </Button>
             </Space>
@@ -1045,7 +1055,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
       <Modal
         title={
           <Space>
-            <Users className="w-5 h-5 text-blue-600" />
+            <Users className='w-5 h-5 text-blue-600' />
             抄送工单
           </Space>
         }
@@ -1059,31 +1069,33 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
       >
         <Form
           form={ccForm}
-          layout="vertical"
+          layout='vertical'
           initialValues={{ notifyChannels: ['in_app'] }}
           onFinish={handleCCSubmit}
         >
+          {usersError && <Alert title={usersError} type='error' showIcon action={hasPermission('user:read') ? <Button aria-label='重试人员列表' loading={loadingUsers} onClick={() => void fetchUsers()}>重试</Button> : undefined} />}
           <Form.Item
-            label="抄送给"
-            name="ccUsers"
+            label='抄送给'
+            name='ccUsers'
             rules={[{ required: true, message: '请选择抄送人' }]}
           >
             <Select
-              mode="multiple"
-              placeholder="请选择抄送人"
+              mode='multiple'
+              placeholder='请选择抄送人'
               loading={loadingUsers}
+              disabled={!hasPermission('user:read') || !!usersError}
               showSearch
-              optionFilterProp="label"
+              optionFilterProp='label'
               options={users.map(user => ({
                 value: user.id,
                 label: `${user.name || user.username}${user.department ? ` (${user.department})` : ''}`,
               }))}
             />
           </Form.Item>
-          <Form.Item label="通知渠道" name="notifyChannels">
+          <Form.Item label='通知渠道' name='notifyChannels'>
             <Select
-              mode="multiple"
-              placeholder="请选择通知渠道"
+              mode='multiple'
+              placeholder='请选择通知渠道'
               options={[
                 { value: 'in_app', label: '站内信' },
                 { value: 'email', label: '邮件' },
@@ -1095,11 +1107,11 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               ]}
             />
           </Form.Item>
-          <Form.Item label="备注" name="comment">
-            <TextArea rows={3} placeholder="请输入抄送备注（可选）" maxLength={500} showCount />
+          <Form.Item label='备注' name='comment'>
+            <TextArea rows={3} placeholder='请输入抄送备注（可选）' maxLength={500} showCount />
           </Form.Item>
-          <Form.Item className="mb-0">
-            <Space className="w-full justify-end">
+          <Form.Item className='mb-0'>
+            <Space className='w-full justify-end'>
               <Button
                 icon={<X />}
                 onClick={() => {
@@ -1109,7 +1121,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               >
                 取消
               </Button>
-              <Button type="primary" htmlType="submit" icon={<Users />} loading={ccing}>
+              <Button type='primary' htmlType='submit' icon={<Users />} loading={ccing}>
                 确认抄送
               </Button>
             </Space>
@@ -1121,7 +1133,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
       <Modal
         title={
           <Space>
-            <Trash2 className="w-5 h-5 text-red-600" />
+            <Trash2 className='w-5 h-5 text-red-600' />
             删除工单
           </Space>
         }
@@ -1130,14 +1142,14 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
         footer={null}
         width={400}
       >
-        <div className="py-4">
-          <div className="flex items-start gap-3 mb-4">
-            <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
+        <div className='py-4'>
+          <div className='flex items-start gap-3 mb-4'>
+            <AlertCircle className='w-6 h-6 text-red-500 flex-shrink-0 mt-0.5' />
             <div>
               <Typography.Text strong className="text-[15px]">
                 确定要删除此工单吗？
               </Typography.Text>
-              <Typography.Paragraph type="secondary" className="mb-0 mt-1">
+              <Typography.Paragraph type='secondary' className='mb-0 mt-1'>
                 此操作不可恢复，工单编号 #{ticket.id} 将被永久删除。
               </Typography.Paragraph>
             </div>
@@ -1146,18 +1158,18 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
             <Typography.Text type="secondary" className="text-[13px]">
               工单信息：
             </Typography.Text>
-            <div className="mt-1">
+            <div className='mt-1'>
               <Text strong>{ticket.title}</Text>
             </div>
           </div>
         </div>
-        <Space className="w-full justify-end">
+        <Space className='w-full justify-end'>
           <Button onClick={() => setDeleteModalVisible(false)} disabled={deleting}>
             取消
           </Button>
           <Button
             danger
-            type="primary"
+            type='primary'
             onClick={handleDeleteConfirm}
             loading={deleting}
             icon={<Trash2 size={14} />}
@@ -1173,6 +1185,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 // ==================== 详情 Tabs 子组件 ====================
 
 interface TicketDetailTabsProps {
+  updateCount: (tab: 'comments' | 'attachments' | 'relations', count: number | undefined) => void;
   ticketId: number;
   recordClass?: string;
   currentUserId?: number;
@@ -1193,10 +1206,15 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
   recordClass,
   currentUserId,
   tabCounts,
+  updateCount,
   ticketAssigneeId,
   canReadNotifications,
   canSendNotifications,
 }) => {
+  const hasPermission = useAuthStore(state => state.hasPermission);
+  const commentsCount = useCallback((count: number | undefined) => updateCount('comments', count), [updateCount]);
+  const attachmentsCount = useCallback((count: number | undefined) => updateCount('attachments', count), [updateCount]);
+  const relationsCount = useCallback((count: number | undefined) => updateCount('relations', count), [updateCount]);
   const countSuffix = (count?: number) => (count !== undefined ? ` (${count})` : '');
 
   const items = [
@@ -1209,7 +1227,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
         </span>
       ),
       children: (
-        <TicketCommentStream
+        <TicketCommentStream onCountChange={commentsCount}
           ticketId={ticketId}
           currentUserId={currentUserId}
           ticketAssigneeId={ticketAssigneeId}
@@ -1225,7 +1243,14 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
           附件{countSuffix(tabCounts?.attachments)}
         </span>
       ),
-      children: <TicketAttachmentGrid ticketId={ticketId} />,
+      children: (
+        <AttachmentPanel onCountChange={attachmentsCount}
+          targetType='ticket'
+          targetId={ticketId}
+          adapter={ticketAttachmentAdapter}
+          permissions={getAttachmentPermissions(recordClass, hasPermission)}
+        />
+      ),
     },
     {
       key: 'approvals',
@@ -1262,7 +1287,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
           关联工单与资产{countSuffix(tabCounts?.relations)}
         </span>
       ),
-      children: <TicketRelationCards ticketId={ticketId} />,
+      children: <TicketRelationCards ticketId={ticketId} onCountChange={relationsCount} />,
     },
   ];
 
@@ -1285,7 +1310,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
         <Info size={13} />
         协作流、审批链与审计历史
       </div>
-      <Tabs items={items} defaultActiveKey="comments" className="custom-ticket-tabs" />
+      <Tabs items={items} defaultActiveKey='comments' className='custom-ticket-tabs' />
     </div>
   );
 };

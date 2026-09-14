@@ -33,8 +33,12 @@ import (
 
 // ==================== TicketWorkflowService 测试设置 ====================
 
-func setupTicketWorkflowTest(t *testing.T) (*TicketWorkflowService, *ent.Client, context.Context) {
-	client := enttest.Open(t, "sqlite3", "file:ticket_workflow_test?mode=memory&cache=shared&_fk=1")
+func setupTicketWorkflowTest(t *testing.T, fixtureDSN ...string) (*TicketWorkflowService, *ent.Client, context.Context) {
+	dsn := testDSN()
+	if len(fixtureDSN) > 0 {
+		dsn = fixtureDSN[0]
+	}
+	client := enttest.Open(t, "sqlite3", dsn)
 	logger := zaptest.NewLogger(t).Sugar()
 	service := NewTicketWorkflowService(client, logger)
 	ctx := context.Background()
@@ -91,7 +95,8 @@ func TestTicketWorkflowService_NewTicketWorkflowService(t *testing.T) {
 }
 
 func TestCCTicketReactivatesHighestInactiveRow(t *testing.T) {
-	service, client, ctx := setupTicketWorkflowTest(t)
+	dsn := testDSN()
+	service, client, ctx := setupTicketWorkflowTest(t, dsn)
 	t.Cleanup(func() { _ = client.Close() })
 	tenant, err := createTicketWorkflowTestTenant(ctx, client, "cc-reactivate")
 	require.NoError(t, err)
@@ -104,7 +109,7 @@ func TestCCTicketReactivatesHighestInactiveRow(t *testing.T) {
 	tk, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
 	require.NoError(t, err)
 
-	db, err := sql.Open("sqlite3", "file:ticket_workflow_test?mode=memory&cache=shared&_fk=1")
+	db, err := sql.Open("sqlite3", dsn)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 	_, err = db.ExecContext(ctx, "DROP INDEX IF EXISTS ticketcc_tenant_id_ticket_id_user_id")
@@ -164,7 +169,8 @@ func TestCCTicketReactivatesHighestInactiveRow(t *testing.T) {
 }
 
 func TestCCTicketReactivationClearsCallbackDeliveryKey(t *testing.T) {
-	service, client, ctx := setupTicketWorkflowTest(t)
+	dsn := testDSN()
+	service, client, ctx := setupTicketWorkflowTest(t, dsn)
 	t.Cleanup(func() { _ = client.Close() })
 	tenant, err := createTicketWorkflowTestTenant(ctx, client, "cc-clear-key")
 	require.NoError(t, err)
@@ -183,7 +189,7 @@ func TestCCTicketReactivationClearsCallbackDeliveryKey(t *testing.T) {
 		SetIsActive(false).
 		SaveX(ctx)
 
-	db, err := sql.Open("sqlite3", "file:ticket_workflow_test?mode=memory&cache=shared&_fk=1")
+	db, err := sql.Open("sqlite3", dsn)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 	_, err = db.ExecContext(ctx, "UPDATE ticket_ccs SET delivery_key = ? WHERE id = ?", "retired-callback-key", inactive.ID)
@@ -199,7 +205,8 @@ func TestCCTicketReactivationClearsCallbackDeliveryKey(t *testing.T) {
 }
 
 func TestCCTicketCreatesOrdinaryRelationWithoutDeliveryKeyOrDTOExposure(t *testing.T) {
-	service, client, ctx := setupTicketWorkflowTest(t)
+	dsn := testDSN()
+	service, client, ctx := setupTicketWorkflowTest(t, dsn)
 	t.Cleanup(func() { _ = client.Close() })
 	tenant, err := createTicketWorkflowTestTenant(ctx, client, "cc-null-key")
 	require.NoError(t, err)
@@ -212,7 +219,7 @@ func TestCCTicketCreatesOrdinaryRelationWithoutDeliveryKeyOrDTOExposure(t *testi
 
 	err = service.CCTicket(ctx, &dto.CCTicketRequest{TicketID: tk.ID, CCUsers: []int{recipient.ID}}, operator.ID, tenant.ID)
 	require.NoError(t, err)
-	db, err := sql.Open("sqlite3", "file:ticket_workflow_test?mode=memory&cache=shared&_fk=1")
+	db, err := sql.Open("sqlite3", dsn)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 	var storedKey sql.NullString

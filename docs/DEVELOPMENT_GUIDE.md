@@ -98,6 +98,38 @@ npm run theme:check      # 检查已提交的生成 CSS 是否与 token 源一�
 ```
 
 主题的权威源是 `itsm-frontend/src/design-system/theme-tokens.json`，展开逻辑位于 `itsm-frontend/src/design-system/expand-theme-tokens.mjs`，生成产物是 `itsm-frontend/src/styles/generated-theme-tokens.css`。不要直接编辑生成 CSS；修改权威源或展开逻辑后运行 `npm run theme:generate`，并把源文件与生成产物一同提交。`theme:check` 会检测漂移，并已接入前端类型检查前置步骤；开发与生产构建使用现有 npm pre-hook 自动重新生成。
+### 前端生产模式与工作流入口维护
+
+日常验收使用生产构建，避免 `next dev` 首次访问页面时按需编译。先在独立目录构建并验证，再停止已核对身份的前端进程并切换发布文件；不要在正在提供服务的 `.next` 目录执行构建。
+
+```bash
+# 在 itsm-frontend 中执行；API 代理目标必须在构建时提供。
+npm ci
+ITSM_BACKEND_URL=http://127.0.0.1:8080 NEXT_PUBLIC_API_URL='' npm run build
+NODE_ENV=production HOSTNAME=127.0.0.1 PORT=3301 npm start
+```
+
+`npm run build` 会准备 `.next/standalone`，包含 `server.js`、依赖、静态资源和 `public`。发布可复制该完整目录并执行 `NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3001 node server.js`；不要只复制 `server.js`。保留启动描述和上一发布目录，切换后验证登录、同源 `/api/v1/health`、静态资源及已登录业务页面。本机固定路径与启动描述见[本机开发环境](development-environment.md)。
+
+工作流分组使用 `/workflow`，该页面跳转 `/admin/workflows`。三个默认子入口为工作流管理、流程设计器和流程实例。审批链规则使用已有页面 `/admin/approval-chains`，旧 `/workflow/approval-chains` 跳转到该页面；`workflow` 菜单修复会同步迁移旧菜单地址，保留已有分组、权限和可见性配置。动态菜单仍由后端按租户、角色和权限过滤。升级已有租户的旧菜单时，使用定向命令，而非全量初始化：
+
+```bash
+# 在 itsm-backend 中构建，再使用目标环境既有配置运行该二进制。
+go build -o /tmp/itsm-reconcile-menus ./cmd/reconcile_menus
+/tmp/itsm-reconcile-menus -scope workflow -tenant-id 1 -requested-by '<operator identity>'
+# 服务目录管理入口与工单分类菜单权限修复：
+/tmp/itsm-reconcile-menus -scope catalog -tenant-id 1 -requested-by '<operator identity>'
+# 审批待办入口（修复旧 /approvals/pending）：
+/tmp/itsm-reconcile-menus -scope approvals -tenant-id 1 -requested-by '<operator identity>'
+```
+
+执行前核对目标数据库、schema、租户并协调共享环境写入。命令在单一事务中修复该租户的菜单，合并旧 `/workflow`、`/workflow/list` 重复入口，保留自定义子项与既有可见/启用状态；不改角色授权、不执行 schema 迁移。审计动作 `reconcile_workflow_menus` 保存操作者和菜单前后快照，可用于核对及受控恢复。首次初始化使用同一菜单修复逻辑。
+
+`-scope` 必须显式选择 `workflow`、`catalog` 或 `approvals`，未知值返回错误，不执行写入。`catalog` 仅维护“服务目录管理”和“工单分类”两个入口，权限分别为 `service_catalog:read`、`ticket_category:read`；保留已有菜单可见性、启用状态、父子关系和顺序，审计动作是 `reconcile_catalog_menus`。
+
+`approvals` 将“我的待办”统一到主导航 `/approvals`（BPMN 任务收件箱），修正旧 `/approvals/pending` 并合并重复记录，保留已有可见性与启用状态。菜单权限是 `task:read`，不是流程定义管理权限；审计动作是 `reconcile_approvals_menus`。
+
+产品用词：主导航“服务目录”用于浏览与申请；管理导航“服务目录管理”用于维护目录项、申请字段、流程和服务级别；“目录分类”是目录项的展示分组；“工单分类”是已产生工作的业务分类树。当前 `ServiceCatalog.category` 是字符串，`Ticket.category_id` 关联独立分类树，二者没有自动映射。自定义字段归属于目录项或工单模板，不从分类继承。
 
 ### 后端 (itsm-backend)
 
@@ -332,11 +364,16 @@ docker exec <container> wget -qO- http://localhost:8090/api/v1/health
 
 ### Intake identity exchange configuration
 
+Requester reference reads use `GET /api/v1/intake/work-item-references` under `intake:workitem:read`. Supply an exact `number` for one readable reference, or omit it for the current requester's unfinished page; pass only the returned `cursor` to continue. Numbers and cursors cannot be combined. `INTAKE_REFERENCE_PAGE_SIZE` (also supported with the `ITSM_` prefix) must be a positive integer and defaults to 50. Links use the configured `Server.FrontendURL` HTTP(S) origin. Unknown lifecycle owners or states fail closed.
+
 A6 routes use assertion v2 only. Set `INTAKE_IDENTITY_CONFIG_FILE` (or the existing `ITSM_` environment prefix) to an owner-only regular JSON file (mode 0600/0400). The file contains `providers` keyed by registered provider, each with a distinct `secret`, allowed `channels` and allowed `purposes` (`create`, `read`); optional `maxAge`, `futureSkew`, `tokenTTL` are whole-second durations. Defaults are 60s, 5s and 5m. Max age is 1s–5m, future skew 0–30s, token TTL 1s–15m. Secrets must differ from JWT/webhook/automation credentials and stay server-side. The application rejects reuse of its loaded JWT or KAF webhook secret. Missing configuration disables exchange; unavailable Redis rejects exchange instead of falling back to memory. Use the deployment's explicit Redis host/port/database.
 
 Create/read exchange share one atomic nonce namespace. Lost exchange responses require a fresh nonce and assertion; retain the business submission key. Only the corresponding Intake routes accept the resulting token. Every request checks current mapping version/active state and current session/target-tenant permissions. Mapping management uses native access-token tenant routes with `intake_identity_mapping:read`/`write`, and PATCH requires `version` plus `active`; immutable provider/workspace/subject/user identity is replaced through a new mapping rather than changed in place. Manage mappings with exact external subjects; email matching is unsupported.
 
 The requester WorkItem projection preserves professional status and returns `fulfillmentState: "unknown"` and `accessResult: null` until C1 installs its authoritative fulfillment/result projection. This is a C1 gate before A7/B1 acceptance, not evidence that access was granted. The shared test-only signature vector lives in [intake-identity-signature.json](contracts/fixtures/intake-identity-signature.json).
+
+菜单历史地址：`/workflow/automation` 跳转到 `/admin/tickets/automation-rules`，`workflow` 定向菜单修复同步迁移该地址并使用后端读取权限 `automation_rule:read`。已有分组和显示开关保留，不授予角色权限。知识库旧 `/knowledge/articles` 和 `/knowledge/articles/create` 分别跳转到 `/knowledge` 和 `/knowledge/articles/new`；静态菜单使用实际目标地址。
+
 
 ### Incident creation classification
 
@@ -422,3 +459,28 @@ Incident消费者核验持久claim/token/lease/attempt、源记录与成员关�
 
 
 Graph清单现声明InitializationLocalOnly：该标记仅表示Init没有外部副作用，并非限制目的地为loopback，也不授予发送权限。Init仍只解析并捕获配置、构造惰性client；token/健康检查/轮询必须显式执行。候选Manager按冻结声明与能力选择激活，核对实际初始化摘要；缺密钥、摘要不符、取消均拒绝且不发布实例。实际候选EmailService/原outbox链路使用该入口，以本机模拟Graph验证令牌请求、Bearer、固定mailbox、收件人/正文、逐字段投递receipt和二次扫描零新增HTTP/完整状态保全；未使用企业端点。SMTP路由变化的零调用为发送入口探针，真实接受另有loopback证据；Graph发送中换代覆盖不能扩张成所有运输并发矩阵。consumer当前RBAC、并发撤权和其余S5仍须完成。
+### Unified support handoff acceptance
+
+KAF reference inspection uses authenticated requester read identity for exact-number
+lookup and paginated unfinished lists. Display number, current status, and frontend link;
+selection does not grant task execution or authorize ticket mutation. ITSM lifecycle owners
+remain authoritative when a reference closes or access changes.
+
+The intake idempotency index is tenant + actor + channel + operation + key. The same
+mapped actor across KAF workspaces replays the same immutable command/key; different
+actors and tenants remain isolated, and a changed command conflicts. Workspace identity
+mapping remains mandatory and cannot be replaced with client-supplied requester identity.
+
+Use isolated runtime/database manifests for live acceptance. Verify read-purpose tokens
+cannot create, current role permissions apply to every receipt/replay, exact/list isolation,
+professional extension ownership, and configured process/manual task persistence. A manual
+Catalog fixture may have unknown provider fulfillment projection; do not report it as
+access granted or completed. Ordinary association is read-only; a delegated failure uses
+only the original task's allowed action and original run/idempotency identity.
+
+
+### Source baseline verification
+
+Cross-file behavioral test mappings live in `scripts/test-coverage-mappings.json`. They identify reviewed domain tests rather than duplicate filename-matching tests. Pure removal-only changes add no implementation to cover; mixed edits remain guarded. Run `node --test scripts/__tests__/test-coverage-guard.test.js` to validate paths and removal classification. Mapping a conditional PostgreSQL test does not assert that it ran; record database evidence separately.
+
+Jest ignores `.next` build copies. Only `theme-preference.ts` is excluded from coverage instrumentation: its functions are serialized into a standalone pre-paint script, and Istanbul counters introduce unavailable module closures. Its full bootstrap and global-error behavior tests still execute. Global coverage thresholds are unchanged.

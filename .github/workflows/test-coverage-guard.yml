@@ -30,6 +30,8 @@ on:
       - 'itsm-backend/controller/**'
       - 'itsm-backend/service/**'
       - 'scripts/test-coverage-guard.js'
+      - 'scripts/test-coverage-mappings.json'
+      - 'scripts/__tests__/test-coverage-guard.test.js'
       - '.github/workflows/test-coverage-guard.yml'
   pull_request:
     paths:
@@ -37,6 +39,8 @@ on:
       - 'itsm-backend/controller/**'
       - 'itsm-backend/service/**'
       - 'scripts/test-coverage-guard.js'
+      - 'scripts/test-coverage-mappings.json'
+      - 'scripts/__tests__/test-coverage-guard.test.js'
       - '.github/workflows/test-coverage-guard.yml'
   workflow_dispatch:
 
@@ -103,6 +107,9 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
+
+      - name: Verify coverage mappings
+        run: node --test scripts/__tests__/test-coverage-guard.test.js
 
       - name: Run guard
         id: guard

@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"itsm-backend/common"
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/service"
@@ -31,12 +32,21 @@ func setupTicketNotificationController(t *testing.T) (*gin.Engine, *ent.Client, 
 	tenantID, userID := seedTenantUser(t, client)
 	core, logs := observer.New(zap.DebugLevel)
 	logger := zap.New(core).Sugar()
-	notificationService := service.NewTicketNotificationService(client, logger, executionfixture.Standard())
+	policy := executionfixture.Standard()
+	notificationService := service.NewTicketNotificationService(client, logger, policy)
+	email := service.NewEmailService(service.EmailConfig{DeliveryTransport: "smtp", Host: "smtp.example.invalid", Port: 2525, Username: "sender", From: "sender@example.invalid"}, logger)
+	email.SetDeliveryTargetDependencies(nil, policy)
+	notificationService.SetEmailService(email)
 	notificationService.SetNotificationPreferenceService(service.NewNotificationPreferenceService(client, logger))
 	controller := NewTicketNotificationController(notificationService, logger)
 
 	router := gin.New()
-	router.Use(gin.Recovery(), withTestAuth(tenantID, userID))
+	router.Use(gin.Recovery(), withTestAuth(tenantID, userID), func(c *gin.Context) {
+		if c.GetInt("tenant_id") > 0 {
+			c.Request = c.Request.WithContext(tenantctx.WithTenantID(c.Request.Context(), c.GetInt("tenant_id")))
+		}
+		c.Next()
+	})
 	router.POST("/api/v1/tickets/:id/notifications", controller.SendTicketNotification)
 	router.PUT("/api/v1/ticket-notifications/:id/read", controller.MarkNotificationRead)
 	router.PUT("/api/v1/ticket-notifications/read-all", controller.MarkAllNotificationsRead)
@@ -206,5 +216,11 @@ func TestTicketNotificationController_QueuedReturnsAccepted(t *testing.T) {
 	require.Zero(t, body.Data.AppliedCount)
 	row := client.TicketNotification.Query().OnlyX(ctx)
 	require.Equal(t, "pending", row.Status)
+	require.NotNil(t, row.TargetProtocolVersion)
+	require.Equal(t, 2, *row.TargetProtocolVersion)
+	require.NotNil(t, row.TargetTransport)
+	require.Equal(t, "smtp", *row.TargetTransport)
+	require.NotNil(t, row.TargetDestinationDigest)
+	require.Len(t, *row.TargetDestinationDigest, 64)
 	require.True(t, row.SentAt.IsZero())
 }

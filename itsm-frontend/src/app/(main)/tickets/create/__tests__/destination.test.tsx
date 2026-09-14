@@ -7,12 +7,14 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Page from '../page';
 const push = jest.fn();
 let key = 0;
+let mockQuery = 'category=change&item=DDL%20firewall%20domain';
 Object.defineProperty(crypto, 'randomUUID', {
   configurable: true,
   value: () => `generic-${++key}`,
 });
 beforeEach(() => {
   jest.clearAllMocks();
+  mockQuery = 'category=change&item=DDL%20firewall%20domain';
   useAuthStore.setState({
     isAuthenticated: true,
     user: { id: 1, actorTenantId: 2, tenantId: 2 } as never,
@@ -21,7 +23,7 @@ beforeEach(() => {
 });
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
-  useSearchParams: () => new URLSearchParams('category=change&item=DDL%20firewall%20domain'),
+  useSearchParams: () => new URLSearchParams(mockQuery),
 }));
 jest.mock('@/lib/api/ticket-category-api', () => ({
   TicketCategoryApi: {
@@ -84,6 +86,22 @@ it('explicit Generic keeps database template and exact fields even for DDL/firew
   expect(push).toHaveBeenCalledWith('/tickets/41');
 });
 
+it('portal help opens the generic form without professional selection or AI triage', async () => {
+  mockQuery = 'entry=help';
+  jest.mocked(TicketApi.getTemplates).mockResolvedValue({ templates: [] } as never);
+  render(<Page />);
+  expect(screen.queryByText('选择创建目标')).not.toBeInTheDocument();
+  expect(await screen.findByLabelText(/^标题/)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '获取 AI 建议' })).not.toBeInTheDocument();
+  expect(screen.getByText('描述您遇到的问题，服务台将协助分类和处理。')).toBeInTheDocument();
+  jest.mocked(TicketApi.createTicket).mockResolvedValue(creationReceipt);
+  fireEvent.change(screen.getByLabelText(/^标题/), { target: { value: '需要服务台协助' } });
+  fireEvent.change(screen.getByLabelText(/^详细描述/), { target: { value: '电脑无法正常连接办公网络，请协助排查。' } });
+  fireEvent.click(screen.getByRole('button', { name: '创建工单' }));
+  await waitFor(() => expect(TicketApi.createTicket).toHaveBeenCalledTimes(1));
+  expect(TicketApi.createTicket).toHaveBeenCalledWith(expect.objectContaining({ type: 'ticket', title: '需要服务台协助' }), expect.objectContaining({ idempotencyKey: expect.any(String) }));
+  expect(push).toHaveBeenCalledWith('/tickets/41');
+});
 it('submits the selected tenant category ID instead of its code or name', async () => {
   jest.mocked(TicketApi.getTemplates).mockResolvedValue({ templates: [] } as never);
   jest.mocked(TicketCategoryApi.getCategoryTree).mockResolvedValue([

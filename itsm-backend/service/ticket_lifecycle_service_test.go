@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"itsm-backend/common/tenantctx"
 	"testing"
 
 	"go.uber.org/zap"
@@ -350,6 +351,7 @@ func TestTicketLifecycleService_EscalateTicket(t *testing.T) {
 		SetStatus("active").
 		Save(ctx)
 	require.NoError(t, err)
+	ctx = tenantctx.WithTenantID(ctx, testTenant.ID)
 
 	testUser, err := client.User.Create().
 		SetUsername("testuser").
@@ -598,5 +600,5 @@ func TestTicketLifecycleService_CancelWorkflow(t *testing.T) {
 // Historical lifecycle tests now exercise the sole manual command owner.
 func newManualEscalationTestOwner(client *ent.Client, logger *zap.SugaredLogger) *TicketService {
 	policy := executionfixture.Standard()
-	return NewTicketService(&TicketServiceConfig{Client: client, Repository: ticketrepo.NewEntRepository(client, logger), Logger: logger, Execution: policy, NotificationService: NewTicketNotificationService(client, logger, policy)})
+	return NewTicketService(&TicketServiceConfig{Client: client, Repository: ticketrepo.NewEntRepository(client, logger), Logger: logger, Execution: policy, NotificationService: newQueuedNotificationTestService(client, logger, policy)})
 }

@@ -26,6 +26,23 @@ import (
 	"go.uber.org/zap"
 )
 
+// IsUnfinished projects persisted Change states. Failed still needs recovery
+// (schedule, rollback or cancel); completion/rejection/rollback end the work.
+func (s *Service) IsUnfinished(_ context.Context, _ *ent.Client, item *ent.Ticket) (bool, error) {
+	if item == nil || item.RecordClass != "change_request" {
+		return false, fmt.Errorf("Change Request WorkItem is required")
+	}
+	switch item.Status {
+	case common.ChangeStatusDraft, common.ChangeStatusSubmitted, common.ChangeStatusApproved,
+		common.ChangeStatusScheduled, common.ChangeStatusInProgress, common.ChangeStatusFailed:
+		return true, nil
+	case common.ChangeStatusRejected, common.ChangeStatusCompleted, common.ChangeStatusCancelled, string(dto.ChangeStatusRolledBack):
+		return false, nil
+	default:
+		return false, fmt.Errorf("unsupported Change Request status %q", item.Status)
+	}
+}
+
 type Service struct {
 	execution     *database.ExecutionPolicy
 	repo          Repository

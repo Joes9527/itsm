@@ -103,6 +103,7 @@ func TestCCCallbackOutboxVariableRecipientsUseAuthoritativeInitiator(t *testing.
 	serviceTask := definitions.Processes[0].ServiceTasks[0]
 	handler := f.engine.findHandlerByTaskType(serviceTask.ServiceTaskType())
 	require.NotNil(t, handler)
+	handler.(*bpmn.CCTaskHandler).SetNotificationTargetBinder(newQueuedNotificationTestService(f.client, zap.NewNop().Sugar(), standardNotificationPolicy(t)))
 
 	executionKeys := make([]string, 0, 1)
 	scheduler := f.engine.forClient(f.client, &executionKeys)
@@ -144,6 +145,14 @@ func TestCCCallbackOutboxVariableRecipientsUseAuthoritativeInitiator(t *testing.
 	channels := make([]string, 0, len(notifications))
 	for _, notification := range notifications {
 		channels = append(channels, notification.Channel)
+		if notification.Channel == "email" {
+			require.NotNil(t, notification.TargetProtocolVersion)
+			require.Equal(t, 2, *notification.TargetProtocolVersion)
+			require.NotNil(t, notification.TargetTransport)
+			require.Equal(t, "smtp", *notification.TargetTransport)
+			require.NotNil(t, notification.TargetDestinationDigest)
+			require.Len(t, *notification.TargetDestinationDigest, 64)
+		}
 	}
 	assert.ElementsMatch(t, []string{"in_app", "email", "in_app", "email"}, channels)
 }

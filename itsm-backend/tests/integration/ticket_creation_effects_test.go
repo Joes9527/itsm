@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"itsm-backend/common/tenantctx"
 	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"testing"
@@ -21,8 +22,11 @@ func configuredCreationTicketOwner(client *ent.Client, logger *zap.SugaredLogger
 	return configuredCreationTicketOwnerWithConnector(client, logger, nil)
 }
 func configuredCreationTicketOwnerWithConnector(client *ent.Client, logger *zap.SugaredLogger, manager *connector.Manager) *service.TicketService {
-	notifications := service.NewTicketNotificationService(client, logger, executionfixture.Standard())
-	notifications.SetEmailService(service.NewEmailService(service.EmailConfig{}, logger))
+	policy := executionfixture.Standard()
+	notifications := service.NewTicketNotificationService(client, logger, policy)
+	mail := service.NewEmailService(service.EmailConfig{DeliveryTransport: "smtp", Host: "smtp.example.invalid", Port: 2525, Username: "fixture", From: "fixture@example.invalid"}, logger)
+	mail.SetDeliveryTargetDependencies(nil, policy)
+	notifications.SetEmailService(mail)
 	assignment := service.NewTicketAssignmentService(client, logger)
 	rules := service.NewTicketAutomationRuleService(client, logger)
 	rules.SetAssignmentService(assignment)
@@ -31,7 +35,7 @@ func configuredCreationTicketOwnerWithConnector(client *ent.Client, logger *zap.
 }
 func TestIntakeGenericCreationUsesConfiguredEffectsAtomically(t *testing.T) {
 	f := newUnifiedIntakeFixture(t, configuredCreationTicketOwner)
-	ctx := context.Background()
+	ctx := tenantctx.WithTenantID(context.Background(), f.identity.TenantID)
 	assignee := f.client.User.Create().SetTenantID(f.identity.TenantID).SetUsername("handler").SetName("Handler").SetEmail("handler@example.test").SetPasswordHash("unused").SetRole("agent").SaveX(ctx)
 	rule := f.client.TicketAutomationRule.Create().SetTenantID(f.identity.TenantID).SetCreatedBy(f.identity.ActorID).SetName("route").SetConditions([]map[string]interface{}{}).SetActions([]map[string]interface{}{{"type": "set_priority", "priority": "critical"}, {"type": "assign", "user_id": assignee.ID}, {"type": "set_status", "status": "pending"}, {"type": "send_notification", "content": "Frozen rule content"}}).SaveX(ctx)
 
@@ -73,7 +77,7 @@ func TestIntakeGenericCreationRejectsMalformedRulesAndRollsBackEffects(t *testin
 	for _, fault := range []string{"unknown action", "notification write"} {
 		t.Run(fault, func(t *testing.T) {
 			f := newUnifiedIntakeFixture(t, configuredCreationTicketOwner)
-			ctx := context.Background()
+			ctx := tenantctx.WithTenantID(context.Background(), f.identity.TenantID)
 			actions := []map[string]interface{}{{"type": "set_priority", "priority": "high"}}
 			if fault == "unknown action" {
 				actions = append(actions, map[string]interface{}{"type": "unknown"})
@@ -96,7 +100,7 @@ func TestIntakeGenericCreationRejectsMalformedRulesAndRollsBackEffects(t *testin
 
 func TestIntakeGenericAssignmentRuleUsesCurrentTenantAndOneExecution(t *testing.T) {
 	f := newUnifiedIntakeFixture(t, configuredCreationTicketOwner)
-	ctx := context.Background()
+	ctx := tenantctx.WithTenantID(context.Background(), f.identity.TenantID)
 	target := f.client.User.Create().SetTenantID(f.identity.TenantID).SetUsername("assigned").SetName("Assigned").SetEmail("assigned@example.test").SetPasswordHash("unused").SetRole("agent").SaveX(ctx)
 	rule := f.client.TicketAssignmentRule.Create().SetTenantID(f.identity.TenantID).SetName("on-create").SetConditions([]map[string]interface{}{{"field": "priority", "operator": "equals", "value": "medium"}}).SetActions(map[string]interface{}{"type": "user", "value": target.ID}).SaveX(ctx)
 	first, err := f.app.Create(ctx, f.identity, f.command)
@@ -115,7 +119,7 @@ func TestIntakeGenericAssignmentRuleUsesCurrentTenantAndOneExecution(t *testing.
 
 func TestIntakeGenericConfiguredRulesRequireTheirOwner(t *testing.T) {
 	f := newUnifiedIntakeFixture(t)
-	ctx := context.Background()
+	ctx := tenantctx.WithTenantID(context.Background(), f.identity.TenantID)
 	f.client.TicketAutomationRule.Create().SetTenantID(f.identity.TenantID).SetCreatedBy(f.identity.ActorID).SetName("configured").SetConditions([]map[string]interface{}{}).SetActions([]map[string]interface{}{{"type": "set_priority", "priority": "high"}}).SaveX(ctx)
 	_, err := f.app.Create(ctx, f.identity, f.command)
 	require.Error(t, err)

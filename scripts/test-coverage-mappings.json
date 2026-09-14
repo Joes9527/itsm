@@ -1,0 +1,228 @@
+{
+  "itsm-backend/controller/feishu_controller.go": [
+    "itsm-backend/controller/feishu_oauth_management_test.go",
+    "itsm-backend/controller/feishu_webhook_test.go"
+  ],
+  "itsm-backend/controller/ticket_creation.go": [
+    "itsm-backend/controller/ticket_controller_test.go",
+    "itsm-backend/controller/ticket_classification_contract_test.go"
+  ],
+  "itsm-backend/controller/work_item_deletion.go": [
+    "itsm-backend/tests/integration/workitem_relation_generic_delete_postgres_test.go"
+  ],
+  "itsm-backend/controller/work_item_relation_controller.go": [
+    "itsm-backend/tests/integration/workitem_relation_http_postgres_test.go"
+  ],
+  "itsm-backend/service/attachment_storage.go": [
+    "itsm-backend/service/attachment_storage_startup_test.go"
+  ],
+  "itsm-backend/service/bpmn_access_policy_publication.go": [
+    "itsm-backend/handlers/service_request/access_policy_publication_test.go",
+    "itsm-backend/handlers/service_catalog/intake_read_test.go"
+  ],
+  "itsm-backend/service/bpmn_actor_snapshot.go": [
+    "itsm-backend/service/bpmn_authorization_test.go",
+    "itsm-backend/service/bpmn_task_ui_actions_test.go"
+  ],
+  "itsm-backend/service/bpmn_creation.go": [
+    "itsm-backend/tests/integration/intake_bpmn_entry_test.go",
+    "itsm-backend/tests/integration/intake_workflow_override_test.go"
+  ],
+  "itsm-backend/service/bpmn_creation_configuration.go": [
+    "itsm-backend/service/publication_precision_test.go",
+    "itsm-backend/tests/integration/intake_workflow_override_test.go"
+  ],
+  "itsm-backend/service/bpmn_execution_scope.go": [
+    "itsm-backend/tests/integration/candidate_intake_boundary_test.go"
+  ],
+  "itsm-backend/service/bpmn_fulfillment.go": [
+    "itsm-backend/handlers/service_request/access_fulfillment_test.go"
+  ],
+  "itsm-backend/service/bpmn_kaf_completion.go": [
+    "itsm-backend/service/bpmn_kaf_completion_integration_test.go",
+    "itsm-backend/service/bpmn_process_engine_ext_test.go"
+  ],
+  "itsm-backend/service/bpmn_participation.go": [
+    "itsm-backend/service/bpmn_authorization_test.go",
+    "itsm-backend/service/bpmn_task_ui_actions_test.go"
+  ],
+  "itsm-backend/service/bpmn_process_binding_service.go": [
+    "itsm-backend/service/release_workflow_e2e_test.go",
+    "itsm-backend/service/publication_precision_test.go"
+  ],
+  "itsm-backend/service/bpmn_publication.go": [
+    "itsm-backend/handlers/service_request/access_policy_publication_test.go",
+    "itsm-backend/service/bpmn_publication_version_test.go"
+  ],
+  "itsm-backend/service/bpmn_submitted_workitem_start.go": [
+    "itsm-backend/tests/integration/workitem_change_start_postgres_test.go"
+  ],
+  "itsm-backend/service/bpmn_termination.go": [
+    "itsm-backend/tests/integration/workitem_change_cancel_postgres_test.go"
+  ],
+  "itsm-backend/service/cloud_discovery_service.go": [
+    "itsm-backend/tests/integration/candidate_intake_boundary_test.go"
+  ],
+  "itsm-backend/service/event_webhook_intent.go": [
+    "itsm-backend/tests/integration/candidate_intake_boundary_test.go"
+  ],
+  "itsm-backend/service/execution_event_authority.go": [
+    "itsm-backend/tests/integration/candidate_intake_boundary_test.go",
+    "itsm-backend/tests/integration/candidate_stream_preservation_test.go"
+  ],
+  "itsm-backend/service/feishu_creation_delivery.go": [
+    "itsm-backend/tests/integration/feishu_creation_delivery_test.go"
+  ],
+  "itsm-backend/service/feishu_sync_service.go": [
+    "itsm-backend/tests/integration/feishu_intake_test.go",
+    "itsm-backend/tests/integration/feishu_creation_delivery_test.go"
+  ],
+  "itsm-backend/service/feishu_target.go": [
+    "itsm-backend/tests/integration/candidate_intake_boundary_test.go"
+  ],
+  "itsm-backend/service/feishu_update_delivery.go": [
+    "itsm-backend/tests/integration/candidate_intake_boundary_test.go"
+  ],
+  "itsm-backend/service/incident_alert_delivery_handler.go": [
+    "itsm-backend/tests/integration/incident_email_target_postgres_test.go",
+    "itsm-backend/service/incident_alert_delivery_worker_test.go"
+  ],
+  "itsm-backend/service/incident_created_effects.go": [
+    "itsm-backend/service/incident_effects_test.go"
+  ],
+  "itsm-backend/service/incident_creation.go": [
+    "itsm-backend/service/incident_creation_entry_test.go"
+  ],
+  "itsm-backend/service/incident_escalation_service.go": [
+    "itsm-backend/service/incident_escalation_command_test.go",
+    "itsm-backend/tests/integration/workitem_sla_cycle_postgres_test.go"
+  ],
+  "itsm-backend/service/incident_rule_action_transaction.go": [
+    "itsm-backend/tests/integration/workitem_incident_rule_snapshot_postgres_test.go",
+    "itsm-backend/service/incident_effects_test.go"
+  ],
+  "itsm-backend/service/incident_rule_engine.go": [
+    "itsm-backend/tests/integration/workitem_incident_rule_snapshot_postgres_test.go",
+    "itsm-backend/tests/integration/candidate_intake_boundary_test.go"
+  ],
+  "itsm-backend/service/incident_work_item_authority.go": [
+    "itsm-backend/service/incident_service_test.go",
+    "itsm-backend/service/incident_classification_contract_test.go"
+  ],
+  "itsm-backend/service/kaf_execution_scope.go": [
+    "itsm-backend/tests/integration/candidate_intake_boundary_test.go"
+  ],
+  "itsm-backend/service/outbox_delivery_worker.go": [
+    "itsm-backend/service/incident_alert_delivery_worker_test.go",
+    "itsm-backend/tests/integration/candidate_intake_boundary_test.go"
+  ],
+  "itsm-backend/service/outbox_event_type_registry.go": [
+    "itsm-backend/service/outbox_ordering_test.go",
+    "itsm-backend/service/work_item_relation_events_test.go"
+  ],
+  "itsm-backend/service/pir_mutation.go": [
+    "itsm-backend/tests/integration/workitem_change_pir_postgres_test.go"
+  ],
+  "itsm-backend/service/pir_service.go": [
+    "itsm-backend/tests/integration/workitem_change_pir_postgres_test.go",
+    "itsm-backend/tests/integration/workitem_change_lifecycle_postgres_test.go"
+  ],
+  "itsm-backend/service/problem_investigation_service.go": [
+    "itsm-backend/handlers/problem/investigation_test.go",
+    "itsm-backend/tests/integration/problem_rca_postgres_test.go"
+  ],
+  "itsm-backend/service/problem_investigation_tenant.go": [
+    "itsm-backend/tests/integration/problem_rca_postgres_test.go"
+  ],
+  "itsm-backend/service/problem_resolved_delivery.go": [
+    "itsm-backend/tests/integration/workitem_relation_outcome_postgres_test.go",
+    "itsm-backend/tests/integration/workitem_delivery_authorization_postgres_test.go"
+  ],
+  "itsm-backend/service/sla_alert_notification_projection.go": [
+    "itsm-backend/tests/integration/candidate_intake_boundary_test.go"
+  ],
+  "itsm-backend/service/ticket_assignment_smart_service.go": [
+    "itsm-backend/service/ticket_incident_assignment_boundary_test.go"
+  ],
+  "itsm-backend/service/ticket_automation_creation.go": [
+    "itsm-backend/tests/integration/ticket_creation_effects_test.go"
+  ],
+  "itsm-backend/service/ticket_category_creation.go": [
+    "itsm-backend/service/ticket_creation_cti_entry_test.go",
+    "itsm-backend/controller/ticket_classification_contract_test.go"
+  ],
+  "itsm-backend/service/ticket_creation_effects.go": [
+    "itsm-backend/tests/integration/ticket_creation_effects_test.go"
+  ],
+  "itsm-backend/service/ticket_email_creation.go": [
+    "itsm-backend/tests/integration/email_creation_intake_test.go"
+  ],
+  "itsm-backend/service/ticket_escalation_command.go": [
+    "itsm-backend/service/ticket_service_ext_test.go",
+    "itsm-backend/tests/integration/candidate_intake_boundary_test.go"
+  ],
+  "itsm-backend/service/ticket_notification_transaction.go": [
+    "itsm-backend/tests/integration/candidate_intake_boundary_test.go"
+  ],
+  "itsm-backend/service/ticket_sla_creation.go": [
+    "itsm-backend/tests/integration/ticket_creation_effects_test.go",
+    "itsm-backend/tests/integration/workitem_sla_cycle_postgres_test.go"
+  ],
+  "itsm-backend/service/ticket_workflow_escalation.go": [
+    "itsm-backend/tests/integration/candidate_intake_boundary_test.go"
+  ],
+  "itsm-backend/service/tool_creation_authority.go": [
+    "itsm-backend/tests/integration/candidate_intake_boundary_test.go"
+  ],
+  "itsm-backend/service/tool_edit_authority.go": [
+    "itsm-backend/tests/integration/candidate_intake_boundary_test.go"
+  ],
+  "itsm-backend/service/websocket_service.go": [
+    "itsm-backend/service/websocket_delivery_test.go"
+  ],
+  "itsm-backend/service/work_item_deletion.go": [
+    "itsm-backend/tests/integration/workitem_deletion_test.go",
+    "itsm-backend/tests/integration/workitem_relation_generic_delete_postgres_test.go"
+  ],
+  "itsm-backend/service/work_item_relation_context.go": [
+    "itsm-backend/tests/integration/workitem_relation_http_postgres_test.go"
+  ],
+  "itsm-backend/service/work_item_relation_delete.go": [
+    "itsm-backend/tests/integration/workitem_relation_delete_postgres_test.go",
+    "itsm-backend/tests/integration/workitem_relation_generic_delete_postgres_test.go"
+  ],
+  "itsm-backend/service/work_item_relation_delivery.go": [
+    "itsm-backend/tests/integration/workitem_delivery_authorization_postgres_test.go",
+    "itsm-backend/service/work_item_delivery_authorization_test.go"
+  ],
+  "itsm-backend/service/work_item_relation_outcome_delivery.go": [
+    "itsm-backend/tests/integration/workitem_relation_outcome_postgres_test.go"
+  ],
+  "itsm-backend/service/work_item_relation_required_fixes.go": [
+    "itsm-backend/tests/integration/workitem_relation_outcome_postgres_test.go"
+  ],
+  "itsm-frontend/src/lib/api/api-config.ts": [
+    "itsm-frontend/src/app/(main)/workspace/tickets/_hooks/__tests__/useAssignedTickets.test.tsx"
+  ],
+  "itsm-frontend/src/lib/api/ticket-edit.ts": [
+    "itsm-frontend/src/lib/api/__tests__/ticket-api.test.ts"
+  ],
+  "itsm-frontend/src/lib/api/types.ts": [
+    "itsm-frontend/src/lib/api/__tests__/ticket-api.test.ts"
+  ],
+  "itsm-frontend/src/lib/design-system/colors.ts": [
+    "itsm-frontend/src/lib/design-system/__tests__/design-system.test.ts"
+  ],
+  "itsm-frontend/src/lib/design-system/spacing.ts": [
+    "itsm-frontend/src/lib/design-system/__tests__/design-system.test.ts"
+  ],
+  "itsm-frontend/src/lib/design-system/theme.tsx": [
+    "itsm-frontend/src/lib/design-system/__tests__/design-system.test.ts"
+  ],
+  "itsm-frontend/src/lib/providers/AntdProvider.tsx": [
+    "itsm-frontend/src/lib/providers/__tests__/providers.test.tsx"
+  ],
+  "itsm-frontend/src/lib/services/ticket-service-v2.ts": [
+    "itsm-frontend/src/lib/services/__tests__/ticket-service.test.ts"
+  ]
+}

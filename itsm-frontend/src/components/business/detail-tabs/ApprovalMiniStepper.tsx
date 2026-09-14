@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React from 'react';
 import { GitBranch } from 'lucide-react';
-import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
-import { toApprovalSteps } from './approvalUtils';
-import type { ApprovalStep, ApprovalStepStatus } from './types';
+import { useApprovalDecisionHistory } from './useApprovalDecisionHistory';
+import { DetailReadState } from './DetailReadState';
+import type { ApprovalStepStatus } from './types';
 
 const statusNodeStyles: Record<
   ApprovalStepStatus,
@@ -61,41 +61,24 @@ function formatStepTime(iso?: string): string {
 }
 
 /**
- * 工单详情右侧工具箱：流转节点进度（BPMN）。
+ * 工单详情右侧工具箱：审批决策历史。
  * 样式对齐 prototype 的 ✓/●/○ 时间轴；数据源与审批链 Tab 相同
  * （BPMNWorkflowApi.getTicketApprovalDecisions），不引入第二套状态映射。
  */
 export const ApprovalMiniStepper: React.FC<{ ticketId: number }> = ({ ticketId }) => {
-  const [steps, setSteps] = useState<ApprovalStep[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const decisions = await BPMNWorkflowApi.getTicketApprovalDecisions(ticketId);
-      setSteps(toApprovalSteps(decisions ?? []));
-    } catch {
-      setSteps([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [ticketId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  if (loading) return null;
+  const { steps, loading, error, reload, ready } = useApprovalDecisionHistory(ticketId);
 
   return (
-    <div className="bg-surface rounded-[8px] border border-border p-[16px] shadow-none space-y-3 text-[12px]">
-      <span className="font-semibold text-foreground flex items-center gap-1.5 border-b border-border pb-2 text-[15px]">
+    <div className="bg-surface rounded-[8px] border border-border p-4 shadow-none space-y-3 text-xs">
+      <span className="font-semibold text-foreground flex items-center gap-1.5 border-b border-border pb-2 text-xs">
         <GitBranch size={14} className="text-muted" />
-        流转节点进度 (BPMN)
+        审批决策历史
       </span>
 
-      {steps.length === 0 ? (
-        <span className="text-muted text-[12px]">该工单未走审批流程</span>
+      <DetailReadState error={error} loading={loading} reload={reload} />
+      {loading && !ready && <span>审批决策记录加载中...</span>}
+      {ready && !error && !loading && steps.length === 0 ? (
+        <span className="text-muted text-xs">暂无审批决策记录</span>
       ) : (
         <div className="space-y-2.5">
           {steps.map((step, idx) => {

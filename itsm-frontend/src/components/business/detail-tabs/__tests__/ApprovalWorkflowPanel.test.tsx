@@ -51,7 +51,7 @@ describe('ApprovalWorkflowPanel — 真实审批决策展示', () => {
     expect(screen.queryByText('该工单未走审批流程')).not.toBeInTheDocument();
   });
 
-  it('接口返回空数组时，展示"未走审批流程"（真实的空，不是吞错误后的假空）', async () => {
+  it('接口返回空数组时，展示暂无审批决策记录', async () => {
     mockGetApprovalDecisions.mockResolvedValue([]);
 
     render(
@@ -62,6 +62,6 @@ describe('ApprovalWorkflowPanel — 真实审批决策展示', () => {
     );
 
     await waitFor(() => expect(mockGetApprovalDecisions).toHaveBeenCalledWith(6));
-    expect(await screen.findByText('该工单未走审批流程')).toBeInTheDocument();
+    expect(await screen.findByText('暂无审批决策记录')).toBeInTheDocument();
   });
 });

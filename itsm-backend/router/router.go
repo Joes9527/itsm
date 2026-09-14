@@ -615,15 +615,15 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 			// 评论
 			if config.TicketCommentController != nil {
 				tickets.GET("/:id/comments", middleware.RequireWorkItemRecordClassPermission("read"), config.TicketCommentController.ListTicketComments)
-				tickets.POST("/:id/comments", middleware.RequireWorkItemRecordClassPermission("create"), config.TicketCommentController.CreateTicketComment)
-				tickets.PUT("/:id/comments/:comment_id", middleware.RequireWorkItemRecordClassPermission("update"), config.TicketCommentController.UpdateTicketComment)
+				tickets.POST("/:id/comments", middleware.RequireWorkItemCollaborationPermission("create"), config.TicketCommentController.CreateTicketComment)
+				tickets.PUT("/:id/comments/:comment_id", middleware.RequireWorkItemCollaborationPermission("update"), config.TicketCommentController.UpdateTicketComment)
 				tickets.DELETE("/:id/comments/:comment_id", middleware.RequireWorkItemRecordClassPermission("delete"), config.TicketCommentController.DeleteTicketComment)
 			}
 
 			// 附件
 			if config.TicketAttachmentController != nil {
 				tickets.GET("/:id/attachments", middleware.RequireWorkItemRecordClassPermission("read"), config.TicketAttachmentController.ListTicketAttachments)
-				tickets.POST("/:id/attachments", middleware.RequireWorkItemRecordClassPermission("create"), config.TicketAttachmentController.UploadAttachment)
+				tickets.POST("/:id/attachments", middleware.RequireWorkItemCollaborationPermission("create"), config.TicketAttachmentController.UploadAttachment)
 				tickets.GET("/:id/attachments/:attachment_id", middleware.RequireWorkItemRecordClassPermission("read"), config.TicketAttachmentController.DownloadAttachment)
 				tickets.GET("/:id/attachments/:attachment_id/preview", middleware.RequireWorkItemRecordClassPermission("read"), config.TicketAttachmentController.PreviewAttachment)
 				tickets.DELETE("/:id/attachments/:attachment_id", middleware.RequireWorkItemRecordClassPermission("delete"), config.TicketAttachmentController.DeleteAttachment)

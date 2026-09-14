@@ -42,6 +42,13 @@
 - [WorkItem 收敛实施总计划（draft）](./superpowers/plans/2026-09-09-workitem-convergence.md)：专业动作、关系联动、流程身份及切换门禁三个子计划。
 
 - [WorkItem 现有实现收敛设计（accepted）](./superpowers/specs/2026-09-09-workitem-convergence-design.md)：Incident、Problem、Change 生命周期、关系、SLA 与 BPMN 的分批收敛。
+- [UI 核心路径复核与后续修复顺序（accepted）](./superpowers/plans/2026-09-14-ui-core-journey-recovery.md)
+- [UI 工作台 1A 回归修复实施计划](./superpowers/plans/2026-09-14-ui-workbench-1a-recovery.md)
+
+- [主管工作台 2B 能力盘点（draft，暂缓）](./superpowers/specs/2026-09-14-manager-workspace-2b-design.md)
+- [工程师工作台 2A 实施与验收](./superpowers/plans/2026-09-14-engineer-workspace-real-data.md)
+- [工程师工作台 2A：真实队列与既有处理能力复用（implemented）](./superpowers/specs/2026-09-14-engineer-workspace-real-data-design.md)
+- [UI 工作台补齐：背景与第一阶段回归修复设计（accepted）](./superpowers/specs/2026-09-14-ui-workbench-completion-design.md)
 
 - [SSLVPN：KAF 对话受理、统一创建与授权闭环设计](./superpowers/specs/2026-09-05-sslvpn-kaf-intake-end-to-end-design.md)
 - [SSLVPN 端到端实施总计划](./superpowers/plans/2026-09-05-sslvpn-end-to-end-implementation.md)

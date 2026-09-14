@@ -62,6 +62,9 @@ func TestIntakeHTTPProblemAndIncidentEntry(t *testing.T) {
 	w, _ = intakeHTTP(t, f, problem.Create, strings.TrimSuffix(body, "}")+`,"impactScope":"ignored"}`, "bad", nil)
 	require.Equal(t, 400, w.Code, w.Body.String())
 	require.Contains(t, w.Body.String(), "impactScope")
+	w, _ = intakeHTTP(t, f, problem.Create, strings.TrimSuffix(body, "}")+`,"category":"network"}`, "legacy-category", nil)
+	require.Equal(t, 400, w.Code, w.Body.String())
+	require.Contains(t, w.Body.String(), `unknown member \"category\"`)
 	incident := controller.NewIncidentController(nil, nil, nil, nil, nil, zap.NewNop().Sugar())
 	incident.SetCreationApplication(f.app)
 	incidentBody := `{"title":"Service unavailable","description":"Detailed service failure","priority":"critical","severity":"high","impact":"high","urgency":"high","type":"alert","source":"manual","impactAnalysis":{"businessImpact":{"revenueImpact":9007199254740993.125}},"detectedAt":"2026-09-05T08:00:00+08:00"}`

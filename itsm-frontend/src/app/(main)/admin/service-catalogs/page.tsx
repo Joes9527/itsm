@@ -567,7 +567,7 @@ const ServiceCatalogManagement = () => {
           <BookOpen className='inline-block w-6 h-6 mr-2' />
           服务目录管理
         </Title>
-        <Text type='secondary'>管理IT服务目录和服务分类</Text>
+        <Text type='secondary'>维护可申请的服务目录项，配置申请字段、流程和服务级别</Text>
       </div>
 
       {/* 统计卡片 */}
@@ -605,7 +605,7 @@ const ServiceCatalogManagement = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card className='enterprise-card'>
             <Statistic
-              title='服务分类'
+              title='目录分类'
               value={stats.categories}
               prefix={<Filter className='w-5 h-5' />}
               styles={{ content: { color: 'var(--color-text-primary)' } }}
@@ -787,11 +787,11 @@ const ServiceCatalogManagement = () => {
 
           <Form.Item
             name='category'
-            label='服务分类'
-            rules={[{ required: true, message: '请选择服务分类' }]}
+            label='目录分类'
+            rules={[{ required: true, message: '请选择目录分类' }]}
           >
             <Select
-              placeholder='请选择服务分类'
+              placeholder='请选择目录分类'
               options={[
                 { value: '云服务', label: '云服务' },
                 { value: '基础设施', label: '基础设施' },

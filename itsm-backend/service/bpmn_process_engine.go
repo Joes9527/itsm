@@ -3690,7 +3690,15 @@ func (s *bpmnTaskService) ListUserTaskViews(ctx context.Context, req *ListUserTa
 		}
 	}
 
-	return dto.ToBPMNTaskResponseList(tasks, instanceMap), total, nil
+	views := dto.ToBPMNTaskResponseList(tasks, instanceMap)
+	projection, err := s.engine.taskUIReadProjection(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	for i, task := range tasks {
+		views[i].UIActions = projection.taskUIActions(ctx, task)
+	}
+	return views, total, nil
 }
 
 func (s *bpmnTaskService) ListApprovalDecisions(ctx context.Context, processInstanceKey string) ([]*ent.ProcessApprovalDecision, error) {

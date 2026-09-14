@@ -40,13 +40,22 @@ export interface UpdateCommentInput {
 
 export interface CommentAdapter {
   list(targetId: number | string): Promise<{ comments: CommentItem[]; total: number }>;
-  create(targetId: number | string, data: CreateCommentInput): Promise<CommentItem>;
+  create(
+    targetId: number | string,
+    data: CreateCommentInput,
+    assertSubmissionContext?: () => void
+  ): Promise<CommentItem>;
   update?(
     targetId: number | string,
     commentId: number,
-    data: UpdateCommentInput
+    data: UpdateCommentInput,
+    assertSubmissionContext?: () => void
   ): Promise<CommentItem>;
-  remove(targetId: number | string, commentId: number): Promise<void>;
+  remove(
+    targetId: number | string,
+    commentId: number,
+    assertSubmissionContext?: () => void
+  ): Promise<void>;
 }
 
 export type TargetType = 'ticket' | 'incident' | 'problem' | 'change' | 'release';
@@ -68,11 +77,20 @@ export interface AttachmentAdapter {
   upload(
     targetId: number | string,
     file: File,
-    onProgress?: (percent: number) => void
+    onProgress?: (percent: number) => void,
+    assertSubmissionContext?: () => void
   ): Promise<AttachmentItem>;
   getDownloadUrl(targetId: number | string, attachmentId: number): string;
-  getPreviewUrl?(targetId: number | string, attachmentId: number): string;
-  remove(targetId: number | string, attachmentId: number): Promise<void>;
+  preview?(
+    targetId: number | string,
+    attachmentId: number,
+    assertSubmissionContext?: () => void
+  ): Promise<Blob>;
+  remove(
+    targetId: number | string,
+    attachmentId: number,
+    assertSubmissionContext?: () => void
+  ): Promise<void>;
 }
 
 // ==================== History ====================

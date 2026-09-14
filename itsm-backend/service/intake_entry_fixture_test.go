@@ -185,7 +185,11 @@ func configureEntryFixture(ctx context.Context, client *ent.Client, tenantID, ac
 		return err
 	}
 	for _, resource := range []string{"ticket", "incident", "service_catalog", "workflow"} {
-		for _, action := range []string{"read", "write"} {
+		creationAction := "write"
+		if resource == "ticket" {
+			creationAction = "create"
+		}
+		for _, action := range []string{"read", creationAction} {
 			p, err := client.Permission.Query().Where(permission.TenantIDEQ(tenantID), permission.CodeEQ(resource+":"+action)).Only(ctx)
 			if ent.IsNotFound(err) {
 				p = client.Permission.Create().SetTenantID(tenantID).SetCode(resource + ":" + action).SetName(resource + action).SetResource(resource).SetAction(action).SaveX(ctx)

@@ -457,7 +457,7 @@ const TicketCategoryManagementPage = () => {
             <Title level={2} className="mb-1">
               工单分类管理
             </Title>
-            <Text type="secondary">管理和配置工单分类体系，支持树形结构和工作流绑定</Text>
+            <Text type="secondary">维护工单的业务分类树，用于分派、服务级别、统计和自动化规则</Text>
           </div>
           <Space>
             <Button.Group>

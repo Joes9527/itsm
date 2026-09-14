@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { App, Alert, Button, Input, Modal, Spin, Tag } from 'antd';
 import { CheckCircle, XCircle, Clock, ShieldCheck } from 'lucide-react';
+import Link from 'next/link';
+import { useApprovalTasks } from '@/components/approvals/useApprovalTasks';
 import { BPMNWorkflowApi, type UserTask } from '@/lib/api/bpmn-workflow-api';
 
 interface PendingApprovalItem {
@@ -15,8 +17,6 @@ interface PendingApprovalItem {
   description?: string;
 }
 
-const PENDING_TASK_STATUSES = ['created', 'assigned', 'started', 'pending'] as const;
-const APPROVAL_PAGE_SIZE = 4;
 
 function formatCreatedAt(dateString?: string): string {
   if (!dateString) return '-';
@@ -50,78 +50,23 @@ function toPendingApproval(task: UserTask): PendingApprovalItem {
   };
 }
 
-async function listApprovalTasksByStatus(status: string): Promise<UserTask[]> {
-  const approvals: UserTask[] = [];
-  let page = 1;
-
-  while (approvals.length < APPROVAL_PAGE_SIZE) {
-    const result = await BPMNWorkflowApi.listUserTasks({
-      status,
-      page,
-      pageSize: APPROVAL_PAGE_SIZE,
-    });
-    approvals.push(
-      ...result.items.filter((task) => task.taskPurpose?.toLowerCase() === 'approval')
-    );
-
-    if (
-      result.items.length < APPROVAL_PAGE_SIZE ||
-      page * APPROVAL_PAGE_SIZE >= result.total
-    ) {
-      break;
-    }
-    page += 1;
-  }
-
-  return approvals.slice(0, APPROVAL_PAGE_SIZE);
-}
-
 export const ManagerPendingApprovals: React.FC = () => {
   const { message } = App.useApp();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [approvals, setApprovals] = useState<PendingApprovalItem[]>([]);
+  const resource = useApprovalTasks(4);
+  const approvals = (resource.data ?? []).map(toPendingApproval);
+  const loading = resource.loading;
+  const error = resource.error;
+  const pending = useRef(new Set<number>());
   const [actionLoading, setActionLoading] = useState<Record<number, boolean>>({});
   const [rejectingTaskId, setRejectingTaskId] = useState<number | null>(null);
   const [rejectComment, setRejectComment] = useState('');
 
-  // 是否有待办完全由后端 BPMN 任务候选人查询结果决定——不再用本地角色
-  // 白名单前置判断，避免和 persona-config.ts 的角色配置各自维护、逐渐漂移不一致。
-  const fetchApprovals = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const pages = await Promise.all(
-        PENDING_TASK_STATUSES.map(listApprovalTasksByStatus)
-      );
-      const uniqueTasks = new Map<number, UserTask>();
-      pages.forEach((tasks) => {
-        tasks.forEach((task) => {
-          uniqueTasks.set(task.id, task);
-        });
-      });
-      const items = Array.from(uniqueTasks.values())
-        .sort((left, right) => {
-          const leftTime = left.createdTime ? Date.parse(left.createdTime) : 0;
-          const rightTime = right.createdTime ? Date.parse(right.createdTime) : 0;
-          return rightTime - leftTime;
-        })
-        .slice(0, 4)
-        .map(toPendingApproval);
-      setApprovals(items);
-    } catch (e) {
-      setError('待办审批加载失败，请重试');
-      setApprovals([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    fetchApprovals();
-  }, [fetchApprovals]);
+    pending.current = new Set();
+    setActionLoading({}); setRejectingTaskId(null); setRejectComment('');
+  }, [resource.identity, resource.denied]);
 
-  if (loading) {
+  if (loading && !resource.ready) {
     return (
       <div className="mb-8 flex justify-center py-6">
         <Spin size="small" />
@@ -129,19 +74,20 @@ export const ManagerPendingApprovals: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (error && !resource.ready) {
     return (
       <div className="mb-8">
         <Alert
           type="error"
           showIcon
-          title={error}
+          title={`待办审批加载失败，请重试：${error}`}
           action={
-            <Button size="small" onClick={() => fetchApprovals()}>
+            <Button size="small" onClick={() => resource.reload()}>
               重试
             </Button>
           }
         />
+        <Link href="/approvals">查看全部审批</Link>
       </div>
     );
   }
@@ -155,36 +101,44 @@ export const ManagerPendingApprovals: React.FC = () => {
     action: 'approve' | 'reject',
     comment?: string
   ) => {
+    if (!resource.ready || loading || error || pending.current.size > 0) return;
+    pending.current.add(id);
+    const current = resource.capture();
+    const assertContext = () => { resource.assertContext(); if (!current()) throw new Error('审批上下文已变化'); };
     setActionLoading((prev) => ({ ...prev, [id]: true }));
     try {
+      assertContext();
       await BPMNWorkflowApi.submitApprovalDecision(id, {
         action,
         ...(comment ? { comment } : {}),
-      });
-      message.success(action === 'approve' ? '审批已通过，已自动流转至下一环节' : '已成功驳回该申请');
-      setApprovals((prev) => prev.filter((item) => item.id !== id));
+      }, assertContext);
+      if (!current()) return;
+      message.success(action === 'approve' ? '审批决定已提交' : '驳回决定已提交');
       setRejectingTaskId(null);
       setRejectComment('');
+      await resource.reload();
     } catch (err) {
-      message.error('操作失败，请重试');
+      if (!current()) return;
+      if (resource.deny(err)) { pending.current.clear(); setActionLoading({}); setRejectingTaskId(null); }
+      message.error(err instanceof Error ? err.message : '操作失败，请重试');
     } finally {
-      setActionLoading((prev) => ({ ...prev, [id]: false }));
+      if (current()) { pending.current.delete(id); setActionLoading((prev) => ({ ...prev, [id]: false })); }
     }
   };
 
   return (
     <div className="mb-8">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2">
           <ShieldCheck size={18} className="text-amber-600" />
-          <h3 className="text-[15px] font-semibold text-foreground m-0">
-            待我审批 ({approvals.length})
+          <h3 className="text-base font-bold text-foreground dark:text-slate-100 m-0">
+            审批待办（预览 {approvals.length} 项）
           </h3>
-          <span className="text-[12px] bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-semibold px-2 py-0.5 rounded-full">
-            部门负责人审批链
-          </span>
+
         </div>
+        <Link href="/approvals" className="text-sm text-primary-600">查看全部审批</Link>
       </div>
+      {error && <Alert className="mb-3" type="error" showIcon title={error} action={<Button size="small" onClick={() => resource.reload()}>重试</Button>} />}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {approvals.map((item) => (
@@ -201,8 +155,8 @@ export const ManagerPendingApprovals: React.FC = () => {
                   <Clock size={12} /> {formatCreatedAt(item.createdAt)}
                 </span>
               </div>
-              <div className="flex items-center gap-2 mt-2 text-[12px] text-muted">
-                <span className="font-medium text-foreground">申请人：{item.requesterName}</span>
+              <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-muted">
+                <span className="font-medium text-foreground dark:text-muted">申请人：{item.requesterName}</span>
                 <span>•</span>
                 <span>{item.department}</span>
                 <span>•</span>
@@ -220,6 +174,7 @@ export const ManagerPendingApprovals: React.FC = () => {
                 size="small"
                 danger
                 loading={actionLoading[item.id]}
+                disabled={loading || !!error || Object.values(actionLoading).some(Boolean)}
                 onClick={() => {
                   setRejectingTaskId(item.id);
                   setRejectComment('');
@@ -232,6 +187,7 @@ export const ManagerPendingApprovals: React.FC = () => {
                 size="small"
                 type="primary"
                 loading={actionLoading[item.id]}
+                disabled={loading || !!error || Object.values(actionLoading).some(Boolean)}
                 onClick={() => handleDecision(item.id, 'approve')}
                 className=""
                 icon={<CheckCircle size={14} />}
@@ -244,12 +200,16 @@ export const ManagerPendingApprovals: React.FC = () => {
       </div>
       <Modal
         title="填写驳回意见"
-        open={rejectingTaskId !== null}
+        open={rejectingTaskId !== null && resource.ready && approvals.some(item => item.id === rejectingTaskId)}
         okText="确认驳回"
         cancelText="取消"
+        closable={!Object.values(actionLoading).some(Boolean)}
+        maskClosable={!Object.values(actionLoading).some(Boolean)}
+        cancelButtonProps={{ disabled: Object.values(actionLoading).some(Boolean) }}
         confirmLoading={rejectingTaskId !== null && Boolean(actionLoading[rejectingTaskId])}
-        okButtonProps={{ danger: true, disabled: !rejectComment.trim() }}
+        okButtonProps={{ danger: true, disabled: !rejectComment.trim() || loading || !!error }}
         onCancel={() => {
+          if (pending.current.size > 0) return;
           setRejectingTaskId(null);
           setRejectComment('');
         }}

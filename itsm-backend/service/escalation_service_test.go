@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/dto"
 	"itsm-backend/handlers/shared/workitemmutation"
 	executionfixture "itsm-backend/tests/fixtures/execution"
@@ -23,7 +24,7 @@ func setupEscalationTest(t *testing.T) (*ent.Client, *EscalationService, context
 	client := enttest.Open(t, "sqlite3", testDSN())
 	logger := zaptest.NewLogger(t).Sugar()
 	service := NewEscalationService(client, logger, executionfixture.Standard())
-	service.SetNotificationService(NewTicketNotificationService(client, logger, executionfixture.Standard()))
+	service.SetNotificationService(newQueuedNotificationTestService(client, logger, executionfixture.Standard()))
 	ctx := context.Background()
 	return client, service, ctx
 }
@@ -98,6 +99,7 @@ func TestEscalationService_ProcessLongPendingTickets(t *testing.T) {
 
 	testTenant, err := createEscalationTestTenant(ctx, client, "pending")
 	require.NoError(t, err)
+	ctx = tenantctx.WithTenantID(ctx, testTenant.ID)
 
 	testUser, err := createEscalationTestUser(ctx, client, testTenant.ID, "pending")
 	require.NoError(t, err)
@@ -158,6 +160,7 @@ func TestEscalationService_EscalateTicket(t *testing.T) {
 
 	testTenant, err := createEscalationTestTenant(ctx, client, "escalate")
 	require.NoError(t, err)
+	ctx = tenantctx.WithTenantID(ctx, testTenant.ID)
 
 	testUser, err := createEscalationTestUser(ctx, client, testTenant.ID, "escalate")
 	require.NoError(t, err)

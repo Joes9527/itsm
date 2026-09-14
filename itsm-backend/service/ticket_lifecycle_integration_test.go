@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"itsm-backend/common/tenantctx"
 	"testing"
 	"time"
 
@@ -86,6 +87,7 @@ func TestTicketLifecycle_Escalate(t *testing.T) {
 	ctx := context.Background()
 
 	tenant, user := createTestUserAndTenant(t, ctx, client)
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
 
 	// 创建高优先级工单
 	ticketEntity, err := client.Ticket.Create().

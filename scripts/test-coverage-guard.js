@@ -61,6 +61,7 @@
 const { execSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const reviewedMappings = require('./test-coverage-mappings.json');
 
 const args = parseArgs(process.argv.slice(2));
 const BASE = args.base || process.env.TEST_COVERAGE_BASE || 'origin/main';
@@ -68,7 +69,7 @@ const HEAD = args.head || process.env.TEST_COVERAGE_HEAD || 'HEAD';
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 
-main();
+if (require.main === module) main();
 
 function main() {
   const allChanged = changedFiles(BASE, HEAD);
@@ -80,7 +81,8 @@ function main() {
     process.exit(2);
   }
 
-  const sources = allChanged.filter(isSourceFile).filter((f) => !isExempt(f));
+  const removalOnly = removalOnlyFiles(BASE, HEAD);
+  const sources = allChanged.filter(isSourceFile).filter((f) => !isExempt(f) && !removalOnly.has(f));
   const tests = allChanged.filter(isTestFile);
 
   const missing = [];
@@ -244,6 +246,7 @@ function isTestFile(p) {
 // ---------- candidate mapping ----------
 
 function testCandidatesFor(src) {
+  if (reviewedMappings[src]) return reviewedMappings[src];
   if (isFrontendSource(src)) return frontendCandidates(src);
   if (isBackendSource(src)) return backendCandidates(src);
   return [];
@@ -319,3 +322,20 @@ function printHelp() {
       `Per-file opt-out: add '// test-coverage-guard: skip' on its own line.`
   );
 }
+// Removal-only deltas add no implementation to cover; surviving behavior is still
+// validated by the normal build and domain suites. Mixed edits remain guarded.
+function parseRemovalOnlyFiles(numstat) {
+  return new Set(numstat.split('\n').flatMap(line => {
+    const [added, removed, file] = line.split('\t');
+    return added === '0' && Number(removed) > 0 && file ? [file] : [];
+  }));
+}
+function removalOnlyFiles(base, head) {
+  try {
+    return parseRemovalOnlyFiles(execSync(
+      `git diff --numstat ${shellQuote(base)} ${shellQuote(head)}`,
+      { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
+    ));
+  } catch { return new Set(); }
+}
+module.exports = { parseRemovalOnlyFiles, testCandidatesFor };

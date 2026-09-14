@@ -219,7 +219,7 @@ func TestTicketController_CreateTicket(t *testing.T) {
 	defer client.Close()
 
 	tenant, user := createTestTenantAndUserForTicket(t, client)
-	seedTicketRolePermission(t, client, tenant.ID, "end_user", "ticket", "write")
+	seedTicketRolePermission(t, client, tenant.ID, "end_user", "ticket", "create")
 	seedTicketRolePermission(t, client, tenant.ID, "end_user", "ticket", "read")
 	seedTicketNoProcessBinding(t, client, tenant.ID)
 
@@ -333,7 +333,7 @@ func TestTicketController_CreateTicket_IgnoresClientSuppliedSource(t *testing.T)
 	defer client.Close()
 
 	tenant, user := createTestTenantAndUserForTicket(t, client)
-	seedTicketRolePermission(t, client, tenant.ID, "end_user", "ticket", "write")
+	seedTicketRolePermission(t, client, tenant.ID, "end_user", "ticket", "create")
 	seedTicketRolePermission(t, client, tenant.ID, "end_user", "ticket", "read")
 	seedTicketNoProcessBinding(t, client, tenant.ID)
 

@@ -9,6 +9,7 @@ const createJestConfig = nextJest({
 const customJestConfig = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   testEnvironment: 'jest-environment-jsdom',
+  modulePathIgnorePatterns: ['<rootDir>/.next/'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^lodash-es$': 'lodash',
@@ -20,6 +21,9 @@ const customJestConfig = {
     '<rootDir>/src/**/__tests__/**/*.{js,jsx,ts,tsx}',
     '<rootDir>/src/**/*.{test,spec}.{js,jsx,ts,tsx}',
   ],
+  // These functions are serialized into a standalone pre-paint script. Istanbul
+  // counters introduce unavailable module closures; bootstrap tests still run.
+  coveragePathIgnorePatterns: ['src/lib/design-system/theme-preference.ts$'],
   collectCoverage: true,
   collectCoverageFrom: [
     'src/lib/**/*.{ts,tsx}',

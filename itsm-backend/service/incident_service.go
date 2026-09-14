@@ -426,6 +426,21 @@ func (s *IncidentService) updateIncident(ctx context.Context, tx *ent.Tx, id int
 }
 
 // AssignIncident 分配事件
+// IsUnfinished uses the Incident owner's actionable/resolved/final boundary.
+func (s *IncidentService) IsUnfinished(_ context.Context, _ *ent.Client, item *ent.Ticket) (bool, error) {
+	if item == nil || item.RecordClass != "incident" {
+		return false, fmt.Errorf("Incident WorkItem is required")
+	}
+	switch item.Status {
+	case common.IncidentStatusNew, common.IncidentStatusAcknowledged, common.IncidentStatusAssigned,
+		common.IncidentStatusInProgress, common.IncidentStatusTriaged, common.IncidentStatusEscalated,
+		common.IncidentStatusOnHold, common.IncidentStatusResolved, common.IncidentStatusClosed, common.IncidentStatusCancelled:
+		return canAssignIncidentStatus(item.Status), nil
+	default:
+		return false, fmt.Errorf("unsupported Incident status %q", item.Status)
+	}
+}
+
 func canAssignIncidentStatus(status string) bool {
 	switch status {
 	case common.IncidentStatusNew, common.IncidentStatusAssigned, common.IncidentStatusAcknowledged, common.IncidentStatusInProgress, common.IncidentStatusTriaged, common.IncidentStatusEscalated, common.IncidentStatusOnHold:

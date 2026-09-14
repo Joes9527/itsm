@@ -134,7 +134,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   // 检查用户权限
   hasPermission: (permission: string) => {
     const { user } = get();
-    return user?.permissions?.includes(permission) || false;
+    return user?.permissions?.some(grant => grant === '*' || grant === permission) || false;
   },
 
   // 检查用户角色

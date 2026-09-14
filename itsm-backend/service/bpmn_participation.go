@@ -33,6 +33,8 @@ type bpmnParticipationResolver struct {
 	groupResolver *bpmn.GroupResolver
 	directory     database.DirectorySnapshot
 	owningTx      *ent.Tx
+	// Populated only on a short-lived read projection resolver, never on the engine's mutation resolver.
+	readActor *bpmnActorIdentity
 }
 
 func newBPMNParticipationResolver(client *ent.Client, groupResolver *bpmn.GroupResolver) *bpmnParticipationResolver {
@@ -40,16 +42,20 @@ func newBPMNParticipationResolver(client *ent.Client, groupResolver *bpmn.GroupR
 }
 
 func (r *bpmnParticipationResolver) forClient(client *ent.Client) *bpmnParticipationResolver {
-	if client == nil {
+	if client == nil || (client == r.client && r.readActor != nil) {
 		return r
 	}
 	clone := *r
 	clone.client = client
+	clone.readActor = nil
 	clone.groupResolver = bpmn.NewGroupResolver(client)
 	return &clone
 }
 
 func (r *bpmnParticipationResolver) resolveActor(ctx context.Context, scope BPMNAccessScope) (*bpmnActorIdentity, error) {
+	if r.readActor != nil && r.readActor.UserID == scope.UserID && r.readActor.TenantID == scope.TenantID {
+		return r.readActor, nil
+	}
 	if r.directory != nil {
 		if r.owningTx == nil {
 			tx, err := r.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})

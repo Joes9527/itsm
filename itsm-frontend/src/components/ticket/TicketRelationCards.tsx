@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React from 'react';
+import { useDetailResource } from '@/components/business/detail-tabs/useDetailResource';
+import { DetailReadState } from '@/components/business/detail-tabs/DetailReadState';
 import { Tag } from 'antd';
 import { Link2 } from 'lucide-react';
 import { TicketRelationsApi } from '@/lib/api/ticket-relations-api';
@@ -9,10 +11,11 @@ import { TicketStatus, TicketStatusConfig } from '@/constants/taxonomy';
 
 interface TicketRelationCardsProps {
   ticketId: number;
+  onCountChange?: (count: number | undefined) => void;
 }
 
 const relationTypeLabels: Record<string, string> = {
-  PARENT_CHILD: '父子关系',
+  parent_child: '父子关系',
   BLOCKS: '阻塞',
   BLOCKED_BY: '被阻塞',
   DEPENDS_ON: '依赖于',
@@ -58,45 +61,40 @@ const statusLabel = (status?: string): string => {
  * 工单工作台关联卡片：视觉与字段完全对齐 prototype 的极简卡片样式，
  * 数据走 TicketRelationsApi.getTicketRelations（与 RelationPanel 同一数据源）。
  */
-export const TicketRelationCards: React.FC<TicketRelationCardsProps> = ({ ticketId }) => {
-  const [relations, setRelations] = useState<TicketRelationWithDetails[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchRelations = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await TicketRelationsApi.getTicketRelations(ticketId, {
-        includeDetails: true,
-      });
-      setRelations(Array.isArray(data) ? data : []);
-    } catch {
-      setRelations([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [ticketId]);
-
-  useEffect(() => {
-    void fetchRelations();
-  }, [fetchRelations]);
-
-  if (loading) {
+export const TicketRelationCards: React.FC<TicketRelationCardsProps> = ({
+  ticketId,
+  onCountChange,
+}) => {
+  const resource = useDetailResource<TicketRelationWithDetails[]>(
+    ticketId,
+    () => TicketRelationsApi.getTicketRelations(ticketId, { includeDetails: true }),
+    data => data.length,
+    onCountChange
+  );
+  const relations = resource.data || [];
+  const feedback = (
+    <DetailReadState error={resource.error} loading={resource.loading} reload={resource.reload} />
+  );
+  if (!resource.ready)
     return (
-      <div className="p-6 text-center text-[12px] text-muted">关联加载中...</div>
+      <div>
+        {feedback}
+        {resource.loading && <p>关联加载中...</p>}
+      </div>
     );
-  }
-
   if (relations.length === 0) {
     return (
-      <div className="text-center py-6 text-muted">
-        <Link2 className="w-8 h-8 mx-auto mb-2 text-muted" />
-        <span className="text-[12px]">暂无关联工单</span>
+      <div className='text-center py-6 text-muted'>
+        {feedback}
+        <Link2 className='w-8 h-8 mx-auto mb-2 text-muted' />
+        <span className='text-xs'>暂无关联工单</span>
       </div>
     );
   }
 
   return (
     <div className="space-y-2.5 pt-2 text-[12px]">
+      {feedback}
       {relations.map(relation => {
         const isOutbound = relation.sourceTicketId === ticketId;
         const otherTicket = isOutbound ? relation.targetTicket : relation.sourceTicket;

@@ -35,7 +35,7 @@ func TestIdentityReadCatalogContractCursorAndCurrentWorkItemScope(t *testing.T) 
 	registry := NewCreatorRegistry()
 	require.NoError(t, registry.Register(&preparedCreator{}))
 	owner.SetCreatorRegistry(registry)
-	h.SetReaders(NewReadService(sessions, owner, "test-cursor-key"))
+	h.SetReaders(NewReadService(sessions, owner, "test-cursor-key", ReferenceReadOptions{FrontendURL: "https://support.example.test", PageSize: 50, Lifecycle: NewRequesterLifecycleReader(referenceLifecycleOwners())}))
 	client.ServiceCatalog.UpdateOneID(f.catalog.ID).SetTargetClass("generic").SetRequiresApproval(false).SaveX(ctx)
 	client.ProcessBinding.Create().SetTenantID(f.actor.TenantID).SetBusinessType("generic").SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
 	r := gin.New()
@@ -49,6 +49,12 @@ func TestIdentityReadCatalogContractCursorAndCurrentWorkItemScope(t *testing.T) 
 		r.ServeHTTP(w, req)
 		return w
 	}
+	client.Ticket.Create().SetTenantID(f.actor.TenantID).SetRequesterID(f.actor.ActorID).SetTitle("Reference").SetTicketNumber("REQ-000037").SetStatus("closed").SaveX(ctx)
+	ref := call("/api/v1/intake/work-item-references?number=REQ-000037")
+	require.Equal(t, 200, ref.Code, ref.Body.String())
+	var reference struct{ Data WorkItemReference }
+	require.NoError(t, json.Unmarshal(ref.Body.Bytes(), &reference))
+	require.Equal(t, "REQ-000037", reference.Data.Number)
 	w := call(fmt.Sprintf("/api/v1/intake/catalog-items/%d", f.catalog.ID))
 	require.Equal(t, 200, w.Code, w.Body.String())
 	var out struct {
@@ -99,7 +105,7 @@ func TestIdentityWorkItemStorageFailureIsUnavailable(t *testing.T) {
 	client.Ticket.Intercept(ent.InterceptFunc(func(next ent.Querier) ent.Querier {
 		return ent.QuerierFunc(func(ctx context.Context, q ent.Query) (ent.Value, error) { return nil, errors.New("database offline") })
 	}))
-	s := NewReadService(authorization.NewSessionReader(client, sameTransactionDirectory{}), nil, "test")
+	s := NewReadService(authorization.NewSessionReader(client, sameTransactionDirectory{}), nil, "test", ReferenceReadOptions{FrontendURL: "https://support.example.test", PageSize: 50, Lifecycle: NewRequesterLifecycleReader(referenceLifecycleOwners())})
 	_, err := s.WorkItem(tenantctx.WithTenantID(context.Background(), i.TenantID), i, 1)
 	require.ErrorIs(t, err, creation.ErrInfrastructureUnavailable)
 }

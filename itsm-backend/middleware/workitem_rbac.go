@@ -20,6 +20,17 @@ import (
 // 认证上下文提取（role/tenant_id/client）与 RequirePermission 完全一致，是刻意复制而不是
 // 提取公共函数——两者都要在各自的错误分支里返回不同的错误信息，抽出来反而增加间接层。
 func RequireWorkItemRecordClassPermission(action string) gin.HandlerFunc {
+	return requireWorkItemPermission(action, false)
+}
+
+// RequireWorkItemCollaborationPermission authorizes comment writes and attachment
+// uploads with Requested Item requester/assignee scope. Relation commands retain
+// their owning domain's record-class update policy.
+func RequireWorkItemCollaborationPermission(action string) gin.HandlerFunc {
+	return requireWorkItemPermission(action, true)
+}
+
+func requireWorkItemPermission(action string, collaboration bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role, exists := c.Get("role")
 		if !exists {
@@ -51,7 +62,11 @@ func RequireWorkItemRecordClassPermission(action string) gin.HandlerFunc {
 			return
 		}
 
-		_, _, err = authorization.AuthorizeWorkItem(c.Request.Context(), client, id, tenantID, role.(string), action)
+		if collaboration {
+			_, _, err = authorization.AuthorizeWorkItemCollaboration(c.Request.Context(), client, id, tenantID, c.GetInt("user_id"), role.(string), action)
+		} else {
+			_, _, err = authorization.AuthorizeWorkItem(c.Request.Context(), client, id, tenantID, role.(string), action)
+		}
 		if err != nil {
 			appErr, ok := err.(*common.AppError)
 			if !ok || appErr.Code == common.ErrCodeInternal {

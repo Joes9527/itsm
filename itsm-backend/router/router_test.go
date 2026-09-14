@@ -310,7 +310,7 @@ func TestAssignRouteUsesIncidentWritePermission(t *testing.T) {
 	})
 	token, err := authentication.GenerateAccessToken(reporter.ID, reporter.Username, role.Code, tenant.ID, jwtSecret, time.Hour)
 	require.NoError(t, err)
-	body := []byte(fmt.Sprintf(`{"assigneeId":%d}`, assignee.ID))
+	body := []byte(fmt.Sprintf(`{"assigneeId":%d,"version":%d,"operationId":"route-assignment"}`, assignee.ID, workItem.Version))
 	request := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/incidents/%d/assign", incidentEntity.ID), bytes.NewReader(body))
 	request.Header.Set("Authorization", "Bearer "+token)
 	request.Header.Set("Content-Type", "application/json")

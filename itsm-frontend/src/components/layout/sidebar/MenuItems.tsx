@@ -58,12 +58,6 @@ export function renderMenuItems(
                   ? item.label
                   : undefined
             }
-            onClick={e => {
-              if (item.path) {
-                e.stopPropagation();
-                onMenuClick(item.path);
-              }
-            }}
           >
             <span className='truncate'>{item.label}</span>
           </div>
