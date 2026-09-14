@@ -2177,48 +2177,10 @@ func (s *Seeder) seedTicketTypes(ctx context.Context) {
 		return
 	}
 
-	// 定义默认工单类型（与前端ticket-type-presets.ts保持一致）
-	ticketTypes := []struct {
-		Code        string
-		Name        string
-		Description string
-		Icon        string
-		Color       string
-	}{
-		{"k8s_scale", "K8S扩缩容", "Kubernetes容器集群扩容或缩容请求", "Container", "#1890ff"},
-		{"ddl_execute", "DDL执行", "数据库表结构变更、索引创建等DDL操作", "Database", "#722ed1"},
-		{"data_export", "数据导出", "从数据库或系统导出数据", "Download", "#13c2c2"},
-		{"vm_apply", "虚拟机申请", "申请新的虚拟机资源", "Desktop", "#2f54eb"},
-		{"account_apply", "账号申请", "申请系统账号、VPN账号、堡垒机账号等", "User", "#52c41a"},
-		{"gitlab_repo_apply", "GitLab代码仓库申请", "申请创建新的GitLab代码仓库", "Code", "#fa541c"},
-		{"domain_apply", "域名申请", "申请新的域名或域名解析变更", "Global", "#eb2f96"},
-		{"firewall_apply", "防火墙规则申请", "申请开放或变更防火墙端口规则", "Safety", "#fa8c16"},
-		{"app_apply", "应用申请", "申请在K8S集群中部署新应用服务", "Appstore", "#1890ff"},
-		{"project_apply", "项目申请", "申请创建新项目或项目空间", "Project", "#722ed1"},
-		{"db_account_apply", "数据库账号申请", "申请数据库读写账号、只读账号等", "Key", "#faad14"},
-		{"general", "其他工单", "通用工单类型，用于不属于以上分类的请求", "FileText", "#8c8c8c"},
-	}
+	ticketTypes := defaultTicketTypes()
 
 	for _, tt := range ticketTypes {
-		_, err := s.client.TicketType.Create().
-			SetCode(tt.Code).
-			SetName(tt.Name).
-			SetDescription(tt.Description).
-			SetIcon(tt.Icon).
-			SetColor(tt.Color).
-			SetStatus("active").
-			SetApprovalEnabled(false).
-			SetSLAEnabled(false).
-			SetAutoAssignEnabled(false).
-			SetAssignmentRules([]interface{}{}).
-			SetNotificationConfig(map[string]interface{}{}).
-			SetPermissionConfig(map[string]interface{}{}).
-			SetCreatedBy(int64(admin.ID)).
-			SetTenantID(int64(t.ID)).
-			SetCreatedAt(time.Now()).
-			SetUpdatedAt(time.Now()).
-			SetUsageCount(0).
-			Save(ctx)
+		_, err := createDefaultTicketType(ctx, s.client, tt, t.ID, admin.ID)
 		if err != nil {
 			s.sugar.Warnw("seed ticket type failed", "error", err, "code", tt.Code)
 		}
