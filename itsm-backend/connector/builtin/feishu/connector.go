@@ -2,7 +2,6 @@ package feishu
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -18,9 +17,10 @@ import (
 // Feishu 飞书连接器实现
 // 复用 package 内 Client 以享受 tenant_access_token 缓存
 type Feishu struct {
-	client    *Client
-	cfg       connector.Config
-	startedAt time.Time
+	client             *Client
+	destination        string
+	callbackInstanceID string
+	startedAt          time.Time
 }
 
 // ActionHandler 卡片按钮/回调事件
@@ -45,12 +45,13 @@ func New() *Feishu { return &Feishu{} }
 
 func (f *Feishu) Manifest() connector.Manifest {
 	return connector.Manifest{
-		Name:        "feishu",
-		Version:     "1.0.0",
-		Title:       "飞书 / Lark",
-		Provider:    "feishu",
-		Type:        connector.TypeIM,
-		Description: "飞书/Lark 开放平台连接器：发送/接收消息、卡片回调、签名校验。覆盖中国大陆及海外版本。",
+		InitializationBehavior: connector.InitializationLocalOnly,
+		Name:                   "feishu",
+		Version:                "1.0.0",
+		Title:                  "飞书 / Lark",
+		Provider:               "feishu",
+		Type:                   connector.TypeIM,
+		Description:            "飞书/Lark 开放平台连接器：发送/接收消息、卡片回调、签名校验。覆盖中国大陆及海外版本。",
 		Capabilities: []connector.Capability{
 			connector.CapSendMessage,
 			connector.CapReceiveMessage,
@@ -68,24 +69,23 @@ func (f *Feishu) Manifest() connector.Manifest {
 }
 
 func (f *Feishu) Init(_ context.Context, cfg connector.Config) error {
-	appID := cfg.Credentials["app_id"]
-	appSecret := cfg.Credentials["app_secret"]
-	if appID == "" || appSecret == "" {
-		return fmt.Errorf("feishu: credentials.app_id and app_secret are required")
+	if f.client != nil {
+		return fmt.Errorf("feishu: connector already initialized")
 	}
-	baseURL, _ := cfg.Settings["base_url"].(string)
-	if baseURL == "" {
-		// 海外版判定
-		if region, _ := cfg.Settings["region"].(string); region == "intl" {
-			baseURL = BaseURLIntl
-		}
+	target, err := parseFeishuDestination(cfg)
+	if err != nil {
+		return err
 	}
-	f.client = NewClient(baseURL, appID, appSecret, cfg.Credentials["verification_token"], cfg.Credentials["encrypt_key"])
-	f.cfg = cfg
+	secret := cfg.Credentials["app_secret"]
+	if secret == "" {
+		return fmt.Errorf("feishu: app secret is required")
+	}
+	f.client = NewClient(target.BaseURL, target.AppID, secret, cfg.Credentials["verification_token"], cfg.Credentials["encrypt_key"])
+	f.destination = target.digest()
+	f.callbackInstanceID = target.CallbackInstanceID
 	f.startedAt = time.Now()
 	return nil
 }
-
 func (f *Feishu) Send(ctx context.Context, msg *connector.Message) error {
 	if f.client == nil {
 		return fmt.Errorf("feishu: connector not initialized")
@@ -120,17 +120,9 @@ func (f *Feishu) GetOAuthAuthURL(redirectURI, state string) string {
 }
 
 // TaskDestinationIdentity freezes the tenant connector destination without secrets.
-func (f *Feishu) TaskDestinationIdentity() string {
-	if f.client == nil {
-		return ""
-	}
-	return fmt.Sprintf("%x", sha256.Sum256([]byte(f.cfg.Credentials["app_id"]+"\x00"+f.client.baseURL)))
-}
+func (f *Feishu) TaskDestinationIdentity() string { return f.destination }
 
-func (f *Feishu) CallbackInstanceID() string {
-	id, _ := f.cfg.Settings["callbackInstanceId"].(string)
-	return id
-}
+func (f *Feishu) CallbackInstanceID() string { return f.callbackInstanceID }
 
 // ExchangeOAuthCode exchanges an authorization code for an access token
 func (f *Feishu) ExchangeOAuthCode(ctx context.Context, code string) (*OAuthTokenResponse, error) {
