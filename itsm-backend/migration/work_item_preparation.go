@@ -350,11 +350,8 @@ func validatePreparationShapeMode(ctx context.Context, q migrationQuery, schema 
 			return fmt.Errorf("required table %s: %w", table, err)
 		}
 		var bad bool
-		if err := q.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=$1::oid AND NOT tgisinternal)`, oid).Scan(&bad); err != nil {
+		if err := validatePreparationTriggers(ctx, q, schema, table, prepared); err != nil {
 			return err
-		}
-		if bad {
-			return fmt.Errorf("unreviewed trigger on %s", table)
 		}
 		for _, column := range preparationLegacyColumns[table] {
 			var nullable bool
