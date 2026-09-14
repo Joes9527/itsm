@@ -1,173 +1,107 @@
-# 旧 CTI vs 新 ITSM 分类 差异清单（映射工作表）
+# 旧 CTI 节点类型分流与映射工作表
 
-> 权威基线：固定制品 `0788a9bb` 的 `itsm-backend/config/seed/default.json`（`ticket_categories`）。
-> 目标 `itsm_ga_ready` 分类当前为空；本表用 seed 代码（`code`）作目标键，目标数据库 ID 在准入时生成。
-> “建议目标”为自动相似度提示（<0.5 视为无候选），**需人工确认**；样本库 ID 不作目标 ID。
+> 权威配置：固定制品 `0788a9bb` 的 `itsm-backend/config/seed/default.json`。
+> 旧 CTI 是**混合树**：业务系统→CMDB `business_system`（开单选 `ci_ids`，不进分类）；服务/动作→`ticket_categories`；组织/地点、基础设施另维。
+> “建议目标”为自动相似度提示，**需人工确认**；目标库 ID 准入时生成。
 
-## 摘要
+## 摘要（按节点类型）
 
-- 权威 seed 分类：182（level 1/2/3 = 8/38/136）
-- 旧 CTI 节点：82
-- 归一化名称精确重叠：0
-- 被路由引用的旧 ctiId：60；其中不在旧树中的缺父引用：14（涉及 118 条路由）
+| 节点类型 | 数量 | 目标维度 |
+| --- | ---: | --- |
+| business_system | 49 | CMDB `business_system` CI |
+| org_location | 17 | Phase 1 部门/地点 |
+| ticket_category | 8 | `ticket_categories` |
+| exclude | 4 | 排除 |
+| infra_ci | 4 | CMDB CI（infra） |
 
-## 旧 CTI → 建议目标（映射工作表）
+## 逐节点映射工作表
 
-| 旧路径 | 旧 ctiId | 路由引用 | 建议目标（seed 路径 / code） | 相似度 | 你的确认 |
-| --- | --- | --- | --- | --- | --- |
-| BMS系统 | `3fb52530b83c4ba99871d12978ce510a` | 0 | _（无候选）_ |  |  |
-| CL-BI系统 | `d3193d15744647499ccba0c200b62314` | 0 | _（无候选）_ |  |  |
-| HR-BI | `0084f6701c1642b786d6b84bbaa054ef` | 0 | _（无候选）_ |  |  |
-| K3.5数据变更 | `5be4d09ae4e344e38305f6d008405139` | 0 | 业务系统支持 / IL业务线支持 / IL主数据变更申请 / `APP-IL-DAT-002` | 0.5 |  |
-| K3.5系统 | `6d09df4b7f574608b85e5e903ae52c6b` | 0 | _（无候选）_ |  |  |
-| KAPP&KOMS系统 | `d21b8854d32a40b9905355fe739a60e8` | 1 | _（无候选）_ |  |  |
-| KAPP系统 | `43844d678b9541108a217353ea97e38b` | 0 | _（无候选）_ |  |  |
-| KBMS结算系统 | `be5b5bb33d9c494ea45ba5ade7e39040` | 0 | _（无候选）_ |  |  |
-| KBMS结算系统_ | `8a35110d259d40d39c2cf1a3cc923b48` | 0 | _（无候选）_ |  |  |
-| KCTS系统 | `d8edfca3745746119e7798b612ec5e0d` | 0 | _（无候选）_ |  |  |
-| KEAS大数据平台 | `e4a2227811e04f74a3cf052d21ade9ca` | 0 | _（无候选）_ |  |  |
-| KOMS主客户实施 | `ea02ecaff4e9438296b5bdb804ddc0c5` | 0 | _（无候选）_ |  |  |
-| KTMS系统 | `44b85c79a0f04c59bf48986aea3b0399` | 0 | _（无候选）_ |  |  |
-| KTMS系统_ | `aa2e0cd25f5b4ef3b6e1363e94a4601a` | 0 | _（无候选）_ |  |  |
-| KWMS系统 | `56f61337d0124ea3b02f4632e97814a8` | 0 | _（无候选）_ |  |  |
-| KWMS系统_ | `f3a3a7cf233a414d8f4b8c2d4f6e3cfa` | 0 | _（无候选）_ |  |  |
-| Ksmart系统 | `cdb8ca38cfbb4df38f08b10fb8fe0c93` | 0 | _（无候选）_ |  |  |
-| Ksmart系统_ | `9a1c1940a851422fadc3707cb636eac3` | 0 | _（无候选）_ |  |  |
-| LTL-BI系统 | `2e8509e420b14f24ba3d56e7953a3e22` | 3 | _（无候选）_ |  |  |
-| OA申请 | `6217e2ebb22b4ef890d0af9af31c8f7a` | 0 | _（无候选）_ |  |  |
-| OA申请 / AD账户申请（Windows账户） | `8c81b8d98ed5470db217389d8436f66c` | 6 | _（无候选）_ |  |  |
-| OA申请 / O365邮箱导出申请 | `5df87242c8594dfa903290bbde570438` | 1 | 邮箱与Microsoft 365协作服务 / 共享资源与协作空间 / 共享邮箱申请 / `COL-SHR-001` | 0.5 |  |
-| OA申请 / O365邮箱账户申请 | `f01241a4136d455680999c8759e94283` | 6 | 邮箱与Microsoft 365协作服务 / 共享资源与协作空间 / 共享邮箱申请 / `COL-SHR-001` | 0.5 |  |
-| OA申请 / SSLVPN账号申请 | `05fae6bef2aa40ba90218daaf33ebd43` | 1 | 网络与远程访问服务 / VPN与远程连接 / VPN开通申请 / `NET-VPN-001` | 0.59 |  |
-| OA申请 / 业务系统服务申请 | `253c64968ab046a0bf85799df965147c` | 0 | 业务系统支持 / `APP` | 0.57 |  |
-| OA申请 / 业务系统账号申请 | `b95693094805482da65f0bcf51133806` | 0 | 账号与访问服务 / 特权与临时权限 / 特权账号申请 / `ACC-PRV-001` | 0.57 |  |
-| OA系统 | `d75f90ea58824c76be4dd82efb09cee6` | 0 | _（无候选）_ |  |  |
-| test | `9cd71e9b23db47c786a1aca485906bf1` | 0 | _（无候选）_ |  |  |
-| test2 | `70d24d24c5054103b950ba10b9f0d1c2` | 0 | _（无候选）_ |  |  |
-| 企业应用系统 | `0405630ab5ba4310a585ce0303456438` | 0 | 业务系统支持 / `APP` | 0.5 |  |
-| 企业应用系统 / Back Office | `2956bb98934c499b925a42cc05bea25c` | 0 | 业务系统支持 / IFF & Back-office业务线支持 / `APP-IFF` | 0.8 |  |
-| 企业应用系统 / Back Office / OA | `4a1f80f59da8482ebed44e34027dedbd` | 9 | _（无候选）_ |  |  |
-| 企业应用系统 / Back Office / 质量报案系统 | `6067201856934723869490de5282faf0` | 9 | _（无候选）_ |  |  |
-| 企业应用系统 / IFF | `215a3d9095564db0b5333fa7e94ca56c` | 0 | 业务系统支持 / IFF & Back-office业务线支持 / `APP-IFF` | 0.8 |  |
-| 企业应用系统 / IFF / DMS系统 | `3a52c34816a84fd784dead09965f47aa` | 9 | _（无候选）_ |  |  |
-| 企业应用系统 / IFF / K35系统 | `2c5c8fdd65ef4dbba6f2858e81036b35` | 18 | _（无候选）_ |  |  |
-| 企业应用系统 / ITSM | `0941d803f2c84eab9ff58aa639620179` | 0 | _（无候选）_ |  |  |
-| 企业应用系统 / KAPP | `2ca22d902fd241859e8a820c2c823dfd` | 0 | _（无候选）_ |  |  |
-| 企业应用系统 / KAPP / CSC | `3d30541b8aa546b68af82970dd9416e7` | 91 | _（无候选）_ |  |  |
-| 企业应用系统 / KAPP / KAPP | `0205eed96e784d249a7d49b724f0cb0b` | 36 | _（无候选）_ |  |  |
-| 企业应用系统 / KAPP / KBMS结算 | `d68b411584404600a23b07a7ab564cfc` | 36 | _（无候选）_ |  |  |
-| 企业应用系统 / KAPP / KOMS | `8ee15341357241efb950ae84c65fcf7d` | 36 | _（无候选）_ |  |  |
-| 企业应用系统 / KAPP / KTMS | `f268adeb98c742aa92ebb5a823787906` | 31 | _（无候选）_ |  |  |
-| 企业应用系统 / KAPP / 运维支持 | `eec83381511a40aab0f24b9be5d2bf83` | 0 | _（无候选）_ |  |  |
-| 企业应用系统 / KWMS北区 | `d35f56e902034623b8326a459abbaddd` | 0 | _（无候选）_ |  |  |
-| 企业应用系统 / KWMS北区 / Ec-kassist | `1bd1a87f223547389308498cd96cc7be` | 13 | _（无候选）_ |  |  |
-| 企业应用系统 / KWMS北区 / KWMS1.0 | `7b915bfba7984c4b8f3013aebfed4ca3` | 11 | _（无候选）_ |  |  |
-| 企业应用系统 / KWMS北区 / KWMS1.0 & KWMS2.0-新需求 | `44bf58792a02440b92788644f18785cd` | 11 | _（无候选）_ |  |  |
-| 企业应用系统 / KWMS北区 / KWMS1.0-EDI | `23fad2dfeb0e4e3bb563fe8a12ed51ed` | 11 | _（无候选）_ |  |  |
-| 企业应用系统 / KWMS北区 / KWMS365 | `b789f62e6ef447b9af2c07be25f7396c` | 8 | _（无候选）_ |  |  |
-| 企业应用系统 / KWMS北区 / 本地系统-KTLS | `0a2e992ba27542e8bc9d6d6f979f09af` | 12 | _（无候选）_ |  |  |
-| 企业应用系统 / KWMS南区 | `442a2600f4014da18efa282ab6306f1c` | 0 | _（无候选）_ |  |  |
-| 企业应用系统 / KWMS南区 / CWOS | `bc4881cea3c2491b845aa8c83765fc45` | 11 | _（无候选）_ |  |  |
-| 企业应用系统 / KWMS南区 / FICS  | `8b250a8452324112a79483740836d926` | 11 | _（无候选）_ |  |  |
-| 企业应用系统 / KWMS南区 / KWMS1.0 & KWMS2.0-新需求 | `1def98b2e738450ba80361a42310aa0d` | 13 | _（无候选）_ |  |  |
-| 企业应用系统 / KWMS南区 / KWMS1.0 & Local-kassist | `59dadf21ef00448eb5466c94963494fa` | 13 | _（无候选）_ |  |  |
-| 企业应用系统 / KWMS南区 / KWMS1.0-EDI | `63147a7fe0894204824156b93117c88f` | 13 | _（无候选）_ |  |  |
-| 企业应用系统 / KWMS南区 / Kflex-U8 | `27e3c6c8780f4a11976c7b17df16dd42` | 9 | _（无候选）_ |  |  |
-| 企业应用系统 / 邮件系统 | `34b675b5b03546ac9244bce4652bd9a6` | 9 | _（无候选）_ |  |  |
-| 其他 | `577b276d6b6844f2bbe70de5db6b9f36` | 2 | _（无候选）_ |  |  |
-| 其他 / 其他 | `2b3a6a0547ff478c84e57ab2b2567256` | 12 | _（无候选）_ |  |  |
-| 基础架构 | `9f369d7e10394a078922dbc21c7a3745` | 0 | _（无候选）_ |  |  |
-| 基础架构 / 数据库 | `b2b9ef80b06b4ae499a1b87a9941868f` | 11 | 平台与基础设施服务 / 中间件与数据库平台 / `INF-MDW` | 0.8 |  |
-| 基础架构 / 服务器 | `4a0ece2db0004d258a35488480d696d0` | 11 | 平台与基础设施服务 / 服务器与计算资源 / `INF-SRV` | 0.8 |  |
-| 基础架构 / 网络 | `40c5ee732d1b425293ee2cbe1062b3f4` | 11 | 网络与远程访问服务 / `NET` | 0.8 |  |
-| 本地系统-上海支持中心 | `d73f2c4f4fce441caacae6a8b0c8c9ba` | 0 | 业务系统支持 / `APP` | 0.5 |  |
-| 本地系统-上海支持中心 / 上海 | `dd352ba467cb4307a1344b2b06050d2c` | 17 | _（无候选）_ |  |  |
-| 本地系统-上海支持中心 / 无锡 | `ecfaaa0b1ea543adb40900835ba542cf` | 5 | _（无候选）_ |  |  |
-| 本地系统-上海支持中心 / 青岛 | `8f7915d3c25f4bdca2b0fb681743ee6f` | 5 | _（无候选）_ |  |  |
-| 本地系统-北京支持中心 | `d4313d52592541dc99573129b1015b00` | 0 | 业务系统支持 / `APP` | 0.5 |  |
-| 本地系统-北京支持中心 / 北京分公司 | `80cb50e7920a45a387144e72c9241c39` | 9 | _（无候选）_ |  |  |
-| 本地系统-北京支持中心 / 北京总部 | `9f8a985202a14da69ef9a06605938b35` | 7 | _（无候选）_ |  |  |
-| 本地系统-北京支持中心 / 大连 | `81569821feff484db48539deafbade1f` | 7 | _（无候选）_ |  |  |
-| 本地系统-北京支持中心 / 天津 | `81446755fdeb4d37bc0a9d8e9a2aa6a7` | 9 | _（无候选）_ |  |  |
-| 本地系统-厦门支持中心 | `f175869ce48b49a6b68445fdbdd39113` | 0 | 业务系统支持 / `APP` | 0.5 |  |
-| 本地系统-厦门支持中心 / 应用系统 | `2b7e2aafc2c84edbadf720bc94c3b7c0` | 20 | _（无候选）_ |  |  |
-| 本地系统-厦门支持中心 / 硬件网络 | `de7a7eaad0e94aed92ce546826464495` | 12 | _（无候选）_ |  |  |
-| 本地系统-深圳支持中心 | `cb2ffb4fc4e3410e9305bdf13d7bc8e3` | 0 | 业务系统支持 / `APP` | 0.5 |  |
-| 本地系统-深圳支持中心 / 南宁 | `8758c8a5469d44eda9d43c40015fff19` | 7 | _（无候选）_ |  |  |
-| 本地系统-深圳支持中心 / 成都 | `fd163c8ff2754d87b617a959d681c21a` | 2 | _（无候选）_ |  |  |
-| 本地系统-深圳支持中心 / 深圳 | `dd0ab54e8d8b437cb4615a5b9629d5fc` | 15 | _（无候选）_ |  |  |
-| 本地系统-深圳支持中心 / 重庆 | `6d4841d6737744da875813f2f2b003d3` | 2 | _（无候选）_ |  |  |
+| 旧路径 | 旧 ctiId | 节点类型 | 路由引用 | 目标 | 相似度 | 你的确认 |
+| --- | --- | --- | --- | --- | --- | --- |
+| BMS系统 | `3fb52530b83c4ba99871d12978ce510a` | business_system | 0 | 建 CMDB `business_system` CI：BMS系统 |  |  |
+| CL-BI系统 | `d3193d15744647499ccba0c200b62314` | business_system | 0 | 建 CMDB `business_system` CI：CL-BI系统 |  |  |
+| HR-BI | `0084f6701c1642b786d6b84bbaa054ef` | business_system | 0 | 建 CMDB `business_system` CI：HR-BI |  |  |
+| K3.5数据变更 | `5be4d09ae4e344e38305f6d008405139` | ticket_category | 0 | 业务系统支持 / IL业务线支持 / IL主数据变更申请 / `APP-IL-DAT-002` | 0.5 |  |
+| K3.5系统 | `6d09df4b7f574608b85e5e903ae52c6b` | business_system | 0 | 建 CMDB `business_system` CI：K3.5系统 |  |  |
+| KAPP&KOMS系统 | `d21b8854d32a40b9905355fe739a60e8` | business_system | 1 | 建 CMDB `business_system` CI：KAPP&KOMS系统 |  |  |
+| KAPP系统 | `43844d678b9541108a217353ea97e38b` | business_system | 0 | 建 CMDB `business_system` CI：KAPP系统 |  |  |
+| KBMS结算系统 | `be5b5bb33d9c494ea45ba5ade7e39040` | business_system | 0 | 建 CMDB `business_system` CI：KBMS结算系统 |  |  |
+| KBMS结算系统_ | `8a35110d259d40d39c2cf1a3cc923b48` | business_system | 0 | 建 CMDB `business_system` CI：KBMS结算系统_ |  |  |
+| KCTS系统 | `d8edfca3745746119e7798b612ec5e0d` | business_system | 0 | 建 CMDB `business_system` CI：KCTS系统 |  |  |
+| KEAS大数据平台 | `e4a2227811e04f74a3cf052d21ade9ca` | business_system | 0 | 建 CMDB `business_system` CI：KEAS大数据平台 |  |  |
+| KOMS主客户实施 | `ea02ecaff4e9438296b5bdb804ddc0c5` | business_system | 0 | 建 CMDB `business_system` CI：KOMS主客户实施 |  |  |
+| KTMS系统 | `44b85c79a0f04c59bf48986aea3b0399` | business_system | 0 | 建 CMDB `business_system` CI：KTMS系统 |  |  |
+| KTMS系统_ | `aa2e0cd25f5b4ef3b6e1363e94a4601a` | business_system | 0 | 建 CMDB `business_system` CI：KTMS系统_ |  |  |
+| KWMS系统 | `56f61337d0124ea3b02f4632e97814a8` | business_system | 0 | 建 CMDB `business_system` CI：KWMS系统 |  |  |
+| KWMS系统_ | `f3a3a7cf233a414d8f4b8c2d4f6e3cfa` | business_system | 0 | 建 CMDB `business_system` CI：KWMS系统_ |  |  |
+| Ksmart系统 | `cdb8ca38cfbb4df38f08b10fb8fe0c93` | business_system | 0 | 建 CMDB `business_system` CI：Ksmart系统 |  |  |
+| Ksmart系统_ | `9a1c1940a851422fadc3707cb636eac3` | business_system | 0 | 建 CMDB `business_system` CI：Ksmart系统_ |  |  |
+| LTL-BI系统 | `2e8509e420b14f24ba3d56e7953a3e22` | business_system | 3 | 建 CMDB `business_system` CI：LTL-BI系统 |  |  |
+| OA申请 | `6217e2ebb22b4ef890d0af9af31c8f7a` | ticket_category | 0 | _（无候选，需补建/排除）_ |  |  |
+| OA申请 / AD账户申请（Windows账户） | `8c81b8d98ed5470db217389d8436f66c` | ticket_category | 6 | _（无候选，需补建/排除）_ |  |  |
+| OA申请 / O365邮箱导出申请 | `5df87242c8594dfa903290bbde570438` | ticket_category | 1 | 邮箱与Microsoft 365协作服务 / 共享资源与协作空间 / 共享邮箱申请 / `COL-SHR-001` | 0.5 |  |
+| OA申请 / O365邮箱账户申请 | `f01241a4136d455680999c8759e94283` | ticket_category | 6 | 邮箱与Microsoft 365协作服务 / 共享资源与协作空间 / 共享邮箱申请 / `COL-SHR-001` | 0.5 |  |
+| OA申请 / SSLVPN账号申请 | `05fae6bef2aa40ba90218daaf33ebd43` | ticket_category | 1 | 网络与远程访问服务 / VPN与远程连接 / VPN开通申请 / `NET-VPN-001` | 0.59 |  |
+| OA申请 / 业务系统服务申请 | `253c64968ab046a0bf85799df965147c` | ticket_category | 0 | 业务系统支持 / `APP` | 0.57 |  |
+| OA申请 / 业务系统账号申请 | `b95693094805482da65f0bcf51133806` | ticket_category | 0 | 账号与访问服务 / 特权与临时权限 / 特权账号申请 / `ACC-PRV-001` | 0.57 |  |
+| OA系统 | `d75f90ea58824c76be4dd82efb09cee6` | business_system | 0 | 建 CMDB `business_system` CI：OA系统 |  |  |
+| test | `9cd71e9b23db47c786a1aca485906bf1` | exclude | 0 | 排除 |  |  |
+| test2 | `70d24d24c5054103b950ba10b9f0d1c2` | exclude | 0 | 排除 |  |  |
+| 企业应用系统 | `0405630ab5ba4310a585ce0303456438` | business_system | 0 | 建 CMDB `business_system` CI：企业应用系统 |  |  |
+| 企业应用系统 / Back Office | `2956bb98934c499b925a42cc05bea25c` | business_system | 0 | 建 CMDB `business_system` CI：Back Office |  |  |
+| 企业应用系统 / Back Office / OA | `4a1f80f59da8482ebed44e34027dedbd` | business_system | 9 | 建 CMDB `business_system` CI：OA |  |  |
+| 企业应用系统 / Back Office / 质量报案系统 | `6067201856934723869490de5282faf0` | business_system | 9 | 建 CMDB `business_system` CI：质量报案系统 |  |  |
+| 企业应用系统 / IFF | `215a3d9095564db0b5333fa7e94ca56c` | business_system | 0 | 建 CMDB `business_system` CI：IFF |  |  |
+| 企业应用系统 / IFF / DMS系统 | `3a52c34816a84fd784dead09965f47aa` | business_system | 9 | 建 CMDB `business_system` CI：DMS系统 |  |  |
+| 企业应用系统 / IFF / K35系统 | `2c5c8fdd65ef4dbba6f2858e81036b35` | business_system | 18 | 建 CMDB `business_system` CI：K35系统 |  |  |
+| 企业应用系统 / ITSM | `0941d803f2c84eab9ff58aa639620179` | business_system | 0 | 建 CMDB `business_system` CI：ITSM |  |  |
+| 企业应用系统 / KAPP | `2ca22d902fd241859e8a820c2c823dfd` | business_system | 0 | 建 CMDB `business_system` CI：KAPP |  |  |
+| 企业应用系统 / KAPP / CSC | `3d30541b8aa546b68af82970dd9416e7` | business_system | 91 | 建 CMDB `business_system` CI：CSC |  |  |
+| 企业应用系统 / KAPP / KAPP | `0205eed96e784d249a7d49b724f0cb0b` | business_system | 36 | 建 CMDB `business_system` CI：KAPP |  |  |
+| 企业应用系统 / KAPP / KBMS结算 | `d68b411584404600a23b07a7ab564cfc` | business_system | 36 | 建 CMDB `business_system` CI：KBMS结算 |  |  |
+| 企业应用系统 / KAPP / KOMS | `8ee15341357241efb950ae84c65fcf7d` | business_system | 36 | 建 CMDB `business_system` CI：KOMS |  |  |
+| 企业应用系统 / KAPP / KTMS | `f268adeb98c742aa92ebb5a823787906` | business_system | 31 | 建 CMDB `business_system` CI：KTMS |  |  |
+| 企业应用系统 / KAPP / 运维支持 | `eec83381511a40aab0f24b9be5d2bf83` | business_system | 0 | 建 CMDB `business_system` CI：运维支持 |  |  |
+| 企业应用系统 / KWMS北区 | `d35f56e902034623b8326a459abbaddd` | business_system | 0 | 建 CMDB `business_system` CI：KWMS北区 |  |  |
+| 企业应用系统 / KWMS北区 / Ec-kassist | `1bd1a87f223547389308498cd96cc7be` | business_system | 13 | 建 CMDB `business_system` CI：Ec-kassist |  |  |
+| 企业应用系统 / KWMS北区 / KWMS1.0 | `7b915bfba7984c4b8f3013aebfed4ca3` | business_system | 11 | 建 CMDB `business_system` CI：KWMS1.0 |  |  |
+| 企业应用系统 / KWMS北区 / KWMS1.0 & KWMS2.0-新需求 | `44bf58792a02440b92788644f18785cd` | business_system | 11 | 建 CMDB `business_system` CI：KWMS1.0 & KWMS2.0-新需求 |  |  |
+| 企业应用系统 / KWMS北区 / KWMS1.0-EDI | `23fad2dfeb0e4e3bb563fe8a12ed51ed` | business_system | 11 | 建 CMDB `business_system` CI：KWMS1.0-EDI |  |  |
+| 企业应用系统 / KWMS北区 / KWMS365 | `b789f62e6ef447b9af2c07be25f7396c` | business_system | 8 | 建 CMDB `business_system` CI：KWMS365 |  |  |
+| 企业应用系统 / KWMS北区 / 本地系统-KTLS | `0a2e992ba27542e8bc9d6d6f979f09af` | business_system | 12 | 建 CMDB `business_system` CI：本地系统-KTLS |  |  |
+| 企业应用系统 / KWMS南区 | `442a2600f4014da18efa282ab6306f1c` | business_system | 0 | 建 CMDB `business_system` CI：KWMS南区 |  |  |
+| 企业应用系统 / KWMS南区 / CWOS | `bc4881cea3c2491b845aa8c83765fc45` | business_system | 11 | 建 CMDB `business_system` CI：CWOS |  |  |
+| 企业应用系统 / KWMS南区 / FICS  | `8b250a8452324112a79483740836d926` | business_system | 11 | 建 CMDB `business_system` CI：FICS  |  |  |
+| 企业应用系统 / KWMS南区 / KWMS1.0 & KWMS2.0-新需求 | `1def98b2e738450ba80361a42310aa0d` | business_system | 13 | 建 CMDB `business_system` CI：KWMS1.0 & KWMS2.0-新需求 |  |  |
+| 企业应用系统 / KWMS南区 / KWMS1.0 & Local-kassist | `59dadf21ef00448eb5466c94963494fa` | business_system | 13 | 建 CMDB `business_system` CI：KWMS1.0 & Local-kassist |  |  |
+| 企业应用系统 / KWMS南区 / KWMS1.0-EDI | `63147a7fe0894204824156b93117c88f` | business_system | 13 | 建 CMDB `business_system` CI：KWMS1.0-EDI |  |  |
+| 企业应用系统 / KWMS南区 / Kflex-U8 | `27e3c6c8780f4a11976c7b17df16dd42` | business_system | 9 | 建 CMDB `business_system` CI：Kflex-U8 |  |  |
+| 企业应用系统 / 邮件系统 | `34b675b5b03546ac9244bce4652bd9a6` | business_system | 9 | 建 CMDB `business_system` CI：邮件系统 |  |  |
+| 其他 | `577b276d6b6844f2bbe70de5db6b9f36` | exclude | 2 | 排除 |  |  |
+| 其他 / 其他 | `2b3a6a0547ff478c84e57ab2b2567256` | exclude | 12 | 排除 |  |  |
+| 基础架构 | `9f369d7e10394a078922dbc21c7a3745` | infra_ci | 0 | CMDB CI（infra） |  |  |
+| 基础架构 / 数据库 | `b2b9ef80b06b4ae499a1b87a9941868f` | infra_ci | 11 | CMDB CI（infra） |  |  |
+| 基础架构 / 服务器 | `4a0ece2db0004d258a35488480d696d0` | infra_ci | 11 | CMDB CI（infra） |  |  |
+| 基础架构 / 网络 | `40c5ee732d1b425293ee2cbe1062b3f4` | infra_ci | 11 | CMDB CI（infra） |  |  |
+| 本地系统-上海支持中心 | `d73f2c4f4fce441caacae6a8b0c8c9ba` | org_location | 0 | Phase 1 部门/地点 |  |  |
+| 本地系统-上海支持中心 / 上海 | `dd352ba467cb4307a1344b2b06050d2c` | org_location | 17 | Phase 1 部门/地点 |  |  |
+| 本地系统-上海支持中心 / 无锡 | `ecfaaa0b1ea543adb40900835ba542cf` | org_location | 5 | Phase 1 部门/地点 |  |  |
+| 本地系统-上海支持中心 / 青岛 | `8f7915d3c25f4bdca2b0fb681743ee6f` | org_location | 5 | Phase 1 部门/地点 |  |  |
+| 本地系统-北京支持中心 | `d4313d52592541dc99573129b1015b00` | org_location | 0 | Phase 1 部门/地点 |  |  |
+| 本地系统-北京支持中心 / 北京分公司 | `80cb50e7920a45a387144e72c9241c39` | org_location | 9 | Phase 1 部门/地点 |  |  |
+| 本地系统-北京支持中心 / 北京总部 | `9f8a985202a14da69ef9a06605938b35` | org_location | 7 | Phase 1 部门/地点 |  |  |
+| 本地系统-北京支持中心 / 大连 | `81569821feff484db48539deafbade1f` | org_location | 7 | Phase 1 部门/地点 |  |  |
+| 本地系统-北京支持中心 / 天津 | `81446755fdeb4d37bc0a9d8e9a2aa6a7` | org_location | 9 | Phase 1 部门/地点 |  |  |
+| 本地系统-厦门支持中心 | `f175869ce48b49a6b68445fdbdd39113` | org_location | 0 | Phase 1 部门/地点 |  |  |
+| 本地系统-厦门支持中心 / 应用系统 | `2b7e2aafc2c84edbadf720bc94c3b7c0` | org_location | 20 | Phase 1 部门/地点 |  |  |
+| 本地系统-厦门支持中心 / 硬件网络 | `de7a7eaad0e94aed92ce546826464495` | org_location | 12 | Phase 1 部门/地点 |  |  |
+| 本地系统-深圳支持中心 | `cb2ffb4fc4e3410e9305bdf13d7bc8e3` | org_location | 0 | Phase 1 部门/地点 |  |  |
+| 本地系统-深圳支持中心 / 南宁 | `8758c8a5469d44eda9d43c40015fff19` | org_location | 7 | Phase 1 部门/地点 |  |  |
+| 本地系统-深圳支持中心 / 成都 | `fd163c8ff2754d87b617a959d681c21a` | org_location | 2 | Phase 1 部门/地点 |  |  |
+| 本地系统-深圳支持中心 / 深圳 | `dd0ab54e8d8b437cb4615a5b9629d5fc` | org_location | 15 | Phase 1 部门/地点 |  |  |
+| 本地系统-深圳支持中心 / 重庆 | `6d4841d6737744da875813f2f2b003d3` | org_location | 2 | Phase 1 部门/地点 |  |  |
 
-## 无候选的旧节点（66）
-
-- BMS系统  (`3fb52530b83c4ba99871d12978ce510a`, 路由引用 0)
-- CL-BI系统  (`d3193d15744647499ccba0c200b62314`, 路由引用 0)
-- HR-BI  (`0084f6701c1642b786d6b84bbaa054ef`, 路由引用 0)
-- K3.5系统  (`6d09df4b7f574608b85e5e903ae52c6b`, 路由引用 0)
-- KAPP&KOMS系统  (`d21b8854d32a40b9905355fe739a60e8`, 路由引用 1)
-- KAPP系统  (`43844d678b9541108a217353ea97e38b`, 路由引用 0)
-- KBMS结算系统  (`be5b5bb33d9c494ea45ba5ade7e39040`, 路由引用 0)
-- KBMS结算系统_  (`8a35110d259d40d39c2cf1a3cc923b48`, 路由引用 0)
-- KCTS系统  (`d8edfca3745746119e7798b612ec5e0d`, 路由引用 0)
-- KEAS大数据平台  (`e4a2227811e04f74a3cf052d21ade9ca`, 路由引用 0)
-- KOMS主客户实施  (`ea02ecaff4e9438296b5bdb804ddc0c5`, 路由引用 0)
-- KTMS系统  (`44b85c79a0f04c59bf48986aea3b0399`, 路由引用 0)
-- KTMS系统_  (`aa2e0cd25f5b4ef3b6e1363e94a4601a`, 路由引用 0)
-- KWMS系统  (`56f61337d0124ea3b02f4632e97814a8`, 路由引用 0)
-- KWMS系统_  (`f3a3a7cf233a414d8f4b8c2d4f6e3cfa`, 路由引用 0)
-- Ksmart系统  (`cdb8ca38cfbb4df38f08b10fb8fe0c93`, 路由引用 0)
-- Ksmart系统_  (`9a1c1940a851422fadc3707cb636eac3`, 路由引用 0)
-- LTL-BI系统  (`2e8509e420b14f24ba3d56e7953a3e22`, 路由引用 3)
-- OA申请  (`6217e2ebb22b4ef890d0af9af31c8f7a`, 路由引用 0)
-- OA申请 / AD账户申请（Windows账户）  (`8c81b8d98ed5470db217389d8436f66c`, 路由引用 6)
-- OA系统  (`d75f90ea58824c76be4dd82efb09cee6`, 路由引用 0)
-- test  (`9cd71e9b23db47c786a1aca485906bf1`, 路由引用 0)
-- test2  (`70d24d24c5054103b950ba10b9f0d1c2`, 路由引用 0)
-- 企业应用系统 / Back Office / OA  (`4a1f80f59da8482ebed44e34027dedbd`, 路由引用 9)
-- 企业应用系统 / Back Office / 质量报案系统  (`6067201856934723869490de5282faf0`, 路由引用 9)
-- 企业应用系统 / IFF / DMS系统  (`3a52c34816a84fd784dead09965f47aa`, 路由引用 9)
-- 企业应用系统 / IFF / K35系统  (`2c5c8fdd65ef4dbba6f2858e81036b35`, 路由引用 18)
-- 企业应用系统 / ITSM  (`0941d803f2c84eab9ff58aa639620179`, 路由引用 0)
-- 企业应用系统 / KAPP  (`2ca22d902fd241859e8a820c2c823dfd`, 路由引用 0)
-- 企业应用系统 / KAPP / CSC  (`3d30541b8aa546b68af82970dd9416e7`, 路由引用 91)
-- 企业应用系统 / KAPP / KAPP  (`0205eed96e784d249a7d49b724f0cb0b`, 路由引用 36)
-- 企业应用系统 / KAPP / KBMS结算  (`d68b411584404600a23b07a7ab564cfc`, 路由引用 36)
-- 企业应用系统 / KAPP / KOMS  (`8ee15341357241efb950ae84c65fcf7d`, 路由引用 36)
-- 企业应用系统 / KAPP / KTMS  (`f268adeb98c742aa92ebb5a823787906`, 路由引用 31)
-- 企业应用系统 / KAPP / 运维支持  (`eec83381511a40aab0f24b9be5d2bf83`, 路由引用 0)
-- 企业应用系统 / KWMS北区  (`d35f56e902034623b8326a459abbaddd`, 路由引用 0)
-- 企业应用系统 / KWMS北区 / Ec-kassist  (`1bd1a87f223547389308498cd96cc7be`, 路由引用 13)
-- 企业应用系统 / KWMS北区 / KWMS1.0  (`7b915bfba7984c4b8f3013aebfed4ca3`, 路由引用 11)
-- 企业应用系统 / KWMS北区 / KWMS1.0 & KWMS2.0-新需求  (`44bf58792a02440b92788644f18785cd`, 路由引用 11)
-- 企业应用系统 / KWMS北区 / KWMS1.0-EDI  (`23fad2dfeb0e4e3bb563fe8a12ed51ed`, 路由引用 11)
-- 企业应用系统 / KWMS北区 / KWMS365  (`b789f62e6ef447b9af2c07be25f7396c`, 路由引用 8)
-- 企业应用系统 / KWMS北区 / 本地系统-KTLS  (`0a2e992ba27542e8bc9d6d6f979f09af`, 路由引用 12)
-- 企业应用系统 / KWMS南区  (`442a2600f4014da18efa282ab6306f1c`, 路由引用 0)
-- 企业应用系统 / KWMS南区 / CWOS  (`bc4881cea3c2491b845aa8c83765fc45`, 路由引用 11)
-- 企业应用系统 / KWMS南区 / FICS   (`8b250a8452324112a79483740836d926`, 路由引用 11)
-- 企业应用系统 / KWMS南区 / KWMS1.0 & KWMS2.0-新需求  (`1def98b2e738450ba80361a42310aa0d`, 路由引用 13)
-- 企业应用系统 / KWMS南区 / KWMS1.0 & Local-kassist  (`59dadf21ef00448eb5466c94963494fa`, 路由引用 13)
-- 企业应用系统 / KWMS南区 / KWMS1.0-EDI  (`63147a7fe0894204824156b93117c88f`, 路由引用 13)
-- 企业应用系统 / KWMS南区 / Kflex-U8  (`27e3c6c8780f4a11976c7b17df16dd42`, 路由引用 9)
-- 企业应用系统 / 邮件系统  (`34b675b5b03546ac9244bce4652bd9a6`, 路由引用 9)
-- 其他  (`577b276d6b6844f2bbe70de5db6b9f36`, 路由引用 2)
-- 其他 / 其他  (`2b3a6a0547ff478c84e57ab2b2567256`, 路由引用 12)
-- 基础架构  (`9f369d7e10394a078922dbc21c7a3745`, 路由引用 0)
-- 本地系统-上海支持中心 / 上海  (`dd352ba467cb4307a1344b2b06050d2c`, 路由引用 17)
-- 本地系统-上海支持中心 / 无锡  (`ecfaaa0b1ea543adb40900835ba542cf`, 路由引用 5)
-- 本地系统-上海支持中心 / 青岛  (`8f7915d3c25f4bdca2b0fb681743ee6f`, 路由引用 5)
-- 本地系统-北京支持中心 / 北京分公司  (`80cb50e7920a45a387144e72c9241c39`, 路由引用 9)
-- 本地系统-北京支持中心 / 北京总部  (`9f8a985202a14da69ef9a06605938b35`, 路由引用 7)
-- 本地系统-北京支持中心 / 大连  (`81569821feff484db48539deafbade1f`, 路由引用 7)
-- 本地系统-北京支持中心 / 天津  (`81446755fdeb4d37bc0a9d8e9a2aa6a7`, 路由引用 9)
-- 本地系统-厦门支持中心 / 应用系统  (`2b7e2aafc2c84edbadf720bc94c3b7c0`, 路由引用 20)
-- 本地系统-厦门支持中心 / 硬件网络  (`de7a7eaad0e94aed92ce546826464495`, 路由引用 12)
-- 本地系统-深圳支持中心 / 南宁  (`8758c8a5469d44eda9d43c40015fff19`, 路由引用 7)
-- 本地系统-深圳支持中心 / 成都  (`fd163c8ff2754d87b617a959d681c21a`, 路由引用 2)
-- 本地系统-深圳支持中心 / 深圳  (`dd0ab54e8d8b437cb4615a5b9629d5fc`, 路由引用 15)
-- 本地系统-深圳支持中心 / 重庆  (`6d4841d6737744da875813f2f2b003d3`, 路由引用 2)
-
-## 缺父引用（被路由引用但不在旧 CTI 树中，需源系统确认）
+## 缺父引用（被路由引用但不在旧 CTI 树中）
 
 - `02ec6fdb451047fe9b7d3ea5270468d4`（路由引用 11 条）
 - `1d02d739f9b84378b4b893030d2c54e7`（路由引用 1 条）
@@ -184,7 +118,7 @@
 - `f0114020950648fc918b35f8d78e7bf2`（路由引用 12 条）
 - `f26af604dcdb4999bcb9c6bb49d004c0`（路由引用 11 条）
 
-## 权威 seed 分类全量（供映射参照）
+## 权威 seed 分类全量（182，分类类节点映射参照）
 
 - L1 账号与访问服务  (`ACC`)
 - L1 终端与办公支持  (`EUC`)

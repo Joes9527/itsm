@@ -38,7 +38,7 @@
 
 | # | 现状（旧 → 新样本） | GAP 与解决方案 |
 | --- | --- | --- |
-| G1 | CTI 82 节点 → 分类 183（9/38/136） | 归一化名称重叠 0 不能证明无语义映射。14 个孤立 ctiId 涉及 118 条路由。业务确认映射/补建/排除；补建前确认父层级及 code/itsm_type/default_priority/sla_tier，缺父阻塞 |
+| G1 | CTI 82 节点 → 分类 183（9/38/136） | **旧 CTI 为混合树，须按节点类型分流**（用户确认）：业务系统→CMDB `business_system`（开单选 `ci_ids`，不进分类）；服务/动作→`ticket_categories`（键 seed `code`）；组织/地点→Phase 1；基础架构→CMDB CI；test/其他排除。本次分流：业务系统 49、服务分类 8、地点 17、基础设施 4、排除 4。归一化名称重叠 0 不能证明无语义映射。14 个孤立 ctiId 涉及 118 条路由。补建前确认父子层级及 code/itsm_type/default_priority/sla_tier，缺父阻塞。见 [操作手册](../migrations/2026-09-14-legacy-config-migration-playbook.md) §2 与 [CTI 分流工作表](../review/2026-09-14-cti-mapping-worksheet.md) |
 | G2 | 字典 988 项/183 组 → field_definitions 131（模板122/目录9） | 全局字典与实体字段选项结构不同，原 label 覆盖率不足1%。仅迁在用且有明确目标实体/字段的项；保留 value/label 语义与一对多落点，无目标者显式差额，不能存入任意 JSON |
 | G3 | P0–P3 共15行，按模块 → 多套词汇 | 旧 P0→urgent/P1、P1→high/P2、P2→medium/P3、P3→low/P4 分别对应 SLA 词汇/分类分级；目标字段按固定代码契约确认。模板 low/medium/P2/P3/P4 等值逐项归一化，不能对不同语义字段盲目全局替换 |
 | G4 | 旧 SLA 按模块分钟不同 → 样本14条（原报告分为1–7与8–14两组） | 以新配置数值为准。按租户、业务键、完整配置及引用关系判重，记录合并、引用重绑和保留理由；不固定“保留id 1–7”，不跨租户去重，目标 ID 独立生成 |

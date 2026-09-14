@@ -3,6 +3,7 @@
 - 状态：draft，供复核；**不写目标库**。
 - 权威配置：固定制品 `0788a9bb` 的 `itsm-backend/config/seed/default.json`（sha256 `372d6052…`）。
 - 目标：`ga-itsm-20260914 / itsm_ga_ready / public`（规范配置当前为空）。
+- 分类维度先做**节点类型分流**（业务系统→CMDB `business_system`、服务/动作→分类、组织/基础设施另维），见 [操作手册 §2](2026-09-14-legacy-config-migration-playbook.md) 与 [CTI 节点分流工作表](2026-09-14-cti-mapping-worksheet.md)。
 
 ## 1. 优先级词汇映射（规则）
 
