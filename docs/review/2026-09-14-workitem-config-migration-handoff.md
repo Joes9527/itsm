@@ -16,7 +16,7 @@
 
 | 仓库 | worktree | 分支 | 基线 | 最终提交 |
 | --- | --- | --- | --- | --- |
-| ITSM | `/home/administrator/project/itsm/.worktrees/workitem-config-migration` | `codex/feat/workitem-config-migration` | `66008779` | **`a4283cdb`** |
+| ITSM | `/home/administrator/project/itsm/.worktrees/workitem-config-migration` | `codex/feat/workitem-config-migration` | `66008779` | **`c0f102d5`**（本交接正文所在提交；如需再追加文档提交，以 `git rev-parse HEAD` 为准） |
 | KAF | `/home/administrator/project/kaf-worktrees/workitem-config-migration` | `feat/workitem-config-migration` | `184f7868` | **`67928a8b`** |
 
 - 本交接提交 SHA 记为 `GBRevision`（`git rev-parse HEAD`：ITSM `a4283cdb`、KAF `67928a8b`；内容提交后如再提交须更新）。
