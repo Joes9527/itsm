@@ -166,3 +166,21 @@ R1 状态：本轮入口盘点已完成；安全缺口未关闭，M1 不通过�
 - 目标摘要采用 `feishu-task-v2` 路由身份，不含密钥；旧意图没有被转换或重写。接下来的持久payload/原producer必须完整固定目标，不能把本提交的字符串摘要等同于完整交付协议。
 - `r2-f-target-red.log`、`r2-f-activation-red.log` 为实际失败证据；`r2-f-target-green.log` 和 `r2-f-activation-green.log`（`go test -p 1 -race ./connector/... -count=1`）PASS，无skip/race。真实Manager在纯初始化后通过原Feishu client向本地接收端create/update成功；disabled、缺secret、错误digest、调用方配置修改和错owner受到检查。
 - 仍需 R2-F：原事务producer的版本化目标；creation持久claim/成员/actor核验；update同实例发送；manual同步消除直接外发；inbound已有mapping/删除边界；发送后重绑/回执失败保持unknown且不重发。尚未做此提交上的全后端构建、完整私有S6或里程碑独立审阅，不复用此前构建为这次变更的构建证明。
+
+### 7.5 R2-F 创建 producer 检查点（2026-09-14 10:15 CST）
+
+代码提交 `9921707da8a384bac190dcb70e8c09310b11175b`。本批累计 09:42–10:15，约33分钟，涵盖7.4目标组件和本检查点；R2仍部分完成。
+
+- 创建 producer 不再依赖已激活 `Manager.Get`：candidate 从冻结声明读取，standard 使用原事务中的持久配置读取。版本化 FeishuTarget 固定协议、name/provider/destinationDigest；禁用outbox/尚未激活/没有发送secret时，合法声明仍产生pending意图，零网络请求。
+- 仅可选目标确实不存在时省略。目标描述错误、错误provider、错tenant和取消上下文不被当成无配置；新增缺失错误仍同时包装原ErrDenied，保留其他调用方的拒绝语义。
+- 配置读取故障保持 InfrastructureUnavailable 与原始错误链，创建事务回滚。旧payload不转换，不重写历史队列；manual创建暂只适配payload类型，其来源和投递端仍待完整收口。
+- 回归fixture明确提供standard策略、租户上下文与持久配置；飞书专用fixture通过持久通知偏好关闭邮件（保持站内通知），不把未配置邮件运输纳入飞书测试。原冻结内容、共享创建意图、当前权限撤销、未知结果和读取不外发断言保留。这些SQLite回归不作为持久claim/锁协议证据。
+
+本机证据（目录同7.3）：
+- `r2-f-producer-red.log`：创建成功但禁用outbox时遗漏意图；`r2-f-producer-fault-red.log`：配置读取故障错误地归为DomainValidationFailed。
+- `r2-f-producer-private-race.log`：私有PG候选原producer正向PASS，冻结完整目标、pending、未激活、零请求。
+- `r2-f-producer-regression-race.log`：受影响Feishu创建/manual/并发/只读/配置故障测试 `-race -count=1` PASS。
+- `r2-f-producer-description-race.log`：database声明与connector持久描述受影响测试 `-race -count=1` PASS。
+- `r2-f-producer-build.log`：当前代码 `go build -p 1 ./...` 退出0；日志空。以上无skip，不冒称完整G1/S6。
+
+剩余差额仍为7.4末项：creation持久claim/成员/actor与发送后回执；update完整目标及同实例；manual原事务意图；inbound已有mapping/删除；R3整体验收和里程碑独立审阅。M1尚未关闭，按当前跨入口规模暂估还需3–6小时（工作估算，非准入承诺），下一批以creation持久投递的实际差额校准。R4–R9未开始；没有新版CandidateSHA或B的T3 EnvironmentRevision，不执行真实候选验收、B配置操作或共享库操作。
