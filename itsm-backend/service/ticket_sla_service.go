@@ -310,12 +310,16 @@ func (s *TicketSLAService) AdjustToBusinessHours(t time.Time) time.Time {
 // businessHoursConfig 业务时间配置。
 // 默认：周一至周五 9:00-18:00，无节假日。
 type businessHoursConfig struct {
-	workDays  map[time.Weekday]bool // 工作日集合
-	startHour int                   // 工作时段起始小时（含），9 表示 09:00
-	startMin  int                   // 工作时段起始分钟
-	endHour   int                   // 工作时段结束小时（不含），18 表示 18:00
-	endMin    int                   // 工作时段结束分钟
-	holidays  map[string]bool       // 节假日集合，格式 "2006-01-02"
+	workDays   map[time.Weekday]bool // 工作日集合
+	startHour  int                   // 工作时段起始小时（含），9 表示 09:00
+	startMin   int                   // 工作时段起始分钟
+	endHour    int                   // 工作时段结束小时（不含），18 表示 18:00
+	endMin     int                   // 工作时段结束分钟
+	holidays   map[string]bool       // 节假日集合，格式 "2006-01-02"
+	makeupDays map[string]bool       // 指定日期补班，覆盖每周工作日规则
+	location   *time.Location        // nil preserves the input location for undeclared legacy calendars
+	validFrom  string                // optional inclusive local-date coverage; both bounds must be declared
+	validUntil string
 }
 
 // defaultBusinessHoursConfig 返回默认业务时间配置（周一至周五 9:00-18:00）。
@@ -325,21 +329,57 @@ func defaultBusinessHoursConfig() businessHoursConfig {
 			time.Monday: true, time.Tuesday: true, time.Wednesday: true,
 			time.Thursday: true, time.Friday: true,
 		},
-		startHour: 9,
-		endHour:   18,
-		holidays:  map[string]bool{},
+		startHour:  9,
+		endHour:    18,
+		holidays:   map[string]bool{},
+		makeupDays: map[string]bool{},
 	}
 }
 
 // parseBusinessHoursConfig 从 SLADefinition.BusinessHours (map[string]interface{}) 解析配置。
-// 配置格式参考 ent/schema/sla_policy.go 的 BusinessHoursConfig：
+// 配置存储于 SLADefinition.BusinessHours：
 //
 //	{ "work_days": [1,2,3,4,5], "start_time": "09:00", "end_time": "18:00",
-//	  "time_zone": "Asia/Shanghai", "holiday_list": ["2026-01-01"] }
+//	  "time_zone": "Asia/Shanghai", "holiday_list": ["2026-01-01"],
+//	  "makeup_days": ["2026-01-04"], "valid_from": "2026-01-01", "valid_until": "2026-12-31" }
 //
 // Missing calendar attributes use documented defaults; invalid declarations fail closed.
 func parseBusinessHoursConfig(raw map[string]interface{}) (businessHoursConfig, error) {
 	cfg := defaultBusinessHoursConfig()
+	if value, exists := raw["time_zone"]; exists {
+		name, ok := value.(string)
+		if !ok || name == "" || name == "Local" {
+			return cfg, fmt.Errorf("SLA time_zone must name an explicit IANA location")
+		}
+		location, err := time.LoadLocation(name)
+		if err != nil {
+			return cfg, fmt.Errorf("invalid SLA time_zone: %w", err)
+		}
+		cfg.location = location
+	}
+	from, hasFrom := raw["valid_from"]
+	until, hasUntil := raw["valid_until"]
+	if hasFrom != hasUntil {
+		return cfg, fmt.Errorf("SLA calendar coverage requires valid_from and valid_until")
+	}
+	if hasFrom {
+		for _, field := range []struct {
+			value  interface{}
+			target *string
+		}{{from, &cfg.validFrom}, {until, &cfg.validUntil}} {
+			date, ok := field.value.(string)
+			if !ok {
+				return cfg, fmt.Errorf("invalid SLA calendar coverage date")
+			}
+			if _, err := time.Parse("2006-01-02", date); err != nil {
+				return cfg, fmt.Errorf("invalid SLA calendar coverage date")
+			}
+			*field.target = date
+		}
+		if cfg.validFrom > cfg.validUntil {
+			return cfg, fmt.Errorf("SLA calendar coverage ends before it starts")
+		}
+	}
 	if value, exists := raw["work_days"]; exists {
 		days, ok := value.([]interface{})
 		if !ok || len(days) == 0 {
@@ -379,52 +419,89 @@ func parseBusinessHoursConfig(raw map[string]interface{}) (businessHoursConfig, 
 	if cfg.endHour*60+cfg.endMin <= cfg.startHour*60+cfg.startMin {
 		return cfg, fmt.Errorf("SLA work period must end after it starts")
 	}
-	if value, exists := raw["holiday_list"]; exists {
-		holidays, ok := value.([]interface{})
-		if !ok {
-			return cfg, fmt.Errorf("invalid SLA holiday_list")
+	for key, dates := range map[string]map[string]bool{"holiday_list": cfg.holidays, "makeup_days": cfg.makeupDays} {
+		value, exists := raw[key]
+		if !exists {
+			continue
 		}
-		for _, value := range holidays {
+		declarations, ok := value.([]interface{})
+		if !ok {
+			return cfg, fmt.Errorf("invalid SLA %s", key)
+		}
+		for _, value := range declarations {
 			day, ok := value.(string)
 			if !ok {
-				return cfg, fmt.Errorf("invalid SLA holiday")
+				return cfg, fmt.Errorf("invalid SLA %s date", key)
 			}
 			if _, err := time.Parse("2006-01-02", day); err != nil {
-				return cfg, fmt.Errorf("invalid SLA holiday")
+				return cfg, fmt.Errorf("invalid SLA %s date", key)
 			}
-			cfg.holidays[day] = true
+			if cfg.validFrom != "" && (day < cfg.validFrom || day > cfg.validUntil) {
+				return cfg, fmt.Errorf("SLA %s date is outside calendar coverage", key)
+			}
+			dates[day] = true
+		}
+	}
+	for day := range cfg.makeupDays {
+		if cfg.holidays[day] {
+			return cfg, fmt.Errorf("SLA date cannot be both a holiday and a makeup day")
 		}
 	}
 	return cfg, nil
 }
 
+func (c businessHoursConfig) calendarTime(t time.Time) time.Time {
+	if c.location != nil {
+		return t.In(c.location)
+	}
+	return t
+}
+
+func (c businessHoursConfig) checkCoverage(t time.Time) error {
+	date := c.calendarTime(t).Format("2006-01-02")
+	if c.validFrom != "" && (date < c.validFrom || date > c.validUntil) {
+		return fmt.Errorf("SLA date %s is outside calendar coverage %s..%s", date, c.validFrom, c.validUntil)
+	}
+	return nil
+}
+
 // isHoliday 判断给定日期是否为节假日。
 func (c businessHoursConfig) isHoliday(t time.Time) bool {
-	return c.holidays[t.Format("2006-01-02")]
+	return c.holidays[c.calendarTime(t).Format("2006-01-02")]
 }
 
 // isWorkDay 判断给定日期是否为工作日（工作日集合 + 非节假日）。
 func (c businessHoursConfig) isWorkDay(t time.Time) bool {
+	t = c.calendarTime(t)
 	if c.isHoliday(t) {
 		return false
+	}
+	if c.makeupDays[t.Format("2006-01-02")] {
+		return true
 	}
 	return c.workDays[t.Weekday()]
 }
 
 // workDayStart 返回 t 所在工作日的工时开始时刻。
 func (c businessHoursConfig) workDayStart(t time.Time) time.Time {
+	t = c.calendarTime(t)
 	y, m, d := t.Date()
 	return time.Date(y, m, d, c.startHour, c.startMin, 0, 0, t.Location())
 }
 
 // workDayEnd 返回 t 所在工作日的工时结束时刻。
 func (c businessHoursConfig) workDayEnd(t time.Time) time.Time {
+	t = c.calendarTime(t)
 	y, m, d := t.Date()
 	return time.Date(y, m, d, c.endHour, c.endMin, 0, 0, t.Location())
 }
 
 // nextWorkDayStart 返回 t 之后下一个工作日的工时开始时刻。
 func (c businessHoursConfig) nextWorkDayStart(t time.Time) (time.Time, error) {
+	t = c.calendarTime(t)
+	if err := c.checkCoverage(t); err != nil {
+		return time.Time{}, err
+	}
 	if len(c.workDays) == 0 {
 		return time.Time{}, fmt.Errorf("SLA has no working days")
 	}
@@ -432,6 +509,9 @@ func (c businessHoursConfig) nextWorkDayStart(t time.Time) (time.Time, error) {
 	// holiday plus one complete week bounds the search even for sparse calendars.
 	for i := 1; i <= 7*(len(c.holidays)+1); i++ {
 		next := t.AddDate(0, 0, i)
+		if err := c.checkCoverage(next); err != nil {
+			return time.Time{}, err
+		}
 		if c.isWorkDay(next) {
 			return c.workDayStart(next), nil
 		}
@@ -440,6 +520,10 @@ func (c businessHoursConfig) nextWorkDayStart(t time.Time) (time.Time, error) {
 }
 
 func adjustToBusinessHoursStart(t time.Time, cfg businessHoursConfig) (time.Time, error) {
+	t = cfg.calendarTime(t)
+	if err := cfg.checkCoverage(t); err != nil {
+		return time.Time{}, err
+	}
 	if !cfg.isWorkDay(t) {
 		return cfg.nextWorkDayStart(t)
 	}
@@ -453,6 +537,10 @@ func adjustToBusinessHoursStart(t time.Time, cfg businessHoursConfig) (time.Time
 }
 
 func addBusinessMinutes(start time.Time, minutes int, cfg businessHoursConfig) (time.Time, error) {
+	start = cfg.calendarTime(start)
+	if err := cfg.checkCoverage(start); err != nil {
+		return time.Time{}, err
+	}
 	if minutes == 0 {
 		return start, nil
 	}
