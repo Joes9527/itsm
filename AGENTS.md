@@ -1,145 +1,86 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+## Purpose and authority
 
-> **Shared with CLAUDE.md**: [CLAUDE.md](CLAUDE.md) is the file Claude Code reads automatically; it mirrors this file's architecture, domain, and product constraints (including a summary of the Unified Work Item Domain Contract below) plus Claude-Code-specific operational conventions (file naming, DTO/response format detail, Docker ops, TypeScript/Ant Design conventions) that don't apply to Codex. When architecture, domain, or cross-cutting principles change here, mirror the summary into CLAUDE.md in the same change — do not let the two drift, they are read by different agents working the same codebase.
+ITSM is an enterprise-grade, open-source, AI-Native platform for the China market, built with Go/Gin/Ent and Next.js/TypeScript. Target ServiceNow-class ITIL v3/v4 capability with lighter private deployment, local enterprise integrations, and one core model supporting private deployment, SaaS, and SaaS + MSP.
 
-## Project Overview
+This file is the authoritative cross-domain architecture and design contract for all coding agents. [CLAUDE.md](CLAUDE.md) provides a synchronized summary and Claude's entry point; DTO, naming, frontend, and operational rules apply equally to every agent. Update its summary in the same change when this contract changes. Maintain detailed rules once and link them from both entry points.
 
-ITSM (IT Service Management) system with a Go/Gin backend and Next.js/TypeScript frontend. Features include:
+Read [engineering governance](docs/agent-engineering-governance.md) before making changes. Follow the task-specific reading map below. Release plans belong in [ROADMAP.md](ROADMAP.md); check its date and current implementation/verification evidence before treating a capability as delivered. This file defines constraints, not a release or deployment status report.
 
-- Ticket/Incident/Problem/Change management
-- Service Catalog
-- Knowledge Base with RAG
-- BPMN Workflow engine
-- SLA monitoring and escalation
-- AI-powered triage and summarization
+## System and code boundaries
 
-## Product Direction
+- **Backend authority:** `itsm-backend` owns domain rules, authorization, tenant isolation, workflow execution, audit, and API contracts. The frontend presents and collects information; UI state or hidden menus never grant permission or authorize a transition.
+- **Existing ownership:** follow the owning domain's legacy `controller/` + `service/` or vertical `handlers/<domain>/` structure. Do not implement the same endpoint in both. A domain exposes services/contracts; other domains must not call its repository implementation directly. Shared helpers belong in `handlers/common/` or `handlers/shared/`; reuse established shared services such as dynamic-field services.
+- **Dependency direction:** HTTP/router layers call application/domain services; services use repositories and infrastructure ports; infrastructure does not call upward into controllers or domain orchestration. Controllers bind/validate input, use established authorization, call services, map DTOs, and return responses. Business rules, transactions, persistence, and external side effects belong below HTTP.
+- **Code locations:** Ent schemas live in `ent/schema/`, route registration in `router/`, and request authentication/CORS/logging in middleware. Tenant enforcement also belongs at service, association, database, and background execution boundaries; middleware alone is insufficient.
+- **Frontend:** use Next.js App Router, `src/lib/api/` for API access, and existing store conventions. Keep domain components/hooks near their route; share only where reuse is real. Backend DTOs define the wire contract; do not hide contract defects with frontend business-rule copies.
+- **Extensions:** AI/RAG services, KAF, connectors, skills, plugins, and CLI use existing service, permission, tenant, audit, and event boundaries. Connectors own lifecycle, configuration, health checks, secret masking, and external transport. Controllers must not make ad hoc provider calls; CLI must not become a second business implementation.
 
-This project is building an enterprise-grade, open-source, AI-Native ITSM platform for the China market. The long-term benchmark is ServiceNow-class process capability, but with lighter private deployment, stronger local enterprise integration, and open extensibility.
+## Architecture and design principles
 
-Core product goals:
+### One authority and explicit domain ownership
 
-- Cover complete ITIL v3/v4 service management workflows: ticket, incident, problem, change, release, service request, service catalog, SLA, knowledge, and CMDB.
-- Make workflow customization a first-class capability through BPMN, process binding, form/config templates, and auditable task execution.
-- Build AI into the service management lifecycle instead of adding a chatbot beside it: triage, summarization, knowledge retrieval, impact analysis, workflow recommendation, audit review, and controlled tool invocation.
-- Prepare for Feishu, WeCom, DingTalk, Webhook, connector marketplace, skill marketplace, plugin marketplace, and CLI-driven operations.
-- Support private deployment, SaaS, and SaaS + MSP modes without forking the core data model.
+- One business concept or field has one authoritative owner and write location. Do not maintain long-term dual reads/writes, duplicate business queries/abstractions, or JSON relationships alongside structured relations. Derived projections must remain traceable to their source and cannot become independent authorities.
+- WorkItem unifies identity and cross-cutting operations, not professional state machines. Incident, Problem, Change Request, Service Request, and Release retain their professional responsibilities; Ticket is WorkItem's product-facing name. The WorkItem extension contract below defines its specific classes and does not implicitly add a Release class.
+- BPMN/process binding owns approval and fulfillment orchestration, escalation, and automation. Do not create another approval engine. Preserve definition, instance, task, variable, history, and audit integrity; professional services validate lifecycle changes. SLA uses authoritative timestamps and policy bindings.
+- CMDB separates CI type/schema, instance, relationships/types, discovery source, reconciliation, topology, and impact analysis. Imports/discovery must be source-aware and idempotent; mutations preserve history/audit, and topology traversal must be bounded.
+- Knowledge/RAG preserves source attribution, version state, tenant scope, and RBAC visibility, with permission filtering before retrieval and before response. Known Error is knowledge; a Catalog Item is a service definition, not an execution record.
 
-When making architecture choices, prefer enterprise correctness, auditability, tenant isolation, and extensibility over quick feature-only shortcuts.
+### Proportionate abstraction and configuration
 
-## System Architecture
+- Put variable product behavior in existing configuration, registries, policies, or strategies. Encode stable domain invariants directly in code/types. Introduce an abstraction only for a real variant, reuse need, or external boundary; do not build a configurable framework for a single fixed rule.
+- Prefer cohesive refactoring over wrappers, bridge services, empty implementations, and parallel mechanisms. A Manager, Facade, Proxy, or Adapter is justified by a necessary responsibility or boundary, not its name. Remove obsolete paths when replacing them, subject to the explicit migration/compatibility decision below.
+- Split modules by responsibility, transaction ownership, and reasons to change, not merely file length. Keep contracts understandable without reading all implementations; do not move the same tangled logic into a vaguely named layer.
 
-- **itsm-backend** is the source of truth for domain rules, RBAC, tenant isolation, workflow execution, audit logs, and API contracts.
-- **itsm-frontend** is the operator, administrator, and requester experience layer. It must not duplicate backend business rules or infer authorization from UI state.
-- **itsm-ai-service**, RAG services, connectors, skills, plugins, and CLI tools are extension surfaces. They must use established service, permission, tenant, audit, and event boundaries rather than embedding parallel business logic.
-- Enterprise connectors use lifecycle, configuration, health-check, permission, secret-masking, and audit boundaries. Controllers must not make ad hoc external calls.
+### Transactions, delivery, and recovery
 
-### Backend and Frontend Boundaries
+- The owning application service defines the transaction. Persist authoritative records, required audit, and reliable-delivery intent atomically where the operation requires them. Reuse existing outbox/delivery mechanisms for external side effects; a remote call cannot be made atomic merely by placing it inside a database transaction.
+- Reuse [WorkItem intake](itsm-backend/handlers/intake/service.go) and the existing domain creators for new creation channels. Preserve its transactional creation, authorization, idempotency, snapshots, audit, and workflow-start outbox instead of introducing another base-record creation path.
+- Retriable creation, callbacks, consumers, and external actions need stable action identity and explicit replay semantics. Replays must not duplicate business effects; changed content under the same identity must follow the owning contract's conflict rules. Use established versions, compare-and-swap, locks, or fenced leases for concurrency; a prior read is not a concurrency guarantee.
+- Distinguish database commit, message delivery, workflow termination, external execution, verification, and professional completion. At-least-once transport requires receiver deduplication. Unknown external results remain pending/unknown/manual intervention as defined by the contract; retries must not blindly repeat an irreversible action or fabricate success evidence.
 
-- The backend contains legacy `controller/` + `service/` modules and newer vertical slices under `handlers/<domain>/`. When extending a domain, follow its existing style and do not implement the same endpoint in both styles.
-- `handlers/<domain>/` packages own their handler, service, repository, and entity/DTO boundaries. Shared helpers belong in `handlers/common/` or `handlers/shared/`; do not call a domain repository implementation directly from another domain.
-- Ent schemas live under `ent/schema/`; authentication, CORS, RBAC, logging, and tenant isolation belong to middleware; route registration belongs to `router/`.
-- Frontend pages use Next.js App Router. API access goes through `src/lib/api/`; shared state uses the existing store conventions; domain components and hooks stay close to their route unless reuse is real.
+### Contract evolution and change scope
 
-### Domain Ownership
+- Distinguish target invariants, current implementation, and migration/deployment state. Historical designs and green unit tests alone do not prove a feature is deployed or fully accepted.
+- Change persistence and public APIs through an explicit migration/compatibility decision with verification and rollback/remediation boundaries. A necessary temporary projection or transition path must have one authoritative source, a documented scope, and a retirement condition; it is not permission for permanent dual ownership.
+- Fix architectural violations needed for the authorized task. Record unrelated debt for separate work rather than silently expanding into a domain-wide rewrite. Major decisions and exceptions belong in a status-bearing authoritative design/contract linked from the documentation index.
 
-- Ticket, Incident, Problem, Change, Release, and Service Request remain distinct professional domains. The WorkItem contract unifies identity and cross-cutting capabilities, not professional state machines.
-- BPMN/process execution is the orchestration layer for approvals, fulfillment, SLA escalation, and automation. Do not create a second approval engine.
-- CMDB keeps CI type/schema, CI instance, relationships, relationship types, discovery source, reconciliation, topology, and impact analysis as separate concerns. Discovery and import must be idempotent and source-aware.
-- Knowledge and RAG must preserve source attribution, version state, tenant scope, RBAC visibility, and permission filtering before retrieval and before response.
-- Every new table, query, background job, migration, event consumer, menu item, and API must account for tenant/MSP boundaries.
+## Security, tenant, and execution policy
 
-### Security and Compliance
+- Authentication, RBAC, menu permissions, endpoint ACLs, row scope, and tenant filters must agree. Actor, tenant, and elevated scope come from trusted authentication/authorization context, never unchecked request fields or model output. Cross-tenant access and associations fail closed.
+- Every new table, query, migration, job, consumer, menu, and API must account for tenant/MSP boundaries. Ownership may be through the canonical WorkItem relation; do not duplicate tenant fields in professional extensions. Keep tenant execution separate from restricted system directory/transport capabilities; follow [runtime database boundaries](itsm-backend/database/runtime_clients.go) and the [RLS execution guide](docs/DEVELOPMENT_GUIDE.md#rls-execution-boundary) before using system access.
+- Uploads, imports, callbacks, webhooks, and AI tool endpoints need input/size validation, authorization, tenant checks, audit, and observable failures. High-risk AI/workflow/connector/bulk actions retain explicit actor/source metadata. Permission resource names must match the permission registry.
+- Never commit or expose secrets, JWTs, API keys, passwords, connector credentials, prompt secrets, or unprotected sensitive content in logs/API responses. Connector APIs return masked metadata and health, not secrets; sensitive audit content requires an explicitly protected design.
+- **Fail-closed dispatch:** unknown, unregistered, or unsupported BPMN tasks, connector/skill capabilities, AI tools, event/webhook consumers, and automation actions must produce an error or visible blocked/manual-intervention state. Never silently no-op or report success. A step is optional only when declared in its definition in advance; a skip still requires audit and an observable warning/metric.
 
-- Authentication, RBAC, menu permissions, endpoint ACLs, row scope, and tenant filters must agree. Hiding a menu is never authorization.
-- Cross-tenant access and associations fail closed. Connector secrets, JWTs, API keys, passwords, prompt secrets, and unprotected sensitive content must never appear in logs or API responses.
-- Upload, import, connector callback, webhook, and AI tool-invocation endpoints require validation, size limits, permission checks, tenant checks, audit records, and observable failure handling.
-- High-risk actions initiated by AI, workflow, connectors, or bulk operations require explicit actor/source metadata and audit records.
+## AI and automation boundary
 
-## Architecture Principles
+- AI supports decisions: intent, extraction, ranking, triage, explanation, knowledge retrieval, impact analysis, and action proposals. Code enforces authorization, risk gates, policy lookup, transitions, transaction boundaries, audit, and side effects. AI cannot bypass professional workflow or tenant scope.
+- Use the existing LLM gateway/AI abstraction. Version and test prompts/skills; retain confidence, model/provider, prompt version, actor/source, decision, and feedback where applicable. Failure, timeout, disabled provider, or low confidence must produce explicit safe behavior or manual review, never silent success or weakened authorization.
+- Improve typed schemas, prompts, or configuration when structured output is insufficient. Do not add a second keyword classifier to re-derive domain meaning after structured AI/domain output.
+- KAF/external executors consume authenticated task scope and existing approval evidence; they do not own ITSM approval or professional completion. Changes to delegated execution must follow the [verified completion contract](docs/contracts/kaf-verified-access-completion.md), including uncertain-result recovery and replay boundaries.
 
-- Prefer architectural refactoring over compatibility layers, wrappers, bridge services, temporary fallbacks, or parallel implementations. When a new path replaces an old path, remove the old path in the same change unless backward compatibility is an explicit requirement.
-- Keep one authoritative source for each business concept and field. Do not maintain long-term dual reads, dual writes, duplicated queries, duplicated abstractions, or JSON fields alongside structured relations.
-- Prefer configuration-driven, registry-based, policy-based, and strategy-based behavior over hardcoded routing, tenant data, business vocabulary, thresholds, or keyword heuristics. Put variable product behavior in configuration or domain metadata.
-- Keep dependency direction downward: HTTP/router layers call application/domain services, services use repositories and infrastructure ports, and infrastructure adapters do not call upward into domain or controller code.
-- Keep controllers thin. They bind and validate input, authorize through established middleware/services, call the owning service, and map DTOs. Business rules, transactions, persistence, workflow identity, and external side effects belong below the controller boundary.
-- Do not add layers such as Manager, Facade, Proxy, or Adapter unless they remove real complexity or define a necessary external boundary. Avoid empty implementations, silent success fallbacks, and deprecated aliases that preserve an obsolete design.
-- Keep modules understandable and traceable. Split oversized files when responsibility boundaries are clear; do not solve size by moving the same logic into another ambiguous layer.
+## Unified Work Item domain contract
 
-### AI and Automation Boundary
+- **Identity:** WorkItem is the assignable, trackable, auditable base record; the product may call it Ticket. Reuse `tickets`; a physical rename requires a separate migration decision. New shared backend interfaces use `WorkItem`.
+- **Extensions:** each Incident, Problem, Change Request, Requested Item, and Catalog Task has exactly one WorkItem, created atomically with its one-to-one professional extension. Professional extensions contain domain-specific fields only.
+- **Shared ownership:** WorkItem owns number, title, description, record class, status storage, priority, requester/opener, assignee/group, category, tenant, timestamps/version, SLA/workflow references, comments, attachments, followers, timeline, audit, and notifications. Do not duplicate shared public fields in extensions.
+- **Class:** `recordClass` is `generic`, `service_request_item`, `incident`, `problem`, `change_request`, or `catalog_task`; it is immutable after an extension exists. Classifying generic work creates the extension atomically. Keep business subtype separate from class; do not overload `type`. This vocabulary does not claim that every creation channel supports every class: unsupported dispatch fails closed.
+- **Relations:** Incident → Problem or Problem → Change creates a target WorkItem plus an explicit relation, preserving source identity/history; changing a type is not a lifecycle conversion.
+- **Vocabulary:** Requested Item is one Catalog request instance; Catalog Task is optional split approval/fulfillment/validation/delivery work. Catalog Item defines service/form/class/process/fulfillment/SLA; Ticket Category classifies operational work; Ticket Template supports internal rapid entry/execution and does not replace Catalog Item. Known Error and Catalog Item are not WorkItems. Introduce a Request Header only for an actual multi-item requirement.
+- **Lifecycle owners:** `IncidentService` owns acknowledge/pending/resolve/close/reopen/cancel/major-incident rules; `ProblemService` owns assessment/investigation/root cause/workaround/known error/resolve/close/reopen; `ChangeService` owns risk, assessment, authorization/CAB, scheduling/windows, implementation, review/PIR, rollback, and closure; `ServiceRequestService` owns catalog validation, approval, fulfillment, delivery, and Requested Item transitions. Do not implement these as one giant service or `switch recordClass` state machine.
 
-- AI is decision support by default. It may understand intent, extract entities, rank options, generate explanations, and propose actions; it must not silently bypass authorization, workflow, tenant isolation, or audit requirements.
-- Code enforces policy and performs side effects: permission checks, risk gates, policy lookup, state transitions, transaction boundaries, audit writes, and external calls. Do not re-derive domain meaning with a second classifier or keyword scan after an AI/domain service has produced structured output.
-- When structured AI output is insufficient, improve the typed schema, prompt, or configuration rather than adding a parallel classifier or hardcoded semantic branch. AI suggestions must retain confidence, model/provider, prompt version, actor/source, decision, and feedback where applicable.
+The [original WorkItem design](docs/superpowers/specs/2026-08-26-unified-work-item-model-design.md) supplies rationale and detailed vocabulary. Its historical baseline and rollout checklist are not current implementation evidence; this section is the implementation contract.
 
-### Fail-Closed Dispatch For Unknown Behavior
+## Required reading by task
 
-- Any execution path that dispatches by type, capability, or name — BPMN service tasks, connector/skill capability invocation, AI tool invocation, event/webhook consumers, automation rule actions — must fail closed when the target is unknown, unregistered, or unsupported. Produce an explicit error, a visible pending/manual-intervention state, or a blocked transition. Do not silently no-op, skip, or proceed as if the step succeeded.
-- A step is legitimately optional only when it is declared optional ahead of time in its own definition (workflow diagram, capability manifest, rule config) — not inferred at runtime because no handler was found. A skipped optional step must still emit an audit record and an observable warning/metric so operators can see it was bypassed.
-- Apply this contract uniformly across dispatch surfaces — BPMN service tasks (e.g. unregistered service task types), connector/skill capability dispatch, AI tool invocation, event consumers — instead of solving it per surface. Extend the same fail-closed behavior when a new dispatch surface is added rather than inventing a new failure mode for it.
-
-### Development Documentation
-
-Operational development procedures are maintained separately:
-
-- [Development and Operations Guide](docs/DEVELOPMENT_GUIDE.md): setup, commands, testing, API/DTO conventions, naming, deployment, troubleshooting, and review lessons.
-- [Coding Agent Engineering Governance](docs/agent-engineering-governance.md): mandatory file placement, documentation, testing, branch, worktree, and delivery rules for Coding Agents.
-- [Development Command Reference](docs/dev-commands-reference.md): detailed Make, Docker Compose, local-service, health-check, and migration commands.
-- [Code Review Guide](docs/code-review-guide.md): review workflow and quality checklist.
-- [E2E Testing Guide](docs/e2e-testing-guide.md): browser and real-path verification details.
-
- Keep `AGENTS.md` focused on architecture and product/domain constraints. Update the linked operational documentation when commands or development procedures change.
-## Current Product Stage
-
-The repository is past v1.0 GA foundation work and is moving through v1.1 hardening:
-
-- v1.0 delivered ITIL core flows, BPMN workflow engine, CMDB v1, knowledge/RAG scaffold, SLA, RBAC, multi-tenant/MSP foundations, Docker Compose, GHCR images, and basic AI/connector scaffolding.
-- v1.1 focus is coverage backfill, controller splitting, connector marketplace v1, RBAC hardening, AI audit console, and integration test coverage.
-- v1.5+ focus is measurable AI evaluator, Feishu/DingTalk/WeCom production connectors, Skill registry, performance budgets, and stronger security scans.
-
-For new work, align with the roadmap rather than creating parallel mechanisms. If a feature overlaps with workflow, connector, AI skill, or marketplace direction, extend the existing extension point.
-
-## Unified Work Item Domain Contract
-
-The unified Work Item model is the shared business language for Ticket, Service Catalog, Service Request, Incident, Problem, Known Error, Change, and fulfillment work. The detailed design is maintained in `docs/superpowers/specs/2026-08-26-unified-work-item-model-design.md`; this section is the implementation contract for all coding agents.
-
-### Business Vocabulary
-
-- **WorkItem** is the unified base record for assignable, trackable, auditable ITSM work. Product UI may continue to say Ticket, but new backend shared interfaces use `WorkItem`.
-- **Ticket** is the product-level name for a WorkItem, not a separate professional lifecycle.
-- **Incident** restores service after an unplanned interruption or degradation.
-- **Problem** investigates and removes the root cause of one or more Incidents.
-- **Known Error** is a knowledge record with a known root cause or workaround; it is not a WorkItem.
-- **Change Request** is a controlled change to a service, application, infrastructure, or configuration.
-- **Requested Item** is one concrete Service Catalog request instance and is a WorkItem.
-- **Catalog Task** is an optional approval, fulfillment, validation, or delivery task split from a Requested Item and is a WorkItem.
-- **Service Catalog / Catalog Item** defines services, forms, target class, process, fulfillment, and SLA; it is not an execution record.
-- **Ticket Category** is the operational classification tree for routing, SLA, reporting, knowledge, automation, and AI classification.
-- **Ticket Template** is an internal rapid-entry or execution template; it does not replace a Catalog Item.
-- **Request Header** is optional and should only be introduced when multi-item requests are a real product requirement.
-
-### Model Principles
-
-- Reuse the existing `tickets` table as the first-phase WorkItem base table. Do not physically rename it to `work_items` without a separate migration decision.
-- Every Incident, Problem, Change Request, Requested Item, and Catalog Task must have exactly one WorkItem. Create the base record and its one-to-one professional extension in the same transaction.
-- WorkItem owns shared identity and cross-cutting fields: number, title, description, record class, status storage, priority, requester, opener, assignee, assignment group, category, tenant, timestamps, version, SLA references, workflow references, comments, attachments, timeline, audit, and notifications.
-- Professional extensions own only domain-specific fields. Do not copy shared title, description, status, priority, assignee, tenant, creator, or public timestamps into extension tables.
-- `recordClass` identifies the professional class (`generic`, `service_request_item`, `incident`, `problem`, `change_request`, `catalog_task`). It is immutable after an extension exists; classification of a generic item must create the extension atomically.
-- Do not use `type` for both professional class and business subtype. Use `recordClass` for class and keep professional subtypes in the extension model.
-- A relationship is not a lifecycle conversion. Incident does not become Problem by changing a type, and Problem does not become Change. Create the target WorkItem and an explicit relation while preserving the source record and history.
-- Known Error and Catalog Item remain separate concepts: knowledge record and service definition respectively, not WorkItems.
-- One authoritative field has one write location. Do not maintain duplicate public fields, long-term dual writes, or JSON relationship fields alongside structured relations.
-
-### Professional Lifecycle Ownership
-
-- WorkItem provides shared operations such as assignment, comments, attachments, followers, SLA projection, workflow references, activity timeline, and audit.
-- `IncidentService` owns acknowledge, resolve, close, reopen, pending, cancellation, and major-incident rules.
-- `ProblemService` owns assessment, investigation, root cause, workaround, known-error, resolve, close, and reopen rules.
-- `ChangeService` owns assessment, authorization, scheduling, implementation, review, rollback, closure, risk, CAB, and implementation-window rules.
-- `ServiceRequestService` owns catalog validation, approval, fulfillment, delivery, and Requested Item lifecycle rules.
-- Do not create a giant service or `switch recordClass` that implements every professional state machine. Shared services coordinate common behavior; professional services validate professional transitions and side effects.
-
-Operational commands, testing procedures, naming details, DTO examples, deployment operations, and troubleshooting belong in [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md).
-
+| Task | Read before acting |
+| --- | --- |
+| Any repository change | [Agent engineering governance](docs/agent-engineering-governance.md): placement, tests, worktrees, review, shared-environment and delivery rules |
+| API, DTO, frontend, naming | [Shared engineering conventions](docs/engineering-conventions.md) |
+| Local services, database, migration, deployment | [Development guide](docs/DEVELOPMENT_GUIDE.md), [command reference](docs/dev-commands-reference.md); for maintained Windows/WSL instances, [local environment](docs/development-environment.md) first |
+| WorkItem fields, creation, lifecycle, relations | Contract above, owning domain code, and [WorkItem design](docs/superpowers/specs/2026-08-26-unified-work-item-model-design.md) with its status caveat |
+| KAF/delegated execution and completion | [Verified completion contract](docs/contracts/kaf-verified-access-completion.md) and owning Service Request/BPMN services |
+| Review and real user-path verification | [Code review guide](docs/code-review-guide.md), [E2E guide](docs/e2e-testing-guide.md) |
+| Product scope and current decisions | [Root roadmap](ROADMAP.md), [documentation index](docs/README.md); reconcile stale status against current evidence |
