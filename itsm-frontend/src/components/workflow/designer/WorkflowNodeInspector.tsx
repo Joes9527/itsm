@@ -252,6 +252,7 @@ export default function WorkflowNodeInspector({
 
   // 用户任务属性
   const currentAssignee = (bo.assignee as string) || '';
+  const currentAssigneeSource = (bo.assigneeSource as string) || '';
   const currentAssigneeRole = (bo.assigneeRole as string) || '';
   const currentAssigneeDeptId = bo.assigneeDeptId ? Number(bo.assigneeDeptId) : undefined;
   const currentAssigneeGmChain = Boolean(bo.assigneeGmChain);
@@ -521,7 +522,7 @@ export default function WorkflowNodeInspector({
               <Select
                 value={currentTaskPurpose}
                 onChange={value => apply({ taskPurpose: value })}
-                options={[{ label: '普通人工任务', value: 'work' }, { label: '审批任务', value: 'approval' }]}
+                options={[{ label: '普通人工任务', value: 'work' }, { label: '履约任务', value: 'fulfillment' }, { label: '审批任务', value: 'approval' }]}
                 className="w-full" size="small"
               />
               {currentTaskPurpose === 'approval' && (
@@ -556,6 +557,40 @@ export default function WorkflowNodeInspector({
               )}
             </div>
 
+            {currentTaskPurpose === 'fulfillment' && (
+              <div className="mb-3">
+                <Text strong className="text-sm block mb-2">任务分配来源</Text>
+                <Select
+                  aria-label="任务分配来源"
+                  allowClear
+                  placeholder="使用流程定义中的处理人配置"
+                  value={currentAssigneeSource || undefined}
+                  options={[
+                    { label: '工单当前处理人', value: 'work_item_assignee' },
+                    ...(currentAssigneeSource && currentAssigneeSource !== 'work_item_assignee'
+                      ? [{ label: `不支持的分配来源（${currentAssigneeSource}）`, value: currentAssigneeSource, disabled: true }]
+                      : []),
+                  ]}
+                  onChange={value => apply(value === 'work_item_assignee' ? {
+                    assigneeSource: value,
+                    assignee: '', assigneeRole: '', assigneeDeptId: undefined,
+                    assigneeTeamId: undefined, assigneeProjectId: undefined,
+                    assigneeTempTeamId: undefined, assigneeGmChain: undefined,
+                    candidateUsers: '', candidateGroups: '',
+                    approvalMode: undefined, approvalThreshold: undefined,
+                    rejectStrategy: undefined, timeoutAction: undefined,
+                    allowDelegate: undefined, allowAddApprover: undefined,
+                    commentRequiredOnReject: undefined,
+                  } : { assigneeSource: undefined })}
+                  className="w-full"
+                  size="small"
+                />
+                <Text type="secondary" className="text-xs mt-1 block">
+                  绑定后由工单当前处理人负责；任务本身不提供领取或单独改派。
+                </Text>
+              </div>
+            )}
+
             {/* 快捷操作栏 */}
             <div className="mb-3 p-2 bg-blue-50 rounded-lg">
               <Space wrap>
@@ -563,6 +598,7 @@ export default function WorkflowNodeInspector({
                 <Button
                   size="small"
                   type="text"
+                  disabled={currentAssigneeSource === 'work_item_assignee'}
                   onClick={() => apply({ assignee: currentAssignee || 'admin' })}
                 >
                   设为管理员
@@ -593,6 +629,7 @@ export default function WorkflowNodeInspector({
               </Text>
               <Select
                 allowClear
+                disabled={currentAssigneeSource === 'work_item_assignee'}
                 showSearch
                 placeholder="选择受理人（单一用户）"
                 value={currentAssignee || undefined}
@@ -621,6 +658,7 @@ export default function WorkflowNodeInspector({
               </Text>
               <Select
                 allowClear
+                disabled={currentAssigneeSource === 'work_item_assignee'}
                 showSearch
                 placeholder="选择角色（该角色下所有用户均可处理）"
                 value={currentAssigneeRole || undefined}
@@ -650,6 +688,7 @@ export default function WorkflowNodeInspector({
               </Text>
               <Select
                 allowClear
+                disabled={currentAssigneeSource === 'work_item_assignee'}
                 showSearch
                 placeholder="选择部门（该部门负责人处理，无负责人则向上级部门找）"
                 value={currentAssigneeDeptId}
@@ -681,6 +720,7 @@ export default function WorkflowNodeInspector({
               </Text>
               <Switch
                 checked={currentAssigneeGmChain}
+                disabled={currentAssigneeSource === 'work_item_assignee'}
                 onChange={checked =>
                   apply({ assigneeGmChain: checked || undefined, assignee: '', assigneeRole: '', assigneeDeptId: undefined })
                 }
@@ -698,6 +738,7 @@ export default function WorkflowNodeInspector({
               </Text>
               <Select
                 mode="multiple"
+                disabled={currentAssigneeSource === 'work_item_assignee'}
                 placeholder="选择候选人（多选）"
                 value={currentCandidateUsers}
                 onChange={values => apply({ candidateUsers: toCsv(values) })}
@@ -730,6 +771,7 @@ export default function WorkflowNodeInspector({
               </Space>
               <Select
                 mode="multiple"
+                disabled={currentAssigneeSource === 'work_item_assignee'}
                 placeholder="选择审批组（多选）"
                 value={currentCandidateGroups}
                 onChange={values => apply({ candidateGroups: toCsv(values) })}

@@ -219,4 +219,38 @@ describe('WorkflowNodeInspector — 审批语义 panel', () => {
     // Empty hint copy in Chinese.
     expect(screen.getByText(/点击画布上的节点查看\/编辑属性/)).toBeInTheDocument();
   });
+
+  it('writes WorkItem assignment and clears conflicting definition assignees', async () => {
+    const onUpdateProperties = jest.fn().mockReturnValue(true);
+    render(<WorkflowNodeInspector selection={buildUserTaskSelection({ taskPurpose: 'fulfillment',
+      assignee: 'operator', assigneeRole: 'service_desk', assigneeDeptId: 9,
+      assigneeTeamId: 10, assigneeProjectId: 11, assigneeTempTeamId: 12,
+      assigneeGmChain: true, candidateUsers: 'alice', candidateGroups: 'support',
+      approvalMode: 'single', approvalThreshold: 1, rejectStrategy: 'terminate',
+      timeoutAction: 'notify', allowDelegate: true, allowAddApprover: true,
+      commentRequiredOnReject: true,
+    })} onUpdateProperties={onUpdateProperties} />);
+
+    const assignmentSource = await screen.findByRole('combobox', { name: '任务分配来源' });
+    await userEvent.click(assignmentSource);
+    await userEvent.click(await screen.findByText('工单当前处理人'));
+
+    expect(onUpdateProperties).toHaveBeenCalledWith('Task_Approve', {
+      assigneeSource: 'work_item_assignee', assignee: '', assigneeRole: '',
+      assigneeDeptId: undefined, assigneeGmChain: undefined,
+      assigneeTeamId: undefined, assigneeProjectId: undefined, assigneeTempTeamId: undefined,
+      candidateUsers: '', candidateGroups: '',
+      approvalMode: undefined, approvalThreshold: undefined, rejectStrategy: undefined,
+      timeoutAction: undefined, allowDelegate: undefined, allowAddApprover: undefined,
+      commentRequiredOnReject: undefined,
+    });
+  });
+
+  it('keeps an unsupported assignment source visible without rewriting it', async () => {
+    const onUpdateProperties = jest.fn().mockReturnValue(true);
+    render(<WorkflowNodeInspector selection={buildUserTaskSelection({ taskPurpose: 'fulfillment', assigneeSource: 'future_policy' })} onUpdateProperties={onUpdateProperties} />);
+
+    expect(await screen.findByText('不支持的分配来源（future_policy）')).toBeInTheDocument();
+    expect(onUpdateProperties).not.toHaveBeenCalled();
+  });
 });

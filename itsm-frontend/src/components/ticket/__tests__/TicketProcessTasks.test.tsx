@@ -152,3 +152,47 @@ it('clears actions when a mutation loses permission', async () => {
   await screen.findAllByText('任务权限已变化');
   expect(screen.queryByRole('button', { name: '领取任务' })).not.toBeInTheDocument();
 });
+
+it('shows a bound task waiting for WorkItem assignment without actions', async () => {
+  read.mockResolvedValue(page([{ ...task, taskPurpose: '', assignee: '', assigneeSource: 'work_item_assignee',
+    assignmentState: 'unassigned', responsibleUserId: 0, actorId: 0,
+    uiActions: { claim: false, complete: false } }]));
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+
+  expect(await screen.findByText('等待工单分配处理人')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '领取任务' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '完成任务' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/用户 ID/)).not.toBeInTheDocument();
+});
+
+it('renders the backend owner projection and offered completion for a bound task', async () => {
+  read.mockResolvedValue(page([{ ...task, taskPurpose: '', assignee: '17', assigneeSource: 'work_item_assignee',
+    assignmentState: 'assigned', responsibleUserId: 17, actorId: 0,
+    uiActions: { claim: false, complete: true } }]));
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+
+  expect(await screen.findByText('处理人用户 ID：17')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '完成任务' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '领取任务' })).not.toBeInTheDocument();
+});
+
+it('shows unavailable bound assignment without guessing a user', async () => {
+  read.mockResolvedValue(page([{ ...task, taskPurpose: '', assignee: '', assigneeSource: 'work_item_assignee',
+    assignmentState: 'unavailable', responsibleUserId: 0, actorId: 0,
+    uiActions: { claim: false, complete: false } }]));
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+
+  expect(await screen.findByText('处理人当前不可用')).toBeInTheDocument();
+  expect(screen.queryByText(/用户 ID/)).not.toBeInTheDocument();
+});
+
+it('renders frozen terminal responsibility and actual actor separately', async () => {
+  read.mockResolvedValue(page([{ ...task, taskPurpose: '', status: 'cancelled', assignee: '',
+    assigneeSource: 'work_item_assignee', assignmentState: 'terminal', responsibleUserId: 0, actorId: 23,
+    uiActions: { claim: false, complete: false } }]));
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+
+  expect(await screen.findByText('历史处理记录')).toBeInTheDocument();
+  expect(screen.getByText('实际操作人用户 ID：23')).toBeInTheDocument();
+  expect(screen.queryByText('处理人用户 ID：23')).not.toBeInTheDocument();
+});
