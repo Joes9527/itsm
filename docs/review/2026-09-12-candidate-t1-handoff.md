@@ -1,3 +1,15 @@
+# 2026-09-14 R5 固定版本更新（取代下方旧版本指令）
+
+- CandidateSHA：`3142247e7ef4f29639d373d8bf53f797e35c0913`；分支 `codex/feat/candidate-release-windows`。后续文档提交不替代此构建SHA。
+- 当前 Agent 同时负责代码与环境；不等待另一个 B。M1及本轮A1/A2独立审阅通过。原WorkItem/双主题集成是本版本祖先，保留来源历史。
+- 已接受限制：[候选运行说明](../deployment/itsm-candidate-runtime.md)。新PG鉴权存储未接生产入口，鉴权重启/恢复未验证；不标为通过。飞书同步不在本轮范围。
+- 本机WSL G1：Node22.23.2/npm10.9.8/Go1.25.12；npm ci、theme/type-check、production build、lint退出0（1个既有BPMNDesigner unused-disable warning）；7个受影响前端套件159测试通过，无skip。旧Mac全量仅作为既有基线复用，没有声称本次重跑全量。
+- Linux API、KAF Worker与迁移工具构建通过。迁移工具使用源码要求的 `-tags migrate`；第一次无标签被build constraints拒绝，修正后退出0。未运行迁移或应用。
+- 构建/日志私有清单：`~/.local/state/itsm-candidate-delivery/t3/build-3142247e/build-manifest.json`；包含3个二进制SHA256、4340文件standalone内容清单聚合摘要、日志摘要和命令退出码。前端静态资源与standalone必须从本构建一起部署。
+- 源24/24 ledger checksum匹配当前编译导出的纯迁移catalog，旧SQL无变化；当前待执行顺序含受控037、普通032–036及039–046，038仍是禁止执行的manual retirement。此处不是目标执行授权或恢复证明。
+- M2代码交接关闭（按维护者修订范围）；T3仍未完成、无EnvironmentRevision。现源API及两个Worker活跃，T2 revision-3已提出精确范围的15分钟备份窗口，需确认后执行。G2/G3、实际URL、生产上线未通过。
+
+---
 # T1 候选代码集成交接
 
 - TaskID：T1
