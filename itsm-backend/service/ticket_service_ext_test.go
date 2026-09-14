@@ -219,7 +219,7 @@ func TestTicketService_UpdateTicketStatus(t *testing.T) {
 		for _, status := range []string{"approved", "rejected"} {
 			_, err := fx.svc.UpdateTicketStatus(fx.ctx, id, status, fx.tenantID(), fx.userID())
 			require.ErrorContains(t, err, "只能由 BPMN")
-			_, err = fx.svc.UpdateTicket(fx.ctx, id, &dto.UpdateTicketRequest{Status: status}, fx.tenantID(),creation.Identity{})
+			_, err = fx.svc.UpdateTicket(fx.ctx, id, &dto.UpdateTicketRequest{Status: status}, fx.tenantID(), creation.Identity{})
 			require.ErrorContains(t, err, "只能由 BPMN")
 		}
 	})

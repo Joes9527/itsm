@@ -1,9 +1,9 @@
 package service
 
 import (
- creation "itsm-backend/handlers/common/workitemcreation"
 	"context"
 	"fmt"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"strings"
 
 	"itsm-backend/dto"
@@ -78,5 +78,5 @@ func (s *IncidentService) UpdateClassification(ctx context.Context, id, tenantID
 		zero := 0
 		categoryID = &zero
 	}
-	return s.UpdateIncident(ctx, id, &dto.UpdateIncidentRequest{CategoryID: categoryID}, tenantID,creation.Identity{})
+	return s.UpdateIncident(ctx, id, &dto.UpdateIncidentRequest{CategoryID: categoryID}, tenantID, creation.Identity{})
 }
