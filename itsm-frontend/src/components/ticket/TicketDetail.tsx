@@ -48,26 +48,17 @@ import { useErrorHandler } from '@/lib/hooks/useErrorHandler';
 import { formatDateTime } from '@/lib/formatters';
 import { SafeTextBlock } from '@/components/common/SafeContent';
 import { AISuggestionPanel } from '@/components/business/AISuggestionPanel';
-import {
-  isValidTransition,
-  isFinalStatus,
-} from '@/lib/utils/workflow-state-machine';
-import {
-  TicketStatus,
-  TicketStatusConfig,
-  getPriorityConfig,
-} from '@/constants/taxonomy';
-import {
-  ticketCommentAdapter,
-  ticketAttachmentAdapter,
-} from '@/components/business/detail-tabs';
+import { isValidTransition, isFinalStatus } from '@/lib/utils/workflow-state-machine';
+import { TicketStatus, TicketStatusConfig, getPriorityConfig } from '@/constants/taxonomy';
+import { ticketCommentAdapter, ticketAttachmentAdapter } from '@/components/business/detail-tabs';
 import { ApprovalMiniStepper } from '@/components/business/detail-tabs/ApprovalMiniStepper';
 import ServiceRequestPanel from './ServiceRequestPanel';
 import ServiceCatalogApprovalChain from './ServiceCatalogApprovalChain';
 import { CIContextCard } from './CIContextCard';
 import { KBRecommendCard } from './KBRecommendCard';
 import { TicketCommentStream } from './TicketCommentStream';
-import { TicketAttachmentGrid } from './TicketAttachmentGrid';
+import { AttachmentPanel } from '@/components/business/detail-tabs';
+import { getAttachmentPermissions } from '@/components/work-item/toTargetType';
 import { TicketHistoryList } from './TicketHistoryList';
 import { ProcessApprovalDecisionCards } from './ProcessApprovalDecisionCards';
 import { TicketRelationCards } from './TicketRelationCards';
@@ -255,7 +246,10 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
         if (history.status === 'fulfilled' && Array.isArray(history.value)) {
           next.history = history.value.length;
         }
-        if (relations.status === 'fulfilled' && typeof relations.value?.totalRelations === 'number') {
+        if (
+          relations.status === 'fulfilled' &&
+          typeof relations.value?.totalRelations === 'number'
+        ) {
           next.relations = relations.value.totalRelations;
         }
         setTabCounts(next);
@@ -418,7 +412,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   if (loading) {
     return (
-      <div className="p-6">
+      <div className='p-6'>
         <Card>
           <Skeleton active title={{ width: '45%' }} paragraph={{ rows: 10 }} />
         </Card>
@@ -428,16 +422,16 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   if (error) {
     return (
-      <div className="p-6">
+      <div className='p-6'>
         <Card>
-          <div className="text-center py-8">
-            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-            <Title level={4} className="text-red-600 mb-2">
+          <div className='text-center py-8'>
+            <AlertCircle className='w-12 h-12 text-red-500 mx-auto mb-4' />
+            <Title level={4} className='text-red-600 mb-2'>
               加载失败
             </Title>
-            <Text type="secondary">{error}</Text>
-            <div className="mt-4">
-              <Button type="primary" onClick={fetchTicket}>
+            <Text type='secondary'>{error}</Text>
+            <div className='mt-4'>
+              <Button type='primary' onClick={fetchTicket}>
                 重试
               </Button>
             </div>
@@ -449,17 +443,17 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   if (!ticket) {
     return (
-      <div className="p-6">
+      <div className='p-6'>
         <Card>
-          <div className="text-center py-8">
-            <XCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <Title level={4} className="text-gray-600 mb-2">
+          <div className='text-center py-8'>
+            <XCircle className='w-12 h-12 text-gray-400 mx-auto mb-4' />
+            <Title level={4} className='text-gray-600 mb-2'>
               未找到工单
             </Title>
-            <Text type="secondary">未找到指定的工单</Text>
-            <div className="mt-4">
-              <Link href="/tickets">
-                <Button type="primary">返回工单列表</Button>
+            <Text type='secondary'>未找到指定的工单</Text>
+            <div className='mt-4'>
+              <Link href='/tickets'>
+                <Button type='primary'>返回工单列表</Button>
               </Link>
             </div>
           </div>
@@ -471,47 +465,58 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
   const isTicketFinal = isFinalStatus(ticket.status as TicketStatus);
 
   return (
-    <div className="w-full space-y-4 pt-4 text-slate-800 font-sans antialiased">
+    <div className='w-full space-y-4 pt-4 text-slate-800 font-sans antialiased'>
       {/* ================= 工单主 Header & 规范动作控制台 ================= */}
-      <div className="w-full bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div className='w-full bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs'>
+        <div className='flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4'>
           {/* 左侧：返回、单号、标题、Tag */}
-          <div className="space-y-2 min-w-0">
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <Link href="/tickets" className="inline-flex items-center gap-1 text-slate-500 hover:text-slate-900 font-medium transition-colors">
+          <div className='space-y-2 min-w-0'>
+            <div className='flex items-center gap-2 text-xs text-slate-500'>
+              <Link
+                href='/tickets'
+                className='inline-flex items-center gap-1 text-slate-500 hover:text-slate-900 font-medium transition-colors'
+              >
                 <ArrowLeft size={13} />
                 返回工单列表
               </Link>
               <span>/</span>
-              <span className="font-mono text-slate-400">{ticket.ticketNumber || `#${ticket.id}`}</span>
+              <span className='font-mono text-slate-400'>
+                {ticket.ticketNumber || `#${ticket.id}`}
+              </span>
               {ticket.source && (
                 <>
                   <span>/</span>
-                  <span className="text-slate-600">
-                    {ticket.source === 'service_catalog' ? '服务目录申请' : ticket.source === 'kaf_web' ? 'KAF Web 申请' : ticket.source}
+                  <span className='text-slate-600'>
+                    {ticket.source === 'service_catalog'
+                      ? '服务目录申请'
+                      : ticket.source === 'kaf_web'
+                        ? 'KAF Web 申请'
+                        : ticket.source}
                   </span>
                 </>
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight m-0 truncate">
+            <div className='flex flex-wrap items-center gap-2.5'>
+              <h1 className='text-lg sm:text-xl font-bold text-slate-900 tracking-tight m-0 truncate'>
                 #{ticket.id} {ticket.title}
               </h1>
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mr-1.5" />
-                {ticket.recordClass === 'service_request_item' ? '服务请求' : getTicketStatusLabel(ticket.status)}
+              <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200'>
+                <span className='w-1.5 h-1.5 rounded-full bg-orange-500 mr-1.5' />
+                {ticket.recordClass === 'service_request_item'
+                  ? '服务请求'
+                  : getTicketStatusLabel(ticket.status)}
               </span>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+              <span className='inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200'>
                 {getPriorityConfig(ticket.priority).label}
               </span>
             </div>
           </div>
 
           {/* 右侧：规范动作按钮控制台 */}
-          <div className="flex flex-wrap items-center gap-2 self-start lg:self-center shrink-0">
+          <div className='flex flex-wrap items-center gap-2 self-start lg:self-center shrink-0'>
             <button
-              type="button"
+              type='button'
               onClick={handleAssign}
               disabled={!ticket.actions?.assign?.allowed}
               title={ticket.actions?.assign?.reason || ''}
@@ -519,12 +524,12 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                 !ticket.actions?.assign?.allowed ? DISABLED_ACTION_CLASS : ''
               }`}
             >
-              <UserCheck size={13} className="text-slate-500" />
+              <UserCheck size={13} className='text-slate-500' />
               <span>转派分配</span>
             </button>
 
             <button
-              type="button"
+              type='button'
               onClick={handleUpdate}
               disabled={!ticket.actions?.edit?.allowed}
               title={ticket.actions?.edit?.reason || ''}
@@ -532,12 +537,12 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                 !ticket.actions?.edit?.allowed ? DISABLED_ACTION_CLASS : ''
               }`}
             >
-              <Edit size={13} className="text-slate-500" />
+              <Edit size={13} className='text-slate-500' />
               <span>编辑</span>
             </button>
 
             <button
-              type="button"
+              type='button'
               onClick={() => setCCModalVisible(true)}
               disabled={!ticket.actions?.cc?.allowed}
               title={ticket.actions?.cc?.reason || ''}
@@ -545,12 +550,12 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                 !ticket.actions?.cc?.allowed ? DISABLED_ACTION_CLASS : ''
               }`}
             >
-              <Users size={13} className="text-slate-500" />
+              <Users size={13} className='text-slate-500' />
               <span>抄送</span>
             </button>
 
             <button
-              type="button"
+              type='button'
               onClick={handleDeleteClick}
               disabled={!ticket.actions?.delete?.allowed}
               title={ticket.actions?.delete?.reason || ''}
@@ -558,48 +563,53 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                 !ticket.actions?.delete?.allowed ? DISABLED_ACTION_CLASS : ''
               }`}
             >
-              <Trash2 size={13} className="text-red-500" />
+              <Trash2 size={13} className='text-red-500' />
               <span>删除</span>
             </button>
           </div>
         </div>
 
         {isTicketFinal && (
-          <div className="mt-3 pt-2 border-t border-slate-100 text-xs text-slate-400">
+          <div className='mt-3 pt-2 border-t border-slate-100 text-xs text-slate-400'>
             工单已结束，当前处于只读归档状态。
           </div>
         )}
       </div>
 
       {/* ================= 主体工作台栅格: 左侧 8 列 + 右侧 4 列 ================= */}
-      <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+      <div className='w-full grid grid-cols-1 lg:grid-cols-12 gap-5 items-start'>
         {/* 左侧 8 列: 诉求描述 -> 服务目录交付规格 -> 底部 Tabs 协作流 */}
-        <div className="lg:col-span-8 space-y-5 min-w-0">
+        <div className='lg:col-span-8 space-y-5 min-w-0'>
           {/* 1. 核心诉求描述卡片 */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-sm text-slate-800">工单诉求与业务描述</span>
-                <span className="text-[11px] text-slate-400">申请人填写</span>
+          <div className='bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4'>
+            <div className='flex items-center justify-between border-b border-slate-100 pb-3'>
+              <div className='flex items-center gap-2'>
+                <span className='font-bold text-sm text-slate-800'>工单诉求与业务描述</span>
+                <span className='text-[11px] text-slate-400'>申请人填写</span>
               </div>
-              <span className="text-xs font-mono text-slate-400">
+              <span className='text-xs font-mono text-slate-400'>
                 提交于 {formatDateTime(ticket.createdAt)}
               </span>
             </div>
 
-            <div className="text-xs text-slate-700 leading-relaxed whitespace-pre-line bg-slate-50/70 p-4 rounded-xl border border-slate-100">
-              <SafeTextBlock content={ticket.description} fallback="暂无详细描述" />
+            <div className='text-xs text-slate-700 leading-relaxed whitespace-pre-line bg-slate-50/70 p-4 rounded-xl border border-slate-100'>
+              <SafeTextBlock content={ticket.description} fallback='暂无详细描述' />
             </div>
 
             {/* 动态自定义字段网格展示 */}
             {ticket.customFields && ticket.customFields.length > 0 && (
-              <div className="pt-2 border-t border-slate-100 space-y-2">
-                <span className="text-xs font-bold text-slate-700 block">业务扩展参数</span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+              <div className='pt-2 border-t border-slate-100 space-y-2'>
+                <span className='text-xs font-bold text-slate-700 block'>业务扩展参数</span>
+                <div className='grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs'>
                   {ticket.customFields.map(field => (
-                    <div key={field.name} className="p-2.5 bg-slate-50 rounded-lg border border-slate-100">
-                      <span className="text-slate-400 block text-[11px]">{field.label}:</span>
-                      <span className="font-medium text-slate-800 break-words">{String(field.value)}</span>
+                    <div
+                      key={field.name}
+                      className='p-2.5 bg-slate-50 rounded-lg border border-slate-100'
+                    >
+                      <span className='text-slate-400 block text-[11px]'>{field.label}:</span>
+                      <span className='font-medium text-slate-800 break-words'>
+                        {String(field.value)}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -609,7 +619,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
           {/* 2. 服务目录专属交付面板 */}
           {ticket?.recordClass === 'service_request_item' && (
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs">
+            <div className='bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs'>
               <ServiceRequestPanel ticketId={ticket.id} />
             </div>
           )}
@@ -627,37 +637,39 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
         </div>
 
         {/* 右侧 4 列: 【高密度运维工具箱 + 悬浮跟随】 */}
-        <div className="lg:col-span-4 flex flex-col gap-4 sticky top-4 min-w-0">
+        <div className='lg:col-span-4 flex flex-col gap-4 sticky top-4 min-w-0'>
           {/* 1. 工单上下文属性 (置顶) */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3 text-xs">
-            <span className="font-bold text-slate-800 block border-b border-slate-100 pb-2 text-xs">
+          <div className='bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3 text-xs'>
+            <span className='font-bold text-slate-800 block border-b border-slate-100 pb-2 text-xs'>
               工单上下文属性
             </span>
 
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400 text-xs">申请人:</span>
-                <span className="font-medium text-slate-800 text-xs">
+            <div className='space-y-2.5'>
+              <div className='flex items-center justify-between'>
+                <span className='text-slate-400 text-xs'>申请人:</span>
+                <span className='font-medium text-slate-800 text-xs'>
                   {ticket.requester?.name || '-'}
                   {ticket.requester?.username ? ` (${ticket.requester.username})` : ''}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400 text-xs">所属部门:</span>
-                <span className="text-slate-700 text-xs">{ticket.requester?.department || '-'}</span>
+              <div className='flex items-center justify-between'>
+                <span className='text-slate-400 text-xs'>所属部门:</span>
+                <span className='text-slate-700 text-xs'>
+                  {ticket.requester?.department || '-'}
+                </span>
               </div>
 
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400 text-xs">当前处理人:</span>
-                <span className="font-semibold text-orange-800 bg-orange-50 px-2 py-0.5 rounded border border-orange-200 text-xs">
+              <div className='flex items-center justify-between'>
+                <span className='text-slate-400 text-xs'>当前处理人:</span>
+                <span className='font-semibold text-orange-800 bg-orange-50 px-2 py-0.5 rounded border border-orange-200 text-xs'>
                   {ticket.assignee?.name || '未分配'}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400 text-xs">工单分类:</span>
-                <span className="text-slate-700 text-xs">{ticket.category || '未分类'}</span>
+              <div className='flex items-center justify-between'>
+                <span className='text-slate-400 text-xs'>工单分类:</span>
+                <span className='text-slate-700 text-xs'>{ticket.category || '未分类'}</span>
               </div>
             </div>
           </div>
@@ -681,7 +693,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                   version: ticket.version,
                 });
                 antMessage.success(
-                  `已采纳AI建议：分类 ${suggestion.category}，优先级 ${suggestion.priority}`,
+                  `已采纳AI建议：分类 ${suggestion.category}，优先级 ${suggestion.priority}`
                 );
                 if (updated?.id) {
                   setTicket(prev => (prev ? { ...prev, ...updated } : prev));
@@ -698,19 +710,19 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
           {/* 3. SLA 履约时限监控卡片 */}
           {slaInfo && (
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                  <Clock size={14} className="text-slate-500" />
+            <div className='bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3'>
+              <div className='flex items-center justify-between'>
+                <span className='text-xs font-bold text-slate-800 flex items-center gap-1.5'>
+                  <Clock size={14} className='text-slate-500' />
                   SLA 时效与承诺
                 </span>
                 <Tag color={slaInfo.isBreached ? 'red' : 'blue'}>{slaInfo.slaName}</Tag>
               </div>
 
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-2 text-xs">
+              <div className='bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-2 text-xs'>
                 {slaInfo.responseDeadline && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500 text-[11px]">响应截止:</span>
+                  <div className='flex items-center justify-between'>
+                    <span className='text-slate-500 text-[11px]'>响应截止:</span>
                     <span
                       className={`font-mono text-xs ${
                         slaInfo.responseTimeRemaining !== null && slaInfo.responseTimeRemaining < 0
@@ -727,11 +739,12 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                 )}
 
                 {slaInfo.resolutionDeadline && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500 text-[11px]">解决截止:</span>
+                  <div className='flex items-center justify-between'>
+                    <span className='text-slate-500 text-[11px]'>解决截止:</span>
                     <span
                       className={`font-mono text-xs ${
-                        slaInfo.resolutionTimeRemaining !== null && slaInfo.resolutionTimeRemaining < 0
+                        slaInfo.resolutionTimeRemaining !== null &&
+                        slaInfo.resolutionTimeRemaining < 0
                           ? 'text-red-600 font-bold'
                           : 'text-slate-800'
                       }`}
@@ -745,16 +758,16 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                 )}
 
                 {slaInfo.isBreached && (
-                  <div className="pt-1">
-                    <Tag color="red" className="w-full text-center">
+                  <div className='pt-1'>
+                    <Tag color='red' className='w-full text-center'>
                       SLA 已违规
                     </Tag>
                   </div>
                 )}
 
                 {slaInfo.responseTime > 0 && (
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-[11px] text-slate-500">
+                  <div className='space-y-1'>
+                    <div className='flex justify-between text-[11px] text-slate-500'>
                       <span>响应进度</span>
                       <span>
                         {slaInfo.responseTimeRemaining !== null
@@ -764,7 +777,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                     </div>
                     <Progress
                       percent={getSLAPercent(slaInfo.responseTime, slaInfo.responseTimeRemaining)}
-                      size="small"
+                      size='small'
                       strokeColor={
                         slaInfo.responseTimeRemaining !== null && slaInfo.responseTimeRemaining < 0
                           ? '#ff4d4f'
@@ -773,7 +786,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                             : '#52c41a'
                       }
                     />
-                    <div className="flex justify-between text-[11px] text-slate-400 font-mono">
+                    <div className='flex justify-between text-[11px] text-slate-400 font-mono'>
                       <span>
                         {slaInfo.responseTimeRemaining !== null
                           ? `剩余 ${formatHours(slaInfo.responseTimeRemaining)} 小时`
@@ -785,8 +798,8 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                 )}
 
                 {slaInfo.resolutionTime > 0 && (
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-[11px] text-slate-500">
+                  <div className='space-y-1'>
+                    <div className='flex justify-between text-[11px] text-slate-500'>
                       <span>解决进度</span>
                       <span>
                         {slaInfo.resolutionTimeRemaining !== null
@@ -795,17 +808,24 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                       </span>
                     </div>
                     <Progress
-                      percent={getSLAPercent(slaInfo.resolutionTime, slaInfo.resolutionTimeRemaining)}
-                      size="small"
+                      percent={getSLAPercent(
+                        slaInfo.resolutionTime,
+                        slaInfo.resolutionTimeRemaining
+                      )}
+                      size='small'
                       strokeColor={
-                        slaInfo.resolutionTimeRemaining !== null && slaInfo.resolutionTimeRemaining < 0
+                        slaInfo.resolutionTimeRemaining !== null &&
+                        slaInfo.resolutionTimeRemaining < 0
                           ? '#ff4d4f'
-                          : getSLAPercent(slaInfo.resolutionTime, slaInfo.resolutionTimeRemaining) >= 70
+                          : getSLAPercent(
+                                slaInfo.resolutionTime,
+                                slaInfo.resolutionTimeRemaining
+                              ) >= 70
                             ? '#fa8c16'
                             : '#52c41a'
                       }
                     />
-                    <div className="flex justify-between text-[11px] text-slate-400 font-mono">
+                    <div className='flex justify-between text-[11px] text-slate-400 font-mono'>
                       <span>
                         {slaInfo.resolutionTimeRemaining !== null
                           ? `剩余 ${formatHours(slaInfo.resolutionTimeRemaining)} 小时`
@@ -832,7 +852,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
       <Modal
         title={
           <Space>
-            <UserCheck className="w-5 h-5 text-blue-600" />
+            <UserCheck className='w-5 h-5 text-blue-600' />
             分配工单
           </Space>
         }
@@ -844,14 +864,14 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
         footer={null}
         width={500}
       >
-        <Form form={assignForm} layout="vertical" onFinish={handleAssignSubmit}>
+        <Form form={assignForm} layout='vertical' onFinish={handleAssignSubmit}>
           <Form.Item
-            label="分配给"
-            name="assigneeId"
+            label='分配给'
+            name='assigneeId'
             rules={[{ required: true, message: '请选择处理人' }]}
           >
             <Select
-              placeholder="请选择处理人"
+              placeholder='请选择处理人'
               loading={loadingUsers}
               showSearch
               filterOption={(input, option) =>
@@ -862,20 +882,20 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                 label: (
                   <Space>
                     <span>{user.name}</span>
-                    <Text type="secondary" className="text-xs">
+                    <Text type='secondary' className='text-xs'>
                       ({user.username})
                     </Text>
-                    {user.department && <Tag color="blue">{user.department}</Tag>}
+                    {user.department && <Tag color='blue'>{user.department}</Tag>}
                   </Space>
                 ),
               }))}
             />
           </Form.Item>
-          <Form.Item label="备注" name="comment">
-            <TextArea rows={3} placeholder="请输入分配备注（可选）" maxLength={500} showCount />
+          <Form.Item label='备注' name='comment'>
+            <TextArea rows={3} placeholder='请输入分配备注（可选）' maxLength={500} showCount />
           </Form.Item>
-          <Form.Item className="mb-0">
-            <Space className="w-full justify-end">
+          <Form.Item className='mb-0'>
+            <Space className='w-full justify-end'>
               <Button
                 icon={<X />}
                 onClick={() => {
@@ -885,7 +905,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               >
                 取消
               </Button>
-              <Button type="primary" htmlType="submit" icon={<Save />} loading={assigning}>
+              <Button type='primary' htmlType='submit' icon={<Save />} loading={assigning}>
                 确认分配
               </Button>
             </Space>
@@ -897,7 +917,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
       <Modal
         title={
           <Space>
-            <Edit className="w-5 h-5 text-green-600" />
+            <Edit className='w-5 h-5 text-green-600' />
             编辑工单
           </Space>
         }
@@ -909,59 +929,63 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
         footer={null}
         width={600}
       >
-        <Form form={editForm} layout="vertical" onFinish={handleEditSubmit}>
+        <Form form={editForm} layout='vertical' onFinish={handleEditSubmit}>
           <Form.Item
-            label="工单标题"
-            name="title"
+            label='工单标题'
+            name='title'
             rules={[
               { required: true, message: '请输入工单标题' },
               { max: 100, message: '标题不能超过100个字符' },
             ]}
           >
-            <Input placeholder="请输入工单标题" />
+            <Input placeholder='请输入工单标题' />
           </Form.Item>
           <Form.Item
-            label="工单描述"
-            name="description"
+            label='工单描述'
+            name='description'
             rules={[
               { required: true, message: '请输入工单描述' },
               { max: 2000, message: '描述不能超过2000个字符' },
             ]}
           >
-            <TextArea rows={6} placeholder="请输入工单描述" showCount maxLength={2000} />
+            <TextArea rows={6} placeholder='请输入工单描述' showCount maxLength={2000} />
           </Form.Item>
-          <div className="grid grid-cols-2 gap-4">
+          <div className='grid grid-cols-2 gap-4'>
             <Form.Item
-              label="优先级"
-              name="priority"
+              label='优先级'
+              name='priority'
               rules={[{ required: true, message: '请选择优先级' }]}
             >
               <Select
-                placeholder="请选择优先级"
+                placeholder='请选择优先级'
                 options={[
                   {
                     value: 'low',
-                    label: <Tag color="green">低优先级</Tag>,
+                    label: <Tag color='green'>低优先级</Tag>,
                   },
                   {
                     value: 'medium',
-                    label: <Tag color="orange">中优先级</Tag>,
+                    label: <Tag color='orange'>中优先级</Tag>,
                   },
                   {
                     value: 'high',
-                    label: <Tag color="red">高优先级</Tag>,
+                    label: <Tag color='red'>高优先级</Tag>,
                   },
                 ]}
               />
             </Form.Item>
             <Form.Item
-              label="状态"
-              name="status"
+              label='状态'
+              name='status'
               rules={[{ required: true, message: '请选择状态' }]}
-              extra={ticket ? `当前状态: ${ticket.recordClass === 'service_request_item' ? '服务请求' : getTicketStatusLabel(ticket.status)}` : ''}
+              extra={
+                ticket
+                  ? `当前状态: ${ticket.recordClass === 'service_request_item' ? '服务请求' : getTicketStatusLabel(ticket.status)}`
+                  : ''
+              }
             >
               <Select
-                placeholder="请选择状态"
+                placeholder='请选择状态'
                 options={[
                   { value: 'new', label: '待处理' },
                   { value: 'in_progress', label: '处理中' },
@@ -972,8 +996,8 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               />
             </Form.Item>
           </div>
-          <Form.Item className="mb-0">
-            <Space className="w-full justify-end">
+          <Form.Item className='mb-0'>
+            <Space className='w-full justify-end'>
               <Button
                 icon={<X />}
                 onClick={() => {
@@ -983,7 +1007,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               >
                 取消
               </Button>
-              <Button type="primary" htmlType="submit" icon={<Save />} loading={updating}>
+              <Button type='primary' htmlType='submit' icon={<Save />} loading={updating}>
                 保存修改
               </Button>
             </Space>
@@ -995,7 +1019,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
       <Modal
         title={
           <Space>
-            <Users className="w-5 h-5 text-blue-600" />
+            <Users className='w-5 h-5 text-blue-600' />
             抄送工单
           </Space>
         }
@@ -1009,31 +1033,31 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
       >
         <Form
           form={ccForm}
-          layout="vertical"
+          layout='vertical'
           initialValues={{ notifyChannels: ['in_app'] }}
           onFinish={handleCCSubmit}
         >
           <Form.Item
-            label="抄送给"
-            name="ccUsers"
+            label='抄送给'
+            name='ccUsers'
             rules={[{ required: true, message: '请选择抄送人' }]}
           >
             <Select
-              mode="multiple"
-              placeholder="请选择抄送人"
+              mode='multiple'
+              placeholder='请选择抄送人'
               loading={loadingUsers}
               showSearch
-              optionFilterProp="label"
+              optionFilterProp='label'
               options={users.map(user => ({
                 value: user.id,
                 label: `${user.name || user.username}${user.department ? ` (${user.department})` : ''}`,
               }))}
             />
           </Form.Item>
-          <Form.Item label="通知渠道" name="notifyChannels">
+          <Form.Item label='通知渠道' name='notifyChannels'>
             <Select
-              mode="multiple"
-              placeholder="请选择通知渠道"
+              mode='multiple'
+              placeholder='请选择通知渠道'
               options={[
                 { value: 'in_app', label: '站内信' },
                 { value: 'email', label: '邮件' },
@@ -1045,11 +1069,11 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               ]}
             />
           </Form.Item>
-          <Form.Item label="备注" name="comment">
-            <TextArea rows={3} placeholder="请输入抄送备注（可选）" maxLength={500} showCount />
+          <Form.Item label='备注' name='comment'>
+            <TextArea rows={3} placeholder='请输入抄送备注（可选）' maxLength={500} showCount />
           </Form.Item>
-          <Form.Item className="mb-0">
-            <Space className="w-full justify-end">
+          <Form.Item className='mb-0'>
+            <Space className='w-full justify-end'>
               <Button
                 icon={<X />}
                 onClick={() => {
@@ -1059,7 +1083,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               >
                 取消
               </Button>
-              <Button type="primary" htmlType="submit" icon={<Users />} loading={ccing}>
+              <Button type='primary' htmlType='submit' icon={<Users />} loading={ccing}>
                 确认抄送
               </Button>
             </Space>
@@ -1071,7 +1095,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
       <Modal
         title={
           <Space>
-            <Trash2 className="w-5 h-5 text-red-600" />
+            <Trash2 className='w-5 h-5 text-red-600' />
             删除工单
           </Space>
         }
@@ -1080,34 +1104,34 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
         footer={null}
         width={400}
       >
-        <div className="py-4">
-          <div className="flex items-start gap-3 mb-4">
-            <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
+        <div className='py-4'>
+          <div className='flex items-start gap-3 mb-4'>
+            <AlertCircle className='w-6 h-6 text-red-500 flex-shrink-0 mt-0.5' />
             <div>
-              <Typography.Text strong className="text-lg">
+              <Typography.Text strong className='text-lg'>
                 确定要删除此工单吗？
               </Typography.Text>
-              <Typography.Paragraph type="secondary" className="mb-0 mt-1">
+              <Typography.Paragraph type='secondary' className='mb-0 mt-1'>
                 此操作不可恢复，工单编号 #{ticket.id} 将被永久删除。
               </Typography.Paragraph>
             </div>
           </div>
-          <div className="bg-gray-50 rounded p-3 mb-4">
-            <Typography.Text type="secondary" className="text-sm">
+          <div className='bg-gray-50 rounded p-3 mb-4'>
+            <Typography.Text type='secondary' className='text-sm'>
               工单信息：
             </Typography.Text>
-            <div className="mt-1">
+            <div className='mt-1'>
               <Text strong>{ticket.title}</Text>
             </div>
           </div>
         </div>
-        <Space className="w-full justify-end">
+        <Space className='w-full justify-end'>
           <Button onClick={() => setDeleteModalVisible(false)} disabled={deleting}>
             取消
           </Button>
           <Button
             danger
-            type="primary"
+            type='primary'
             onClick={handleDeleteConfirm}
             loading={deleting}
             icon={<Trash2 size={14} />}
@@ -1147,13 +1171,14 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
   canReadNotifications,
   canSendNotifications,
 }) => {
+  const hasPermission = useAuthStore(state => state.hasPermission);
   const countSuffix = (count?: number) => (count !== undefined ? ` (${count})` : '');
 
   const items = [
     {
       key: 'comments',
       label: (
-        <span className="flex items-center gap-1.5 text-xs font-medium">
+        <span className='flex items-center gap-1.5 text-xs font-medium'>
           <MessageSquare size={13} />
           协作沟通与评论{countSuffix(tabCounts?.comments)}
         </span>
@@ -1170,17 +1195,24 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
     {
       key: 'attachments',
       label: (
-        <span className="flex items-center gap-1.5 text-xs font-medium">
+        <span className='flex items-center gap-1.5 text-xs font-medium'>
           <Paperclip size={13} />
           附件{countSuffix(tabCounts?.attachments)}
         </span>
       ),
-      children: <TicketAttachmentGrid ticketId={ticketId} />,
+      children: (
+        <AttachmentPanel
+          targetType='ticket'
+          targetId={ticketId}
+          adapter={ticketAttachmentAdapter}
+          permissions={getAttachmentPermissions(recordClass, hasPermission)}
+        />
+      ),
     },
     {
       key: 'approvals',
       label: (
-        <span className="flex items-center gap-1.5 text-xs font-medium">
+        <span className='flex items-center gap-1.5 text-xs font-medium'>
           <GitBranch size={13} />
           审批链{countSuffix(tabCounts?.approvals)}
         </span>
@@ -1197,7 +1229,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
     {
       key: 'history',
       label: (
-        <span className="flex items-center gap-1.5 text-xs font-medium">
+        <span className='flex items-center gap-1.5 text-xs font-medium'>
           <HistoryIcon size={13} />
           历史流转{countSuffix(tabCounts?.history)}
         </span>
@@ -1207,7 +1239,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
     {
       key: 'relations',
       label: (
-        <span className="flex items-center gap-1.5 text-xs font-medium">
+        <span className='flex items-center gap-1.5 text-xs font-medium'>
           <Link2 size={13} />
           关联工单与资产{countSuffix(tabCounts?.relations)}
         </span>
@@ -1220,24 +1252,22 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
     items.push({
       key: 'notifications',
       label: (
-        <span className="flex items-center gap-1.5 text-xs font-medium">
+        <span className='flex items-center gap-1.5 text-xs font-medium'>
           <Bell size={13} />
           工单通知
         </span>
       ),
-      children: (
-        <TicketNotificationSection ticketId={ticketId} canSend={canSendNotifications} />
-      ),
+      children: <TicketNotificationSection ticketId={ticketId} canSend={canSendNotifications} />,
     });
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-3">
-      <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold border-b border-slate-100 pb-2">
+    <div className='bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-3'>
+      <div className='flex items-center gap-2 text-slate-500 text-xs font-semibold border-b border-slate-100 pb-2'>
         <Info size={13} />
         协作流、审批链与审计历史
       </div>
-      <Tabs items={items} defaultActiveKey="comments" className="custom-ticket-tabs" />
+      <Tabs items={items} defaultActiveKey='comments' className='custom-ticket-tabs' />
     </div>
   );
 };

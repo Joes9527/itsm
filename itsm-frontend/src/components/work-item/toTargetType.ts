@@ -17,3 +17,27 @@ export function toTargetType(recordClass: WorkItemCommon['recordClass']): Target
       return 'ticket';
   }
 }
+
+// Mirrors the registered backend resource boundary for coarse UI gating only.
+// Row scope and ownership are still checked by the attachment service.
+export function getAttachmentPermissions(
+  recordClass: string | undefined,
+  hasPermission: (permission: string) => boolean
+) {
+  const registered = [
+    'generic',
+    'service_request_item',
+    'incident',
+    'problem',
+    'change_request',
+    'catalog_task',
+  ];
+  if (!recordClass || !registered.includes(recordClass))
+    return { canRead: false, canUpload: false, canDelete: false };
+  const resource = toTargetType(recordClass as WorkItemCommon['recordClass']);
+  return {
+    canRead: hasPermission(`${resource}:read`),
+    canUpload: hasPermission(`${resource}:create`),
+    canDelete: hasPermission(`${resource}:delete`),
+  };
+}

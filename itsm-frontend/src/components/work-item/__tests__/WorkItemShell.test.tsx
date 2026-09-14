@@ -7,10 +7,18 @@ import type { WorkItemCommon } from '../WorkItemTypes';
 // Mock detail-tabs components to prevent real network calls from CommentPanel/AttachmentPanel
 jest.mock('@/components/business/detail-tabs', () => ({
   CommentPanel: ({ targetType, targetId }: { targetType: string; targetId: number }) => (
-    <div data-testid="mocked-comment-panel" data-target-type={targetType} data-target-id={targetId} />
+    <div
+      data-testid='mocked-comment-panel'
+      data-target-type={targetType}
+      data-target-id={targetId}
+    />
   ),
   AttachmentPanel: ({ targetType, targetId }: { targetType: string; targetId: number }) => (
-    <div data-testid="mocked-attachment-panel" data-target-type={targetType} data-target-id={targetId} />
+    <div
+      data-testid='mocked-attachment-panel'
+      data-target-type={targetType}
+      data-target-id={targetId}
+    />
   ),
   ticketCommentAdapter: {},
   ticketAttachmentAdapter: {},
@@ -18,7 +26,10 @@ jest.mock('@/components/business/detail-tabs', () => ({
 
 // Mock auth store to provide user context for WorkItemComments
 jest.mock('@/lib/store/auth-store', () => ({
-  useAuthStore: () => ({ user: { id: 1 } }),
+  useAuthStore: (selector?: (state: unknown) => unknown) => {
+    const state = { user: { id: 1 }, hasPermission: () => false };
+    return selector ? selector(state) : state;
+  },
 }));
 
 // Mock the API modules backing the newly-wired TicketHistoryList/TicketRelationCards
@@ -72,11 +83,11 @@ const props = {
 function ProbePanel() {
   const { workItem: fromContext, actions } = useWorkItemContext();
   return (
-    <div data-testid="probe">
+    <div data-testid='probe'>
       {fromContext.title}
-      <span data-testid="probe-resolve-allowed">{String(actions.resolve?.allowed)}</span>
-      <span data-testid="probe-close-reason">{actions.close?.reason ?? ''}</span>
-      <span data-testid="probe-action-count">{Object.keys(actions).length}</span>
+      <span data-testid='probe-resolve-allowed'>{String(actions.resolve?.allowed)}</span>
+      <span data-testid='probe-close-reason'>{actions.close?.reason ?? ''}</span>
+      <span data-testid='probe-action-count'>{Object.keys(actions).length}</span>
     </div>
   );
 }
@@ -134,7 +145,7 @@ describe('WorkItemShell', () => {
         actions={{}}
         onActionDispatch={jest.fn()}
         professionalPanelSlot={<ProbePanel />}
-        error="加载失败"
+        error='加载失败'
       />
     );
     expect(screen.queryByTestId('probe')).not.toBeInTheDocument();
