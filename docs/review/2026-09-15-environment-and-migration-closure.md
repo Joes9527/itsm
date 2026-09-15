@@ -89,7 +89,8 @@ context** 上、由 `database/rls.AcquireConn` 读取。
    `docs/migrations/2026-09-15-legacy-migration-input-and-rule-archive.md`（+ manifest）；
    原始导出文件复制到受控私有归档目录。归档时进一步查明：**部门数据是树结构**（1 根、11 层、深度与 code
    长度对应），库内多出的 3,000 个部门里 1,083 个是中间层级、**2,323 个（77.4%）的名称来自用户
-   `departmentName` 路径分段**，仅 677 个仍待解释；`function_line` 约定与 297 个缺失 id 仍不可复现，见该文档 §4。
+   `departmentName` 路径分段**，残留的 3 个已查明为同批次创建、无父节点、0 用户挂靠的通用命名节点（判为种子/测试部门），
+   **3,000 个差额 99.9% 归因完毕**；`function_line` 约定与 297 个缺失 id 仍不可复现，见该文档 §4。
 4. ~~`d395dbd5…` 制品的独立复审~~ **已于 2026-09-15 由人工复审者批准**
    （复审包 §2–§4 结论通过，§5 未验证项转为后续跟踪项）；`reviewed_binary_sha256` 已更新为
    `d395dbd5…`，manifest 留有 review record。
