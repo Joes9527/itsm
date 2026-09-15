@@ -109,3 +109,36 @@ C3 的 SLA 业务覆盖、C4 的主管审批是否保留，在既有交接中未
 - KAF `184f7868:docs/superpowers/specs/2026-09-14-legacy-itsm-master-data-extraction-and-diff-design.md`：旧源系统身份和抽取边界。
 
 历史/私有证据保留原时间与提交，不复制凭据、原始用户数据或dump入Git。状态变更只在本清单对应ID更新；具体执行证据以受保护目录或独立测试资产索引引用。
+
+## 9. C1 执行任务书：五批四方只读对账
+
+- 状态：ready；维护者已批准本次只读对账。设计/复核由主agent负责，执行agent仅完成下述范围。
+- 单一目标：对照原始来源、五批定义/执行证据、gb_replay_review、当前itsm_ga_ready；每批给出可复核差异。没有证据时标记不能判定，不自行推定迁移成功或缺失。
+- 不执行：数据/DDL/授权写入、迁移CLI、重放/回滚、恢复备份、清理、切库、重启、旧源重新抽取、ticket内容读取、UI业务写入。PG物理合并及047升级不属于本任务。
+
+### 输入及访问
+
+- 先读两仓库AGENTS.md及ITSM工程治理。保留所有既有worktree、未提交文件和后台任务。
+- SSH：`ssh -p 22222 administrator@192.168.31.66`；普通读取使用administrator，确需私有证据/容器查询才用sudo -n。不输出完整env、DSN、凭据、用户记录或原始业务数据。
+- 历史执行入口：`/home/administrator/project/itsm/.worktrees/config-launch-integration/HANDOFF.md`、同树`docs/review/2026-09-14-config-launch-closure.md`。
+- 工具证据入口：`/home/administrator/.local/state/itsm-task2-remediation-20260914/`、`/home/administrator/.local/state/itsm-task2-b0-20260914/`、`/home/administrator/.local/state/itsm-backend-switch-20260915/`；先列文件名/大小，按相关性读取，不递归输出私有目录全部内容，不读巨型运行日志。
+- 来源：KAF `/home/administrator/project/kaf/data/legacy_itsm/test/`；工具ITSM `7c8cee6f`、KAF `e6fd8a50`，用git show定位准确代码，不checkout/重跑写入工具。
+- 重放库：`gb-remediation-test-pg-20260914 / gb_replay_review`，已有config_migration_control.receipts五条；目标：`ga-itsm-20260914 / itsm_ga_ready`。不得因目标没有相同收据而补造。
+
+### 步骤与检查标准
+
+1. **固定证据窗口。** 记录UTC时间、容器/数据库/schema/版本、代码/manifest摘要；检查当前连接的聚合信息。用显式`BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY`、`SET LOCAL statement_timeout='30s'`、`SET LOCAL lock_timeout='2s'`执行SELECT；大型聚合分批，不禁用超时。不能运行会EnsureMigrationsTable的-status/-dry-run。只读会话结束正常COMMIT或ROLLBACK，不跨工具调用悬挂事务。
+2. **从实际定义识别五批。** 提取每批ID、依赖、对象集合、源manifest/摘要、映射修订/摘要、代码版本、纳入/排除和预期变换。批次名称必须来自文件/收据，不能编造B0-B4语义。区分新规范seed与旧数据映射，不能把seed初始化都声称旧数据迁移。
+3. **验证重放证据。** 对照五条收据的batch_id/context/source_sha256/mapping_sha256/object_set/post_state_sha256与实际定义及历史执行结果。只读复用摘要规范；不重新实现另一套摘要算法。若旧算法存在错误，只记录证据差额，不改数据或收据。区分批次即时摘要与后续批次合法覆盖，不能将最终库直接比对每批中间态后误判漂移。
+4. **逐对象比目标。** 使用真实稳定业务键、tenant与映射进行匹配，数值ID仅用于库内引用；对分类层级/字段归属/优先级/SLA/目录/流程绑定按实际五批对象检查字段与引用。JSON规范化按原契约，不能随意忽略字段。名称相似不自动合并，缺映射明确列出。
+5. **解释差额。** 将结果归为一致、后续获准变更、缺失、冲突、无法判定；合理差异须有代码/变更证据。额外目标对象不能自动删除。基础身份只检查聚合、稳定映射和关联完整性，不导出身份内容。当前三个验收工单不用于旧数据导入对账。
+6. **检查观察期间变化。** 在目标重复读取相同受检对象的摘要/计数；若变化，记录窗口及受影响批次，不能把并发变化定性迁移错误。两库不是原子跨库快照，明确各自采样时刻与限制。
+7. **交付。** 生成一份脱敏结果文件，逐批列应迁对象数量/匹配/缺失/额外/冲突/排除；无法取得分母则明确未知。每个差异附稳定对象标识或脱敏标识、规则、预期与实际差异、来源路径/提交及后续建议。禁止以总数相等或5条收据替代对象级检查。
+
+### 交付边界与完成条件
+
+- 执行agent只写本地临时脱敏报告和必要只读查询脚本，不修改仓库业务代码、清单、数据库、远端或环境配置。原始源/映射/配置内容只在WSL受保护目录中处理，不拷贝PII至Mac/tmp/Git。
+- 输出位置：`/tmp/itsm-five-batch-reconciliation-20260915.md`；如需机器可读脱敏差异，使用同名前缀.json。不得把完整context/原始JSON直接写入报告。
+- 报告包含：五批矩阵、执行时刻及指纹、检查方法、每批差异、证据路径、限制、按优先级的精确下一动作，以及未做任何数据库变更的声明。
+- 主agent复核关键摘要/查询及至少一个一致和一个差异例（如有），再更新本清单C1及相关C/R/V状态。没有独立核验的历史结论不升级为当前PASS。
+- 一个批次或证据链超过合理查找范围时提交准确缺口；最多60分钟交付本轮结果，不无限追查不影响五批的其他库或历史任务。
