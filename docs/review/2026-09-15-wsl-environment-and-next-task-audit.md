@@ -87,7 +87,7 @@
 | P1 | 修复 Assignment 浏览器夹具 | 使用 canonical recordClass，补能捕获查询词表漂移的验证 |
 | P1 | 匹配版本迁移、部署和人工验收 | 先落实目标、备份、回滚边界；A→B 后 A 失权、B 可完成，经理/申请人职责不变，终态审计及 Outbox 可核验 |
 | P1 | 目录流程新版本 | 先对照目标库实际目录身份，再处理历史计划中的九项通用目录；保留 Copilot/SSLVPN 专用审批，Change/Incident 不混入 Requested Item；仅影响新实例 |
-| P1 | Helpdesk 解决/关闭及审批驳回 | 详情页接入专业动作与 resolution，验证真实 UI、持久化和权限；BPMN 完成不代表工单已解决 |
+| P1 | Helpdesk 解决/关闭及审批驳回 | 普通工单详情接入现有 resolve/close 动作并收集 resolution；Requested Item、Incident、Problem、Change 分别调用所属领域动作，独立验证审批驳回、真实 UI、持久化及权限；BPMN 完成不代表工单已解决 |
 | P2 | 姓名投影、申请人进度、专用表单、并发领取 | 使用受控后端投影，不能通过放宽任务/用户目录权限解决展示问题 |
 
 源码证据：`TicketDetail.tsx` 当前编辑提交使用 updateTicket，表单没有 resolution；`ticket-api.ts` 已有 resolve API；`TicketProcessTasks.tsx` 仍显示处理人 ID，任务列表只代表当前身份可见任务，专用 formKey 入口未建立。历史 HTTP500 不是本次重新实测结果。
