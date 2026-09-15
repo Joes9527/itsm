@@ -145,3 +145,19 @@ python3 /home/administrator/bind-review-to-artifact.py approve --reviewer "<name
 
 Until then the artifact stays blocked: switching or restarting through the coordinator tools is
 refused with `{"review_gate": "blocked"}` before any process is touched.
+
+## 7. Review-ready snapshot (refreshed 2026-09-15 16:05 CST)
+
+| Item | Value |
+| --- | --- |
+| Serving process | pid 1896647 on port 8080, `/proc/1896647/exe` sha256 = `d395dbd5a03739d48cde6fe7898ec45d7daadb19686ac265f5bf6e70239a58ef` |
+| Process cwd | `/home/administrator/.local/state/itsm-kaf-baseline-20260908/config/itsm-wsl-development` |
+| Manifest artifact hash | `d395dbd5…` (matches the serving process) |
+| Previously reviewed artifact | `62aefd8d0c3258158b07001b8cf5e9d9a13c159b2c7c85858a2b36a238045db6` |
+| Review gate | blocked: `reviewed_binary_sha256` != artifact hash, 0 review records, 0 acceptances |
+| Regression test re-run | `go test ./controller -run 'TestNotificationController_' -count=1` → `ok` |
+| Runtime state | backend 8080, web 3010, database `itsm_ga_ready` on the clone; ports 3000/3001 unused |
+
+The artifact under review is therefore the one currently serving traffic, and the packet's evidence is
+reproducible on demand. The review itself must be performed by someone other than the implementing
+agent; see section 6 for the checklist and the approval command.
