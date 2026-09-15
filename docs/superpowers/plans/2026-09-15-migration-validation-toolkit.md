@@ -973,7 +973,17 @@ REGISTRY = {'departments': DepartmentsCheck()}
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m pytest scripts/__tests__/test_migration_checks_departments.py -q`
-Expected: `5 passed`
+Expected: `10 passed`
+
+Notes recorded while executing this task:
+1. The planned `docker exec -e PGPASSWORD=<value>` form puts the credential in `argv`, where any
+   local user can read it from `ps`. The variable name is forwarded instead and the value travels
+   through the child's environment; a test asserts the password is absent from `argv`.
+2. The planned test contradicted itself (it required `PGPASSWORD=` in argv and forbade the password
+   in argv), so it now checks the environment channel explicitly.
+3. API tests need a fake response object carrying `status`, which the plan's snippet did not have.
+4. Extra tests cover `department_ids_by_code`, the dsn path with and without its variable, and the
+   CSRF token reaching the write request.
 
 - [ ] **Step 5: Commit**
 
@@ -1306,6 +1316,23 @@ SPEC = TargetSpec(access='docker', user='ga_owner', database='itsm_ga_ready', co
                   credential=Credential(from_env='TARGET_PW'))
 
 
+class FakeResponse:
+    status = 200
+
+    def __init__(self, payload, cookies=()):
+        self._payload = json.dumps(payload).encode()
+        self.headers = type('H', (), {'get_all': lambda self, name: list(cookies)})()
+
+    def read(self):
+        return self._payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
 class Recorder:
     def __init__(self, stdout='A|B\n', code=0):
         self.calls = []
@@ -1332,9 +1359,10 @@ def test_password_never_appears_in_argv(monkeypatch):
     monkeypatch.setenv('TARGET_PW', 'secret')
     runner = Recorder()
     Target(SPEC, runner=runner).query('SELECT 1')
-    joined = ' '.join(runner.calls[0][0])
-    assert 'secret' not in joined
-    assert any(str(arg).startswith('PGPASSWORD=') for arg in runner.calls[0][0])
+    argv = runner.calls[0][0]
+    assert 'secret' not in ' '.join(argv), 'the password must not be visible in argv'
+    assert 'PGPASSWORD' in argv, 'the variable name is forwarded so docker can read it from the env'
+    assert runner.calls[0][1]['env']['PGPASSWORD'] == 'secret'
 
 
 def test_missing_credential_env_is_reported(monkeypatch):
@@ -1390,7 +1418,9 @@ class Target:
     # --- read-only database -------------------------------------------------------------------
     def _argv(self, password: str) -> list[str]:
         if self.spec.access == 'docker':
-            return ['docker', 'exec', '-i', '-e', 'PGPASSWORD=%s' % password, self.spec.container,
+            # the variable name only: the value travels through the child's environment, so it
+            # never shows up in `ps` output for other users on the host
+            return ['docker', 'exec', '-i', '-e', 'PGPASSWORD', self.spec.container,
                     'psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-A', '-t', '-F', '|',
                     '-U', self.spec.user, '-d', self.spec.database]
         import os
@@ -1405,7 +1435,9 @@ class Target:
         except Exception as exc:                                  # ProfileError
             raise TargetError(str(exc)) from exc
         statement = 'BEGIN READ ONLY;\n%s;\nCOMMIT;' % sql.rstrip().rstrip(';')
-        completed = self.runner(self._argv(password), input=statement, text=True, capture_output=True)
+        environment = dict(os.environ, PGPASSWORD=password)
+        completed = self.runner(self._argv(password), input=statement, text=True,
+                                capture_output=True, env=environment)
         if completed.returncode != 0:
             raise TargetError('query failed (%s): %s' % (sql.strip()[:60], completed.stderr.strip()[:200]))
         return [line.split('|') for line in completed.stdout.splitlines() if '|' in line]
