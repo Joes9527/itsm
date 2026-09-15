@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/user"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type TicketAutomationRuleCreate struct {
 	config
 	mutation *TicketAutomationRuleMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -287,6 +289,7 @@ func (_c *TicketAutomationRuleCreate) createSpec() (*TicketAutomationRule, *sqlg
 		_node = &TicketAutomationRule{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(ticketautomationrule.Table, sqlgraph.NewFieldSpec(ticketautomationrule.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(ticketautomationrule.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -351,11 +354,537 @@ func (_c *TicketAutomationRuleCreate) createSpec() (*TicketAutomationRule, *sqlg
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TicketAutomationRule.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TicketAutomationRuleUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TicketAutomationRuleCreate) OnConflict(opts ...sql.ConflictOption) *TicketAutomationRuleUpsertOne {
+	_c.conflict = opts
+	return &TicketAutomationRuleUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TicketAutomationRule.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TicketAutomationRuleCreate) OnConflictColumns(columns ...string) *TicketAutomationRuleUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TicketAutomationRuleUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// TicketAutomationRuleUpsertOne is the builder for "upsert"-ing
+	//  one TicketAutomationRule node.
+	TicketAutomationRuleUpsertOne struct {
+		create *TicketAutomationRuleCreate
+	}
+
+	// TicketAutomationRuleUpsert is the "OnConflict" setter.
+	TicketAutomationRuleUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *TicketAutomationRuleUpsert) SetName(v string) *TicketAutomationRuleUpsert {
+	u.Set(ticketautomationrule.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsert) UpdateName() *TicketAutomationRuleUpsert {
+	u.SetExcluded(ticketautomationrule.FieldName)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *TicketAutomationRuleUpsert) SetDescription(v string) *TicketAutomationRuleUpsert {
+	u.Set(ticketautomationrule.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsert) UpdateDescription() *TicketAutomationRuleUpsert {
+	u.SetExcluded(ticketautomationrule.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *TicketAutomationRuleUpsert) ClearDescription() *TicketAutomationRuleUpsert {
+	u.SetNull(ticketautomationrule.FieldDescription)
+	return u
+}
+
+// SetPriority sets the "priority" field.
+func (u *TicketAutomationRuleUpsert) SetPriority(v int) *TicketAutomationRuleUpsert {
+	u.Set(ticketautomationrule.FieldPriority, v)
+	return u
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsert) UpdatePriority() *TicketAutomationRuleUpsert {
+	u.SetExcluded(ticketautomationrule.FieldPriority)
+	return u
+}
+
+// AddPriority adds v to the "priority" field.
+func (u *TicketAutomationRuleUpsert) AddPriority(v int) *TicketAutomationRuleUpsert {
+	u.Add(ticketautomationrule.FieldPriority, v)
+	return u
+}
+
+// SetConditions sets the "conditions" field.
+func (u *TicketAutomationRuleUpsert) SetConditions(v []map[string]interface{}) *TicketAutomationRuleUpsert {
+	u.Set(ticketautomationrule.FieldConditions, v)
+	return u
+}
+
+// UpdateConditions sets the "conditions" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsert) UpdateConditions() *TicketAutomationRuleUpsert {
+	u.SetExcluded(ticketautomationrule.FieldConditions)
+	return u
+}
+
+// ClearConditions clears the value of the "conditions" field.
+func (u *TicketAutomationRuleUpsert) ClearConditions() *TicketAutomationRuleUpsert {
+	u.SetNull(ticketautomationrule.FieldConditions)
+	return u
+}
+
+// SetActions sets the "actions" field.
+func (u *TicketAutomationRuleUpsert) SetActions(v []map[string]interface{}) *TicketAutomationRuleUpsert {
+	u.Set(ticketautomationrule.FieldActions, v)
+	return u
+}
+
+// UpdateActions sets the "actions" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsert) UpdateActions() *TicketAutomationRuleUpsert {
+	u.SetExcluded(ticketautomationrule.FieldActions)
+	return u
+}
+
+// ClearActions clears the value of the "actions" field.
+func (u *TicketAutomationRuleUpsert) ClearActions() *TicketAutomationRuleUpsert {
+	u.SetNull(ticketautomationrule.FieldActions)
+	return u
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *TicketAutomationRuleUpsert) SetIsActive(v bool) *TicketAutomationRuleUpsert {
+	u.Set(ticketautomationrule.FieldIsActive, v)
+	return u
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsert) UpdateIsActive() *TicketAutomationRuleUpsert {
+	u.SetExcluded(ticketautomationrule.FieldIsActive)
+	return u
+}
+
+// SetExecutionCount sets the "execution_count" field.
+func (u *TicketAutomationRuleUpsert) SetExecutionCount(v int) *TicketAutomationRuleUpsert {
+	u.Set(ticketautomationrule.FieldExecutionCount, v)
+	return u
+}
+
+// UpdateExecutionCount sets the "execution_count" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsert) UpdateExecutionCount() *TicketAutomationRuleUpsert {
+	u.SetExcluded(ticketautomationrule.FieldExecutionCount)
+	return u
+}
+
+// AddExecutionCount adds v to the "execution_count" field.
+func (u *TicketAutomationRuleUpsert) AddExecutionCount(v int) *TicketAutomationRuleUpsert {
+	u.Add(ticketautomationrule.FieldExecutionCount, v)
+	return u
+}
+
+// SetLastExecutedAt sets the "last_executed_at" field.
+func (u *TicketAutomationRuleUpsert) SetLastExecutedAt(v time.Time) *TicketAutomationRuleUpsert {
+	u.Set(ticketautomationrule.FieldLastExecutedAt, v)
+	return u
+}
+
+// UpdateLastExecutedAt sets the "last_executed_at" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsert) UpdateLastExecutedAt() *TicketAutomationRuleUpsert {
+	u.SetExcluded(ticketautomationrule.FieldLastExecutedAt)
+	return u
+}
+
+// ClearLastExecutedAt clears the value of the "last_executed_at" field.
+func (u *TicketAutomationRuleUpsert) ClearLastExecutedAt() *TicketAutomationRuleUpsert {
+	u.SetNull(ticketautomationrule.FieldLastExecutedAt)
+	return u
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *TicketAutomationRuleUpsert) SetCreatedBy(v int) *TicketAutomationRuleUpsert {
+	u.Set(ticketautomationrule.FieldCreatedBy, v)
+	return u
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsert) UpdateCreatedBy() *TicketAutomationRuleUpsert {
+	u.SetExcluded(ticketautomationrule.FieldCreatedBy)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TicketAutomationRuleUpsert) SetTenantID(v int) *TicketAutomationRuleUpsert {
+	u.Set(ticketautomationrule.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsert) UpdateTenantID() *TicketAutomationRuleUpsert {
+	u.SetExcluded(ticketautomationrule.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TicketAutomationRuleUpsert) AddTenantID(v int) *TicketAutomationRuleUpsert {
+	u.Add(ticketautomationrule.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TicketAutomationRuleUpsert) SetCreatedAt(v time.Time) *TicketAutomationRuleUpsert {
+	u.Set(ticketautomationrule.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsert) UpdateCreatedAt() *TicketAutomationRuleUpsert {
+	u.SetExcluded(ticketautomationrule.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *TicketAutomationRuleUpsert) SetUpdatedAt(v time.Time) *TicketAutomationRuleUpsert {
+	u.Set(ticketautomationrule.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsert) UpdateUpdatedAt() *TicketAutomationRuleUpsert {
+	u.SetExcluded(ticketautomationrule.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.TicketAutomationRule.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TicketAutomationRuleUpsertOne) UpdateNewValues() *TicketAutomationRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TicketAutomationRule.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *TicketAutomationRuleUpsertOne) Ignore() *TicketAutomationRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TicketAutomationRuleUpsertOne) DoNothing() *TicketAutomationRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TicketAutomationRuleCreate.OnConflict
+// documentation for more info.
+func (u *TicketAutomationRuleUpsertOne) Update(set func(*TicketAutomationRuleUpsert)) *TicketAutomationRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TicketAutomationRuleUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *TicketAutomationRuleUpsertOne) SetName(v string) *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertOne) UpdateName() *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *TicketAutomationRuleUpsertOne) SetDescription(v string) *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertOne) UpdateDescription() *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *TicketAutomationRuleUpsertOne) ClearDescription() *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetPriority sets the "priority" field.
+func (u *TicketAutomationRuleUpsertOne) SetPriority(v int) *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetPriority(v)
+	})
+}
+
+// AddPriority adds v to the "priority" field.
+func (u *TicketAutomationRuleUpsertOne) AddPriority(v int) *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.AddPriority(v)
+	})
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertOne) UpdatePriority() *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdatePriority()
+	})
+}
+
+// SetConditions sets the "conditions" field.
+func (u *TicketAutomationRuleUpsertOne) SetConditions(v []map[string]interface{}) *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetConditions(v)
+	})
+}
+
+// UpdateConditions sets the "conditions" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertOne) UpdateConditions() *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateConditions()
+	})
+}
+
+// ClearConditions clears the value of the "conditions" field.
+func (u *TicketAutomationRuleUpsertOne) ClearConditions() *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.ClearConditions()
+	})
+}
+
+// SetActions sets the "actions" field.
+func (u *TicketAutomationRuleUpsertOne) SetActions(v []map[string]interface{}) *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetActions(v)
+	})
+}
+
+// UpdateActions sets the "actions" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertOne) UpdateActions() *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateActions()
+	})
+}
+
+// ClearActions clears the value of the "actions" field.
+func (u *TicketAutomationRuleUpsertOne) ClearActions() *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.ClearActions()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *TicketAutomationRuleUpsertOne) SetIsActive(v bool) *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertOne) UpdateIsActive() *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetExecutionCount sets the "execution_count" field.
+func (u *TicketAutomationRuleUpsertOne) SetExecutionCount(v int) *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetExecutionCount(v)
+	})
+}
+
+// AddExecutionCount adds v to the "execution_count" field.
+func (u *TicketAutomationRuleUpsertOne) AddExecutionCount(v int) *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.AddExecutionCount(v)
+	})
+}
+
+// UpdateExecutionCount sets the "execution_count" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertOne) UpdateExecutionCount() *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateExecutionCount()
+	})
+}
+
+// SetLastExecutedAt sets the "last_executed_at" field.
+func (u *TicketAutomationRuleUpsertOne) SetLastExecutedAt(v time.Time) *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetLastExecutedAt(v)
+	})
+}
+
+// UpdateLastExecutedAt sets the "last_executed_at" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertOne) UpdateLastExecutedAt() *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateLastExecutedAt()
+	})
+}
+
+// ClearLastExecutedAt clears the value of the "last_executed_at" field.
+func (u *TicketAutomationRuleUpsertOne) ClearLastExecutedAt() *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.ClearLastExecutedAt()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *TicketAutomationRuleUpsertOne) SetCreatedBy(v int) *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertOne) UpdateCreatedBy() *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TicketAutomationRuleUpsertOne) SetTenantID(v int) *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TicketAutomationRuleUpsertOne) AddTenantID(v int) *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertOne) UpdateTenantID() *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TicketAutomationRuleUpsertOne) SetCreatedAt(v time.Time) *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertOne) UpdateCreatedAt() *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *TicketAutomationRuleUpsertOne) SetUpdatedAt(v time.Time) *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertOne) UpdateUpdatedAt() *TicketAutomationRuleUpsertOne {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *TicketAutomationRuleUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TicketAutomationRuleCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TicketAutomationRuleUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *TicketAutomationRuleUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *TicketAutomationRuleUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // TicketAutomationRuleCreateBulk is the builder for creating many TicketAutomationRule entities in bulk.
 type TicketAutomationRuleCreateBulk struct {
 	config
 	err      error
 	builders []*TicketAutomationRuleCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the TicketAutomationRule entities in the database.
@@ -385,6 +914,7 @@ func (_c *TicketAutomationRuleCreateBulk) Save(ctx context.Context) ([]*TicketAu
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -435,6 +965,327 @@ func (_c *TicketAutomationRuleCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *TicketAutomationRuleCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TicketAutomationRule.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TicketAutomationRuleUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TicketAutomationRuleCreateBulk) OnConflict(opts ...sql.ConflictOption) *TicketAutomationRuleUpsertBulk {
+	_c.conflict = opts
+	return &TicketAutomationRuleUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TicketAutomationRule.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TicketAutomationRuleCreateBulk) OnConflictColumns(columns ...string) *TicketAutomationRuleUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TicketAutomationRuleUpsertBulk{
+		create: _c,
+	}
+}
+
+// TicketAutomationRuleUpsertBulk is the builder for "upsert"-ing
+// a bulk of TicketAutomationRule nodes.
+type TicketAutomationRuleUpsertBulk struct {
+	create *TicketAutomationRuleCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.TicketAutomationRule.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TicketAutomationRuleUpsertBulk) UpdateNewValues() *TicketAutomationRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TicketAutomationRule.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *TicketAutomationRuleUpsertBulk) Ignore() *TicketAutomationRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TicketAutomationRuleUpsertBulk) DoNothing() *TicketAutomationRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TicketAutomationRuleCreateBulk.OnConflict
+// documentation for more info.
+func (u *TicketAutomationRuleUpsertBulk) Update(set func(*TicketAutomationRuleUpsert)) *TicketAutomationRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TicketAutomationRuleUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *TicketAutomationRuleUpsertBulk) SetName(v string) *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertBulk) UpdateName() *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *TicketAutomationRuleUpsertBulk) SetDescription(v string) *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertBulk) UpdateDescription() *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *TicketAutomationRuleUpsertBulk) ClearDescription() *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetPriority sets the "priority" field.
+func (u *TicketAutomationRuleUpsertBulk) SetPriority(v int) *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetPriority(v)
+	})
+}
+
+// AddPriority adds v to the "priority" field.
+func (u *TicketAutomationRuleUpsertBulk) AddPriority(v int) *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.AddPriority(v)
+	})
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertBulk) UpdatePriority() *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdatePriority()
+	})
+}
+
+// SetConditions sets the "conditions" field.
+func (u *TicketAutomationRuleUpsertBulk) SetConditions(v []map[string]interface{}) *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetConditions(v)
+	})
+}
+
+// UpdateConditions sets the "conditions" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertBulk) UpdateConditions() *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateConditions()
+	})
+}
+
+// ClearConditions clears the value of the "conditions" field.
+func (u *TicketAutomationRuleUpsertBulk) ClearConditions() *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.ClearConditions()
+	})
+}
+
+// SetActions sets the "actions" field.
+func (u *TicketAutomationRuleUpsertBulk) SetActions(v []map[string]interface{}) *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetActions(v)
+	})
+}
+
+// UpdateActions sets the "actions" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertBulk) UpdateActions() *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateActions()
+	})
+}
+
+// ClearActions clears the value of the "actions" field.
+func (u *TicketAutomationRuleUpsertBulk) ClearActions() *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.ClearActions()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *TicketAutomationRuleUpsertBulk) SetIsActive(v bool) *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertBulk) UpdateIsActive() *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetExecutionCount sets the "execution_count" field.
+func (u *TicketAutomationRuleUpsertBulk) SetExecutionCount(v int) *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetExecutionCount(v)
+	})
+}
+
+// AddExecutionCount adds v to the "execution_count" field.
+func (u *TicketAutomationRuleUpsertBulk) AddExecutionCount(v int) *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.AddExecutionCount(v)
+	})
+}
+
+// UpdateExecutionCount sets the "execution_count" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertBulk) UpdateExecutionCount() *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateExecutionCount()
+	})
+}
+
+// SetLastExecutedAt sets the "last_executed_at" field.
+func (u *TicketAutomationRuleUpsertBulk) SetLastExecutedAt(v time.Time) *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetLastExecutedAt(v)
+	})
+}
+
+// UpdateLastExecutedAt sets the "last_executed_at" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertBulk) UpdateLastExecutedAt() *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateLastExecutedAt()
+	})
+}
+
+// ClearLastExecutedAt clears the value of the "last_executed_at" field.
+func (u *TicketAutomationRuleUpsertBulk) ClearLastExecutedAt() *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.ClearLastExecutedAt()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *TicketAutomationRuleUpsertBulk) SetCreatedBy(v int) *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertBulk) UpdateCreatedBy() *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TicketAutomationRuleUpsertBulk) SetTenantID(v int) *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TicketAutomationRuleUpsertBulk) AddTenantID(v int) *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertBulk) UpdateTenantID() *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TicketAutomationRuleUpsertBulk) SetCreatedAt(v time.Time) *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertBulk) UpdateCreatedAt() *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *TicketAutomationRuleUpsertBulk) SetUpdatedAt(v time.Time) *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *TicketAutomationRuleUpsertBulk) UpdateUpdatedAt() *TicketAutomationRuleUpsertBulk {
+	return u.Update(func(s *TicketAutomationRuleUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *TicketAutomationRuleUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the TicketAutomationRuleCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TicketAutomationRuleCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TicketAutomationRuleUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

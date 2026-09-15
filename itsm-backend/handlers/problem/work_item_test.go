@@ -1,4 +1,4 @@
-package problem
+package problem_test
 
 import (
 	"context"
@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
-	"time"
+
+	"itsm-backend/handlers/shared/workitemmutation"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
@@ -26,7 +27,7 @@ func TestProblemCreate_CreatesWorkItemInSameTransaction(t *testing.T) {
 	tenant := createProblemHandlerTenant(t, ctx, client, "wi-create")
 	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "wi-create")
 
-	p, err := service.Create(ctx, tenant.ID, &Problem{
+	p, err := service.SubmitCreation(ctx, tenant.ID, &Problem{
 		Title: "Disk latency spike", Description: "p99 disk latency", Priority: "high", CreatedBy: user.ID,
 	})
 	require.NoError(t, err)
@@ -56,7 +57,7 @@ func TestProblemCreate_RollsBackWorkItemWhenCreatorInvalid(t *testing.T) {
 	ticketCountBefore, err := client.Ticket.Query().Count(ctx)
 	require.NoError(t, err)
 
-	_, err = service.Create(ctx, tenant.ID, &Problem{
+	_, err = service.SubmitCreation(ctx, tenant.ID, &Problem{
 		Title: "Orphan attempt", Priority: "high", CreatedBy: 999999,
 	})
 	require.Error(t, err)
@@ -85,7 +86,7 @@ func TestProblemAddAssociations_TicketWritesWorkItemRelation(t *testing.T) {
 		SetTitle("Related ticket").SetTicketNumber("PRB-REL-1").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	require.NoError(t, service.AddAssociations(ctx, tenant.ID, p.ID, user.ID, "ticket", []int{relatedTicket.ID}))
+	require.NoError(t, applyProblemRelation(service, ctx, tenant.ID, user.ID, *p.WorkItemID, relatedTicket.ID, 1, "related_to", "same-operation", false))
 
 	relations, err := client.WorkItemRelation.Query().
 		Where(
@@ -99,22 +100,16 @@ func TestProblemAddAssociations_TicketWritesWorkItemRelation(t *testing.T) {
 	require.Len(t, relations, 1)
 	assert.Equal(t, user.ID, relations[0].CreatedByID)
 
-	// The legacy ent m2m edge must NOT be used by the new write path.
-	problemEnt, err := client.Problem.Get(ctx, p.ID)
-	require.NoError(t, err)
-	legacyEdgeTickets, err := client.Problem.QueryTickets(problemEnt).All(ctx)
-	require.NoError(t, err)
-	assert.Empty(t, legacyEdgeTickets, "new ticket associations must not be written to the legacy Problem<->Ticket edge")
-
+	// Physical legacy-storage exclusion is tested with old-only SQL fixtures.
 	// GetWithAssociations must resolve the ticket via WorkItemRelation.
-	withAssoc, err := service.GetWithAssociations(ctx, p.ID, tenant.ID)
+	withAssoc, err := service.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"})
 	require.NoError(t, err)
-	require.Len(t, withAssoc.Tickets, 1)
-	assert.Equal(t, relatedTicket.ID, withAssoc.Tickets[0].ID)
-	assert.Equal(t, relatedTicket.TicketNumber, withAssoc.Tickets[0].Number)
+	require.Len(t, withAssoc.Relations, 1)
+	assert.Equal(t, relatedTicket.ID, withAssoc.Relations[0].Target.WorkItemID)
+	assert.Equal(t, relatedTicket.TicketNumber, withAssoc.Relations[0].Target.Number)
 
 	// Idempotent re-add must not create a duplicate live relation row.
-	require.NoError(t, service.AddAssociations(ctx, tenant.ID, p.ID, user.ID, "ticket", []int{relatedTicket.ID}))
+	require.NoError(t, applyProblemRelation(service, ctx, tenant.ID, user.ID, *p.WorkItemID, relatedTicket.ID, 1, "related_to", "same-operation", false))
 	relationsAfterReAdd, err := client.WorkItemRelation.Query().
 		Where(
 			workitemrelation.TenantID(tenant.ID),
@@ -127,7 +122,7 @@ func TestProblemAddAssociations_TicketWritesWorkItemRelation(t *testing.T) {
 	require.Len(t, relationsAfterReAdd, 1, "re-adding the same ticket association must be a no-op, not a duplicate row")
 
 	// RemoveAssociation soft-deletes the relation and relinking creates a fresh row.
-	require.NoError(t, service.RemoveAssociation(ctx, tenant.ID, p.ID, "ticket", relatedTicket.ID))
+	require.NoError(t, applyProblemRelation(service, ctx, tenant.ID, user.ID, *p.WorkItemID, relatedTicket.ID, 2, "related_to", "remove", true))
 	liveAfterRemove, err := client.WorkItemRelation.Query().
 		Where(
 			workitemrelation.TenantID(tenant.ID),
@@ -138,11 +133,11 @@ func TestProblemAddAssociations_TicketWritesWorkItemRelation(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, liveAfterRemove)
 
-	withAssocAfterRemove, err := service.GetWithAssociations(ctx, p.ID, tenant.ID)
+	withAssocAfterRemove, err := service.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"})
 	require.NoError(t, err)
-	assert.Empty(t, withAssocAfterRemove.Tickets)
+	assert.Empty(t, withAssocAfterRemove.Relations)
 
-	require.NoError(t, service.AddAssociations(ctx, tenant.ID, p.ID, user.ID, "ticket", []int{relatedTicket.ID}))
+	require.NoError(t, applyProblemRelation(service, ctx, tenant.ID, user.ID, *p.WorkItemID, relatedTicket.ID, 3, "related_to", "relink", false))
 	liveAfterRelink, err := client.WorkItemRelation.Query().
 		Where(
 			workitemrelation.TenantID(tenant.ID),
@@ -172,19 +167,19 @@ func TestProblemWorkItem_CrossTenantIsolation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Tenant B cannot link its own ticket to Tenant A's problem (problem lookup fails closed).
-	err = service.AddAssociations(ctx, tenantB.ID, problemA.ID, userB.ID, "ticket", []int{ticketB.ID})
+	err = applyProblemRelation(service, ctx, tenantB.ID, userB.ID, *problemA.WorkItemID, ticketB.ID, 1, "related_to", "foreign-owner", false)
 	require.Error(t, err)
 
 	// Tenant A cannot link a foreign tenant's ticket to its own problem.
-	err = service.AddAssociations(ctx, tenantA.ID, problemA.ID, userA.ID, "ticket", []int{ticketB.ID})
-	require.ErrorContains(t, err, "current tenant")
+	err = applyProblemRelation(service, ctx, tenantA.ID, userA.ID, *problemA.WorkItemID, ticketB.ID, 1, "related_to", "foreign-target", false)
+	require.Error(t, err)
 
 	// Directly probing WorkItemRelation across tenants must not surface Tenant A's relation
 	// under Tenant B's tenant_id filter, even if the caller knew the raw WorkItem IDs.
 	ticketA, err := client.Ticket.Create().
 		SetTitle("Tenant A ticket").SetTicketNumber("PRB-ISO-A").SetRequesterID(userA.ID).SetTenantID(tenantA.ID).Save(ctx)
 	require.NoError(t, err)
-	require.NoError(t, service.AddAssociations(ctx, tenantA.ID, problemA.ID, userA.ID, "ticket", []int{ticketA.ID}))
+	require.NoError(t, applyProblemRelation(service, ctx, tenantA.ID, userA.ID, *problemA.WorkItemID, ticketA.ID, 1, "related_to", "local-target", false))
 
 	foreignCount, err := client.WorkItemRelation.Query().
 		Where(
@@ -196,18 +191,11 @@ func TestProblemWorkItem_CrossTenantIsolation(t *testing.T) {
 
 	// GetWithAssociations under tenant B for problem A must fail closed (not found), never
 	// silently return an empty/partial result impersonating success.
-	_, err = service.GetWithAssociations(ctx, problemA.ID, tenantB.ID)
+	_, err = service.Get(ctx, problemA.ID, workitemmutation.Meta{TenantID: tenantB.ID, ActorID: userB.ID, Source: "http"})
 	require.True(t, ent.IsNotFound(err))
 }
 
-// TestGenerateWorkItemTicketNumber_CrossTenantSameMonthNoCollision 锁定一个在实现过程中
-// 发现的真实缺陷类别：IncidentService.generateWorkItemTicketNumber 和
-// repository/ticket.EntRepository.GenerateTicketNumber 都按租户维度计数生成
-// TKT-YYYYMM-NNNNNN 编号，但 tickets.ticket_number 是全局唯一索引（不区分租户）——两个
-// 不同租户在同一个月第一次创建单据都会生成 "TKT-YYYYMM-000001" 并撞上全局唯一约束。
-// Problem 这次新写的生成器改成全局维度计数，这个测试锁定"两个租户各自创建 Problem 不
-// 会互相撞号"这个正确行为。
-func TestGenerateWorkItemTicketNumber_CrossTenantSameMonthNoCollision(t *testing.T) {
+func TestProblemWorkItem_CrossTenantSameMonthUsesIndependentSequences(t *testing.T) {
 	client, service, ctx := setupProblemHandlerTest(t)
 	defer client.Close()
 	tenantA := createProblemHandlerTenant(t, ctx, client, "seq-a")
@@ -215,10 +203,10 @@ func TestGenerateWorkItemTicketNumber_CrossTenantSameMonthNoCollision(t *testing
 	userA := createProblemHandlerUser(t, ctx, client, tenantA.ID, "seq-a")
 	userB := createProblemHandlerUser(t, ctx, client, tenantB.ID, "seq-b")
 
-	pA, err := service.Create(ctx, tenantA.ID, &Problem{Title: "A first problem", Priority: "medium", CreatedBy: userA.ID})
+	pA, err := service.SubmitCreation(ctx, tenantA.ID, &Problem{Title: "A first problem", Priority: "medium", CreatedBy: userA.ID})
 	require.NoError(t, err)
-	pB, err := service.Create(ctx, tenantB.ID, &Problem{Title: "B first problem", Priority: "medium", CreatedBy: userB.ID})
-	require.NoError(t, err, "tenant B's first problem of the month must not collide with tenant A's ticket number")
+	pB, err := service.SubmitCreation(ctx, tenantB.ID, &Problem{Title: "B first problem", Priority: "medium", CreatedBy: userB.ID})
+	require.NoError(t, err)
 
 	require.NotNil(t, pA.WorkItemID)
 	require.NotNil(t, pB.WorkItemID)
@@ -226,54 +214,9 @@ func TestGenerateWorkItemTicketNumber_CrossTenantSameMonthNoCollision(t *testing
 	require.NoError(t, err)
 	ticketB, err := client.Ticket.Get(ctx, *pB.WorkItemID)
 	require.NoError(t, err)
-	assert.NotEqual(t, ticketA.TicketNumber, ticketB.TicketNumber)
-}
-
-// fakeSequenceProvider is a minimal SequenceProvider stub used to exercise the Redis-backed
-// branch of generateWorkItemTicketNumber without a real Redis instance.
-type fakeSequenceProvider struct {
-	seq int64
-	err error
-}
-
-func (f *fakeSequenceProvider) GetNextSequenceWithExpiry(_ context.Context, _ string, _ time.Time) (int64, error) {
-	if f.err != nil {
-		return 0, f.err
-	}
-	f.seq++
-	return f.seq, nil
-}
-
-// TestEntRepository_SequenceProviderWiring 锁定 SetSequenceService 注入的 SequenceProvider
-// 确实被 generateWorkItemTicketNumber 使用（优先于数据库兜底路径）；同时验证 Provider 返回
-// 错误时能正确降级到数据库兜底，不影响 Problem 创建成功。这条路径目前没有被
-// internal/bootstrap/app.go 注入（不在本次任务允许修改的文件范围内，见交付说明），
-// 但作为新写的能力必须有单测覆盖，不能是形同虚设的死接口。
-func TestEntRepository_SequenceProviderWiring(t *testing.T) {
-	client, service, ctx := setupProblemHandlerTest(t)
-	defer client.Close()
-	tenant := createProblemHandlerTenant(t, ctx, client, "seq-provider")
-	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "seq-provider")
-
-	repo, ok := service.repo.(*EntRepository)
-	require.True(t, ok)
-	provider := &fakeSequenceProvider{seq: 40}
-	repo.SetSequenceService(provider)
-
-	p, err := service.Create(ctx, tenant.ID, &Problem{Title: "Sequenced problem", Priority: "low", CreatedBy: user.ID})
-	require.NoError(t, err)
-	require.NotNil(t, p.WorkItemID)
-	workItem, err := client.Ticket.Get(ctx, *p.WorkItemID)
-	require.NoError(t, err)
-	now := time.Now()
-	expected := fmt.Sprintf("TKT-%04d%02d-%06d", now.Year(), int(now.Month()), 41)
-	assert.Equal(t, expected, workItem.TicketNumber)
-
-	// Provider failure must gracefully fall back to the DB-based sequence, not fail creation.
-	repo.SetSequenceService(&fakeSequenceProvider{err: fmt.Errorf("redis unavailable")})
-	p2, err := service.Create(ctx, tenant.ID, &Problem{Title: "Fallback problem", Priority: "low", CreatedBy: user.ID})
-	require.NoError(t, err)
-	require.NotNil(t, p2.WorkItemID)
+	assert.Equal(t, ticketA.TicketNumber, ticketB.TicketNumber)
+	assert.Equal(t, tenantA.ID, ticketA.TenantID)
+	assert.Equal(t, tenantB.ID, ticketB.TenantID)
 }
 
 // TestProblemAddAssociationHTTP_MissingUserContext 锁定 AddAssociation 在缺少 user_id 上下文
@@ -291,9 +234,9 @@ func TestProblemAddAssociationHTTP_MissingUserContext(t *testing.T) {
 		SetTitle("T1").SetTicketNumber("PRB-NOUSER-1").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	assocReq := dto.ProblemAssociationRequest{RelatedType: "ticket", RelatedIDs: []int{ticket1.ID}}
+	assocReq := dto.WorkItemRelationRequest{SourceWorkItemID: *p.WorkItemID, TargetWorkItemID: ticket1.ID, RelationType: "related_to", ExpectedVersion: p.Version, OperationID: "missing-actor"}
 	// performProblemRequest only sets X-User-ID when userID > 0; pass 0 to omit it.
-	w := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/associations", p.ID), assocReq, tenant.ID, 0)
+	w := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/work-items/%d/relations", *p.WorkItemID), assocReq, tenant.ID, 0)
 	require.Equal(t, http.StatusUnauthorized, w.Code)
 	var res common.Response
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &res))

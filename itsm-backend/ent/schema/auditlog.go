@@ -4,7 +4,9 @@ import (
 	"time"
 
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
 )
 
 // AuditLog holds the schema definition for the AuditLog entity.
@@ -15,6 +17,10 @@ type AuditLog struct {
 // Fields of the AuditLog.
 func (AuditLog) Fields() []ent.Field {
 	return []ent.Field{
+		field.String("operation_id").Optional().Nillable(),
+		field.String("request_digest").Optional().Nillable(),
+		field.Int("result_version").Optional().Nillable(),
+		field.String("result_status").Optional().Nillable(),
 		field.Time("created_at").Default(time.Now),
 		field.Int("tenant_id").Optional(),
 		field.Int("user_id").Optional(),
@@ -31,3 +37,8 @@ func (AuditLog) Fields() []ent.Field {
 
 // Edges of the AuditLog.
 func (AuditLog) Edges() []ent.Edge { return nil }
+
+// Historical HTTP audits have no operation ID; only command receipts are unique.
+func (AuditLog) Indexes() []ent.Index {
+	return []ent.Index{index.Fields("tenant_id", "user_id", "operation_id").Unique().StorageKey("audit_log_operation_receipt").Annotations(entsql.IndexWhere("operation_id IS NOT NULL"))}
+}

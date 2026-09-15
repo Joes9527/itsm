@@ -2,7 +2,12 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
+	"os"
 	"testing"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/processdefinition"
@@ -91,7 +96,7 @@ func TestBPMNTemplateService_DeployAndStartTicketUrgentFlow(t *testing.T) {
 	require.NoError(t, err, "ticket_urgent_flow 模板应该能正常部署")
 
 	logger := zaptest.NewLogger(t).Sugar()
-	engineIface := NewCustomProcessEngine(client, logger)
+	engineIface := NewCustomProcessEngine(client, logger, executionfixture.Standard())
 	engine, ok := engineIface.(*CustomProcessEngine)
 	require.True(t, ok)
 
@@ -99,6 +104,7 @@ func TestBPMNTemplateService_DeployAndStartTicketUrgentFlow(t *testing.T) {
 	runCtx = WithTrustedBPMNTenantContext(runCtx, tenant.ID)
 	instance, err := engine.StartProcess(runCtx, "ticket_urgent_flow", "TICKET-URGENT-1", "", 0, map[string]interface{}{
 		"requester_id": float64(1),
+		"triggered_by": "system",
 	})
 	require.NoError(t, err, "ticket_urgent_flow 应该能成功启动流程实例，不再报'获取流程定义失败'")
 	assert.NotNil(t, instance)
@@ -141,7 +147,7 @@ func TestBPMNTemplateService_DeployAndStartChangeEmergencyFlow(t *testing.T) {
 	require.NoError(t, err, "change_emergency_flow 模板应该能正常部署")
 
 	logger := zaptest.NewLogger(t).Sugar()
-	engineIface := NewCustomProcessEngine(client, logger)
+	engineIface := NewCustomProcessEngine(client, logger, executionfixture.Standard())
 	engine, ok := engineIface.(*CustomProcessEngine)
 	require.True(t, ok)
 
@@ -149,6 +155,7 @@ func TestBPMNTemplateService_DeployAndStartChangeEmergencyFlow(t *testing.T) {
 	runCtx = WithTrustedBPMNTenantContext(runCtx, tenant.ID)
 	instance, err := engine.StartProcess(runCtx, "change_emergency_flow", "CHANGE-EMERGENCY-1", "", 0, map[string]interface{}{
 		"requester_id": float64(1),
+		"triggered_by": "system",
 	})
 	require.NoError(t, err, "change_emergency_flow 应该能成功启动流程实例，不再报'流程定义不存在'")
 	assert.NotNil(t, instance)
@@ -197,12 +204,12 @@ func TestBPMNTemplateService_ChangeNormalFlow_ApprovalGatewayConditionCompiles(t
 		switch flow.TargetRef {
 		case "Activity_CABApproval":
 			approvalFlow = flow
-		case "Activity_Schedule":
+		case "Activity_PolicyAuthorization":
 			scheduleFlow = flow
 		}
 	}
 	require.NotNil(t, approvalFlow, "Gateway_Approval 应该有一条指向 Activity_CABApproval 的出边（approval_required==true）")
-	require.NotNil(t, scheduleFlow, "Gateway_Approval 应该有一条指向 Activity_Schedule 的出边（approval_required!=true）")
+	require.NotNil(t, scheduleFlow, "Gateway_Approval 应该有一条指向 Activity_PolicyAuthorization 的出边（approval_required!=true）")
 	require.NotNil(t, approvalFlow.ConditionExpression)
 	require.NotNil(t, scheduleFlow.ConditionExpression)
 
@@ -217,7 +224,7 @@ func TestBPMNTemplateService_ChangeNormalFlow_ApprovalGatewayConditionCompiles(t
 
 	result, err = engine.EvaluateCondition(scheduleFlow.ConditionExpression.Expression, approvalRequiredTrue)
 	require.NoError(t, err, "approval_required!=true 分支的条件表达式应该能正常编译求值，而不是解析失败")
-	assert.False(t, result, "approval_required=true 时，指向 Activity_Schedule 的分支应该判定为不满足")
+	assert.False(t, result, "approval_required=true 时，指向 Activity_PolicyAuthorization 的分支应该判定为不满足")
 }
 
 func TestBPMNTemplateService_ServiceRequestFlows_ApprovalNodeMarked(t *testing.T) {
@@ -319,4 +326,67 @@ func TestBPMNTemplateService_LoadAndDeployTemplates_DriftPublishesNewVersion(t *
 		All(ctx)
 	require.NoError(t, err)
 	require.Len(t, defs, 2, "内容一致时同步应幂等，不再产生新版本")
+}
+
+// The historical fixture is the exact embedded definition from C2 before the
+// rejection-branch fix (53a198b5); only template deployment is exercised here.
+func TestBPMNTemplateService_SSLVPNContentIdentityAcrossDeploymentHistory(t *testing.T) {
+	for _, existing := range []bool{false, true} {
+		t.Run(fmt.Sprintf("existing_%t", existing), func(t *testing.T) {
+			client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:sslvpn_identity_%t?mode=memory&cache=shared&_fk=1", existing))
+			t.Cleanup(func() { client.Close() })
+			ctx := context.Background()
+			tenant := client.Tenant.Create().SetName("Template identity").SetCode("template-identity").SetDomain("template-identity.example").SetStatus("active").SaveX(ctx)
+			svc := NewBPMNTemplateService(client)
+			templates, err := svc.GetTemplateList()
+			require.NoError(t, err)
+			var tmpl *TemplateInfo
+			for _, candidate := range templates {
+				if candidate.ID == "sslvpn_approval_flow" {
+					tmpl = candidate
+				}
+			}
+			require.NotNil(t, tmpl)
+			embedded, err := svc.GetTemplateContent(tmpl.ID)
+			require.NoError(t, err)
+			require.Equal(t, fmt.Sprintf("%x", sha256.Sum256(embedded)), tmpl.ContentSHA256)
+			var oldID int
+			var oldXML []byte
+			if existing {
+				oldXML, err = os.ReadFile("testdata/sslvpn_approval_flow_pre_rejection.bpmn")
+				require.NoError(t, err)
+				require.NotEqual(t, tmpl.ContentSHA256, fmt.Sprintf("%x", sha256.Sum256(oldXML)))
+				require.NoError(t, svc.deployTemplate(ctx, tmpl, tenant.ID, oldXML))
+				oldID = client.ProcessDefinition.Query().OnlyX(ctx).ID
+			}
+			require.NoError(t, svc.DeployTemplateByName(ctx, tmpl.ID, tenant.ID))
+			latest := client.ProcessDefinition.Query().Where(processdefinition.IsLatest(true)).OnlyX(ctx)
+			require.Equal(t, embedded, latest.BpmnXML)
+			require.Equal(t, tmpl.ContentSHA256, fmt.Sprintf("%x", sha256.Sum256(latest.BpmnXML)), "verify persisted bytes, not only template metadata")
+			require.True(t, latest.IsActive)
+			expectedCount := 1
+			if existing {
+				expectedCount = 2
+				old := client.ProcessDefinition.GetX(ctx, oldID)
+				assert.Equal(t, oldXML, old.BpmnXML, "historical definitions remain immutable")
+				assert.Equal(t, "1.0.0", old.Version)
+				assert.False(t, old.IsActive)
+				assert.False(t, old.IsLatest)
+				assert.Equal(t, "1.1.0", latest.Version, "existing version owner increments the tenant deployment history")
+			} else {
+				assert.Equal(t, "1.0.0", latest.Version, "fresh deployment starts its own version history")
+			}
+			// XML annotation 1.1.0 is not the tenant's deployment version.
+			assert.Contains(t, string(latest.BpmnXML), "<bpmn:metaData name=\"version\">1.1.0</bpmn:metaData>")
+			deploymentCount := client.ProcessDeployment.Query().CountX(ctx)
+			require.NoError(t, svc.DeployTemplateByName(ctx, tmpl.ID, tenant.ID))
+			assert.Equal(t, expectedCount, client.ProcessDefinition.Query().CountX(ctx))
+			assert.Equal(t, deploymentCount, client.ProcessDeployment.Query().CountX(ctx))
+			again := client.ProcessDefinition.Query().Where(processdefinition.IsLatest(true)).OnlyX(ctx)
+			assert.Equal(t, latest.ID, again.ID)
+			assert.Equal(t, latest.Version, again.Version)
+			assert.Equal(t, tmpl.ContentSHA256, fmt.Sprintf("%x", sha256.Sum256(again.BpmnXML)))
+			assert.Equal(t, 1, client.ProcessDefinition.Query().Where(processdefinition.IsActive(true)).CountX(ctx))
+		})
+	}
 }

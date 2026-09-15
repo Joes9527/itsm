@@ -7,11 +7,29 @@
 ## 基础信息
 
 - **Base URL**: `http://localhost:8090/api/v1`
-- **认证方式**: JWT Bearer Token
+- **认证方式**: 后端签发的 Secure/HttpOnly cookie 会话；浏览器 JSON 响应不暴露 JWT
 - **数据格式**: JSON
 - **字符编码**: UTF-8
 
 ## 通用响应格式
+
+### Incident 生命周期命令
+
+`POST /api/v1/incidents/:id/{acknowledge|start|resolve|close|reopen}` 使用领域 Incident ID。
+请求必须提供当前 WorkItem `version`（正整数）和客户端生成的 `operationId`（最多 200 字符）。
+`resolve` 还必须提供非空 `resolution`（服务恢复证据），`close` 必须提供非空 `reason`。
+实际操作者、租户和来源由认证上下文确定。响应 `data` 为
+`{workItemId, version, status, replayed}`。同键同内容重试返回原回执；同键不同内容或陈旧版本返回 409。
+普通 Incident 编辑同样必须提供 `version`，不能写 `status` 或强制跳过版本检查。
+已确认事件通过 `start` 进入处理中；已解决/关闭事件通过 `reopen` 开启新的 SLA 周期。
+Incident 服务恢复不依赖关联 Problem 完成。
+
+状态命令在同一事务保存 WorkItem、审计回执、时间线及 `incident.status_changed` Outbox 事件。
+既有 Incident 规则可用 `conditions.event_type` 显式订阅 `incident.created` 或 `incident.status_changed`；
+没有该条件的历史规则仅处理创建事件。状态条件使用冻结的事件快照。
+状态动作必须由有 `incident:write` 权限的可信操作者执行，解决/关闭动作须配置恢复证据/说明。
+未知事件或动作明确阻断；已知事件没有配置规则时保存可观测的无动作执行记录。
+BPMN 用户任务回调使用入队事务冻结的操作者；缺少身份事实的历史回调会阻断，需要运营排空处理。
 
 所有 API 响应遵循以下格式：
 
@@ -32,6 +50,7 @@
 | 2001 | 认证失败 |
 | 4001 | 权限不足 |
 | 5001 | 服务器内部错误 |
+| 5003 | 认证依赖暂不可用（HTTP 503） |
 
 ## 认证接口
 
@@ -55,8 +74,6 @@ Content-Type: application/json
   "code": 0,
   "message": "success",
   "data": {
-    "accessToken": "eyJhbGciOiJIUzI1NiIs...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIs...",
     "user": {
       "id": 1,
       "username": "admin",
@@ -81,18 +98,24 @@ Content-Type: application/json
 ```http
 POST /auth/refresh
 Content-Type: application/json
+Cookie: refresh_token=<HttpOnly cookie>
 
-{
-  "refreshToken": "eyJhbGciOiJIUzI1NiIs..."
-}
+{}
 ```
+
+Access token 和 refresh token 只通过 `HttpOnly` Cookie 交付，登录、刷新与租户切换的
+JSON 响应不包含 JWT。Refresh token 每次只能成功使用一次；成功后轮换两个 Cookie。
+Redis 不可用时接口返回 HTTP `503`/业务码 `5003`，不会降级为可重放刷新。
 
 ### 登出
 
 ```http
 POST /auth/logout
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
+
+登出端点撤销当前 access token 并清除浏览器认证 Cookie。它不接收、也不
+声称服务器端撤销未提交的 refresh token；浏览器不能读取这些 Cookie 的值。
 
 ### 注册
 
@@ -143,7 +166,7 @@ Content-Type: application/json
 
 ```http
 GET /tickets
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码 (默认: 1)
@@ -189,7 +212,7 @@ Query Parameters:
 
 ```http
 POST /tickets
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -205,14 +228,14 @@ Content-Type: application/json
 
 ```http
 GET /tickets/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 更新工单
 
 ```http
 PUT /tickets/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -228,7 +251,7 @@ Content-Type: application/json
 
 ```http
 PUT /tickets/{id}/status
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -241,14 +264,14 @@ Content-Type: application/json
 
 ```http
 DELETE /tickets/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 分配工单
 
 ```http
 POST /tickets/{id}/assign
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -274,14 +297,14 @@ POST /tickets/{id}/workflow/reopen
 
 ```http
 GET /tickets/{id}/comments
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 添加工单评论
 
 ```http
 POST /tickets/{id}/comments
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -294,14 +317,14 @@ Content-Type: application/json
 
 ```http
 GET /tickets/{id}/attachments
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 上传工单附件
 
 ```http
 POST /tickets/{id}/attachments
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: multipart/form-data
 
 file: [binary data]
@@ -313,7 +336,7 @@ file: [binary data]
 
 ```http
 GET /incidents
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码
@@ -327,7 +350,7 @@ Query Parameters:
 
 ```http
 POST /incidents
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -343,14 +366,14 @@ Content-Type: application/json
 
 ```http
 GET /incidents/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 更新事件
 
 ```http
 PUT /incidents/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -365,7 +388,7 @@ Content-Type: application/json
 
 ```http
 DELETE /incidents/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 问题管理接口
@@ -374,7 +397,7 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /problems
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码
@@ -387,7 +410,7 @@ Query Parameters:
 
 ```http
 POST /problems
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -402,14 +425,14 @@ Content-Type: application/json
 
 ```http
 GET /problems/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 更新问题
 
 ```http
 PUT /problems/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -423,7 +446,7 @@ Content-Type: application/json
 
 ```http
 DELETE /problems/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 变更管理接口
@@ -432,7 +455,7 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /changes
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码
@@ -445,7 +468,7 @@ Query Parameters:
 
 ```http
 POST /changes
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -462,29 +485,55 @@ Content-Type: application/json
 
 ```http
 GET /changes/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 更新变更
 
 ```http
 PUT /changes/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
+  "expectedVersion": 7,
+  "operationId": "change-edit-unique-attempt",
   "title": "更新后的标题",
-  "description": "更新后的描述",
-  "status": "approved",
-  "risk": "low"
+  "description": "更新后的描述"
 }
 ```
+
+普通编辑不接受专业状态变更。已评估的方案和风险事实、已授权范围及实施窗口继续受专业流程约束。
+
+### Change 分配与转派
+
+```http
+POST /changes/{id}/assign
+Cookie: access_token=<HttpOnly cookie>
+Content-Type: application/json
+
+{
+  "expectedVersion": 7,
+  "operationId": "change-assign-unique-attempt",
+  "assigneeId": 42,
+  "assignmentReason": "交由应用支持协调后续实施"
+}
+```
+
+`id` 为 Change 领域 ID。`expectedVersion` 为调用者已观察到的 WorkItem 版本，不能改用 `version`；
+`operationId` 标识同一次请求，重试保持原键。目标人员必须是当前租户的活跃用户。
+已有负责人且实际更换人员时，`assignmentReason` 去除首尾空白后必填；首次分配不额外要求原因。
+`PUT /changes/{id}` 同样支持 `assigneeId` 和 `assignmentReason`，执行同一 metadata 命令。
+
+成功响应 `data` 为 `{workItemId, version, status, replayed}`。转派只调整负责人及版本并保存审计，
+保留当前阶段、评估证据、审批决定和流程任务人员；终态或存在未决流程回调时仍拒绝修改。
+同键同内容返回已有回执，同键改变负责人或原因、陈旧版本产生冲突。重放也检查当前授权。
 
 ### 删除变更
 
 ```http
 DELETE /changes/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 变更状态流转
@@ -494,11 +543,18 @@ POST /changes/{id}/submit
 POST /changes/{id}/assign
 POST /changes/{id}/approve
 POST /changes/{id}/reject
-POST /changes/{id}/start
-POST /changes/{id}/complete
-POST /changes/{id}/rollback
+POST /changes/{id}/assess
+POST /changes/{id}/schedule
+POST /changes/{id}/implement
+POST /changes/{id}/record-outcome
+POST /changes/{id}/review
+POST /changes/{id}/close
 POST /changes/{id}/cancel
 ```
+
+以上专业动作使用 `expectedVersion` 和 `operationId`；approve/reject 仍校验独立审批权限与任务身份。失败或回滚通过 record-outcome 保存真实结果，不使用已退出的 start/complete/rollback 路由。
+
+配置了流程的 Change 创建返回 `workflowStartStatus: awaiting_submit`，冻结所选定义与输入，草稿不自动启动。submit 在专业事务中启动该精确定义，并以实际提交人记录启动行为；转派不重建流程或变更审批人。提交时当前 Type 与冻结路由依据不一致、冻结证据缺失或定义已变更均明确拒绝，不按最新配置猜测重启。显式 no_process 创建仍返回 not_required，但不能满足 Change 提交所需的审批流程门禁。共享创建回执结构见 [Intake 契约](../contracts/intake.openapi.yaml)。
 
 ## 发布管理接口
 
@@ -506,7 +562,7 @@ POST /changes/{id}/cancel
 
 ```http
 GET /releases
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码
@@ -518,7 +574,7 @@ Query Parameters:
 
 ```http
 POST /releases
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -533,14 +589,14 @@ Content-Type: application/json
 
 ```http
 GET /releases/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 更新发布
 
 ```http
 PUT /releases/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -554,7 +610,7 @@ Content-Type: application/json
 
 ```http
 PUT /releases/{id}/status
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -566,7 +622,7 @@ Content-Type: application/json
 
 ```http
 DELETE /releases/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 服务目录接口
@@ -575,7 +631,7 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /service-catalog
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - categoryId: 分类过滤
@@ -586,7 +642,7 @@ Query Parameters:
 
 ```http
 GET /service-catalog/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 知识库接口
@@ -595,7 +651,7 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /knowledge/articles
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码
@@ -608,14 +664,14 @@ Query Parameters:
 
 ```http
 GET /knowledge/articles/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 创建知识文章
 
 ```http
 POST /knowledge/articles
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -631,7 +687,7 @@ Content-Type: application/json
 
 ```http
 PUT /knowledge/articles/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -645,14 +701,14 @@ Content-Type: application/json
 
 ```http
 DELETE /knowledge/articles/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 知识库搜索
 
 ```http
 POST /knowledge/search
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -665,7 +721,7 @@ Content-Type: application/json
 
 ```http
 POST /knowledge/ask
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -676,25 +732,33 @@ Content-Type: application/json
 
 ## SLA 管理接口
 
+### 获取 WorkItem 当前及历史 SLA 周期
+
+`GET /api/v1/tickets/:workItemId/sla` 使用公共 WorkItem ID。返回已保存的策略与截止时间，不在读取详情时重新匹配策略。
+
+- `slaStatus`：`ok`、`warning`、`breached`、`not_required`（未应用 SLA）或 `configuration_missing`（已有 SLA 痕迹但冻结策略/截止时间不完整）。配置缺失不能按正常达标展示。
+- 当前周期：`cycleNumber`、`cycleStartedAt`、`pausedMinutes`、`appliedPolicy`、`firstResponseAt`、`resolvedAt`、`closedAt` 及两种 deadline/remaining 字段。已完成时使用完成时间计算剩余值；关闭时停止尚未完成的时钟，前端显示完成/停止事实。
+- `history` 保留每次重开前的 `number`、`startedAt`、`endedAt`、`responseAt`、`resolvedAt`、两种 deadline/breached、`pausedMinutes`、`policy`、`actorId`、`source`、`correlationId`。时间为 ISO 字符串或 null，历史违规不因重开而删除。
+
 ### 获取 SLA 策略列表
 
 ```http
 GET /sla/policies
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取 SLA 统计
 
 ```http
 GET /sla/statistics
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取 SLA 违规记录
 
 ```http
 GET /sla/violations
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 工作流接口
@@ -703,21 +767,21 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /workflows
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取工作流实例
 
 ```http
 GET /workflows/instances/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 启动工作流
 
 ```http
 POST /workflows/instances
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -734,7 +798,7 @@ Content-Type: application/json
 
 ```http
 GET /users
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码
@@ -747,14 +811,14 @@ Query Parameters:
 
 ```http
 GET /users/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 创建用户
 
 ```http
 POST /users
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -771,7 +835,7 @@ Content-Type: application/json
 
 ```http
 PUT /users/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -786,7 +850,7 @@ Content-Type: application/json
 
 ```http
 DELETE /users/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 资产管理接口
@@ -795,7 +859,7 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /assets
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码
@@ -809,14 +873,14 @@ Query Parameters:
 
 ```http
 GET /assets/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 创建资产
 
 ```http
 POST /assets
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -842,7 +906,7 @@ Content-Type: application/json
 
 ```http
 PUT /assets/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -856,7 +920,7 @@ Content-Type: application/json
 
 ```http
 PUT /assets/{id}/assign
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -868,21 +932,21 @@ Content-Type: application/json
 
 ```http
 PUT /assets/{id}/retire
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 删除资产
 
 ```http
 DELETE /assets/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取资产统计
 
 ```http
 GET /assets/statistics
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 许可证管理接口
@@ -891,7 +955,7 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /licenses
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码
@@ -904,14 +968,14 @@ Query Parameters:
 
 ```http
 GET /licenses/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 创建许可证
 
 ```http
 POST /licenses
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -931,7 +995,7 @@ Content-Type: application/json
 
 ```http
 PUT /licenses/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -945,7 +1009,7 @@ Content-Type: application/json
 
 ```http
 PUT /licenses/{id}/assign
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -957,14 +1021,14 @@ Content-Type: application/json
 
 ```http
 DELETE /licenses/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取许可证统计
 
 ```http
 GET /licenses/statistics
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## CMDB 接口
@@ -973,7 +1037,7 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /cmdb/items
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码
@@ -986,14 +1050,14 @@ Query Parameters:
 
 ```http
 GET /cmdb/items/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 创建配置项
 
 ```http
 POST /cmdb/items
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -1014,7 +1078,7 @@ Content-Type: application/json
 
 ```http
 PUT /cmdb/items/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -1030,21 +1094,21 @@ Content-Type: application/json
 
 ```http
 DELETE /cmdb/items/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取配置项关系
 
 ```http
 GET /cmdb/items/{id}/relationships
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取配置项拓扑图
 
 ```http
 GET /cmdb/items/{id}/topology
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 通知接口
@@ -1053,7 +1117,7 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /notifications
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - page: 页码
@@ -1066,28 +1130,28 @@ Query Parameters:
 
 ```http
 PUT /notifications/{id}/read
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 标记所有通知已读
 
 ```http
 PUT /notifications/read-all
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 删除通知
 
 ```http
 DELETE /notifications/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取未读数量
 
 ```http
 GET /notifications/unread-count
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 仪表板接口
@@ -1096,21 +1160,21 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /dashboard
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取工单统计
 
 ```http
 GET /dashboard/ticket-stats
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取 SLA 统计
 
 ```http
 GET /dashboard/sla-stats
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 系统配置接口
@@ -1119,28 +1183,28 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /system-configs
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取系统配置
 
 ```http
 GET /system-configs/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 获取系统配置（按键）
 
 ```http
 GET /system-configs/key/{key}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ### 更新系统配置
 
 ```http
 PUT /system-configs/{id}
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -1152,7 +1216,7 @@ Content-Type: application/json
 
 ```http
 PUT /system-configs/batch
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
@@ -1173,7 +1237,7 @@ Content-Type: application/json
 
 ```http
 GET /system-configs/init
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 ```
 
 ## 搜索接口
@@ -1182,7 +1246,7 @@ Authorization: Bearer <accessToken>
 
 ```http
 GET /search
-Authorization: Bearer <accessToken>
+Cookie: access_token=<HttpOnly cookie>
 
 Query Parameters:
 - q: 搜索关键词
@@ -1285,3 +1349,28 @@ Query Parameters:
 ## 联系支持
 
 如有问题，请联系技术支持团队。
+
+
+### Problem metadata、责任调整与 RCA
+
+Problem 专业路由中的 `:id` 是 Problem ID；公共评论、附件、SLA 使用详情中的 `workItemId`，两者不能互换。以下写接口均要求调用者观察到的 `version` 和一次逻辑请求稳定的 `operationId`；操作人、租户和来源由认证上下文建立，客户端不指定 actor。
+
+| 接口 | 输入与行为 |
+|---|---|
+| `PUT /api/v1/problems/:id` | 可选 title、description、priority、categoryId、rootCause、workaround、resolution、impact、assigneeId、assignmentReason；状态必须通过专业生命周期动作改变。 |
+| `PUT /api/v1/problems/:id/root-cause` | 非空 rootCause；与普通编辑共用版本、授权、事务与回执。 |
+| `PUT /api/v1/problems/:id/solution` | 可选 workaround、resolution、历史输入字段 solution。只有 resolution 省略时才采用 solution；resolution 显式空字符串表示清空，不回退。全部正文省略或未改变事实时拒绝。 |
+| `POST /api/v1/problem-investigation/root-cause-analysis` | version、operationId、problemId、analysisMethod、rootCauseDescription、confidenceLevel 及现有 RCA 证据字段；analystId 省略时采用当前操作人，仍校验客户租户人员资格。 |
+| `PUT /api/v1/problem-investigation/root-cause-analysis/:id` | version、operationId 与变更的 RCA 字段；:id 是分析记录 ID，事务重新验证所属 Problem。 |
+
+指针正文输入省略保持原值，显式空字符串清空相应内容。`assigneeId` 必须为客户租户内有效人员；已有负责人实际变化时 `assignmentReason` 去除首尾空白后必填，已结束记录不可借转派重开。后端 `actions.assign` 提供允许状态和拒绝原因。
+
+纯转派保留阶段及原验证人员、时间、验证时版本；根因、永久方案实际变化、RCA 证据修改、重新选择方案或重开均清除当前验证，历史审计保留。内容 A→B→A 不恢复旧验证。解决与关闭依据当前内容摘要及完整验证证据，并继续执行专业状态和必需 Change 结果门禁。
+
+同键同内容重放仍检查当前权限；同键改内容或观察版本过期返回冲突。公共字段、专业字段、RCA 元数据、版本、必需审计和回执在同一事务提交，失败全部回滚。详情响应通过授权读取生成，客户端成功后使用后端权威 version。
+
+#### Problem 调查步骤与候选方案变更
+
+`PUT /problem-investigation/investigations/:id`、`POST /problem-investigation/steps`、`PUT /problem-investigation/steps/:id`、`POST /problem-investigation/solutions`、`PUT /problem-investigation/solutions/:id` 和 `DELETE /problem-investigation/solutions/:id` 的 JSON 均必须包含专业 `problemId`、当前 `version` 和稳定 `operationId`。路由 ID 为对应调查、步骤或方案 ID；后端在同一 Problem 事务内校验归属及实际操作者，不从请求推断授权。DELETE 也保留原 Problem 身份，以便删除成功后的同键重放。
+
+这些接口返回 `{workItemId, version, status, replayed}` 提交结果。调用方收到成功后重新读取授权摘要；调查步骤或候选方案变更递增 WorkItem 版本并记录审计，但不隐式替换已选权威方案，也不单纯因版本改变而使验证失效。专用 `PUT /problems/:id/root-cause` 拒绝纯空白正文；通用 metadata PATCH 的显式空串清空语义保持不变。

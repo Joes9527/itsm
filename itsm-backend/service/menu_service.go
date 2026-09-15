@@ -5,28 +5,30 @@ import (
 	"fmt"
 	"strings"
 
+	"itsm-backend/authorization"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/menu"
-	"itsm-backend/ent/permission"
 	"itsm-backend/ent/role"
-	"itsm-backend/ent/rolepermission"
 	"itsm-backend/ent/user"
+	creation "itsm-backend/handlers/common/workitemcreation"
 
 	"go.uber.org/zap"
 )
 
 // MenuService 菜单服务
 type MenuService struct {
-	client *ent.Client
-	logger *zap.SugaredLogger
+	client   *ent.Client
+	logger   *zap.SugaredLogger
+	sessions *authorization.SessionReader
 }
 
 // NewMenuService 创建菜单服务
-func NewMenuService(client *ent.Client, logger *zap.SugaredLogger) *MenuService {
+func NewMenuService(client *ent.Client, logger *zap.SugaredLogger, sessions *authorization.SessionReader) *MenuService {
 	return &MenuService{
-		client: client,
-		logger: logger,
+		client:   client,
+		logger:   logger,
+		sessions: sessions,
 	}
 }
 
@@ -207,156 +209,38 @@ func (s *MenuService) DeleteMenu(ctx context.Context, id int, tenantID int) erro
 }
 
 // GetUserMenus 获取用户可见菜单（根据用户角色和权限）
-func (s *MenuService) GetUserMenus(ctx context.Context, userID int, tenantID int) (*dto.MenuTreeResponse, error) {
-	s.logger.Infow("Getting user menus", "user_id", userID, "tenant_id", tenantID)
-
-	// 获取用户角色
-	userEntity, err := s.client.User.Query().
-		Where(user.ID(userID)).
-		WithRoles(func(q *ent.RoleQuery) {
-			q.Select(role.FieldCode)
-		}).
-		Only(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("用户不存在: %w", err)
-	}
-
-	// 获取用户的权限列表
-	permissions := s.getUserPermissions(ctx, userEntity, tenantID)
-	roleCodes := collectUserRoleCodes(userEntity)
-
-	// 获取所有启用的菜单
-	allMenus, err := s.client.Menu.Query().
-		Where(
-			menu.TenantID(tenantID),
-			menu.IsEnabled(true),
-			menu.IsVisible(true),
-		).
-		Order(ent.Asc(menu.FieldSortOrder)).
-		All(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("获取菜单失败: %w", err)
-	}
-
-	// 根据权限过滤菜单
-	filteredMenus := s.filterMenusByPermission(allMenus, permissions, roleCodes)
-
-	// 构建菜单树
-	mainMenus, adminMenus := s.buildMenuTree(filteredMenus)
-
-	return &dto.MenuTreeResponse{
-		Main:  mainMenus,
-		Admin: adminMenus,
-	}, nil
-}
-
-// getUserPermissions 获取用户的权限列表
-func (s *MenuService) getUserPermissions(ctx context.Context, userEntity *ent.User, tenantID int) map[string]bool {
-	permissions := make(map[string]bool)
-
-	// 超级管理员拥有所有权限
-	if userEntity.Role == "super_admin" {
-		permissions["*"] = true
-		return permissions
-	}
-
-	roleCodes := make([]string, 0, 1+len(userEntity.Edges.Roles))
-
-	// 收集直接角色（兼容旧的 users.role 字段）
-	if userEntity.Role != "" {
-		roleCodes = append(roleCodes, string(userEntity.Role))
-	}
-
-	// 从用户-角色多对多关系收集数据库角色代码
-	if userEntity.Edges.Roles != nil {
-		for _, r := range userEntity.Edges.Roles {
-			roleCodes = append(roleCodes, r.Code)
+func (s *MenuService) GetUserMenus(ctx context.Context, identity creation.Identity) (*dto.MenuTreeResponse, error) {
+	var result *dto.MenuTreeResponse
+	err := s.sessions.Read(ctx, identity, func(session *authorization.SessionSnapshot) error {
+		permissions := make(map[string]bool)
+		for _, permission := range session.Permissions {
+			permissions[permission.Resource+":"+permission.Action] = true
+			if permission.Resource == "*" && permission.Action == "*" {
+				permissions["*"] = true
+			}
 		}
-	}
-
-	// 从数据库加载角色权限（不再使用硬编码 RolePermissions）
-	s.addDatabaseRolePermissions(ctx, permissions, tenantID, roleCodes)
-
-	return permissions
-}
-
-func (s *MenuService) addDatabaseRolePermissions(ctx context.Context, permissions map[string]bool, tenantID int, roleCodes []string) {
-	if len(roleCodes) == 0 {
-		return
-	}
-
-	uniqueRoleCodes := make([]string, 0, len(roleCodes))
-	seenRoleCodes := make(map[string]bool, len(roleCodes))
-	for _, code := range roleCodes {
-		code = strings.TrimSpace(code)
-		if code == "" || seenRoleCodes[code] {
-			continue
+		roleCodes := map[string]bool{strings.ToLower(identity.Role): true}
+		// Additional roles retain their existing navigation-path meaning, scoped to
+		// the target Runtime. They do not grant extra endpoint permissions.
+		roles, err := session.Tx.Role.Query().Where(role.TenantIDEQ(identity.TenantID), role.IsActiveEQ(true), role.HasUsersWith(user.IDEQ(identity.ActorID))).All(ctx)
+		if err != nil {
+			return creation.NewInfrastructureUnavailable("could not load navigation roles", err)
 		}
-		seenRoleCodes[code] = true
-		uniqueRoleCodes = append(uniqueRoleCodes, code)
-	}
-	if len(uniqueRoleCodes) == 0 {
-		return
-	}
-
-	roles, err := s.client.Role.Query().
-		Where(role.TenantIDEQ(tenantID), role.CodeIn(uniqueRoleCodes...)).
-		All(ctx)
+		for _, r := range roles {
+			roleCodes[strings.ToLower(r.Code)] = true
+		}
+		allMenus, err := session.Tx.Menu.Query().Where(menu.TenantID(identity.TenantID), menu.IsEnabled(true), menu.IsVisible(true)).Order(ent.Asc(menu.FieldSortOrder)).All(ctx)
+		if err != nil {
+			return creation.NewInfrastructureUnavailable("could not load session menus", err)
+		}
+		main, admin := s.buildMenuTree(s.filterMenusByPermission(allMenus, permissions, roleCodes))
+		result = &dto.MenuTreeResponse{Main: main, Admin: admin}
+		return nil
+	})
 	if err != nil {
-		s.logger.Warnw("Failed to query database roles for menu permissions", "error", err, "tenant_id", tenantID)
-		return
+		return nil, err
 	}
-	if len(roles) == 0 {
-		return
-	}
-
-	roleIDs := make([]int, 0, len(roles))
-	for _, r := range roles {
-		roleIDs = append(roleIDs, r.ID)
-	}
-
-	rolePerms, err := s.client.RolePermission.Query().
-		Where(rolepermission.RoleIDIn(roleIDs...)).
-		All(ctx)
-	if err != nil {
-		s.logger.Warnw("Failed to query role permissions for menus", "error", err, "tenant_id", tenantID)
-		return
-	}
-	if len(rolePerms) == 0 {
-		return
-	}
-
-	permissionIDs := make([]int, 0, len(rolePerms))
-	seenPermissionIDs := make(map[int]bool, len(rolePerms))
-	for _, rp := range rolePerms {
-		if rp.PermissionID == 0 || seenPermissionIDs[rp.PermissionID] {
-			continue
-		}
-		seenPermissionIDs[rp.PermissionID] = true
-		permissionIDs = append(permissionIDs, rp.PermissionID)
-	}
-	if len(permissionIDs) == 0 {
-		return
-	}
-
-	dbPermissions, err := s.client.Permission.Query().
-		Where(permission.IDIn(permissionIDs...), permission.TenantIDEQ(tenantID)).
-		All(ctx)
-	if err != nil {
-		s.logger.Warnw("Failed to query permissions for menus", "error", err, "tenant_id", tenantID)
-		return
-	}
-
-	for _, p := range dbPermissions {
-		if p.Resource == "" || p.Action == "" {
-			continue
-		}
-		key := p.Resource + ":" + p.Action
-		permissions[key] = true
-		if p.Action == "*" {
-			permissions[p.Resource+":*"] = true
-		}
-	}
+	return result, nil
 }
 
 // filterMenusByPermission 根据权限过滤菜单
@@ -428,24 +312,6 @@ func (s *MenuService) filterMenusByPermission(menus []*ent.Menu, permissions map
 	}
 
 	return filtered
-}
-
-func collectUserRoleCodes(userEntity *ent.User) map[string]bool {
-	roleCodes := make(map[string]bool)
-
-	if userEntity.Role != "" {
-		roleCodes[strings.ToLower(string(userEntity.Role))] = true
-	}
-
-	if userEntity.Edges.Roles != nil {
-		for _, r := range userEntity.Edges.Roles {
-			if r.Code != "" {
-				roleCodes[strings.ToLower(r.Code)] = true
-			}
-		}
-	}
-
-	return roleCodes
 }
 
 func shouldRestrictMenuForRole(path string, roleCodes map[string]bool) bool {

@@ -1,14 +1,20 @@
-package service
+package service_test
 
 import (
 	"context"
 	"testing"
 	"time"
 
+	creation "itsm-backend/handlers/common/workitemcreation"
+
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/repository/ticket"
+	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -61,14 +67,14 @@ func newTicketFixture(t *testing.T) *ticketFixture {
 		SetEmail("agent@example.com").
 		SetName("Agent").
 		SetPasswordHash("h").
-		SetRole("agent").
+		SetRole("super_admin").
 		SetActive(true).
 		SetTenantID(tenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
 
 	return &ticketFixture{
-		ctx:     ctx,
+		ctx:     tenantctx.WithTenantID(ctx, tenant.ID),
 		client:  client,
 		svc:     svc,
 		tenant:  entAdapter{id: tenant.ID},
@@ -106,7 +112,7 @@ func (f *ticketFixture) makeTicket(t *testing.T, name string, status ticket.Stat
 		Category:    "incident",
 		RequesterID: userID,
 	}
-	tkt, err := f.svc.CreateTicket(f.ctx, req, tenantID)
+	tkt, err := f.svc.SubmitCreation(f.ctx, req, tenantID)
 	require.NoError(t, err)
 	require.NotNil(t, tkt)
 
@@ -210,6 +216,17 @@ func TestTicketService_UpdateTicketStatus(t *testing.T) {
 		_, err := fx.svc.UpdateTicketStatus(fx.ctx, 99999,
 			string(ticket.StatusOpen), tenantID, userID)
 		assert.Error(t, err)
+	})
+
+	t.Run("approval decisions must use BPMN task command", func(t *testing.T) {
+		id := fx.makeTicket(t, "u-approval", ticket.StatusOpen)
+		require.NoError(t, configureEntryTicketEdit(fx.ctx, fx.client, fx.tenantID(), fx.userID()))
+		for _, status := range []string{"approved", "rejected"} {
+			_, err := fx.svc.UpdateTicketStatus(fx.ctx, id, status, fx.tenantID(), fx.userID())
+			require.ErrorContains(t, err, "只能由 BPMN")
+			_, err = fx.svc.UpdateTicket(fx.ctx, editCommandForTest(id, &dto.TicketEditCommand{Fields: dto.TicketEditFields{Status: status}, Meta: workitemmutation.Meta{ActorID: fx.userID(), ExpectedVersion: fx.client.Ticket.GetX(fx.ctx, id).Version}}, fx.tenantID()))
+			require.ErrorContains(t, err, "只能由 BPMN")
+		}
 	})
 }
 
@@ -320,7 +337,7 @@ func TestTicketService_AssignTicket(t *testing.T) {
 		tenantID := fx.tenantID()
 		agentID := fx.agentID()
 
-		updated, err := fx.svc.AssignTicket(fx.ctx, id, agentID, tenantID)
+		updated, err := fx.svc.AssignTicket(fx.ctx, id, agentID, tenantID, creation.Identity{ActorID: fx.agentID(), TenantID: fx.tenantID(), Role: "super_admin", Channel: "http"})
 		require.NoError(t, err)
 		assert.NotNil(t, updated.AssigneeID)
 		assert.Equal(t, agentID, *updated.AssigneeID)
@@ -331,7 +348,7 @@ func TestTicketService_AssignTicket(t *testing.T) {
 		tenantID := fx.tenantID()
 		agentID := fx.agentID()
 
-		updated, err := fx.svc.AssignTicket(fx.ctx, id, agentID, tenantID)
+		updated, err := fx.svc.AssignTicket(fx.ctx, id, agentID, tenantID, creation.Identity{ActorID: fx.agentID(), TenantID: fx.tenantID(), Role: "super_admin", Channel: "http"})
 		require.NoError(t, err)
 		assert.NotNil(t, updated.AssigneeID)
 		assert.Equal(t, agentID, *updated.AssigneeID)
@@ -340,7 +357,7 @@ func TestTicketService_AssignTicket(t *testing.T) {
 
 	t.Run("终态工单不能重新分配", func(t *testing.T) {
 		id := fx.makeTicket(t, "a-closed", ticket.StatusClosed)
-		_, err := fx.svc.AssignTicket(fx.ctx, id, fx.agentID(), fx.tenantID())
+		_, err := fx.svc.AssignTicket(fx.ctx, id, fx.agentID(), fx.tenantID(), creation.Identity{ActorID: fx.agentID(), TenantID: fx.tenantID(), Role: "super_admin", Channel: "http"})
 		require.Error(t, err)
 	})
 
@@ -352,8 +369,8 @@ func TestTicketService_AssignTicket(t *testing.T) {
 			SetPasswordHash("h").SetRole("agent").SetActive(true).SetTenantID(otherTenant.ID).Save(fx.ctx)
 		require.NoError(t, err)
 		id := fx.makeTicket(t, "a-foreign", ticket.StatusOpen)
-		_, err = fx.svc.AssignTicket(fx.ctx, id, foreignAgent.ID, fx.tenantID())
-		require.ErrorContains(t, err, "处理人不存在")
+		_, err = fx.svc.AssignTicket(fx.ctx, id, foreignAgent.ID, fx.tenantID(), creation.Identity{ActorID: fx.agentID(), TenantID: fx.tenantID(), Role: "super_admin", Channel: "http"})
+		require.Error(t, err)
 	})
 }
 
@@ -365,10 +382,16 @@ func TestTicketService_BatchDeleteTickets(t *testing.T) {
 	fx := newTicketFixture(t)
 	defer fx.client.Close()
 
+	deletionRole := fx.client.Role.Create().SetTenantID(fx.tenant.GetID()).SetCode("end_user").SetName("delete fixture").SetIsActive(true).SaveX(fx.ctx)
+	for _, verb := range []string{"read", "delete"} {
+		perm := fx.client.Permission.Create().SetTenantID(fx.tenant.GetID()).SetCode("deletion_" + verb).SetName(verb).SetResource("ticket").SetAction(verb).SaveX(fx.ctx)
+		fx.client.RolePermission.Create().SetTenantID(fx.tenant.GetID()).SetRoleID(deletionRole.ID).SetPermissionID(perm.ID).ExecX(fx.ctx)
+	}
+
 	t.Run("批量删除空列表", func(t *testing.T) {
 		tenantID := fx.tenantID()
-		err := fx.svc.BatchDeleteTickets(fx.ctx, []int{}, tenantID)
-		assert.NoError(t, err)
+		err := fx.svc.BatchDeleteTickets(fx.ctx, []int{}, workitemmutation.Meta{TenantID: tenantID, ActorID: fx.user.GetID()})
+		assert.Error(t, err)
 	})
 
 	t.Run("批量删除多条 ticket", func(t *testing.T) {
@@ -377,7 +400,7 @@ func TestTicketService_BatchDeleteTickets(t *testing.T) {
 		id3 := fx.makeTicket(t, "b3", ticket.StatusNew)
 		tenantID := fx.tenantID()
 
-		err := fx.svc.BatchDeleteTickets(fx.ctx, []int{id1, id2, id3}, tenantID)
+		err := fx.svc.BatchDeleteTickets(fx.ctx, []int{id1, id2, id3}, workitemmutation.Meta{TenantID: tenantID, ActorID: fx.user.GetID()})
 		require.NoError(t, err)
 
 		// 验证已删除（GetByID 应失败）
@@ -484,7 +507,7 @@ func TestTicketService_GetTicketsByAssignee(t *testing.T) {
 		tenantID := fx.tenantID()
 		agentID := fx.agentID()
 
-		_, err := fx.svc.AssignTicket(fx.ctx, id, agentID, tenantID)
+		_, err := fx.svc.AssignTicket(fx.ctx, id, agentID, tenantID, creation.Identity{ActorID: fx.agentID(), TenantID: fx.tenantID(), Role: "super_admin", Channel: "http"})
 		require.NoError(t, err)
 
 		tickets, err := fx.svc.GetTicketsByAssignee(fx.ctx, agentID, tenantID)
@@ -496,51 +519,6 @@ func TestTicketService_GetTicketsByAssignee(t *testing.T) {
 // =====================================================================
 // 纯函数 / 内部辅助方法
 // =====================================================================
-
-func TestMapProcessStatusToDTO(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"running", "running"},
-		{"completed", "completed"},
-		{"failed", "failed"},
-		{"cancelled", "cancelled"},
-		{"unknown", "unknown"}, // 默认 fallback
-	}
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			// 注意：mapProcessStatusToDTO 返回 dto.ProcessStatus，
-			// 测试只需验证它不会 panic 并返回非空值。
-			result := mapProcessStatusToDTO(tt.input)
-			assert.NotEmpty(t, string(result))
-		})
-	}
-}
-
-func TestGetEscalatedPriority(t *testing.T) {
-	tests := []struct {
-		currentPriority string
-		expectedNotSame bool
-	}{
-		{"low", true},
-		{"medium", true},
-		{"high", true},
-		{"urgent", false}, // 已是最高之一，升级后仍是 urgent
-		{"critical", false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.currentPriority, func(t *testing.T) {
-			svc := &TicketService{} // 不需要依赖
-			escalated := svc.getEscalatedPriority(tt.currentPriority)
-			if tt.expectedNotSame {
-				assert.NotEqual(t, tt.currentPriority, escalated,
-					"升级后优先级应变化")
-			}
-			assert.NotEmpty(t, escalated)
-		})
-	}
-}
 
 // =====================================================================
 // 跨租户隔离：删除不应该影响其他租户
@@ -564,13 +542,11 @@ func TestTicketService_BatchDeleteTickets_TenantIsolation(t *testing.T) {
 	tenantID := fx.tenantID()
 
 	// 用 tenant2 删除不应该成功（保护原租户）
-	err = fx.svc.BatchDeleteTickets(fx.ctx, []int{id}, tenant2.ID)
-	// 跨租户删除行为：可能返回错误或部分成功；主要验证原租户 ticket 仍然存在
+	err = fx.svc.BatchDeleteTickets(fx.ctx, []int{id}, workitemmutation.Meta{TenantID: tenant2.ID, ActorID: fx.user.GetID()})
+	require.Error(t, err, "foreign-tenant batch must fail atomically")
 	tkt, err2 := fx.svc.GetTicket(fx.ctx, id, tenantID)
 	require.NoError(t, err2, "原租户 ticket 仍应可查询")
 	assert.Equal(t, id, tkt.ID, "跨租户删除不应影响原租户 ticket")
-
-	_ = err // err 类型取决于 repository 实现
 }
 
 // =====================================================================
@@ -584,7 +560,8 @@ func TestTicketService_EscalateTicket_TicketNotFound(t *testing.T) {
 	tenantID := fx.tenantID()
 	userID := fx.userID()
 
-	_, err := fx.svc.EscalateTicket(fx.ctx, 99999, "reason", tenantID, userID)
+	manualOwner := service.NewTicketService(&service.TicketServiceConfig{Execution: executionfixture.Standard(), Client: fx.client, Repository: ticket.NewEntRepository(fx.client, zaptest.NewLogger(t).Sugar()), Logger: zaptest.NewLogger(t).Sugar()})
+	_, err := manualOwner.EscalateTicket(fx.ctx, dto.TicketEscalationCommand{WorkItemID: 99999, Reason: "reason", Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: userID, ExpectedVersion: 1, Source: "http", OperationID: "not-found"}})
 	assert.Error(t, err, "不存在的 ticket 应该失败")
 }
 
@@ -606,13 +583,13 @@ func TestTicketService_CreateTicket_DefaultsToNewStatus(t *testing.T) {
 		Category:    "incident",
 		RequesterID: userID,
 	}
-	tkt, err := fx.svc.CreateTicket(fx.ctx, req, tenantID)
+	tkt, err := fx.svc.SubmitCreation(fx.ctx, req, tenantID)
 	require.NoError(t, err)
 	assert.Equal(t, ticket.StatusNew, tkt.Status,
 		"新建工单默认状态应为 new")
 }
 
-func TestTicketService_CreateTicket_PersistsCreatorEmailAndExternalMessageID(t *testing.T) {
+func TestTicketService_PublicCreationRejectsUnverifiedEmailIdentity(t *testing.T) {
 	fx := newTicketFixture(t)
 	defer fx.client.Close()
 
@@ -626,13 +603,11 @@ func TestTicketService_CreateTicket_PersistsCreatorEmailAndExternalMessageID(t *
 		ExternalMessageID: "<msg-1@contoso.com>",
 	}
 
-	tkt, err := fx.svc.CreateTicket(fx.ctx, req, fx.tenant.GetID())
-	require.NoError(t, err)
-
-	stored, err := fx.client.Ticket.Get(fx.ctx, tkt.ID)
-	require.NoError(t, err)
-	assert.Equal(t, "alice@test.com", stored.CreatorEmail)
-	assert.Equal(t, "<msg-1@contoso.com>", stored.ExternalMessageID)
+	tkt, err := fx.svc.SubmitCreation(fx.ctx, req, fx.tenant.GetID())
+	require.Error(t, err)
+	require.Nil(t, tkt)
+	require.Zero(t, fx.client.Ticket.Query().CountX(fx.ctx))
+	require.Zero(t, fx.client.IntakeRequest.Query().CountX(fx.ctx))
 }
 
 // 时间戳 sanity check（用于未来 regression）

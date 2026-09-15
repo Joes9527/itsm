@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
+	"itsm-backend/authorization"
 	"itsm-backend/config"
 	"itsm-backend/ent/enttest"
 	_ "itsm-backend/ent/runtime"
-	"itsm-backend/middleware"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
@@ -150,15 +150,15 @@ func TestValidateWebStartupConfigRejectsMutationFlags(t *testing.T) {
 }
 
 func TestConfigurePermissionModeFailsClosedByDefault(t *testing.T) {
-	original := middleware.PermissionConfig.Mode
-	t.Cleanup(func() { middleware.PermissionConfig.Mode = original })
+	original := authorization.PermissionConfig.Mode
+	t.Cleanup(func() { authorization.PermissionConfig.Mode = original })
 
 	configurePermissionMode("")
-	require.Equal(t, middleware.PermissionConfigModeDBOnly, middleware.PermissionConfig.Mode)
+	require.Equal(t, authorization.PermissionConfigModeDBOnly, authorization.PermissionConfig.Mode)
 
 	configurePermissionMode("production")
-	require.Equal(t, middleware.PermissionConfigModeDBOnly, middleware.PermissionConfig.Mode)
+	require.Equal(t, authorization.PermissionConfigModeDBOnly, authorization.PermissionConfig.Mode)
 
 	configurePermissionMode("development")
-	require.Equal(t, middleware.PermissionConfigModeDBOnly, middleware.PermissionConfig.Mode)
+	require.Equal(t, authorization.PermissionConfigModeDBOnly, authorization.PermissionConfig.Mode)
 }

@@ -26,53 +26,89 @@ SELECT * FROM (VALUES
     ('打印机无法使用', '3楼打印机无法连接', 'resolved', 'low', 'TKT-202602-000013', 1, 5, 2, NOW(), NOW()),
     ('申请服务器资源', '需要申请2台4核8G服务器用于新项目', 'submitted', 'high', 'TKT-202602-000014', 1, 2, NULL, NOW(), NOW())
 ) AS v(title, description, status, priority, ticket_number, tenant_id, requester_id, assignee_id, created_at, updated_at)
-WHERE NOT EXISTS (SELECT 1 FROM tickets WHERE ticket_number = 'TKT-202602-000008');
+WHERE NOT EXISTS (SELECT 1 FROM tickets WHERE tenant_id = 1 AND ticket_number = 'TKT-202602-000008');
 
 -- =============================================
--- 3. 添加更多事件测试数据
+-- 3. 添加更多事件测试数据（共享字段只写 WorkItem）
 -- =============================================
-INSERT INTO incidents (title, description, status, priority, incident_number, source, type, is_major_incident, reporter_id, tenant_id, detected_at, created_at, updated_at)
-SELECT * FROM (VALUES
-    ('服务器CPU 100%', 'Web服务器CPU使用率持续100%，服务响应缓慢', 'new', 'critical', 'INC-202602-000003', 'monitoring', 'incident', false, 1, 1, NOW(), NOW(), NOW()),
-    ('数据库主从延迟', '数据库主从同步延迟超过5分钟', 'investigating', 'high', 'INC-202602-000004', 'monitoring', 'incident', false, 1, 1, NOW(), NOW(), NOW()),
-    ('网站首页无法访问', '用户报告网站首页无法打开', 'confirmed', 'critical', 'INC-202602-000005', 'user', 'incident', true, 2, 1, NOW(), NOW(), NOW()),
-    ('支付接口报错', '调用支付接口返回500错误', 'in_progress', 'high', 'INC-202602-000006', 'user', 'incident', false, 3, 1, NOW(), NOW(), NOW())
-) AS v(title, description, status, priority, incident_number, source, type, is_major_incident, reporter_id, tenant_id, detected_at, created_at, updated_at)
-WHERE NOT EXISTS (SELECT 1 FROM incidents WHERE incident_number = 'INC-202602-000003');
+INSERT INTO tickets (title, description, status, priority, record_class, ticket_number, tenant_id, requester_id, source, created_at, updated_at)
+SELECT title, description, status, priority, 'incident', work_item_number, tenant_id, reporter_id, source, NOW(), NOW()
+FROM (VALUES
+    ('服务器CPU 100%', 'Web服务器CPU使用率持续100%，服务响应缓慢', 'new', 'critical', 'TKT-SEED-INC-000003', 1, 1, 'monitoring'),
+    ('数据库主从延迟', '数据库主从同步延迟超过5分钟', 'investigating', 'high', 'TKT-SEED-INC-000004', 1, 1, 'monitoring'),
+    ('网站首页无法访问', '用户报告网站首页无法打开', 'confirmed', 'critical', 'TKT-SEED-INC-000005', 1, 2, 'user'),
+    ('支付接口报错', '调用支付接口返回500错误', 'in_progress', 'high', 'TKT-SEED-INC-000006', 1, 3, 'user')
+) AS v(title, description, status, priority, work_item_number, tenant_id, reporter_id, source)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO incidents (work_item_id, type, is_major_incident, detected_at)
+SELECT t.id, 'incident', v.is_major, NOW()
+FROM (VALUES
+    ('TKT-SEED-INC-000003', false, 1),
+    ('TKT-SEED-INC-000004', false, 1),
+    ('TKT-SEED-INC-000005', true, 1),
+    ('TKT-SEED-INC-000006', false, 1)
+) AS v(work_item_number, is_major, tenant_id)
+JOIN tickets t ON t.ticket_number = v.work_item_number AND t.tenant_id = v.tenant_id
+WHERE NOT EXISTS (SELECT 1 FROM incidents i WHERE i.work_item_id = t.id);
 
 -- =============================================
 -- 4. 添加更多问题测试数据
 -- =============================================
-INSERT INTO problems (title, description, status, priority, category, created_by, tenant_id, created_at, updated_at)
-SELECT * FROM (VALUES
-    ('数据库连接池耗尽', '多次出现数据库连接池耗尽导致服务不可用', 'open', 'high', 'performance', 1, 1, NOW(), NOW()),
-    ('内存泄漏问题', '应用服务存在内存泄漏，每隔24小时需要重启', 'analyzing', 'critical', 'performance', 1, 1, NOW(), NOW()),
-    ('网络丢包严重', '跨机房网络经常丢包，影响服务质量', 'identified', 'medium', 'network', 1, 1, NOW(), NOW())
-) AS v(title, description, status, priority, category, created_by, tenant_id, created_at, updated_at)
-WHERE NOT EXISTS (SELECT 1 FROM problems WHERE title = '数据库连接池耗尽');
+INSERT INTO tickets (title, description, status, priority, record_class, ticket_number, tenant_id, requester_id, created_at, updated_at)
+SELECT title, description, status, priority, 'problem', work_item_number, tenant_id, created_by, NOW(), NOW()
+FROM (VALUES
+    ('数据库连接池耗尽', '多次出现数据库连接池耗尽导致服务不可用', 'open', 'high', 'TKT-SEED-PRB-000001', 1, 1),
+    ('内存泄漏问题', '应用服务存在内存泄漏，每隔24小时需要重启', 'analyzing', 'critical', 'TKT-SEED-PRB-000002', 1, 1),
+    ('网络丢包严重', '跨机房网络经常丢包，影响服务质量', 'identified', 'medium', 'TKT-SEED-PRB-000003', 1, 1)
+) AS v(title, description, status, priority, work_item_number, tenant_id, created_by)
+ON CONFLICT DO NOTHING;
+INSERT INTO problems (work_item_id)
+SELECT t.id
+FROM (VALUES
+    ('TKT-SEED-PRB-000001', 'performance', 1, 1),
+    ('TKT-SEED-PRB-000002', 'performance', 1, 1),
+    ('TKT-SEED-PRB-000003', 'network', 1, 1)
+) AS v(work_item_number, category, created_by, tenant_id)
+JOIN tickets t ON t.ticket_number = v.work_item_number AND t.tenant_id = v.tenant_id
+WHERE NOT EXISTS (SELECT 1 FROM problems p WHERE p.work_item_id = t.id);
 
 -- =============================================
 -- 5. 添加更多变更测试数据
 -- =============================================
-INSERT INTO changes (title, description, justification, type, status, priority, risk_level, created_by, tenant_id, planned_start_date, planned_end_date, created_at, updated_at)
-SELECT * FROM (VALUES
-    ('数据库版本升级', '将MySQL 5.7升级到8.0', '提升性能和安全性', 'standard', 'approved', 'medium', 'medium', 1, 1, NOW() + INTERVAL '1 day', NOW() + INTERVAL '2 days', NOW(), NOW()),
-    ('服务器扩容', '增加2台应用服务器应对流量高峰', '业务增长需要', 'standard', 'pending', 'high', 'low', 1, 1, NOW() + INTERVAL '3 days', NOW() + INTERVAL '4 days', NOW(), NOW()),
-    ('核心路由切换', '切换到新的核心路由器', '设备老化需要更换', 'emergency', 'in_progress', 'urgent', 'high', 1, 1, NOW(), NOW() + INTERVAL '6 hours', NOW(), NOW())
-) AS v(title, description, justification, type, status, priority, risk_level, created_by, tenant_id, planned_start_date, planned_end_date, created_at, updated_at)
-WHERE NOT EXISTS (SELECT 1 FROM changes WHERE title = '数据库版本升级');
+INSERT INTO tickets (title, description, status, priority, record_class, ticket_number, tenant_id, requester_id, created_at, updated_at)
+SELECT title, description, status, priority, 'change_request', work_item_number, tenant_id, created_by, NOW(), NOW()
+FROM (VALUES
+    ('数据库版本升级', '将MySQL 5.7升级到8.0', 'approved', 'medium', 'TKT-SEED-CHG-000001', 1, 1),
+    ('服务器扩容', '增加2台应用服务器应对流量高峰', 'pending', 'high', 'TKT-SEED-CHG-000002', 1, 1),
+    ('核心路由切换', '切换到新的核心路由器', 'in_progress', 'urgent', 'TKT-SEED-CHG-000003', 1, 1)
+) AS v(title, description, status, priority, work_item_number, tenant_id, created_by)
+ON CONFLICT DO NOTHING;
+INSERT INTO changes (work_item_id, justification, type, risk_level, planned_start_date, planned_end_date)
+SELECT t.id, v.justification, v.change_type, v.risk_level, v.planned_start, v.planned_end
+FROM (VALUES
+    ('TKT-SEED-CHG-000001', '提升性能和安全性', 'standard', 'medium', 1, 1, NOW() + INTERVAL '1 day', NOW() + INTERVAL '2 days'),
+    ('TKT-SEED-CHG-000002', '业务增长需要', 'standard', 'low', 1, 1, NOW() + INTERVAL '3 days', NOW() + INTERVAL '4 days'),
+    ('TKT-SEED-CHG-000003', '设备老化需要更换', 'emergency', 'high', 1, 1, NOW(), NOW() + INTERVAL '6 hours')
+) AS v(work_item_number, justification, change_type, risk_level, created_by, tenant_id, planned_start, planned_end)
+JOIN tickets t ON t.ticket_number = v.work_item_number AND t.tenant_id = v.tenant_id
+WHERE NOT EXISTS (SELECT 1 FROM changes c WHERE c.work_item_id = t.id);
 
 -- =============================================
 -- 6. 添加更多服务请求测试数据
 -- =============================================
-INSERT INTO service_requests (title, status, requester_id, catalog_id, tenant_id, created_at, updated_at)
-SELECT * FROM (VALUES
+WITH fixture(title,status,requester_id,catalog_id,tenant_id,created_at,updated_at) AS (VALUES
     ('开通云服务器', 'pending_approval', 1, 2, 1, NOW(), NOW()),
     ('申请域名', 'in_progress', 2, 2, 1, NOW(), NOW()),
     ('开通CDN服务', 'approved', 3, 2, 1, NOW(), NOW()),
     ('SSL证书申请', 'completed', 4, 2, 1, NOW(), NOW())
-) AS v(title, status, requester_id, catalog_id, tenant_id, created_at, updated_at)
-WHERE NOT EXISTS (SELECT 1 FROM service_requests WHERE title = '开通云服务器');
+), owners AS (
+ INSERT INTO tickets(ticket_number,title,description,status,priority,record_class,requester_id,tenant_id,created_at,updated_at)
+ SELECT 'SR-SEED-' || requester_id::text,title,'',status,'medium','service_request_item',requester_id,tenant_id,created_at,updated_at FROM fixture
+ ON CONFLICT (tenant_id,ticket_number) DO NOTHING RETURNING id,tenant_id,ticket_number
+)
+INSERT INTO service_requests(ticket_id,catalog_id)
+SELECT owners.id,fixture.catalog_id FROM owners JOIN fixture ON owners.tenant_id=fixture.tenant_id AND owners.ticket_number='SR-SEED-' || requester_id::text;
 
 -- =============================================
 -- 7. 添加更多知识库文章

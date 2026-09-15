@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
@@ -30,13 +31,13 @@ func buildWorkItemTestRouter(client *ent.Client, tenantID int, role string) *gin
 	r.GET("/api/v1/tickets/:id/comments", RequireWorkItemRecordClassPermission("read"), func(c *gin.Context) {
 		common.Success(c, gin.H{"ok": true})
 	})
-	// 形状与 router.go 的 tickets.POST("/:id/comments", ..., RequireWorkItemRecordClassPermission("create"), ...)
-	// 和 tickets.PUT("/:id/comments/:comment_id", ..., RequireWorkItemRecordClassPermission("update"), ...)
+	// 形状与 router.go 的 tickets.POST("/:id/comments", ..., RequireWorkItemCollaborationPermission("create"), ...)
+	// 和 tickets.PUT("/:id/comments/:comment_id", ..., RequireWorkItemCollaborationPermission("update"), ...)
 	// 完全一致，用于验证 Fix 1 的 create/update → write 归一化在真实路由匹配链路里同样生效。
-	r.POST("/api/v1/tickets/:id/comments", RequireWorkItemRecordClassPermission("create"), func(c *gin.Context) {
+	r.POST("/api/v1/tickets/:id/comments", RequireWorkItemCollaborationPermission("create"), func(c *gin.Context) {
 		common.Success(c, gin.H{"ok": true})
 	})
-	r.PUT("/api/v1/tickets/:id/comments/:comment_id", RequireWorkItemRecordClassPermission("update"), func(c *gin.Context) {
+	r.PUT("/api/v1/tickets/:id/comments/:comment_id", RequireWorkItemCollaborationPermission("update"), func(c *gin.Context) {
 		common.Success(c, gin.H{"ok": true})
 	})
 	return r
@@ -51,8 +52,8 @@ func TestWorkItemSharedRoute_IntegrationThroughRealRouter(t *testing.T) {
 	incidentTicket := setupWorkItemRBACTestTicket(t, client, tenantID, "incident")
 	changeTicket := setupWorkItemRBACTestTicket(t, client, tenantID, "change_request")
 
-	withHardcodedPermissions(t, "problem_manager", []Permission{{Resource: "problem", Action: "read"}})
-	withHardcodedPermissions(t, "change_manager", []Permission{{Resource: "change", Action: "read"}})
+	withHardcodedPermissions(t, "problem_manager", []authorization.Permission{{Resource: "problem", Action: "read"}})
+	withHardcodedPermissions(t, "change_manager", []authorization.Permission{{Resource: "change", Action: "read"}})
 
 	problemRouter := buildWorkItemTestRouter(client, tenantID, "problem_manager")
 	changeRouter := buildWorkItemTestRouter(client, tenantID, "change_manager")
@@ -89,8 +90,8 @@ func TestWorkItemSharedRoute_IntegrationThroughRealRouter(t *testing.T) {
 	// "<resource>:write" (the only mutation permission code that exists for
 	// incident/problem/change — see pkg/seeder/seeder.go) must be able to reach the
 	// POST/PUT routes registered with RequireWorkItemRecordClassPermission("create"/"update").
-	withHardcodedPermissions(t, "problem_writer", []Permission{{Resource: "problem", Action: "write"}})
-	withHardcodedPermissions(t, "change_writer", []Permission{{Resource: "change", Action: "write"}})
+	withHardcodedPermissions(t, "problem_writer", []authorization.Permission{{Resource: "problem", Action: "write"}})
+	withHardcodedPermissions(t, "change_writer", []authorization.Permission{{Resource: "change", Action: "write"}})
 	problemWriterRouter := buildWorkItemTestRouter(client, tenantID, "problem_writer")
 	changeWriterRouter := buildWorkItemTestRouter(client, tenantID, "change_writer")
 

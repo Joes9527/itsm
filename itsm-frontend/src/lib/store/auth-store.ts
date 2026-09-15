@@ -1,14 +1,11 @@
 /**
  * 统一的认证状态管理 Store
  * 合并了 tenant 支持和 permissions 系统
- * 使用 Zustand 进行全局状态管理，支持持久化存储
+ * 使用 Zustand 管理当前页面内由 `/auth/me` 验证的会话投影。
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { clearAuthStorage } from '@/lib/auth/token-storage';
-import { setTenant, clearTenant } from '@/lib/auth/tenant-context';
-import type { User, Tenant } from '@/lib/api/api-config';
+import type { SessionUser, Tenant } from '@/lib/api/api-config';
 import { httpClient } from '@/lib/api/http-client';
 
 // ===================================
@@ -19,21 +16,16 @@ import { httpClient } from '@/lib/api/http-client';
 
 interface AuthState {
   // 状态
-  user: User | null;
-  token: string | null;
+  user: SessionUser | null;
   currentTenant: Tenant | null;
   isAuthenticated: boolean;
   isLoading: boolean;
 
   // 认证操作
-  login: (user: User, token: string, tenant?: Tenant) => void;
+  hydrateSession: () => Promise<SessionUser>;
   logout: () => void;
-  updateUser: (user: Partial<User>) => void;
+  updateUser: (user: Partial<SessionUser>) => void;
   setLoading: (loading: boolean) => void;
-
-  // 租户操作
-  setCurrentTenant: (tenant: Tenant) => void;
-  clearTenant: () => void;
 
   // 权限检查
   hasPermission: (permission: string) => boolean;
@@ -45,129 +37,118 @@ interface AuthState {
 // Store 定义
 // ===================================
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
-      // 初始状态
+export const useAuthStore = create<AuthState>()((set, get) => ({
+  // 初始状态
+  user: null,
+  currentTenant: null,
+  isAuthenticated: false,
+  isLoading: false,
+
+  // `/auth/me` 与其精确匹配的授权租户是浏览器会话投影的唯一来源。
+  hydrateSession: async () => {
+    set({ isLoading: true });
+    try {
+      const user = await httpClient.get<SessionUser>('/api/v1/auth/me');
+      const actorID = Number(user?.id);
+      if (!Number.isInteger(actorID) || actorID <= 0 || !String(user?.username || '').trim()) {
+        throw new Error('Invalid authenticated actor response');
+      }
+      const role = String(user?.role || '').trim();
+      if (!role) {
+        throw new Error('Invalid authenticated actor role');
+      }
+
+      const tenantID = Number(user?.tenantId);
+      if (!Number.isInteger(tenantID) || tenantID <= 0) {
+        throw new Error('Invalid authenticated tenant identity');
+      }
+
+      const actorTenantID = user?.actorTenantId;
+      if (
+        typeof actorTenantID !== 'number' ||
+        !Number.isSafeInteger(actorTenantID) ||
+        actorTenantID <= 0
+      ) {
+        throw new Error('Invalid authenticated native tenant identity');
+      }
+
+      const response = await httpClient.get<{ tenants: Tenant[] }>('/api/v1/auth/tenants');
+      const tenant = Array.isArray(response?.tenants)
+        ? response.tenants.find(candidate => Number(candidate.id) === tenantID)
+        : undefined;
+      if (!tenant || !String(tenant.code || '').trim() || tenant.status !== 'active') {
+        throw new Error('Authenticated tenant is not authorized');
+      }
+
+      const sessionUser: SessionUser = {
+        ...user,
+        id: actorID,
+        username: String(user.username).trim(),
+        role,
+        tenantId: tenantID,
+        actorTenantId: actorTenantID,
+      };
+      set({
+        user: sessionUser,
+        currentTenant: tenant,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+      return sessionUser;
+    } catch (error) {
+      set({
+        user: null,
+        currentTenant: null,
+        isAuthenticated: false,
+        isLoading: false,
+      });
+      throw error;
+    }
+  },
+
+  // 登出操作
+  logout: () => {
+    set({
       user: null,
-      token: null,
-      currentTenant: null,
       isAuthenticated: false,
       isLoading: false,
+      currentTenant: null,
+    });
+  },
 
-      // 登录操作
-      // 注意：token 存储在 httpOnly cookie 中，前端不需要存储
-      login: (user: User, _token: string, tenant?: Tenant) => {
-        set({
-          user,
-          token: null, // token 在 httpOnly cookie 中，不存储在前端
-          isAuthenticated: true,
-          isLoading: false,
-          currentTenant: tenant || null,
-        });
-
-        // 只设置租户信息（不存储 token）
-        if (tenant) {
-          httpClient.setTenantId(tenant.id);
-          httpClient.setTenantCode(tenant.code);
-        }
-      },
-
-      // 登出操作
-      logout: () => {
-        set({
-          user: null,
-          token: null,
-          isAuthenticated: false,
-          isLoading: false,
-          currentTenant: null,
-        });
-
-        // 清除所有认证信息（使用统一的清理函数，包含历史键名）
-        clearAuthStorage();
-
-        httpClient.clearToken();
-        httpClient.setTenantId(null);
-        httpClient.setTenantCode(null);
-      },
-
-      // 更新用户信息
-      updateUser: (userData: Partial<User>) => {
-        const { user } = get();
-        if (user) {
-          set({
-            user: { ...user, ...userData },
-          });
-        }
-      },
-
-      // 设置加载状态
-      setLoading: (loading: boolean) => {
-        set({ isLoading: loading });
-      },
-
-      // 设置当前租户
-      setCurrentTenant: (tenant: Tenant) => {
-        set({ currentTenant: tenant });
-        httpClient.setTenantId(tenant.id);
-        httpClient.setTenantCode(tenant.code);
-
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('current_tenant_id', tenant.id.toString());
-          localStorage.setItem('current_tenant_code', tenant.code);
-        }
-      },
-
-      // 清除租户
-      clearTenant: () => {
-        set({ currentTenant: null });
-        httpClient.setTenantId(null);
-        httpClient.setTenantCode(null);
-
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('current_tenant_id');
-          localStorage.removeItem('current_tenant_code');
-        }
-      },
-
-      // 检查用户权限
-      hasPermission: (permission: string) => {
-        const { user } = get();
-        return user?.permissions?.includes(permission) || false;
-      },
-
-      // 检查用户角色
-      hasRole: (role: string) => {
-        const { user } = get();
-        return user?.role === role;
-      },
-
-      // 检查是否为管理员
-      isAdmin: () => {
-        const { user } = get();
-        return user?.role === 'admin' || user?.role === 'super_admin';
-      },
-    }),
-    {
-      name: 'auth-storage',
-      partialize: state => ({
-        // 安全：不持久化 user（含 PII/permissions），避免 XSS 读取与跨用户残留
-        token: null, // token 在 httpOnly cookie 中，不持久化
-        currentTenant: state.currentTenant,
-        // 不持久化 isAuthenticated/user，由启动时的 /api/v1/auth/me 探活接口决定
-        // 避免 cookie 过期后前端仍显示已登录的伪登录态
-      }),
-      skipHydration: true, // 手动处理 SSR hydration
-      onRehydrateStorage: () => (state) => {
-        // hydration 完成后，强制将 isAuthenticated 设为 false
-        // 后续通过 /api/v1/auth/me 接口验证真实登录状态
-        if (state) {
-          state.isAuthenticated = false;
-        }
-      },
+  // 更新用户信息
+  updateUser: (userData: Partial<SessionUser>) => {
+    const { user } = get();
+    if (user) {
+      set({
+        user: { ...user, ...userData },
+      });
     }
-  )
-);
+  },
+
+  // 设置加载状态
+  setLoading: (loading: boolean) => {
+    set({ isLoading: loading });
+  },
+
+  // 检查用户权限
+  hasPermission: (permission: string) => {
+    const { user } = get();
+    return user?.permissions?.some(grant => grant === '*' || grant === permission) || false;
+  },
+
+  // 检查用户角色
+  hasRole: (role: string) => {
+    const { user } = get();
+    return user?.role === role;
+  },
+
+  // 检查是否为管理员
+  isAdmin: () => {
+    const { user } = get();
+    return user?.role === 'admin' || user?.role === 'super_admin';
+  },
+}));
 
 // ===================================
 // 租户管理 Store
@@ -297,27 +278,4 @@ export const usePermissions = () => {
   };
 };
 
-// ===================================
-// 导出兼容性别名
-// ===================================
-
-// 导出 store 以便手动 hydration
-export { useAuthStore as authStore };
-
-// Hydration hook - 在客户端组件中使用
-import { useEffect } from 'react';
-
-export const useAuthStoreHydration = () => {
-  useEffect(() => {
-    // 触发 persist hydration - rehydrate may return void or Promise
-    const result = useAuthStore.persist.rehydrate();
-    if (result instanceof Promise) {
-      result.catch((err: unknown) => {
-        console.error('Auth store hydration failed:', err);
-      });
-    }
-  }, []);
-};
-
-// 为了向后兼容，导出类型
 export type { AuthState, TenantState };

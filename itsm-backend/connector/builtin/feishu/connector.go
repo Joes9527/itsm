@@ -8,19 +8,19 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common"
 	"itsm-backend/connector"
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/feishuticketsync"
-	"itsm-backend/ent/user"
 )
 
 // Feishu 飞书连接器实现
 // 复用 package 内 Client 以享受 tenant_access_token 缓存
 type Feishu struct {
-	client    *Client
-	cfg       connector.Config
-	startedAt time.Time
+	client             *Client
+	destination        string
+	callbackInstanceID string
+	startedAt          time.Time
 }
 
 // ActionHandler 卡片按钮/回调事件
@@ -45,12 +45,13 @@ func New() *Feishu { return &Feishu{} }
 
 func (f *Feishu) Manifest() connector.Manifest {
 	return connector.Manifest{
-		Name:        "feishu",
-		Version:     "1.0.0",
-		Title:       "飞书 / Lark",
-		Provider:    "feishu",
-		Type:        connector.TypeIM,
-		Description: "飞书/Lark 开放平台连接器：发送/接收消息、卡片回调、签名校验。覆盖中国大陆及海外版本。",
+		InitializationBehavior: connector.InitializationLocalOnly,
+		Name:                   "feishu",
+		Version:                "1.0.0",
+		Title:                  "飞书 / Lark",
+		Provider:               "feishu",
+		Type:                   connector.TypeIM,
+		Description:            "飞书/Lark 开放平台连接器：发送/接收消息、卡片回调、签名校验。覆盖中国大陆及海外版本。",
 		Capabilities: []connector.Capability{
 			connector.CapSendMessage,
 			connector.CapReceiveMessage,
@@ -68,20 +69,20 @@ func (f *Feishu) Manifest() connector.Manifest {
 }
 
 func (f *Feishu) Init(_ context.Context, cfg connector.Config) error {
-	appID := cfg.Credentials["app_id"]
-	appSecret := cfg.Credentials["app_secret"]
-	if appID == "" || appSecret == "" {
-		return fmt.Errorf("feishu: credentials.app_id and app_secret are required")
+	if f.client != nil {
+		return fmt.Errorf("feishu: connector already initialized")
 	}
-	baseURL, _ := cfg.Settings["base_url"].(string)
-	if baseURL == "" {
-		// 海外版判定
-		if region, _ := cfg.Settings["region"].(string); region == "intl" {
-			baseURL = BaseURLIntl
-		}
+	target, err := parseFeishuDestination(cfg)
+	if err != nil {
+		return err
 	}
-	f.client = NewClient(baseURL, appID, appSecret, cfg.Credentials["verification_token"], cfg.Credentials["encrypt_key"])
-	f.cfg = cfg
+	secret := cfg.Credentials["app_secret"]
+	if secret == "" {
+		return fmt.Errorf("feishu: app secret is required")
+	}
+	f.client = NewClient(target.BaseURL, target.AppID, secret, cfg.Credentials["verification_token"], cfg.Credentials["encrypt_key"])
+	f.destination = target.digest()
+	f.callbackInstanceID = target.CallbackInstanceID
 	f.startedAt = time.Now()
 	return nil
 }
@@ -119,10 +120,10 @@ func (f *Feishu) GetOAuthAuthURL(redirectURI, state string) string {
 	return f.client.GetOAuthAuthURL(redirectURI, state)
 }
 
-func (f *Feishu) CallbackInstanceID() string {
-	id, _ := f.cfg.Settings["callbackInstanceId"].(string)
-	return id
-}
+// TaskDestinationIdentity freezes the tenant connector destination without secrets.
+func (f *Feishu) TaskDestinationIdentity() string { return f.destination }
+
+func (f *Feishu) CallbackInstanceID() string { return f.callbackInstanceID }
 
 // ExchangeOAuthCode exchanges an authorization code for an access token
 func (f *Feishu) ExchangeOAuthCode(ctx context.Context, code string) (*OAuthTokenResponse, error) {
@@ -182,6 +183,10 @@ func (f *Feishu) VerifySignature(headers map[string]string, body []byte) error {
 // ParseInbound 解析飞书事件回调
 // 支持：url_verification / event_callback / card.action.trigger
 func (f *Feishu) ParseInbound(body []byte) (*connector.InboundMessage, error) {
+	if _, err := common.DecodeJSONObject(body); err != nil {
+		return nil, fmt.Errorf("feishu: invalid JSON payload")
+	}
+
 	var base struct {
 		UUID      string `json:"uuid"`
 		Token     string `json:"token"`
@@ -265,8 +270,8 @@ func (f *Feishu) ParseInbound(body []byte) (*connector.InboundMessage, error) {
 	return nil, fmt.Errorf("feishu: unknown event type=%s", base.Type)
 }
 
-// SyncTicketToFeishu syncs an ITSM ticket to Feishu as a task (creates or updates)
-func (f *Feishu) SyncTicketToFeishu(ctx context.Context, tx *ent.Tx, ticket *ent.Ticket) (*FeishuTask, error) {
+// UpdateExistingTicketTask updates a mapped task. Creation belongs to the durable Outbox owner.
+func (f *Feishu) UpdateExistingTicketTask(ctx context.Context, tx *ent.Tx, ticket *ent.Ticket) (*FeishuTask, error) {
 	if f.client == nil {
 		return nil, fmt.Errorf("feishu: connector not initialized")
 	}
@@ -277,6 +282,10 @@ func (f *Feishu) SyncTicketToFeishu(ctx context.Context, tx *ent.Tx, ticket *ent
 		Only(ctx)
 	if err != nil && !ent.IsNotFound(err) {
 		return nil, fmt.Errorf("feishu: failed to query sync record: %w", err)
+	}
+
+	if syncRecord == nil || syncRecord.FeishuTaskGUID == "" {
+		return nil, fmt.Errorf("feishu: task mapping is pending or unavailable")
 	}
 
 	// Map ticket fields to Feishu task
@@ -309,22 +318,6 @@ func (f *Feishu) SyncTicketToFeishu(ctx context.Context, tx *ent.Tx, ticket *ent
 			SetLastSyncedAt(time.Now()).
 			ClearErrorMessage().
 			Save(ctx)
-	} else {
-		// Create new task
-		task, err = f.client.CreateTask(ctx, feishuTask)
-		if err != nil {
-			return nil, fmt.Errorf("feishu: failed to create task: %w", err)
-		}
-		// Create sync record
-		_, err = tx.FeishuTicketSync.Create().
-			SetTenantID(ticket.TenantID).
-			SetTicketID(ticket.ID).
-			SetFeishuTaskID(task.GUID). // Wait, is GUID the same as ID? Let's check Feishu API: yes, task GUID is the unique ID
-			SetFeishuTaskGUID(task.GUID).
-			SetSyncStatus("synced").
-			SetLastSyncDirection("itsm_to_feishu").
-			SetLastSyncedAt(time.Now()).
-			Save(ctx)
 	}
 
 	if err != nil {
@@ -332,134 +325,6 @@ func (f *Feishu) SyncTicketToFeishu(ctx context.Context, tx *ent.Tx, ticket *ent
 	}
 
 	return task, nil
-}
-
-// SyncFeishuTaskToTicket syncs a Feishu task to ITSM as a ticket (creates or updates)
-func (f *Feishu) SyncFeishuTaskToTicket(ctx context.Context, tx *ent.Tx, feishuTask *FeishuTask) (*ent.Ticket, error) {
-	if f.client == nil {
-		return nil, fmt.Errorf("feishu: connector not initialized")
-	}
-
-	// Check if there's an existing sync mapping
-	syncRecord, err := tx.FeishuTicketSync.Query().
-		Where(feishuticketsync.TenantID(f.cfg.TenantID), feishuticketsync.FeishuTaskID(feishuTask.GUID)).
-		Only(ctx)
-	if err != nil && !ent.IsNotFound(err) {
-		return nil, fmt.Errorf("feishu: failed to query sync record: %w", err)
-	}
-
-	// Map Feishu task fields to ITSM ticket
-	ticketUpdate := dto.UpdateTicketRequest{
-		Title:       feishuTask.Name,
-		Description: feishuTask.Description,
-		Priority:    mapPriorityFromFeishu(feishuTask.Priority),
-		Status:      mapStatusFromFeishu(feishuTask.Status),
-		// Set requester: need to map Feishu creator ID to ITSM user ID
-		// RequesterID: userID,
-	}
-
-	var ticket *ent.Ticket
-	if syncRecord != nil {
-		// Update existing ticket
-		ticket, err = tx.Ticket.Get(ctx, syncRecord.TicketID)
-		if err != nil {
-			return nil, fmt.Errorf("feishu: failed to get ticket: %w", err)
-		}
-
-		update := ticket.Update()
-		if ticketUpdate.Title != "" {
-			update.SetTitle(ticketUpdate.Title)
-		}
-		if ticketUpdate.Description != "" {
-			update.SetDescription(ticketUpdate.Description)
-		}
-		if ticketUpdate.Priority != "" {
-			update.SetPriority(ticketUpdate.Priority)
-		}
-		if ticketUpdate.Status != "" {
-			update.SetStatus(ticketUpdate.Status)
-		}
-
-		ticket, err = update.Save(ctx)
-		if err != nil {
-			// Update sync record with error
-			_, _ = syncRecord.Update().
-				SetSyncStatus("failed").
-				SetErrorMessage(err.Error()).
-				Save(ctx)
-			return nil, fmt.Errorf("feishu: failed to update ticket: %w", err)
-		}
-
-		// Update sync record
-		_, err = syncRecord.Update().
-			SetSyncStatus("synced").
-			SetLastSyncDirection("feishu_to_itsm").
-			SetLastSyncedAt(time.Now()).
-			ClearErrorMessage().
-			Save(ctx)
-	} else {
-		// Create new ticket
-		createReq := dto.CreateTicketRequest{
-			Title:       feishuTask.Name,
-			Description: feishuTask.Description,
-			Priority:    mapPriorityFromFeishu(feishuTask.Priority),
-			Type:        "ticket",
-			// Set requester: need to map Feishu creator ID to ITSM user ID
-			// RequesterID: userID,
-		}
-
-		// Create ticket using the same logic as ticket service
-		// TODO: Inject ticket service or reuse create logic
-		// For now, we'll create it directly
-
-		// 映射飞书创建人到ITSM用户
-		requesterID := 1 // 默认管理员
-		if feishuTask.CreatorID != "" {
-			user, err := tx.User.Query().
-				Where(user.FeishuOpenID(feishuTask.CreatorID)).
-				Where(user.TenantID(f.cfg.TenantID)).
-				Only(ctx)
-			if err == nil {
-				requesterID = user.ID
-			}
-		}
-
-		ticketNumber := fmt.Sprintf("TK-%d-%s", f.cfg.TenantID, time.Now().Format("20060102150405"))
-		create := tx.Ticket.Create().
-			SetTitle(createReq.Title).
-			SetDescription(createReq.Description).
-			SetPriority(createReq.Priority).
-			SetType(createReq.Type).
-			SetStatus(mapStatusFromFeishu(feishuTask.Status)).
-			SetTenantID(f.cfg.TenantID).
-			SetRequesterID(requesterID).
-			SetTicketNumber(ticketNumber)
-
-		if createReq.AssigneeID > 0 {
-			create.SetAssigneeID(createReq.AssigneeID)
-		}
-		ticket, err = create.Save(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("feishu: failed to create ticket: %w", err)
-		}
-
-		// Create sync record
-		_, err = tx.FeishuTicketSync.Create().
-			SetTenantID(f.cfg.TenantID).
-			SetTicketID(ticket.ID).
-			SetFeishuTaskID(feishuTask.GUID).
-			SetFeishuTaskGUID(feishuTask.GUID).
-			SetSyncStatus("synced").
-			SetLastSyncDirection("feishu_to_itsm").
-			SetLastSyncedAt(time.Now()).
-			Save(ctx)
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("feishu: failed to save sync record: %w", err)
-	}
-
-	return ticket, nil
 }
 
 // HandleTaskEvent handles Feishu task webhook events
@@ -486,22 +351,6 @@ func mapPriorityToFeishu(itsmPriority string) string {
 	}
 }
 
-// mapPriorityFromFeishu maps Feishu task priority to ITSM ticket priority
-func mapPriorityFromFeishu(feishuPriority string) string {
-	switch strings.ToLower(feishuPriority) {
-	case "low":
-		return "low"
-	case "medium":
-		return "medium"
-	case "high":
-		return "high"
-	case "urgent":
-		return "critical"
-	default:
-		return "medium"
-	}
-}
-
 // mapStatusToFeishu maps ITSM ticket status to Feishu task status
 func mapStatusToFeishu(itsmStatus string) string {
 	switch strings.ToLower(itsmStatus) {
@@ -515,21 +364,5 @@ func mapStatusToFeishu(itsmStatus string) string {
 		return "canceled"
 	default:
 		return "not_started"
-	}
-}
-
-// mapStatusFromFeishu maps Feishu task status to ITSM ticket status
-func mapStatusFromFeishu(feishuStatus string) string {
-	switch strings.ToLower(feishuStatus) {
-	case "not_started":
-		return "open"
-	case "in_progress":
-		return "in_progress"
-	case "completed":
-		return "resolved"
-	case "canceled":
-		return "closed"
-	default:
-		return "open"
 	}
 }

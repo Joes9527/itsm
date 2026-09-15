@@ -24,7 +24,6 @@ type TicketCategoryResponse struct {
 	Level           int       `json:"level"`
 	SortOrder       int       `json:"sortOrder"`
 	IsActive        bool      `json:"isActive"`
-	WorkflowID      *int      `json:"workflowId,omitempty"`
 	DepartmentID    *int      `json:"departmentId,omitempty"`
 	TenantID        int       `json:"tenantId"`
 	ITSMType        string    `json:"itsmType,omitempty"`

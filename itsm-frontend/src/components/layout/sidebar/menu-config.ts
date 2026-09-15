@@ -159,17 +159,10 @@ export function getMenuConfig(): MenuConfig {
             permission: 'knowledge:read',
           },
           {
-            key: '/knowledge/articles',
-            icon: getIconByName('FileText')!,
-            label: '文章管理',
-            path: '/knowledge/articles',
-            permission: 'knowledge:write',
-          },
-          {
-            key: '/knowledge/articles/create',
+            key: '/knowledge/articles/new',
             icon: getIconByName('Plus')!,
             label: '新建文章',
-            path: '/knowledge/articles/create',
+            path: '/knowledge/articles/new',
             permission: 'knowledge:write',
           },
         ],
@@ -189,11 +182,6 @@ export function getMenuConfig(): MenuConfig {
             path: '/tickets/create',
             permission: 'service:read',
           },
-          // "待我审批" 子菜单已经移除——原来指向的 /service-catalog/approvals 是一个直接对
-          // ServiceRequest 做 approve/reject 的独立页面，Task 1 删除了它依赖的后端路由
-          // （SR 自己的审批阶段整体退休，统一走关联 Ticket 的 BPMN 流程）。同一个目的地
-          // 已经有独立的顶层菜单项"待我审批"（/approvals/pending，见下方"扩展模块"），
-          // 这里不重复放一个指向同一页面、权限点还不一样的入口。
         ],
       },
       {
@@ -332,10 +320,10 @@ export function getMenuConfig(): MenuConfig {
         description: '工作流自动化',
         children: [
           {
-            key: '/workflow/list',
-            icon: getIconByName('List')!,
-            label: '工作流列表',
-            path: '/workflow',
+            key: '/admin/workflows',
+            icon: getIconByName('Workflow')!,
+            label: '工作流管理',
+            path: '/admin/workflows',
             permission: 'workflow:read',
           },
           {
@@ -366,13 +354,6 @@ export function getMenuConfig(): MenuConfig {
             path: '/workflow/dashboard',
             permission: 'workflow:read',
           },
-          {
-            key: '/workflow/automation',
-            icon: getIconByName('Zap')!,
-            label: '自动化规则',
-            path: '/workflow/automation',
-            permission: 'workflow:write',
-          },
         ],
       },
       // ===== AI =====
@@ -402,11 +383,11 @@ export function getMenuConfig(): MenuConfig {
       },
       // ===== 扩展模块 =====
       {
-        key: '/approvals/pending',
+        key: '/approvals',
         icon: getIconByName('CheckCircle')!,
         label: '待我审批',
-        path: '/approvals/pending',
-        permission: 'approval:read',
+        path: '/approvals',
+        permission: 'task:read',
         description: '待我审批',
       },
       // ===== MSP与发布 =====
@@ -465,16 +446,16 @@ export function getMenuConfig(): MenuConfig {
         key: '/admin',
         icon: getIconByName('Settings')!,
         label: '系统管理',
-        path: '/admin',
-        permission: 'admin:write',
+        path: '/admin/overview',
+        permission: 'system:read',
         description: '系统管理',
         children: [
           {
-            key: '/admin',
+            key: '/admin/overview',
             icon: getIconByName('LayoutDashboard')!,
             label: '系统概览',
-            path: '/admin',
-            permission: 'admin:write',
+            path: '/admin/overview',
+            permission: 'system:read',
           },
           {
             key: '/admin/users',
@@ -523,7 +504,7 @@ export function getMenuConfig(): MenuConfig {
             icon: getIconByName('Tag')!,
             label: '工单分类',
             path: '/admin/ticket-categories',
-            permission: 'ticket:category:manage',
+            permission: 'ticket_category:read',
           },
           {
             key: '/tickets/templates',
@@ -544,7 +525,7 @@ export function getMenuConfig(): MenuConfig {
             icon: getIconByName('Zap')!,
             label: '自动化规则',
             path: '/admin/tickets/automation-rules',
-            permission: 'ticket:manage',
+            permission: 'automation_rule:read',
           },
           {
             key: '/admin/approval-chains',
@@ -605,9 +586,9 @@ export function getMenuConfig(): MenuConfig {
           {
             key: '/admin/service-catalogs',
             icon: getIconByName('Boxes')!,
-            label: '服务目录',
+            label: '服务目录管理',
             path: '/admin/service-catalogs',
-            permission: 'catalog:manage',
+            permission: 'service_catalog:read',
           },
           {
             key: '/admin/sla-definitions',
@@ -615,13 +596,6 @@ export function getMenuConfig(): MenuConfig {
             label: 'SLA 定义',
             path: '/admin/sla-definitions',
             permission: 'sla:manage',
-          },
-          {
-            key: '/admin/workflows',
-            icon: getIconByName('GitBranch')!,
-            label: '工作流',
-            path: '/admin/workflows',
-            permission: 'workflow:manage',
           },
         ],
       },

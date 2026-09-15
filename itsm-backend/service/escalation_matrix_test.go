@@ -64,7 +64,10 @@ func TestEscalationMatrixService_FindNextEscalationLevel_P1(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		got := svc.FindNextEscalationLevel(1, "critical", tc.elapsedMin, tc.currentLevel, 0)
+		got, err := svc.FindNextEscalationLevel(context.Background(), 1, "critical", tc.elapsedMin, tc.currentLevel, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if tc.expectNil {
 			if got != nil {
 				t.Errorf("%s: expected nil, got L%d", tc.name, got.Level)
@@ -92,25 +95,37 @@ func TestEscalationMatrixService_FindNextEscalationLevel_MultiLevelSkip(t *testi
 	svc := NewEscalationMatrixService(nil)
 
 	// 第一次调用 elapsed=60, currentMax=0 → 返回 L1
-	lvl := svc.FindNextEscalationLevel(1, "critical", 60, 0, 0)
+	lvl, err := svc.FindNextEscalationLevel(context.Background(), 1, "critical", 60, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if lvl == nil || lvl.Level != 1 {
 		t.Errorf("expected L1, got %v", lvl)
 	}
 
 	// 第二次调用 elapsed=60, currentMax=1 → 返回 L2
-	lvl = svc.FindNextEscalationLevel(1, "critical", 60, 1, 0)
+	lvl, err = svc.FindNextEscalationLevel(context.Background(), 1, "critical", 60, 1, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if lvl == nil || lvl.Level != 2 {
 		t.Errorf("expected L2, got %v", lvl)
 	}
 
 	// 第三次调用 elapsed=60, currentMax=2 → 返回 L3
-	lvl = svc.FindNextEscalationLevel(1, "critical", 60, 2, 0)
+	lvl, err = svc.FindNextEscalationLevel(context.Background(), 1, "critical", 60, 2, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if lvl == nil || lvl.Level != 3 {
 		t.Errorf("expected L3, got %v", lvl)
 	}
 
 	// 第四次调用 elapsed=60, currentMax=3 → 返回 nil
-	lvl = svc.FindNextEscalationLevel(1, "critical", 60, 3, 0)
+	lvl, err = svc.FindNextEscalationLevel(context.Background(), 1, "critical", 60, 3, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if lvl != nil {
 		t.Errorf("expected nil (已到顶), got L%d", lvl.Level)
 	}
@@ -121,7 +136,10 @@ func TestEscalationMatrixService_FindNextEscalationLevel_UnknownPriority(t *test
 	svc := NewEscalationMatrixService(nil)
 
 	// 未知 priority + elapsed=240 → 走 medium 兜底，应返回 L1
-	lvl := svc.FindNextEscalationLevel(1, "unknown_priority", 240, 0, 0)
+	lvl, err := svc.FindNextEscalationLevel(context.Background(), 1, "unknown_priority", 240, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if lvl == nil || lvl.Level != 1 {
 		t.Errorf("expected L1 from medium fallback, got %v", lvl)
 	}
@@ -204,7 +222,7 @@ func TestEscalationMatrixService_ConcurrentAccess(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			_ = svc.GetMatrix(i % 5)
-			_ = svc.FindNextEscalationLevel(i%5, "critical", i, 0, 0)
+			_, _ = svc.FindNextEscalationLevel(context.Background(), i%5, "critical", i, 0, 0)
 		}(i)
 	}
 	wg.Wait()
@@ -269,33 +287,33 @@ func stringHasSubstr(s, substr string) bool {
 	return false
 }
 
-// TestNewEscalationService 验证创建时自动初始化 matrix service
-func TestNewEscalationService(t *testing.T) {
-	es := NewEscalationService(nil, nil)
-	if es.MatrixService() == nil {
-		t.Error("MatrixService should be auto-initialized")
-	}
-}
-
-// TestEscalationService_SetMatrixService 验证依赖注入
-func TestEscalationService_SetMatrixService(t *testing.T) {
-	es := NewEscalationService(nil, nil)
-	custom := NewEscalationMatrixService(nil)
-	custom.SetMatrix(1, EscalationMatrix{
-		"critical": {{Level: 1, AfterMinutes: 999}},
-	})
-	es.SetMatrixService(custom)
-
-	if got := es.MatrixService().GetMatrix(1)["critical"][0].AfterMinutes; got != 999 {
-		t.Errorf("expected custom 999, got %d", got)
-	}
-}
-
-// TestEscalationService_SetMatrixService_NilSafe 验证 nil 输入安全
-func TestEscalationService_SetMatrixService_NilSafe(t *testing.T) {
-	es := NewEscalationService(nil, nil)
-	es.SetMatrixService(nil) // 不应改变 matrix service
-	if es.MatrixService() == nil {
-		t.Error("matrix service should not become nil after SetMatrixService(nil)")
+// Explicit recipients must survive the persisted SLA JSON round trip.
+func TestEscalationMatrixExplicitRecipients(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		ids   interface{}
+		valid bool
+	}{
+		{"valid", []interface{}{float64(7), float64(11)}, true},
+		{"zero", []interface{}{float64(0)}, false},
+		{"fraction", []interface{}{float64(1.5)}, false},
+		{"wrong type", "7", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			matrix, err := parseSLAEscalationMatrix(map[string]interface{}{"medium": []interface{}{map[string]interface{}{"level": float64(1), "afterMinutes": float64(0), "notifyUserIDs": tc.ids}}})
+			if !tc.valid {
+				if err == nil {
+					t.Fatal("invalid recipient accepted")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			ids := matrix["medium"][0].NotifyUserIDs
+			if len(ids) != 2 || ids[0] != 7 || ids[1] != 11 {
+				t.Fatalf("recipients lost: %v", ids)
+			}
+		})
 	}
 }

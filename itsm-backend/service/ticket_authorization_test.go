@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
-	"itsm-backend/middleware"
 	"itsm-backend/repository/ticket"
 
-	"github.com/stretchr/testify/require"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/stretchr/testify/require"
 )
 
 // seedRolePermission 给测试角色授予一条 resource:action 权限，供 hasPermission 相关断言使用。
@@ -42,70 +42,17 @@ func seedRolePermission(t *testing.T, client *ent.Client, tenantID int, roleCode
 	require.NoError(t, err)
 }
 
-func TestCanApprove_RequesterExcludedEvenWithPermission(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", testDSN())
-	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
-	ctx := context.Background()
-
-	tenant, err := client.Tenant.Create().SetName("t").SetCode("t").SetDomain("t.com").SetStatus("active").Save(ctx)
-	require.NoError(t, err)
-	seedRolePermission(t, client, tenant.ID, "l1_support", "ticket", "update")
-
-	tk := &ticket.Ticket{ID: 1, RequesterID: 42, Status: ticket.StatusOpen}
-	actor := ActionActor{Client: client, TenantID: tenant.ID, UserID: 42, Role: "l1_support"}
-
-	perm := CanApprove(actor, tk)
-	require.False(t, perm.Allowed)
-	require.Equal(t, "不能审批自己提交的工单", perm.Reason)
-}
-
-func TestCanApprove_AllowedForNonRequesterWithPermission(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", testDSN())
-	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
-	ctx := context.Background()
-
-	tenant, err := client.Tenant.Create().SetName("t").SetCode("t").SetDomain("t.com").SetStatus("active").Save(ctx)
-	require.NoError(t, err)
-	seedRolePermission(t, client, tenant.ID, "l1_support", "ticket", "update")
-
-	tk := &ticket.Ticket{ID: 1, RequesterID: 42, Status: ticket.StatusOpen}
-	actor := ActionActor{Client: client, TenantID: tenant.ID, UserID: 99, Role: "l1_support"}
-
-	perm := CanApprove(actor, tk)
-	require.True(t, perm.Allowed)
-}
-
-func TestCanApprove_DeniedWithoutPermission(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", testDSN())
-	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
-	ctx := context.Background()
-
-	tenant, err := client.Tenant.Create().SetName("t").SetCode("t").SetDomain("t.com").SetStatus("active").Save(ctx)
-	require.NoError(t, err)
-	// end_user 没有 ticket:update
-
-	tk := &ticket.Ticket{ID: 1, RequesterID: 42, Status: ticket.StatusOpen}
-	actor := ActionActor{Client: client, TenantID: tenant.ID, UserID: 99, Role: "end_user"}
-
-	perm := CanApprove(actor, tk)
-	require.False(t, perm.Allowed)
-	require.Equal(t, "无审批权限", perm.Reason)
-}
-
 func TestCanAssign_NotExcludedForRequester(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
+	authorization.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	tenant, err := client.Tenant.Create().SetName("t").SetCode("t").SetDomain("t.com").SetStatus("active").Save(ctx)
 	require.NoError(t, err)
 	seedRolePermission(t, client, tenant.ID, "sd_manager", "ticket", "assign")
 
-	tk := &ticket.Ticket{ID: 1, RequesterID: 42, Status: ticket.StatusOpen}
+	tk := &ticket.Ticket{ID: 1, RequesterID: 42, Status: ticket.StatusOpen, RecordClass: "generic"}
 	actor := ActionActor{Client: client, TenantID: tenant.ID, UserID: 42, Role: "sd_manager"}
 
 	perm := CanAssign(actor, tk)
@@ -115,7 +62,7 @@ func TestCanAssign_NotExcludedForRequester(t *testing.T) {
 func TestCanCC_AllowedForRequester(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
+	authorization.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	tenant, err := client.Tenant.Create().SetName("t").SetCode("t").SetDomain("t.com").SetStatus("active").Save(ctx)
@@ -141,7 +88,7 @@ func TestCanCC_AllowedForRequester(t *testing.T) {
 func TestCanCC_BlockedForUnrelatedUser(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
+	authorization.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	tenant, err := client.Tenant.Create().SetName("t").SetCode("t").SetDomain("t.com").SetStatus("active").Save(ctx)
@@ -173,7 +120,7 @@ func TestCanCC_BlockedForUnrelatedUser(t *testing.T) {
 func TestCanDelete_BlockedByRunningProcessInstance(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
+	authorization.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	tenant, err := client.Tenant.Create().SetName("t").SetCode("t").SetDomain("t.com").SetStatus("active").Save(ctx)
@@ -198,7 +145,7 @@ func TestCanDelete_BlockedByRunningProcessInstance(t *testing.T) {
 
 	_, err = client.ProcessInstance.Create().
 		SetProcessInstanceID("proc-1").
-		SetBusinessKey("ticket:7").
+		SetBusinessKey("generic:7").
 		SetProcessDefinitionKey("ticket_general_flow").
 		SetProcessDefinitionID(def.ID).
 		SetStatus("running").
@@ -207,7 +154,8 @@ func TestCanDelete_BlockedByRunningProcessInstance(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	tk := &ticket.Ticket{ID: 7, RequesterID: 42, Status: ticket.StatusOpen}
+	// 实例身份是 generic:7，工单必须声明同一个 recordClass 才构成一致身份。
+	tk := &ticket.Ticket{ID: 7, RequesterID: 42, Status: ticket.StatusOpen, RecordClass: "generic"}
 	actor := ActionActor{Client: client, TenantID: tenant.ID, UserID: 99, Role: "sysadmin_test"}
 
 	perm := CanDelete(ctx, actor, tk)
@@ -218,7 +166,7 @@ func TestCanDelete_BlockedByRunningProcessInstance(t *testing.T) {
 func TestCanProvision_RequesterExcludedEvenWithPermission(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
+	authorization.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	tenant, err := client.Tenant.Create().SetName("t").SetCode("t").SetDomain("t.com").SetStatus("active").Save(ctx)
@@ -233,7 +181,7 @@ func TestCanProvision_RequesterExcludedEvenWithPermission(t *testing.T) {
 func TestCanProvision_AllowedForFulfillerNotRequester(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
+	authorization.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	tenant, err := client.Tenant.Create().SetName("t").SetCode("t").SetDomain("t.com").SetStatus("active").Save(ctx)
@@ -247,7 +195,7 @@ func TestCanProvision_AllowedForFulfillerNotRequester(t *testing.T) {
 func TestCanProvision_DeniedForEndUserEvenNotRequester(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
+	authorization.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	tenant, err := client.Tenant.Create().SetName("t").SetCode("t").SetDomain("t.com").SetStatus("active").Save(ctx)
@@ -257,4 +205,49 @@ func TestCanProvision_DeniedForEndUserEvenNotRequester(t *testing.T) {
 	perm := CanProvision(client, tenant.ID, 99, "end_user", 42)
 	require.False(t, perm.Allowed)
 	require.Equal(t, "无交付权限", perm.Reason)
+}
+
+// 非 generic 的 WorkItem 同样受运行中流程保护：守卫曾硬编码 generic，于是
+// incident/problem/change/service_request_item 带活跃流程时可以被误删。
+func TestCanDelete_BlockedByRunningProcessInstanceForNonGenericWorkItem(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", testDSN())
+	defer client.Close()
+	authorization.InvalidateAllPermissionCaches()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().SetName("t2").SetCode("t2").SetDomain("t2.com").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	seedRolePermission(t, client, tenant.ID, "sysadmin_test", "ticket", "delete")
+
+	deployment, err := client.ProcessDeployment.Create().
+		SetDeploymentID("deploy-non-generic").
+		SetDeploymentName("测试部署").
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+	def, err := client.ProcessDefinition.Create().
+		SetKey("incident_emergency_flow").
+		SetName("事件应急流程").
+		SetBpmnXML([]byte("<bpmn/>")).
+		SetDeploymentID(deployment.ID).
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+	_, err = client.ProcessInstance.Create().
+		SetProcessInstanceID("proc-incident").
+		SetBusinessKey("incident:7").
+		SetProcessDefinitionKey("incident_emergency_flow").
+		SetProcessDefinitionID(def.ID).
+		SetStatus("running").
+		SetTenantID(tenant.ID).
+		SetStartTime(time.Now()).
+		Save(ctx)
+	require.NoError(t, err)
+
+	tk := &ticket.Ticket{ID: 7, RequesterID: 42, Status: ticket.StatusOpen, RecordClass: "incident"}
+	actor := ActionActor{Client: client, TenantID: tenant.ID, UserID: 99, Role: "sysadmin_test"}
+
+	perm := CanDelete(ctx, actor, tk)
+	require.False(t, perm.Allowed)
+	require.Equal(t, "工单流程流转中，不可删除", perm.Reason)
 }

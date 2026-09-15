@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/cmdbimporttask"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +19,7 @@ type CMDBImportTaskCreate struct {
 	config
 	mutation *CMDBImportTaskMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTaskID sets the "task_id" field.
@@ -350,6 +352,7 @@ func (_c *CMDBImportTaskCreate) createSpec() (*CMDBImportTask, *sqlgraph.CreateS
 		_node = &CMDBImportTask{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(cmdbimporttask.Table, sqlgraph.NewFieldSpec(cmdbimporttask.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.TaskID(); ok {
 		_spec.SetField(cmdbimporttask.FieldTaskID, field.TypeString, value)
 		_node.TaskID = value
@@ -421,11 +424,719 @@ func (_c *CMDBImportTaskCreate) createSpec() (*CMDBImportTask, *sqlgraph.CreateS
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.CMDBImportTask.Create().
+//		SetTaskID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.CMDBImportTaskUpsert) {
+//			SetTaskID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *CMDBImportTaskCreate) OnConflict(opts ...sql.ConflictOption) *CMDBImportTaskUpsertOne {
+	_c.conflict = opts
+	return &CMDBImportTaskUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.CMDBImportTask.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *CMDBImportTaskCreate) OnConflictColumns(columns ...string) *CMDBImportTaskUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &CMDBImportTaskUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// CMDBImportTaskUpsertOne is the builder for "upsert"-ing
+	//  one CMDBImportTask node.
+	CMDBImportTaskUpsertOne struct {
+		create *CMDBImportTaskCreate
+	}
+
+	// CMDBImportTaskUpsert is the "OnConflict" setter.
+	CMDBImportTaskUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTaskID sets the "task_id" field.
+func (u *CMDBImportTaskUpsert) SetTaskID(v string) *CMDBImportTaskUpsert {
+	u.Set(cmdbimporttask.FieldTaskID, v)
+	return u
+}
+
+// UpdateTaskID sets the "task_id" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsert) UpdateTaskID() *CMDBImportTaskUpsert {
+	u.SetExcluded(cmdbimporttask.FieldTaskID)
+	return u
+}
+
+// SetFileURL sets the "file_url" field.
+func (u *CMDBImportTaskUpsert) SetFileURL(v string) *CMDBImportTaskUpsert {
+	u.Set(cmdbimporttask.FieldFileURL, v)
+	return u
+}
+
+// UpdateFileURL sets the "file_url" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsert) UpdateFileURL() *CMDBImportTaskUpsert {
+	u.SetExcluded(cmdbimporttask.FieldFileURL)
+	return u
+}
+
+// SetFileType sets the "file_type" field.
+func (u *CMDBImportTaskUpsert) SetFileType(v string) *CMDBImportTaskUpsert {
+	u.Set(cmdbimporttask.FieldFileType, v)
+	return u
+}
+
+// UpdateFileType sets the "file_type" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsert) UpdateFileType() *CMDBImportTaskUpsert {
+	u.SetExcluded(cmdbimporttask.FieldFileType)
+	return u
+}
+
+// SetUpdateMode sets the "update_mode" field.
+func (u *CMDBImportTaskUpsert) SetUpdateMode(v string) *CMDBImportTaskUpsert {
+	u.Set(cmdbimporttask.FieldUpdateMode, v)
+	return u
+}
+
+// UpdateUpdateMode sets the "update_mode" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsert) UpdateUpdateMode() *CMDBImportTaskUpsert {
+	u.SetExcluded(cmdbimporttask.FieldUpdateMode)
+	return u
+}
+
+// SetSheetName sets the "sheet_name" field.
+func (u *CMDBImportTaskUpsert) SetSheetName(v string) *CMDBImportTaskUpsert {
+	u.Set(cmdbimporttask.FieldSheetName, v)
+	return u
+}
+
+// UpdateSheetName sets the "sheet_name" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsert) UpdateSheetName() *CMDBImportTaskUpsert {
+	u.SetExcluded(cmdbimporttask.FieldSheetName)
+	return u
+}
+
+// ClearSheetName clears the value of the "sheet_name" field.
+func (u *CMDBImportTaskUpsert) ClearSheetName() *CMDBImportTaskUpsert {
+	u.SetNull(cmdbimporttask.FieldSheetName)
+	return u
+}
+
+// SetTotalCount sets the "total_count" field.
+func (u *CMDBImportTaskUpsert) SetTotalCount(v int) *CMDBImportTaskUpsert {
+	u.Set(cmdbimporttask.FieldTotalCount, v)
+	return u
+}
+
+// UpdateTotalCount sets the "total_count" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsert) UpdateTotalCount() *CMDBImportTaskUpsert {
+	u.SetExcluded(cmdbimporttask.FieldTotalCount)
+	return u
+}
+
+// AddTotalCount adds v to the "total_count" field.
+func (u *CMDBImportTaskUpsert) AddTotalCount(v int) *CMDBImportTaskUpsert {
+	u.Add(cmdbimporttask.FieldTotalCount, v)
+	return u
+}
+
+// SetSuccessCount sets the "success_count" field.
+func (u *CMDBImportTaskUpsert) SetSuccessCount(v int) *CMDBImportTaskUpsert {
+	u.Set(cmdbimporttask.FieldSuccessCount, v)
+	return u
+}
+
+// UpdateSuccessCount sets the "success_count" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsert) UpdateSuccessCount() *CMDBImportTaskUpsert {
+	u.SetExcluded(cmdbimporttask.FieldSuccessCount)
+	return u
+}
+
+// AddSuccessCount adds v to the "success_count" field.
+func (u *CMDBImportTaskUpsert) AddSuccessCount(v int) *CMDBImportTaskUpsert {
+	u.Add(cmdbimporttask.FieldSuccessCount, v)
+	return u
+}
+
+// SetFailedCount sets the "failed_count" field.
+func (u *CMDBImportTaskUpsert) SetFailedCount(v int) *CMDBImportTaskUpsert {
+	u.Set(cmdbimporttask.FieldFailedCount, v)
+	return u
+}
+
+// UpdateFailedCount sets the "failed_count" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsert) UpdateFailedCount() *CMDBImportTaskUpsert {
+	u.SetExcluded(cmdbimporttask.FieldFailedCount)
+	return u
+}
+
+// AddFailedCount adds v to the "failed_count" field.
+func (u *CMDBImportTaskUpsert) AddFailedCount(v int) *CMDBImportTaskUpsert {
+	u.Add(cmdbimporttask.FieldFailedCount, v)
+	return u
+}
+
+// SetErrors sets the "errors" field.
+func (u *CMDBImportTaskUpsert) SetErrors(v []map[string]interface{}) *CMDBImportTaskUpsert {
+	u.Set(cmdbimporttask.FieldErrors, v)
+	return u
+}
+
+// UpdateErrors sets the "errors" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsert) UpdateErrors() *CMDBImportTaskUpsert {
+	u.SetExcluded(cmdbimporttask.FieldErrors)
+	return u
+}
+
+// ClearErrors clears the value of the "errors" field.
+func (u *CMDBImportTaskUpsert) ClearErrors() *CMDBImportTaskUpsert {
+	u.SetNull(cmdbimporttask.FieldErrors)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *CMDBImportTaskUpsert) SetStatus(v string) *CMDBImportTaskUpsert {
+	u.Set(cmdbimporttask.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsert) UpdateStatus() *CMDBImportTaskUpsert {
+	u.SetExcluded(cmdbimporttask.FieldStatus)
+	return u
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (u *CMDBImportTaskUpsert) SetErrorMessage(v string) *CMDBImportTaskUpsert {
+	u.Set(cmdbimporttask.FieldErrorMessage, v)
+	return u
+}
+
+// UpdateErrorMessage sets the "error_message" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsert) UpdateErrorMessage() *CMDBImportTaskUpsert {
+	u.SetExcluded(cmdbimporttask.FieldErrorMessage)
+	return u
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (u *CMDBImportTaskUpsert) ClearErrorMessage() *CMDBImportTaskUpsert {
+	u.SetNull(cmdbimporttask.FieldErrorMessage)
+	return u
+}
+
+// SetOperatorID sets the "operator_id" field.
+func (u *CMDBImportTaskUpsert) SetOperatorID(v int) *CMDBImportTaskUpsert {
+	u.Set(cmdbimporttask.FieldOperatorID, v)
+	return u
+}
+
+// UpdateOperatorID sets the "operator_id" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsert) UpdateOperatorID() *CMDBImportTaskUpsert {
+	u.SetExcluded(cmdbimporttask.FieldOperatorID)
+	return u
+}
+
+// AddOperatorID adds v to the "operator_id" field.
+func (u *CMDBImportTaskUpsert) AddOperatorID(v int) *CMDBImportTaskUpsert {
+	u.Add(cmdbimporttask.FieldOperatorID, v)
+	return u
+}
+
+// SetOperatorName sets the "operator_name" field.
+func (u *CMDBImportTaskUpsert) SetOperatorName(v string) *CMDBImportTaskUpsert {
+	u.Set(cmdbimporttask.FieldOperatorName, v)
+	return u
+}
+
+// UpdateOperatorName sets the "operator_name" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsert) UpdateOperatorName() *CMDBImportTaskUpsert {
+	u.SetExcluded(cmdbimporttask.FieldOperatorName)
+	return u
+}
+
+// ClearOperatorName clears the value of the "operator_name" field.
+func (u *CMDBImportTaskUpsert) ClearOperatorName() *CMDBImportTaskUpsert {
+	u.SetNull(cmdbimporttask.FieldOperatorName)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *CMDBImportTaskUpsert) SetTenantID(v int) *CMDBImportTaskUpsert {
+	u.Set(cmdbimporttask.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsert) UpdateTenantID() *CMDBImportTaskUpsert {
+	u.SetExcluded(cmdbimporttask.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *CMDBImportTaskUpsert) AddTenantID(v int) *CMDBImportTaskUpsert {
+	u.Add(cmdbimporttask.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *CMDBImportTaskUpsert) SetCreatedAt(v time.Time) *CMDBImportTaskUpsert {
+	u.Set(cmdbimporttask.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsert) UpdateCreatedAt() *CMDBImportTaskUpsert {
+	u.SetExcluded(cmdbimporttask.FieldCreatedAt)
+	return u
+}
+
+// SetStartedAt sets the "started_at" field.
+func (u *CMDBImportTaskUpsert) SetStartedAt(v time.Time) *CMDBImportTaskUpsert {
+	u.Set(cmdbimporttask.FieldStartedAt, v)
+	return u
+}
+
+// UpdateStartedAt sets the "started_at" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsert) UpdateStartedAt() *CMDBImportTaskUpsert {
+	u.SetExcluded(cmdbimporttask.FieldStartedAt)
+	return u
+}
+
+// ClearStartedAt clears the value of the "started_at" field.
+func (u *CMDBImportTaskUpsert) ClearStartedAt() *CMDBImportTaskUpsert {
+	u.SetNull(cmdbimporttask.FieldStartedAt)
+	return u
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (u *CMDBImportTaskUpsert) SetCompletedAt(v time.Time) *CMDBImportTaskUpsert {
+	u.Set(cmdbimporttask.FieldCompletedAt, v)
+	return u
+}
+
+// UpdateCompletedAt sets the "completed_at" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsert) UpdateCompletedAt() *CMDBImportTaskUpsert {
+	u.SetExcluded(cmdbimporttask.FieldCompletedAt)
+	return u
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (u *CMDBImportTaskUpsert) ClearCompletedAt() *CMDBImportTaskUpsert {
+	u.SetNull(cmdbimporttask.FieldCompletedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.CMDBImportTask.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *CMDBImportTaskUpsertOne) UpdateNewValues() *CMDBImportTaskUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.CMDBImportTask.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *CMDBImportTaskUpsertOne) Ignore() *CMDBImportTaskUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *CMDBImportTaskUpsertOne) DoNothing() *CMDBImportTaskUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the CMDBImportTaskCreate.OnConflict
+// documentation for more info.
+func (u *CMDBImportTaskUpsertOne) Update(set func(*CMDBImportTaskUpsert)) *CMDBImportTaskUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&CMDBImportTaskUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTaskID sets the "task_id" field.
+func (u *CMDBImportTaskUpsertOne) SetTaskID(v string) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetTaskID(v)
+	})
+}
+
+// UpdateTaskID sets the "task_id" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertOne) UpdateTaskID() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateTaskID()
+	})
+}
+
+// SetFileURL sets the "file_url" field.
+func (u *CMDBImportTaskUpsertOne) SetFileURL(v string) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetFileURL(v)
+	})
+}
+
+// UpdateFileURL sets the "file_url" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertOne) UpdateFileURL() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateFileURL()
+	})
+}
+
+// SetFileType sets the "file_type" field.
+func (u *CMDBImportTaskUpsertOne) SetFileType(v string) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetFileType(v)
+	})
+}
+
+// UpdateFileType sets the "file_type" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertOne) UpdateFileType() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateFileType()
+	})
+}
+
+// SetUpdateMode sets the "update_mode" field.
+func (u *CMDBImportTaskUpsertOne) SetUpdateMode(v string) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetUpdateMode(v)
+	})
+}
+
+// UpdateUpdateMode sets the "update_mode" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertOne) UpdateUpdateMode() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateUpdateMode()
+	})
+}
+
+// SetSheetName sets the "sheet_name" field.
+func (u *CMDBImportTaskUpsertOne) SetSheetName(v string) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetSheetName(v)
+	})
+}
+
+// UpdateSheetName sets the "sheet_name" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertOne) UpdateSheetName() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateSheetName()
+	})
+}
+
+// ClearSheetName clears the value of the "sheet_name" field.
+func (u *CMDBImportTaskUpsertOne) ClearSheetName() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.ClearSheetName()
+	})
+}
+
+// SetTotalCount sets the "total_count" field.
+func (u *CMDBImportTaskUpsertOne) SetTotalCount(v int) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetTotalCount(v)
+	})
+}
+
+// AddTotalCount adds v to the "total_count" field.
+func (u *CMDBImportTaskUpsertOne) AddTotalCount(v int) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.AddTotalCount(v)
+	})
+}
+
+// UpdateTotalCount sets the "total_count" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertOne) UpdateTotalCount() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateTotalCount()
+	})
+}
+
+// SetSuccessCount sets the "success_count" field.
+func (u *CMDBImportTaskUpsertOne) SetSuccessCount(v int) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetSuccessCount(v)
+	})
+}
+
+// AddSuccessCount adds v to the "success_count" field.
+func (u *CMDBImportTaskUpsertOne) AddSuccessCount(v int) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.AddSuccessCount(v)
+	})
+}
+
+// UpdateSuccessCount sets the "success_count" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertOne) UpdateSuccessCount() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateSuccessCount()
+	})
+}
+
+// SetFailedCount sets the "failed_count" field.
+func (u *CMDBImportTaskUpsertOne) SetFailedCount(v int) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetFailedCount(v)
+	})
+}
+
+// AddFailedCount adds v to the "failed_count" field.
+func (u *CMDBImportTaskUpsertOne) AddFailedCount(v int) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.AddFailedCount(v)
+	})
+}
+
+// UpdateFailedCount sets the "failed_count" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertOne) UpdateFailedCount() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateFailedCount()
+	})
+}
+
+// SetErrors sets the "errors" field.
+func (u *CMDBImportTaskUpsertOne) SetErrors(v []map[string]interface{}) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetErrors(v)
+	})
+}
+
+// UpdateErrors sets the "errors" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertOne) UpdateErrors() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateErrors()
+	})
+}
+
+// ClearErrors clears the value of the "errors" field.
+func (u *CMDBImportTaskUpsertOne) ClearErrors() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.ClearErrors()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *CMDBImportTaskUpsertOne) SetStatus(v string) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertOne) UpdateStatus() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (u *CMDBImportTaskUpsertOne) SetErrorMessage(v string) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetErrorMessage(v)
+	})
+}
+
+// UpdateErrorMessage sets the "error_message" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertOne) UpdateErrorMessage() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateErrorMessage()
+	})
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (u *CMDBImportTaskUpsertOne) ClearErrorMessage() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.ClearErrorMessage()
+	})
+}
+
+// SetOperatorID sets the "operator_id" field.
+func (u *CMDBImportTaskUpsertOne) SetOperatorID(v int) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetOperatorID(v)
+	})
+}
+
+// AddOperatorID adds v to the "operator_id" field.
+func (u *CMDBImportTaskUpsertOne) AddOperatorID(v int) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.AddOperatorID(v)
+	})
+}
+
+// UpdateOperatorID sets the "operator_id" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertOne) UpdateOperatorID() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateOperatorID()
+	})
+}
+
+// SetOperatorName sets the "operator_name" field.
+func (u *CMDBImportTaskUpsertOne) SetOperatorName(v string) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetOperatorName(v)
+	})
+}
+
+// UpdateOperatorName sets the "operator_name" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertOne) UpdateOperatorName() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateOperatorName()
+	})
+}
+
+// ClearOperatorName clears the value of the "operator_name" field.
+func (u *CMDBImportTaskUpsertOne) ClearOperatorName() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.ClearOperatorName()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *CMDBImportTaskUpsertOne) SetTenantID(v int) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *CMDBImportTaskUpsertOne) AddTenantID(v int) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertOne) UpdateTenantID() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *CMDBImportTaskUpsertOne) SetCreatedAt(v time.Time) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertOne) UpdateCreatedAt() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetStartedAt sets the "started_at" field.
+func (u *CMDBImportTaskUpsertOne) SetStartedAt(v time.Time) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetStartedAt(v)
+	})
+}
+
+// UpdateStartedAt sets the "started_at" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertOne) UpdateStartedAt() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateStartedAt()
+	})
+}
+
+// ClearStartedAt clears the value of the "started_at" field.
+func (u *CMDBImportTaskUpsertOne) ClearStartedAt() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.ClearStartedAt()
+	})
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (u *CMDBImportTaskUpsertOne) SetCompletedAt(v time.Time) *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetCompletedAt(v)
+	})
+}
+
+// UpdateCompletedAt sets the "completed_at" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertOne) UpdateCompletedAt() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateCompletedAt()
+	})
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (u *CMDBImportTaskUpsertOne) ClearCompletedAt() *CMDBImportTaskUpsertOne {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.ClearCompletedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *CMDBImportTaskUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for CMDBImportTaskCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *CMDBImportTaskUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *CMDBImportTaskUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *CMDBImportTaskUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // CMDBImportTaskCreateBulk is the builder for creating many CMDBImportTask entities in bulk.
 type CMDBImportTaskCreateBulk struct {
 	config
 	err      error
 	builders []*CMDBImportTaskCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the CMDBImportTask entities in the database.
@@ -455,6 +1166,7 @@ func (_c *CMDBImportTaskCreateBulk) Save(ctx context.Context) ([]*CMDBImportTask
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -505,6 +1217,425 @@ func (_c *CMDBImportTaskCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *CMDBImportTaskCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.CMDBImportTask.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.CMDBImportTaskUpsert) {
+//			SetTaskID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *CMDBImportTaskCreateBulk) OnConflict(opts ...sql.ConflictOption) *CMDBImportTaskUpsertBulk {
+	_c.conflict = opts
+	return &CMDBImportTaskUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.CMDBImportTask.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *CMDBImportTaskCreateBulk) OnConflictColumns(columns ...string) *CMDBImportTaskUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &CMDBImportTaskUpsertBulk{
+		create: _c,
+	}
+}
+
+// CMDBImportTaskUpsertBulk is the builder for "upsert"-ing
+// a bulk of CMDBImportTask nodes.
+type CMDBImportTaskUpsertBulk struct {
+	create *CMDBImportTaskCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.CMDBImportTask.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *CMDBImportTaskUpsertBulk) UpdateNewValues() *CMDBImportTaskUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.CMDBImportTask.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *CMDBImportTaskUpsertBulk) Ignore() *CMDBImportTaskUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *CMDBImportTaskUpsertBulk) DoNothing() *CMDBImportTaskUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the CMDBImportTaskCreateBulk.OnConflict
+// documentation for more info.
+func (u *CMDBImportTaskUpsertBulk) Update(set func(*CMDBImportTaskUpsert)) *CMDBImportTaskUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&CMDBImportTaskUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTaskID sets the "task_id" field.
+func (u *CMDBImportTaskUpsertBulk) SetTaskID(v string) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetTaskID(v)
+	})
+}
+
+// UpdateTaskID sets the "task_id" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertBulk) UpdateTaskID() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateTaskID()
+	})
+}
+
+// SetFileURL sets the "file_url" field.
+func (u *CMDBImportTaskUpsertBulk) SetFileURL(v string) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetFileURL(v)
+	})
+}
+
+// UpdateFileURL sets the "file_url" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertBulk) UpdateFileURL() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateFileURL()
+	})
+}
+
+// SetFileType sets the "file_type" field.
+func (u *CMDBImportTaskUpsertBulk) SetFileType(v string) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetFileType(v)
+	})
+}
+
+// UpdateFileType sets the "file_type" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertBulk) UpdateFileType() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateFileType()
+	})
+}
+
+// SetUpdateMode sets the "update_mode" field.
+func (u *CMDBImportTaskUpsertBulk) SetUpdateMode(v string) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetUpdateMode(v)
+	})
+}
+
+// UpdateUpdateMode sets the "update_mode" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertBulk) UpdateUpdateMode() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateUpdateMode()
+	})
+}
+
+// SetSheetName sets the "sheet_name" field.
+func (u *CMDBImportTaskUpsertBulk) SetSheetName(v string) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetSheetName(v)
+	})
+}
+
+// UpdateSheetName sets the "sheet_name" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertBulk) UpdateSheetName() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateSheetName()
+	})
+}
+
+// ClearSheetName clears the value of the "sheet_name" field.
+func (u *CMDBImportTaskUpsertBulk) ClearSheetName() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.ClearSheetName()
+	})
+}
+
+// SetTotalCount sets the "total_count" field.
+func (u *CMDBImportTaskUpsertBulk) SetTotalCount(v int) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetTotalCount(v)
+	})
+}
+
+// AddTotalCount adds v to the "total_count" field.
+func (u *CMDBImportTaskUpsertBulk) AddTotalCount(v int) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.AddTotalCount(v)
+	})
+}
+
+// UpdateTotalCount sets the "total_count" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertBulk) UpdateTotalCount() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateTotalCount()
+	})
+}
+
+// SetSuccessCount sets the "success_count" field.
+func (u *CMDBImportTaskUpsertBulk) SetSuccessCount(v int) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetSuccessCount(v)
+	})
+}
+
+// AddSuccessCount adds v to the "success_count" field.
+func (u *CMDBImportTaskUpsertBulk) AddSuccessCount(v int) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.AddSuccessCount(v)
+	})
+}
+
+// UpdateSuccessCount sets the "success_count" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertBulk) UpdateSuccessCount() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateSuccessCount()
+	})
+}
+
+// SetFailedCount sets the "failed_count" field.
+func (u *CMDBImportTaskUpsertBulk) SetFailedCount(v int) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetFailedCount(v)
+	})
+}
+
+// AddFailedCount adds v to the "failed_count" field.
+func (u *CMDBImportTaskUpsertBulk) AddFailedCount(v int) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.AddFailedCount(v)
+	})
+}
+
+// UpdateFailedCount sets the "failed_count" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertBulk) UpdateFailedCount() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateFailedCount()
+	})
+}
+
+// SetErrors sets the "errors" field.
+func (u *CMDBImportTaskUpsertBulk) SetErrors(v []map[string]interface{}) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetErrors(v)
+	})
+}
+
+// UpdateErrors sets the "errors" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertBulk) UpdateErrors() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateErrors()
+	})
+}
+
+// ClearErrors clears the value of the "errors" field.
+func (u *CMDBImportTaskUpsertBulk) ClearErrors() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.ClearErrors()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *CMDBImportTaskUpsertBulk) SetStatus(v string) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertBulk) UpdateStatus() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (u *CMDBImportTaskUpsertBulk) SetErrorMessage(v string) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetErrorMessage(v)
+	})
+}
+
+// UpdateErrorMessage sets the "error_message" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertBulk) UpdateErrorMessage() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateErrorMessage()
+	})
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (u *CMDBImportTaskUpsertBulk) ClearErrorMessage() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.ClearErrorMessage()
+	})
+}
+
+// SetOperatorID sets the "operator_id" field.
+func (u *CMDBImportTaskUpsertBulk) SetOperatorID(v int) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetOperatorID(v)
+	})
+}
+
+// AddOperatorID adds v to the "operator_id" field.
+func (u *CMDBImportTaskUpsertBulk) AddOperatorID(v int) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.AddOperatorID(v)
+	})
+}
+
+// UpdateOperatorID sets the "operator_id" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertBulk) UpdateOperatorID() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateOperatorID()
+	})
+}
+
+// SetOperatorName sets the "operator_name" field.
+func (u *CMDBImportTaskUpsertBulk) SetOperatorName(v string) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetOperatorName(v)
+	})
+}
+
+// UpdateOperatorName sets the "operator_name" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertBulk) UpdateOperatorName() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateOperatorName()
+	})
+}
+
+// ClearOperatorName clears the value of the "operator_name" field.
+func (u *CMDBImportTaskUpsertBulk) ClearOperatorName() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.ClearOperatorName()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *CMDBImportTaskUpsertBulk) SetTenantID(v int) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *CMDBImportTaskUpsertBulk) AddTenantID(v int) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertBulk) UpdateTenantID() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *CMDBImportTaskUpsertBulk) SetCreatedAt(v time.Time) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertBulk) UpdateCreatedAt() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetStartedAt sets the "started_at" field.
+func (u *CMDBImportTaskUpsertBulk) SetStartedAt(v time.Time) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetStartedAt(v)
+	})
+}
+
+// UpdateStartedAt sets the "started_at" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertBulk) UpdateStartedAt() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateStartedAt()
+	})
+}
+
+// ClearStartedAt clears the value of the "started_at" field.
+func (u *CMDBImportTaskUpsertBulk) ClearStartedAt() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.ClearStartedAt()
+	})
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (u *CMDBImportTaskUpsertBulk) SetCompletedAt(v time.Time) *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.SetCompletedAt(v)
+	})
+}
+
+// UpdateCompletedAt sets the "completed_at" field to the value that was provided on create.
+func (u *CMDBImportTaskUpsertBulk) UpdateCompletedAt() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.UpdateCompletedAt()
+	})
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (u *CMDBImportTaskUpsertBulk) ClearCompletedAt() *CMDBImportTaskUpsertBulk {
+	return u.Update(func(s *CMDBImportTaskUpsert) {
+		s.ClearCompletedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *CMDBImportTaskUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the CMDBImportTaskCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for CMDBImportTaskCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *CMDBImportTaskUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

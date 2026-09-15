@@ -127,7 +127,7 @@ export const LazyReportsPage = lazy(() =>
 );
 
 export const LazyAdminPage = lazy(() =>
-  import('@/app/(main)/admin/page').then(module => ({
+  import('@/app/(main)/admin/overview/page').then(module => ({
     default: module.default,
   }))
 );

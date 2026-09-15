@@ -2,11 +2,18 @@ package service
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
+	entsql "entgo.io/ent/dialect/sql"
+	"itsm-backend/authorization"
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/database"
 	"itsm-backend/ent"
+	"itsm-backend/ent/group"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
@@ -24,6 +31,10 @@ type bpmnActorIdentity struct {
 type bpmnParticipationResolver struct {
 	client        *ent.Client
 	groupResolver *bpmn.GroupResolver
+	directory     database.DirectorySnapshot
+	owningTx      *ent.Tx
+	// Populated only on a short-lived read projection resolver, never on the engine's mutation resolver.
+	readActor *bpmnActorIdentity
 }
 
 func newBPMNParticipationResolver(client *ent.Client, groupResolver *bpmn.GroupResolver) *bpmnParticipationResolver {
@@ -31,13 +42,93 @@ func newBPMNParticipationResolver(client *ent.Client, groupResolver *bpmn.GroupR
 }
 
 func (r *bpmnParticipationResolver) forClient(client *ent.Client) *bpmnParticipationResolver {
-	if client == nil {
+	if client == nil || (client == r.client && r.readActor != nil) {
 		return r
 	}
-	return newBPMNParticipationResolver(client, bpmn.NewGroupResolver(client))
+	clone := *r
+	clone.client = client
+	clone.readActor = nil
+	clone.groupResolver = bpmn.NewGroupResolver(client)
+	return &clone
 }
 
 func (r *bpmnParticipationResolver) resolveActor(ctx context.Context, scope BPMNAccessScope) (*bpmnActorIdentity, error) {
+	if r.readActor != nil && r.readActor.UserID == scope.UserID && r.readActor.TenantID == scope.TenantID {
+		return r.readActor, nil
+	}
+	if r.directory != nil {
+		if r.owningTx == nil {
+			tx, err := r.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+			if err != nil {
+				return nil, err
+			}
+			defer tx.Rollback()
+			clone := r.forClient(tx.Client())
+			clone.owningTx = tx
+			return clone.resolveActor(ctx, scope)
+		}
+		engine := &CustomProcessEngine{client: r.client, directory: r.directory, owningTx: r.owningTx}
+		actor, err := engine.resolveAssignmentUser(ctx, r.client, scope.UserID, scope.TenantID)
+		if err != nil {
+			return nil, err
+		}
+		identity := &bpmnActorIdentity{UserID: actor.ID, TenantID: scope.TenantID, UserTokens: map[string]struct{}{}, GroupTokens: map[string]struct{}{}}
+		addToken(identity.UserTokens, strconv.Itoa(actor.ID))
+		addToken(identity.UserTokens, actor.Username)
+		addToken(identity.UserTokens, actor.Email)
+		addToken(identity.GroupTokens, authorization.EffectiveSessionRole(actor))
+		roles, err := r.client.Role.Query().Where(role.TenantID(scope.TenantID), role.IsActive(true), func(s *entsql.Selector) {
+			edge := entsql.Table(role.UsersTable)
+			s.Where(entsql.In(s.C(role.FieldID), entsql.Select(edge.C("role_id")).From(edge).Where(entsql.EQ(edge.C("user_id"), actor.ID))))
+		}).All(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, assignedRole := range roles {
+			addToken(identity.GroupTokens, assignedRole.Code)
+		}
+		// Group.Members is users.group_members; User.Groups is a distinct
+		// edge and cannot establish this task's configured membership.
+		var directory *ent.Client
+		var closeDirectory func() error
+		if snapshot := taskReadSnapshot(ctx, r.client); snapshot != nil {
+			// Identity and group membership share the response-owned directory.
+			// It is closed once after projection, with close failures propagated.
+			directory = snapshot.directory
+		} else {
+			directory, closeDirectory, err = r.directory.Open(ctx, r.owningTx, scope.TenantID)
+		}
+		if err != nil || directory == nil || (taskReadSnapshot(ctx, r.client) == nil && closeDirectory == nil) {
+			if closeDirectory != nil {
+				err = errors.Join(err, closeDirectory())
+			}
+			return nil, errors.Join(errors.New("BPMN group directory unavailable"), err)
+		}
+		var memberships []struct {
+			GroupID *int `json:"group_members"`
+		}
+		err = directory.User.Query().Where(user.ID(actor.ID)).Select(group.MembersColumn).Scan(tenantctx.SystemContext(ctx, "bpmn:group-membership", "read authorized actor membership at owning snapshot"), &memberships)
+		var closeErr error
+		if closeDirectory != nil {
+			closeErr = closeDirectory()
+		}
+		if err != nil || closeErr != nil {
+			return nil, errors.Join(err, closeErr)
+		}
+		if len(memberships) != 1 {
+			return nil, fmt.Errorf("BPMN actor membership unavailable")
+		}
+		if memberships[0].GroupID != nil {
+			groups, err := r.client.Group.Query().Where(group.ID(*memberships[0].GroupID), group.TenantID(scope.TenantID)).All(ctx)
+			if err != nil {
+				return nil, err
+			}
+			for _, memberGroup := range groups {
+				addToken(identity.GroupTokens, memberGroup.Name)
+			}
+		}
+		return identity, nil
+	}
 	actor, err := r.client.User.Query().
 		Where(
 			user.ID(scope.UserID),
@@ -92,6 +183,23 @@ func (r *bpmnParticipationResolver) participatingInstanceIDs(ctx context.Context
 	if actor == nil || actor.UserID <= 0 || actor.TenantID <= 0 {
 		return nil, fmt.Errorf("invalid BPMN actor identity")
 	}
+	if taskReadSnapshot(ctx, r.client) == nil && r.owningTx == nil {
+		var ids []int
+		err := withBPMNTaskReadSnapshot(ctx, r.client, func(ctx context.Context, tx *ent.Tx) error {
+			resolver := r.forClient(tx.Client())
+			resolver.owningTx = tx
+			current, err := resolver.resolveActor(ctx, BPMNAccessScope{UserID: actor.UserID, TenantID: actor.TenantID})
+			if err != nil {
+				return err
+			}
+			ids, err = resolver.participatingInstanceIDs(ctx, current)
+			return err
+		})
+		if err != nil {
+			return nil, err
+		}
+		return ids, nil
+	}
 
 	prefilter := make([]predicate.ProcessTask, 0, len(actor.UserTokens)*2+len(actor.GroupTokens))
 	for token := range actor.UserTokens {
@@ -104,28 +212,50 @@ func (r *bpmnParticipationResolver) participatingInstanceIDs(ctx context.Context
 		prefilter = append(prefilter, processtask.CandidateGroupsContainsFold(token))
 	}
 
-	tasks, err := r.client.ProcessTask.Query().
-		Where(
-			processtask.TenantID(actor.TenantID),
-			processtask.Or(prefilter...),
-		).
-		Order(ent.Asc(processtask.FieldID)).
-		All(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("query BPMN participant tasks: %w", err)
-	}
+	prefilter = append(prefilter, processtask.AssigneeSourceNEQ(""))
 
-	seen := make(map[int]struct{}, len(tasks))
-	instanceIDs := make([]int, 0, len(tasks))
-	for _, task := range tasks {
-		if !r.matchesTask(task, actor) {
-			continue
+	query := r.client.ProcessTask.Query().Where(processtask.TenantID(actor.TenantID), processtask.Or(prefilter...))
+	seen := make(map[int]struct{})
+	instanceIDs := make([]int, 0)
+	lastID := 0
+	for {
+		tasks, err := query.Clone().Where(processtask.IDGT(lastID)).Order(ent.Asc(processtask.FieldID)).Limit(bpmnTaskReadBatchSize).All(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("query BPMN participant tasks: %w", err)
 		}
-		if _, exists := seen[task.ProcessInstanceID]; exists {
-			continue
+		if len(tasks) == 0 {
+			break
 		}
-		seen[task.ProcessInstanceID] = struct{}{}
-		instanceIDs = append(instanceIDs, task.ProcessInstanceID)
+		if view := taskReadSnapshot(ctx, r.client); view != nil {
+			view.resetChunk()
+			if err := view.loadTerminalAssignments(ctx, tasks); err != nil {
+				return nil, err
+			}
+		}
+		for _, task := range tasks {
+			if task.AssigneeSource != "" {
+				engine := &CustomProcessEngine{client: r.client, directory: r.directory, owningTx: r.owningTx}
+				scope := BPMNAccessScope{UserID: actor.UserID, TenantID: actor.TenantID}
+				if err := engine.authorizeBoundTask(ctx, r.client, task, scope, ""); err != nil {
+					if isBPMNTaskAccessDenial(err) {
+						continue
+					}
+					return nil, err
+				}
+			} else if !r.matchesTask(task, actor) {
+				continue
+			}
+			if _, exists := seen[task.ProcessInstanceID]; exists {
+				continue
+			}
+			seen[task.ProcessInstanceID] = struct{}{}
+			instanceIDs = append(instanceIDs, task.ProcessInstanceID)
+		}
+
+		lastID = tasks[len(tasks)-1].ID
+		if len(tasks) < bpmnTaskReadBatchSize {
+			break
+		}
 	}
 	if len(instanceIDs) == 0 {
 		return nil, nil

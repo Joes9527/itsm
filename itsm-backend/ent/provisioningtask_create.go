@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/provisioningtask"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +19,7 @@ type ProvisioningTaskCreate struct {
 	config
 	mutation *ProvisioningTaskMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTenantID sets the "tenant_id" field.
@@ -244,6 +246,7 @@ func (_c *ProvisioningTaskCreate) createSpec() (*ProvisioningTask, *sqlgraph.Cre
 		_node = &ProvisioningTask{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(provisioningtask.Table, sqlgraph.NewFieldSpec(provisioningtask.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(provisioningtask.FieldTenantID, field.TypeInt, value)
 		_node.TenantID = value
@@ -287,11 +290,459 @@ func (_c *ProvisioningTaskCreate) createSpec() (*ProvisioningTask, *sqlgraph.Cre
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProvisioningTask.Create().
+//		SetTenantID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProvisioningTaskUpsert) {
+//			SetTenantID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProvisioningTaskCreate) OnConflict(opts ...sql.ConflictOption) *ProvisioningTaskUpsertOne {
+	_c.conflict = opts
+	return &ProvisioningTaskUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProvisioningTask.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProvisioningTaskCreate) OnConflictColumns(columns ...string) *ProvisioningTaskUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProvisioningTaskUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ProvisioningTaskUpsertOne is the builder for "upsert"-ing
+	//  one ProvisioningTask node.
+	ProvisioningTaskUpsertOne struct {
+		create *ProvisioningTaskCreate
+	}
+
+	// ProvisioningTaskUpsert is the "OnConflict" setter.
+	ProvisioningTaskUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProvisioningTaskUpsert) SetTenantID(v int) *ProvisioningTaskUpsert {
+	u.Set(provisioningtask.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsert) UpdateTenantID() *ProvisioningTaskUpsert {
+	u.SetExcluded(provisioningtask.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProvisioningTaskUpsert) AddTenantID(v int) *ProvisioningTaskUpsert {
+	u.Add(provisioningtask.FieldTenantID, v)
+	return u
+}
+
+// SetServiceRequestID sets the "service_request_id" field.
+func (u *ProvisioningTaskUpsert) SetServiceRequestID(v int) *ProvisioningTaskUpsert {
+	u.Set(provisioningtask.FieldServiceRequestID, v)
+	return u
+}
+
+// UpdateServiceRequestID sets the "service_request_id" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsert) UpdateServiceRequestID() *ProvisioningTaskUpsert {
+	u.SetExcluded(provisioningtask.FieldServiceRequestID)
+	return u
+}
+
+// AddServiceRequestID adds v to the "service_request_id" field.
+func (u *ProvisioningTaskUpsert) AddServiceRequestID(v int) *ProvisioningTaskUpsert {
+	u.Add(provisioningtask.FieldServiceRequestID, v)
+	return u
+}
+
+// SetProvider sets the "provider" field.
+func (u *ProvisioningTaskUpsert) SetProvider(v string) *ProvisioningTaskUpsert {
+	u.Set(provisioningtask.FieldProvider, v)
+	return u
+}
+
+// UpdateProvider sets the "provider" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsert) UpdateProvider() *ProvisioningTaskUpsert {
+	u.SetExcluded(provisioningtask.FieldProvider)
+	return u
+}
+
+// SetResourceType sets the "resource_type" field.
+func (u *ProvisioningTaskUpsert) SetResourceType(v string) *ProvisioningTaskUpsert {
+	u.Set(provisioningtask.FieldResourceType, v)
+	return u
+}
+
+// UpdateResourceType sets the "resource_type" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsert) UpdateResourceType() *ProvisioningTaskUpsert {
+	u.SetExcluded(provisioningtask.FieldResourceType)
+	return u
+}
+
+// SetPayload sets the "payload" field.
+func (u *ProvisioningTaskUpsert) SetPayload(v map[string]interface{}) *ProvisioningTaskUpsert {
+	u.Set(provisioningtask.FieldPayload, v)
+	return u
+}
+
+// UpdatePayload sets the "payload" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsert) UpdatePayload() *ProvisioningTaskUpsert {
+	u.SetExcluded(provisioningtask.FieldPayload)
+	return u
+}
+
+// ClearPayload clears the value of the "payload" field.
+func (u *ProvisioningTaskUpsert) ClearPayload() *ProvisioningTaskUpsert {
+	u.SetNull(provisioningtask.FieldPayload)
+	return u
+}
+
+// SetResult sets the "result" field.
+func (u *ProvisioningTaskUpsert) SetResult(v map[string]interface{}) *ProvisioningTaskUpsert {
+	u.Set(provisioningtask.FieldResult, v)
+	return u
+}
+
+// UpdateResult sets the "result" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsert) UpdateResult() *ProvisioningTaskUpsert {
+	u.SetExcluded(provisioningtask.FieldResult)
+	return u
+}
+
+// ClearResult clears the value of the "result" field.
+func (u *ProvisioningTaskUpsert) ClearResult() *ProvisioningTaskUpsert {
+	u.SetNull(provisioningtask.FieldResult)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *ProvisioningTaskUpsert) SetStatus(v string) *ProvisioningTaskUpsert {
+	u.Set(provisioningtask.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsert) UpdateStatus() *ProvisioningTaskUpsert {
+	u.SetExcluded(provisioningtask.FieldStatus)
+	return u
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (u *ProvisioningTaskUpsert) SetErrorMessage(v string) *ProvisioningTaskUpsert {
+	u.Set(provisioningtask.FieldErrorMessage, v)
+	return u
+}
+
+// UpdateErrorMessage sets the "error_message" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsert) UpdateErrorMessage() *ProvisioningTaskUpsert {
+	u.SetExcluded(provisioningtask.FieldErrorMessage)
+	return u
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (u *ProvisioningTaskUpsert) ClearErrorMessage() *ProvisioningTaskUpsert {
+	u.SetNull(provisioningtask.FieldErrorMessage)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProvisioningTaskUpsert) SetCreatedAt(v time.Time) *ProvisioningTaskUpsert {
+	u.Set(provisioningtask.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsert) UpdateCreatedAt() *ProvisioningTaskUpsert {
+	u.SetExcluded(provisioningtask.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProvisioningTaskUpsert) SetUpdatedAt(v time.Time) *ProvisioningTaskUpsert {
+	u.Set(provisioningtask.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsert) UpdateUpdatedAt() *ProvisioningTaskUpsert {
+	u.SetExcluded(provisioningtask.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ProvisioningTask.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProvisioningTaskUpsertOne) UpdateNewValues() *ProvisioningTaskUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProvisioningTask.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ProvisioningTaskUpsertOne) Ignore() *ProvisioningTaskUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProvisioningTaskUpsertOne) DoNothing() *ProvisioningTaskUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProvisioningTaskCreate.OnConflict
+// documentation for more info.
+func (u *ProvisioningTaskUpsertOne) Update(set func(*ProvisioningTaskUpsert)) *ProvisioningTaskUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProvisioningTaskUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProvisioningTaskUpsertOne) SetTenantID(v int) *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProvisioningTaskUpsertOne) AddTenantID(v int) *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsertOne) UpdateTenantID() *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetServiceRequestID sets the "service_request_id" field.
+func (u *ProvisioningTaskUpsertOne) SetServiceRequestID(v int) *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.SetServiceRequestID(v)
+	})
+}
+
+// AddServiceRequestID adds v to the "service_request_id" field.
+func (u *ProvisioningTaskUpsertOne) AddServiceRequestID(v int) *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.AddServiceRequestID(v)
+	})
+}
+
+// UpdateServiceRequestID sets the "service_request_id" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsertOne) UpdateServiceRequestID() *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.UpdateServiceRequestID()
+	})
+}
+
+// SetProvider sets the "provider" field.
+func (u *ProvisioningTaskUpsertOne) SetProvider(v string) *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.SetProvider(v)
+	})
+}
+
+// UpdateProvider sets the "provider" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsertOne) UpdateProvider() *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.UpdateProvider()
+	})
+}
+
+// SetResourceType sets the "resource_type" field.
+func (u *ProvisioningTaskUpsertOne) SetResourceType(v string) *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.SetResourceType(v)
+	})
+}
+
+// UpdateResourceType sets the "resource_type" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsertOne) UpdateResourceType() *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.UpdateResourceType()
+	})
+}
+
+// SetPayload sets the "payload" field.
+func (u *ProvisioningTaskUpsertOne) SetPayload(v map[string]interface{}) *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.SetPayload(v)
+	})
+}
+
+// UpdatePayload sets the "payload" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsertOne) UpdatePayload() *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.UpdatePayload()
+	})
+}
+
+// ClearPayload clears the value of the "payload" field.
+func (u *ProvisioningTaskUpsertOne) ClearPayload() *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.ClearPayload()
+	})
+}
+
+// SetResult sets the "result" field.
+func (u *ProvisioningTaskUpsertOne) SetResult(v map[string]interface{}) *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.SetResult(v)
+	})
+}
+
+// UpdateResult sets the "result" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsertOne) UpdateResult() *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.UpdateResult()
+	})
+}
+
+// ClearResult clears the value of the "result" field.
+func (u *ProvisioningTaskUpsertOne) ClearResult() *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.ClearResult()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ProvisioningTaskUpsertOne) SetStatus(v string) *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsertOne) UpdateStatus() *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (u *ProvisioningTaskUpsertOne) SetErrorMessage(v string) *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.SetErrorMessage(v)
+	})
+}
+
+// UpdateErrorMessage sets the "error_message" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsertOne) UpdateErrorMessage() *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.UpdateErrorMessage()
+	})
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (u *ProvisioningTaskUpsertOne) ClearErrorMessage() *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.ClearErrorMessage()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProvisioningTaskUpsertOne) SetCreatedAt(v time.Time) *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsertOne) UpdateCreatedAt() *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProvisioningTaskUpsertOne) SetUpdatedAt(v time.Time) *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsertOne) UpdateUpdatedAt() *ProvisioningTaskUpsertOne {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProvisioningTaskUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProvisioningTaskCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProvisioningTaskUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ProvisioningTaskUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ProvisioningTaskUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ProvisioningTaskCreateBulk is the builder for creating many ProvisioningTask entities in bulk.
 type ProvisioningTaskCreateBulk struct {
 	config
 	err      error
 	builders []*ProvisioningTaskCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ProvisioningTask entities in the database.
@@ -321,6 +772,7 @@ func (_c *ProvisioningTaskCreateBulk) Save(ctx context.Context) ([]*Provisioning
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -371,6 +823,285 @@ func (_c *ProvisioningTaskCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ProvisioningTaskCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProvisioningTask.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProvisioningTaskUpsert) {
+//			SetTenantID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProvisioningTaskCreateBulk) OnConflict(opts ...sql.ConflictOption) *ProvisioningTaskUpsertBulk {
+	_c.conflict = opts
+	return &ProvisioningTaskUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProvisioningTask.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProvisioningTaskCreateBulk) OnConflictColumns(columns ...string) *ProvisioningTaskUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProvisioningTaskUpsertBulk{
+		create: _c,
+	}
+}
+
+// ProvisioningTaskUpsertBulk is the builder for "upsert"-ing
+// a bulk of ProvisioningTask nodes.
+type ProvisioningTaskUpsertBulk struct {
+	create *ProvisioningTaskCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ProvisioningTask.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProvisioningTaskUpsertBulk) UpdateNewValues() *ProvisioningTaskUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProvisioningTask.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ProvisioningTaskUpsertBulk) Ignore() *ProvisioningTaskUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProvisioningTaskUpsertBulk) DoNothing() *ProvisioningTaskUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProvisioningTaskCreateBulk.OnConflict
+// documentation for more info.
+func (u *ProvisioningTaskUpsertBulk) Update(set func(*ProvisioningTaskUpsert)) *ProvisioningTaskUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProvisioningTaskUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProvisioningTaskUpsertBulk) SetTenantID(v int) *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProvisioningTaskUpsertBulk) AddTenantID(v int) *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsertBulk) UpdateTenantID() *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetServiceRequestID sets the "service_request_id" field.
+func (u *ProvisioningTaskUpsertBulk) SetServiceRequestID(v int) *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.SetServiceRequestID(v)
+	})
+}
+
+// AddServiceRequestID adds v to the "service_request_id" field.
+func (u *ProvisioningTaskUpsertBulk) AddServiceRequestID(v int) *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.AddServiceRequestID(v)
+	})
+}
+
+// UpdateServiceRequestID sets the "service_request_id" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsertBulk) UpdateServiceRequestID() *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.UpdateServiceRequestID()
+	})
+}
+
+// SetProvider sets the "provider" field.
+func (u *ProvisioningTaskUpsertBulk) SetProvider(v string) *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.SetProvider(v)
+	})
+}
+
+// UpdateProvider sets the "provider" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsertBulk) UpdateProvider() *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.UpdateProvider()
+	})
+}
+
+// SetResourceType sets the "resource_type" field.
+func (u *ProvisioningTaskUpsertBulk) SetResourceType(v string) *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.SetResourceType(v)
+	})
+}
+
+// UpdateResourceType sets the "resource_type" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsertBulk) UpdateResourceType() *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.UpdateResourceType()
+	})
+}
+
+// SetPayload sets the "payload" field.
+func (u *ProvisioningTaskUpsertBulk) SetPayload(v map[string]interface{}) *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.SetPayload(v)
+	})
+}
+
+// UpdatePayload sets the "payload" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsertBulk) UpdatePayload() *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.UpdatePayload()
+	})
+}
+
+// ClearPayload clears the value of the "payload" field.
+func (u *ProvisioningTaskUpsertBulk) ClearPayload() *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.ClearPayload()
+	})
+}
+
+// SetResult sets the "result" field.
+func (u *ProvisioningTaskUpsertBulk) SetResult(v map[string]interface{}) *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.SetResult(v)
+	})
+}
+
+// UpdateResult sets the "result" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsertBulk) UpdateResult() *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.UpdateResult()
+	})
+}
+
+// ClearResult clears the value of the "result" field.
+func (u *ProvisioningTaskUpsertBulk) ClearResult() *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.ClearResult()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ProvisioningTaskUpsertBulk) SetStatus(v string) *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsertBulk) UpdateStatus() *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (u *ProvisioningTaskUpsertBulk) SetErrorMessage(v string) *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.SetErrorMessage(v)
+	})
+}
+
+// UpdateErrorMessage sets the "error_message" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsertBulk) UpdateErrorMessage() *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.UpdateErrorMessage()
+	})
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (u *ProvisioningTaskUpsertBulk) ClearErrorMessage() *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.ClearErrorMessage()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProvisioningTaskUpsertBulk) SetCreatedAt(v time.Time) *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsertBulk) UpdateCreatedAt() *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProvisioningTaskUpsertBulk) SetUpdatedAt(v time.Time) *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProvisioningTaskUpsertBulk) UpdateUpdatedAt() *ProvisioningTaskUpsertBulk {
+	return u.Update(func(s *ProvisioningTaskUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProvisioningTaskUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ProvisioningTaskCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProvisioningTaskCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProvisioningTaskUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

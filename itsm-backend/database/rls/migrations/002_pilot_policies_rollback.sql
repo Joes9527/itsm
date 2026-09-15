@@ -6,6 +6,7 @@
 -- =============================================================================
 
 DROP POLICY IF EXISTS tenant_isolation ON changes;
+DROP POLICY IF EXISTS tenant_isolation_changes ON changes;
 ALTER TABLE changes NO FORCE ROW LEVEL SECURITY;
 ALTER TABLE changes DISABLE ROW LEVEL SECURITY;
 
@@ -14,6 +15,7 @@ BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.tables
                WHERE table_schema = 'public' AND table_name = 'vectors') THEN
         EXECUTE 'DROP POLICY IF EXISTS tenant_isolation ON vectors';
+        EXECUTE 'DROP POLICY IF EXISTS tenant_isolation_vectors ON vectors';
         EXECUTE 'ALTER TABLE vectors NO FORCE ROW LEVEL SECURITY';
         EXECUTE 'ALTER TABLE vectors DISABLE ROW LEVEL SECURITY';
     END IF;

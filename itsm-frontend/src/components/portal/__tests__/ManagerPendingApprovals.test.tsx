@@ -1,18 +1,19 @@
 import { render, screen, waitFor } from '@/lib/test-utils';
+import { useAuthStore } from '@/lib/store/auth-store';
 import userEvent from '@testing-library/user-event';
 import { ManagerPendingApprovals } from '../ManagerPendingApprovals';
-import { WorkflowApi } from '@/lib/api/workflow-api';
+import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 
 // 回归覆盖：接口失败不能再用编造的假数据/假成功掩盖真实错误。
-jest.mock('@/lib/api/workflow-api', () => ({
-  WorkflowApi: {
-    listMyApprovalTasks: jest.fn(),
-    submitTaskDecision: jest.fn(),
+jest.mock('@/lib/api/bpmn-workflow-api', () => ({
+  BPMNWorkflowApi: {
+    listUserTasks: jest.fn(),
+    submitApprovalDecision: jest.fn(),
   },
 }));
 
-const mockListMyApprovalTasks = WorkflowApi.listMyApprovalTasks as jest.Mock;
-const mockSubmitTaskDecision = WorkflowApi.submitTaskDecision as jest.Mock;
+const mockListMyApprovalTasks = BPMNWorkflowApi.listUserTasks as jest.Mock;
+const mockSubmitTaskDecision = BPMNWorkflowApi.submitApprovalDecision as jest.Mock;
 
 const pendingTask = {
   id: 1,
@@ -22,7 +23,7 @@ const pendingTask = {
   taskType: 'user_task',
   status: 'created',
   processInstanceId: 10,
-  businessType: 'ticket',
+  businessType: 'generic',
   businessId: 42,
   taskPurpose: 'approval',
   taskVariables: {
@@ -36,9 +37,9 @@ function mockTaskPages(tasks: typeof pendingTask[]) {
   mockListMyApprovalTasks.mockImplementation(({ status }: { status?: string }) =>
     Promise.resolve({
       items: tasks.filter((task) => task.status === status),
-      total: tasks.length,
+      total: tasks.filter((task) => task.status === status).length,
       page: 1,
-      size: 4,
+      pageSize: 4,
     })
   );
 }
@@ -46,6 +47,7 @@ function mockTaskPages(tasks: typeof pendingTask[]) {
 describe('ManagerPendingApprovals', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    useAuthStore.setState({ isAuthenticated: true, user: { id: 1, tenantId: 2, permissions: [] } as never, currentTenant: { id: 2, status: 'active' } as never });
   });
 
   it('renders nothing when there are no pending approvals', async () => {
@@ -60,7 +62,7 @@ describe('ManagerPendingApprovals', () => {
     mockListMyApprovalTasks.mockRejectedValue(new Error('network error'));
     render(<ManagerPendingApprovals />);
 
-    expect(await screen.findByText('待办审批加载失败，请重试')).toBeInTheDocument();
+    expect(await screen.findByText(/待办审批加载失败，请重试/)).toBeInTheDocument();
     expect(screen.queryByText('李思源')).not.toBeInTheDocument();
   });
 
@@ -103,12 +105,12 @@ describe('ManagerPendingApprovals', () => {
     mockListMyApprovalTasks.mockImplementation(
       ({ status, page }: { status?: string; page?: number }) => {
         if (status !== 'created') {
-          return Promise.resolve({ items: [], total: 0, page: 1, size: 4 });
+          return Promise.resolve({ items: [], total: 0, page: 1, pageSize: 4 });
         }
         return Promise.resolve(
           page === 1
-            ? { items: fulfillmentTasks, total: 5, page: 1, size: 4 }
-            : { items: [pendingTask], total: 5, page: 2, size: 4 }
+            ? { items: fulfillmentTasks, total: 5, page: 1, pageSize: 4 }
+            : { items: [pendingTask], total: 5, page: 2, pageSize: 4 }
         );
       }
     );
@@ -136,7 +138,7 @@ describe('ManagerPendingApprovals', () => {
     await waitFor(() =>
       expect(mockSubmitTaskDecision).toHaveBeenCalledWith(1, {
         action: 'approve',
-      })
+      }, expect.any(Function))
     );
     // 失败后任务必须还在列表里，不能被静默移除或误报成功。
     expect(await screen.findByText('SSL-VPN 远程访问权限申请')).toBeInTheDocument();
@@ -144,7 +146,7 @@ describe('ManagerPendingApprovals', () => {
 
   it('removes the task only after the backend accepts the approval decision', async () => {
     mockTaskPages([pendingTask]);
-    mockSubmitTaskDecision.mockResolvedValue(undefined);
+    mockSubmitTaskDecision.mockImplementation(async () => { mockTaskPages([]); });
 
     render(<ManagerPendingApprovals />);
 
@@ -158,7 +160,7 @@ describe('ManagerPendingApprovals', () => {
 
   it('submits the rejection comment entered by the approver', async () => {
     mockTaskPages([pendingTask]);
-    mockSubmitTaskDecision.mockResolvedValue(undefined);
+    mockSubmitTaskDecision.mockImplementation(async () => { mockTaskPages([]); });
 
     render(<ManagerPendingApprovals />);
 
@@ -171,7 +173,14 @@ describe('ManagerPendingApprovals', () => {
       expect(mockSubmitTaskDecision).toHaveBeenCalledWith(1, {
         action: 'reject',
         comment: '缺少业务必要性说明',
-      })
+      }, expect.any(Function))
     );
   });
+});
+
+it('offers a full approval list from the bounded portal preview', async () => {
+  mockTaskPages([pendingTask]);
+  render(<ManagerPendingApprovals />);
+  expect(await screen.findByRole('link', { name: '查看全部审批' })).toHaveAttribute('href', '/approvals');
+  expect(screen.queryByText('部门负责人审批链')).not.toBeInTheDocument();
 });

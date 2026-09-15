@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/configurationitem"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type CIRelationshipCreate struct {
 	config
 	mutation *CIRelationshipMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTenantID sets the "tenant_id" field.
@@ -304,6 +306,7 @@ func (_c *CIRelationshipCreate) createSpec() (*CIRelationship, *sqlgraph.CreateS
 		_node = &CIRelationship{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(cirelationship.Table, sqlgraph.NewFieldSpec(cirelationship.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(cirelationship.FieldTenantID, field.TypeInt, value)
 		_node.TenantID = value
@@ -381,11 +384,485 @@ func (_c *CIRelationshipCreate) createSpec() (*CIRelationship, *sqlgraph.CreateS
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.CIRelationship.Create().
+//		SetTenantID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.CIRelationshipUpsert) {
+//			SetTenantID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *CIRelationshipCreate) OnConflict(opts ...sql.ConflictOption) *CIRelationshipUpsertOne {
+	_c.conflict = opts
+	return &CIRelationshipUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.CIRelationship.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *CIRelationshipCreate) OnConflictColumns(columns ...string) *CIRelationshipUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &CIRelationshipUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// CIRelationshipUpsertOne is the builder for "upsert"-ing
+	//  one CIRelationship node.
+	CIRelationshipUpsertOne struct {
+		create *CIRelationshipCreate
+	}
+
+	// CIRelationshipUpsert is the "OnConflict" setter.
+	CIRelationshipUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTenantID sets the "tenant_id" field.
+func (u *CIRelationshipUpsert) SetTenantID(v int) *CIRelationshipUpsert {
+	u.Set(cirelationship.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *CIRelationshipUpsert) UpdateTenantID() *CIRelationshipUpsert {
+	u.SetExcluded(cirelationship.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *CIRelationshipUpsert) AddTenantID(v int) *CIRelationshipUpsert {
+	u.Add(cirelationship.FieldTenantID, v)
+	return u
+}
+
+// SetRelationshipType sets the "relationship_type" field.
+func (u *CIRelationshipUpsert) SetRelationshipType(v string) *CIRelationshipUpsert {
+	u.Set(cirelationship.FieldRelationshipType, v)
+	return u
+}
+
+// UpdateRelationshipType sets the "relationship_type" field to the value that was provided on create.
+func (u *CIRelationshipUpsert) UpdateRelationshipType() *CIRelationshipUpsert {
+	u.SetExcluded(cirelationship.FieldRelationshipType)
+	return u
+}
+
+// SetSourceCiID sets the "source_ci_id" field.
+func (u *CIRelationshipUpsert) SetSourceCiID(v int) *CIRelationshipUpsert {
+	u.Set(cirelationship.FieldSourceCiID, v)
+	return u
+}
+
+// UpdateSourceCiID sets the "source_ci_id" field to the value that was provided on create.
+func (u *CIRelationshipUpsert) UpdateSourceCiID() *CIRelationshipUpsert {
+	u.SetExcluded(cirelationship.FieldSourceCiID)
+	return u
+}
+
+// SetTargetCiID sets the "target_ci_id" field.
+func (u *CIRelationshipUpsert) SetTargetCiID(v int) *CIRelationshipUpsert {
+	u.Set(cirelationship.FieldTargetCiID, v)
+	return u
+}
+
+// UpdateTargetCiID sets the "target_ci_id" field to the value that was provided on create.
+func (u *CIRelationshipUpsert) UpdateTargetCiID() *CIRelationshipUpsert {
+	u.SetExcluded(cirelationship.FieldTargetCiID)
+	return u
+}
+
+// SetStrength sets the "strength" field.
+func (u *CIRelationshipUpsert) SetStrength(v cirelationship.Strength) *CIRelationshipUpsert {
+	u.Set(cirelationship.FieldStrength, v)
+	return u
+}
+
+// UpdateStrength sets the "strength" field to the value that was provided on create.
+func (u *CIRelationshipUpsert) UpdateStrength() *CIRelationshipUpsert {
+	u.SetExcluded(cirelationship.FieldStrength)
+	return u
+}
+
+// SetImpactLevel sets the "impact_level" field.
+func (u *CIRelationshipUpsert) SetImpactLevel(v cirelationship.ImpactLevel) *CIRelationshipUpsert {
+	u.Set(cirelationship.FieldImpactLevel, v)
+	return u
+}
+
+// UpdateImpactLevel sets the "impact_level" field to the value that was provided on create.
+func (u *CIRelationshipUpsert) UpdateImpactLevel() *CIRelationshipUpsert {
+	u.SetExcluded(cirelationship.FieldImpactLevel)
+	return u
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *CIRelationshipUpsert) SetIsActive(v bool) *CIRelationshipUpsert {
+	u.Set(cirelationship.FieldIsActive, v)
+	return u
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *CIRelationshipUpsert) UpdateIsActive() *CIRelationshipUpsert {
+	u.SetExcluded(cirelationship.FieldIsActive)
+	return u
+}
+
+// SetIsDiscovered sets the "is_discovered" field.
+func (u *CIRelationshipUpsert) SetIsDiscovered(v bool) *CIRelationshipUpsert {
+	u.Set(cirelationship.FieldIsDiscovered, v)
+	return u
+}
+
+// UpdateIsDiscovered sets the "is_discovered" field to the value that was provided on create.
+func (u *CIRelationshipUpsert) UpdateIsDiscovered() *CIRelationshipUpsert {
+	u.SetExcluded(cirelationship.FieldIsDiscovered)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *CIRelationshipUpsert) SetDescription(v string) *CIRelationshipUpsert {
+	u.Set(cirelationship.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *CIRelationshipUpsert) UpdateDescription() *CIRelationshipUpsert {
+	u.SetExcluded(cirelationship.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *CIRelationshipUpsert) ClearDescription() *CIRelationshipUpsert {
+	u.SetNull(cirelationship.FieldDescription)
+	return u
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *CIRelationshipUpsert) SetMetadata(v map[string]interface{}) *CIRelationshipUpsert {
+	u.Set(cirelationship.FieldMetadata, v)
+	return u
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *CIRelationshipUpsert) UpdateMetadata() *CIRelationshipUpsert {
+	u.SetExcluded(cirelationship.FieldMetadata)
+	return u
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *CIRelationshipUpsert) ClearMetadata() *CIRelationshipUpsert {
+	u.SetNull(cirelationship.FieldMetadata)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *CIRelationshipUpsert) SetCreatedAt(v time.Time) *CIRelationshipUpsert {
+	u.Set(cirelationship.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *CIRelationshipUpsert) UpdateCreatedAt() *CIRelationshipUpsert {
+	u.SetExcluded(cirelationship.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *CIRelationshipUpsert) SetUpdatedAt(v time.Time) *CIRelationshipUpsert {
+	u.Set(cirelationship.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *CIRelationshipUpsert) UpdateUpdatedAt() *CIRelationshipUpsert {
+	u.SetExcluded(cirelationship.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.CIRelationship.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *CIRelationshipUpsertOne) UpdateNewValues() *CIRelationshipUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.CIRelationship.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *CIRelationshipUpsertOne) Ignore() *CIRelationshipUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *CIRelationshipUpsertOne) DoNothing() *CIRelationshipUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the CIRelationshipCreate.OnConflict
+// documentation for more info.
+func (u *CIRelationshipUpsertOne) Update(set func(*CIRelationshipUpsert)) *CIRelationshipUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&CIRelationshipUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *CIRelationshipUpsertOne) SetTenantID(v int) *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *CIRelationshipUpsertOne) AddTenantID(v int) *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *CIRelationshipUpsertOne) UpdateTenantID() *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetRelationshipType sets the "relationship_type" field.
+func (u *CIRelationshipUpsertOne) SetRelationshipType(v string) *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetRelationshipType(v)
+	})
+}
+
+// UpdateRelationshipType sets the "relationship_type" field to the value that was provided on create.
+func (u *CIRelationshipUpsertOne) UpdateRelationshipType() *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateRelationshipType()
+	})
+}
+
+// SetSourceCiID sets the "source_ci_id" field.
+func (u *CIRelationshipUpsertOne) SetSourceCiID(v int) *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetSourceCiID(v)
+	})
+}
+
+// UpdateSourceCiID sets the "source_ci_id" field to the value that was provided on create.
+func (u *CIRelationshipUpsertOne) UpdateSourceCiID() *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateSourceCiID()
+	})
+}
+
+// SetTargetCiID sets the "target_ci_id" field.
+func (u *CIRelationshipUpsertOne) SetTargetCiID(v int) *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetTargetCiID(v)
+	})
+}
+
+// UpdateTargetCiID sets the "target_ci_id" field to the value that was provided on create.
+func (u *CIRelationshipUpsertOne) UpdateTargetCiID() *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateTargetCiID()
+	})
+}
+
+// SetStrength sets the "strength" field.
+func (u *CIRelationshipUpsertOne) SetStrength(v cirelationship.Strength) *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetStrength(v)
+	})
+}
+
+// UpdateStrength sets the "strength" field to the value that was provided on create.
+func (u *CIRelationshipUpsertOne) UpdateStrength() *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateStrength()
+	})
+}
+
+// SetImpactLevel sets the "impact_level" field.
+func (u *CIRelationshipUpsertOne) SetImpactLevel(v cirelationship.ImpactLevel) *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetImpactLevel(v)
+	})
+}
+
+// UpdateImpactLevel sets the "impact_level" field to the value that was provided on create.
+func (u *CIRelationshipUpsertOne) UpdateImpactLevel() *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateImpactLevel()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *CIRelationshipUpsertOne) SetIsActive(v bool) *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *CIRelationshipUpsertOne) UpdateIsActive() *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetIsDiscovered sets the "is_discovered" field.
+func (u *CIRelationshipUpsertOne) SetIsDiscovered(v bool) *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetIsDiscovered(v)
+	})
+}
+
+// UpdateIsDiscovered sets the "is_discovered" field to the value that was provided on create.
+func (u *CIRelationshipUpsertOne) UpdateIsDiscovered() *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateIsDiscovered()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *CIRelationshipUpsertOne) SetDescription(v string) *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *CIRelationshipUpsertOne) UpdateDescription() *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *CIRelationshipUpsertOne) ClearDescription() *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *CIRelationshipUpsertOne) SetMetadata(v map[string]interface{}) *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *CIRelationshipUpsertOne) UpdateMetadata() *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *CIRelationshipUpsertOne) ClearMetadata() *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *CIRelationshipUpsertOne) SetCreatedAt(v time.Time) *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *CIRelationshipUpsertOne) UpdateCreatedAt() *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *CIRelationshipUpsertOne) SetUpdatedAt(v time.Time) *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *CIRelationshipUpsertOne) UpdateUpdatedAt() *CIRelationshipUpsertOne {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *CIRelationshipUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for CIRelationshipCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *CIRelationshipUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *CIRelationshipUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *CIRelationshipUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // CIRelationshipCreateBulk is the builder for creating many CIRelationship entities in bulk.
 type CIRelationshipCreateBulk struct {
 	config
 	err      error
 	builders []*CIRelationshipCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the CIRelationship entities in the database.
@@ -415,6 +892,7 @@ func (_c *CIRelationshipCreateBulk) Save(ctx context.Context) ([]*CIRelationship
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -465,6 +943,299 @@ func (_c *CIRelationshipCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *CIRelationshipCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.CIRelationship.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.CIRelationshipUpsert) {
+//			SetTenantID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *CIRelationshipCreateBulk) OnConflict(opts ...sql.ConflictOption) *CIRelationshipUpsertBulk {
+	_c.conflict = opts
+	return &CIRelationshipUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.CIRelationship.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *CIRelationshipCreateBulk) OnConflictColumns(columns ...string) *CIRelationshipUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &CIRelationshipUpsertBulk{
+		create: _c,
+	}
+}
+
+// CIRelationshipUpsertBulk is the builder for "upsert"-ing
+// a bulk of CIRelationship nodes.
+type CIRelationshipUpsertBulk struct {
+	create *CIRelationshipCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.CIRelationship.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *CIRelationshipUpsertBulk) UpdateNewValues() *CIRelationshipUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.CIRelationship.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *CIRelationshipUpsertBulk) Ignore() *CIRelationshipUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *CIRelationshipUpsertBulk) DoNothing() *CIRelationshipUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the CIRelationshipCreateBulk.OnConflict
+// documentation for more info.
+func (u *CIRelationshipUpsertBulk) Update(set func(*CIRelationshipUpsert)) *CIRelationshipUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&CIRelationshipUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *CIRelationshipUpsertBulk) SetTenantID(v int) *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *CIRelationshipUpsertBulk) AddTenantID(v int) *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *CIRelationshipUpsertBulk) UpdateTenantID() *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetRelationshipType sets the "relationship_type" field.
+func (u *CIRelationshipUpsertBulk) SetRelationshipType(v string) *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetRelationshipType(v)
+	})
+}
+
+// UpdateRelationshipType sets the "relationship_type" field to the value that was provided on create.
+func (u *CIRelationshipUpsertBulk) UpdateRelationshipType() *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateRelationshipType()
+	})
+}
+
+// SetSourceCiID sets the "source_ci_id" field.
+func (u *CIRelationshipUpsertBulk) SetSourceCiID(v int) *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetSourceCiID(v)
+	})
+}
+
+// UpdateSourceCiID sets the "source_ci_id" field to the value that was provided on create.
+func (u *CIRelationshipUpsertBulk) UpdateSourceCiID() *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateSourceCiID()
+	})
+}
+
+// SetTargetCiID sets the "target_ci_id" field.
+func (u *CIRelationshipUpsertBulk) SetTargetCiID(v int) *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetTargetCiID(v)
+	})
+}
+
+// UpdateTargetCiID sets the "target_ci_id" field to the value that was provided on create.
+func (u *CIRelationshipUpsertBulk) UpdateTargetCiID() *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateTargetCiID()
+	})
+}
+
+// SetStrength sets the "strength" field.
+func (u *CIRelationshipUpsertBulk) SetStrength(v cirelationship.Strength) *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetStrength(v)
+	})
+}
+
+// UpdateStrength sets the "strength" field to the value that was provided on create.
+func (u *CIRelationshipUpsertBulk) UpdateStrength() *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateStrength()
+	})
+}
+
+// SetImpactLevel sets the "impact_level" field.
+func (u *CIRelationshipUpsertBulk) SetImpactLevel(v cirelationship.ImpactLevel) *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetImpactLevel(v)
+	})
+}
+
+// UpdateImpactLevel sets the "impact_level" field to the value that was provided on create.
+func (u *CIRelationshipUpsertBulk) UpdateImpactLevel() *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateImpactLevel()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *CIRelationshipUpsertBulk) SetIsActive(v bool) *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *CIRelationshipUpsertBulk) UpdateIsActive() *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetIsDiscovered sets the "is_discovered" field.
+func (u *CIRelationshipUpsertBulk) SetIsDiscovered(v bool) *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetIsDiscovered(v)
+	})
+}
+
+// UpdateIsDiscovered sets the "is_discovered" field to the value that was provided on create.
+func (u *CIRelationshipUpsertBulk) UpdateIsDiscovered() *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateIsDiscovered()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *CIRelationshipUpsertBulk) SetDescription(v string) *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *CIRelationshipUpsertBulk) UpdateDescription() *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *CIRelationshipUpsertBulk) ClearDescription() *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *CIRelationshipUpsertBulk) SetMetadata(v map[string]interface{}) *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *CIRelationshipUpsertBulk) UpdateMetadata() *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *CIRelationshipUpsertBulk) ClearMetadata() *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *CIRelationshipUpsertBulk) SetCreatedAt(v time.Time) *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *CIRelationshipUpsertBulk) UpdateCreatedAt() *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *CIRelationshipUpsertBulk) SetUpdatedAt(v time.Time) *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *CIRelationshipUpsertBulk) UpdateUpdatedAt() *CIRelationshipUpsertBulk {
+	return u.Update(func(s *CIRelationshipUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *CIRelationshipUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the CIRelationshipCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for CIRelationshipCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *CIRelationshipUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

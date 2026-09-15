@@ -1,17 +1,19 @@
+import { verifyCreationAndReplay } from './creation.test-utils';
 import { expect, test } from '@playwright/test';
-import { loginAndReturn } from './auth-utils';
+import { DEFAULT_LOGIN, loginAndReturn } from './auth-utils';
 
 test.setTimeout(60_000);
 
 test.describe('变更管理页面功能', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAndReturn(page, 'admin', 'admin123', '/changes');
+    await loginAndReturn(page, DEFAULT_LOGIN, '/changes');
   });
 
   test('管理员可以从列表进入变更详情', async ({ page }) => {
     await expect(page.getByRole('heading', { name: '变更管理' })).toBeVisible({ timeout: 15_000 });
     const detailLink = page.getByRole('link', { name: /查看变更/ }).first();
-    if (await detailLink.isVisible().catch(() => false)) {
+    await expect(detailLink).toBeVisible();
+    {
       await detailLink.click();
       await expect(page).toHaveURL(/\/changes\/\d+$/);
     }
@@ -36,11 +38,10 @@ test.describe('变更管理页面功能', () => {
 
     const createResponse = page.waitForResponse(
       response =>
-        response.url().endsWith('/api/v1/changes') &&
-        response.request().method() === 'POST'
+        response.url().endsWith('/api/v1/changes') && response.request().method() === 'POST'
     );
     await page.getByTestId('change-submit-button').click();
-    expect((await createResponse).ok()).toBeTruthy();
+    await verifyCreationAndReplay(page, await createResponse);
     await expect(page).toHaveURL(/\/changes$/);
     await expect(page.getByText(title)).toBeVisible();
   });

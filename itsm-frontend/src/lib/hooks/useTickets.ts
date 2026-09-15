@@ -6,6 +6,7 @@ import type {
   Ticket,
   TicketStatus,
   TicketPriority,
+  UpdateTicketRequest,
   TicketType} from '../../lib/services/ticket-service';
 import {
   ticketService
@@ -57,8 +58,7 @@ export interface UseTicketsReturn {
   updatePagination: (page: number, pageSize: number) => void;
 
   // Ticket operations
-  createTicket: (ticketData: unknown) => Promise<void>;
-  updateTicket: (id: number, ticketData: unknown) => Promise<void>;
+  updateTicket: (id: number, ticketData: UpdateTicketRequest) => Promise<void>;
   deleteTicket: (id: number) => Promise<void>;
   batchDeleteTickets: (ids: number[]) => Promise<void>;
 }
@@ -174,25 +174,9 @@ export const useTickets = (): UseTicketsReturn => {
     setFetchTrigger(n => n + 1);
   }, []);
 
-  // Create ticket
-  const createTicket = useCallback(
-    async (ticketData: any) => {
-      try {
-        await ticketService.createTicket(ticketData);
-        message.success('Ticket created successfully');
-        await refreshData();
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to create ticket';
-        message.error(errorMessage);
-        throw err;
-      }
-    },
-    [refreshData]
-  );
-
   // Update ticket
   const updateTicket = useCallback(
-    async (id: number, ticketData: any) => {
+    async (id: number, ticketData: UpdateTicketRequest) => {
       try {
         await ticketService.updateTicket(id, ticketData);
         message.success('Ticket updated successfully');
@@ -260,7 +244,6 @@ export const useTickets = (): UseTicketsReturn => {
     refreshData,
     updateFilters,
     updatePagination,
-    createTicket,
     updateTicket,
     deleteTicket,
     batchDeleteTickets,

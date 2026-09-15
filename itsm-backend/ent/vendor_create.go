@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/vendor"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -20,6 +21,7 @@ type VendorCreate struct {
 	config
 	mutation *VendorMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -292,6 +294,7 @@ func (_c *VendorCreate) createSpec() (*Vendor, *sqlgraph.CreateSpec) {
 		_node = &Vendor{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(vendor.Table, sqlgraph.NewFieldSpec(vendor.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(vendor.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -379,11 +382,498 @@ func (_c *VendorCreate) createSpec() (*Vendor, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Vendor.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.VendorUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *VendorCreate) OnConflict(opts ...sql.ConflictOption) *VendorUpsertOne {
+	_c.conflict = opts
+	return &VendorUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Vendor.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *VendorCreate) OnConflictColumns(columns ...string) *VendorUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &VendorUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// VendorUpsertOne is the builder for "upsert"-ing
+	//  one Vendor node.
+	VendorUpsertOne struct {
+		create *VendorCreate
+	}
+
+	// VendorUpsert is the "OnConflict" setter.
+	VendorUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *VendorUpsert) SetName(v string) *VendorUpsert {
+	u.Set(vendor.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *VendorUpsert) UpdateName() *VendorUpsert {
+	u.SetExcluded(vendor.FieldName)
+	return u
+}
+
+// SetCode sets the "code" field.
+func (u *VendorUpsert) SetCode(v string) *VendorUpsert {
+	u.Set(vendor.FieldCode, v)
+	return u
+}
+
+// UpdateCode sets the "code" field to the value that was provided on create.
+func (u *VendorUpsert) UpdateCode() *VendorUpsert {
+	u.SetExcluded(vendor.FieldCode)
+	return u
+}
+
+// SetVendorType sets the "vendor_type" field.
+func (u *VendorUpsert) SetVendorType(v string) *VendorUpsert {
+	u.Set(vendor.FieldVendorType, v)
+	return u
+}
+
+// UpdateVendorType sets the "vendor_type" field to the value that was provided on create.
+func (u *VendorUpsert) UpdateVendorType() *VendorUpsert {
+	u.SetExcluded(vendor.FieldVendorType)
+	return u
+}
+
+// SetContactName sets the "contact_name" field.
+func (u *VendorUpsert) SetContactName(v string) *VendorUpsert {
+	u.Set(vendor.FieldContactName, v)
+	return u
+}
+
+// UpdateContactName sets the "contact_name" field to the value that was provided on create.
+func (u *VendorUpsert) UpdateContactName() *VendorUpsert {
+	u.SetExcluded(vendor.FieldContactName)
+	return u
+}
+
+// SetContactEmail sets the "contact_email" field.
+func (u *VendorUpsert) SetContactEmail(v string) *VendorUpsert {
+	u.Set(vendor.FieldContactEmail, v)
+	return u
+}
+
+// UpdateContactEmail sets the "contact_email" field to the value that was provided on create.
+func (u *VendorUpsert) UpdateContactEmail() *VendorUpsert {
+	u.SetExcluded(vendor.FieldContactEmail)
+	return u
+}
+
+// SetContactPhone sets the "contact_phone" field.
+func (u *VendorUpsert) SetContactPhone(v string) *VendorUpsert {
+	u.Set(vendor.FieldContactPhone, v)
+	return u
+}
+
+// UpdateContactPhone sets the "contact_phone" field to the value that was provided on create.
+func (u *VendorUpsert) UpdateContactPhone() *VendorUpsert {
+	u.SetExcluded(vendor.FieldContactPhone)
+	return u
+}
+
+// SetAddress sets the "address" field.
+func (u *VendorUpsert) SetAddress(v string) *VendorUpsert {
+	u.Set(vendor.FieldAddress, v)
+	return u
+}
+
+// UpdateAddress sets the "address" field to the value that was provided on create.
+func (u *VendorUpsert) UpdateAddress() *VendorUpsert {
+	u.SetExcluded(vendor.FieldAddress)
+	return u
+}
+
+// SetWebsite sets the "website" field.
+func (u *VendorUpsert) SetWebsite(v string) *VendorUpsert {
+	u.Set(vendor.FieldWebsite, v)
+	return u
+}
+
+// UpdateWebsite sets the "website" field to the value that was provided on create.
+func (u *VendorUpsert) UpdateWebsite() *VendorUpsert {
+	u.SetExcluded(vendor.FieldWebsite)
+	return u
+}
+
+// SetRating sets the "rating" field.
+func (u *VendorUpsert) SetRating(v float64) *VendorUpsert {
+	u.Set(vendor.FieldRating, v)
+	return u
+}
+
+// UpdateRating sets the "rating" field to the value that was provided on create.
+func (u *VendorUpsert) UpdateRating() *VendorUpsert {
+	u.SetExcluded(vendor.FieldRating)
+	return u
+}
+
+// AddRating adds v to the "rating" field.
+func (u *VendorUpsert) AddRating(v float64) *VendorUpsert {
+	u.Add(vendor.FieldRating, v)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *VendorUpsert) SetStatus(v string) *VendorUpsert {
+	u.Set(vendor.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *VendorUpsert) UpdateStatus() *VendorUpsert {
+	u.SetExcluded(vendor.FieldStatus)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *VendorUpsert) SetTenantID(v int) *VendorUpsert {
+	u.Set(vendor.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *VendorUpsert) UpdateTenantID() *VendorUpsert {
+	u.SetExcluded(vendor.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *VendorUpsert) AddTenantID(v int) *VendorUpsert {
+	u.Add(vendor.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *VendorUpsert) SetCreatedAt(v time.Time) *VendorUpsert {
+	u.Set(vendor.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *VendorUpsert) UpdateCreatedAt() *VendorUpsert {
+	u.SetExcluded(vendor.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *VendorUpsert) SetUpdatedAt(v time.Time) *VendorUpsert {
+	u.Set(vendor.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *VendorUpsert) UpdateUpdatedAt() *VendorUpsert {
+	u.SetExcluded(vendor.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.Vendor.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *VendorUpsertOne) UpdateNewValues() *VendorUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Vendor.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *VendorUpsertOne) Ignore() *VendorUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *VendorUpsertOne) DoNothing() *VendorUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the VendorCreate.OnConflict
+// documentation for more info.
+func (u *VendorUpsertOne) Update(set func(*VendorUpsert)) *VendorUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&VendorUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *VendorUpsertOne) SetName(v string) *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *VendorUpsertOne) UpdateName() *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetCode sets the "code" field.
+func (u *VendorUpsertOne) SetCode(v string) *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetCode(v)
+	})
+}
+
+// UpdateCode sets the "code" field to the value that was provided on create.
+func (u *VendorUpsertOne) UpdateCode() *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateCode()
+	})
+}
+
+// SetVendorType sets the "vendor_type" field.
+func (u *VendorUpsertOne) SetVendorType(v string) *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetVendorType(v)
+	})
+}
+
+// UpdateVendorType sets the "vendor_type" field to the value that was provided on create.
+func (u *VendorUpsertOne) UpdateVendorType() *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateVendorType()
+	})
+}
+
+// SetContactName sets the "contact_name" field.
+func (u *VendorUpsertOne) SetContactName(v string) *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetContactName(v)
+	})
+}
+
+// UpdateContactName sets the "contact_name" field to the value that was provided on create.
+func (u *VendorUpsertOne) UpdateContactName() *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateContactName()
+	})
+}
+
+// SetContactEmail sets the "contact_email" field.
+func (u *VendorUpsertOne) SetContactEmail(v string) *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetContactEmail(v)
+	})
+}
+
+// UpdateContactEmail sets the "contact_email" field to the value that was provided on create.
+func (u *VendorUpsertOne) UpdateContactEmail() *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateContactEmail()
+	})
+}
+
+// SetContactPhone sets the "contact_phone" field.
+func (u *VendorUpsertOne) SetContactPhone(v string) *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetContactPhone(v)
+	})
+}
+
+// UpdateContactPhone sets the "contact_phone" field to the value that was provided on create.
+func (u *VendorUpsertOne) UpdateContactPhone() *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateContactPhone()
+	})
+}
+
+// SetAddress sets the "address" field.
+func (u *VendorUpsertOne) SetAddress(v string) *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetAddress(v)
+	})
+}
+
+// UpdateAddress sets the "address" field to the value that was provided on create.
+func (u *VendorUpsertOne) UpdateAddress() *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateAddress()
+	})
+}
+
+// SetWebsite sets the "website" field.
+func (u *VendorUpsertOne) SetWebsite(v string) *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetWebsite(v)
+	})
+}
+
+// UpdateWebsite sets the "website" field to the value that was provided on create.
+func (u *VendorUpsertOne) UpdateWebsite() *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateWebsite()
+	})
+}
+
+// SetRating sets the "rating" field.
+func (u *VendorUpsertOne) SetRating(v float64) *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetRating(v)
+	})
+}
+
+// AddRating adds v to the "rating" field.
+func (u *VendorUpsertOne) AddRating(v float64) *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.AddRating(v)
+	})
+}
+
+// UpdateRating sets the "rating" field to the value that was provided on create.
+func (u *VendorUpsertOne) UpdateRating() *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateRating()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *VendorUpsertOne) SetStatus(v string) *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *VendorUpsertOne) UpdateStatus() *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *VendorUpsertOne) SetTenantID(v int) *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *VendorUpsertOne) AddTenantID(v int) *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *VendorUpsertOne) UpdateTenantID() *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *VendorUpsertOne) SetCreatedAt(v time.Time) *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *VendorUpsertOne) UpdateCreatedAt() *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *VendorUpsertOne) SetUpdatedAt(v time.Time) *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *VendorUpsertOne) UpdateUpdatedAt() *VendorUpsertOne {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *VendorUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for VendorCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *VendorUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *VendorUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *VendorUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // VendorCreateBulk is the builder for creating many Vendor entities in bulk.
 type VendorCreateBulk struct {
 	config
 	err      error
 	builders []*VendorCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the Vendor entities in the database.
@@ -413,6 +903,7 @@ func (_c *VendorCreateBulk) Save(ctx context.Context) ([]*Vendor, error) {
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -463,6 +954,306 @@ func (_c *VendorCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *VendorCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Vendor.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.VendorUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *VendorCreateBulk) OnConflict(opts ...sql.ConflictOption) *VendorUpsertBulk {
+	_c.conflict = opts
+	return &VendorUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Vendor.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *VendorCreateBulk) OnConflictColumns(columns ...string) *VendorUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &VendorUpsertBulk{
+		create: _c,
+	}
+}
+
+// VendorUpsertBulk is the builder for "upsert"-ing
+// a bulk of Vendor nodes.
+type VendorUpsertBulk struct {
+	create *VendorCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.Vendor.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *VendorUpsertBulk) UpdateNewValues() *VendorUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Vendor.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *VendorUpsertBulk) Ignore() *VendorUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *VendorUpsertBulk) DoNothing() *VendorUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the VendorCreateBulk.OnConflict
+// documentation for more info.
+func (u *VendorUpsertBulk) Update(set func(*VendorUpsert)) *VendorUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&VendorUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *VendorUpsertBulk) SetName(v string) *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *VendorUpsertBulk) UpdateName() *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetCode sets the "code" field.
+func (u *VendorUpsertBulk) SetCode(v string) *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetCode(v)
+	})
+}
+
+// UpdateCode sets the "code" field to the value that was provided on create.
+func (u *VendorUpsertBulk) UpdateCode() *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateCode()
+	})
+}
+
+// SetVendorType sets the "vendor_type" field.
+func (u *VendorUpsertBulk) SetVendorType(v string) *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetVendorType(v)
+	})
+}
+
+// UpdateVendorType sets the "vendor_type" field to the value that was provided on create.
+func (u *VendorUpsertBulk) UpdateVendorType() *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateVendorType()
+	})
+}
+
+// SetContactName sets the "contact_name" field.
+func (u *VendorUpsertBulk) SetContactName(v string) *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetContactName(v)
+	})
+}
+
+// UpdateContactName sets the "contact_name" field to the value that was provided on create.
+func (u *VendorUpsertBulk) UpdateContactName() *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateContactName()
+	})
+}
+
+// SetContactEmail sets the "contact_email" field.
+func (u *VendorUpsertBulk) SetContactEmail(v string) *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetContactEmail(v)
+	})
+}
+
+// UpdateContactEmail sets the "contact_email" field to the value that was provided on create.
+func (u *VendorUpsertBulk) UpdateContactEmail() *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateContactEmail()
+	})
+}
+
+// SetContactPhone sets the "contact_phone" field.
+func (u *VendorUpsertBulk) SetContactPhone(v string) *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetContactPhone(v)
+	})
+}
+
+// UpdateContactPhone sets the "contact_phone" field to the value that was provided on create.
+func (u *VendorUpsertBulk) UpdateContactPhone() *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateContactPhone()
+	})
+}
+
+// SetAddress sets the "address" field.
+func (u *VendorUpsertBulk) SetAddress(v string) *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetAddress(v)
+	})
+}
+
+// UpdateAddress sets the "address" field to the value that was provided on create.
+func (u *VendorUpsertBulk) UpdateAddress() *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateAddress()
+	})
+}
+
+// SetWebsite sets the "website" field.
+func (u *VendorUpsertBulk) SetWebsite(v string) *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetWebsite(v)
+	})
+}
+
+// UpdateWebsite sets the "website" field to the value that was provided on create.
+func (u *VendorUpsertBulk) UpdateWebsite() *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateWebsite()
+	})
+}
+
+// SetRating sets the "rating" field.
+func (u *VendorUpsertBulk) SetRating(v float64) *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetRating(v)
+	})
+}
+
+// AddRating adds v to the "rating" field.
+func (u *VendorUpsertBulk) AddRating(v float64) *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.AddRating(v)
+	})
+}
+
+// UpdateRating sets the "rating" field to the value that was provided on create.
+func (u *VendorUpsertBulk) UpdateRating() *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateRating()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *VendorUpsertBulk) SetStatus(v string) *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *VendorUpsertBulk) UpdateStatus() *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *VendorUpsertBulk) SetTenantID(v int) *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *VendorUpsertBulk) AddTenantID(v int) *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *VendorUpsertBulk) UpdateTenantID() *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *VendorUpsertBulk) SetCreatedAt(v time.Time) *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *VendorUpsertBulk) UpdateCreatedAt() *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *VendorUpsertBulk) SetUpdatedAt(v time.Time) *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *VendorUpsertBulk) UpdateUpdatedAt() *VendorUpsertBulk {
+	return u.Update(func(s *VendorUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *VendorUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the VendorCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for VendorCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *VendorUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

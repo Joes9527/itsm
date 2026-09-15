@@ -227,7 +227,6 @@ INSERT INTO menus (name, path, icon, parent_id, permission_code, sort_order, ten
 SELECT '审计日志', '/workflow/audit', 'ClipboardList', id, 'workflow:read', 126, 1, true, true FROM menus WHERE path = '/workflow';
 
 INSERT INTO menus (name, path, icon, parent_id, permission_code, sort_order, tenant_id, is_visible, is_enabled)
-SELECT '自动化规则', '/workflow/automation', 'Zap', id, 'workflow:write', 127, 1, true, true FROM menus WHERE path = '/workflow';
 
 -- ============================================
 -- 14. AI助手子菜单
@@ -308,7 +307,7 @@ SELECT '发布历史', '/releases/history', 'History', id, 'release:read', 215, 
 -- 19. 系统管理子菜单
 -- ============================================
 INSERT INTO menus (name, path, icon, parent_id, permission_code, sort_order, tenant_id, is_visible, is_enabled)
-SELECT '系统概览', '/admin/overview', 'LayoutDashboard', id, 'admin:write', 301, 1, true, true FROM menus WHERE path = '/admin';
+SELECT '系统概览', '/admin/overview', 'LayoutDashboard', id, 'system:read', 301, 1, true, true FROM menus WHERE path = '/admin';
 
 INSERT INTO menus (name, path, icon, parent_id, permission_code, sort_order, tenant_id, is_visible, is_enabled)
 SELECT '用户管理', '/admin/users', 'Users', id, 'user:read', 302, 1, true, true FROM menus WHERE path = '/admin';
@@ -338,9 +337,6 @@ INSERT INTO menus (name, path, icon, parent_id, permission_code, sort_order, ten
 SELECT '自动化规则', '/admin/tickets/automation', 'Zap', id, 'ticket:manage', 310, 1, true, true FROM menus WHERE path = '/admin';
 
 INSERT INTO menus (name, path, icon, parent_id, permission_code, sort_order, tenant_id, is_visible, is_enabled)
-SELECT '审批管理', '/admin/approvals', 'GitMerge', id, 'approval:manage', 311, 1, true, true FROM menus WHERE path = '/admin';
-
-INSERT INTO menus (name, path, icon, parent_id, permission_code, sort_order, tenant_id, is_visible, is_enabled)
 SELECT '审批链', '/admin/approval-chains', 'Link', id, 'approval:manage', 312, 1, true, true FROM menus WHERE path = '/admin';
 
 INSERT INTO menus (name, path, icon, parent_id, permission_code, sort_order, tenant_id, is_visible, is_enabled)
@@ -362,7 +358,7 @@ SELECT '连接器市场', '/admin/connectors', 'Plug', id, 'connector:read', 317
 -- 20. 独立功能页（无父菜单）
 -- ============================================
 INSERT INTO menus (name, path, icon, parent_id, permission_code, sort_order, tenant_id, is_visible, is_enabled) VALUES
-('待我审批', '/approvals/pending', 'CheckCircle', NULL, 'approval:read', 400, 1, true, true),
+('待我审批', '/approvals', 'CheckCircle', NULL, 'task:read', 400, 1, true, true),
 ('通知中心', '/notifications', 'Bell', NULL, '', 410, 1, true, true),
 ('个人设置', '/profile', 'User', NULL, '', 420, 1, true, true);
 

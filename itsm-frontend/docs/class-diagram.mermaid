@@ -1,12 +1,10 @@
 classDiagram
     class AuthService {
-        -static getCookie(name: string): string | null
         -static makeRequest~T~(endpoint: string, options: RequestInit): Promise~T~
-        +static login(username: string, password: string, tenantCode?: string, rememberMe?: boolean): Promise~boolean~
+        +static login(username: string, password: string, tenantCode?: string): Promise~boolean~
         +static register(params: RegisterParams): Promise~boolean~
         +static logout(): void
         +static isAuthenticated(): boolean
-        +static refreshToken(): Promise~boolean~
         +static forgotPassword(email: string): Promise~boolean~
         +static resetPassword(params: ResetParams): Promise~boolean~
     }

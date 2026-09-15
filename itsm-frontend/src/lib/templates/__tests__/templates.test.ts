@@ -139,44 +139,6 @@ describe('Templates - API Service', () => {
   });
 });
 
-describe('Templates - Store', () => {
-  it('should export createSimpleStore', async () => {
-    jest.resetModules();
-    jest.doMock('zustand', () => ({
-      create: () => {
-        const fn = () => ({});
-        fn.getState = () => ({});
-        fn.setState = () => {};
-        fn.subscribe = () => () => {};
-        return fn;
-      },
-    }));
-    jest.doMock('zustand/middleware', () => ({
-      persist: (fn: any) => fn,
-    }));
-    const { createSimpleStore } = await import('../store');
-    expect(createSimpleStore).toBeDefined();
-  });
-
-  it('should export useAuthStore', async () => {
-    jest.resetModules();
-    jest.doMock('zustand', () => ({
-      create: () => {
-        const fn = () => ({});
-        fn.getState = () => ({});
-        fn.setState = () => {};
-        fn.subscribe = () => () => {};
-        return fn;
-      },
-    }));
-    jest.doMock('zustand/middleware', () => ({
-      persist: (fn: any) => fn,
-    }));
-    const { useAuthStore } = await import('../store');
-    expect(useAuthStore).toBeDefined();
-  });
-});
-
 describe('Templates - Query', () => {
   it('should export useList', async () => {
     const { useList } = await import('../query');

@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/cloudservice"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type CloudServiceCreate struct {
 	config
 	mutation *CloudServiceMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetParentID sets the "parent_id" field.
@@ -337,6 +339,7 @@ func (_c *CloudServiceCreate) createSpec() (*CloudService, *sqlgraph.CreateSpec)
 		_node = &CloudService{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(cloudservice.Table, sqlgraph.NewFieldSpec(cloudservice.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Provider(); ok {
 		_spec.SetField(cloudservice.FieldProvider, field.TypeString, value)
 		_node.Provider = value
@@ -441,11 +444,563 @@ func (_c *CloudServiceCreate) createSpec() (*CloudService, *sqlgraph.CreateSpec)
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.CloudService.Create().
+//		SetParentID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.CloudServiceUpsert) {
+//			SetParentID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *CloudServiceCreate) OnConflict(opts ...sql.ConflictOption) *CloudServiceUpsertOne {
+	_c.conflict = opts
+	return &CloudServiceUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.CloudService.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *CloudServiceCreate) OnConflictColumns(columns ...string) *CloudServiceUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &CloudServiceUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// CloudServiceUpsertOne is the builder for "upsert"-ing
+	//  one CloudService node.
+	CloudServiceUpsertOne struct {
+		create *CloudServiceCreate
+	}
+
+	// CloudServiceUpsert is the "OnConflict" setter.
+	CloudServiceUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetParentID sets the "parent_id" field.
+func (u *CloudServiceUpsert) SetParentID(v int) *CloudServiceUpsert {
+	u.Set(cloudservice.FieldParentID, v)
+	return u
+}
+
+// UpdateParentID sets the "parent_id" field to the value that was provided on create.
+func (u *CloudServiceUpsert) UpdateParentID() *CloudServiceUpsert {
+	u.SetExcluded(cloudservice.FieldParentID)
+	return u
+}
+
+// ClearParentID clears the value of the "parent_id" field.
+func (u *CloudServiceUpsert) ClearParentID() *CloudServiceUpsert {
+	u.SetNull(cloudservice.FieldParentID)
+	return u
+}
+
+// SetProvider sets the "provider" field.
+func (u *CloudServiceUpsert) SetProvider(v string) *CloudServiceUpsert {
+	u.Set(cloudservice.FieldProvider, v)
+	return u
+}
+
+// UpdateProvider sets the "provider" field to the value that was provided on create.
+func (u *CloudServiceUpsert) UpdateProvider() *CloudServiceUpsert {
+	u.SetExcluded(cloudservice.FieldProvider)
+	return u
+}
+
+// SetCategory sets the "category" field.
+func (u *CloudServiceUpsert) SetCategory(v string) *CloudServiceUpsert {
+	u.Set(cloudservice.FieldCategory, v)
+	return u
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *CloudServiceUpsert) UpdateCategory() *CloudServiceUpsert {
+	u.SetExcluded(cloudservice.FieldCategory)
+	return u
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *CloudServiceUpsert) ClearCategory() *CloudServiceUpsert {
+	u.SetNull(cloudservice.FieldCategory)
+	return u
+}
+
+// SetServiceCode sets the "service_code" field.
+func (u *CloudServiceUpsert) SetServiceCode(v string) *CloudServiceUpsert {
+	u.Set(cloudservice.FieldServiceCode, v)
+	return u
+}
+
+// UpdateServiceCode sets the "service_code" field to the value that was provided on create.
+func (u *CloudServiceUpsert) UpdateServiceCode() *CloudServiceUpsert {
+	u.SetExcluded(cloudservice.FieldServiceCode)
+	return u
+}
+
+// SetServiceName sets the "service_name" field.
+func (u *CloudServiceUpsert) SetServiceName(v string) *CloudServiceUpsert {
+	u.Set(cloudservice.FieldServiceName, v)
+	return u
+}
+
+// UpdateServiceName sets the "service_name" field to the value that was provided on create.
+func (u *CloudServiceUpsert) UpdateServiceName() *CloudServiceUpsert {
+	u.SetExcluded(cloudservice.FieldServiceName)
+	return u
+}
+
+// SetResourceTypeCode sets the "resource_type_code" field.
+func (u *CloudServiceUpsert) SetResourceTypeCode(v string) *CloudServiceUpsert {
+	u.Set(cloudservice.FieldResourceTypeCode, v)
+	return u
+}
+
+// UpdateResourceTypeCode sets the "resource_type_code" field to the value that was provided on create.
+func (u *CloudServiceUpsert) UpdateResourceTypeCode() *CloudServiceUpsert {
+	u.SetExcluded(cloudservice.FieldResourceTypeCode)
+	return u
+}
+
+// SetResourceTypeName sets the "resource_type_name" field.
+func (u *CloudServiceUpsert) SetResourceTypeName(v string) *CloudServiceUpsert {
+	u.Set(cloudservice.FieldResourceTypeName, v)
+	return u
+}
+
+// UpdateResourceTypeName sets the "resource_type_name" field to the value that was provided on create.
+func (u *CloudServiceUpsert) UpdateResourceTypeName() *CloudServiceUpsert {
+	u.SetExcluded(cloudservice.FieldResourceTypeName)
+	return u
+}
+
+// SetAPIVersion sets the "api_version" field.
+func (u *CloudServiceUpsert) SetAPIVersion(v string) *CloudServiceUpsert {
+	u.Set(cloudservice.FieldAPIVersion, v)
+	return u
+}
+
+// UpdateAPIVersion sets the "api_version" field to the value that was provided on create.
+func (u *CloudServiceUpsert) UpdateAPIVersion() *CloudServiceUpsert {
+	u.SetExcluded(cloudservice.FieldAPIVersion)
+	return u
+}
+
+// ClearAPIVersion clears the value of the "api_version" field.
+func (u *CloudServiceUpsert) ClearAPIVersion() *CloudServiceUpsert {
+	u.SetNull(cloudservice.FieldAPIVersion)
+	return u
+}
+
+// SetAttributeSchema sets the "attribute_schema" field.
+func (u *CloudServiceUpsert) SetAttributeSchema(v map[string]interface{}) *CloudServiceUpsert {
+	u.Set(cloudservice.FieldAttributeSchema, v)
+	return u
+}
+
+// UpdateAttributeSchema sets the "attribute_schema" field to the value that was provided on create.
+func (u *CloudServiceUpsert) UpdateAttributeSchema() *CloudServiceUpsert {
+	u.SetExcluded(cloudservice.FieldAttributeSchema)
+	return u
+}
+
+// ClearAttributeSchema clears the value of the "attribute_schema" field.
+func (u *CloudServiceUpsert) ClearAttributeSchema() *CloudServiceUpsert {
+	u.SetNull(cloudservice.FieldAttributeSchema)
+	return u
+}
+
+// SetIsSystem sets the "is_system" field.
+func (u *CloudServiceUpsert) SetIsSystem(v bool) *CloudServiceUpsert {
+	u.Set(cloudservice.FieldIsSystem, v)
+	return u
+}
+
+// UpdateIsSystem sets the "is_system" field to the value that was provided on create.
+func (u *CloudServiceUpsert) UpdateIsSystem() *CloudServiceUpsert {
+	u.SetExcluded(cloudservice.FieldIsSystem)
+	return u
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *CloudServiceUpsert) SetIsActive(v bool) *CloudServiceUpsert {
+	u.Set(cloudservice.FieldIsActive, v)
+	return u
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *CloudServiceUpsert) UpdateIsActive() *CloudServiceUpsert {
+	u.SetExcluded(cloudservice.FieldIsActive)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *CloudServiceUpsert) SetTenantID(v int) *CloudServiceUpsert {
+	u.Set(cloudservice.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *CloudServiceUpsert) UpdateTenantID() *CloudServiceUpsert {
+	u.SetExcluded(cloudservice.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *CloudServiceUpsert) AddTenantID(v int) *CloudServiceUpsert {
+	u.Add(cloudservice.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *CloudServiceUpsert) SetCreatedAt(v time.Time) *CloudServiceUpsert {
+	u.Set(cloudservice.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *CloudServiceUpsert) UpdateCreatedAt() *CloudServiceUpsert {
+	u.SetExcluded(cloudservice.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *CloudServiceUpsert) SetUpdatedAt(v time.Time) *CloudServiceUpsert {
+	u.Set(cloudservice.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *CloudServiceUpsert) UpdateUpdatedAt() *CloudServiceUpsert {
+	u.SetExcluded(cloudservice.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.CloudService.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *CloudServiceUpsertOne) UpdateNewValues() *CloudServiceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.CloudService.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *CloudServiceUpsertOne) Ignore() *CloudServiceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *CloudServiceUpsertOne) DoNothing() *CloudServiceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the CloudServiceCreate.OnConflict
+// documentation for more info.
+func (u *CloudServiceUpsertOne) Update(set func(*CloudServiceUpsert)) *CloudServiceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&CloudServiceUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetParentID sets the "parent_id" field.
+func (u *CloudServiceUpsertOne) SetParentID(v int) *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetParentID(v)
+	})
+}
+
+// UpdateParentID sets the "parent_id" field to the value that was provided on create.
+func (u *CloudServiceUpsertOne) UpdateParentID() *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateParentID()
+	})
+}
+
+// ClearParentID clears the value of the "parent_id" field.
+func (u *CloudServiceUpsertOne) ClearParentID() *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.ClearParentID()
+	})
+}
+
+// SetProvider sets the "provider" field.
+func (u *CloudServiceUpsertOne) SetProvider(v string) *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetProvider(v)
+	})
+}
+
+// UpdateProvider sets the "provider" field to the value that was provided on create.
+func (u *CloudServiceUpsertOne) UpdateProvider() *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateProvider()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *CloudServiceUpsertOne) SetCategory(v string) *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *CloudServiceUpsertOne) UpdateCategory() *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *CloudServiceUpsertOne) ClearCategory() *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetServiceCode sets the "service_code" field.
+func (u *CloudServiceUpsertOne) SetServiceCode(v string) *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetServiceCode(v)
+	})
+}
+
+// UpdateServiceCode sets the "service_code" field to the value that was provided on create.
+func (u *CloudServiceUpsertOne) UpdateServiceCode() *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateServiceCode()
+	})
+}
+
+// SetServiceName sets the "service_name" field.
+func (u *CloudServiceUpsertOne) SetServiceName(v string) *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetServiceName(v)
+	})
+}
+
+// UpdateServiceName sets the "service_name" field to the value that was provided on create.
+func (u *CloudServiceUpsertOne) UpdateServiceName() *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateServiceName()
+	})
+}
+
+// SetResourceTypeCode sets the "resource_type_code" field.
+func (u *CloudServiceUpsertOne) SetResourceTypeCode(v string) *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetResourceTypeCode(v)
+	})
+}
+
+// UpdateResourceTypeCode sets the "resource_type_code" field to the value that was provided on create.
+func (u *CloudServiceUpsertOne) UpdateResourceTypeCode() *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateResourceTypeCode()
+	})
+}
+
+// SetResourceTypeName sets the "resource_type_name" field.
+func (u *CloudServiceUpsertOne) SetResourceTypeName(v string) *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetResourceTypeName(v)
+	})
+}
+
+// UpdateResourceTypeName sets the "resource_type_name" field to the value that was provided on create.
+func (u *CloudServiceUpsertOne) UpdateResourceTypeName() *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateResourceTypeName()
+	})
+}
+
+// SetAPIVersion sets the "api_version" field.
+func (u *CloudServiceUpsertOne) SetAPIVersion(v string) *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetAPIVersion(v)
+	})
+}
+
+// UpdateAPIVersion sets the "api_version" field to the value that was provided on create.
+func (u *CloudServiceUpsertOne) UpdateAPIVersion() *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateAPIVersion()
+	})
+}
+
+// ClearAPIVersion clears the value of the "api_version" field.
+func (u *CloudServiceUpsertOne) ClearAPIVersion() *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.ClearAPIVersion()
+	})
+}
+
+// SetAttributeSchema sets the "attribute_schema" field.
+func (u *CloudServiceUpsertOne) SetAttributeSchema(v map[string]interface{}) *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetAttributeSchema(v)
+	})
+}
+
+// UpdateAttributeSchema sets the "attribute_schema" field to the value that was provided on create.
+func (u *CloudServiceUpsertOne) UpdateAttributeSchema() *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateAttributeSchema()
+	})
+}
+
+// ClearAttributeSchema clears the value of the "attribute_schema" field.
+func (u *CloudServiceUpsertOne) ClearAttributeSchema() *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.ClearAttributeSchema()
+	})
+}
+
+// SetIsSystem sets the "is_system" field.
+func (u *CloudServiceUpsertOne) SetIsSystem(v bool) *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetIsSystem(v)
+	})
+}
+
+// UpdateIsSystem sets the "is_system" field to the value that was provided on create.
+func (u *CloudServiceUpsertOne) UpdateIsSystem() *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateIsSystem()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *CloudServiceUpsertOne) SetIsActive(v bool) *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *CloudServiceUpsertOne) UpdateIsActive() *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *CloudServiceUpsertOne) SetTenantID(v int) *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *CloudServiceUpsertOne) AddTenantID(v int) *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *CloudServiceUpsertOne) UpdateTenantID() *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *CloudServiceUpsertOne) SetCreatedAt(v time.Time) *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *CloudServiceUpsertOne) UpdateCreatedAt() *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *CloudServiceUpsertOne) SetUpdatedAt(v time.Time) *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *CloudServiceUpsertOne) UpdateUpdatedAt() *CloudServiceUpsertOne {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *CloudServiceUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for CloudServiceCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *CloudServiceUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *CloudServiceUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *CloudServiceUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // CloudServiceCreateBulk is the builder for creating many CloudService entities in bulk.
 type CloudServiceCreateBulk struct {
 	config
 	err      error
 	builders []*CloudServiceCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the CloudService entities in the database.
@@ -475,6 +1030,7 @@ func (_c *CloudServiceCreateBulk) Save(ctx context.Context) ([]*CloudService, er
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -525,6 +1081,341 @@ func (_c *CloudServiceCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *CloudServiceCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.CloudService.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.CloudServiceUpsert) {
+//			SetParentID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *CloudServiceCreateBulk) OnConflict(opts ...sql.ConflictOption) *CloudServiceUpsertBulk {
+	_c.conflict = opts
+	return &CloudServiceUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.CloudService.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *CloudServiceCreateBulk) OnConflictColumns(columns ...string) *CloudServiceUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &CloudServiceUpsertBulk{
+		create: _c,
+	}
+}
+
+// CloudServiceUpsertBulk is the builder for "upsert"-ing
+// a bulk of CloudService nodes.
+type CloudServiceUpsertBulk struct {
+	create *CloudServiceCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.CloudService.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *CloudServiceUpsertBulk) UpdateNewValues() *CloudServiceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.CloudService.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *CloudServiceUpsertBulk) Ignore() *CloudServiceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *CloudServiceUpsertBulk) DoNothing() *CloudServiceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the CloudServiceCreateBulk.OnConflict
+// documentation for more info.
+func (u *CloudServiceUpsertBulk) Update(set func(*CloudServiceUpsert)) *CloudServiceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&CloudServiceUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetParentID sets the "parent_id" field.
+func (u *CloudServiceUpsertBulk) SetParentID(v int) *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetParentID(v)
+	})
+}
+
+// UpdateParentID sets the "parent_id" field to the value that was provided on create.
+func (u *CloudServiceUpsertBulk) UpdateParentID() *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateParentID()
+	})
+}
+
+// ClearParentID clears the value of the "parent_id" field.
+func (u *CloudServiceUpsertBulk) ClearParentID() *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.ClearParentID()
+	})
+}
+
+// SetProvider sets the "provider" field.
+func (u *CloudServiceUpsertBulk) SetProvider(v string) *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetProvider(v)
+	})
+}
+
+// UpdateProvider sets the "provider" field to the value that was provided on create.
+func (u *CloudServiceUpsertBulk) UpdateProvider() *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateProvider()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *CloudServiceUpsertBulk) SetCategory(v string) *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *CloudServiceUpsertBulk) UpdateCategory() *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *CloudServiceUpsertBulk) ClearCategory() *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetServiceCode sets the "service_code" field.
+func (u *CloudServiceUpsertBulk) SetServiceCode(v string) *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetServiceCode(v)
+	})
+}
+
+// UpdateServiceCode sets the "service_code" field to the value that was provided on create.
+func (u *CloudServiceUpsertBulk) UpdateServiceCode() *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateServiceCode()
+	})
+}
+
+// SetServiceName sets the "service_name" field.
+func (u *CloudServiceUpsertBulk) SetServiceName(v string) *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetServiceName(v)
+	})
+}
+
+// UpdateServiceName sets the "service_name" field to the value that was provided on create.
+func (u *CloudServiceUpsertBulk) UpdateServiceName() *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateServiceName()
+	})
+}
+
+// SetResourceTypeCode sets the "resource_type_code" field.
+func (u *CloudServiceUpsertBulk) SetResourceTypeCode(v string) *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetResourceTypeCode(v)
+	})
+}
+
+// UpdateResourceTypeCode sets the "resource_type_code" field to the value that was provided on create.
+func (u *CloudServiceUpsertBulk) UpdateResourceTypeCode() *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateResourceTypeCode()
+	})
+}
+
+// SetResourceTypeName sets the "resource_type_name" field.
+func (u *CloudServiceUpsertBulk) SetResourceTypeName(v string) *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetResourceTypeName(v)
+	})
+}
+
+// UpdateResourceTypeName sets the "resource_type_name" field to the value that was provided on create.
+func (u *CloudServiceUpsertBulk) UpdateResourceTypeName() *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateResourceTypeName()
+	})
+}
+
+// SetAPIVersion sets the "api_version" field.
+func (u *CloudServiceUpsertBulk) SetAPIVersion(v string) *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetAPIVersion(v)
+	})
+}
+
+// UpdateAPIVersion sets the "api_version" field to the value that was provided on create.
+func (u *CloudServiceUpsertBulk) UpdateAPIVersion() *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateAPIVersion()
+	})
+}
+
+// ClearAPIVersion clears the value of the "api_version" field.
+func (u *CloudServiceUpsertBulk) ClearAPIVersion() *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.ClearAPIVersion()
+	})
+}
+
+// SetAttributeSchema sets the "attribute_schema" field.
+func (u *CloudServiceUpsertBulk) SetAttributeSchema(v map[string]interface{}) *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetAttributeSchema(v)
+	})
+}
+
+// UpdateAttributeSchema sets the "attribute_schema" field to the value that was provided on create.
+func (u *CloudServiceUpsertBulk) UpdateAttributeSchema() *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateAttributeSchema()
+	})
+}
+
+// ClearAttributeSchema clears the value of the "attribute_schema" field.
+func (u *CloudServiceUpsertBulk) ClearAttributeSchema() *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.ClearAttributeSchema()
+	})
+}
+
+// SetIsSystem sets the "is_system" field.
+func (u *CloudServiceUpsertBulk) SetIsSystem(v bool) *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetIsSystem(v)
+	})
+}
+
+// UpdateIsSystem sets the "is_system" field to the value that was provided on create.
+func (u *CloudServiceUpsertBulk) UpdateIsSystem() *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateIsSystem()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *CloudServiceUpsertBulk) SetIsActive(v bool) *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *CloudServiceUpsertBulk) UpdateIsActive() *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *CloudServiceUpsertBulk) SetTenantID(v int) *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *CloudServiceUpsertBulk) AddTenantID(v int) *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *CloudServiceUpsertBulk) UpdateTenantID() *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *CloudServiceUpsertBulk) SetCreatedAt(v time.Time) *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *CloudServiceUpsertBulk) UpdateCreatedAt() *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *CloudServiceUpsertBulk) SetUpdatedAt(v time.Time) *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *CloudServiceUpsertBulk) UpdateUpdatedAt() *CloudServiceUpsertBulk {
+	return u.Update(func(s *CloudServiceUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *CloudServiceUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the CloudServiceCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for CloudServiceCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *CloudServiceUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

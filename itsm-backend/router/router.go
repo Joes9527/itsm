@@ -21,6 +21,8 @@ import (
 	"itsm-backend/handlers/change"
 	"itsm-backend/handlers/cmdb"
 	domainCommon "itsm-backend/handlers/common"
+	"itsm-backend/handlers/delegated_execution"
+	"itsm-backend/handlers/intake"
 	"itsm-backend/handlers/knowledge"
 	"itsm-backend/handlers/known_error"
 	"itsm-backend/handlers/problem"
@@ -181,10 +183,13 @@ func dashboardWidgetByID(widgetID string) gin.H {
 
 // RouterConfig 路由配置
 type RouterConfig struct {
-	JWTSecret string
-	Logger    *zap.SugaredLogger
-	Client    *ent.Client
-	RawDB     *sql.DB
+	WorkItemRelationController *controller.WorkItemRelationController
+	IntakeHandler              *intake.Handler
+	TenantDirectoryClient      *ent.Client
+	JWTSecret                  string
+	Logger                     *zap.SugaredLogger
+	Client                     *ent.Client
+	RawDB                      *sql.DB
 
 	// CSRF configuration
 	CSRFEnabled bool
@@ -256,9 +261,10 @@ type RouterConfig struct {
 	CloudController        *controller.CloudController
 
 	// Domain Handlers
-	ServiceCatalogHandler *service_catalog.Handler
-	ServiceRequestHandler *service_request.Handler
-	CMDBHandler           *cmdb.Handler
+	ServiceCatalogHandler     *service_catalog.Handler
+	ServiceRequestHandler     *service_request.Handler
+	CMDBHandler               *cmdb.Handler
+	DelegatedExecutionHandler *delegated_execution.Handler
 
 	ProblemHandler        *problem.Handler
 	ChangeHandler         *change.Handler
@@ -338,10 +344,12 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 
 	// 公共路由（无需认证）
 	public := r.Group("/api/v1")
+	if config.IntakeHandler != nil {
+		config.IntakeHandler.RegisterRoutes(public)
+	}
 	{
 		if config.CommonHandler != nil {
 			public.POST("/auth/login", config.CommonHandler.Login)
-			public.POST("/refresh-token", config.CommonHandler.RefreshToken)
 			public.POST("/auth/refresh", config.CommonHandler.RefreshToken)
 		}
 
@@ -398,18 +406,24 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 	auth := r.Group("/api/v1")
 	auth.Use(middleware.AuthMiddleware(config.JWTSecret))
 	// RBAC 权限控制中间件：保护所有已认证路由
-	auth.Use(middleware.RBACMiddleware(config.Client))
+	auth.Use(middleware.RBACMiddleware(config.Client, config.TenantDirectoryClient))
 	// CSRF 保护中间件（仅对状态变更请求生效）
 	if config.CSRFEnabled {
 		csrfConfig := middleware.DefaultCSRFConfig()
 		// CSRF 不验证登录相关的路径
-		csrfConfig.SkipPaths = append(csrfConfig.SkipPaths, "/api/v1/auth/login", "/api/v1/refresh-token")
+		csrfConfig.SkipPaths = append(csrfConfig.SkipPaths, "/api/v1/auth/login")
 		auth.Use(middleware.CSRFProtectionMiddleware(csrfConfig))
+	}
+	if config.DelegatedExecutionHandler != nil {
+		delegatedExecutions := auth.Group("/delegated-executions")
+		delegatedExecutions.GET("", middleware.RequirePermission("delegated_execution", "view"), config.DelegatedExecutionHandler.List)
+		delegatedExecutions.POST("/:eventId/reconcile", middleware.RequirePermission("delegated_execution", "reconcile"), config.DelegatedExecutionHandler.Reconcile)
+		delegatedExecutions.POST("/:eventId/requeue", middleware.RequirePermission("delegated_execution", "requeue"), config.DelegatedExecutionHandler.Requeue)
 	}
 
 	// WebSocket 路由（使用短期票据替代JWT query参数，避免token泄露）
 	// 票据流程:
-	//   1. 客户端 POST /api/v1/ws/ticket (携带 Authorization header) 获取短期票据
+	//   1. 浏览器通过 HttpOnly access_token Cookie 调用 POST /api/v1/ws/ticket 获取短期票据
 	//   2. 客户端使用 ?ticket=<ticket> 建立 WebSocket 连接
 	//   3. 票据验证后立即销毁（一次性使用）
 	var wsTicketStore *WSTicketStore
@@ -417,7 +431,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 		wsTicketStore = NewWSTicketStore(DefaultWSTicketTTL)
 
 		// 票据颁发端点（需要JWT认证）
-		auth.POST("/ws/ticket", middleware.RequireRole("super_admin"), func(c *gin.Context) {
+		auth.POST("/ws/ticket", func(c *gin.Context) {
 			userID, _ := c.Get("user_id")
 			tenantID, _ := c.Get("tenant_id")
 
@@ -455,7 +469,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 	if config.MSPController != nil {
 		msp := r.Group("/api/v1/msp")
 		msp.Use(middleware.AuthMiddleware(config.JWTSecret))
-		msp.Use(middleware.RBACMiddleware(config.Client)) // 设置 client 到 context
+		msp.Use(middleware.RBACMiddleware(config.Client, config.TenantDirectoryClient)) // 设置 client 到 context
 		msp.Use(middleware.MSPMiddleware(config.Client))
 		{
 			// MSP 基础信息 - 允许 MSP 员工和管理员访问
@@ -489,7 +503,18 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 
 	{
 		// 租户中间件
-		tenant := auth.Use(middleware.TenantMiddleware(config.Client))
+		tenant := auth.Use(middleware.TenantMiddleware(config.TenantDirectoryClient))
+		if config.IntakeHandler != nil {
+			config.IntakeHandler.RegisterMappingRoutes(tenant)
+		}
+
+		if config.WorkItemRelationController != nil {
+			tenant.GET("/work-items/:id/relation-context", middleware.RequireWorkItemRecordClassPermission("read"), config.WorkItemRelationController.Context)
+			relations := tenant.(*gin.RouterGroup).Group("/work-items/:id/relations")
+			relations.GET("", middleware.RequireWorkItemRecordClassPermission("read"), config.WorkItemRelationController.List)
+			relations.POST("", middleware.RequireWorkItemRecordClassPermission("update"), config.WorkItemRelationController.Add)
+			relations.DELETE("", middleware.RequireWorkItemRecordClassPermission("update"), config.WorkItemRelationController.Remove)
+		}
 
 		// ==================== Ticket Categories & Tags ====================
 		if config.TicketCategoryController != nil {
@@ -590,34 +615,26 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 			// 评论
 			if config.TicketCommentController != nil {
 				tickets.GET("/:id/comments", middleware.RequireWorkItemRecordClassPermission("read"), config.TicketCommentController.ListTicketComments)
-				tickets.POST("/:id/comments", middleware.RequireWorkItemRecordClassPermission("create"), config.TicketCommentController.CreateTicketComment)
-				tickets.PUT("/:id/comments/:comment_id", middleware.RequireWorkItemRecordClassPermission("update"), config.TicketCommentController.UpdateTicketComment)
+				tickets.POST("/:id/comments", middleware.RequireWorkItemCollaborationPermission("create"), config.TicketCommentController.CreateTicketComment)
+				tickets.PUT("/:id/comments/:comment_id", middleware.RequireWorkItemCollaborationPermission("update"), config.TicketCommentController.UpdateTicketComment)
 				tickets.DELETE("/:id/comments/:comment_id", middleware.RequireWorkItemRecordClassPermission("delete"), config.TicketCommentController.DeleteTicketComment)
 			}
 
 			// 附件
 			if config.TicketAttachmentController != nil {
 				tickets.GET("/:id/attachments", middleware.RequireWorkItemRecordClassPermission("read"), config.TicketAttachmentController.ListTicketAttachments)
-				tickets.POST("/:id/attachments", middleware.RequireWorkItemRecordClassPermission("create"), config.TicketAttachmentController.UploadAttachment)
+				tickets.POST("/:id/attachments", middleware.RequireWorkItemCollaborationPermission("create"), config.TicketAttachmentController.UploadAttachment)
 				tickets.GET("/:id/attachments/:attachment_id", middleware.RequireWorkItemRecordClassPermission("read"), config.TicketAttachmentController.DownloadAttachment)
 				tickets.GET("/:id/attachments/:attachment_id/preview", middleware.RequireWorkItemRecordClassPermission("read"), config.TicketAttachmentController.PreviewAttachment)
 				tickets.DELETE("/:id/attachments/:attachment_id", middleware.RequireWorkItemRecordClassPermission("delete"), config.TicketAttachmentController.DeleteAttachment)
 			}
 
-			// 我的待审批：聚合当前用户的 BPMN 审批任务
-			// legacy ApprovalController/ApprovalWorkflow 引擎已下线（存量数据已迁移至 BPMN，见 Task 5/6）
-			if config.BPMNWorkflowController != nil {
-				tenant.GET("/my-approvals", middleware.RequirePermission("task", "read"), config.BPMNWorkflowController.ListUserTasks)
-			}
-
 			// 工单流转工作流
 			if config.TicketWorkflowController != nil {
 				tickets.POST("/workflow/accept", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.AcceptTicket)
-				tickets.POST("/workflow/reject", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.RejectTicket)
 				tickets.POST("/workflow/withdraw", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.WithdrawTicket)
 				tickets.POST("/workflow/forward", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.ForwardTicket)
 				tickets.POST("/workflow/cc", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.CCTicket)
-				tickets.POST("/workflow/approve", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.ApproveTicket)
 				tickets.POST("/workflow/resolve", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.ResolveTicket)
 				tickets.POST("/workflow/close", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.CloseTicket)
 				tickets.POST("/workflow/reopen", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.ReopenTicket)
@@ -625,7 +642,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				tickets.GET("/:id/workflow/state", middleware.RequirePermission("ticket", "read"), config.TicketWorkflowController.GetTicketWorkflowState)
 				tickets.GET("/:id/workflow-history", middleware.RequirePermission("ticket", "read"), config.TicketWorkflowController.GetTicketWorkflowHistory)
 				tickets.GET("/:id/workflow_records", middleware.RequirePermission("ticket", "read"), config.TicketWorkflowController.GetTicketWorkflowHistory)
-				tickets.GET("/:id/approval-decisions", middleware.RequirePermission("ticket", "read"), config.TicketWorkflowController.GetApprovalDecisions)
+				tickets.GET("/:id/approval-decisions", config.TicketWorkflowController.GetApprovalDecisions)
 			}
 
 			// 工单自动化规则
@@ -797,6 +814,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				// 事件操作
 				inc.POST("/:id/escalate", middleware.RequirePermission("incident", "write"), config.IncidentController.EscalateIncident)
 				inc.POST("/:id/acknowledge", middleware.RequirePermission("incident", "write"), config.IncidentController.AcknowledgeIncident)
+				inc.POST("/:id/start", middleware.RequirePermission("incident", "write"), config.IncidentController.StartIncident)
 				inc.POST("/:id/resolve", middleware.RequirePermission("incident", "write"), config.IncidentController.ResolveIncident)
 				inc.POST("/:id/close", middleware.RequirePermission("incident", "write"), config.IncidentController.CloseIncident)
 				inc.POST("/:id/reopen", middleware.RequirePermission("incident", "write"), config.IncidentController.ReopenIncident)
@@ -901,17 +919,18 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				problems.PUT("/:id", middleware.RequirePermission("problem", "write"), config.ProblemHandler.Update)
 				problems.DELETE("/:id", middleware.RequirePermission("problem", "delete"), config.ProblemHandler.Delete)
 				problems.POST("/:id/investigate", middleware.RequirePermission("problem", "write"), config.ProblemHandler.InvestigateProblem)
+				problems.POST("/:id/select-resolution", middleware.RequirePermission("problem", "write"), config.ProblemHandler.SelectResolution)
 				problems.PUT("/:id/root-cause", middleware.RequirePermission("problem", "write"), config.ProblemHandler.UpdateRootCause)
 				problems.PUT("/:id/solution", middleware.RequirePermission("problem", "write"), config.ProblemHandler.UpdateSolution)
+				problems.POST("/:id/resolve", middleware.RequirePermission("problem", "write"), config.ProblemHandler.ResolveProblem)
+				problems.POST("/:id/verify-resolution", middleware.RequirePermission("problem", "write"), config.ProblemHandler.VerifyResolution)
+				problems.POST("/:id/reopen", middleware.RequirePermission("problem", "write"), config.ProblemHandler.ReopenProblem)
 				problems.POST("/:id/close", middleware.RequirePermission("problem", "write"), config.ProblemHandler.CloseProblem)
 				// 问题 → 已知错误 (KEDB) 联动
 				if config.KnownErrorHandler != nil {
 					problems.POST("/:id/known-error", middleware.RequirePermission("problem", "write"), config.KnownErrorHandler.CreateFromProblem)
 				}
 				// 关联管理
-				problems.GET("/:id/associations", middleware.RequirePermission("problem", "read"), config.ProblemHandler.GetAssociations)
-				problems.POST("/:id/associations", middleware.RequirePermission("problem", "write"), config.ProblemHandler.AddAssociation)
-				problems.DELETE("/:id/associations", middleware.RequirePermission("problem", "write"), config.ProblemHandler.RemoveAssociation)
 			}
 		}
 
@@ -925,16 +944,21 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				changes.GET("/:id", middleware.RequirePermission("change", "read"), config.ChangeHandler.GetChange)
 				changes.PUT("/:id", middleware.RequirePermission("change", "write"), config.ChangeHandler.UpdateChange)
 				changes.DELETE("/:id", middleware.RequirePermission("change", "delete"), config.ChangeHandler.DeleteChange)
-				changes.POST("/:id/submit", middleware.RequirePermission("change", "write"), config.ChangeHandler.SubmitChange)
+				changes.POST("/:id/submit", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
 				changes.POST("/:id/assign", middleware.RequirePermission("change", "write"), config.ChangeHandler.AssignChange)
-				// 状态转换：approve/reject 需要独立审批权限，rollback 需要独立回滚权限（H-15 修复：禁止 write 权限泛化为审批/回滚）
-				changes.POST("/:id/approve", middleware.RequirePermission("change", "approve"), config.ChangeHandler.TransitionStatus)
-				changes.POST("/:id/reject", middleware.RequirePermission("change", "approve"), config.ChangeHandler.TransitionStatus)
-				changes.POST("/:id/start", middleware.RequirePermission("change", "write"), config.ChangeHandler.TransitionStatus)
-				changes.POST("/:id/complete", middleware.RequirePermission("change", "write"), config.ChangeHandler.TransitionStatus)
-				changes.POST("/:id/rollback", middleware.RequirePermission("change", "rollback"), config.ChangeHandler.TransitionStatus)
-				changes.POST("/:id/cancel", middleware.RequirePermission("change", "write"), config.ChangeHandler.TransitionStatus)
+				// CAB decisions retain independent approval permission; stages use the Change write owner.
+				changes.POST("/:id/approve", middleware.RequirePermission("change", "approve"), config.ChangeHandler.ExecuteAction)
+				changes.POST("/:id/reject", middleware.RequirePermission("change", "approve"), config.ChangeHandler.ExecuteAction)
+				changes.POST("/:id/assess", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
+				changes.POST("/:id/schedule", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
+				changes.POST("/:id/implement", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
+				changes.POST("/:id/record-outcome", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
+				changes.POST("/:id/review", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
+				changes.POST("/:id/close", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
+
+				changes.POST("/:id/cancel", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
 				// 审批
+				changes.GET("/:id/task-progress", middleware.RequirePermission("change", "read"), config.ChangeHandler.GetTaskProgress)
 				changes.GET("/:id/approvals", middleware.RequirePermission("change", "read"), config.ChangeHandler.GetApprovals)
 				// 风险评估（同时支持 /risk 和 /risk-assessment 两个路径）
 				changes.GET("/:id/risk-assessment", middleware.RequirePermission("change", "read"), config.ChangeHandler.GetRiskAssessment)
@@ -963,8 +987,6 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				releases.PUT("/:id", middleware.RequirePermission("release", "write"), config.ReleaseController.UpdateRelease)
 				releases.PUT("/:id/status", middleware.RequirePermission("release", "write"), config.ReleaseController.UpdateReleaseStatus)
 				releases.POST("/:id/tech-review", middleware.RequirePermission("release", "write"), config.ReleaseController.SubmitTechReview)
-				releases.POST("/:id/approve", middleware.RequirePermission("release", "approve"), config.ReleaseController.ApproveRelease)
-				releases.POST("/:id/reject", middleware.RequirePermission("release", "approve"), config.ReleaseController.RejectRelease)
 				releases.POST("/:id/rollback", middleware.RequirePermission("release", "rollback"), config.ReleaseController.RollbackRelease)
 				releases.DELETE("/:id", middleware.RequirePermission("release", "delete"), config.ReleaseController.DeleteRelease)
 			}
@@ -1376,13 +1398,16 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				// 调查步骤管理
 				problemInvestigation.POST("/steps", middleware.RequirePermission("step", "create"), config.ProblemInvestigationController.CreateInvestigationStep)
 				problemInvestigation.PUT("/steps/:id", middleware.RequirePermission("step", "update"), config.ProblemInvestigationController.UpdateInvestigationStep)
-				problemInvestigation.GET("/investigations/:investigation_id/steps", middleware.RequirePermission("investigation", "read"), config.ProblemInvestigationController.GetInvestigationSteps)
+				problemInvestigation.GET("/investigations/:id/steps", middleware.RequirePermission("investigation", "read"), config.ProblemInvestigationController.GetInvestigationSteps)
 
 				// 根本原因分析
 				problemInvestigation.POST("/root-cause-analysis", middleware.RequirePermission("root_cause", "create"), config.ProblemInvestigationController.CreateRootCauseAnalysis)
+				problemInvestigation.PUT("/root-cause-analysis/:id", middleware.RequirePermission("root_cause", "create"), config.ProblemInvestigationController.UpdateRootCauseAnalysis)
 
 				// 解决方案管理
 				problemInvestigation.POST("/solutions", middleware.RequirePermission("solution", "create"), config.ProblemInvestigationController.CreateProblemSolution)
+				problemInvestigation.PUT("/solutions/:id", middleware.RequirePermission("problem", "update"), config.ProblemInvestigationController.UpdateProblemSolution)
+				problemInvestigation.DELETE("/solutions/:id", middleware.RequirePermission("problem", "update"), config.ProblemInvestigationController.DeleteProblemSolution)
 				problemInvestigation.GET("/problems/:id/solutions", middleware.RequirePermission("problem", "read"), config.ProblemInvestigationController.GetProblemSolutions)
 
 				// 问题调查摘要
@@ -1393,7 +1418,6 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 		// ==================== BPMN Workflow ====================
 		if config.BPMNWorkflowController != nil {
 			config.BPMNWorkflowController.RegisterRoutes(tenant.(*gin.RouterGroup))
-			config.BPMNWorkflowController.RegisterWorkflowAliasRoutes(tenant.(*gin.RouterGroup))
 		}
 
 		// BPMN Process Trigger Controller (统一流程触发接口)
@@ -1452,8 +1476,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				conns.POST("/:name/send", middleware.RequirePermission("connector", "write"), config.ConnectorController.Send)
 				conns.POST("/:name/test", middleware.RequirePermission("connector", "write"), config.ConnectorController.Test)
 				conns.GET("/health", middleware.RequirePermission("connector", "read"), config.ConnectorController.Health)
-				// 飞书事件回调（独立签名校验）
-				conns.POST("/feishu/callback", middleware.RequireRole("super_admin"), config.ConnectorController.FeishuCallback)
+				conns.POST("/health", middleware.RequirePermission("connector", "write"), config.ConnectorController.RefreshHealth)
 			}
 		}
 
@@ -1663,34 +1686,6 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 					cloudResources.DELETE("/:id", middleware.RequirePermission("cloud_resource", "delete"), config.CloudController.DeleteCloudResource)
 				}
 			}
-		}
-
-		// ==================== Legacy Compatibility Routes ====================
-		// These old paths are kept only to return explicit guidance. They must
-		// not pretend that writes succeeded before a real backend is wired.
-		tenant.GET("/workflows", middleware.RequirePermission("workflow", "read"), func(c *gin.Context) {
-			common.Fail(c, common.BadRequestCode, "兼容接口未接入真实数据，请使用 /api/v1/bpmn/process-definitions")
-		})
-		tenant.POST("/workflows", middleware.RequirePermission("workflow", "create"), func(c *gin.Context) {
-			common.Fail(c, common.BadRequestCode, "兼容接口不支持写入，请使用 /api/v1/bpmn/process-definitions")
-		})
-
-		// Legacy /api/v1/bpmn/definitions path; canonical BPMN APIs are
-		// registered by BPMNWorkflowController under /api/v1/bpmn/process-*.
-		bpmn := tenant.(*gin.RouterGroup).Group("/bpmn")
-		{
-			bpmn.GET("/definitions", middleware.RequirePermission("workflow", "read"), func(c *gin.Context) {
-				common.Fail(c, common.BadRequestCode, "兼容接口未接入真实数据，请使用 /api/v1/bpmn/process-definitions")
-			})
-			bpmn.POST("/definitions", middleware.RequirePermission("workflow", "create"), func(c *gin.Context) {
-				common.Fail(c, common.BadRequestCode, "兼容接口不支持写入，请使用 /api/v1/bpmn/process-definitions")
-			})
-			bpmn.GET("/definitions/:id", middleware.RequirePermission("workflow", "read"), func(c *gin.Context) {
-				common.Fail(c, common.BadRequestCode, "兼容接口未接入真实数据，请使用 /api/v1/bpmn/process-definitions/"+c.Param("id"))
-			})
-			bpmn.PUT("/definitions/:id", middleware.RequirePermission("workflow", "update"), func(c *gin.Context) {
-				common.Fail(c, common.BadRequestCode, "兼容接口不支持写入，请使用 /api/v1/bpmn/process-definitions/"+c.Param("id"))
-			})
 		}
 
 		// Legacy service catalog path. Canonical APIs are /service-catalogs and

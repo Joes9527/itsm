@@ -1,240 +1,34 @@
-import type { Tenant } from '@/lib/api/api-config';
-import { API_BASE_URL } from '@/lib/api/api-config';
 import { useAuthStore } from '@/lib/store/auth-store';
+import { httpClient } from '@/lib/api/http-client';
+import type { User } from '@/lib/api/api-config';
 
 export class AuthService {
-  /**
-   * 第三方登录
-   */
-  static async thirdPartyLogin(provider: string, code: string, state?: string | null): Promise<void> {
-    const response = await fetch(`/api/auth/${provider}/callback`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ code, state }),
-    });
-
-    if (!response.ok) {
-      throw new Error('登录失败');
-    }
-
-    const data = await response.json();
-    // 不将令牌/用户信息写入 localStorage（避免 XSS 窃取）。
-    // 令牌由后端 httpOnly cookie 管理；前端仅写入 auth-token 标记位供 middleware 路由守卫使用。
-    if (typeof window !== 'undefined' && data.user) {
-      const secure = location.protocol === 'https:' ? '; Secure' : '';
-      // 仅写入标记位（非真值 token），供 middleware 路由守卫判断登录态
-      // 真值 token 由后端 httpOnly cookie 管理，JS 不可读，防 XSS 窃取
-      document.cookie = `auth-token=1; path=/; SameSite=Lax${secure}`;
-    }
-    if (data.user) {
-      const { login } = useAuthStore.getState();
-      const u = data.user as any;
-      login(
-        {
-          id: Number(u?.id || 0),
-          username: String(u?.username || ''),
-          role: String(u?.role || 'end_user'),
-          email: String(u?.email || ''),
-          name: String(u?.name || u?.fullName || ''),
-          tenantId: u?.tenantId ? Number(u.tenantId) : undefined,
-          department: u?.department,
-          permissions: u?.permissions,
-        },
-        String(data.token || 'authenticated'),
-        {
-          id: Number(u?.tenantId || 1),
-          name: '默认租户',
-          code: 'default',
-          type: 'standard' as any,
-          status: 'active' as any,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        } as Tenant
-      );
-    }
-  }
-
-  // Only non-sensitive UI marker cookies may be inspected in the browser.
-  // Authentication tokens are intentionally not read through this helper.
-  private static getCookie(name: string): string | null {
-    if (typeof document === 'undefined') return null;
-    for (const cookie of document.cookie.split(';')) {
-      const [cookieName, cookieValue] = cookie.trim().split('=');
-      if (cookieName === name) return decodeURIComponent(cookieValue || '');
-    }
-    return null;
-  }
-
-  // 设置tokens（空实现，保留向后兼容）
-  // 安全：access_token 由后端 httpOnly cookie 管理，前端不存储 token 真值
-  // middleware 路由守卫依赖 auth-token 标记位 cookie（非真值）
-  static setTokens(accessToken: string, refreshToken: string) {
-    void accessToken;
-    void refreshToken;
-  }
-
-  // 获取access token
-  static getAccessToken(): string | null {
-	return null;
-  }
-
-  // Backward-compatible helpers used by some UI providers
-  static getToken(): string | null {
-    return this.getAccessToken();
-  }
-
   static getCurrentUser() {
     const { user } = useAuthStore.getState();
     return user;
-  }
-
-  // 获取refresh token
-  static getRefreshToken(): string | null {
-	return null;
   }
 
   // 检查是否已认证
   static isAuthenticated(): boolean {
     const { isAuthenticated } = useAuthStore.getState();
     if (isAuthenticated) return true;
-	return false;
+    return false;
   }
 
-  // 直接使用fetch进行HTTP请求，避免循环依赖
-  private static async makeRequest<T>(endpoint: string, options: RequestInit): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`;
-
-    const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-      credentials: options.credentials || 'include', // 默认包含cookies
-      ...options,
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const responseData = (await response.json()) as { code: number; message: string; data: T };
-
-    // 检查响应码
-    if (responseData.code !== 0) {
-      throw new Error(responseData.message || '请求失败');
-    }
-
-    return responseData.data;
-  }
-
-  // 刷新token
-  static async refreshToken(): Promise<boolean> {
-    try {
-      await this.makeRequest<Record<string, never>>('/api/v1/auth/refresh', {
-        method: 'POST',
-        credentials: 'include', // Include httpOnly cookies
-		body: '{}',
-      });
-      return true;
-    } catch (error) {
-      console.error('Token refresh failed:', error);
-      this.clearTokens();
-      return false;
-    }
-  }
-
-  // 清除所有tokens
-  static clearTokens() {
-    const { logout } = useAuthStore.getState();
-    logout();
-  }
-
-  // 登出方法
-  static logout() {
-    const { logout } = useAuthStore.getState();
-    try {
-      fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      }).catch(() => {});
-    } finally {
-      // 清除 auth-token cookie（middleware 路由守卫使用）
-      const secure = location.protocol === 'https:' ? '; Secure' : '';
-      document.cookie = `auth-token=; path=/; max-age=0; SameSite=Lax${secure}`;
-      logout();
-    }
+  static async logout(): Promise<void> {
+    await httpClient.post('/api/v1/auth/logout', {});
+    useAuthStore.getState().logout();
   }
 
   // 修改login方法
-  static async login(
-    username: string,
-    password: string,
-    tenantCode?: string,
-    rememberMe?: boolean
-  ): Promise<boolean> {
+  static async login(username: string, password: string, tenantCode?: string): Promise<User> {
+    await httpClient.post('/api/v1/auth/login', { username, password, tenantCode });
     try {
-      const data = await this.makeRequest<{
-        accessToken: string;
-        refreshToken: string;
-        user: unknown;
-        tenant?: unknown;
-      }>('/api/v1/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({
-          username,
-          password,
-          tenantCode: tenantCode,
-        }),
-      });
-
-      // Token 仅通过 httpOnly cookie 管理（由后端设置）
-      // 前端仅设置 auth-token cookie 供 middleware 路由守卫使用
-      if (typeof window !== 'undefined' && data.user) {
-        const cookieMaxAge = rememberMe ? `; max-age=${7 * 24 * 60 * 60}` : '';
-        const secure = location.protocol === 'https:' ? '; Secure' : '';
-        // 仅写入 auth-token 标记位供 middleware 路由守卫使用，不写真值 token
-		document.cookie = `auth-token=1; path=/; SameSite=Lax${cookieMaxAge}${secure}`;
-      }
-
-      // 使用store管理登录状态
-      const { login } = useAuthStore.getState();
-      const u = data.user as any;
-      const t = data.tenant as any;
-      login(
-        {
-          id: Number(u?.id || 0),
-          username: String(u?.username || username),
-          role: String(u?.role || 'end_user'),
-          email: String(u?.email || ''),
-          name: String(u?.name || u?.fullName || ''),
-          tenantId: u?.tenantId
-            ? Number(u.tenantId)
-            : u?.tenantId
-              ? Number(u.tenantId)
-              : undefined,
-          department: u?.department,
-          permissions: u?.permissions,
-          createdAt: u?.createdAt || u?.createdAt,
-          updatedAt: u?.updatedAt || u?.updatedAt,
-        },
-		'authenticated',
-        {
-          id: Number(t?.id || u?.tenantId || 1),
-          name: String(t?.name || '默认租户'),
-          code: String(t?.code || tenantCode || 'default'),
-          type: (t?.type || 'standard') as any,
-          status: (t?.status || 'active') as any,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        } as Tenant
-      );
-
-      return true;
+      return await useAuthStore.getState().hydrateSession();
     } catch (error) {
-      console.error('Login failed:', error);
-      return false;
+      // A cookie session that cannot be projected authoritatively must not remain usable.
+      await httpClient.post('/api/v1/auth/logout', {});
+      throw error;
     }
   }
 
@@ -249,21 +43,7 @@ export class AuthService {
     role?: string;
   }): Promise<boolean> {
     try {
-      await this.makeRequest<{ id: number; username: string; email: string; message: string }>(
-        '/api/v1/auth/register',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            username: params.username,
-            email: params.email,
-            password: params.password,
-            fullName: params.fullName,
-            phone: params.phone,
-            company: params.company,
-            role: params.role,
-          }),
-        }
-      );
+      await httpClient.post('/api/v1/auth/register', params);
 
       return true;
     } catch (error) {
@@ -275,13 +55,7 @@ export class AuthService {
   // 发送密码重置邮件
   static async forgotPassword(email: string, tenantCode?: string): Promise<boolean> {
     try {
-      await this.makeRequest<{ message: string }>('/api/v1/auth/forgot-password', {
-        method: 'POST',
-        body: JSON.stringify({
-          email,
-          tenantCode: tenantCode,
-        }),
-      });
+      await httpClient.post('/api/v1/auth/forgot-password', { email, tenantCode });
 
       return true;
     } catch (error) {
@@ -298,15 +72,7 @@ export class AuthService {
     passwordConfirm: string;
   }): Promise<boolean> {
     try {
-      await this.makeRequest<{ message: string }>('/api/v1/auth/reset-password', {
-        method: 'POST',
-        body: JSON.stringify({
-          token: params.token,
-          email: params.email,
-          password: params.password,
-          passwordConfirm: params.passwordConfirm,
-        }),
-      });
+      await httpClient.post('/api/v1/auth/reset-password', params);
 
       return true;
     } catch (error) {
@@ -318,15 +84,9 @@ export class AuthService {
   // 验证重置令牌
   static async validateResetToken(token: string, email: string): Promise<boolean> {
     try {
-      const result = await this.makeRequest<{ valid: boolean; email: string }>(
+      const result = await httpClient.post<{ valid: boolean; email: string }>(
         '/api/v1/auth/validate-reset-token',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            token,
-            email,
-          }),
-        }
+        { token, email }
       );
 
       return result.valid;

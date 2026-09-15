@@ -1,13 +1,20 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"strconv"
 	"sync"
 	"time"
 
+	"itsm-backend/common/executionscope"
+
 	"itsm-backend/common"
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/connector"
 	feishuConn "itsm-backend/connector/builtin/feishu"
 	"itsm-backend/dto"
@@ -18,9 +25,14 @@ import (
 	"go.uber.org/zap"
 )
 
+type feishuSyncService interface {
+	SyncTicketToFeishu(context.Context, service.ActionActor, int, *feishuConn.Feishu) (*dto.FeishuTicketSyncResponse, error)
+	HandleTaskEvent(context.Context, int, *feishuConn.Feishu, string, map[string]interface{}) (*dto.FeishuWebhookResponse, error)
+}
+
 type FeishuController struct {
 	connectorManager *connector.Manager
-	syncService      *service.FeishuSyncService
+	syncService      feishuSyncService
 	marketplace      *marketplaceService.Service
 	logger           *zap.SugaredLogger
 	replayMu         sync.Mutex
@@ -54,6 +66,9 @@ func (c *FeishuController) getFeishuConnector(ctx *gin.Context) (*feishuConn.Fei
 // getFeishuConnectorPublic uses a high-entropy connector instance ID; public
 // callbacks never accept an enumerable tenant ID.
 func (c *FeishuController) getFeishuConnectorPublic(ctx *gin.Context) (*feishuConn.Feishu, int, bool) {
+	if c.connectorManager == nil {
+		return nil, 0, false
+	}
 	instanceID := ctx.Param("instance_id")
 	conn, tenantID, ok := c.connectorManager.GetByCallbackInstanceID("feishu", instanceID)
 	if !ok {
@@ -97,30 +112,38 @@ func (c *FeishuController) OAuthCallback(ctx *gin.Context) {
 		common.Fail(ctx, common.ParamErrorCode, "Invalid request")
 		return
 	}
-	token, err := fc.ExchangeOAuthCode(ctx.Request.Context(), code)
+	// Only the resolved instance supplies tenant identity; query/state cannot select it.
+	callbackCtx := tenantctx.WithTenantID(ctx.Request.Context(), tenantID)
+	if err := c.marketplace.RequireIntegrationManagement(callbackCtx, tenantID); err != nil {
+		if errors.Is(err, executionscope.ErrDenied) {
+			common.Forbidden(ctx, "当前执行环境不允许修改集成配置")
+		} else {
+			common.Fail(ctx, common.InternalErrorCode, "Failed to validate integration configuration access")
+		}
+		return
+	}
+	token, err := fc.ExchangeOAuthCode(callbackCtx, code)
 	if err != nil {
 		c.logger.Errorw("Failed to exchange Feishu OAuth code", "err", err)
 		common.Fail(ctx, common.InternalErrorCode, "Failed to exchange Feishu OAuth code")
 		return
 	}
-	if c.marketplace != nil {
-		_, err = c.marketplace.MergeConnectorInstallationConfig(ctx.Request.Context(), tenantID, "feishu", map[string]interface{}{
-			"oauth": map[string]interface{}{
-				"access_token":  token.AccessToken,
-				"refresh_token": token.RefreshToken,
-				"expires_in":    token.ExpiresIn,
-				"token_type":    token.TokenType,
-				"scope":         token.Scope,
-				"user_id":       token.UserID,
-				"open_id":       token.OpenID,
-				"union_id":      token.UnionID,
-			},
-		})
-		if err != nil {
-			c.logger.Errorw("Failed to persist Feishu OAuth callback", "tenant_id", tenantID, "err", err)
-			common.Fail(ctx, common.InternalErrorCode, "Failed to persist Feishu OAuth callback")
-			return
-		}
+	_, err = c.marketplace.MergeConnectorInstallationConfig(callbackCtx, tenantID, "feishu", map[string]interface{}{
+		"oauth": map[string]interface{}{
+			"access_token":  token.AccessToken,
+			"refresh_token": token.RefreshToken,
+			"expires_in":    token.ExpiresIn,
+			"token_type":    token.TokenType,
+			"scope":         token.Scope,
+			"user_id":       token.UserID,
+			"open_id":       token.OpenID,
+			"union_id":      token.UnionID,
+		},
+	})
+	if err != nil {
+		c.logger.Errorw("Failed to persist Feishu OAuth callback", "tenant_id", tenantID, "err", err)
+		common.Fail(ctx, common.InternalErrorCode, "Failed to persist Feishu OAuth callback")
+		return
 	}
 	common.Success(ctx, &dto.FeishuOAuthCallbackResponse{
 		ExpiresIn: token.ExpiresIn,
@@ -145,7 +168,7 @@ func (c *FeishuController) SyncTicketToFeishu(ctx *gin.Context) {
 		common.Fail(ctx, common.InternalErrorCode, "Feishu connector not configured")
 		return
 	}
-	resp, err := c.syncService.SyncTicketToFeishu(ctx.Request.Context(), tenantID, ticketID, fc)
+	resp, err := c.syncService.SyncTicketToFeishu(ctx.Request.Context(), service.ActionActor{TenantID: tenantID, UserID: ctx.GetInt("user_id"), Role: ctx.GetString("role")}, ticketID, fc)
 	if err != nil {
 		c.logger.Errorw("Failed to sync ticket to Feishu", "ticket_id", ticketID, "tenant_id", tenantID, "err", err)
 		common.Fail(ctx, common.InternalErrorCode, err.Error())
@@ -162,7 +185,15 @@ func (c *FeishuController) Webhook(ctx *gin.Context) {
 		return
 	}
 
-	rawData, _ := ctx.GetRawData()
+	rawData, err := io.ReadAll(http.MaxBytesReader(ctx.Writer, ctx.Request.Body, common.MaxJSONBodyBytes))
+	if err != nil {
+		common.Fail(ctx, common.ParamErrorCode, "Invalid event payload")
+		return
+	}
+	if _, err := common.DecodeJSONObject(rawData); err != nil {
+		common.Fail(ctx, common.ParamErrorCode, "Invalid event payload")
+		return
+	}
 
 	// 将 http.Header 转换为 map[string]string
 	headers := make(map[string]string)
@@ -172,7 +203,7 @@ func (c *FeishuController) Webhook(ctx *gin.Context) {
 		}
 	}
 
-	err := fc.VerifySignature(headers, rawData)
+	err = fc.VerifySignature(headers, rawData)
 	if err != nil {
 		c.logger.Errorw("Invalid Feishu webhook signature", "err", err)
 		common.Fail(ctx, common.ForbiddenCode, "Invalid signature")
@@ -188,7 +219,7 @@ func (c *FeishuController) Webhook(ctx *gin.Context) {
 
 	msg, err := fc.ParseInbound(rawData)
 	if err != nil {
-		c.logger.Errorw("Failed to parse Feishu webhook event", "err", err)
+		c.logger.Errorw("Failed to parse Feishu webhook event")
 		common.Fail(ctx, common.ParamErrorCode, "Invalid event payload")
 		return
 	}
@@ -211,7 +242,7 @@ func (c *FeishuController) Webhook(ctx *gin.Context) {
 		return
 	}
 
-	common.Success(ctx, &dto.FeishuWebhookResponse{EventType: msg.Type, Action: "ignored"})
+	common.Fail(ctx, common.ParamErrorCode, "Unsupported event type")
 }
 
 func (c *FeishuController) consumeWebhookNonce(timestamp, nonce, signature string) bool {

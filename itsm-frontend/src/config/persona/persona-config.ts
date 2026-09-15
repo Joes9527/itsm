@@ -246,6 +246,14 @@ export function getRolePersonaConfig(roleCode?: string): RoleRouteConfig {
 }
 
 /**
+ * Resolve the single canonical landing page for a role.
+ */
+export function getDefaultHomePath(roleCode?: string): string {
+  const roleConfig = getRolePersonaConfig(roleCode);
+  return PERSONAS[roleConfig.defaultPersona].homePath;
+}
+
+/**
  * 判断当前路径属于哪种工作台视图类型
  */
 export function getPersonaByPath(pathname: string): PersonaType {

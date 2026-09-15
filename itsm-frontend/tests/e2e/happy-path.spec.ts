@@ -10,7 +10,7 @@
 
 import type { Page } from '@playwright/test';
 import { test, expect } from '@playwright/test';
-import { loginAsAdmin } from './test-utils';
+import { loginAndReturn as loginAsAdmin, mutateWithCSRF } from './auth-utils';
 
 const BASE = 'http://localhost:3000';
 const API = 'http://localhost:8090';
@@ -23,9 +23,8 @@ async function verifySuccessResponse(response: Response, minDataFields: number =
   const json = await response.json();
   expect(json.code).toBe(0);
   expect(json).toHaveProperty('data');
-  if (minDataFields > 0 && json.data) {
-    expect(Object.keys(json.data).length).toBeGreaterThanOrEqual(minDataFields);
-  }
+  expect(json.data).not.toBeNull();
+  expect(Object.keys(json.data).length).toBeGreaterThanOrEqual(minDataFields);
   return json;
 }
 
@@ -38,7 +37,7 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
   // ===== 1. 工单 (Ticket) Happy Path =====
   test('1. 工单：创建 → 接受 → 解决 → 关闭', async ({ page }) => {
     // 1.1 创建工单
-    const createResp = await page.request.post(`${API}/api/v1/tickets`, {
+    const createResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/tickets`, {
       data: {
         title: `Happy Path Ticket ${Date.now()}`,
         description: '核心模块 E2E 测试工单',
@@ -51,13 +50,13 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
     expect(createJson.data.status).toBe('new');
 
     // 1.2 接受工单
-    const acceptResp = await page.request.post(`${API}/api/v1/tickets/workflow/accept`, {
+    const acceptResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/tickets/workflow/accept`, {
       data: { ticket_id: ticketId },
     });
     await verifySuccessResponse(acceptResp);
 
     // 1.3 解决工单
-    const resolveResp = await page.request.post(`${API}/api/v1/tickets/workflow/resolve`, {
+    const resolveResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/tickets/workflow/resolve`, {
       data: {
         ticket_id: ticketId,
         resolution: '问题已修复',
@@ -67,7 +66,7 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
     await verifySuccessResponse(resolveResp);
 
     // 1.4 关闭工单
-    const closeResp = await page.request.post(`${API}/api/v1/tickets/workflow/close`, {
+    const closeResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/tickets/workflow/close`, {
       data: { ticket_id: ticketId, closeNotes: '测试关闭', closeReason: '完成' },
     });
     await verifySuccessResponse(closeResp);
@@ -83,7 +82,7 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
   // ===== 2. 事件 (Incident) Happy Path =====
   test('2. 事件：创建 → 确认 → 评论 → 解决 → 关闭', async ({ page }) => {
     // 2.1 创建事件
-    const createResp = await page.request.post(`${API}/api/v1/incidents`, {
+    const createResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/incidents`, {
       data: {
         title: `Happy Path Incident ${Date.now()}`,
         description: '核心模块 E2E 测试事件',
@@ -98,25 +97,25 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
     expect(createJson.data.status).toBe('new');
 
     // 2.2 确认事件
-    const ackResp = await page.request.post(`${API}/api/v1/incidents/${incidentId}/acknowledge`, {
+    const ackResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/incidents/${incidentId}/acknowledge`, {
       data: { comment: '已确认' },
     });
     await verifySuccessResponse(ackResp);
 
     // 2.3 添加评论
-    const commentResp = await page.request.post(`${API}/api/v1/incidents/${incidentId}/comments`, {
+    const commentResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/incidents/${incidentId}/comments`, {
       data: { content: '处理中', isInternal: false },
     });
     await verifySuccessResponse(commentResp);
 
     // 2.4 解决事件
-    const resolveResp = await page.request.post(`${API}/api/v1/incidents/${incidentId}/resolve`, {
+    const resolveResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/incidents/${incidentId}/resolve`, {
       data: { resolution: '已恢复', resolutionCategory: 'environment' },
     });
     await verifySuccessResponse(resolveResp);
 
     // 2.5 关闭事件
-    const closeResp = await page.request.post(`${API}/api/v1/incidents/${incidentId}/close`, {
+    const closeResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/incidents/${incidentId}/close`, {
       data: { comment: '已关闭' },
     });
     await verifySuccessResponse(closeResp);
@@ -127,7 +126,7 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
   // ===== 3. 问题 (Problem) Happy Path =====
   test('3. 问题：创建 → 调查 → 根因 → 关闭', async ({ page }) => {
     // 3.1 创建问题
-    const createResp = await page.request.post(`${API}/api/v1/problems`, {
+    const createResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/problems`, {
       data: {
         title: `Happy Path Problem ${Date.now()}`,
         description: '核心模块 E2E 测试问题',
@@ -140,19 +139,19 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
     const problemId = createJson.data.id;
 
     // 3.2 开始调查
-    const investigateResp = await page.request.post(`${API}/api/v1/problems/${problemId}/investigate`, {
+    const investigateResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/problems/${problemId}/investigate`, {
       data: { comment: '开始调查' },
     });
     await verifySuccessResponse(investigateResp);
 
     // 3.3 添加根因分析
-    const rcaResp = await page.request.put(`${API}/api/v1/problems/${problemId}/root-cause`, {
+    const rcaResp = await mutateWithCSRF(page.request, 'PUT', `${API}/api/v1/problems/${problemId}/root-cause`, {
       data: { rootCause: '资源泄漏', causeCategory: 'resource_leak' },
     });
     await verifySuccessResponse(rcaResp);
 
     // 3.4 关闭问题
-    const closeResp = await page.request.post(`${API}/api/v1/problems/${problemId}/close`, {
+    const closeResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/problems/${problemId}/close`, {
       data: { resolution: '已修复', comment: '问题已解决' },
     });
     await verifySuccessResponse(closeResp);
@@ -161,9 +160,10 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
   });
 
   // ===== 4. 变更 (Change) Happy Path =====
-  test('4. 变更：创建 → 提交 → 审批 → 实施 → 关闭', async ({ page }) => {
+  // 审批决策链路（approve/reject → BPMN 历史）由 itsm-backend/handlers/change/change_bpmn_e2e_test.go 覆盖，此处不重复。
+  test('4. 变更：创建 → 提交 → 风险评估 → CMDB影响', async ({ page }) => {
     // 4.1 创建变更
-    const createResp = await page.request.post(`${API}/api/v1/changes`, {
+    const createResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/changes`, {
       data: {
         title: `Happy Path Change ${Date.now()}`,
         description: '核心模块 E2E 测试变更',
@@ -179,7 +179,7 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
     expect(createJson.data.status).toBe('draft');
 
     // 4.2 提交变更
-    const submitResp = await page.request.post(`${API}/api/v1/changes/${changeId}/submit`, {
+    const submitResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/changes/${changeId}/submit`, {
       data: {
         comment: '请审批',
         approver_ids: [1],
@@ -187,15 +187,11 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
     });
     await verifySuccessResponse(submitResp);
 
-    // 4.3 获取审批摘要
-    const summaryResp = await page.request.get(`${API}/api/v1/changes/${changeId}/approval-summary`);
-    await verifySuccessResponse(summaryResp);
-
-    // 4.4 获取风险评估
+    // 4.3 获取风险评估
     const riskResp = await page.request.get(`${API}/api/v1/changes/${changeId}/risk-assessment`);
     await verifySuccessResponse(riskResp);
 
-    // 4.5 获取 CMDB 影响摘要
+    // 4.4 获取 CMDB 影响摘要
     const cmdbResp = await page.request.get(`${API}/api/v1/changes/${changeId}/cmdb-impact`);
     await verifySuccessResponse(cmdbResp);
 
@@ -203,9 +199,10 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
   });
 
   // ===== 5. 服务请求 (Service Request) Happy Path =====
-  test('5. 服务请求：创建目录 → 申请 → 审批', async ({ page }) => {
+  // 审批决策链路（BPMN /approvals 中心批准）由 sslvpn-approval-flow.spec.ts 覆盖，此处不重复。
+  test('5. 服务请求：创建目录 → 申请', async ({ page }) => {
     // 5.1 创建服务目录
-    const catalogResp = await page.request.post(`${API}/api/v1/service-catalogs`, {
+    const catalogResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/service-catalogs`, {
       data: {
         name: `Happy Path Catalog ${Date.now()}`,
         description: '核心模块 E2E 测试服务目录',
@@ -218,7 +215,7 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
     const catalogId = catalogJson.data.id;
 
     // 5.2 创建服务请求
-    const requestResp = await page.request.post(`${API}/api/v1/service-requests`, {
+    const requestResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/service-requests`, {
       data: {
         catalog_id: catalogId,
         title: `Happy Path Request ${Date.now()}`,
@@ -230,12 +227,6 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
     const requestJson = await verifySuccessResponse(requestResp);
     const requestId = requestJson.data.id;
 
-    // 5.3 审批请求
-    const approvalResp = await page.request.post(`${API}/api/v1/service-requests/${requestId}/approval`, {
-      data: { action: 'approve', comment: '审批通过' },
-    });
-    await verifySuccessResponse(approvalResp);
-
     console.log(`✅ 服务请求 Happy Path 完成: catalogId=${catalogId}, requestId=${requestId}`);
   });
 
@@ -246,7 +237,7 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
     const statsJson = await verifySuccessResponse(statsResp);
 
     // 6.2 触发 SLA 监控
-    const monitorResp = await page.request.post(`${API}/api/v1/sla/monitoring`, { data: {} });
+    const monitorResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/sla/monitoring`, { data: {} });
     const monitorJson = await verifySuccessResponse(monitorResp, 2);
 
     // 6.3 获取合规报告
@@ -261,7 +252,7 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
   // ===== 7. CMDB Happy Path =====
   test('7. CMDB：创建 CI 类型 → 创建 CI 实例 → 查询', async ({ page }) => {
     // 7.1 创建 CI 类型
-    const typeResp = await page.request.post(`${API}/api/v1/cmdb/ci-types`, {
+    const typeResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/cmdb/ci-types`, {
       data: {
         name: `Server ${Date.now()}`,
         description: '核心模块 E2E 测试 CI 类型',
@@ -276,7 +267,7 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
     const ciTypeId = typeJson.data.id;
 
     // 7.2 创建 CI 实例
-	const ciResp = await page.request.post(`${API}/api/v1/configuration-items`, {
+	const ciResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/configuration-items`, {
       data: {
         ci_type_id: ciTypeId,
         name: `Test Server ${Date.now()}`,
@@ -304,9 +295,9 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
     const overviewJson = await verifySuccessResponse(overviewResp, 2);
 
     // 8.2 验证 KPI 指标
-    if (overviewJson.data.kpiMetrics) {
-      expect(Array.isArray(overviewJson.data.kpiMetrics)).toBeTruthy();
-    }
+    expect(overviewJson.data).toHaveProperty('kpiMetrics');
+    expect(overviewJson.data.kpiMetrics).toEqual(expect.any(Array));
+    expect(overviewJson.data.kpiMetrics.length).toBeGreaterThan(0);
 
     console.log(`✅ Dashboard Happy Path 完成`);
   });

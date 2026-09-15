@@ -88,11 +88,12 @@ func (s *TicketRatingService) SubmitRating(
 		if req.Comment != "" {
 			content += fmt.Sprintf("，评论：%s", req.Comment)
 		}
-		if err := s.notificationService.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
+		result, sendErr := s.notificationService.SendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
 			UserIDs:   []int{updatedTicket.AssigneeID},
 			EventType: "ticket_updated",
 			Content:   content,
-		}, tenantID); err != nil {
+		}, tenantID)
+		if err := ticketNotificationDeliveryError(result, sendErr); err != nil {
 			s.logger.Warnw("Failed to send rating notification", "error", err)
 		}
 	}

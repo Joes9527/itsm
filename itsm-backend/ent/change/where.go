@@ -55,14 +55,59 @@ func IDLTE(id int) predicate.Change {
 	return predicate.Change(sql.FieldLTE(FieldID, id))
 }
 
-// Title applies equality check predicate on the "title" field. It's identical to TitleEQ.
-func Title(v string) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldTitle, v))
+// Outcome applies equality check predicate on the "outcome" field. It's identical to OutcomeEQ.
+func Outcome(v string) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldOutcome, v))
 }
 
-// Description applies equality check predicate on the "description" field. It's identical to DescriptionEQ.
-func Description(v string) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldDescription, v))
+// OutcomeEvidence applies equality check predicate on the "outcome_evidence" field. It's identical to OutcomeEvidenceEQ.
+func OutcomeEvidence(v string) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldOutcomeEvidence, v))
+}
+
+// AssessmentEvidence applies equality check predicate on the "assessment_evidence" field. It's identical to AssessmentEvidenceEQ.
+func AssessmentEvidence(v string) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldAssessmentEvidence, v))
+}
+
+// AssessmentDigest applies equality check predicate on the "assessment_digest" field. It's identical to AssessmentDigestEQ.
+func AssessmentDigest(v string) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldAssessmentDigest, v))
+}
+
+// AssessedBy applies equality check predicate on the "assessed_by" field. It's identical to AssessedByEQ.
+func AssessedBy(v int) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldAssessedBy, v))
+}
+
+// AssessedAt applies equality check predicate on the "assessed_at" field. It's identical to AssessedAtEQ.
+func AssessedAt(v time.Time) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldAssessedAt, v))
+}
+
+// ReviewedBy applies equality check predicate on the "reviewed_by" field. It's identical to ReviewedByEQ.
+func ReviewedBy(v int) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldReviewedBy, v))
+}
+
+// ReviewedAt applies equality check predicate on the "reviewed_at" field. It's identical to ReviewedAtEQ.
+func ReviewedAt(v time.Time) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldReviewedAt, v))
+}
+
+// ReviewEvidence applies equality check predicate on the "review_evidence" field. It's identical to ReviewEvidenceEQ.
+func ReviewEvidence(v string) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldReviewEvidence, v))
+}
+
+// ReviewDigest applies equality check predicate on the "review_digest" field. It's identical to ReviewDigestEQ.
+func ReviewDigest(v string) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldReviewDigest, v))
+}
+
+// StandardTemplateID applies equality check predicate on the "standard_template_id" field. It's identical to StandardTemplateIDEQ.
+func StandardTemplateID(v int) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldStandardTemplateID, v))
 }
 
 // Justification applies equality check predicate on the "justification" field. It's identical to JustificationEQ.
@@ -75,16 +120,6 @@ func Type(v string) predicate.Change {
 	return predicate.Change(sql.FieldEQ(FieldType, v))
 }
 
-// Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
-func Status(v string) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldStatus, v))
-}
-
-// Priority applies equality check predicate on the "priority" field. It's identical to PriorityEQ.
-func Priority(v string) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldPriority, v))
-}
-
 // ImpactScope applies equality check predicate on the "impact_scope" field. It's identical to ImpactScopeEQ.
 func ImpactScope(v string) predicate.Change {
 	return predicate.Change(sql.FieldEQ(FieldImpactScope, v))
@@ -95,24 +130,9 @@ func RiskLevel(v string) predicate.Change {
 	return predicate.Change(sql.FieldEQ(FieldRiskLevel, v))
 }
 
-// AssigneeID applies equality check predicate on the "assignee_id" field. It's identical to AssigneeIDEQ.
-func AssigneeID(v int) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldAssigneeID, v))
-}
-
-// CreatedBy applies equality check predicate on the "created_by" field. It's identical to CreatedByEQ.
-func CreatedBy(v int) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldCreatedBy, v))
-}
-
 // WorkItemID applies equality check predicate on the "work_item_id" field. It's identical to WorkItemIDEQ.
 func WorkItemID(v int) predicate.Change {
 	return predicate.Change(sql.FieldEQ(FieldWorkItemID, v))
-}
-
-// TenantID applies equality check predicate on the "tenant_id" field. It's identical to TenantIDEQ.
-func TenantID(v int) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldTenantID, v))
 }
 
 // PlannedStartDate applies equality check predicate on the "planned_start_date" field. It's identical to PlannedStartDateEQ.
@@ -145,154 +165,694 @@ func RollbackPlan(v string) predicate.Change {
 	return predicate.Change(sql.FieldEQ(FieldRollbackPlan, v))
 }
 
-// CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
-func CreatedAt(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldCreatedAt, v))
+// OutcomeEQ applies the EQ predicate on the "outcome" field.
+func OutcomeEQ(v string) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldOutcome, v))
 }
 
-// UpdatedAt applies equality check predicate on the "updated_at" field. It's identical to UpdatedAtEQ.
-func UpdatedAt(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldUpdatedAt, v))
+// OutcomeNEQ applies the NEQ predicate on the "outcome" field.
+func OutcomeNEQ(v string) predicate.Change {
+	return predicate.Change(sql.FieldNEQ(FieldOutcome, v))
 }
 
-// TitleEQ applies the EQ predicate on the "title" field.
-func TitleEQ(v string) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldTitle, v))
+// OutcomeIn applies the In predicate on the "outcome" field.
+func OutcomeIn(vs ...string) predicate.Change {
+	return predicate.Change(sql.FieldIn(FieldOutcome, vs...))
 }
 
-// TitleNEQ applies the NEQ predicate on the "title" field.
-func TitleNEQ(v string) predicate.Change {
-	return predicate.Change(sql.FieldNEQ(FieldTitle, v))
+// OutcomeNotIn applies the NotIn predicate on the "outcome" field.
+func OutcomeNotIn(vs ...string) predicate.Change {
+	return predicate.Change(sql.FieldNotIn(FieldOutcome, vs...))
 }
 
-// TitleIn applies the In predicate on the "title" field.
-func TitleIn(vs ...string) predicate.Change {
-	return predicate.Change(sql.FieldIn(FieldTitle, vs...))
+// OutcomeGT applies the GT predicate on the "outcome" field.
+func OutcomeGT(v string) predicate.Change {
+	return predicate.Change(sql.FieldGT(FieldOutcome, v))
 }
 
-// TitleNotIn applies the NotIn predicate on the "title" field.
-func TitleNotIn(vs ...string) predicate.Change {
-	return predicate.Change(sql.FieldNotIn(FieldTitle, vs...))
+// OutcomeGTE applies the GTE predicate on the "outcome" field.
+func OutcomeGTE(v string) predicate.Change {
+	return predicate.Change(sql.FieldGTE(FieldOutcome, v))
 }
 
-// TitleGT applies the GT predicate on the "title" field.
-func TitleGT(v string) predicate.Change {
-	return predicate.Change(sql.FieldGT(FieldTitle, v))
+// OutcomeLT applies the LT predicate on the "outcome" field.
+func OutcomeLT(v string) predicate.Change {
+	return predicate.Change(sql.FieldLT(FieldOutcome, v))
 }
 
-// TitleGTE applies the GTE predicate on the "title" field.
-func TitleGTE(v string) predicate.Change {
-	return predicate.Change(sql.FieldGTE(FieldTitle, v))
+// OutcomeLTE applies the LTE predicate on the "outcome" field.
+func OutcomeLTE(v string) predicate.Change {
+	return predicate.Change(sql.FieldLTE(FieldOutcome, v))
 }
 
-// TitleLT applies the LT predicate on the "title" field.
-func TitleLT(v string) predicate.Change {
-	return predicate.Change(sql.FieldLT(FieldTitle, v))
+// OutcomeContains applies the Contains predicate on the "outcome" field.
+func OutcomeContains(v string) predicate.Change {
+	return predicate.Change(sql.FieldContains(FieldOutcome, v))
 }
 
-// TitleLTE applies the LTE predicate on the "title" field.
-func TitleLTE(v string) predicate.Change {
-	return predicate.Change(sql.FieldLTE(FieldTitle, v))
+// OutcomeHasPrefix applies the HasPrefix predicate on the "outcome" field.
+func OutcomeHasPrefix(v string) predicate.Change {
+	return predicate.Change(sql.FieldHasPrefix(FieldOutcome, v))
 }
 
-// TitleContains applies the Contains predicate on the "title" field.
-func TitleContains(v string) predicate.Change {
-	return predicate.Change(sql.FieldContains(FieldTitle, v))
+// OutcomeHasSuffix applies the HasSuffix predicate on the "outcome" field.
+func OutcomeHasSuffix(v string) predicate.Change {
+	return predicate.Change(sql.FieldHasSuffix(FieldOutcome, v))
 }
 
-// TitleHasPrefix applies the HasPrefix predicate on the "title" field.
-func TitleHasPrefix(v string) predicate.Change {
-	return predicate.Change(sql.FieldHasPrefix(FieldTitle, v))
+// OutcomeIsNil applies the IsNil predicate on the "outcome" field.
+func OutcomeIsNil() predicate.Change {
+	return predicate.Change(sql.FieldIsNull(FieldOutcome))
 }
 
-// TitleHasSuffix applies the HasSuffix predicate on the "title" field.
-func TitleHasSuffix(v string) predicate.Change {
-	return predicate.Change(sql.FieldHasSuffix(FieldTitle, v))
+// OutcomeNotNil applies the NotNil predicate on the "outcome" field.
+func OutcomeNotNil() predicate.Change {
+	return predicate.Change(sql.FieldNotNull(FieldOutcome))
 }
 
-// TitleEqualFold applies the EqualFold predicate on the "title" field.
-func TitleEqualFold(v string) predicate.Change {
-	return predicate.Change(sql.FieldEqualFold(FieldTitle, v))
+// OutcomeEqualFold applies the EqualFold predicate on the "outcome" field.
+func OutcomeEqualFold(v string) predicate.Change {
+	return predicate.Change(sql.FieldEqualFold(FieldOutcome, v))
 }
 
-// TitleContainsFold applies the ContainsFold predicate on the "title" field.
-func TitleContainsFold(v string) predicate.Change {
-	return predicate.Change(sql.FieldContainsFold(FieldTitle, v))
+// OutcomeContainsFold applies the ContainsFold predicate on the "outcome" field.
+func OutcomeContainsFold(v string) predicate.Change {
+	return predicate.Change(sql.FieldContainsFold(FieldOutcome, v))
 }
 
-// DescriptionEQ applies the EQ predicate on the "description" field.
-func DescriptionEQ(v string) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldDescription, v))
+// OutcomeEvidenceEQ applies the EQ predicate on the "outcome_evidence" field.
+func OutcomeEvidenceEQ(v string) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldOutcomeEvidence, v))
 }
 
-// DescriptionNEQ applies the NEQ predicate on the "description" field.
-func DescriptionNEQ(v string) predicate.Change {
-	return predicate.Change(sql.FieldNEQ(FieldDescription, v))
+// OutcomeEvidenceNEQ applies the NEQ predicate on the "outcome_evidence" field.
+func OutcomeEvidenceNEQ(v string) predicate.Change {
+	return predicate.Change(sql.FieldNEQ(FieldOutcomeEvidence, v))
 }
 
-// DescriptionIn applies the In predicate on the "description" field.
-func DescriptionIn(vs ...string) predicate.Change {
-	return predicate.Change(sql.FieldIn(FieldDescription, vs...))
+// OutcomeEvidenceIn applies the In predicate on the "outcome_evidence" field.
+func OutcomeEvidenceIn(vs ...string) predicate.Change {
+	return predicate.Change(sql.FieldIn(FieldOutcomeEvidence, vs...))
 }
 
-// DescriptionNotIn applies the NotIn predicate on the "description" field.
-func DescriptionNotIn(vs ...string) predicate.Change {
-	return predicate.Change(sql.FieldNotIn(FieldDescription, vs...))
+// OutcomeEvidenceNotIn applies the NotIn predicate on the "outcome_evidence" field.
+func OutcomeEvidenceNotIn(vs ...string) predicate.Change {
+	return predicate.Change(sql.FieldNotIn(FieldOutcomeEvidence, vs...))
 }
 
-// DescriptionGT applies the GT predicate on the "description" field.
-func DescriptionGT(v string) predicate.Change {
-	return predicate.Change(sql.FieldGT(FieldDescription, v))
+// OutcomeEvidenceGT applies the GT predicate on the "outcome_evidence" field.
+func OutcomeEvidenceGT(v string) predicate.Change {
+	return predicate.Change(sql.FieldGT(FieldOutcomeEvidence, v))
 }
 
-// DescriptionGTE applies the GTE predicate on the "description" field.
-func DescriptionGTE(v string) predicate.Change {
-	return predicate.Change(sql.FieldGTE(FieldDescription, v))
+// OutcomeEvidenceGTE applies the GTE predicate on the "outcome_evidence" field.
+func OutcomeEvidenceGTE(v string) predicate.Change {
+	return predicate.Change(sql.FieldGTE(FieldOutcomeEvidence, v))
 }
 
-// DescriptionLT applies the LT predicate on the "description" field.
-func DescriptionLT(v string) predicate.Change {
-	return predicate.Change(sql.FieldLT(FieldDescription, v))
+// OutcomeEvidenceLT applies the LT predicate on the "outcome_evidence" field.
+func OutcomeEvidenceLT(v string) predicate.Change {
+	return predicate.Change(sql.FieldLT(FieldOutcomeEvidence, v))
 }
 
-// DescriptionLTE applies the LTE predicate on the "description" field.
-func DescriptionLTE(v string) predicate.Change {
-	return predicate.Change(sql.FieldLTE(FieldDescription, v))
+// OutcomeEvidenceLTE applies the LTE predicate on the "outcome_evidence" field.
+func OutcomeEvidenceLTE(v string) predicate.Change {
+	return predicate.Change(sql.FieldLTE(FieldOutcomeEvidence, v))
 }
 
-// DescriptionContains applies the Contains predicate on the "description" field.
-func DescriptionContains(v string) predicate.Change {
-	return predicate.Change(sql.FieldContains(FieldDescription, v))
+// OutcomeEvidenceContains applies the Contains predicate on the "outcome_evidence" field.
+func OutcomeEvidenceContains(v string) predicate.Change {
+	return predicate.Change(sql.FieldContains(FieldOutcomeEvidence, v))
 }
 
-// DescriptionHasPrefix applies the HasPrefix predicate on the "description" field.
-func DescriptionHasPrefix(v string) predicate.Change {
-	return predicate.Change(sql.FieldHasPrefix(FieldDescription, v))
+// OutcomeEvidenceHasPrefix applies the HasPrefix predicate on the "outcome_evidence" field.
+func OutcomeEvidenceHasPrefix(v string) predicate.Change {
+	return predicate.Change(sql.FieldHasPrefix(FieldOutcomeEvidence, v))
 }
 
-// DescriptionHasSuffix applies the HasSuffix predicate on the "description" field.
-func DescriptionHasSuffix(v string) predicate.Change {
-	return predicate.Change(sql.FieldHasSuffix(FieldDescription, v))
+// OutcomeEvidenceHasSuffix applies the HasSuffix predicate on the "outcome_evidence" field.
+func OutcomeEvidenceHasSuffix(v string) predicate.Change {
+	return predicate.Change(sql.FieldHasSuffix(FieldOutcomeEvidence, v))
 }
 
-// DescriptionIsNil applies the IsNil predicate on the "description" field.
-func DescriptionIsNil() predicate.Change {
-	return predicate.Change(sql.FieldIsNull(FieldDescription))
+// OutcomeEvidenceIsNil applies the IsNil predicate on the "outcome_evidence" field.
+func OutcomeEvidenceIsNil() predicate.Change {
+	return predicate.Change(sql.FieldIsNull(FieldOutcomeEvidence))
 }
 
-// DescriptionNotNil applies the NotNil predicate on the "description" field.
-func DescriptionNotNil() predicate.Change {
-	return predicate.Change(sql.FieldNotNull(FieldDescription))
+// OutcomeEvidenceNotNil applies the NotNil predicate on the "outcome_evidence" field.
+func OutcomeEvidenceNotNil() predicate.Change {
+	return predicate.Change(sql.FieldNotNull(FieldOutcomeEvidence))
 }
 
-// DescriptionEqualFold applies the EqualFold predicate on the "description" field.
-func DescriptionEqualFold(v string) predicate.Change {
-	return predicate.Change(sql.FieldEqualFold(FieldDescription, v))
+// OutcomeEvidenceEqualFold applies the EqualFold predicate on the "outcome_evidence" field.
+func OutcomeEvidenceEqualFold(v string) predicate.Change {
+	return predicate.Change(sql.FieldEqualFold(FieldOutcomeEvidence, v))
 }
 
-// DescriptionContainsFold applies the ContainsFold predicate on the "description" field.
-func DescriptionContainsFold(v string) predicate.Change {
-	return predicate.Change(sql.FieldContainsFold(FieldDescription, v))
+// OutcomeEvidenceContainsFold applies the ContainsFold predicate on the "outcome_evidence" field.
+func OutcomeEvidenceContainsFold(v string) predicate.Change {
+	return predicate.Change(sql.FieldContainsFold(FieldOutcomeEvidence, v))
+}
+
+// AssessmentEvidenceEQ applies the EQ predicate on the "assessment_evidence" field.
+func AssessmentEvidenceEQ(v string) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldAssessmentEvidence, v))
+}
+
+// AssessmentEvidenceNEQ applies the NEQ predicate on the "assessment_evidence" field.
+func AssessmentEvidenceNEQ(v string) predicate.Change {
+	return predicate.Change(sql.FieldNEQ(FieldAssessmentEvidence, v))
+}
+
+// AssessmentEvidenceIn applies the In predicate on the "assessment_evidence" field.
+func AssessmentEvidenceIn(vs ...string) predicate.Change {
+	return predicate.Change(sql.FieldIn(FieldAssessmentEvidence, vs...))
+}
+
+// AssessmentEvidenceNotIn applies the NotIn predicate on the "assessment_evidence" field.
+func AssessmentEvidenceNotIn(vs ...string) predicate.Change {
+	return predicate.Change(sql.FieldNotIn(FieldAssessmentEvidence, vs...))
+}
+
+// AssessmentEvidenceGT applies the GT predicate on the "assessment_evidence" field.
+func AssessmentEvidenceGT(v string) predicate.Change {
+	return predicate.Change(sql.FieldGT(FieldAssessmentEvidence, v))
+}
+
+// AssessmentEvidenceGTE applies the GTE predicate on the "assessment_evidence" field.
+func AssessmentEvidenceGTE(v string) predicate.Change {
+	return predicate.Change(sql.FieldGTE(FieldAssessmentEvidence, v))
+}
+
+// AssessmentEvidenceLT applies the LT predicate on the "assessment_evidence" field.
+func AssessmentEvidenceLT(v string) predicate.Change {
+	return predicate.Change(sql.FieldLT(FieldAssessmentEvidence, v))
+}
+
+// AssessmentEvidenceLTE applies the LTE predicate on the "assessment_evidence" field.
+func AssessmentEvidenceLTE(v string) predicate.Change {
+	return predicate.Change(sql.FieldLTE(FieldAssessmentEvidence, v))
+}
+
+// AssessmentEvidenceContains applies the Contains predicate on the "assessment_evidence" field.
+func AssessmentEvidenceContains(v string) predicate.Change {
+	return predicate.Change(sql.FieldContains(FieldAssessmentEvidence, v))
+}
+
+// AssessmentEvidenceHasPrefix applies the HasPrefix predicate on the "assessment_evidence" field.
+func AssessmentEvidenceHasPrefix(v string) predicate.Change {
+	return predicate.Change(sql.FieldHasPrefix(FieldAssessmentEvidence, v))
+}
+
+// AssessmentEvidenceHasSuffix applies the HasSuffix predicate on the "assessment_evidence" field.
+func AssessmentEvidenceHasSuffix(v string) predicate.Change {
+	return predicate.Change(sql.FieldHasSuffix(FieldAssessmentEvidence, v))
+}
+
+// AssessmentEvidenceIsNil applies the IsNil predicate on the "assessment_evidence" field.
+func AssessmentEvidenceIsNil() predicate.Change {
+	return predicate.Change(sql.FieldIsNull(FieldAssessmentEvidence))
+}
+
+// AssessmentEvidenceNotNil applies the NotNil predicate on the "assessment_evidence" field.
+func AssessmentEvidenceNotNil() predicate.Change {
+	return predicate.Change(sql.FieldNotNull(FieldAssessmentEvidence))
+}
+
+// AssessmentEvidenceEqualFold applies the EqualFold predicate on the "assessment_evidence" field.
+func AssessmentEvidenceEqualFold(v string) predicate.Change {
+	return predicate.Change(sql.FieldEqualFold(FieldAssessmentEvidence, v))
+}
+
+// AssessmentEvidenceContainsFold applies the ContainsFold predicate on the "assessment_evidence" field.
+func AssessmentEvidenceContainsFold(v string) predicate.Change {
+	return predicate.Change(sql.FieldContainsFold(FieldAssessmentEvidence, v))
+}
+
+// AssessmentDigestEQ applies the EQ predicate on the "assessment_digest" field.
+func AssessmentDigestEQ(v string) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldAssessmentDigest, v))
+}
+
+// AssessmentDigestNEQ applies the NEQ predicate on the "assessment_digest" field.
+func AssessmentDigestNEQ(v string) predicate.Change {
+	return predicate.Change(sql.FieldNEQ(FieldAssessmentDigest, v))
+}
+
+// AssessmentDigestIn applies the In predicate on the "assessment_digest" field.
+func AssessmentDigestIn(vs ...string) predicate.Change {
+	return predicate.Change(sql.FieldIn(FieldAssessmentDigest, vs...))
+}
+
+// AssessmentDigestNotIn applies the NotIn predicate on the "assessment_digest" field.
+func AssessmentDigestNotIn(vs ...string) predicate.Change {
+	return predicate.Change(sql.FieldNotIn(FieldAssessmentDigest, vs...))
+}
+
+// AssessmentDigestGT applies the GT predicate on the "assessment_digest" field.
+func AssessmentDigestGT(v string) predicate.Change {
+	return predicate.Change(sql.FieldGT(FieldAssessmentDigest, v))
+}
+
+// AssessmentDigestGTE applies the GTE predicate on the "assessment_digest" field.
+func AssessmentDigestGTE(v string) predicate.Change {
+	return predicate.Change(sql.FieldGTE(FieldAssessmentDigest, v))
+}
+
+// AssessmentDigestLT applies the LT predicate on the "assessment_digest" field.
+func AssessmentDigestLT(v string) predicate.Change {
+	return predicate.Change(sql.FieldLT(FieldAssessmentDigest, v))
+}
+
+// AssessmentDigestLTE applies the LTE predicate on the "assessment_digest" field.
+func AssessmentDigestLTE(v string) predicate.Change {
+	return predicate.Change(sql.FieldLTE(FieldAssessmentDigest, v))
+}
+
+// AssessmentDigestContains applies the Contains predicate on the "assessment_digest" field.
+func AssessmentDigestContains(v string) predicate.Change {
+	return predicate.Change(sql.FieldContains(FieldAssessmentDigest, v))
+}
+
+// AssessmentDigestHasPrefix applies the HasPrefix predicate on the "assessment_digest" field.
+func AssessmentDigestHasPrefix(v string) predicate.Change {
+	return predicate.Change(sql.FieldHasPrefix(FieldAssessmentDigest, v))
+}
+
+// AssessmentDigestHasSuffix applies the HasSuffix predicate on the "assessment_digest" field.
+func AssessmentDigestHasSuffix(v string) predicate.Change {
+	return predicate.Change(sql.FieldHasSuffix(FieldAssessmentDigest, v))
+}
+
+// AssessmentDigestIsNil applies the IsNil predicate on the "assessment_digest" field.
+func AssessmentDigestIsNil() predicate.Change {
+	return predicate.Change(sql.FieldIsNull(FieldAssessmentDigest))
+}
+
+// AssessmentDigestNotNil applies the NotNil predicate on the "assessment_digest" field.
+func AssessmentDigestNotNil() predicate.Change {
+	return predicate.Change(sql.FieldNotNull(FieldAssessmentDigest))
+}
+
+// AssessmentDigestEqualFold applies the EqualFold predicate on the "assessment_digest" field.
+func AssessmentDigestEqualFold(v string) predicate.Change {
+	return predicate.Change(sql.FieldEqualFold(FieldAssessmentDigest, v))
+}
+
+// AssessmentDigestContainsFold applies the ContainsFold predicate on the "assessment_digest" field.
+func AssessmentDigestContainsFold(v string) predicate.Change {
+	return predicate.Change(sql.FieldContainsFold(FieldAssessmentDigest, v))
+}
+
+// AssessedByEQ applies the EQ predicate on the "assessed_by" field.
+func AssessedByEQ(v int) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldAssessedBy, v))
+}
+
+// AssessedByNEQ applies the NEQ predicate on the "assessed_by" field.
+func AssessedByNEQ(v int) predicate.Change {
+	return predicate.Change(sql.FieldNEQ(FieldAssessedBy, v))
+}
+
+// AssessedByIn applies the In predicate on the "assessed_by" field.
+func AssessedByIn(vs ...int) predicate.Change {
+	return predicate.Change(sql.FieldIn(FieldAssessedBy, vs...))
+}
+
+// AssessedByNotIn applies the NotIn predicate on the "assessed_by" field.
+func AssessedByNotIn(vs ...int) predicate.Change {
+	return predicate.Change(sql.FieldNotIn(FieldAssessedBy, vs...))
+}
+
+// AssessedByGT applies the GT predicate on the "assessed_by" field.
+func AssessedByGT(v int) predicate.Change {
+	return predicate.Change(sql.FieldGT(FieldAssessedBy, v))
+}
+
+// AssessedByGTE applies the GTE predicate on the "assessed_by" field.
+func AssessedByGTE(v int) predicate.Change {
+	return predicate.Change(sql.FieldGTE(FieldAssessedBy, v))
+}
+
+// AssessedByLT applies the LT predicate on the "assessed_by" field.
+func AssessedByLT(v int) predicate.Change {
+	return predicate.Change(sql.FieldLT(FieldAssessedBy, v))
+}
+
+// AssessedByLTE applies the LTE predicate on the "assessed_by" field.
+func AssessedByLTE(v int) predicate.Change {
+	return predicate.Change(sql.FieldLTE(FieldAssessedBy, v))
+}
+
+// AssessedByIsNil applies the IsNil predicate on the "assessed_by" field.
+func AssessedByIsNil() predicate.Change {
+	return predicate.Change(sql.FieldIsNull(FieldAssessedBy))
+}
+
+// AssessedByNotNil applies the NotNil predicate on the "assessed_by" field.
+func AssessedByNotNil() predicate.Change {
+	return predicate.Change(sql.FieldNotNull(FieldAssessedBy))
+}
+
+// AssessedAtEQ applies the EQ predicate on the "assessed_at" field.
+func AssessedAtEQ(v time.Time) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldAssessedAt, v))
+}
+
+// AssessedAtNEQ applies the NEQ predicate on the "assessed_at" field.
+func AssessedAtNEQ(v time.Time) predicate.Change {
+	return predicate.Change(sql.FieldNEQ(FieldAssessedAt, v))
+}
+
+// AssessedAtIn applies the In predicate on the "assessed_at" field.
+func AssessedAtIn(vs ...time.Time) predicate.Change {
+	return predicate.Change(sql.FieldIn(FieldAssessedAt, vs...))
+}
+
+// AssessedAtNotIn applies the NotIn predicate on the "assessed_at" field.
+func AssessedAtNotIn(vs ...time.Time) predicate.Change {
+	return predicate.Change(sql.FieldNotIn(FieldAssessedAt, vs...))
+}
+
+// AssessedAtGT applies the GT predicate on the "assessed_at" field.
+func AssessedAtGT(v time.Time) predicate.Change {
+	return predicate.Change(sql.FieldGT(FieldAssessedAt, v))
+}
+
+// AssessedAtGTE applies the GTE predicate on the "assessed_at" field.
+func AssessedAtGTE(v time.Time) predicate.Change {
+	return predicate.Change(sql.FieldGTE(FieldAssessedAt, v))
+}
+
+// AssessedAtLT applies the LT predicate on the "assessed_at" field.
+func AssessedAtLT(v time.Time) predicate.Change {
+	return predicate.Change(sql.FieldLT(FieldAssessedAt, v))
+}
+
+// AssessedAtLTE applies the LTE predicate on the "assessed_at" field.
+func AssessedAtLTE(v time.Time) predicate.Change {
+	return predicate.Change(sql.FieldLTE(FieldAssessedAt, v))
+}
+
+// AssessedAtIsNil applies the IsNil predicate on the "assessed_at" field.
+func AssessedAtIsNil() predicate.Change {
+	return predicate.Change(sql.FieldIsNull(FieldAssessedAt))
+}
+
+// AssessedAtNotNil applies the NotNil predicate on the "assessed_at" field.
+func AssessedAtNotNil() predicate.Change {
+	return predicate.Change(sql.FieldNotNull(FieldAssessedAt))
+}
+
+// ReviewedByEQ applies the EQ predicate on the "reviewed_by" field.
+func ReviewedByEQ(v int) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldReviewedBy, v))
+}
+
+// ReviewedByNEQ applies the NEQ predicate on the "reviewed_by" field.
+func ReviewedByNEQ(v int) predicate.Change {
+	return predicate.Change(sql.FieldNEQ(FieldReviewedBy, v))
+}
+
+// ReviewedByIn applies the In predicate on the "reviewed_by" field.
+func ReviewedByIn(vs ...int) predicate.Change {
+	return predicate.Change(sql.FieldIn(FieldReviewedBy, vs...))
+}
+
+// ReviewedByNotIn applies the NotIn predicate on the "reviewed_by" field.
+func ReviewedByNotIn(vs ...int) predicate.Change {
+	return predicate.Change(sql.FieldNotIn(FieldReviewedBy, vs...))
+}
+
+// ReviewedByGT applies the GT predicate on the "reviewed_by" field.
+func ReviewedByGT(v int) predicate.Change {
+	return predicate.Change(sql.FieldGT(FieldReviewedBy, v))
+}
+
+// ReviewedByGTE applies the GTE predicate on the "reviewed_by" field.
+func ReviewedByGTE(v int) predicate.Change {
+	return predicate.Change(sql.FieldGTE(FieldReviewedBy, v))
+}
+
+// ReviewedByLT applies the LT predicate on the "reviewed_by" field.
+func ReviewedByLT(v int) predicate.Change {
+	return predicate.Change(sql.FieldLT(FieldReviewedBy, v))
+}
+
+// ReviewedByLTE applies the LTE predicate on the "reviewed_by" field.
+func ReviewedByLTE(v int) predicate.Change {
+	return predicate.Change(sql.FieldLTE(FieldReviewedBy, v))
+}
+
+// ReviewedByIsNil applies the IsNil predicate on the "reviewed_by" field.
+func ReviewedByIsNil() predicate.Change {
+	return predicate.Change(sql.FieldIsNull(FieldReviewedBy))
+}
+
+// ReviewedByNotNil applies the NotNil predicate on the "reviewed_by" field.
+func ReviewedByNotNil() predicate.Change {
+	return predicate.Change(sql.FieldNotNull(FieldReviewedBy))
+}
+
+// ReviewedAtEQ applies the EQ predicate on the "reviewed_at" field.
+func ReviewedAtEQ(v time.Time) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldReviewedAt, v))
+}
+
+// ReviewedAtNEQ applies the NEQ predicate on the "reviewed_at" field.
+func ReviewedAtNEQ(v time.Time) predicate.Change {
+	return predicate.Change(sql.FieldNEQ(FieldReviewedAt, v))
+}
+
+// ReviewedAtIn applies the In predicate on the "reviewed_at" field.
+func ReviewedAtIn(vs ...time.Time) predicate.Change {
+	return predicate.Change(sql.FieldIn(FieldReviewedAt, vs...))
+}
+
+// ReviewedAtNotIn applies the NotIn predicate on the "reviewed_at" field.
+func ReviewedAtNotIn(vs ...time.Time) predicate.Change {
+	return predicate.Change(sql.FieldNotIn(FieldReviewedAt, vs...))
+}
+
+// ReviewedAtGT applies the GT predicate on the "reviewed_at" field.
+func ReviewedAtGT(v time.Time) predicate.Change {
+	return predicate.Change(sql.FieldGT(FieldReviewedAt, v))
+}
+
+// ReviewedAtGTE applies the GTE predicate on the "reviewed_at" field.
+func ReviewedAtGTE(v time.Time) predicate.Change {
+	return predicate.Change(sql.FieldGTE(FieldReviewedAt, v))
+}
+
+// ReviewedAtLT applies the LT predicate on the "reviewed_at" field.
+func ReviewedAtLT(v time.Time) predicate.Change {
+	return predicate.Change(sql.FieldLT(FieldReviewedAt, v))
+}
+
+// ReviewedAtLTE applies the LTE predicate on the "reviewed_at" field.
+func ReviewedAtLTE(v time.Time) predicate.Change {
+	return predicate.Change(sql.FieldLTE(FieldReviewedAt, v))
+}
+
+// ReviewedAtIsNil applies the IsNil predicate on the "reviewed_at" field.
+func ReviewedAtIsNil() predicate.Change {
+	return predicate.Change(sql.FieldIsNull(FieldReviewedAt))
+}
+
+// ReviewedAtNotNil applies the NotNil predicate on the "reviewed_at" field.
+func ReviewedAtNotNil() predicate.Change {
+	return predicate.Change(sql.FieldNotNull(FieldReviewedAt))
+}
+
+// ReviewEvidenceEQ applies the EQ predicate on the "review_evidence" field.
+func ReviewEvidenceEQ(v string) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldReviewEvidence, v))
+}
+
+// ReviewEvidenceNEQ applies the NEQ predicate on the "review_evidence" field.
+func ReviewEvidenceNEQ(v string) predicate.Change {
+	return predicate.Change(sql.FieldNEQ(FieldReviewEvidence, v))
+}
+
+// ReviewEvidenceIn applies the In predicate on the "review_evidence" field.
+func ReviewEvidenceIn(vs ...string) predicate.Change {
+	return predicate.Change(sql.FieldIn(FieldReviewEvidence, vs...))
+}
+
+// ReviewEvidenceNotIn applies the NotIn predicate on the "review_evidence" field.
+func ReviewEvidenceNotIn(vs ...string) predicate.Change {
+	return predicate.Change(sql.FieldNotIn(FieldReviewEvidence, vs...))
+}
+
+// ReviewEvidenceGT applies the GT predicate on the "review_evidence" field.
+func ReviewEvidenceGT(v string) predicate.Change {
+	return predicate.Change(sql.FieldGT(FieldReviewEvidence, v))
+}
+
+// ReviewEvidenceGTE applies the GTE predicate on the "review_evidence" field.
+func ReviewEvidenceGTE(v string) predicate.Change {
+	return predicate.Change(sql.FieldGTE(FieldReviewEvidence, v))
+}
+
+// ReviewEvidenceLT applies the LT predicate on the "review_evidence" field.
+func ReviewEvidenceLT(v string) predicate.Change {
+	return predicate.Change(sql.FieldLT(FieldReviewEvidence, v))
+}
+
+// ReviewEvidenceLTE applies the LTE predicate on the "review_evidence" field.
+func ReviewEvidenceLTE(v string) predicate.Change {
+	return predicate.Change(sql.FieldLTE(FieldReviewEvidence, v))
+}
+
+// ReviewEvidenceContains applies the Contains predicate on the "review_evidence" field.
+func ReviewEvidenceContains(v string) predicate.Change {
+	return predicate.Change(sql.FieldContains(FieldReviewEvidence, v))
+}
+
+// ReviewEvidenceHasPrefix applies the HasPrefix predicate on the "review_evidence" field.
+func ReviewEvidenceHasPrefix(v string) predicate.Change {
+	return predicate.Change(sql.FieldHasPrefix(FieldReviewEvidence, v))
+}
+
+// ReviewEvidenceHasSuffix applies the HasSuffix predicate on the "review_evidence" field.
+func ReviewEvidenceHasSuffix(v string) predicate.Change {
+	return predicate.Change(sql.FieldHasSuffix(FieldReviewEvidence, v))
+}
+
+// ReviewEvidenceIsNil applies the IsNil predicate on the "review_evidence" field.
+func ReviewEvidenceIsNil() predicate.Change {
+	return predicate.Change(sql.FieldIsNull(FieldReviewEvidence))
+}
+
+// ReviewEvidenceNotNil applies the NotNil predicate on the "review_evidence" field.
+func ReviewEvidenceNotNil() predicate.Change {
+	return predicate.Change(sql.FieldNotNull(FieldReviewEvidence))
+}
+
+// ReviewEvidenceEqualFold applies the EqualFold predicate on the "review_evidence" field.
+func ReviewEvidenceEqualFold(v string) predicate.Change {
+	return predicate.Change(sql.FieldEqualFold(FieldReviewEvidence, v))
+}
+
+// ReviewEvidenceContainsFold applies the ContainsFold predicate on the "review_evidence" field.
+func ReviewEvidenceContainsFold(v string) predicate.Change {
+	return predicate.Change(sql.FieldContainsFold(FieldReviewEvidence, v))
+}
+
+// ReviewDigestEQ applies the EQ predicate on the "review_digest" field.
+func ReviewDigestEQ(v string) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldReviewDigest, v))
+}
+
+// ReviewDigestNEQ applies the NEQ predicate on the "review_digest" field.
+func ReviewDigestNEQ(v string) predicate.Change {
+	return predicate.Change(sql.FieldNEQ(FieldReviewDigest, v))
+}
+
+// ReviewDigestIn applies the In predicate on the "review_digest" field.
+func ReviewDigestIn(vs ...string) predicate.Change {
+	return predicate.Change(sql.FieldIn(FieldReviewDigest, vs...))
+}
+
+// ReviewDigestNotIn applies the NotIn predicate on the "review_digest" field.
+func ReviewDigestNotIn(vs ...string) predicate.Change {
+	return predicate.Change(sql.FieldNotIn(FieldReviewDigest, vs...))
+}
+
+// ReviewDigestGT applies the GT predicate on the "review_digest" field.
+func ReviewDigestGT(v string) predicate.Change {
+	return predicate.Change(sql.FieldGT(FieldReviewDigest, v))
+}
+
+// ReviewDigestGTE applies the GTE predicate on the "review_digest" field.
+func ReviewDigestGTE(v string) predicate.Change {
+	return predicate.Change(sql.FieldGTE(FieldReviewDigest, v))
+}
+
+// ReviewDigestLT applies the LT predicate on the "review_digest" field.
+func ReviewDigestLT(v string) predicate.Change {
+	return predicate.Change(sql.FieldLT(FieldReviewDigest, v))
+}
+
+// ReviewDigestLTE applies the LTE predicate on the "review_digest" field.
+func ReviewDigestLTE(v string) predicate.Change {
+	return predicate.Change(sql.FieldLTE(FieldReviewDigest, v))
+}
+
+// ReviewDigestContains applies the Contains predicate on the "review_digest" field.
+func ReviewDigestContains(v string) predicate.Change {
+	return predicate.Change(sql.FieldContains(FieldReviewDigest, v))
+}
+
+// ReviewDigestHasPrefix applies the HasPrefix predicate on the "review_digest" field.
+func ReviewDigestHasPrefix(v string) predicate.Change {
+	return predicate.Change(sql.FieldHasPrefix(FieldReviewDigest, v))
+}
+
+// ReviewDigestHasSuffix applies the HasSuffix predicate on the "review_digest" field.
+func ReviewDigestHasSuffix(v string) predicate.Change {
+	return predicate.Change(sql.FieldHasSuffix(FieldReviewDigest, v))
+}
+
+// ReviewDigestIsNil applies the IsNil predicate on the "review_digest" field.
+func ReviewDigestIsNil() predicate.Change {
+	return predicate.Change(sql.FieldIsNull(FieldReviewDigest))
+}
+
+// ReviewDigestNotNil applies the NotNil predicate on the "review_digest" field.
+func ReviewDigestNotNil() predicate.Change {
+	return predicate.Change(sql.FieldNotNull(FieldReviewDigest))
+}
+
+// ReviewDigestEqualFold applies the EqualFold predicate on the "review_digest" field.
+func ReviewDigestEqualFold(v string) predicate.Change {
+	return predicate.Change(sql.FieldEqualFold(FieldReviewDigest, v))
+}
+
+// ReviewDigestContainsFold applies the ContainsFold predicate on the "review_digest" field.
+func ReviewDigestContainsFold(v string) predicate.Change {
+	return predicate.Change(sql.FieldContainsFold(FieldReviewDigest, v))
+}
+
+// StandardTemplateIDEQ applies the EQ predicate on the "standard_template_id" field.
+func StandardTemplateIDEQ(v int) predicate.Change {
+	return predicate.Change(sql.FieldEQ(FieldStandardTemplateID, v))
+}
+
+// StandardTemplateIDNEQ applies the NEQ predicate on the "standard_template_id" field.
+func StandardTemplateIDNEQ(v int) predicate.Change {
+	return predicate.Change(sql.FieldNEQ(FieldStandardTemplateID, v))
+}
+
+// StandardTemplateIDIn applies the In predicate on the "standard_template_id" field.
+func StandardTemplateIDIn(vs ...int) predicate.Change {
+	return predicate.Change(sql.FieldIn(FieldStandardTemplateID, vs...))
+}
+
+// StandardTemplateIDNotIn applies the NotIn predicate on the "standard_template_id" field.
+func StandardTemplateIDNotIn(vs ...int) predicate.Change {
+	return predicate.Change(sql.FieldNotIn(FieldStandardTemplateID, vs...))
+}
+
+// StandardTemplateIDIsNil applies the IsNil predicate on the "standard_template_id" field.
+func StandardTemplateIDIsNil() predicate.Change {
+	return predicate.Change(sql.FieldIsNull(FieldStandardTemplateID))
+}
+
+// StandardTemplateIDNotNil applies the NotNil predicate on the "standard_template_id" field.
+func StandardTemplateIDNotNil() predicate.Change {
+	return predicate.Change(sql.FieldNotNull(FieldStandardTemplateID))
+}
+
+// StandardPolicyIsNil applies the IsNil predicate on the "standard_policy" field.
+func StandardPolicyIsNil() predicate.Change {
+	return predicate.Change(sql.FieldIsNull(FieldStandardPolicy))
+}
+
+// StandardPolicyNotNil applies the NotNil predicate on the "standard_policy" field.
+func StandardPolicyNotNil() predicate.Change {
+	return predicate.Change(sql.FieldNotNull(FieldStandardPolicy))
 }
 
 // JustificationEQ applies the EQ predicate on the "justification" field.
@@ -435,136 +995,6 @@ func TypeContainsFold(v string) predicate.Change {
 	return predicate.Change(sql.FieldContainsFold(FieldType, v))
 }
 
-// StatusEQ applies the EQ predicate on the "status" field.
-func StatusEQ(v string) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldStatus, v))
-}
-
-// StatusNEQ applies the NEQ predicate on the "status" field.
-func StatusNEQ(v string) predicate.Change {
-	return predicate.Change(sql.FieldNEQ(FieldStatus, v))
-}
-
-// StatusIn applies the In predicate on the "status" field.
-func StatusIn(vs ...string) predicate.Change {
-	return predicate.Change(sql.FieldIn(FieldStatus, vs...))
-}
-
-// StatusNotIn applies the NotIn predicate on the "status" field.
-func StatusNotIn(vs ...string) predicate.Change {
-	return predicate.Change(sql.FieldNotIn(FieldStatus, vs...))
-}
-
-// StatusGT applies the GT predicate on the "status" field.
-func StatusGT(v string) predicate.Change {
-	return predicate.Change(sql.FieldGT(FieldStatus, v))
-}
-
-// StatusGTE applies the GTE predicate on the "status" field.
-func StatusGTE(v string) predicate.Change {
-	return predicate.Change(sql.FieldGTE(FieldStatus, v))
-}
-
-// StatusLT applies the LT predicate on the "status" field.
-func StatusLT(v string) predicate.Change {
-	return predicate.Change(sql.FieldLT(FieldStatus, v))
-}
-
-// StatusLTE applies the LTE predicate on the "status" field.
-func StatusLTE(v string) predicate.Change {
-	return predicate.Change(sql.FieldLTE(FieldStatus, v))
-}
-
-// StatusContains applies the Contains predicate on the "status" field.
-func StatusContains(v string) predicate.Change {
-	return predicate.Change(sql.FieldContains(FieldStatus, v))
-}
-
-// StatusHasPrefix applies the HasPrefix predicate on the "status" field.
-func StatusHasPrefix(v string) predicate.Change {
-	return predicate.Change(sql.FieldHasPrefix(FieldStatus, v))
-}
-
-// StatusHasSuffix applies the HasSuffix predicate on the "status" field.
-func StatusHasSuffix(v string) predicate.Change {
-	return predicate.Change(sql.FieldHasSuffix(FieldStatus, v))
-}
-
-// StatusEqualFold applies the EqualFold predicate on the "status" field.
-func StatusEqualFold(v string) predicate.Change {
-	return predicate.Change(sql.FieldEqualFold(FieldStatus, v))
-}
-
-// StatusContainsFold applies the ContainsFold predicate on the "status" field.
-func StatusContainsFold(v string) predicate.Change {
-	return predicate.Change(sql.FieldContainsFold(FieldStatus, v))
-}
-
-// PriorityEQ applies the EQ predicate on the "priority" field.
-func PriorityEQ(v string) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldPriority, v))
-}
-
-// PriorityNEQ applies the NEQ predicate on the "priority" field.
-func PriorityNEQ(v string) predicate.Change {
-	return predicate.Change(sql.FieldNEQ(FieldPriority, v))
-}
-
-// PriorityIn applies the In predicate on the "priority" field.
-func PriorityIn(vs ...string) predicate.Change {
-	return predicate.Change(sql.FieldIn(FieldPriority, vs...))
-}
-
-// PriorityNotIn applies the NotIn predicate on the "priority" field.
-func PriorityNotIn(vs ...string) predicate.Change {
-	return predicate.Change(sql.FieldNotIn(FieldPriority, vs...))
-}
-
-// PriorityGT applies the GT predicate on the "priority" field.
-func PriorityGT(v string) predicate.Change {
-	return predicate.Change(sql.FieldGT(FieldPriority, v))
-}
-
-// PriorityGTE applies the GTE predicate on the "priority" field.
-func PriorityGTE(v string) predicate.Change {
-	return predicate.Change(sql.FieldGTE(FieldPriority, v))
-}
-
-// PriorityLT applies the LT predicate on the "priority" field.
-func PriorityLT(v string) predicate.Change {
-	return predicate.Change(sql.FieldLT(FieldPriority, v))
-}
-
-// PriorityLTE applies the LTE predicate on the "priority" field.
-func PriorityLTE(v string) predicate.Change {
-	return predicate.Change(sql.FieldLTE(FieldPriority, v))
-}
-
-// PriorityContains applies the Contains predicate on the "priority" field.
-func PriorityContains(v string) predicate.Change {
-	return predicate.Change(sql.FieldContains(FieldPriority, v))
-}
-
-// PriorityHasPrefix applies the HasPrefix predicate on the "priority" field.
-func PriorityHasPrefix(v string) predicate.Change {
-	return predicate.Change(sql.FieldHasPrefix(FieldPriority, v))
-}
-
-// PriorityHasSuffix applies the HasSuffix predicate on the "priority" field.
-func PriorityHasSuffix(v string) predicate.Change {
-	return predicate.Change(sql.FieldHasSuffix(FieldPriority, v))
-}
-
-// PriorityEqualFold applies the EqualFold predicate on the "priority" field.
-func PriorityEqualFold(v string) predicate.Change {
-	return predicate.Change(sql.FieldEqualFold(FieldPriority, v))
-}
-
-// PriorityContainsFold applies the ContainsFold predicate on the "priority" field.
-func PriorityContainsFold(v string) predicate.Change {
-	return predicate.Change(sql.FieldContainsFold(FieldPriority, v))
-}
-
 // ImpactScopeEQ applies the EQ predicate on the "impact_scope" field.
 func ImpactScopeEQ(v string) predicate.Change {
 	return predicate.Change(sql.FieldEQ(FieldImpactScope, v))
@@ -695,96 +1125,6 @@ func RiskLevelContainsFold(v string) predicate.Change {
 	return predicate.Change(sql.FieldContainsFold(FieldRiskLevel, v))
 }
 
-// AssigneeIDEQ applies the EQ predicate on the "assignee_id" field.
-func AssigneeIDEQ(v int) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldAssigneeID, v))
-}
-
-// AssigneeIDNEQ applies the NEQ predicate on the "assignee_id" field.
-func AssigneeIDNEQ(v int) predicate.Change {
-	return predicate.Change(sql.FieldNEQ(FieldAssigneeID, v))
-}
-
-// AssigneeIDIn applies the In predicate on the "assignee_id" field.
-func AssigneeIDIn(vs ...int) predicate.Change {
-	return predicate.Change(sql.FieldIn(FieldAssigneeID, vs...))
-}
-
-// AssigneeIDNotIn applies the NotIn predicate on the "assignee_id" field.
-func AssigneeIDNotIn(vs ...int) predicate.Change {
-	return predicate.Change(sql.FieldNotIn(FieldAssigneeID, vs...))
-}
-
-// AssigneeIDGT applies the GT predicate on the "assignee_id" field.
-func AssigneeIDGT(v int) predicate.Change {
-	return predicate.Change(sql.FieldGT(FieldAssigneeID, v))
-}
-
-// AssigneeIDGTE applies the GTE predicate on the "assignee_id" field.
-func AssigneeIDGTE(v int) predicate.Change {
-	return predicate.Change(sql.FieldGTE(FieldAssigneeID, v))
-}
-
-// AssigneeIDLT applies the LT predicate on the "assignee_id" field.
-func AssigneeIDLT(v int) predicate.Change {
-	return predicate.Change(sql.FieldLT(FieldAssigneeID, v))
-}
-
-// AssigneeIDLTE applies the LTE predicate on the "assignee_id" field.
-func AssigneeIDLTE(v int) predicate.Change {
-	return predicate.Change(sql.FieldLTE(FieldAssigneeID, v))
-}
-
-// AssigneeIDIsNil applies the IsNil predicate on the "assignee_id" field.
-func AssigneeIDIsNil() predicate.Change {
-	return predicate.Change(sql.FieldIsNull(FieldAssigneeID))
-}
-
-// AssigneeIDNotNil applies the NotNil predicate on the "assignee_id" field.
-func AssigneeIDNotNil() predicate.Change {
-	return predicate.Change(sql.FieldNotNull(FieldAssigneeID))
-}
-
-// CreatedByEQ applies the EQ predicate on the "created_by" field.
-func CreatedByEQ(v int) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldCreatedBy, v))
-}
-
-// CreatedByNEQ applies the NEQ predicate on the "created_by" field.
-func CreatedByNEQ(v int) predicate.Change {
-	return predicate.Change(sql.FieldNEQ(FieldCreatedBy, v))
-}
-
-// CreatedByIn applies the In predicate on the "created_by" field.
-func CreatedByIn(vs ...int) predicate.Change {
-	return predicate.Change(sql.FieldIn(FieldCreatedBy, vs...))
-}
-
-// CreatedByNotIn applies the NotIn predicate on the "created_by" field.
-func CreatedByNotIn(vs ...int) predicate.Change {
-	return predicate.Change(sql.FieldNotIn(FieldCreatedBy, vs...))
-}
-
-// CreatedByGT applies the GT predicate on the "created_by" field.
-func CreatedByGT(v int) predicate.Change {
-	return predicate.Change(sql.FieldGT(FieldCreatedBy, v))
-}
-
-// CreatedByGTE applies the GTE predicate on the "created_by" field.
-func CreatedByGTE(v int) predicate.Change {
-	return predicate.Change(sql.FieldGTE(FieldCreatedBy, v))
-}
-
-// CreatedByLT applies the LT predicate on the "created_by" field.
-func CreatedByLT(v int) predicate.Change {
-	return predicate.Change(sql.FieldLT(FieldCreatedBy, v))
-}
-
-// CreatedByLTE applies the LTE predicate on the "created_by" field.
-func CreatedByLTE(v int) predicate.Change {
-	return predicate.Change(sql.FieldLTE(FieldCreatedBy, v))
-}
-
 // WorkItemIDEQ applies the EQ predicate on the "work_item_id" field.
 func WorkItemIDEQ(v int) predicate.Change {
 	return predicate.Change(sql.FieldEQ(FieldWorkItemID, v))
@@ -803,76 +1143,6 @@ func WorkItemIDIn(vs ...int) predicate.Change {
 // WorkItemIDNotIn applies the NotIn predicate on the "work_item_id" field.
 func WorkItemIDNotIn(vs ...int) predicate.Change {
 	return predicate.Change(sql.FieldNotIn(FieldWorkItemID, vs...))
-}
-
-// WorkItemIDGT applies the GT predicate on the "work_item_id" field.
-func WorkItemIDGT(v int) predicate.Change {
-	return predicate.Change(sql.FieldGT(FieldWorkItemID, v))
-}
-
-// WorkItemIDGTE applies the GTE predicate on the "work_item_id" field.
-func WorkItemIDGTE(v int) predicate.Change {
-	return predicate.Change(sql.FieldGTE(FieldWorkItemID, v))
-}
-
-// WorkItemIDLT applies the LT predicate on the "work_item_id" field.
-func WorkItemIDLT(v int) predicate.Change {
-	return predicate.Change(sql.FieldLT(FieldWorkItemID, v))
-}
-
-// WorkItemIDLTE applies the LTE predicate on the "work_item_id" field.
-func WorkItemIDLTE(v int) predicate.Change {
-	return predicate.Change(sql.FieldLTE(FieldWorkItemID, v))
-}
-
-// WorkItemIDIsNil applies the IsNil predicate on the "work_item_id" field.
-func WorkItemIDIsNil() predicate.Change {
-	return predicate.Change(sql.FieldIsNull(FieldWorkItemID))
-}
-
-// WorkItemIDNotNil applies the NotNil predicate on the "work_item_id" field.
-func WorkItemIDNotNil() predicate.Change {
-	return predicate.Change(sql.FieldNotNull(FieldWorkItemID))
-}
-
-// TenantIDEQ applies the EQ predicate on the "tenant_id" field.
-func TenantIDEQ(v int) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldTenantID, v))
-}
-
-// TenantIDNEQ applies the NEQ predicate on the "tenant_id" field.
-func TenantIDNEQ(v int) predicate.Change {
-	return predicate.Change(sql.FieldNEQ(FieldTenantID, v))
-}
-
-// TenantIDIn applies the In predicate on the "tenant_id" field.
-func TenantIDIn(vs ...int) predicate.Change {
-	return predicate.Change(sql.FieldIn(FieldTenantID, vs...))
-}
-
-// TenantIDNotIn applies the NotIn predicate on the "tenant_id" field.
-func TenantIDNotIn(vs ...int) predicate.Change {
-	return predicate.Change(sql.FieldNotIn(FieldTenantID, vs...))
-}
-
-// TenantIDGT applies the GT predicate on the "tenant_id" field.
-func TenantIDGT(v int) predicate.Change {
-	return predicate.Change(sql.FieldGT(FieldTenantID, v))
-}
-
-// TenantIDGTE applies the GTE predicate on the "tenant_id" field.
-func TenantIDGTE(v int) predicate.Change {
-	return predicate.Change(sql.FieldGTE(FieldTenantID, v))
-}
-
-// TenantIDLT applies the LT predicate on the "tenant_id" field.
-func TenantIDLT(v int) predicate.Change {
-	return predicate.Change(sql.FieldLT(FieldTenantID, v))
-}
-
-// TenantIDLTE applies the LTE predicate on the "tenant_id" field.
-func TenantIDLTE(v int) predicate.Change {
-	return predicate.Change(sql.FieldLTE(FieldTenantID, v))
 }
 
 // PlannedStartDateEQ applies the EQ predicate on the "planned_start_date" field.
@@ -1235,111 +1505,44 @@ func AffectedCisNotNil() predicate.Change {
 	return predicate.Change(sql.FieldNotNull(FieldAffectedCis))
 }
 
-// RelatedTicketsIsNil applies the IsNil predicate on the "related_tickets" field.
-func RelatedTicketsIsNil() predicate.Change {
-	return predicate.Change(sql.FieldIsNull(FieldRelatedTickets))
-}
-
-// RelatedTicketsNotNil applies the NotNil predicate on the "related_tickets" field.
-func RelatedTicketsNotNil() predicate.Change {
-	return predicate.Change(sql.FieldNotNull(FieldRelatedTickets))
-}
-
-// CreatedAtEQ applies the EQ predicate on the "created_at" field.
-func CreatedAtEQ(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldCreatedAt, v))
-}
-
-// CreatedAtNEQ applies the NEQ predicate on the "created_at" field.
-func CreatedAtNEQ(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldNEQ(FieldCreatedAt, v))
-}
-
-// CreatedAtIn applies the In predicate on the "created_at" field.
-func CreatedAtIn(vs ...time.Time) predicate.Change {
-	return predicate.Change(sql.FieldIn(FieldCreatedAt, vs...))
-}
-
-// CreatedAtNotIn applies the NotIn predicate on the "created_at" field.
-func CreatedAtNotIn(vs ...time.Time) predicate.Change {
-	return predicate.Change(sql.FieldNotIn(FieldCreatedAt, vs...))
-}
-
-// CreatedAtGT applies the GT predicate on the "created_at" field.
-func CreatedAtGT(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldGT(FieldCreatedAt, v))
-}
-
-// CreatedAtGTE applies the GTE predicate on the "created_at" field.
-func CreatedAtGTE(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldGTE(FieldCreatedAt, v))
-}
-
-// CreatedAtLT applies the LT predicate on the "created_at" field.
-func CreatedAtLT(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldLT(FieldCreatedAt, v))
-}
-
-// CreatedAtLTE applies the LTE predicate on the "created_at" field.
-func CreatedAtLTE(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldLTE(FieldCreatedAt, v))
-}
-
-// UpdatedAtEQ applies the EQ predicate on the "updated_at" field.
-func UpdatedAtEQ(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldUpdatedAt, v))
-}
-
-// UpdatedAtNEQ applies the NEQ predicate on the "updated_at" field.
-func UpdatedAtNEQ(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldNEQ(FieldUpdatedAt, v))
-}
-
-// UpdatedAtIn applies the In predicate on the "updated_at" field.
-func UpdatedAtIn(vs ...time.Time) predicate.Change {
-	return predicate.Change(sql.FieldIn(FieldUpdatedAt, vs...))
-}
-
-// UpdatedAtNotIn applies the NotIn predicate on the "updated_at" field.
-func UpdatedAtNotIn(vs ...time.Time) predicate.Change {
-	return predicate.Change(sql.FieldNotIn(FieldUpdatedAt, vs...))
-}
-
-// UpdatedAtGT applies the GT predicate on the "updated_at" field.
-func UpdatedAtGT(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldGT(FieldUpdatedAt, v))
-}
-
-// UpdatedAtGTE applies the GTE predicate on the "updated_at" field.
-func UpdatedAtGTE(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldGTE(FieldUpdatedAt, v))
-}
-
-// UpdatedAtLT applies the LT predicate on the "updated_at" field.
-func UpdatedAtLT(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldLT(FieldUpdatedAt, v))
-}
-
-// UpdatedAtLTE applies the LTE predicate on the "updated_at" field.
-func UpdatedAtLTE(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldLTE(FieldUpdatedAt, v))
-}
-
-// HasProblems applies the HasEdge predicate on the "problems" edge.
-func HasProblems() predicate.Change {
+// HasStandardTemplate applies the HasEdge predicate on the "standard_template" edge.
+func HasStandardTemplate() predicate.Change {
 	return predicate.Change(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2M, true, ProblemsTable, ProblemsPrimaryKey...),
+			sqlgraph.Edge(sqlgraph.M2O, true, StandardTemplateTable, StandardTemplateColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})
 }
 
-// HasProblemsWith applies the HasEdge predicate on the "problems" edge with a given conditions (other predicates).
-func HasProblemsWith(preds ...predicate.Problem) predicate.Change {
+// HasStandardTemplateWith applies the HasEdge predicate on the "standard_template" edge with a given conditions (other predicates).
+func HasStandardTemplateWith(preds ...predicate.StandardChange) predicate.Change {
 	return predicate.Change(func(s *sql.Selector) {
-		step := newProblemsStep()
+		step := newStandardTemplateStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasWorkItem applies the HasEdge predicate on the "work_item" edge.
+func HasWorkItem() predicate.Change {
+	return predicate.Change(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, WorkItemTable, WorkItemColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasWorkItemWith applies the HasEdge predicate on the "work_item" edge with a given conditions (other predicates).
+func HasWorkItemWith(preds ...predicate.Ticket) predicate.Change {
+	return predicate.Change(func(s *sql.Selector) {
+		step := newWorkItemStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

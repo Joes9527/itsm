@@ -5,10 +5,12 @@ package ent
 import (
 	"encoding/json"
 	"fmt"
-	"itsm-backend/ent/processinstance"
-	"itsm-backend/ent/processtask"
 	"strings"
 	"time"
+
+	"itsm-backend/ent/processinstance"
+	"itsm-backend/ent/processtask"
+	"itsm-backend/internal/jsonvalue"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -33,6 +35,8 @@ type ProcessTask struct {
 	TaskType string `json:"task_type,omitempty"`
 	// 任务负责人
 	Assignee string `json:"assignee,omitempty"`
+	// Immutable task assignment source from the pinned process definition
+	AssigneeSource string `json:"assignee_source,omitempty"`
 	// 候选用户，逗号分隔
 	CandidateUsers string `json:"candidate_users,omitempty"`
 	// 候选组，逗号分隔
@@ -54,7 +58,7 @@ type ProcessTask struct {
 	// 表单Key
 	FormKey string `json:"form_key,omitempty"`
 	// 参与者可编辑的任务表单变量；回调路由和系统元数据不得存放在此字段
-	TaskVariables map[string]interface{} `json:"task_variables,omitempty"`
+	TaskVariables jsonvalue.NumberMap `json:"task_variables,omitempty"`
 	// 创建任务时从流程定义解析的不可变回调处理器 ID；显式哨兵表示无回调或无法解析
 	CallbackHandlerID string `json:"callback_handler_id,omitempty"`
 	// 创建任务时从流程定义解析的不可变回调任务类型
@@ -114,7 +118,7 @@ func (*ProcessTask) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case processtask.FieldID, processtask.FieldProcessInstanceID, processtask.FieldAggregationVersion, processtask.FieldTenantID:
 			values[i] = new(sql.NullInt64)
-		case processtask.FieldTaskID, processtask.FieldProcessDefinitionKey, processtask.FieldTaskDefinitionKey, processtask.FieldTaskName, processtask.FieldTaskType, processtask.FieldAssignee, processtask.FieldCandidateUsers, processtask.FieldCandidateGroups, processtask.FieldStatus, processtask.FieldPriority, processtask.FieldFormKey, processtask.FieldCallbackHandlerID, processtask.FieldCallbackTaskType, processtask.FieldCallbackAction, processtask.FieldCallbackConfigRef, processtask.FieldDescription, processtask.FieldCorrelationID, processtask.FieldParentTaskID, processtask.FieldRootTaskID:
+		case processtask.FieldTaskID, processtask.FieldProcessDefinitionKey, processtask.FieldTaskDefinitionKey, processtask.FieldTaskName, processtask.FieldTaskType, processtask.FieldAssignee, processtask.FieldAssigneeSource, processtask.FieldCandidateUsers, processtask.FieldCandidateGroups, processtask.FieldStatus, processtask.FieldPriority, processtask.FieldFormKey, processtask.FieldCallbackHandlerID, processtask.FieldCallbackTaskType, processtask.FieldCallbackAction, processtask.FieldCallbackConfigRef, processtask.FieldDescription, processtask.FieldCorrelationID, processtask.FieldParentTaskID, processtask.FieldRootTaskID:
 			values[i] = new(sql.NullString)
 		case processtask.FieldDueDate, processtask.FieldCreatedTime, processtask.FieldAssignedTime, processtask.FieldStartedTime, processtask.FieldCompletedTime, processtask.FieldCreatedAt, processtask.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -180,6 +184,12 @@ func (_m *ProcessTask) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field assignee", values[i])
 			} else if value.Valid {
 				_m.Assignee = value.String
+			}
+		case processtask.FieldAssigneeSource:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field assignee_source", values[i])
+			} else if value.Valid {
+				_m.AssigneeSource = value.String
 			}
 		case processtask.FieldCandidateUsers:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -382,6 +392,9 @@ func (_m *ProcessTask) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("assignee=")
 	builder.WriteString(_m.Assignee)
+	builder.WriteString(", ")
+	builder.WriteString("assignee_source=")
+	builder.WriteString(_m.AssigneeSource)
 	builder.WriteString(", ")
 	builder.WriteString("candidate_users=")
 	builder.WriteString(_m.CandidateUsers)

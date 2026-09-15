@@ -2,8 +2,9 @@ package bpmn
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 
 	"go.uber.org/zap"
@@ -18,7 +19,8 @@ import (
 // WorkItem 动作（resolve/close 等）走上游委派设计 §4.3 的 typed action API，
 // 不经过这个 Execute。
 type KafDelegateServiceTaskHandler struct {
-	logger *zap.SugaredLogger
+	logger      *zap.SugaredLogger
+	publication PublicationConfigurationProvider
 }
 
 // NewKafDelegateServiceTaskHandler 创建 KAF 委派任务处理器
@@ -41,14 +43,9 @@ func (h *KafDelegateServiceTaskHandler) IsAsync() bool {
 	return true
 }
 
-// Validate 验证配置
-func (h *KafDelegateServiceTaskHandler) Validate(ctx context.Context, config map[string]interface{}) error {
-	return nil
-}
-
 // Execute 只在委派任务完成后的异步回调阶段被调用一次，用于记录完成事件，
 // 不产生业务副作用。
-func (h *KafDelegateServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *KafDelegateServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error) {
 	taskID := ""
 	tenantID := 0
 	if task != nil {
@@ -60,9 +57,35 @@ func (h *KafDelegateServiceTaskHandler) Execute(ctx context.Context, task *ent.P
 	} else {
 		h.logger.Infow("KAF 委派任务已完成", "taskID", taskID, "tenantID", tenantID)
 	}
-	return &dto.ServiceTaskResult{Success: true, Message: "kaf_delegate 任务已完成"}, nil
+	return &CallbackEffect{Status: CallbackEffectApplied, Message: "kaf_delegate 任务已完成"}, nil
 }
 
 // 确保 KafDelegateServiceTaskHandler 实现了 ServiceTaskHandlerInterface 和 AsyncServiceTaskHandler
-var _ ServiceTaskHandlerInterface = (*KafDelegateServiceTaskHandler)(nil)
-var _ AsyncServiceTaskHandler = (*KafDelegateServiceTaskHandler)(nil)
+var (
+	_ ServiceTaskHandlerInterface = (*KafDelegateServiceTaskHandler)(nil)
+	_ AsyncServiceTaskHandler     = (*KafDelegateServiceTaskHandler)(nil)
+)
+
+func (h *KafDelegateServiceTaskHandler) SetPublicationConfiguration(owner PublicationConfigurationProvider) {
+	h.publication = owner
+}
+
+func (h *KafDelegateServiceTaskHandler) PublicationConfiguration(ctx context.Context, client *ent.Client, tenantID int, action, ref string) (json.RawMessage, error) {
+	if action == "" && ref == "" {
+		return json.Marshal(nil)
+	}
+	if h.publication == nil {
+		return json.Marshal(map[string]string{"action": action, "ref": ref, "validation": "unavailable"})
+	}
+	return h.publication.PublicationConfiguration(ctx, client, tenantID, action, ref)
+}
+
+func (h *KafDelegateServiceTaskHandler) ValidatePublicationConfiguration(ctx context.Context, client *ent.Client, tenantID int, action, ref string) error {
+	if action == "" && ref == "" {
+		return nil
+	}
+	if h.publication == nil {
+		return fmt.Errorf("delegation capability configuration owner is unavailable")
+	}
+	return h.publication.ValidatePublicationConfiguration(ctx, client, tenantID, action, ref)
+}

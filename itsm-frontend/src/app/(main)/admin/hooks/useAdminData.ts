@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { DashboardAPI } from '@/lib/api/dashboard-api';
-import { WorkflowAPI } from '@/lib/api/workflow-api';
+import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 
 export interface AdminStats {
   activeUsers: string | number | null;
@@ -27,7 +27,7 @@ export const useAdminData = () => {
         // 并行请求数据
         const [userStats, workflowStats] = await Promise.allSettled([
           DashboardAPI.getUserStats(),
-          WorkflowAPI.getWorkflows({ page: 1, pageSize: 1 }), // 只需获取总数，或者如果有专门的统计API更好
+          BPMNWorkflowApi.listProcessDefinitions({ page: 1, pageSize: 1 }),
         ]);
 
         const newStats: Partial<AdminStats> = {};
@@ -41,12 +41,15 @@ export const useAdminData = () => {
         if (workflowStats.status === 'fulfilled') {
           newStats.runningWorkflows = workflowStats.value.total; // 这里暂时用总数，因为getWorkflows返回列表
           // 如果有专门的 running instances 统计会更准确
-          // 注意：WorkflowAPI.getInstances() 可能更适合获取运行中的实例数
+          // 实例统计由 BPMN 运行时提供。
         }
 
         // 尝试获取运行中的工作流实例数
         try {
-          const instances = await WorkflowAPI.getInstances({ status: 'running', pageSize: 1 });
+          const instances = await BPMNWorkflowApi.listProcessInstances({
+            status: 'running',
+            pageSize: 1,
+          });
           newStats.runningWorkflows = instances.total;
         } catch (e) {
           console.warn('Failed to fetch running workflow instances', e);

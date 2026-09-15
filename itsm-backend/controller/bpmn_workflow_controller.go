@@ -8,7 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/database"
+
+	"itsm-backend/authorization"
 	"itsm-backend/common"
+	"itsm-backend/common/executionscope"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/middleware"
@@ -27,13 +31,13 @@ type BPMNWorkflowController struct {
 }
 
 // NewBPMNWorkflowController 创建BPMN工作流控制器
-func NewBPMNWorkflowController(processEngine service.ProcessEngine, versionService *service.BPMNVersionService, clients ...*ent.Client) *BPMNWorkflowController {
+func NewBPMNWorkflowController(processEngine service.ProcessEngine, versionService *service.BPMNVersionService, execution *database.ExecutionPolicy, clients ...*ent.Client) *BPMNWorkflowController {
 	controller := &BPMNWorkflowController{
 		processEngine:  processEngine,
 		versionService: versionService,
 	}
 	if len(clients) > 0 && clients[0] != nil {
-		controller.kafDelegationController = NewKafDelegationController(clients[0], processEngine)
+		controller.kafDelegationController = NewKafDelegationController(clients[0], processEngine, execution)
 	}
 	return controller
 }
@@ -51,7 +55,7 @@ func getBPMNTenantContext(ctx *gin.Context) (context.Context, int, bool) {
 	clientValue, _ := ctx.Get("client")
 	client, _ := clientValue.(*ent.Client)
 	hasPermission := func(resource, action string) bool {
-		return client != nil && middleware.HasResourcePermission(client, role, resource, action, tenantID)
+		return client != nil && authorization.HasResourcePermission(client, role, resource, action, tenantID)
 	}
 	scope := service.BPMNAccessScope{
 		UserID:                userID,
@@ -70,10 +74,15 @@ func getBPMNTenantContext(ctx *gin.Context) (context.Context, int, bool) {
 }
 
 func respondBPMNError(ctx *gin.Context, err error, fallback string) {
+	if common.RespondSerializationConflict(ctx, err) {
+		return
+	}
 	var appErr *common.AppError
 	errorClass := "internal"
 	if errors.As(err, &appErr) {
 		errorClass = string(appErr.Code)
+	} else if errors.Is(err, executionscope.ErrDenied) {
+		errorClass = string(common.ErrCodeForbidden)
 	} else if ent.IsNotFound(err) {
 		errorClass = "not_found"
 	}
@@ -83,6 +92,10 @@ func respondBPMNError(ctx *gin.Context, err error, fallback string) {
 		"request_id", ctx.GetString("request_id"),
 	)
 
+	if errors.Is(err, executionscope.ErrDenied) {
+		common.Forbidden(ctx, "无权执行此流程操作")
+		return
+	}
 	if errors.As(err, &appErr) {
 		switch appErr.Code {
 		case common.ErrCodeForbidden:
@@ -179,22 +192,6 @@ func (c *BPMNWorkflowController) RegisterRoutes(r *gin.RouterGroup) {
 		bpmn.POST("/tasks/:id/counter-sign", c.CreateCounterSignTasks)
 		bpmn.GET("/tasks/:id/counter-sign-status", c.GetCounterSignStatus)
 		bpmn.PUT("/tasks/:id/vote", c.Vote)
-	}
-}
-
-// RegisterWorkflowAliasRoutes registers the stricter permission-gated workflow aliases.
-func (c *BPMNWorkflowController) RegisterWorkflowAliasRoutes(r *gin.RouterGroup) {
-	workflow := r.Group("/workflow")
-	{
-		workflow.GET("/instances", middleware.RequirePermission("process_instance", "read"), c.ListProcessInstances)
-		workflow.GET("/instances/:id", middleware.RequirePermission("process_instance", "read"), c.GetProcessInstance)
-		workflow.POST("/instances", middleware.RequirePermission("process_instance", "create"), c.StartProcess)
-		workflow.PUT("/instances/:id/terminate", middleware.RequirePermission("process_instance", "update"), c.TerminateProcess)
-		workflow.PUT("/instances/:id/suspend", middleware.RequirePermission("process_instance", "update"), c.SuspendProcess)
-		workflow.PUT("/instances/:id/resume", middleware.RequirePermission("process_instance", "update"), c.ResumeProcess)
-		workflow.GET("/tasks", middleware.RequirePermission("task", "read"), c.ListUserTasks)
-		workflow.PUT("/tasks/:id/complete", middleware.RequirePermission("task", "update"), c.CompleteTask)
-		workflow.POST("/tasks/:id/claim", middleware.RequirePermission("task", "update"), c.ClaimTask)
 	}
 }
 
@@ -353,7 +350,7 @@ func (c *BPMNWorkflowController) UpdateProcessDefinition(ctx *gin.Context) {
 
 	definition, err := c.processEngine.ProcessDefinitionService().UpdateProcessDefinition(workflowCtx, key, version, &req)
 	if err != nil {
-		common.InternalError(ctx, "更新流程定义失败: "+err.Error())
+		respondBPMNError(ctx, err, "更新流程定义失败")
 		return
 	}
 
@@ -715,22 +712,12 @@ func (c *BPMNWorkflowController) GetTask(ctx *gin.Context) {
 		return
 	}
 
-	// 先尝试解析为数字ID（数据库自增ID）
-	id, err := strconv.Atoi(taskID)
-	var task interface{}
-	if err == nil {
-		// 数字ID，使用GetTaskByID
-		task, err = c.processEngine.TaskService().GetTaskByID(workflowCtx, id)
-	} else {
-		// 字符串ID（BPMN标准task_id），使用GetTask
-		task, err = c.processEngine.TaskService().GetTask(workflowCtx, taskID)
-	}
+	view, err := c.processEngine.TaskService().GetTaskView(workflowCtx, taskID)
 	if err != nil {
-		respondBPMNError(ctx, err, "任务不存在")
+		respondBPMNError(ctx, err, "读取任务视图失败")
 		return
 	}
-
-	common.Success(ctx, task)
+	common.Success(ctx, view)
 }
 
 // AssignTask 分配任务
@@ -1164,4 +1151,10 @@ func (c *BPMNWorkflowController) GetVersionChangeLogsByID(ctx *gin.Context) {
 	}
 
 	common.Success(ctx, changelogs)
+}
+
+func (c *BPMNWorkflowController) SetApprovedAccessReader(owner service.ApprovedAccessReader) {
+	if c.kafDelegationController != nil {
+		c.kafDelegationController.service.SetApprovedAccessReader(owner)
+	}
 }

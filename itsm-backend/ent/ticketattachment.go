@@ -19,6 +19,8 @@ type TicketAttachment struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
+	// Immutable scoped inbound attachment identity; NULL for interactive uploads
+	SourceKey *string `json:"source_key,omitempty"`
 	// 工单ID
 	TicketID int `json:"ticket_id,omitempty"`
 	// 文件名
@@ -85,7 +87,7 @@ func (*TicketAttachment) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case ticketattachment.FieldID, ticketattachment.FieldTicketID, ticketattachment.FieldFileSize, ticketattachment.FieldUploadedBy, ticketattachment.FieldTenantID:
 			values[i] = new(sql.NullInt64)
-		case ticketattachment.FieldFileName, ticketattachment.FieldFilePath, ticketattachment.FieldFileURL, ticketattachment.FieldFileType, ticketattachment.FieldMimeType:
+		case ticketattachment.FieldSourceKey, ticketattachment.FieldFileName, ticketattachment.FieldFilePath, ticketattachment.FieldFileURL, ticketattachment.FieldFileType, ticketattachment.FieldMimeType:
 			values[i] = new(sql.NullString)
 		case ticketattachment.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -110,6 +112,13 @@ func (_m *TicketAttachment) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
+		case ticketattachment.FieldSourceKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field source_key", values[i])
+			} else if value.Valid {
+				_m.SourceKey = new(string)
+				*_m.SourceKey = value.String
+			}
 		case ticketattachment.FieldTicketID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field ticket_id", values[i])
@@ -216,6 +225,11 @@ func (_m *TicketAttachment) String() string {
 	var builder strings.Builder
 	builder.WriteString("TicketAttachment(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	if v := _m.SourceKey; v != nil {
+		builder.WriteString("source_key=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
 	builder.WriteString("ticket_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TicketID))
 	builder.WriteString(", ")

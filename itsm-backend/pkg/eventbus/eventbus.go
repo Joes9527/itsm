@@ -3,7 +3,9 @@ package eventbus
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"itsm-backend/config"
@@ -27,27 +29,129 @@ type stableEvent interface {
 // Envelope 事件信封：解决 BaseEvent 未导出字段被 JSON 序列化丢失的问题。
 // 字段按 API 契约使用 camelCase。
 type Envelope struct {
-	EventType  string          `json:"eventType"`
-	TenantID   string          `json:"tenantId"`
-	OccurredAt time.Time       `json:"occurredAt"`
-	Payload    json.RawMessage `json:"payload"`
+	EventID    string             `json:"eventId,omitempty"`
+	Execution  *ExecutionIdentity `json:"execution,omitempty"`
+	EventType  string             `json:"eventType"`
+	TenantID   string             `json:"tenantId"`
+	OccurredAt time.Time          `json:"occurredAt"`
+	Payload    json.RawMessage    `json:"payload"`
 }
 
 // WatermillEventBus implements shared.EventBus interface using Watermill with Redis Stream
 type WatermillEventBus struct {
-	publisher  message.Publisher
-	subscriber *redisstream.Subscriber
-	logger     *zap.SugaredLogger
+	authority           EventAuthority
+	rejectionClient     redis.Cmdable
+	routes              *streamRoutes
+	publisher           message.Publisher
+	subscriber          streamSubscriber
+	newSubscriber       func(string) (streamSubscriber, error)
+	ownedSubscribers    map[string]streamSubscriber
+	establishing        sync.WaitGroup
+	activeSubscriptions map[string]bool
+	logger              *zap.SugaredLogger
+	mu                  sync.Mutex
+	started             bool
+	closed              bool
+	closeDone           chan struct{}
+	closeErr            error
+	ctx                 context.Context
+	cancel              context.CancelFunc
+	consumers           sync.WaitGroup
+	subscriptions       []subscription
+}
+
+// ExecutionEnvelopeHandler requires persistent identity and source validation
+// before invocation in every execution mode. It never accepts flattened payloads.
+type ExecutionEnvelopeHandler interface {
+	shared.EventHandler
+	ExecutionEnvelopeRequired()
+}
+
+type ContextEventHandler interface {
+	HandleContext(context.Context, interface{}) error
+}
+
+type streamSubscriber interface {
+	Subscribe(context.Context, string) (<-chan *message.Message, error)
+	Close() error
+}
+type subscription struct {
+	consumer string
+	topic    string
+	handler  shared.EventHandler
+}
+
+// RegisterSubscription only describes runtime work; it does not touch Redis.
+func (eb *WatermillEventBus) RegisterSubscription(topic string, handler shared.EventHandler) error {
+	eb.mu.Lock()
+	defer eb.mu.Unlock()
+	if eb.started || eb.closed || topic == "" || handler == nil {
+		return fmt.Errorf("cannot register event subscription")
+	}
+	consumer, err := eb.consumerIdentity(handler)
+	if err != nil {
+		return err
+	}
+	if consumer != "" {
+		for _, existing := range eb.subscriptions {
+			if existing.topic == topic && existing.consumer == consumer {
+				return fmt.Errorf("duplicate durable event subscription")
+			}
+		}
+	}
+	eb.subscriptions = append(eb.subscriptions, subscription{consumer: consumer, topic: topic, handler: handler})
+	return nil
+}
+
+func (eb *WatermillEventBus) Start(ctx context.Context) error {
+	eb.mu.Lock()
+	if ctx == nil || eb.started || eb.closed {
+		eb.mu.Unlock()
+		return fmt.Errorf("event runtime cannot start")
+	}
+	if err := ctx.Err(); err != nil {
+		eb.mu.Unlock()
+		return err
+	}
+	eb.ctx, eb.cancel = context.WithCancel(ctx)
+	eb.started = true
+	subscriptions := append([]subscription(nil), eb.subscriptions...)
+	eb.mu.Unlock()
+	for _, sub := range subscriptions {
+		if err := eb.subscribe(sub.topic, sub.consumer, sub.handler); err != nil {
+			_ = eb.Close()
+			return err
+		}
+	}
+	return nil
 }
 
 // NewWatermillEventBus creates a new WatermillEventBus instance
-func NewWatermillEventBus(cfg *config.RedisConfig, logger *zap.SugaredLogger) (*WatermillEventBus, error) {
-	// Create Redis client
-	rdb := redis.NewClient(&redis.Options{
+func NewWatermillEventBus(cfg *config.RedisConfig, execution config.ExecutionConfig, authority EventAuthority, logger *zap.SugaredLogger) (*WatermillEventBus, error) {
+	routes, err := newStreamRoutes(execution)
+	if err != nil {
+		return nil, fmt.Errorf("invalid event execution configuration: %w", err)
+	}
+	if routes.candidate && authority == nil {
+		return nil, fmt.Errorf("persistent event authority required")
+	}
+	if cfg == nil || logger == nil {
+		return nil, fmt.Errorf("event Redis configuration and logger required")
+	}
+	stream := cfg.EventStream
+	if stream.ClaimIdle < 0 || stream.ClaimInterval < 0 || stream.NackDelay < 0 {
+		return nil, fmt.Errorf("event stream durations cannot be negative")
+	}
+	if stream.NackDelay == 0 {
+		stream.NackDelay = time.Second
+	}
+	// Publisher and each logical subscriber own and close their Redis client.
+	options := &redis.Options{
 		Addr:     fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
 		Password: cfg.Password,
 		DB:       cfg.DB,
-	})
+	}
+	publisherClient := redis.NewClient(options)
 
 	// Watermill logger
 	watermillLogger := NewZapLoggerAdapter(logger)
@@ -55,31 +159,43 @@ func NewWatermillEventBus(cfg *config.RedisConfig, logger *zap.SugaredLogger) (*
 	// Create publisher
 	publisher, err := redisstream.NewPublisher(
 		redisstream.PublisherConfig{
-			Client: rdb,
+			Client: publisherClient,
 		},
 		watermillLogger,
 	)
 	if err != nil {
+		_ = publisherClient.Close()
 		return nil, fmt.Errorf("failed to create publisher: %w", err)
 	}
 
-	// Create subscriber
-	subscriber, err := redisstream.NewSubscriber(
-		redisstream.SubscriberConfig{
-			Client: rdb,
-		},
-		watermillLogger,
-	)
-	if err != nil {
-		_ = publisher.Close()
-		return nil, fmt.Errorf("failed to create subscriber: %w", err)
+	makeSubscriber := func(group string) (streamSubscriber, error) {
+		client := redis.NewClient(options)
+		if group != "" {
+			subscriber, err := newRedisDurableSubscriber(client, group, stream, logger)
+			if err != nil {
+				_ = client.Close()
+				return nil, err
+			}
+			return subscriber, nil
+		}
+		settings := redisstream.SubscriberConfig{Client: client, DisableIndefiniteInitialBlock: true}
+		subscriber, err := redisstream.NewSubscriber(settings, watermillLogger)
+		if err != nil {
+			_ = client.Close()
+			return nil, err
+		}
+		return subscriber, nil
 	}
-
-	return &WatermillEventBus{
-		publisher:  publisher,
-		subscriber: subscriber,
-		logger:     logger,
-	}, nil
+	bus := &WatermillEventBus{rejectionClient: publisherClient, authority: authority, routes: routes, publisher: publisher, logger: logger}
+	bus.newSubscriber = makeSubscriber
+	if !routes.candidate {
+		bus.subscriber, err = makeSubscriber("")
+		if err != nil {
+			_ = publisher.Close()
+			return nil, fmt.Errorf("failed to create subscriber: %w", err)
+		}
+	}
+	return bus, nil
 }
 
 // resolveTopic 解析事件 topic：
@@ -103,6 +219,24 @@ func (eb *WatermillEventBus) Publish(event interface{}) error {
 	}
 
 	se, isStable := event.(stableEvent)
+	if _, persistent := event.(ExecutionEvent); persistent && !isStable {
+		return fmt.Errorf("persistent event must declare stable topic and tenant")
+	}
+	if eb.routes == nil {
+		return fmt.Errorf("event transport execution configuration required")
+	}
+	if eb.routes.candidate && !isStable {
+		return fmt.Errorf("candidate event must declare a stable topic and tenant")
+	}
+	tenant := ""
+	if isStable {
+		tenant = se.TenantID()
+	}
+	topic := resolveTopic(event)
+	physicalTopic, routeErr := eb.routes.publishTopic(topic, tenant)
+	if routeErr != nil {
+		return routeErr
+	}
 
 	var payload []byte
 	var err error
@@ -117,6 +251,35 @@ func (eb *WatermillEventBus) Publish(event interface{}) error {
 			OccurredAt: se.OccurredAt(),
 			Payload:    raw,
 		}
+		source, persistent := event.(ExecutionEvent)
+		if eb.routes.candidate || persistent {
+			ok := persistent
+			if !ok {
+				return fmt.Errorf("candidate event requires a persistent source")
+			}
+			ref, routeErr := eb.routes.refFor(tenant)
+			if routeErr != nil {
+				return routeErr
+			}
+			env.EventID = source.PersistentEventID()
+			env.Execution = &ExecutionIdentity{DeploymentID: ref.DeploymentID, ScopeID: ref.ScopeID, WorkItemID: source.ExecutionWorkItemID()}
+			wire, encodeErr := json.Marshal(env)
+			if encodeErr != nil {
+				return encodeErr
+			}
+			if _, decodeErr := DecodeExecutionEnvelope(wire); decodeErr != nil {
+				return decodeErr
+			}
+			if eb.authority == nil {
+				return fmt.Errorf("persistent event authority required")
+			}
+			checkCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			checkErr := eb.authority.ValidateEvent(checkCtx, ref, env)
+			cancel()
+			if checkErr != nil {
+				return fmt.Errorf("event source rejected: %w", checkErr)
+			}
+		}
 		payload, err = json.Marshal(env)
 		if err != nil {
 			return fmt.Errorf("failed to marshal envelope: %w", err)
@@ -128,14 +291,16 @@ func (eb *WatermillEventBus) Publish(event interface{}) error {
 		}
 	}
 
-	topic := resolveTopic(event)
-
 	// Create message
-	msg := message.NewMessage(watermill.NewUUID(), payload)
+	messageID := watermill.NewUUID()
+	if source, persistent := event.(ExecutionEvent); isStable && persistent {
+		messageID = source.PersistentEventID()
+	}
+	msg := message.NewMessage(messageID, payload)
 	msg.Metadata.Set("event_type", topic)
 
 	// Publish to Redis Stream
-	if err := eb.publisher.Publish(topic, msg); err != nil {
+	if err := eb.publisher.Publish(physicalTopic, msg); err != nil {
 		return fmt.Errorf("failed to publish event: %w", err)
 	}
 
@@ -146,26 +311,128 @@ func (eb *WatermillEventBus) Publish(event interface{}) error {
 // Subscribe subscribes to events of a specific type.
 // 订阅 topic 使用稳定事件类型名（如 "ticket.created"）。
 func (eb *WatermillEventBus) Subscribe(eventType string, handler shared.EventHandler) error {
-	// Subscribe to the topic
-	messages, err := eb.subscriber.Subscribe(context.Background(), eventType)
+	consumer, err := eb.consumerIdentity(handler)
 	if err != nil {
+		return err
+	}
+	return eb.subscribe(eventType, consumer, handler)
+}
+
+func (eb *WatermillEventBus) subscribe(eventType, consumer string, handler shared.EventHandler) error {
+	routes, err := eb.routes.subscriptionRoutes(eventType)
+	if err != nil {
+		return err
+	}
+	for index, route := range routes {
+		if err := eb.subscribeRoute(eventType, consumer, route, handler); err != nil {
+			// A partially established candidate subscription cannot remain live
+			// after reporting failure. Stop the runtime without resetting groups.
+			if eb.routes.candidate && index > 0 {
+				return errors.Join(err, eb.Close())
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (eb *WatermillEventBus) subscribeRoute(eventType, consumer string, route streamRoute, handler shared.EventHandler) error {
+	eb.mu.Lock()
+	if !eb.started || eb.closed || handler == nil || eventType == "" {
+		eb.mu.Unlock()
+		return fmt.Errorf("event runtime is not accepting subscriptions")
+	}
+	key := consumer + ":" + route.topic
+	if consumer != "" && eb.activeSubscriptions[key] {
+		eb.mu.Unlock()
+		return fmt.Errorf("durable event subscription already started")
+	}
+	subscriber, err := eb.subscriberForLocked(consumer)
+	if err != nil {
+		eb.mu.Unlock()
+		return fmt.Errorf("event subscriber unavailable: %w", err)
+	}
+	if subscriber == nil {
+		eb.mu.Unlock()
+		return fmt.Errorf("event subscriber unavailable")
+	}
+	if eb.activeSubscriptions == nil {
+		eb.activeSubscriptions = map[string]bool{}
+	}
+	eb.activeSubscriptions[key] = true
+	ctx := eb.ctx
+	eb.consumers.Add(1)
+	eb.establishing.Add(1)
+	eb.mu.Unlock()
+	defer eb.establishing.Done()
+	// Subscribe may create only a group in the frozen candidate namespace.
+	messages, err := subscriber.Subscribe(ctx, route.topic)
+	if err != nil {
+		eb.mu.Lock()
+		delete(eb.activeSubscriptions, key)
+		eb.mu.Unlock()
+		eb.consumers.Done()
 		return fmt.Errorf("failed to subscribe to event type %s: %w", eventType, err)
 	}
 
 	// Start message processing goroutine
 	go func() {
+		defer eb.consumers.Done()
 		for msg := range messages {
-			// Unwrap envelope (if present) and pass the raw payload JSON to the handler
-			deliver, err := unwrapEnvelope(msg.Payload)
-			if err != nil {
-				eb.logger.Errorw("Failed to unwrap event payload", "event_type", eventType, "error", err)
-				msg.Nack()
-				continue
+			var deliver interface{}
+			// Required persistent identity is checked before invoking its owner.
+			_, typed := handler.(ExecutionEnvelopeHandler)
+			if eb.routes.candidate || typed {
+				reason := "envelope_invalid"
+				env, decodeErr := DecodeExecutionEnvelope(msg.Payload)
+				tenant := env.TenantID
+				if eb.routes.candidate {
+					tenant = fmt.Sprint(route.tenantID)
+				}
+				ref, refErr := eb.routes.refFor(tenant)
+				if decodeErr == nil && refErr == nil {
+					reason = "identity_mismatch"
+					decodeErr = validateEnvelopeRoute(env, ref, eventType)
+				}
+				if decodeErr == nil && refErr == nil && (msg.UUID != env.EventID || msg.Metadata.Get("event_type") != eventType) {
+					decodeErr = fmt.Errorf("event transport identity mismatch")
+				}
+				if decodeErr == nil && refErr == nil {
+					reason = "source_rejected"
+					if eb.authority == nil {
+						decodeErr = fmt.Errorf("persistent event authority required")
+					} else {
+						decodeErr = eb.authority.ValidateEvent(ctx, ref, env)
+					}
+				}
+				if decodeErr != nil || refErr != nil {
+					eb.recordRejection(ctx, consumer, route, msg, reason)
+					msg.Nack()
+					continue
+				}
+				deliver = env
+			} else {
+				var err error
+				deliver, err = unwrapEnvelope(msg.Payload)
+				if err != nil {
+					eb.logger.Errorw("Failed to unwrap event payload", "event_type", eventType, "error", err)
+					msg.Nack()
+					continue
+				}
 			}
 
-			// Call handler
-			if err := handler.Handle(deliver); err != nil {
-				eb.logger.Errorw("Failed to handle event", "event_type", eventType, "error", err)
+			var handleErr error
+			if contextual, ok := handler.(ContextEventHandler); ok {
+				handleErr = contextual.HandleContext(ctx, deliver)
+			} else {
+				handleErr = handler.Handle(deliver)
+			}
+			if err := handleErr; err != nil {
+				if eb.routes.candidate || typed {
+					eb.recordRejection(ctx, consumer, route, msg, "handler_rejected")
+				} else {
+					eb.logger.Errorw("Failed to handle event", "event_type", eventType, "error", err)
+				}
 				msg.Nack()
 				continue
 			}
@@ -198,6 +465,10 @@ func unwrapEnvelope(raw []byte) (interface{}, error) {
 			merged["eventType"] = probe["eventType"]
 			merged["tenantId"] = probe["tenantId"]
 			merged["occurredAt"] = probe["occurredAt"]
+			if execution, ok := probe["execution"]; ok {
+				merged["execution"] = execution
+				merged["eventId"] = probe["eventId"]
+			}
 			return merged, nil
 		}
 	}
@@ -206,13 +477,34 @@ func unwrapEnvelope(raw []byte) (interface{}, error) {
 
 // Close closes the event bus
 func (eb *WatermillEventBus) Close() error {
-	if err := eb.publisher.Close(); err != nil {
-		return err
+	eb.mu.Lock()
+	if eb.closed {
+		done := eb.closeDone
+		eb.mu.Unlock()
+		<-done
+		return eb.closeErr
 	}
-	if err := eb.subscriber.Close(); err != nil {
-		return err
+	eb.closed = true
+	eb.closeDone = make(chan struct{})
+	if eb.cancel != nil {
+		eb.cancel()
 	}
-	return nil
+	eb.mu.Unlock()
+	eb.establishing.Wait()
+	var err error
+	if eb.subscriber != nil {
+		err = eb.subscriber.Close()
+	}
+	for _, subscriber := range eb.ownedSubscribers {
+		err = errors.Join(err, subscriber.Close())
+	}
+	eb.consumers.Wait()
+	err = errors.Join(err, eb.publisher.Close())
+	eb.mu.Lock()
+	eb.closeErr = err
+	close(eb.closeDone)
+	eb.mu.Unlock()
+	return err
 }
 
 // Global event bus instance

@@ -18,6 +18,7 @@ type OutboxEvent struct {
 // Fields of the OutboxEvent.
 func (OutboxEvent) Fields() []ent.Field {
 	return []ent.Field{
+		field.Int("execution_work_item_id").Optional().Nillable().Immutable().Positive().Comment("Immutable execution WorkItem reference; historical rows remain NULL; FK managed by migration 039"),
 		field.String("event_id").
 			Comment("Immutable cross-system event identifier").
 			Unique().
@@ -40,7 +41,7 @@ func (OutboxEvent) Fields() []ent.Field {
 			Comment("Serialized event payload").
 			Sensitive(),
 		field.String("status").
-			Comment("Delivery status: pending, publishing, published").
+			Comment("Delivery status: pending, publishing, published, blocked, dead_letter").
 			Default("pending"),
 		field.Int("attempt_count").
 			Comment("Number of failed delivery attempts").

@@ -28,12 +28,18 @@ function extractPermission(arg) {
   // RequirePermission / RequireMSPPermission 都是权限中间件（两个参数：resource, action）
   const m = arg.match(/Require(?:MSP)?Permission\s*\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']\s*\)/);
   if (m) return `${m[1]}.${m[2]}`;
-  // RequireWorkItemRecordClassPermission 只传 action——resource 在请求时按
+  // RequireWorkItemRecordClassPermission / RequireWorkItemCollaborationPermission 只传 action——resource 在请求时按
   // tickets.record_class 动态解析（ticket/incident/problem/change 之一），路由注册
   // 阶段静态未知，所以用 "workitem" 这个占位资源名标注，跟静态的 "<resource>.<action>"
   // 形式区分开，提示审计者这条路由的资源不是固定的。
-  const wm = arg.match(/RequireWorkItemRecordClassPermission\s*\(\s*["']([^"']+)["']\s*\)/);
+  const wm = arg.match(/RequireWorkItem(?:RecordClass|Collaboration)Permission\s*\(\s*["']([^"']+)["']\s*\)/);
   if (wm) return `workitem.${wm[1]}`;
+  const scoped = arg.match(/IntakeAuthMiddleware\s*\(\s*\w+\s*,\s*"([^"]+)"/);
+  if (scoped) return scoped[1];
+  // The exchange handler verifies signed v2 purpose, provider and nonce before
+  // identity lookup. This denotes assertion authentication, not an RBAC grant.
+  const assertion = arg.match(/exchangeHandler\s*\(\s*"(create|read)"/);
+  if (assertion) return `assertion.v2.${assertion[1]}`;
   return null;
 }
 
@@ -219,18 +225,18 @@ function discoverRouterFiles(dir) {
 
 const KNOWN_PUBLIC = new Set([
   "/api/v1/health", "/api/v1/healthz", "/api/v1/readyz",
-  "/api/v1/version", "/api/v1/auth/login", "/api/v1/refresh-token",
-  "/api/v1/auth/refresh",
+  "/api/v1/version", "/api/v1/auth/login", "/api/v1/auth/refresh",
   "/api/v1/csrf-token", "/api/v1/readiness/ga",
   // 注册与密码重置：无需登录
   "/api/v1/auth/register",
   "/api/v1/auth/forgot-password",
   "/api/v1/auth/reset-password",
   "/api/v1/auth/validate-reset-token",
+  "/api/v1/auth/azure/login",
+  "/api/v1/auth/azure/callback",
   // 外部系统回调：由独立签名/事件校验保护，无法要求登录态 RBAC
-  "/api/v1/connectors/feishu/callback",
-  "/api/v1/feishu/oauth/callback",
-  "/api/v1/feishu/webhook",
+  "/api/v1/feishu/oauth/callback/:instance_id",
+  "/api/v1/feishu/webhook/:instance_id",
 ]);
 
 // 认证即可访问的身份/自服务类端点：登录后任意角色都需要，
@@ -246,6 +252,10 @@ const AUTH_ONLY = new Set([
   "/api/v1/auth/logout",
   "/api/v1/auth/menus",
   "/api/v1/auth/switch-tenant",  // 租户切换：JWT 认证即可，无需 RBAC 资源权限
+  // The application service dispatches the professional-domain read policy
+  // after loading the WorkItem; a second route-level lookup would duplicate
+  // authorization and could drift from the recordClass authority.
+  "/api/v1/tickets/:id/approval-decisions",
   "/api/v1/users/profile",
   "/api/v1/users/me",
 ]);
@@ -269,7 +279,7 @@ const outIdx = args.indexOf("--output");
 const outFile = outIdx !== -1 ? args[outIdx + 1] : OUTPUT_FILE;
 
 console.log("Parsing router files...");
-for (const f of discoverRouterFiles(ROUTER_DIR)) {
+for (const f of [...discoverRouterFiles(ROUTER_DIR), ...["handler.go", "identity_mapping_handler.go"].map(name => path.join(ROUTER_DIR, "../handlers/intake", name))]) {
   parseFile(f);
 }
 

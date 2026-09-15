@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { loginAndReturn } from './auth-utils';
+import { DEFAULT_LOGIN, loginAndReturn, loginThroughForm, mutateWithCSRF } from './auth-utils';
 
 function getNumberEnv(name: string, fallback: number) {
   const raw = process.env[name];
@@ -14,16 +14,8 @@ test.describe('Performance - 浏览器端关键指标', () => {
   test('First screen navigation should meet budget', async ({ page }) => {
     const budgetMs = getNumberEnv('PERF_BUDGET_FIRST_SCREEN_MS', 2000);
 
-    await page.goto('/login');
-    await page.waitForSelector('input.ant-input', { timeout: 15000 });
-
-    const inputs = page.locator('input.ant-input');
-    await inputs.nth(0).fill('admin');
-    await inputs.nth(1).fill('admin123');
-
     const start = Date.now();
-    await page.click('button[type="submit"]');
-    await page.waitForURL(/\/(dashboard|tickets|incidents|problems|changes)/, { timeout: 30000 });
+    await loginThroughForm(page, DEFAULT_LOGIN);
     await page.waitForLoadState('networkidle');
     const elapsed = Date.now() - start;
 
@@ -33,41 +25,25 @@ test.describe('Performance - 浏览器端关键指标', () => {
   test('Ticket submit response time should meet budget', async ({ page }) => {
     const budgetMs = getNumberEnv('PERF_BUDGET_TICKET_SUBMIT_MS', 1000);
 
-    await loginAndReturn(page, 'end_user', 'admin123');
+    await loginAndReturn(page, { ...DEFAULT_LOGIN, username: 'end_user', password: 'admin123' });
     await page.goto('/tickets/create');
-    await page.waitForSelector('form, [data-testid="ticket-form"]', { timeout: 15000 });
+    await expect(page.getByRole('main', { name: '创建工单页面' })).toBeVisible({ timeout: 15000 });
 
-    await page
-      .locator('input[id*="title"], input[name*="title"], input[placeholder*="标题"]')
-      .first()
-      .fill(`Perf Ticket ${Date.now()}`);
-    await page
-      .locator('textarea[id*="description"], textarea[name*="description"], textarea[placeholder*="描述"]')
-      .first()
-      .fill('performance test');
+    await page.getByLabel('标题').fill(`Perf Ticket ${Date.now()}`);
+    await page.getByLabel('详细描述').fill('performance test');
 
     const start = Date.now();
-    const respPromise = page
-      .waitForResponse(
-        r => r.url().includes('/api/v1/tickets') && r.request().method() === 'POST',
-        { timeout: 15000 }
-      )
-      .catch(() => null);
+    const respPromise = page.waitForResponse(
+      r => r.url().includes('/api/v1/tickets') && r.request().method() === 'POST',
+      { timeout: 15000 }
+    );
 
-    await page
-      .locator(
-        'button[type="submit"], button:has-text("提交"), button:has-text("创建"), button:has-text("创建工单")'
-      )
-      .first()
-      .click();
+    await page.getByRole('button', { name: '创建工单', exact: true }).click();
 
     const response = await respPromise;
     const elapsed = Date.now() - start;
 
-    if (response) {
-      expect(response.status()).toBeGreaterThanOrEqual(200);
-      expect(response.status()).toBeLessThan(500);
-    }
+    expect(response.status()).toBe(200);
 
     expect(elapsed).toBeLessThanOrEqual(budgetMs);
   });
@@ -79,14 +55,15 @@ test.describe('Performance - 浏览器端关键指标', () => {
     const budgetMs = getNumberEnv('PERF_BUDGET_EXPORT_1000_MS', 10000);
     const payload = JSON.parse(raw as string) as Record<string, unknown>;
 
-    await loginAndReturn(page, 'admin', 'admin123');
+    await loginAndReturn(page, DEFAULT_LOGIN);
 
     const start = Date.now();
-    const response = await page.request.post('/api/v1/tickets/batch/export', { data: payload });
+    const response = await mutateWithCSRF(page.request, 'POST', '/api/v1/tickets/batch/export', {
+      data: payload,
+    });
     const elapsed = Date.now() - start;
 
-    expect(response.status()).toBeGreaterThanOrEqual(200);
-    expect(response.status()).toBeLessThan(500);
+    expect(response.status()).toBe(200);
     expect(elapsed).toBeLessThanOrEqual(budgetMs);
   });
 });

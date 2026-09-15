@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"itsm-backend/authorization"
 	"itsm-backend/ent"
 
 	"github.com/gin-gonic/gin"
@@ -12,22 +13,6 @@ import (
 
 // MSPRoleManager 顶层 MSP 角色，常量集中放这里便于引用。
 const MSPRoleManager = "provider_admin"
-
-// mspRoleToRBACRoleMap 把 MSP 原生角色映射到 RBAC 角色，供 RequireMSPPermission
-// 在 hasResourcePermission 前做转换。已带 msp_ 前缀的角色直接放行。
-var mspRoleToRBACRoleMap = map[string]string{
-	"provider_admin": "msp_manager",
-	"provider_agent": "msp_tech",
-	"customer_user":  "end_user",
-}
-
-// GetMSPRBACRole 把 MSP 原生角色转换成 RBAC 角色；未识别的回落到 msp_viewer。
-func GetMSPRBACRole(mspRole string) string {
-	if rbacRole, ok := mspRoleToRBACRoleMap[mspRole]; ok {
-		return rbacRole
-	}
-	return "msp_viewer"
-}
 
 // RequireMSPAccess 阻挡非 MSP 用户的访问。仅在 MSP 路由族内挂载。
 func RequireMSPAccess() gin.HandlerFunc {
@@ -138,7 +123,7 @@ func RequireMSPPermission(resource, action string) gin.HandlerFunc {
 
 		rbacRole := mspCtx.Role
 		if !strings.HasPrefix(rbacRole, "msp_") {
-			rbacRole = GetMSPRBACRole(rbacRole)
+			rbacRole = authorization.GetMSPRBACRole(rbacRole)
 		}
 
 		tenantIDInterface, exists := c.Get("tenant_id")
@@ -163,7 +148,7 @@ func RequireMSPPermission(resource, action string) gin.HandlerFunc {
 		}
 		client := clientInterface.(*ent.Client)
 
-		if !hasResourcePermission(client, rbacRole, resource, action, tenantID) {
+		if !authorization.HasResourcePermission(client, rbacRole, resource, action, tenantID) {
 			c.JSON(http.StatusForbidden, gin.H{
 				"code":    http.StatusForbidden,
 				"message": "权限不足",

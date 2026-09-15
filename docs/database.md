@@ -34,11 +34,27 @@ go generate ent new MigrationName
 go generate ./ent
 ```
 
-### Apply Migrations
+### Apply Post-schema Migrations
 
 ```bash
-go run -tags migrate main.go
+# This only applies the registered post-schema stream. The deployment
+# bootstrap owns Ent Schema.Create and must have completed first.
+go run -tags migrate ./cmd/migrate -up
 ```
+
+For a disposable development or test database only, `-fresh` performs the
+canonical order: create the Ent schema, apply the post-schema stream, then
+seed. It requires an allowed development mode plus exact confirmation of the
+normalized configured host, port, and database name. System databases and the
+shared `192.168.31.66` host are refused:
+
+```bash
+ITSM_ALLOW_DESTRUCTIVE_FRESH=true ITSM_FRESH_HOST="$DB_HOST" \
+  ITSM_FRESH_PORT="$DB_PORT" ITSM_FRESH_DATABASE="$DB_NAME" \
+  go run -tags migrate ./cmd/migrate -fresh
+```
+
+Do not use `-fresh` for a shared or production database.
 
 ### Recent Migrations
 

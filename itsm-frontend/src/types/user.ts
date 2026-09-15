@@ -178,14 +178,7 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   user: User;
-  token: string;
-  refreshToken: string;
-  expiresIn: number;
   permissions: string[];
-}
-
-export interface RefreshTokenRequest {
-  refreshToken: string;
 }
 
 export interface ChangePasswordRequest {

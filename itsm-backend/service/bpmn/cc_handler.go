@@ -3,13 +3,13 @@ package bpmn
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 	"time"
 
-	"itsm-backend/dto"
+	"itsm-backend/common/executionscope"
 	"itsm-backend/ent"
 	"itsm-backend/ent/group"
 	"itsm-backend/ent/role"
@@ -20,8 +20,15 @@ import (
 	"go.uber.org/zap"
 )
 
+// NotificationTargetBinder is supplied by the existing notification owner.
+// It binds only transport identity; the CC owner retains its transaction.
+type NotificationTargetBinder interface {
+	BindNotificationTargetTx(context.Context, *ent.Tx, int, string, *ent.TicketNotificationCreate) error
+}
+
 // CCTaskHandler 抄送服务任务处理器
 type CCTaskHandler struct {
+	notificationTargets NotificationTargetBinder
 	HandlerBase
 	client *ent.Client
 	logger *zap.SugaredLogger
@@ -33,6 +40,10 @@ func NewCCTaskHandler(client *ent.Client, logger *zap.SugaredLogger) *CCTaskHand
 		client: client,
 		logger: logger,
 	}
+}
+
+func (h *CCTaskHandler) SetNotificationTargetBinder(binder NotificationTargetBinder) {
+	h.notificationTargets = binder
 }
 
 // GetTaskType 返回任务类型
@@ -49,8 +60,11 @@ func (h *CCTaskHandler) GetHandlerID() string {
 // scheduling still has the source process values available. The durable row
 // retains only the fixed recipient IDs, never the arbitrary source field.
 func (h *CCTaskHandler) NormalizeCallbackPayload(action string, variables map[string]interface{}) (map[string]interface{}, error) {
-	payload := make(map[string]interface{}, len(ccCallbackPayloadFields))
-	for _, key := range h.CallbackPayloadFields(action) {
+	// CC has one actionless contract; legacy BPMN node labels are not part of
+	// the durable action boundary and never alter recipient semantics.
+	contract, _ := h.CallbackContract("")
+	payload := make(map[string]interface{}, len(contract.PayloadFields))
+	for _, key := range contract.PayloadFields {
 		if key == "ccResolvedUserIds" {
 			continue
 		}
@@ -84,7 +98,7 @@ func (h *CCTaskHandler) NormalizeCallbackPayload(action string, variables map[st
 }
 
 // Execute 执行抄送服务任务
-func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error) {
 	deliveryKey, ok := BPMNCallbackExecutionKey(ctx)
 	if !ok {
 		return nil, fmt.Errorf("抄送回调执行键不能为空")
@@ -109,6 +123,14 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 
 	if ticketID == 0 {
 		return nil, fmt.Errorf("工单ID不能为空")
+	}
+	if ccType != "user" && ccType != "group" && ccType != "role" && ccType != "variable" {
+		return BlockedEffect(CallbackBlockUnsupportedCCType, "unsupported CC recipient type"), nil
+	}
+	for _, raw := range []string{ccUserIds, ccGroupIds, ccRoleIds} {
+		if strings.Contains(raw, "${") {
+			return BlockedEffect(CallbackBlockUnsupportedTemplate, "unresolved CC placeholder"), nil
+		}
 	}
 
 	h.logger.Infow(
@@ -135,18 +157,12 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 	}
 
 	if len(ccUsers) == 0 {
-		h.logger.Warnw("No CC users resolved, skip CC task")
-		return &dto.ServiceTaskResult{
-			Success: true,
-			Message: "没有解析到抄送人，跳过抄送任务",
-			OutputVars: map[string]interface{}{
-				"added_cc_users": []int{},
-			},
-		}, nil
+		return BlockedEffect(CallbackBlockRecipientEmpty, "CC recipient set is empty"), nil
 	}
 
 	// 添加抄送人
 	var addedUsers []int
+	hadExistingDelivery := false
 	for _, ccUserID := range ccUsers {
 		delivered, err := tx.Client().TicketCC.Query().
 			Where(
@@ -159,6 +175,7 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 			return nil, fmt.Errorf("检查抄送回调投递失败")
 		}
 		if delivered {
+			hadExistingDelivery = true
 			continue
 		}
 
@@ -191,16 +208,22 @@ func (h *CCTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, vari
 
 	// 发送通知给抄送人
 	if ccNotify && len(addedUsers) > 0 {
-		if err := h.createCCNotifications(ctx, tx.Client(), ticketID, addedUsers, notifyChannels, tenantID); err != nil {
+		if err := h.createCCNotifications(ctx, tx, ticketID, addedUsers, notifyChannels, tenantID); err != nil {
 			return nil, err
 		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("提交抄送任务事务失败")
 	}
+	if len(addedUsers) == 0 && hadExistingDelivery {
+		return IdempotentEffect("CC delivery already exists", map[string]interface{}{"added_cc_users": []int{}}), nil
+	}
+	if len(addedUsers) == 0 {
+		return BlockedEffect(CallbackBlockRecipientEmpty, "CC recipient set produced no durable delivery"), nil
+	}
 
-	return &dto.ServiceTaskResult{
-		Success: true,
+	return &CallbackEffect{
+		Status:  CallbackEffectApplied,
 		Message: fmt.Sprintf("已成功添加 %d 位抄送人", len(addedUsers)),
 		OutputVars: map[string]interface{}{
 			"added_cc_users": addedUsers,
@@ -240,12 +263,7 @@ func (h *CCTaskHandler) resolveCCUsers(ctx context.Context, client *ent.Client, 
 		}
 		return h.validateCCUsers(ctx, client, ids, tenantID)
 	default:
-		// 默认按用户ID处理
-		ids, err := h.parseCommaSeparatedInts(ccUserIds)
-		if err != nil {
-			return nil, err
-		}
-		return h.validateCCUsers(ctx, client, ids, tenantID)
+		return nil, fmt.Errorf("unsupported CC recipient type")
 	}
 }
 
@@ -274,7 +292,7 @@ func normalizeCCRecipientIDs(value interface{}) ([]int, error) {
 		for _, id := range strings.Split(typed, ",") {
 			values = append(values, id)
 		}
-	case int, int64, float64:
+	case int, int64, float64, json.Number:
 		values = append(values, typed)
 	default:
 		return nil, fmt.Errorf("动态抄送人必须是正整数列表")
@@ -300,35 +318,14 @@ func normalizeCCRecipientIDs(value interface{}) ([]int, error) {
 }
 
 func normalizeCCRecipientID(value interface{}) (int, error) {
-	maxInt := int(^uint(0) >> 1)
-	valid := func(id int) (int, error) {
-		if id <= 0 {
-			return 0, fmt.Errorf("动态抄送人必须是正整数")
-		}
-		return id, nil
+	if text, ok := value.(string); ok {
+		value = strings.TrimSpace(text)
 	}
-	switch typed := value.(type) {
-	case int:
-		return valid(typed)
-	case int64:
-		if typed > int64(maxInt) {
-			return 0, fmt.Errorf("动态抄送人必须是正整数")
-		}
-		return valid(int(typed))
-	case float64:
-		if math.IsNaN(typed) || math.IsInf(typed, 0) || math.Trunc(typed) != typed || typed > float64(maxInt) || typed < 1 {
-			return 0, fmt.Errorf("动态抄送人必须是正整数")
-		}
-		return valid(int(typed))
-	case string:
-		id, err := strconv.Atoi(strings.TrimSpace(typed))
-		if err != nil {
-			return 0, fmt.Errorf("动态抄送人必须是正整数")
-		}
-		return valid(id)
-	default:
+	id, err := CallbackInteger(value)
+	if err != nil || id <= 0 {
 		return 0, fmt.Errorf("动态抄送人必须是正整数")
 	}
+	return id, nil
 }
 
 func (h *CCTaskHandler) validateCCUsers(ctx context.Context, client *ent.Client, ids []int, tenantID int) ([]int, error) {
@@ -366,12 +363,8 @@ func (h *CCTaskHandler) parseCommaSeparatedInts(str string) ([]int, error) {
 		if part == "" {
 			continue
 		}
-		// 处理变量占位符，如 ${applyUserId}
 		if strings.HasPrefix(part, "${") && strings.HasSuffix(part, "}") {
-			// 这里会在流程变量替换阶段处理，暂时保留原样，由上层替换
-			// TODO: 支持变量解析
-			h.logger.Warnw("Variable placeholder in CC user ID not supported yet", "placeholder", part)
-			continue
+			return nil, fmt.Errorf("unresolved CC placeholder")
 		}
 		id, err := strconv.Atoi(part)
 		if err != nil {
@@ -500,7 +493,8 @@ func parseNotifyChannelsFromVars(variables map[string]interface{}) ([]string, er
 	return parseNotifyChannels(channels)
 }
 
-func (h *CCTaskHandler) createCCNotifications(ctx context.Context, client *ent.Client, ticketID int, userIDs []int, channels []string, tenantID int) error {
+func (h *CCTaskHandler) createCCNotifications(ctx context.Context, tx *ent.Tx, ticketID int, userIDs []int, channels []string, tenantID int) error {
+	client := tx.Client()
 	ticketEntity, err := client.Ticket.Query().Where(ticket.ID(ticketID), ticket.TenantID(tenantID)).Only(ctx)
 	if err != nil {
 		return fmt.Errorf("获取抄送通知工单失败")
@@ -523,6 +517,14 @@ func (h *CCTaskHandler) createCCNotifications(ctx context.Context, client *ent.C
 			}
 			if hasExecutionKey {
 				create.SetDeliveryKey(ccNotificationDeliveryKey(executionKey, ticketID, userID, channel))
+			}
+			if channel != "in_app" && channel != "push" {
+				if h.notificationTargets == nil {
+					return executionscope.ErrDenied
+				}
+				if err := h.notificationTargets.BindNotificationTargetTx(ctx, tx, tenantID, channel, create); err != nil {
+					return err
+				}
 			}
 			if _, err := create.Save(ctx); err != nil {
 				return fmt.Errorf("创建抄送通知失败")
@@ -549,11 +551,6 @@ func (h *CCTaskHandler) createCCNotifications(ctx context.Context, client *ent.C
 func ccNotificationDeliveryKey(executionKey string, ticketID, userID int, channel string) string {
 	effectIdentity := fmt.Sprintf("%s\x00%d\x00%d\x00%s", executionKey, ticketID, userID, channel)
 	return fmt.Sprintf("ticket-notification-bpmn-%x", sha256.Sum256([]byte(effectIdentity)))
-}
-
-// Validate 验证配置
-func (h *CCTaskHandler) Validate(ctx context.Context, config map[string]interface{}) error {
-	return nil
 }
 
 // 确保 CCTaskHandler 实现了 ServiceTaskHandlerInterface

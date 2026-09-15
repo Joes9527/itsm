@@ -308,7 +308,7 @@ const EscalationRuleManagement = () => {
                 <Text strong>级别 {level.level}</Text>
                 <Tag color="blue">{level.timeThreshold}</Tag>
               </div>
-              <div className="text-sm text-gray-600">
+              <div className="text-[13px] text-muted">
                 <div>升级至: {level.escalateTo}</div>
                 <div>操作: {level.action}</div>
                 <div className="flex items-center gap-1 mt-1">
@@ -345,13 +345,13 @@ const EscalationRuleManagement = () => {
               {PRIORITY_CONFIG[record.priority]?.label}
             </Tag>
           </div>
-          <Text type="secondary" className="text-sm">
+          <Text type="secondary" className="text-[13px]">
             {record.description}
           </Text>
           <div className="flex items-center gap-4 mt-1">
-            <span className="text-xs text-gray-500">ID: {record.id}</span>
-            <span className="text-xs text-gray-500">类型: {record.serviceType}</span>
-            <span className="text-xs text-gray-500">级别: {record.escalationLevels.length}</span>
+            <span className="text-[12px] text-muted">ID: {record.id}</span>
+            <span className="text-[12px] text-muted">类型: {record.serviceType}</span>
+            <span className="text-[12px] text-muted">级别: {record.escalationLevels.length}</span>
           </div>
         </div>
       ),
@@ -363,9 +363,9 @@ const EscalationRuleManagement = () => {
       align: 'center' as const,
       render: (_: unknown, record: EscalationRule) => (
         <div className="text-center">
-          <div className="text-lg font-bold text-orange-600">{record.usageCount}</div>
-          <div className="text-xs text-gray-500">次触发</div>
-          <div className="text-xs text-gray-500">{record.lastTriggered}</div>
+          <div className="text-[15px] font-bold text-orange-600">{record.usageCount}</div>
+          <div className="text-[12px] text-muted">次触发</div>
+          <div className="text-[12px] text-muted">{record.lastTriggered}</div>
         </div>
       ),
     },
@@ -390,8 +390,8 @@ const EscalationRuleManagement = () => {
       align: 'center' as const,
       render: (_: unknown, record: EscalationRule) => (
         <div className="text-center">
-          <div className="text-sm">{record.updatedAt}</div>
-          <div className="text-xs text-gray-500">由 {record.createdBy}</div>
+          <div className="text-[13px]">{record.updatedAt}</div>
+          <div className="text-[12px] text-muted">由 {record.createdBy}</div>
         </div>
       ),
     },
@@ -515,7 +515,7 @@ const EscalationRuleManagement = () => {
           <Col xs={24} md={6}>
             <Input
               placeholder="搜索规则名称或描述..."
-              prefix={<Search className="w-4 h-4 text-gray-400" />}
+              prefix={<Search className="w-4 h-4 text-muted" />}
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               allowClear
@@ -529,7 +529,10 @@ const EscalationRuleManagement = () => {
               style={{ width: '100%' }}
               options={[
                 { value: 'all', label: '全部优先级' },
-                ...Object.entries(PRIORITY_CONFIG).map(([key, config]) => ({ value: key, label: config.label })),
+                ...Object.entries(PRIORITY_CONFIG).map(([key, config]) => ({
+                  value: key,
+                  label: config.label,
+                })),
               ]}
             />
           </Col>
@@ -541,7 +544,10 @@ const EscalationRuleManagement = () => {
               style={{ width: '100%' }}
               options={[
                 { value: 'all', label: '全部状态' },
-                ...Object.entries(STATUS_CONFIG).map(([key, config]) => ({ value: key, label: config.label })),
+                ...Object.entries(STATUS_CONFIG).map(([key, config]) => ({
+                  value: key,
+                  label: config.label,
+                })),
               ]}
             />
           </Col>
@@ -633,7 +639,12 @@ const EscalationRuleManagement = () => {
                 rules={[{ required: true, message: '请选择优先级' }]}
                 initialValue="P3"
               >
-                <Select options={Object.entries(PRIORITY_CONFIG).map(([key, config]) => ({ value: key, label: config.label }))} />
+                <Select
+                  options={Object.entries(PRIORITY_CONFIG).map(([key, config]) => ({
+                    value: key,
+                    label: config.label,
+                  }))}
+                />
               </Form.Item>
             </Col>
             <Col span={8}>
@@ -642,12 +653,22 @@ const EscalationRuleManagement = () => {
                 name="serviceType"
                 rules={[{ required: true, message: '请输入服务类型' }]}
               >
-                <Select showSearch optionFilterProp="label" placeholder="选择或输入服务类型" options={serviceTypes.map(type => ({ value: type, label: type }))} />
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder="选择或输入服务类型"
+                  options={serviceTypes.map(type => ({ value: type, label: type }))}
+                />
               </Form.Item>
             </Col>
             <Col span={8}>
               <Form.Item label="状态" name="status" initialValue="draft">
-                <Select options={Object.entries(STATUS_CONFIG).map(([key, config]) => ({ value: key, label: config.label }))} />
+                <Select
+                  options={Object.entries(STATUS_CONFIG).map(([key, config]) => ({
+                    value: key,
+                    label: config.label,
+                  }))}
+                />
               </Form.Item>
             </Col>
           </Row>
@@ -703,7 +724,9 @@ const EscalationRuleManagement = () => {
             </Descriptions>
 
             <div>
-              <Title level={4}>使用统计</Title>
+              <Title style={{ fontSize: 15, fontWeight: 600 }} level={4}>
+                使用统计
+              </Title>
               <Row gutter={16}>
                 <Col span={8}>
                   <Statistic
@@ -730,7 +753,9 @@ const EscalationRuleManagement = () => {
             </div>
 
             <div>
-              <Title level={4}>升级级别配置</Title>
+              <Title style={{ fontSize: 15, fontWeight: 600 }} level={4}>
+                升级级别配置
+              </Title>
               {renderEscalationLevels(selectedRule.escalationLevels)}
             </div>
           </div>

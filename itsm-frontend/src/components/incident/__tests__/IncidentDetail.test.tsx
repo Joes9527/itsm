@@ -11,11 +11,14 @@ const mockGetImpactAssessment = jest.fn();
 const mockGetIncidentClassification = jest.fn();
 const mockResolveIncident = jest.fn();
 const mockCloseIncident = jest.fn();
+const mockStartIncident = jest.fn();
+const mockConvertToProblem = jest.fn();
+const mockPush = jest.fn();
 const hasPermission = () => false;
 
 jest.mock('next/navigation', () => ({
   useParams: () => ({ id: '301' }),
-  useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
+  useRouter: () => ({ push: mockPush, back: jest.fn() }),
 }));
 
 jest.mock('@/lib/api/', () => ({
@@ -26,6 +29,8 @@ jest.mock('@/lib/api/', () => ({
     getIncidentClassification: (...args: unknown[]) => mockGetIncidentClassification(...args),
     resolveIncident: (...args: unknown[]) => mockResolveIncident(...args),
     closeIncident: (...args: unknown[]) => mockCloseIncident(...args),
+    startIncident: (...args: unknown[]) => mockStartIncident(...args),
+    convertToProblem: (...args: unknown[]) => mockConvertToProblem(...args),
   },
 }));
 
@@ -35,12 +40,14 @@ jest.mock('@/lib/api/user-api', () => ({
   },
 }));
 
-jest.mock('@/lib/store/auth-store', () => ({
-  useAuthStore: (selector: (state: { hasPermission: typeof hasPermission }) => unknown) =>
-    selector({ hasPermission }),
-}));
+jest.mock('@/lib/store/auth-store', () => {
+  const state = { hasPermission: () => false, isAuthenticated: true, user: { id: 1, tenantId: 2, actorTenantId: 2 }, currentTenant: { id: 2 } };
+  return { useAuthStore: Object.assign((selector: (state: unknown) => unknown) => selector(state), { getState: () => state }) };
+});
+Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: () => 'conversion-key' });
 
 const workItem: WorkItemCommon = {
+  version: 1,
   id: 301,
   number: 'INC-202608-000301',
   recordClass: 'incident',
@@ -53,6 +60,7 @@ const workItem: WorkItemCommon = {
 };
 
 const incident = {
+	version: 7,
   id: 301,
   incidentNumber: 'INC-202608-000301',
   title: '数据库连接失败',
@@ -74,7 +82,7 @@ const deniedActions = {
   escalate: { allowed: false, reason: '当前事件不能升级' },
   assign: { allowed: false, reason: '无权指派该事件' },
   markMajorIncident: { allowed: false, reason: '当前事件不能标记为重大事件' },
-  convertToProblem: { allowed: false, reason: '当前事件不能转为问题' },
+  convertToProblem: { allowed: false, reason: '当前事件不能创建关联问题' },
 } satisfies Record<string, WorkItemActionState>;
 
 function renderWithProvider(
@@ -142,6 +150,16 @@ describe('IncidentDetail action eligibility', () => {
     mockGetIncidentClassification.mockResolvedValue(null);
     mockResolveIncident.mockResolvedValue(incident);
     mockCloseIncident.mockResolvedValue(incident);
+    mockStartIncident.mockResolvedValue({ workItemId: 301, version: 8, status: 'in_progress' });
+  });
+
+  it('starts acknowledged work using its version and a stable operation key', async () => {
+    mockGetIncident.mockResolvedValue({ ...incident, status: 'acknowledged' });
+    renderWithProvider({ start: { allowed: true } });
+    await userEvent.click(await screen.findByRole('button', { name: /开始处理/ }));
+    await waitFor(() => expect(mockStartIncident).toHaveBeenCalledWith(301, {
+      version: 7, operationId: 'conversion-key',
+    }));
   });
 
   it('disables every denied incident action and shows the backend reason', async () => {
@@ -152,9 +170,9 @@ describe('IncidentDetail action eligibility', () => {
     await expectDisabledAction('关闭', deniedActions.close.reason);
     await expectDisabledAction('重新打开', deniedActions.reopen.reason);
     await expectDisabledAction('升级', deniedActions.escalate.reason);
-    await expectDisabledAction('指派', deniedActions.assign.reason);
+    expect(screen.queryByRole('button', { name: '指派' })).not.toBeInTheDocument(); // Shared Shell owns assignment.
     await expectDisabledAction('升级为重大事件', deniedActions.markMajorIncident.reason);
-    await expectDisabledAction('转为问题', deniedActions.convertToProblem.reason);
+    await expectDisabledAction('创建关联问题', deniedActions.convertToProblem.reason);
   });
 
   it('prefers work item context actions over fallback actions when a provider is present', async () => {
@@ -178,8 +196,9 @@ describe('IncidentDetail action eligibility', () => {
 
     await waitFor(() =>
       expect(mockResolveIncident).toHaveBeenCalledWith(301, {
+		version: 7,
+		operationId: 'conversion-key',
         resolution: '已恢复数据库连接并验证服务正常',
-        resolutionCode: undefined,
       })
     );
   });
@@ -232,8 +251,23 @@ describe('IncidentDetail action eligibility', () => {
 
     const user = userEvent.setup();
     await user.click(await screen.findByRole('button', { name: /关\s*闭/ }));
-    await waitFor(() => expect(mockCloseIncident).toHaveBeenCalledWith(301));
+    const closeDialog = await screen.findByRole('dialog', { name: '关闭事件' });
+    await user.type(within(closeDialog).getByLabelText('关闭说明'), '服务稳定，用户已确认');
+    await user.click(within(closeDialog).getByRole('button', { name: '确认关闭' }));
+    await waitFor(() => expect(mockCloseIncident).toHaveBeenCalledWith(301, { version: 7, operationId: 'conversion-key', reason: '服务稳定，用户已确认' }));
 
     expect(screen.getByRole('button', { name: '重新打开' })).toBeDisabled();
   });
+});
+
+it('conversion uses a confirmed payload and professional Problem reference without inheriting reporter', async () => {
+  mockGetIncident.mockResolvedValue({ ...incident, reporterId: 999, actions: { convertToProblem: { allowed: true } } });
+  mockConvertToProblem.mockResolvedValue({ workItemId: 41, number: 'PRB-41', recordClass: 'problem', professionalReference: { type: 'problem', id: 88 }, workflowStartStatus: 'manual_intervention_required', replayed: true });
+  renderWithoutProvider({ convertToProblem: { allowed: true } });
+  await userEvent.click(await screen.findByRole('button', { name: '创建关联问题' }));
+  const dialog = await screen.findByRole('dialog', { name: '创建关联问题' });
+  fireEvent.click(within(dialog).getByRole('button', { name: /确|OK/ }));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/problems/88'));
+  expect(mockConvertToProblem).toHaveBeenCalledWith(301, { title: incident.title, description: incident.description, expectedVersion: incident.version }, expect.objectContaining({ idempotencyKey: 'conversion-key' }));
+  expect(screen.getAllByText(/PRB-41.*已创建.*需要人工处理/).length).toBeGreaterThan(0);
 });

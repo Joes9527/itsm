@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text, Newline } from 'ink';
-import { LoginCommand } from './commands/login.js';
+import { LoginCommand, LogoutCommand } from './commands/login.js';
 import { TicketsCommand } from './commands/tickets.js';
 import { TicketViewCommand } from './commands/ticket.js';
 import { SearchCommand } from './commands/search.js';
@@ -16,7 +16,7 @@ import {
 import { SlaStatsCommand, SlaOverdueCommand } from './commands/sla.js';
 import {
   WorkflowInstancesCommand, WorkflowTasksCommand, WorkflowCompleteCommand,
-  ApprovalListCommand, ApprovalActionCommand,
+  ApprovalActionCommand,
 } from './commands/workflow.js';
 import {
   NotificationListCommand, NotificationReadCommand,
@@ -25,7 +25,7 @@ import {
   ConnectorListCommand, ConnectorTestCommand, ConnectorHealthCommand, ConnectorSendCommand,
 } from './commands/connector.js';
 import { DashboardOverviewCommand } from './commands/admin.js';
-import { isLoggedIn, clearCredentials } from './lib/credentials.js';
+import { isLoggedIn } from './lib/credentials.js';
 import { apiClient } from './lib/api-client.js';
 
 interface CliFlags {
@@ -111,8 +111,7 @@ const Router: React.FC<{ input: string[]; flags: CliFlags }> = ({ input, flags }
       return <MeCommand />;
 
     case 'logout':
-      clearCredentials();
-      return <Text color="yellow">✓ Logged out</Text>;
+      return <LogoutCommand />;
 
     case 'tickets':
       return <TicketsCommand status={flags.status} priority={flags.priority} page={flags.page} />;
@@ -185,17 +184,7 @@ const Router: React.FC<{ input: string[]; flags: CliFlags }> = ({ input, flags }
       if (sub === 'reject' && args[1]) {
         return <ApprovalActionCommand id={args[1]} action="reject" comment={flags.comment} />;
       }
-      if (sub === 'approvals' || sub === 'pending') {
-        return <ApprovalListCommand status={flags.status} />;
-      }
-      return <Text color="red">Usage: itsm workflow &lt;instances|tasks|complete|approve|reject|approvals&gt;</Text>;
-    }
-
-    case 'approvals': {
-      if (sub === 'pending' || sub === undefined) return <ApprovalListCommand status={flags.status} />;
-      if (sub === 'approve' && args[1]) return <ApprovalActionCommand id={args[1]} action="approve" comment={flags.comment} />;
-      if (sub === 'reject' && args[1]) return <ApprovalActionCommand id={args[1]} action="reject" comment={flags.comment} />;
-      return <Text color="red">Usage: itsm approvals &lt;pending|approve|reject&gt;</Text>;
+      return <Text color="red">Usage: itsm workflow &lt;instances|tasks|complete|approve|reject&gt;</Text>;
     }
 
     case 'notification': {

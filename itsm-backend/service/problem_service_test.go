@@ -64,13 +64,13 @@ func TestProblemService_CreateKnownErrorFromProblemTenantIsolation(t *testing.T)
 	require.NoError(t, err)
 	userB, err := createProblemTestUser(ctx, client, tenantB.ID, "kedb-b")
 	require.NoError(t, err)
+	workItem, err := client.Ticket.Create().SetTitle("Connection pool problem").SetStatus("open").SetPriority("high").
+		SetRecordClass("problem").SetTicketNumber("TKT-KEDB-PROBLEM").
+		SetRequesterID(userA.ID).SetTenantID(tenantA.ID).Save(ctx)
+	require.NoError(t, err)
 	p, err := client.Problem.Create().
-		SetTitle("Known database issue").
-		SetDescription("Repeated database connection exhaustion").
-		SetPriority("high").
 		SetRootCause("Connection pool leak").
-		SetCreatedBy(userA.ID).
-		SetTenantID(tenantA.ID).
+		SetWorkItemID(workItem.ID).
 		Save(ctx)
 	require.NoError(t, err)
 	service.SetKnownErrorService(NewKnownErrorService(client, service.logger))

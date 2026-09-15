@@ -16,6 +16,7 @@ import (
 	"itsm-backend/ent/ticket"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -25,6 +26,7 @@ type ConfigurationItemCreate struct {
 	config
 	mutation *ConfigurationItemMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -778,6 +780,7 @@ func (_c *ConfigurationItemCreate) createSpec() (*ConfigurationItem, *sqlgraph.C
 		_node = &ConfigurationItem{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(configurationitem.Table, sqlgraph.NewFieldSpec(configurationitem.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(configurationitem.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -1059,11 +1062,1525 @@ func (_c *ConfigurationItemCreate) createSpec() (*ConfigurationItem, *sqlgraph.C
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ConfigurationItem.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ConfigurationItemUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ConfigurationItemCreate) OnConflict(opts ...sql.ConflictOption) *ConfigurationItemUpsertOne {
+	_c.conflict = opts
+	return &ConfigurationItemUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ConfigurationItem.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ConfigurationItemCreate) OnConflictColumns(columns ...string) *ConfigurationItemUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ConfigurationItemUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ConfigurationItemUpsertOne is the builder for "upsert"-ing
+	//  one ConfigurationItem node.
+	ConfigurationItemUpsertOne struct {
+		create *ConfigurationItemCreate
+	}
+
+	// ConfigurationItemUpsert is the "OnConflict" setter.
+	ConfigurationItemUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *ConfigurationItemUpsert) SetName(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateName() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldName)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *ConfigurationItemUpsert) SetDescription(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateDescription() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ConfigurationItemUpsert) ClearDescription() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldDescription)
+	return u
+}
+
+// SetCiTypeID sets the "ci_type_id" field.
+func (u *ConfigurationItemUpsert) SetCiTypeID(v int) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldCiTypeID, v)
+	return u
+}
+
+// UpdateCiTypeID sets the "ci_type_id" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateCiTypeID() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldCiTypeID)
+	return u
+}
+
+// SetCiType sets the "ci_type" field.
+func (u *ConfigurationItemUpsert) SetCiType(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldCiType, v)
+	return u
+}
+
+// UpdateCiType sets the "ci_type" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateCiType() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldCiType)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *ConfigurationItemUpsert) SetStatus(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateStatus() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldStatus)
+	return u
+}
+
+// SetEnvironment sets the "environment" field.
+func (u *ConfigurationItemUpsert) SetEnvironment(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldEnvironment, v)
+	return u
+}
+
+// UpdateEnvironment sets the "environment" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateEnvironment() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldEnvironment)
+	return u
+}
+
+// SetCriticality sets the "criticality" field.
+func (u *ConfigurationItemUpsert) SetCriticality(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldCriticality, v)
+	return u
+}
+
+// UpdateCriticality sets the "criticality" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateCriticality() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldCriticality)
+	return u
+}
+
+// SetAssetTag sets the "asset_tag" field.
+func (u *ConfigurationItemUpsert) SetAssetTag(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldAssetTag, v)
+	return u
+}
+
+// UpdateAssetTag sets the "asset_tag" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateAssetTag() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldAssetTag)
+	return u
+}
+
+// ClearAssetTag clears the value of the "asset_tag" field.
+func (u *ConfigurationItemUpsert) ClearAssetTag() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldAssetTag)
+	return u
+}
+
+// SetSerialNumber sets the "serial_number" field.
+func (u *ConfigurationItemUpsert) SetSerialNumber(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldSerialNumber, v)
+	return u
+}
+
+// UpdateSerialNumber sets the "serial_number" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateSerialNumber() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldSerialNumber)
+	return u
+}
+
+// ClearSerialNumber clears the value of the "serial_number" field.
+func (u *ConfigurationItemUpsert) ClearSerialNumber() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldSerialNumber)
+	return u
+}
+
+// SetModel sets the "model" field.
+func (u *ConfigurationItemUpsert) SetModel(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldModel, v)
+	return u
+}
+
+// UpdateModel sets the "model" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateModel() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldModel)
+	return u
+}
+
+// ClearModel clears the value of the "model" field.
+func (u *ConfigurationItemUpsert) ClearModel() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldModel)
+	return u
+}
+
+// SetVendor sets the "vendor" field.
+func (u *ConfigurationItemUpsert) SetVendor(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldVendor, v)
+	return u
+}
+
+// UpdateVendor sets the "vendor" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateVendor() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldVendor)
+	return u
+}
+
+// ClearVendor clears the value of the "vendor" field.
+func (u *ConfigurationItemUpsert) ClearVendor() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldVendor)
+	return u
+}
+
+// SetLocation sets the "location" field.
+func (u *ConfigurationItemUpsert) SetLocation(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldLocation, v)
+	return u
+}
+
+// UpdateLocation sets the "location" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateLocation() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldLocation)
+	return u
+}
+
+// ClearLocation clears the value of the "location" field.
+func (u *ConfigurationItemUpsert) ClearLocation() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldLocation)
+	return u
+}
+
+// SetAssignedTo sets the "assigned_to" field.
+func (u *ConfigurationItemUpsert) SetAssignedTo(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldAssignedTo, v)
+	return u
+}
+
+// UpdateAssignedTo sets the "assigned_to" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateAssignedTo() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldAssignedTo)
+	return u
+}
+
+// ClearAssignedTo clears the value of the "assigned_to" field.
+func (u *ConfigurationItemUpsert) ClearAssignedTo() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldAssignedTo)
+	return u
+}
+
+// SetOwnedBy sets the "owned_by" field.
+func (u *ConfigurationItemUpsert) SetOwnedBy(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldOwnedBy, v)
+	return u
+}
+
+// UpdateOwnedBy sets the "owned_by" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateOwnedBy() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldOwnedBy)
+	return u
+}
+
+// ClearOwnedBy clears the value of the "owned_by" field.
+func (u *ConfigurationItemUpsert) ClearOwnedBy() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldOwnedBy)
+	return u
+}
+
+// SetOwnershipMode sets the "ownership_mode" field.
+func (u *ConfigurationItemUpsert) SetOwnershipMode(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldOwnershipMode, v)
+	return u
+}
+
+// UpdateOwnershipMode sets the "ownership_mode" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateOwnershipMode() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldOwnershipMode)
+	return u
+}
+
+// SetLocalModifiedAt sets the "local_modified_at" field.
+func (u *ConfigurationItemUpsert) SetLocalModifiedAt(v time.Time) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldLocalModifiedAt, v)
+	return u
+}
+
+// UpdateLocalModifiedAt sets the "local_modified_at" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateLocalModifiedAt() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldLocalModifiedAt)
+	return u
+}
+
+// ClearLocalModifiedAt clears the value of the "local_modified_at" field.
+func (u *ConfigurationItemUpsert) ClearLocalModifiedAt() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldLocalModifiedAt)
+	return u
+}
+
+// SetDiscoverySource sets the "discovery_source" field.
+func (u *ConfigurationItemUpsert) SetDiscoverySource(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldDiscoverySource, v)
+	return u
+}
+
+// UpdateDiscoverySource sets the "discovery_source" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateDiscoverySource() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldDiscoverySource)
+	return u
+}
+
+// ClearDiscoverySource clears the value of the "discovery_source" field.
+func (u *ConfigurationItemUpsert) ClearDiscoverySource() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldDiscoverySource)
+	return u
+}
+
+// SetLastDiscovered sets the "last_discovered" field.
+func (u *ConfigurationItemUpsert) SetLastDiscovered(v time.Time) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldLastDiscovered, v)
+	return u
+}
+
+// UpdateLastDiscovered sets the "last_discovered" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateLastDiscovered() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldLastDiscovered)
+	return u
+}
+
+// ClearLastDiscovered clears the value of the "last_discovered" field.
+func (u *ConfigurationItemUpsert) ClearLastDiscovered() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldLastDiscovered)
+	return u
+}
+
+// SetSource sets the "source" field.
+func (u *ConfigurationItemUpsert) SetSource(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldSource, v)
+	return u
+}
+
+// UpdateSource sets the "source" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateSource() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldSource)
+	return u
+}
+
+// ClearSource clears the value of the "source" field.
+func (u *ConfigurationItemUpsert) ClearSource() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldSource)
+	return u
+}
+
+// SetAttributes sets the "attributes" field.
+func (u *ConfigurationItemUpsert) SetAttributes(v map[string]interface{}) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldAttributes, v)
+	return u
+}
+
+// UpdateAttributes sets the "attributes" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateAttributes() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldAttributes)
+	return u
+}
+
+// ClearAttributes clears the value of the "attributes" field.
+func (u *ConfigurationItemUpsert) ClearAttributes() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldAttributes)
+	return u
+}
+
+// SetCloudProvider sets the "cloud_provider" field.
+func (u *ConfigurationItemUpsert) SetCloudProvider(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldCloudProvider, v)
+	return u
+}
+
+// UpdateCloudProvider sets the "cloud_provider" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateCloudProvider() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldCloudProvider)
+	return u
+}
+
+// ClearCloudProvider clears the value of the "cloud_provider" field.
+func (u *ConfigurationItemUpsert) ClearCloudProvider() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldCloudProvider)
+	return u
+}
+
+// SetCloudAccountID sets the "cloud_account_id" field.
+func (u *ConfigurationItemUpsert) SetCloudAccountID(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldCloudAccountID, v)
+	return u
+}
+
+// UpdateCloudAccountID sets the "cloud_account_id" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateCloudAccountID() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldCloudAccountID)
+	return u
+}
+
+// ClearCloudAccountID clears the value of the "cloud_account_id" field.
+func (u *ConfigurationItemUpsert) ClearCloudAccountID() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldCloudAccountID)
+	return u
+}
+
+// SetCloudRegion sets the "cloud_region" field.
+func (u *ConfigurationItemUpsert) SetCloudRegion(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldCloudRegion, v)
+	return u
+}
+
+// UpdateCloudRegion sets the "cloud_region" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateCloudRegion() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldCloudRegion)
+	return u
+}
+
+// ClearCloudRegion clears the value of the "cloud_region" field.
+func (u *ConfigurationItemUpsert) ClearCloudRegion() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldCloudRegion)
+	return u
+}
+
+// SetCloudZone sets the "cloud_zone" field.
+func (u *ConfigurationItemUpsert) SetCloudZone(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldCloudZone, v)
+	return u
+}
+
+// UpdateCloudZone sets the "cloud_zone" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateCloudZone() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldCloudZone)
+	return u
+}
+
+// ClearCloudZone clears the value of the "cloud_zone" field.
+func (u *ConfigurationItemUpsert) ClearCloudZone() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldCloudZone)
+	return u
+}
+
+// SetCloudResourceID sets the "cloud_resource_id" field.
+func (u *ConfigurationItemUpsert) SetCloudResourceID(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldCloudResourceID, v)
+	return u
+}
+
+// UpdateCloudResourceID sets the "cloud_resource_id" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateCloudResourceID() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldCloudResourceID)
+	return u
+}
+
+// ClearCloudResourceID clears the value of the "cloud_resource_id" field.
+func (u *ConfigurationItemUpsert) ClearCloudResourceID() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldCloudResourceID)
+	return u
+}
+
+// SetCloudResourceType sets the "cloud_resource_type" field.
+func (u *ConfigurationItemUpsert) SetCloudResourceType(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldCloudResourceType, v)
+	return u
+}
+
+// UpdateCloudResourceType sets the "cloud_resource_type" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateCloudResourceType() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldCloudResourceType)
+	return u
+}
+
+// ClearCloudResourceType clears the value of the "cloud_resource_type" field.
+func (u *ConfigurationItemUpsert) ClearCloudResourceType() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldCloudResourceType)
+	return u
+}
+
+// SetCloudMetadata sets the "cloud_metadata" field.
+func (u *ConfigurationItemUpsert) SetCloudMetadata(v map[string]interface{}) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldCloudMetadata, v)
+	return u
+}
+
+// UpdateCloudMetadata sets the "cloud_metadata" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateCloudMetadata() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldCloudMetadata)
+	return u
+}
+
+// ClearCloudMetadata clears the value of the "cloud_metadata" field.
+func (u *ConfigurationItemUpsert) ClearCloudMetadata() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldCloudMetadata)
+	return u
+}
+
+// SetCloudTags sets the "cloud_tags" field.
+func (u *ConfigurationItemUpsert) SetCloudTags(v map[string]interface{}) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldCloudTags, v)
+	return u
+}
+
+// UpdateCloudTags sets the "cloud_tags" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateCloudTags() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldCloudTags)
+	return u
+}
+
+// ClearCloudTags clears the value of the "cloud_tags" field.
+func (u *ConfigurationItemUpsert) ClearCloudTags() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldCloudTags)
+	return u
+}
+
+// SetCloudMetrics sets the "cloud_metrics" field.
+func (u *ConfigurationItemUpsert) SetCloudMetrics(v map[string]interface{}) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldCloudMetrics, v)
+	return u
+}
+
+// UpdateCloudMetrics sets the "cloud_metrics" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateCloudMetrics() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldCloudMetrics)
+	return u
+}
+
+// ClearCloudMetrics clears the value of the "cloud_metrics" field.
+func (u *ConfigurationItemUpsert) ClearCloudMetrics() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldCloudMetrics)
+	return u
+}
+
+// SetCloudSyncTime sets the "cloud_sync_time" field.
+func (u *ConfigurationItemUpsert) SetCloudSyncTime(v time.Time) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldCloudSyncTime, v)
+	return u
+}
+
+// UpdateCloudSyncTime sets the "cloud_sync_time" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateCloudSyncTime() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldCloudSyncTime)
+	return u
+}
+
+// ClearCloudSyncTime clears the value of the "cloud_sync_time" field.
+func (u *ConfigurationItemUpsert) ClearCloudSyncTime() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldCloudSyncTime)
+	return u
+}
+
+// SetCloudSyncStatus sets the "cloud_sync_status" field.
+func (u *ConfigurationItemUpsert) SetCloudSyncStatus(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldCloudSyncStatus, v)
+	return u
+}
+
+// UpdateCloudSyncStatus sets the "cloud_sync_status" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateCloudSyncStatus() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldCloudSyncStatus)
+	return u
+}
+
+// ClearCloudSyncStatus clears the value of the "cloud_sync_status" field.
+func (u *ConfigurationItemUpsert) ClearCloudSyncStatus() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldCloudSyncStatus)
+	return u
+}
+
+// SetCloudResourceRefID sets the "cloud_resource_ref_id" field.
+func (u *ConfigurationItemUpsert) SetCloudResourceRefID(v int) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldCloudResourceRefID, v)
+	return u
+}
+
+// UpdateCloudResourceRefID sets the "cloud_resource_ref_id" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateCloudResourceRefID() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldCloudResourceRefID)
+	return u
+}
+
+// ClearCloudResourceRefID clears the value of the "cloud_resource_ref_id" field.
+func (u *ConfigurationItemUpsert) ClearCloudResourceRefID() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldCloudResourceRefID)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ConfigurationItemUpsert) SetTenantID(v int) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateTenantID() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ConfigurationItemUpsert) AddTenantID(v int) *ConfigurationItemUpsert {
+	u.Add(configurationitem.FieldTenantID, v)
+	return u
+}
+
+// SetVersion sets the "version" field.
+func (u *ConfigurationItemUpsert) SetVersion(v int) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldVersion, v)
+	return u
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateVersion() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldVersion)
+	return u
+}
+
+// AddVersion adds v to the "version" field.
+func (u *ConfigurationItemUpsert) AddVersion(v int) *ConfigurationItemUpsert {
+	u.Add(configurationitem.FieldVersion, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ConfigurationItemUpsert) SetCreatedAt(v time.Time) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateCreatedAt() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ConfigurationItemUpsert) SetUpdatedAt(v time.Time) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateUpdatedAt() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldUpdatedAt)
+	return u
+}
+
+// SetLifecycleStatus sets the "lifecycle_status" field.
+func (u *ConfigurationItemUpsert) SetLifecycleStatus(v string) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldLifecycleStatus, v)
+	return u
+}
+
+// UpdateLifecycleStatus sets the "lifecycle_status" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateLifecycleStatus() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldLifecycleStatus)
+	return u
+}
+
+// SetEffectiveAt sets the "effective_at" field.
+func (u *ConfigurationItemUpsert) SetEffectiveAt(v time.Time) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldEffectiveAt, v)
+	return u
+}
+
+// UpdateEffectiveAt sets the "effective_at" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateEffectiveAt() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldEffectiveAt)
+	return u
+}
+
+// ClearEffectiveAt clears the value of the "effective_at" field.
+func (u *ConfigurationItemUpsert) ClearEffectiveAt() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldEffectiveAt)
+	return u
+}
+
+// SetExpireAt sets the "expire_at" field.
+func (u *ConfigurationItemUpsert) SetExpireAt(v time.Time) *ConfigurationItemUpsert {
+	u.Set(configurationitem.FieldExpireAt, v)
+	return u
+}
+
+// UpdateExpireAt sets the "expire_at" field to the value that was provided on create.
+func (u *ConfigurationItemUpsert) UpdateExpireAt() *ConfigurationItemUpsert {
+	u.SetExcluded(configurationitem.FieldExpireAt)
+	return u
+}
+
+// ClearExpireAt clears the value of the "expire_at" field.
+func (u *ConfigurationItemUpsert) ClearExpireAt() *ConfigurationItemUpsert {
+	u.SetNull(configurationitem.FieldExpireAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ConfigurationItem.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ConfigurationItemUpsertOne) UpdateNewValues() *ConfigurationItemUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ConfigurationItem.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ConfigurationItemUpsertOne) Ignore() *ConfigurationItemUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ConfigurationItemUpsertOne) DoNothing() *ConfigurationItemUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ConfigurationItemCreate.OnConflict
+// documentation for more info.
+func (u *ConfigurationItemUpsertOne) Update(set func(*ConfigurationItemUpsert)) *ConfigurationItemUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ConfigurationItemUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *ConfigurationItemUpsertOne) SetName(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateName() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *ConfigurationItemUpsertOne) SetDescription(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateDescription() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ConfigurationItemUpsertOne) ClearDescription() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetCiTypeID sets the "ci_type_id" field.
+func (u *ConfigurationItemUpsertOne) SetCiTypeID(v int) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCiTypeID(v)
+	})
+}
+
+// UpdateCiTypeID sets the "ci_type_id" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateCiTypeID() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCiTypeID()
+	})
+}
+
+// SetCiType sets the "ci_type" field.
+func (u *ConfigurationItemUpsertOne) SetCiType(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCiType(v)
+	})
+}
+
+// UpdateCiType sets the "ci_type" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateCiType() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCiType()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ConfigurationItemUpsertOne) SetStatus(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateStatus() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetEnvironment sets the "environment" field.
+func (u *ConfigurationItemUpsertOne) SetEnvironment(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetEnvironment(v)
+	})
+}
+
+// UpdateEnvironment sets the "environment" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateEnvironment() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateEnvironment()
+	})
+}
+
+// SetCriticality sets the "criticality" field.
+func (u *ConfigurationItemUpsertOne) SetCriticality(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCriticality(v)
+	})
+}
+
+// UpdateCriticality sets the "criticality" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateCriticality() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCriticality()
+	})
+}
+
+// SetAssetTag sets the "asset_tag" field.
+func (u *ConfigurationItemUpsertOne) SetAssetTag(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetAssetTag(v)
+	})
+}
+
+// UpdateAssetTag sets the "asset_tag" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateAssetTag() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateAssetTag()
+	})
+}
+
+// ClearAssetTag clears the value of the "asset_tag" field.
+func (u *ConfigurationItemUpsertOne) ClearAssetTag() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearAssetTag()
+	})
+}
+
+// SetSerialNumber sets the "serial_number" field.
+func (u *ConfigurationItemUpsertOne) SetSerialNumber(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetSerialNumber(v)
+	})
+}
+
+// UpdateSerialNumber sets the "serial_number" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateSerialNumber() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateSerialNumber()
+	})
+}
+
+// ClearSerialNumber clears the value of the "serial_number" field.
+func (u *ConfigurationItemUpsertOne) ClearSerialNumber() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearSerialNumber()
+	})
+}
+
+// SetModel sets the "model" field.
+func (u *ConfigurationItemUpsertOne) SetModel(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetModel(v)
+	})
+}
+
+// UpdateModel sets the "model" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateModel() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateModel()
+	})
+}
+
+// ClearModel clears the value of the "model" field.
+func (u *ConfigurationItemUpsertOne) ClearModel() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearModel()
+	})
+}
+
+// SetVendor sets the "vendor" field.
+func (u *ConfigurationItemUpsertOne) SetVendor(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetVendor(v)
+	})
+}
+
+// UpdateVendor sets the "vendor" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateVendor() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateVendor()
+	})
+}
+
+// ClearVendor clears the value of the "vendor" field.
+func (u *ConfigurationItemUpsertOne) ClearVendor() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearVendor()
+	})
+}
+
+// SetLocation sets the "location" field.
+func (u *ConfigurationItemUpsertOne) SetLocation(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetLocation(v)
+	})
+}
+
+// UpdateLocation sets the "location" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateLocation() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateLocation()
+	})
+}
+
+// ClearLocation clears the value of the "location" field.
+func (u *ConfigurationItemUpsertOne) ClearLocation() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearLocation()
+	})
+}
+
+// SetAssignedTo sets the "assigned_to" field.
+func (u *ConfigurationItemUpsertOne) SetAssignedTo(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetAssignedTo(v)
+	})
+}
+
+// UpdateAssignedTo sets the "assigned_to" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateAssignedTo() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateAssignedTo()
+	})
+}
+
+// ClearAssignedTo clears the value of the "assigned_to" field.
+func (u *ConfigurationItemUpsertOne) ClearAssignedTo() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearAssignedTo()
+	})
+}
+
+// SetOwnedBy sets the "owned_by" field.
+func (u *ConfigurationItemUpsertOne) SetOwnedBy(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetOwnedBy(v)
+	})
+}
+
+// UpdateOwnedBy sets the "owned_by" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateOwnedBy() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateOwnedBy()
+	})
+}
+
+// ClearOwnedBy clears the value of the "owned_by" field.
+func (u *ConfigurationItemUpsertOne) ClearOwnedBy() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearOwnedBy()
+	})
+}
+
+// SetOwnershipMode sets the "ownership_mode" field.
+func (u *ConfigurationItemUpsertOne) SetOwnershipMode(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetOwnershipMode(v)
+	})
+}
+
+// UpdateOwnershipMode sets the "ownership_mode" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateOwnershipMode() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateOwnershipMode()
+	})
+}
+
+// SetLocalModifiedAt sets the "local_modified_at" field.
+func (u *ConfigurationItemUpsertOne) SetLocalModifiedAt(v time.Time) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetLocalModifiedAt(v)
+	})
+}
+
+// UpdateLocalModifiedAt sets the "local_modified_at" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateLocalModifiedAt() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateLocalModifiedAt()
+	})
+}
+
+// ClearLocalModifiedAt clears the value of the "local_modified_at" field.
+func (u *ConfigurationItemUpsertOne) ClearLocalModifiedAt() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearLocalModifiedAt()
+	})
+}
+
+// SetDiscoverySource sets the "discovery_source" field.
+func (u *ConfigurationItemUpsertOne) SetDiscoverySource(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetDiscoverySource(v)
+	})
+}
+
+// UpdateDiscoverySource sets the "discovery_source" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateDiscoverySource() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateDiscoverySource()
+	})
+}
+
+// ClearDiscoverySource clears the value of the "discovery_source" field.
+func (u *ConfigurationItemUpsertOne) ClearDiscoverySource() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearDiscoverySource()
+	})
+}
+
+// SetLastDiscovered sets the "last_discovered" field.
+func (u *ConfigurationItemUpsertOne) SetLastDiscovered(v time.Time) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetLastDiscovered(v)
+	})
+}
+
+// UpdateLastDiscovered sets the "last_discovered" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateLastDiscovered() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateLastDiscovered()
+	})
+}
+
+// ClearLastDiscovered clears the value of the "last_discovered" field.
+func (u *ConfigurationItemUpsertOne) ClearLastDiscovered() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearLastDiscovered()
+	})
+}
+
+// SetSource sets the "source" field.
+func (u *ConfigurationItemUpsertOne) SetSource(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetSource(v)
+	})
+}
+
+// UpdateSource sets the "source" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateSource() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateSource()
+	})
+}
+
+// ClearSource clears the value of the "source" field.
+func (u *ConfigurationItemUpsertOne) ClearSource() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearSource()
+	})
+}
+
+// SetAttributes sets the "attributes" field.
+func (u *ConfigurationItemUpsertOne) SetAttributes(v map[string]interface{}) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetAttributes(v)
+	})
+}
+
+// UpdateAttributes sets the "attributes" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateAttributes() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateAttributes()
+	})
+}
+
+// ClearAttributes clears the value of the "attributes" field.
+func (u *ConfigurationItemUpsertOne) ClearAttributes() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearAttributes()
+	})
+}
+
+// SetCloudProvider sets the "cloud_provider" field.
+func (u *ConfigurationItemUpsertOne) SetCloudProvider(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudProvider(v)
+	})
+}
+
+// UpdateCloudProvider sets the "cloud_provider" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateCloudProvider() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudProvider()
+	})
+}
+
+// ClearCloudProvider clears the value of the "cloud_provider" field.
+func (u *ConfigurationItemUpsertOne) ClearCloudProvider() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudProvider()
+	})
+}
+
+// SetCloudAccountID sets the "cloud_account_id" field.
+func (u *ConfigurationItemUpsertOne) SetCloudAccountID(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudAccountID(v)
+	})
+}
+
+// UpdateCloudAccountID sets the "cloud_account_id" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateCloudAccountID() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudAccountID()
+	})
+}
+
+// ClearCloudAccountID clears the value of the "cloud_account_id" field.
+func (u *ConfigurationItemUpsertOne) ClearCloudAccountID() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudAccountID()
+	})
+}
+
+// SetCloudRegion sets the "cloud_region" field.
+func (u *ConfigurationItemUpsertOne) SetCloudRegion(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudRegion(v)
+	})
+}
+
+// UpdateCloudRegion sets the "cloud_region" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateCloudRegion() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudRegion()
+	})
+}
+
+// ClearCloudRegion clears the value of the "cloud_region" field.
+func (u *ConfigurationItemUpsertOne) ClearCloudRegion() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudRegion()
+	})
+}
+
+// SetCloudZone sets the "cloud_zone" field.
+func (u *ConfigurationItemUpsertOne) SetCloudZone(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudZone(v)
+	})
+}
+
+// UpdateCloudZone sets the "cloud_zone" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateCloudZone() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudZone()
+	})
+}
+
+// ClearCloudZone clears the value of the "cloud_zone" field.
+func (u *ConfigurationItemUpsertOne) ClearCloudZone() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudZone()
+	})
+}
+
+// SetCloudResourceID sets the "cloud_resource_id" field.
+func (u *ConfigurationItemUpsertOne) SetCloudResourceID(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudResourceID(v)
+	})
+}
+
+// UpdateCloudResourceID sets the "cloud_resource_id" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateCloudResourceID() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudResourceID()
+	})
+}
+
+// ClearCloudResourceID clears the value of the "cloud_resource_id" field.
+func (u *ConfigurationItemUpsertOne) ClearCloudResourceID() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudResourceID()
+	})
+}
+
+// SetCloudResourceType sets the "cloud_resource_type" field.
+func (u *ConfigurationItemUpsertOne) SetCloudResourceType(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudResourceType(v)
+	})
+}
+
+// UpdateCloudResourceType sets the "cloud_resource_type" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateCloudResourceType() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudResourceType()
+	})
+}
+
+// ClearCloudResourceType clears the value of the "cloud_resource_type" field.
+func (u *ConfigurationItemUpsertOne) ClearCloudResourceType() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudResourceType()
+	})
+}
+
+// SetCloudMetadata sets the "cloud_metadata" field.
+func (u *ConfigurationItemUpsertOne) SetCloudMetadata(v map[string]interface{}) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudMetadata(v)
+	})
+}
+
+// UpdateCloudMetadata sets the "cloud_metadata" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateCloudMetadata() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudMetadata()
+	})
+}
+
+// ClearCloudMetadata clears the value of the "cloud_metadata" field.
+func (u *ConfigurationItemUpsertOne) ClearCloudMetadata() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudMetadata()
+	})
+}
+
+// SetCloudTags sets the "cloud_tags" field.
+func (u *ConfigurationItemUpsertOne) SetCloudTags(v map[string]interface{}) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudTags(v)
+	})
+}
+
+// UpdateCloudTags sets the "cloud_tags" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateCloudTags() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudTags()
+	})
+}
+
+// ClearCloudTags clears the value of the "cloud_tags" field.
+func (u *ConfigurationItemUpsertOne) ClearCloudTags() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudTags()
+	})
+}
+
+// SetCloudMetrics sets the "cloud_metrics" field.
+func (u *ConfigurationItemUpsertOne) SetCloudMetrics(v map[string]interface{}) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudMetrics(v)
+	})
+}
+
+// UpdateCloudMetrics sets the "cloud_metrics" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateCloudMetrics() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudMetrics()
+	})
+}
+
+// ClearCloudMetrics clears the value of the "cloud_metrics" field.
+func (u *ConfigurationItemUpsertOne) ClearCloudMetrics() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudMetrics()
+	})
+}
+
+// SetCloudSyncTime sets the "cloud_sync_time" field.
+func (u *ConfigurationItemUpsertOne) SetCloudSyncTime(v time.Time) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudSyncTime(v)
+	})
+}
+
+// UpdateCloudSyncTime sets the "cloud_sync_time" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateCloudSyncTime() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudSyncTime()
+	})
+}
+
+// ClearCloudSyncTime clears the value of the "cloud_sync_time" field.
+func (u *ConfigurationItemUpsertOne) ClearCloudSyncTime() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudSyncTime()
+	})
+}
+
+// SetCloudSyncStatus sets the "cloud_sync_status" field.
+func (u *ConfigurationItemUpsertOne) SetCloudSyncStatus(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudSyncStatus(v)
+	})
+}
+
+// UpdateCloudSyncStatus sets the "cloud_sync_status" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateCloudSyncStatus() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudSyncStatus()
+	})
+}
+
+// ClearCloudSyncStatus clears the value of the "cloud_sync_status" field.
+func (u *ConfigurationItemUpsertOne) ClearCloudSyncStatus() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudSyncStatus()
+	})
+}
+
+// SetCloudResourceRefID sets the "cloud_resource_ref_id" field.
+func (u *ConfigurationItemUpsertOne) SetCloudResourceRefID(v int) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudResourceRefID(v)
+	})
+}
+
+// UpdateCloudResourceRefID sets the "cloud_resource_ref_id" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateCloudResourceRefID() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudResourceRefID()
+	})
+}
+
+// ClearCloudResourceRefID clears the value of the "cloud_resource_ref_id" field.
+func (u *ConfigurationItemUpsertOne) ClearCloudResourceRefID() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudResourceRefID()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ConfigurationItemUpsertOne) SetTenantID(v int) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ConfigurationItemUpsertOne) AddTenantID(v int) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateTenantID() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetVersion sets the "version" field.
+func (u *ConfigurationItemUpsertOne) SetVersion(v int) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetVersion(v)
+	})
+}
+
+// AddVersion adds v to the "version" field.
+func (u *ConfigurationItemUpsertOne) AddVersion(v int) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.AddVersion(v)
+	})
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateVersion() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateVersion()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ConfigurationItemUpsertOne) SetCreatedAt(v time.Time) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateCreatedAt() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ConfigurationItemUpsertOne) SetUpdatedAt(v time.Time) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateUpdatedAt() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetLifecycleStatus sets the "lifecycle_status" field.
+func (u *ConfigurationItemUpsertOne) SetLifecycleStatus(v string) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetLifecycleStatus(v)
+	})
+}
+
+// UpdateLifecycleStatus sets the "lifecycle_status" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateLifecycleStatus() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateLifecycleStatus()
+	})
+}
+
+// SetEffectiveAt sets the "effective_at" field.
+func (u *ConfigurationItemUpsertOne) SetEffectiveAt(v time.Time) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetEffectiveAt(v)
+	})
+}
+
+// UpdateEffectiveAt sets the "effective_at" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateEffectiveAt() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateEffectiveAt()
+	})
+}
+
+// ClearEffectiveAt clears the value of the "effective_at" field.
+func (u *ConfigurationItemUpsertOne) ClearEffectiveAt() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearEffectiveAt()
+	})
+}
+
+// SetExpireAt sets the "expire_at" field.
+func (u *ConfigurationItemUpsertOne) SetExpireAt(v time.Time) *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetExpireAt(v)
+	})
+}
+
+// UpdateExpireAt sets the "expire_at" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertOne) UpdateExpireAt() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateExpireAt()
+	})
+}
+
+// ClearExpireAt clears the value of the "expire_at" field.
+func (u *ConfigurationItemUpsertOne) ClearExpireAt() *ConfigurationItemUpsertOne {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearExpireAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ConfigurationItemUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ConfigurationItemCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ConfigurationItemUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ConfigurationItemUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ConfigurationItemUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ConfigurationItemCreateBulk is the builder for creating many ConfigurationItem entities in bulk.
 type ConfigurationItemCreateBulk struct {
 	config
 	err      error
 	builders []*ConfigurationItemCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ConfigurationItem entities in the database.
@@ -1093,6 +2610,7 @@ func (_c *ConfigurationItemCreateBulk) Save(ctx context.Context) ([]*Configurati
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -1143,6 +2661,859 @@ func (_c *ConfigurationItemCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ConfigurationItemCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ConfigurationItem.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ConfigurationItemUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ConfigurationItemCreateBulk) OnConflict(opts ...sql.ConflictOption) *ConfigurationItemUpsertBulk {
+	_c.conflict = opts
+	return &ConfigurationItemUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ConfigurationItem.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ConfigurationItemCreateBulk) OnConflictColumns(columns ...string) *ConfigurationItemUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ConfigurationItemUpsertBulk{
+		create: _c,
+	}
+}
+
+// ConfigurationItemUpsertBulk is the builder for "upsert"-ing
+// a bulk of ConfigurationItem nodes.
+type ConfigurationItemUpsertBulk struct {
+	create *ConfigurationItemCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ConfigurationItem.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ConfigurationItemUpsertBulk) UpdateNewValues() *ConfigurationItemUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ConfigurationItem.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ConfigurationItemUpsertBulk) Ignore() *ConfigurationItemUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ConfigurationItemUpsertBulk) DoNothing() *ConfigurationItemUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ConfigurationItemCreateBulk.OnConflict
+// documentation for more info.
+func (u *ConfigurationItemUpsertBulk) Update(set func(*ConfigurationItemUpsert)) *ConfigurationItemUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ConfigurationItemUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *ConfigurationItemUpsertBulk) SetName(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateName() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *ConfigurationItemUpsertBulk) SetDescription(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateDescription() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ConfigurationItemUpsertBulk) ClearDescription() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetCiTypeID sets the "ci_type_id" field.
+func (u *ConfigurationItemUpsertBulk) SetCiTypeID(v int) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCiTypeID(v)
+	})
+}
+
+// UpdateCiTypeID sets the "ci_type_id" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateCiTypeID() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCiTypeID()
+	})
+}
+
+// SetCiType sets the "ci_type" field.
+func (u *ConfigurationItemUpsertBulk) SetCiType(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCiType(v)
+	})
+}
+
+// UpdateCiType sets the "ci_type" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateCiType() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCiType()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ConfigurationItemUpsertBulk) SetStatus(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateStatus() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetEnvironment sets the "environment" field.
+func (u *ConfigurationItemUpsertBulk) SetEnvironment(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetEnvironment(v)
+	})
+}
+
+// UpdateEnvironment sets the "environment" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateEnvironment() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateEnvironment()
+	})
+}
+
+// SetCriticality sets the "criticality" field.
+func (u *ConfigurationItemUpsertBulk) SetCriticality(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCriticality(v)
+	})
+}
+
+// UpdateCriticality sets the "criticality" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateCriticality() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCriticality()
+	})
+}
+
+// SetAssetTag sets the "asset_tag" field.
+func (u *ConfigurationItemUpsertBulk) SetAssetTag(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetAssetTag(v)
+	})
+}
+
+// UpdateAssetTag sets the "asset_tag" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateAssetTag() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateAssetTag()
+	})
+}
+
+// ClearAssetTag clears the value of the "asset_tag" field.
+func (u *ConfigurationItemUpsertBulk) ClearAssetTag() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearAssetTag()
+	})
+}
+
+// SetSerialNumber sets the "serial_number" field.
+func (u *ConfigurationItemUpsertBulk) SetSerialNumber(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetSerialNumber(v)
+	})
+}
+
+// UpdateSerialNumber sets the "serial_number" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateSerialNumber() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateSerialNumber()
+	})
+}
+
+// ClearSerialNumber clears the value of the "serial_number" field.
+func (u *ConfigurationItemUpsertBulk) ClearSerialNumber() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearSerialNumber()
+	})
+}
+
+// SetModel sets the "model" field.
+func (u *ConfigurationItemUpsertBulk) SetModel(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetModel(v)
+	})
+}
+
+// UpdateModel sets the "model" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateModel() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateModel()
+	})
+}
+
+// ClearModel clears the value of the "model" field.
+func (u *ConfigurationItemUpsertBulk) ClearModel() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearModel()
+	})
+}
+
+// SetVendor sets the "vendor" field.
+func (u *ConfigurationItemUpsertBulk) SetVendor(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetVendor(v)
+	})
+}
+
+// UpdateVendor sets the "vendor" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateVendor() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateVendor()
+	})
+}
+
+// ClearVendor clears the value of the "vendor" field.
+func (u *ConfigurationItemUpsertBulk) ClearVendor() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearVendor()
+	})
+}
+
+// SetLocation sets the "location" field.
+func (u *ConfigurationItemUpsertBulk) SetLocation(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetLocation(v)
+	})
+}
+
+// UpdateLocation sets the "location" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateLocation() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateLocation()
+	})
+}
+
+// ClearLocation clears the value of the "location" field.
+func (u *ConfigurationItemUpsertBulk) ClearLocation() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearLocation()
+	})
+}
+
+// SetAssignedTo sets the "assigned_to" field.
+func (u *ConfigurationItemUpsertBulk) SetAssignedTo(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetAssignedTo(v)
+	})
+}
+
+// UpdateAssignedTo sets the "assigned_to" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateAssignedTo() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateAssignedTo()
+	})
+}
+
+// ClearAssignedTo clears the value of the "assigned_to" field.
+func (u *ConfigurationItemUpsertBulk) ClearAssignedTo() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearAssignedTo()
+	})
+}
+
+// SetOwnedBy sets the "owned_by" field.
+func (u *ConfigurationItemUpsertBulk) SetOwnedBy(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetOwnedBy(v)
+	})
+}
+
+// UpdateOwnedBy sets the "owned_by" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateOwnedBy() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateOwnedBy()
+	})
+}
+
+// ClearOwnedBy clears the value of the "owned_by" field.
+func (u *ConfigurationItemUpsertBulk) ClearOwnedBy() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearOwnedBy()
+	})
+}
+
+// SetOwnershipMode sets the "ownership_mode" field.
+func (u *ConfigurationItemUpsertBulk) SetOwnershipMode(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetOwnershipMode(v)
+	})
+}
+
+// UpdateOwnershipMode sets the "ownership_mode" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateOwnershipMode() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateOwnershipMode()
+	})
+}
+
+// SetLocalModifiedAt sets the "local_modified_at" field.
+func (u *ConfigurationItemUpsertBulk) SetLocalModifiedAt(v time.Time) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetLocalModifiedAt(v)
+	})
+}
+
+// UpdateLocalModifiedAt sets the "local_modified_at" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateLocalModifiedAt() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateLocalModifiedAt()
+	})
+}
+
+// ClearLocalModifiedAt clears the value of the "local_modified_at" field.
+func (u *ConfigurationItemUpsertBulk) ClearLocalModifiedAt() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearLocalModifiedAt()
+	})
+}
+
+// SetDiscoverySource sets the "discovery_source" field.
+func (u *ConfigurationItemUpsertBulk) SetDiscoverySource(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetDiscoverySource(v)
+	})
+}
+
+// UpdateDiscoverySource sets the "discovery_source" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateDiscoverySource() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateDiscoverySource()
+	})
+}
+
+// ClearDiscoverySource clears the value of the "discovery_source" field.
+func (u *ConfigurationItemUpsertBulk) ClearDiscoverySource() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearDiscoverySource()
+	})
+}
+
+// SetLastDiscovered sets the "last_discovered" field.
+func (u *ConfigurationItemUpsertBulk) SetLastDiscovered(v time.Time) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetLastDiscovered(v)
+	})
+}
+
+// UpdateLastDiscovered sets the "last_discovered" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateLastDiscovered() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateLastDiscovered()
+	})
+}
+
+// ClearLastDiscovered clears the value of the "last_discovered" field.
+func (u *ConfigurationItemUpsertBulk) ClearLastDiscovered() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearLastDiscovered()
+	})
+}
+
+// SetSource sets the "source" field.
+func (u *ConfigurationItemUpsertBulk) SetSource(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetSource(v)
+	})
+}
+
+// UpdateSource sets the "source" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateSource() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateSource()
+	})
+}
+
+// ClearSource clears the value of the "source" field.
+func (u *ConfigurationItemUpsertBulk) ClearSource() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearSource()
+	})
+}
+
+// SetAttributes sets the "attributes" field.
+func (u *ConfigurationItemUpsertBulk) SetAttributes(v map[string]interface{}) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetAttributes(v)
+	})
+}
+
+// UpdateAttributes sets the "attributes" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateAttributes() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateAttributes()
+	})
+}
+
+// ClearAttributes clears the value of the "attributes" field.
+func (u *ConfigurationItemUpsertBulk) ClearAttributes() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearAttributes()
+	})
+}
+
+// SetCloudProvider sets the "cloud_provider" field.
+func (u *ConfigurationItemUpsertBulk) SetCloudProvider(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudProvider(v)
+	})
+}
+
+// UpdateCloudProvider sets the "cloud_provider" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateCloudProvider() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudProvider()
+	})
+}
+
+// ClearCloudProvider clears the value of the "cloud_provider" field.
+func (u *ConfigurationItemUpsertBulk) ClearCloudProvider() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudProvider()
+	})
+}
+
+// SetCloudAccountID sets the "cloud_account_id" field.
+func (u *ConfigurationItemUpsertBulk) SetCloudAccountID(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudAccountID(v)
+	})
+}
+
+// UpdateCloudAccountID sets the "cloud_account_id" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateCloudAccountID() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudAccountID()
+	})
+}
+
+// ClearCloudAccountID clears the value of the "cloud_account_id" field.
+func (u *ConfigurationItemUpsertBulk) ClearCloudAccountID() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudAccountID()
+	})
+}
+
+// SetCloudRegion sets the "cloud_region" field.
+func (u *ConfigurationItemUpsertBulk) SetCloudRegion(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudRegion(v)
+	})
+}
+
+// UpdateCloudRegion sets the "cloud_region" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateCloudRegion() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudRegion()
+	})
+}
+
+// ClearCloudRegion clears the value of the "cloud_region" field.
+func (u *ConfigurationItemUpsertBulk) ClearCloudRegion() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudRegion()
+	})
+}
+
+// SetCloudZone sets the "cloud_zone" field.
+func (u *ConfigurationItemUpsertBulk) SetCloudZone(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudZone(v)
+	})
+}
+
+// UpdateCloudZone sets the "cloud_zone" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateCloudZone() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudZone()
+	})
+}
+
+// ClearCloudZone clears the value of the "cloud_zone" field.
+func (u *ConfigurationItemUpsertBulk) ClearCloudZone() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudZone()
+	})
+}
+
+// SetCloudResourceID sets the "cloud_resource_id" field.
+func (u *ConfigurationItemUpsertBulk) SetCloudResourceID(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudResourceID(v)
+	})
+}
+
+// UpdateCloudResourceID sets the "cloud_resource_id" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateCloudResourceID() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudResourceID()
+	})
+}
+
+// ClearCloudResourceID clears the value of the "cloud_resource_id" field.
+func (u *ConfigurationItemUpsertBulk) ClearCloudResourceID() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudResourceID()
+	})
+}
+
+// SetCloudResourceType sets the "cloud_resource_type" field.
+func (u *ConfigurationItemUpsertBulk) SetCloudResourceType(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudResourceType(v)
+	})
+}
+
+// UpdateCloudResourceType sets the "cloud_resource_type" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateCloudResourceType() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudResourceType()
+	})
+}
+
+// ClearCloudResourceType clears the value of the "cloud_resource_type" field.
+func (u *ConfigurationItemUpsertBulk) ClearCloudResourceType() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudResourceType()
+	})
+}
+
+// SetCloudMetadata sets the "cloud_metadata" field.
+func (u *ConfigurationItemUpsertBulk) SetCloudMetadata(v map[string]interface{}) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudMetadata(v)
+	})
+}
+
+// UpdateCloudMetadata sets the "cloud_metadata" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateCloudMetadata() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudMetadata()
+	})
+}
+
+// ClearCloudMetadata clears the value of the "cloud_metadata" field.
+func (u *ConfigurationItemUpsertBulk) ClearCloudMetadata() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudMetadata()
+	})
+}
+
+// SetCloudTags sets the "cloud_tags" field.
+func (u *ConfigurationItemUpsertBulk) SetCloudTags(v map[string]interface{}) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudTags(v)
+	})
+}
+
+// UpdateCloudTags sets the "cloud_tags" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateCloudTags() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudTags()
+	})
+}
+
+// ClearCloudTags clears the value of the "cloud_tags" field.
+func (u *ConfigurationItemUpsertBulk) ClearCloudTags() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudTags()
+	})
+}
+
+// SetCloudMetrics sets the "cloud_metrics" field.
+func (u *ConfigurationItemUpsertBulk) SetCloudMetrics(v map[string]interface{}) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudMetrics(v)
+	})
+}
+
+// UpdateCloudMetrics sets the "cloud_metrics" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateCloudMetrics() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudMetrics()
+	})
+}
+
+// ClearCloudMetrics clears the value of the "cloud_metrics" field.
+func (u *ConfigurationItemUpsertBulk) ClearCloudMetrics() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudMetrics()
+	})
+}
+
+// SetCloudSyncTime sets the "cloud_sync_time" field.
+func (u *ConfigurationItemUpsertBulk) SetCloudSyncTime(v time.Time) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudSyncTime(v)
+	})
+}
+
+// UpdateCloudSyncTime sets the "cloud_sync_time" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateCloudSyncTime() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudSyncTime()
+	})
+}
+
+// ClearCloudSyncTime clears the value of the "cloud_sync_time" field.
+func (u *ConfigurationItemUpsertBulk) ClearCloudSyncTime() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudSyncTime()
+	})
+}
+
+// SetCloudSyncStatus sets the "cloud_sync_status" field.
+func (u *ConfigurationItemUpsertBulk) SetCloudSyncStatus(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudSyncStatus(v)
+	})
+}
+
+// UpdateCloudSyncStatus sets the "cloud_sync_status" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateCloudSyncStatus() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudSyncStatus()
+	})
+}
+
+// ClearCloudSyncStatus clears the value of the "cloud_sync_status" field.
+func (u *ConfigurationItemUpsertBulk) ClearCloudSyncStatus() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudSyncStatus()
+	})
+}
+
+// SetCloudResourceRefID sets the "cloud_resource_ref_id" field.
+func (u *ConfigurationItemUpsertBulk) SetCloudResourceRefID(v int) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCloudResourceRefID(v)
+	})
+}
+
+// UpdateCloudResourceRefID sets the "cloud_resource_ref_id" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateCloudResourceRefID() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCloudResourceRefID()
+	})
+}
+
+// ClearCloudResourceRefID clears the value of the "cloud_resource_ref_id" field.
+func (u *ConfigurationItemUpsertBulk) ClearCloudResourceRefID() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearCloudResourceRefID()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ConfigurationItemUpsertBulk) SetTenantID(v int) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ConfigurationItemUpsertBulk) AddTenantID(v int) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateTenantID() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetVersion sets the "version" field.
+func (u *ConfigurationItemUpsertBulk) SetVersion(v int) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetVersion(v)
+	})
+}
+
+// AddVersion adds v to the "version" field.
+func (u *ConfigurationItemUpsertBulk) AddVersion(v int) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.AddVersion(v)
+	})
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateVersion() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateVersion()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ConfigurationItemUpsertBulk) SetCreatedAt(v time.Time) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateCreatedAt() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ConfigurationItemUpsertBulk) SetUpdatedAt(v time.Time) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateUpdatedAt() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetLifecycleStatus sets the "lifecycle_status" field.
+func (u *ConfigurationItemUpsertBulk) SetLifecycleStatus(v string) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetLifecycleStatus(v)
+	})
+}
+
+// UpdateLifecycleStatus sets the "lifecycle_status" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateLifecycleStatus() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateLifecycleStatus()
+	})
+}
+
+// SetEffectiveAt sets the "effective_at" field.
+func (u *ConfigurationItemUpsertBulk) SetEffectiveAt(v time.Time) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetEffectiveAt(v)
+	})
+}
+
+// UpdateEffectiveAt sets the "effective_at" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateEffectiveAt() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateEffectiveAt()
+	})
+}
+
+// ClearEffectiveAt clears the value of the "effective_at" field.
+func (u *ConfigurationItemUpsertBulk) ClearEffectiveAt() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearEffectiveAt()
+	})
+}
+
+// SetExpireAt sets the "expire_at" field.
+func (u *ConfigurationItemUpsertBulk) SetExpireAt(v time.Time) *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.SetExpireAt(v)
+	})
+}
+
+// UpdateExpireAt sets the "expire_at" field to the value that was provided on create.
+func (u *ConfigurationItemUpsertBulk) UpdateExpireAt() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.UpdateExpireAt()
+	})
+}
+
+// ClearExpireAt clears the value of the "expire_at" field.
+func (u *ConfigurationItemUpsertBulk) ClearExpireAt() *ConfigurationItemUpsertBulk {
+	return u.Update(func(s *ConfigurationItemUpsert) {
+		s.ClearExpireAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ConfigurationItemUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ConfigurationItemCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ConfigurationItemCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ConfigurationItemUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

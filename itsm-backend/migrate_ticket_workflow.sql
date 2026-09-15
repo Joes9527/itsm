@@ -62,29 +62,6 @@ CREATE INDEX idx_workflow_records_tenant ON ticket_workflow_records(tenant_id);
 CREATE INDEX idx_workflow_records_action ON ticket_workflow_records(action);
 CREATE INDEX idx_workflow_records_created ON ticket_workflow_records(created_at DESC);
 
--- 工单审批记录表
-CREATE TABLE IF NOT EXISTS ticket_approvals (
-    id SERIAL PRIMARY KEY,
-    ticket_id INTEGER NOT NULL,
-    level INTEGER NOT NULL,
-    level_name VARCHAR(200),
-    approver_id INTEGER NOT NULL,
-    status VARCHAR(50) NOT NULL DEFAULT 'pending',
-    action VARCHAR(50),
-    comment TEXT,
-    processed_at TIMESTAMP,
-    delegate_to_user_id INTEGER,
-    tenant_id INTEGER NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
--- 索引
-CREATE INDEX idx_approvals_ticket ON ticket_approvals(ticket_id);
-CREATE INDEX idx_approvals_approver ON ticket_approvals(approver_id);
-CREATE INDEX idx_approvals_status ON ticket_approvals(status);
-CREATE INDEX idx_approvals_tenant ON ticket_approvals(tenant_id);
-
 -- 工单抄送表
 CREATE TABLE IF NOT EXISTS ticket_cc (
     id SERIAL PRIMARY KEY,
@@ -117,7 +94,6 @@ ALTER TABLE tickets ADD CONSTRAINT fk_ticket_type
 -- 注释
 COMMENT ON TABLE ticket_types IS '工单类型定义表';
 COMMENT ON TABLE ticket_workflow_records IS '工单流转记录表';
-COMMENT ON TABLE ticket_approvals IS '工单审批记录表';
 COMMENT ON TABLE ticket_cc IS '工单抄送表';
 
 COMMENT ON COLUMN ticket_types.code IS '类型编码，租户内唯一';
@@ -128,7 +104,3 @@ COMMENT ON COLUMN ticket_types.usage_count IS '使用次数统计';
 
 COMMENT ON COLUMN ticket_workflow_records.action IS '流转操作类型: accept, reject, withdraw, forward, cc, approve等';
 COMMENT ON COLUMN ticket_workflow_records.metadata IS '附加元数据(JSON)';
-
-COMMENT ON COLUMN ticket_approvals.level IS '审批级别';
-COMMENT ON COLUMN ticket_approvals.status IS '审批状态: pending, approved, rejected, cancelled';
-

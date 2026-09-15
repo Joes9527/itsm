@@ -12,7 +12,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -41,7 +40,7 @@ func newAuthFixture(t *testing.T) *authFixture {
 	logger := zaptest.NewLogger(t).Sugar()
 
 	svc := &AuthService{
-		client:    client,
+		client: client, sessionClient: client,
 		jwtSecret: "test-secret-key",
 		logger:    logger,
 		baseURL:   "http://localhost:3000",
@@ -86,64 +85,6 @@ func newAuthFixture(t *testing.T) *authFixture {
 		logger:  logger,
 		ctx:     ctx,
 	}
-}
-
-// =====================================================================
-// Logout / Token 黑名单 (nil blacklist 路径)
-// =====================================================================
-
-// TestAuthService_Logout 验证 Logout 在各种黑名单配置下的行为
-func TestAuthService_Logout(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("tokenBlacklist 为 nil 时登出仍成功", func(t *testing.T) {
-		fx := newAuthFixture(t)
-		defer fx.client.Close()
-
-		// 不注入 tokenBlacklist
-		err := fx.service.Logout(ctx, fx.user.ID)
-		assert.NoError(t, err)
-	})
-
-	t.Run("tokenBlacklist 内部 panic 时登出仍应成功（回归测试）", func(t *testing.T) {
-		// 背景：AuthService.Logout 调用 tokenBlacklist.RevokeUserTokens。
-		// 当底层 Redis 未配置或不可用时，TokenBlacklistService.RevokeUserTokens
-		// 会 nil-pointer panic。之前这导致整个 HTTP 请求崩溃。
-		// 修复后：Logout 内部 panic-safety，panic 被捕获，登出仍返回成功。
-		fx := newAuthFixture(t)
-		defer fx.client.Close()
-
-		fx.service.tokenBlacklist = &TokenBlacklistService{
-			prefix:      "jwt:blacklist:",
-			logger:      zap.NewNop().Sugar(),
-			redisClient: nil, // 触发 nil pointer panic
-		}
-
-		// 即使 blacklist panic，Logout 也应返回 nil
-		assert.NotPanics(t, func() {
-			err := fx.service.Logout(fx.ctx, fx.user.ID)
-			assert.NoError(t, err)
-		}, "Logout 不应因为 blacklist 内部 panic 而崩溃")
-	})
-}
-
-// TestAuthService_RevokeUserTokens 验证 tokenBlacklist 未配置时返回错误
-func TestAuthService_RevokeUserTokens(t *testing.T) {
-	ctx := context.Background()
-	fx := newAuthFixture(t)
-	defer fx.client.Close()
-
-	t.Run("tokenBlacklist 未配置应该返回错误", func(t *testing.T) {
-		err := fx.service.RevokeUserTokens(ctx, fx.user.ID)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "token blacklist service not configured")
-	})
-
-	t.Run("AddTokenToBlacklist 未配置应该返回错误", func(t *testing.T) {
-		err := fx.service.AddTokenToBlacklist("any.token.here", time.Now().Add(time.Hour))
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "token blacklist service not configured")
-	})
 }
 
 // =====================================================================
@@ -624,34 +565,6 @@ func TestGenerateResetToken_Distinct(t *testing.T) {
 		}
 		seen[tok.Token] = struct{}{}
 	}
-}
-
-// =====================================================================
-// 防御性场景：重复调用不会 panic
-// =====================================================================
-
-func TestAuthService_Register_And_Login_RoundTrip(t *testing.T) {
-	fx := newAuthFixture(t)
-	defer fx.client.Close()
-
-	req := &dto.RegisterRequest{
-		Username:   "round-trip",
-		Email:      "rt@example.com",
-		Password:   "password123",
-		FullName:   "Round Trip",
-		TenantCode: "test",
-	}
-	regResp, err := fx.service.Register(fx.ctx, req)
-	require.NoError(t, err)
-
-	loginResp, err := fx.service.Login(fx.ctx, &dto.LoginRequest{
-		Username:   regResp.Username,
-		Password:   "password123",
-		TenantCode: "test",
-	})
-	require.NoError(t, err)
-	assert.NotEmpty(t, loginResp.AccessToken)
-	assert.Equal(t, regResp.ID, loginResp.User.ID)
 }
 
 // 防止 unused import 标记

@@ -3,6 +3,8 @@ package schema
 import (
 	"time"
 
+	"itsm-backend/internal/jsonvalue"
+
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
@@ -17,18 +19,22 @@ type ProcessInstance struct {
 // Fields of the ProcessInstance.
 func (ProcessInstance) Fields() []ent.Field {
 	return []ent.Field{
+		field.Int("execution_work_item_id").Optional().Nillable().Immutable().Positive().Comment("Immutable execution WorkItem reference; historical rows remain NULL; FK managed by migration 039"),
 		field.String("process_instance_id").
 			Comment("流程实例ID，BPMN标准").
 			Unique().
 			NotEmpty(),
+		field.String("start_request_digest").
+			Comment("Immutable digest of a durable start request; NULL for legacy non-idempotent starts").
+			Optional().Immutable().Sensitive(),
 		field.String("business_key").
 			Comment("业务键，关联业务实体").
 			Optional(),
 		field.String("business_type").
-			Comment("结构化业务类型。Wave 1 写入的是 dto.BusinessType 取值（ticket/change/incident/service_request/problem/release，见 dto/bpmn_process_trigger_dto.go），即迁移前的词表；不是 recordClass 词表——两者有两个值对不上：change vs change_request、ticket vs generic。收敛到 recordClass（generic/service_request_item/incident/problem/change_request/catalog_task）由 Wave 2 各域迁移任务负责，在对应域拥有 WorkItem 之后进行。与 business_key 由同一次 TriggerProcess 调用原子写入，不从 variables JSON 里现取").
+			Comment("结构化业务类型。按统一 WorkItem 设计 §15.2.2，本字段就是 WorkItem.recordClass（generic/service_request_item/incident/problem/change_request/catalog_task），词表与业务键格式的唯一权威是 common/workitemidentity；Wave-1 旧词表（ticket/change/service_request）已退役，不再写入也不被解析。Release 保留其显式遗留值 \"release\"，它不是 WorkItem。与 business_key 由同一次 TriggerProcess 调用原子写入，不从 variables JSON 里现取").
 			Optional(),
 		field.Int("business_id").
-			Comment("结构化业务主键（迁移完成前是各专业域自己的表主键，迁移完成后是 WorkItem ID/tickets.id），与 business_type 成对使用").
+			Comment("结构化业务主键，恒为 WorkItem ID（tickets.id），与 business_type 成对使用；专业扩展表主键从不写入此处").
 			Optional(),
 		field.String("process_definition_key").
 			Comment("流程定义Key").
@@ -45,7 +51,7 @@ func (ProcessInstance) Fields() []ent.Field {
 		field.String("current_activity_name").
 			Comment("当前活动名称").
 			Optional(),
-		field.JSON("variables", map[string]interface{}{}).
+		field.JSON("variables", jsonvalue.NumberMap{}).
 			Comment("流程变量").
 			Optional(),
 		field.Time("start_time").

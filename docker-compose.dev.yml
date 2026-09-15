@@ -44,7 +44,7 @@ services:
 
   # MinIO 对象存储（开发环境，可选）
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     container_name: itsm-minio-dev
     hostname: minio
     command: server /data --console-address ":9001"
@@ -132,6 +132,8 @@ services:
     container_name: itsm-backend-dev
     hostname: backend
     environment:
+      # Public endpoint only; the signing secret remains worker-owned.
+      - KAF_WEBHOOK_URL=${KAF_WEBHOOK_URL:-}
       # 数据库配置
       - DATABASE_URL=postgres://itsm_user:dev123@postgres:5432/itsm?sslmode=disable
       - DB_HOST=postgres
@@ -179,7 +181,7 @@ services:
       - LLM_PROVIDER=openai
       - LLM_BASE_URL=https://api.deepseek.com/v1
       - LLM_ENDPOINT=https://api.deepseek.com/v1
-      - LLM_API_KEY=sk-f06badc392ec4d5797288736d5e5c040
+      - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_MODEL=deepseek-v4-pro
 
       # 监控配置
@@ -226,6 +228,50 @@ services:
       retries: 5
     restart: unless-stopped
     profiles: [ "dev" ]
+
+  # Optional local KAF Worker. Start two replicas with:
+  # docker compose -f docker-compose.dev.yml --profile dev --profile worker up -d --scale itsm-worker=2 itsm-worker
+  itsm-worker:
+    build:
+      context: ./itsm-backend
+      dockerfile: Dockerfile
+    command: ["./kaf-worker"]
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=itsm_user
+      - DB_PASSWORD=dev123
+      - DB_NAME=itsm
+      - DB_SSLMODE=disable
+      - ENV=development
+      - DEPLOYMENT_MODE=${DEPLOYMENT_MODE:-private}
+      - ITSM_AUTO_MIGRATE=false
+      - ITSM_AUTO_SEED=false
+      - KAF_WEBHOOK_URL=${KAF_WEBHOOK_URL:?KAF_WEBHOOK_URL must be set to start the worker}
+      - KAF_WEBHOOK_SECRET=${KAF_WEBHOOK_SECRET:?KAF_WEBHOOK_SECRET must be set to start the worker}
+      - KAF_OUTBOX_BATCH_SIZE=${KAF_OUTBOX_BATCH_SIZE:-20}
+      - KAF_OUTBOX_POLL_INTERVAL=${KAF_OUTBOX_POLL_INTERVAL:-5s}
+      - KAF_OUTBOX_MAX_ATTEMPTS=${KAF_OUTBOX_MAX_ATTEMPTS:-5}
+      - KAF_WORKER_HEALTH_PORT=8081
+      - LOG_LEVEL=debug
+      - LOG_PATH=/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      itsm-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./logs:/app/logs
+      - ./config:/app/config:ro
+    networks:
+      - itsm-dev-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8081/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    profiles: [ "worker" ]
 
   # ITSM 前端服务（生产构建模式 — 预编译，无 JIT，访问速度更快）
   itsm-frontend:

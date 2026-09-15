@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/processdeployment"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type ProcessDeploymentCreate struct {
 	config
 	mutation *ProcessDeploymentMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetDeploymentID sets the "deployment_id" field.
@@ -296,6 +298,7 @@ func (_c *ProcessDeploymentCreate) createSpec() (*ProcessDeployment, *sqlgraph.C
 		_node = &ProcessDeployment{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(processdeployment.Table, sqlgraph.NewFieldSpec(processdeployment.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.DeploymentID(); ok {
 		_spec.SetField(processdeployment.FieldDeploymentID, field.TypeString, value)
 		_node.DeploymentID = value
@@ -363,11 +366,511 @@ func (_c *ProcessDeploymentCreate) createSpec() (*ProcessDeployment, *sqlgraph.C
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessDeployment.Create().
+//		SetDeploymentID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessDeploymentUpsert) {
+//			SetDeploymentID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessDeploymentCreate) OnConflict(opts ...sql.ConflictOption) *ProcessDeploymentUpsertOne {
+	_c.conflict = opts
+	return &ProcessDeploymentUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessDeployment.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessDeploymentCreate) OnConflictColumns(columns ...string) *ProcessDeploymentUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessDeploymentUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ProcessDeploymentUpsertOne is the builder for "upsert"-ing
+	//  one ProcessDeployment node.
+	ProcessDeploymentUpsertOne struct {
+		create *ProcessDeploymentCreate
+	}
+
+	// ProcessDeploymentUpsert is the "OnConflict" setter.
+	ProcessDeploymentUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetDeploymentID sets the "deployment_id" field.
+func (u *ProcessDeploymentUpsert) SetDeploymentID(v string) *ProcessDeploymentUpsert {
+	u.Set(processdeployment.FieldDeploymentID, v)
+	return u
+}
+
+// UpdateDeploymentID sets the "deployment_id" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsert) UpdateDeploymentID() *ProcessDeploymentUpsert {
+	u.SetExcluded(processdeployment.FieldDeploymentID)
+	return u
+}
+
+// SetDeploymentName sets the "deployment_name" field.
+func (u *ProcessDeploymentUpsert) SetDeploymentName(v string) *ProcessDeploymentUpsert {
+	u.Set(processdeployment.FieldDeploymentName, v)
+	return u
+}
+
+// UpdateDeploymentName sets the "deployment_name" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsert) UpdateDeploymentName() *ProcessDeploymentUpsert {
+	u.SetExcluded(processdeployment.FieldDeploymentName)
+	return u
+}
+
+// SetDeploymentSource sets the "deployment_source" field.
+func (u *ProcessDeploymentUpsert) SetDeploymentSource(v string) *ProcessDeploymentUpsert {
+	u.Set(processdeployment.FieldDeploymentSource, v)
+	return u
+}
+
+// UpdateDeploymentSource sets the "deployment_source" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsert) UpdateDeploymentSource() *ProcessDeploymentUpsert {
+	u.SetExcluded(processdeployment.FieldDeploymentSource)
+	return u
+}
+
+// ClearDeploymentSource clears the value of the "deployment_source" field.
+func (u *ProcessDeploymentUpsert) ClearDeploymentSource() *ProcessDeploymentUpsert {
+	u.SetNull(processdeployment.FieldDeploymentSource)
+	return u
+}
+
+// SetDeploymentTime sets the "deployment_time" field.
+func (u *ProcessDeploymentUpsert) SetDeploymentTime(v time.Time) *ProcessDeploymentUpsert {
+	u.Set(processdeployment.FieldDeploymentTime, v)
+	return u
+}
+
+// UpdateDeploymentTime sets the "deployment_time" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsert) UpdateDeploymentTime() *ProcessDeploymentUpsert {
+	u.SetExcluded(processdeployment.FieldDeploymentTime)
+	return u
+}
+
+// SetDeployedBy sets the "deployed_by" field.
+func (u *ProcessDeploymentUpsert) SetDeployedBy(v string) *ProcessDeploymentUpsert {
+	u.Set(processdeployment.FieldDeployedBy, v)
+	return u
+}
+
+// UpdateDeployedBy sets the "deployed_by" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsert) UpdateDeployedBy() *ProcessDeploymentUpsert {
+	u.SetExcluded(processdeployment.FieldDeployedBy)
+	return u
+}
+
+// ClearDeployedBy clears the value of the "deployed_by" field.
+func (u *ProcessDeploymentUpsert) ClearDeployedBy() *ProcessDeploymentUpsert {
+	u.SetNull(processdeployment.FieldDeployedBy)
+	return u
+}
+
+// SetDeploymentComment sets the "deployment_comment" field.
+func (u *ProcessDeploymentUpsert) SetDeploymentComment(v string) *ProcessDeploymentUpsert {
+	u.Set(processdeployment.FieldDeploymentComment, v)
+	return u
+}
+
+// UpdateDeploymentComment sets the "deployment_comment" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsert) UpdateDeploymentComment() *ProcessDeploymentUpsert {
+	u.SetExcluded(processdeployment.FieldDeploymentComment)
+	return u
+}
+
+// ClearDeploymentComment clears the value of the "deployment_comment" field.
+func (u *ProcessDeploymentUpsert) ClearDeploymentComment() *ProcessDeploymentUpsert {
+	u.SetNull(processdeployment.FieldDeploymentComment)
+	return u
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *ProcessDeploymentUpsert) SetIsActive(v bool) *ProcessDeploymentUpsert {
+	u.Set(processdeployment.FieldIsActive, v)
+	return u
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsert) UpdateIsActive() *ProcessDeploymentUpsert {
+	u.SetExcluded(processdeployment.FieldIsActive)
+	return u
+}
+
+// SetDeploymentCategory sets the "deployment_category" field.
+func (u *ProcessDeploymentUpsert) SetDeploymentCategory(v string) *ProcessDeploymentUpsert {
+	u.Set(processdeployment.FieldDeploymentCategory, v)
+	return u
+}
+
+// UpdateDeploymentCategory sets the "deployment_category" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsert) UpdateDeploymentCategory() *ProcessDeploymentUpsert {
+	u.SetExcluded(processdeployment.FieldDeploymentCategory)
+	return u
+}
+
+// SetDeploymentMetadata sets the "deployment_metadata" field.
+func (u *ProcessDeploymentUpsert) SetDeploymentMetadata(v map[string]interface{}) *ProcessDeploymentUpsert {
+	u.Set(processdeployment.FieldDeploymentMetadata, v)
+	return u
+}
+
+// UpdateDeploymentMetadata sets the "deployment_metadata" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsert) UpdateDeploymentMetadata() *ProcessDeploymentUpsert {
+	u.SetExcluded(processdeployment.FieldDeploymentMetadata)
+	return u
+}
+
+// ClearDeploymentMetadata clears the value of the "deployment_metadata" field.
+func (u *ProcessDeploymentUpsert) ClearDeploymentMetadata() *ProcessDeploymentUpsert {
+	u.SetNull(processdeployment.FieldDeploymentMetadata)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessDeploymentUpsert) SetTenantID(v int) *ProcessDeploymentUpsert {
+	u.Set(processdeployment.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsert) UpdateTenantID() *ProcessDeploymentUpsert {
+	u.SetExcluded(processdeployment.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessDeploymentUpsert) AddTenantID(v int) *ProcessDeploymentUpsert {
+	u.Add(processdeployment.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessDeploymentUpsert) SetCreatedAt(v time.Time) *ProcessDeploymentUpsert {
+	u.Set(processdeployment.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsert) UpdateCreatedAt() *ProcessDeploymentUpsert {
+	u.SetExcluded(processdeployment.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProcessDeploymentUpsert) SetUpdatedAt(v time.Time) *ProcessDeploymentUpsert {
+	u.Set(processdeployment.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsert) UpdateUpdatedAt() *ProcessDeploymentUpsert {
+	u.SetExcluded(processdeployment.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ProcessDeployment.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessDeploymentUpsertOne) UpdateNewValues() *ProcessDeploymentUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessDeployment.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ProcessDeploymentUpsertOne) Ignore() *ProcessDeploymentUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessDeploymentUpsertOne) DoNothing() *ProcessDeploymentUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessDeploymentCreate.OnConflict
+// documentation for more info.
+func (u *ProcessDeploymentUpsertOne) Update(set func(*ProcessDeploymentUpsert)) *ProcessDeploymentUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessDeploymentUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetDeploymentID sets the "deployment_id" field.
+func (u *ProcessDeploymentUpsertOne) SetDeploymentID(v string) *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetDeploymentID(v)
+	})
+}
+
+// UpdateDeploymentID sets the "deployment_id" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertOne) UpdateDeploymentID() *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateDeploymentID()
+	})
+}
+
+// SetDeploymentName sets the "deployment_name" field.
+func (u *ProcessDeploymentUpsertOne) SetDeploymentName(v string) *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetDeploymentName(v)
+	})
+}
+
+// UpdateDeploymentName sets the "deployment_name" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertOne) UpdateDeploymentName() *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateDeploymentName()
+	})
+}
+
+// SetDeploymentSource sets the "deployment_source" field.
+func (u *ProcessDeploymentUpsertOne) SetDeploymentSource(v string) *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetDeploymentSource(v)
+	})
+}
+
+// UpdateDeploymentSource sets the "deployment_source" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertOne) UpdateDeploymentSource() *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateDeploymentSource()
+	})
+}
+
+// ClearDeploymentSource clears the value of the "deployment_source" field.
+func (u *ProcessDeploymentUpsertOne) ClearDeploymentSource() *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.ClearDeploymentSource()
+	})
+}
+
+// SetDeploymentTime sets the "deployment_time" field.
+func (u *ProcessDeploymentUpsertOne) SetDeploymentTime(v time.Time) *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetDeploymentTime(v)
+	})
+}
+
+// UpdateDeploymentTime sets the "deployment_time" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertOne) UpdateDeploymentTime() *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateDeploymentTime()
+	})
+}
+
+// SetDeployedBy sets the "deployed_by" field.
+func (u *ProcessDeploymentUpsertOne) SetDeployedBy(v string) *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetDeployedBy(v)
+	})
+}
+
+// UpdateDeployedBy sets the "deployed_by" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertOne) UpdateDeployedBy() *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateDeployedBy()
+	})
+}
+
+// ClearDeployedBy clears the value of the "deployed_by" field.
+func (u *ProcessDeploymentUpsertOne) ClearDeployedBy() *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.ClearDeployedBy()
+	})
+}
+
+// SetDeploymentComment sets the "deployment_comment" field.
+func (u *ProcessDeploymentUpsertOne) SetDeploymentComment(v string) *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetDeploymentComment(v)
+	})
+}
+
+// UpdateDeploymentComment sets the "deployment_comment" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertOne) UpdateDeploymentComment() *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateDeploymentComment()
+	})
+}
+
+// ClearDeploymentComment clears the value of the "deployment_comment" field.
+func (u *ProcessDeploymentUpsertOne) ClearDeploymentComment() *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.ClearDeploymentComment()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *ProcessDeploymentUpsertOne) SetIsActive(v bool) *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertOne) UpdateIsActive() *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetDeploymentCategory sets the "deployment_category" field.
+func (u *ProcessDeploymentUpsertOne) SetDeploymentCategory(v string) *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetDeploymentCategory(v)
+	})
+}
+
+// UpdateDeploymentCategory sets the "deployment_category" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertOne) UpdateDeploymentCategory() *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateDeploymentCategory()
+	})
+}
+
+// SetDeploymentMetadata sets the "deployment_metadata" field.
+func (u *ProcessDeploymentUpsertOne) SetDeploymentMetadata(v map[string]interface{}) *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetDeploymentMetadata(v)
+	})
+}
+
+// UpdateDeploymentMetadata sets the "deployment_metadata" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertOne) UpdateDeploymentMetadata() *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateDeploymentMetadata()
+	})
+}
+
+// ClearDeploymentMetadata clears the value of the "deployment_metadata" field.
+func (u *ProcessDeploymentUpsertOne) ClearDeploymentMetadata() *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.ClearDeploymentMetadata()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessDeploymentUpsertOne) SetTenantID(v int) *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessDeploymentUpsertOne) AddTenantID(v int) *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertOne) UpdateTenantID() *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessDeploymentUpsertOne) SetCreatedAt(v time.Time) *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertOne) UpdateCreatedAt() *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProcessDeploymentUpsertOne) SetUpdatedAt(v time.Time) *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertOne) UpdateUpdatedAt() *ProcessDeploymentUpsertOne {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessDeploymentUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessDeploymentCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessDeploymentUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ProcessDeploymentUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ProcessDeploymentUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ProcessDeploymentCreateBulk is the builder for creating many ProcessDeployment entities in bulk.
 type ProcessDeploymentCreateBulk struct {
 	config
 	err      error
 	builders []*ProcessDeploymentCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ProcessDeployment entities in the database.
@@ -397,6 +900,7 @@ func (_c *ProcessDeploymentCreateBulk) Save(ctx context.Context) ([]*ProcessDepl
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -447,6 +951,313 @@ func (_c *ProcessDeploymentCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ProcessDeploymentCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessDeployment.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessDeploymentUpsert) {
+//			SetDeploymentID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessDeploymentCreateBulk) OnConflict(opts ...sql.ConflictOption) *ProcessDeploymentUpsertBulk {
+	_c.conflict = opts
+	return &ProcessDeploymentUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessDeployment.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessDeploymentCreateBulk) OnConflictColumns(columns ...string) *ProcessDeploymentUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessDeploymentUpsertBulk{
+		create: _c,
+	}
+}
+
+// ProcessDeploymentUpsertBulk is the builder for "upsert"-ing
+// a bulk of ProcessDeployment nodes.
+type ProcessDeploymentUpsertBulk struct {
+	create *ProcessDeploymentCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ProcessDeployment.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessDeploymentUpsertBulk) UpdateNewValues() *ProcessDeploymentUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessDeployment.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ProcessDeploymentUpsertBulk) Ignore() *ProcessDeploymentUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessDeploymentUpsertBulk) DoNothing() *ProcessDeploymentUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessDeploymentCreateBulk.OnConflict
+// documentation for more info.
+func (u *ProcessDeploymentUpsertBulk) Update(set func(*ProcessDeploymentUpsert)) *ProcessDeploymentUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessDeploymentUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetDeploymentID sets the "deployment_id" field.
+func (u *ProcessDeploymentUpsertBulk) SetDeploymentID(v string) *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetDeploymentID(v)
+	})
+}
+
+// UpdateDeploymentID sets the "deployment_id" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertBulk) UpdateDeploymentID() *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateDeploymentID()
+	})
+}
+
+// SetDeploymentName sets the "deployment_name" field.
+func (u *ProcessDeploymentUpsertBulk) SetDeploymentName(v string) *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetDeploymentName(v)
+	})
+}
+
+// UpdateDeploymentName sets the "deployment_name" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertBulk) UpdateDeploymentName() *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateDeploymentName()
+	})
+}
+
+// SetDeploymentSource sets the "deployment_source" field.
+func (u *ProcessDeploymentUpsertBulk) SetDeploymentSource(v string) *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetDeploymentSource(v)
+	})
+}
+
+// UpdateDeploymentSource sets the "deployment_source" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertBulk) UpdateDeploymentSource() *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateDeploymentSource()
+	})
+}
+
+// ClearDeploymentSource clears the value of the "deployment_source" field.
+func (u *ProcessDeploymentUpsertBulk) ClearDeploymentSource() *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.ClearDeploymentSource()
+	})
+}
+
+// SetDeploymentTime sets the "deployment_time" field.
+func (u *ProcessDeploymentUpsertBulk) SetDeploymentTime(v time.Time) *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetDeploymentTime(v)
+	})
+}
+
+// UpdateDeploymentTime sets the "deployment_time" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertBulk) UpdateDeploymentTime() *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateDeploymentTime()
+	})
+}
+
+// SetDeployedBy sets the "deployed_by" field.
+func (u *ProcessDeploymentUpsertBulk) SetDeployedBy(v string) *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetDeployedBy(v)
+	})
+}
+
+// UpdateDeployedBy sets the "deployed_by" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertBulk) UpdateDeployedBy() *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateDeployedBy()
+	})
+}
+
+// ClearDeployedBy clears the value of the "deployed_by" field.
+func (u *ProcessDeploymentUpsertBulk) ClearDeployedBy() *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.ClearDeployedBy()
+	})
+}
+
+// SetDeploymentComment sets the "deployment_comment" field.
+func (u *ProcessDeploymentUpsertBulk) SetDeploymentComment(v string) *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetDeploymentComment(v)
+	})
+}
+
+// UpdateDeploymentComment sets the "deployment_comment" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertBulk) UpdateDeploymentComment() *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateDeploymentComment()
+	})
+}
+
+// ClearDeploymentComment clears the value of the "deployment_comment" field.
+func (u *ProcessDeploymentUpsertBulk) ClearDeploymentComment() *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.ClearDeploymentComment()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *ProcessDeploymentUpsertBulk) SetIsActive(v bool) *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertBulk) UpdateIsActive() *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetDeploymentCategory sets the "deployment_category" field.
+func (u *ProcessDeploymentUpsertBulk) SetDeploymentCategory(v string) *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetDeploymentCategory(v)
+	})
+}
+
+// UpdateDeploymentCategory sets the "deployment_category" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertBulk) UpdateDeploymentCategory() *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateDeploymentCategory()
+	})
+}
+
+// SetDeploymentMetadata sets the "deployment_metadata" field.
+func (u *ProcessDeploymentUpsertBulk) SetDeploymentMetadata(v map[string]interface{}) *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetDeploymentMetadata(v)
+	})
+}
+
+// UpdateDeploymentMetadata sets the "deployment_metadata" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertBulk) UpdateDeploymentMetadata() *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateDeploymentMetadata()
+	})
+}
+
+// ClearDeploymentMetadata clears the value of the "deployment_metadata" field.
+func (u *ProcessDeploymentUpsertBulk) ClearDeploymentMetadata() *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.ClearDeploymentMetadata()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessDeploymentUpsertBulk) SetTenantID(v int) *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessDeploymentUpsertBulk) AddTenantID(v int) *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertBulk) UpdateTenantID() *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessDeploymentUpsertBulk) SetCreatedAt(v time.Time) *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertBulk) UpdateCreatedAt() *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProcessDeploymentUpsertBulk) SetUpdatedAt(v time.Time) *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProcessDeploymentUpsertBulk) UpdateUpdatedAt() *ProcessDeploymentUpsertBulk {
+	return u.Update(func(s *ProcessDeploymentUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessDeploymentUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ProcessDeploymentCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessDeploymentCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessDeploymentUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

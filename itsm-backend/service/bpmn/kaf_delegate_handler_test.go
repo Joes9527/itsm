@@ -53,7 +53,7 @@ func TestKafDelegateServiceTaskHandler_Execute_ReturnsSuccessWithoutSideEffects(
 
 	result, err := handler.Execute(context.Background(), nil, map[string]interface{}{"resultSummary": "done"})
 	require.NoError(t, err)
-	assert.True(t, result.Success)
+	assert.True(t, result.Status == CallbackEffectApplied)
 }
 
 func TestCallbackRegistry_RegistersKafDelegateHandlerByDefault(t *testing.T) {

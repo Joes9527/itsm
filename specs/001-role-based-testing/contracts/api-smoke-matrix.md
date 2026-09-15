@@ -2,7 +2,7 @@
 
 **Feature**: 001-role-based-testing
 **Authority**: 与 spec FR-204 / SC-204 / 源文档 §六绑定。
-**Token**: 默认 `admin / admin123`。
+**Session**: 默认 `admin / admin123` 登录后建立的 HttpOnly cookie jar；响应 JSON 不含 JWT。
 **Base**: `http://localhost:8090`。
 
 ## 矩阵
@@ -11,7 +11,7 @@
 |---|------|------|------|------|----------|----------|
 | 1 | health | GET | `/api/v1/health` | 200 | `status=ok` | * |
 | 2 | readiness | GET | `/api/v1/readiness/ga` | 200 | `data.modules.length=12` | super_admin |
-| 3 | auth | POST | `/api/v1/auth/login` | 200 | `data.access_token` | * |
+| 3 | auth | POST | `/api/v1/auth/login` | 200 | `data.user.id` + access/refresh `Set-Cookie`，JSON 无 token 字段 | * |
 | 4 | auth | GET | `/api/v1/auth/me` | 200 | `data.username` | * |
 | 5 | menus | GET | `/api/v1/auth/menus` | 200 | `data.length>=20` | super_admin |
 | 6 | tickets | GET | `/api/v1/tickets` | 200 | `code=0` | * |
@@ -30,8 +30,8 @@
 | 19 | sla-monitoring | POST | `/api/v1/sla/monitoring` | 200 | `code=0` | sd_manager |
 | 20 | connectors | GET | `/api/v1/connectors/lifecycle` | 200 | `data.length>=5` | super_admin |
 | 21 | bpmn-process | GET | `/api/v1/bpmn/process-instances` | 200 | `code=0` | engineer / approver |
-| 22 | workflow | GET | `/api/v1/workflow/instances` | 200 | `code=0` | approver |
-| 23 | approval-workflows | GET | `/api/v1/approval-workflows` | 200 | `code=0` | approver |
+| 22 | bpmn-tasks | GET | `/api/v1/bpmn/tasks` | 200 | `code=0` | approver |
+| 23 | bpmn-definitions | GET | `/api/v1/bpmn/process-definitions` | 200 | `code=0` | super_admin |
 | 24 | process-bindings | GET | `/api/v1/process-bindings` | 200 | `code=0` | super_admin |
 | 25 | ai-triage | POST | `/api/v1/ai/triage` | 200 | `code=0` | engineer |
 | 26 | ai-audit | POST | `/api/v1/ai/audit` | 200 | `code=0` | engineer |
@@ -55,7 +55,7 @@
 |------|------|
 | 0 | 全部通过 |
 | 1 | 至少 1 项失败（具体在 stdout `[FAIL]` 行） |
-| 2 | 前置（登录 / 取 token）失败 |
+| 2 | 前置（登录 / 建立 cookie 会话）失败 |
 
 ## 安全用例（A05/A07/A09/A10 走冒烟）
 

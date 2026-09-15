@@ -1,13 +1,17 @@
 package controller
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"time"
 
+	"itsm-backend/handlers/shared/workitemmutation"
+
 	"itsm-backend/common"
 	"itsm-backend/dto"
-	problemDomain "itsm-backend/handlers/problem"
+	"itsm-backend/handlers/common/intakehttp"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
 
@@ -16,12 +20,12 @@ import (
 )
 
 type IncidentController struct {
+	creationApplication      creation.Application
 	incidentService          *service.IncidentService
 	ruleEngine               *service.IncidentRuleEngine
 	monitoringService        *service.IncidentMonitoringService
 	alertingService          *service.IncidentAlertingService
 	rootCauseAnalysisService *service.RootCauseAnalysisService
-	problemConversionService problemDomain.ConversionService
 	logger                   *zap.SugaredLogger
 }
 
@@ -31,7 +35,6 @@ func NewIncidentController(
 	monitoringService *service.IncidentMonitoringService,
 	alertingService *service.IncidentAlertingService,
 	rootCauseAnalysisService *service.RootCauseAnalysisService,
-	problemConversionService problemDomain.ConversionService,
 	logger *zap.SugaredLogger,
 ) *IncidentController {
 	return &IncidentController{
@@ -40,14 +43,13 @@ func NewIncidentController(
 		monitoringService:        monitoringService,
 		alertingService:          alertingService,
 		rootCauseAnalysisService: rootCauseAnalysisService,
-		problemConversionService: problemConversionService,
 		logger:                   logger,
 	}
 }
 
 // CreateIncident 创建事件
 // @Summary 创建事件
-// @Description 创建新的事件记录
+// @Description 创建新的事件记录。HTTP source 仅允许省略、manual 或 user；system/monitoring 需要受信内部入口。
 // @Tags 事件管理
 // @Accept json
 // @Produce json
@@ -70,34 +72,28 @@ func (c *IncidentController) resolveTenantID(ctx *gin.Context) (int, bool) {
 	return 0, false
 }
 
+func (c *IncidentController) SetCreationApplication(app creation.Application) {
+	c.creationApplication = app
+}
+
 func (c *IncidentController) CreateIncident(ctx *gin.Context) {
 	var req dto.CreateIncidentRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		c.logger.Errorw("Invalid request body", "error", err)
-		common.Fail(ctx, common.ParamErrorCode, "请求参数无效")
+	if !intakehttp.Bind(ctx, &req) {
 		return
 	}
-
 	tenantID, ok := c.resolveTenantID(ctx)
 	if !ok {
 		return
 	}
-
-	userID, err := middleware.GetUserID(ctx)
-	if err != nil {
-		c.logger.Errorw("Failed to get user ID", "error", err)
-		common.Fail(ctx, common.AuthFailedCode, "获取用户ID失败")
-		return
+	detected := ""
+	if req.DetectedAt != nil {
+		detected = req.DetectedAt.UTC().Format(time.RFC3339Nano)
 	}
-
-	response, err := c.incidentService.CreateIncident(ctx.Request.Context(), &req, tenantID, userID)
-	if err != nil {
-		c.logger.Errorw("Failed to create incident", "error", err)
-		common.Fail(ctx, common.InternalErrorCode, "创建事件失败")
-		return
+	requesterID := 0
+	if req.RequesterID != nil {
+		requesterID = *req.RequesterID
 	}
-
-	common.Success(ctx, response)
+	intakehttp.Execute(ctx, c.creationApplication, tenantID, requesterID, creation.CreateWorkItemCommand{CTI: req.CTI, RecordClass: creation.RecordClassIncident, IntakeKind: creation.IntakeKindIncident, Title: req.Title, Description: req.Description, Priority: req.Priority, AssigneeID: req.AssigneeID, CIIDs: req.ConfigurationItemIDs, Incident: &creation.IncidentInput{Type: req.Type, Severity: req.Severity, Impact: req.Impact, Urgency: req.Urgency, DetectedAt: detected, ImpactAnalysis: req.ImpactAnalysis, Metadata: req.Metadata, Source: req.Source}})
 }
 
 // GetIncident 获取事件详情
@@ -284,23 +280,7 @@ func (c *IncidentController) UpdateIncident(ctx *gin.Context) {
 	}
 	response, err := c.incidentService.UpdateIncident(ctx.Request.Context(), id, &req, tenantID)
 	if err != nil {
-		// 处理版本冲突错误
-		if common.IsVersionConflictError(err) {
-			conflictErr := err.(*common.VersionConflictError)
-			c.logger.Warnw("Version conflict", "error", err, "incident_id", id)
-			common.Conflict(ctx, conflictErr.Error(), gin.H{
-				"incidentId":     conflictErr.ResourceID,
-				"currentVersion": conflictErr.CurrentVersion,
-				"serverVersion":  conflictErr.ServerVersion,
-			})
-			return
-		}
-		if err.Error() == "incident not found" {
-			common.Fail(ctx, common.ParamErrorCode, "事件不存在")
-			return
-		}
-		c.logger.Errorw("Failed to update incident", "error", err, "id", id)
-		common.Fail(ctx, common.InternalErrorCode, "更新事件失败")
+		respondIncidentMutationError(ctx, err)
 		return
 	}
 
@@ -330,14 +310,9 @@ func (c *IncidentController) DeleteIncident(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	err = c.incidentService.DeleteIncident(ctx.Request.Context(), id, tenantID)
+	err = c.incidentService.DeleteIncident(ctx.Request.Context(), id, workitemmutation.Meta{TenantID: tenantID, ActorID: ctx.GetInt("user_id"), Source: "http"})
 	if err != nil {
-		if err.Error() == "incident not found" {
-			common.Fail(ctx, common.ParamErrorCode, "事件不存在")
-			return
-		}
-		c.logger.Errorw("Failed to delete incident", "error", err, "id", id)
-		common.Fail(ctx, common.InternalErrorCode, "删除事件失败")
+		respondWorkItemDeletionError(ctx, err)
 		return
 	}
 
@@ -368,10 +343,21 @@ func (c *IncidentController) EscalateIncident(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	response, err := c.incidentService.EscalateIncident(ctx.Request.Context(), &req, tenantID)
+	userID, err := middleware.GetUserID(ctx)
+	if err != nil {
+		common.Fail(ctx, common.AuthFailedCode, "获取用户ID失败")
+		return
+	}
+	deliveryCtx := service.WithIncidentAlertActor(ctx.Request.Context(), userID, "user", ctx.GetString("request_id"))
+	response, err := c.incidentService.EscalateIncident(deliveryCtx, &req, tenantID)
 	if err != nil {
 		if err.Error() == "incident not found" {
 			common.Fail(ctx, common.ParamErrorCode, "事件不存在")
+			return
+		}
+		var appErr *common.AppError
+		if errors.As(err, &appErr) && appErr.Code == common.ErrCodeForbidden {
+			common.Forbidden(ctx, appErr.Message)
 			return
 		}
 		c.logger.Errorw("Failed to escalate incident", "error", err)
@@ -633,8 +619,20 @@ func (c *IncidentController) CreateIncidentAlert(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	response, err := c.alertingService.CreateIncidentAlert(ctx.Request.Context(), &req, tenantID)
+	userID, err := middleware.GetUserID(ctx)
 	if err != nil {
+		c.logger.Errorw("Failed to get incident alert actor", "error", err)
+		common.Fail(ctx, common.AuthFailedCode, "获取用户ID失败")
+		return
+	}
+	deliveryCtx := service.WithIncidentAlertActor(ctx.Request.Context(), userID, "user", ctx.GetString("request_id"))
+	response, err := c.alertingService.CreateIncidentAlert(deliveryCtx, &req, tenantID)
+	if err != nil {
+		var appErr *common.AppError
+		if errors.As(err, &appErr) && appErr.Code == common.ErrCodeForbidden {
+			common.Forbidden(ctx, appErr.Message)
+			return
+		}
 		c.logger.Errorw("Failed to create incident alert", "error", err)
 		common.Fail(ctx, common.InternalErrorCode, "创建事件告警失败")
 		return
@@ -653,18 +651,7 @@ func (c *IncidentController) CreateIncidentAlert(ctx *gin.Context) {
 // @Success 200 {object} common.Response
 // @Router /api/v1/incidents/:id/acknowledge [post]
 func (c *IncidentController) AcknowledgeIncident(ctx *gin.Context) {
-	id, err := strconv.Atoi(ctx.Param("id"))
-	if err != nil {
-		common.Fail(ctx, common.ParamErrorCode, "无效的事件ID")
-		return
-	}
-	userID := ctx.GetInt("user_id")
-	tenantID := ctx.GetInt("tenant_id")
-	if err := c.incidentService.AcknowledgeIncident(ctx.Request.Context(), id, userID, tenantID); err != nil {
-		common.Fail(ctx, common.InternalErrorCode, err.Error())
-		return
-	}
-	common.Success(ctx, gin.H{"message": "事件已确认"})
+	c.applyIncidentCommand(ctx, "acknowledge")
 }
 
 // ResolveIncident 解决事件
@@ -678,23 +665,7 @@ func (c *IncidentController) AcknowledgeIncident(ctx *gin.Context) {
 // @Success 200 {object} common.Response
 // @Router /api/v1/incidents/:id/resolve [post]
 func (c *IncidentController) ResolveIncident(ctx *gin.Context) {
-	id, err := strconv.Atoi(ctx.Param("id"))
-	if err != nil {
-		common.Fail(ctx, common.ParamErrorCode, "无效的事件ID")
-		return
-	}
-	var body struct {
-		Resolution string `json:"resolution"`
-		RootCause  string `json:"rootCause"`
-	}
-	_ = ctx.ShouldBindJSON(&body)
-	userID := ctx.GetInt("user_id")
-	tenantID := ctx.GetInt("tenant_id")
-	if err := c.incidentService.ResolveIncident(ctx.Request.Context(), id, userID, tenantID, body.Resolution, body.RootCause); err != nil {
-		common.Fail(ctx, common.InternalErrorCode, err.Error())
-		return
-	}
-	common.Success(ctx, gin.H{"message": "事件已解决"})
+	c.applyIncidentCommand(ctx, "resolve")
 }
 
 // CloseIncident 关闭事件
@@ -707,24 +678,7 @@ func (c *IncidentController) ResolveIncident(ctx *gin.Context) {
 // @Param body body object true "关闭信息"
 // @Success 200 {object} common.Response
 // @Router /api/v1/incidents/:id/close [post]
-func (c *IncidentController) CloseIncident(ctx *gin.Context) {
-	id, err := strconv.Atoi(ctx.Param("id"))
-	if err != nil {
-		common.Fail(ctx, common.ParamErrorCode, "无效的事件ID")
-		return
-	}
-	var body struct {
-		CloseNotes string `json:"closeNotes"`
-	}
-	_ = ctx.ShouldBindJSON(&body)
-	userID := ctx.GetInt("user_id")
-	tenantID := ctx.GetInt("tenant_id")
-	if err := c.incidentService.CloseIncident(ctx.Request.Context(), id, userID, tenantID, body.CloseNotes); err != nil {
-		common.Fail(ctx, common.InternalErrorCode, err.Error())
-		return
-	}
-	common.Success(ctx, gin.H{"message": "事件已关闭"})
-}
+func (c *IncidentController) CloseIncident(ctx *gin.Context) { c.applyIncidentCommand(ctx, "close") }
 
 // ReopenIncident 重新打开事件
 // @Summary 重新打开事件
@@ -734,20 +688,7 @@ func (c *IncidentController) CloseIncident(ctx *gin.Context) {
 // @Param id path int true "事件ID"
 // @Success 200 {object} common.Response
 // @Router /api/v1/incidents/:id/reopen [post]
-func (c *IncidentController) ReopenIncident(ctx *gin.Context) {
-	id, err := strconv.Atoi(ctx.Param("id"))
-	if err != nil {
-		common.Fail(ctx, common.ParamErrorCode, "无效的事件ID")
-		return
-	}
-	userID := ctx.GetInt("user_id")
-	tenantID := ctx.GetInt("tenant_id")
-	if err := c.incidentService.ReopenIncident(ctx.Request.Context(), id, userID, tenantID); err != nil {
-		common.Fail(ctx, common.InternalErrorCode, err.Error())
-		return
-	}
-	common.Success(ctx, gin.H{"message": "事件已重新打开"})
-}
+func (c *IncidentController) ReopenIncident(ctx *gin.Context) { c.applyIncidentCommand(ctx, "reopen") }
 
 // EscalateMajorIncident 升级为重大事件
 // @Summary 升级为重大事件
@@ -794,31 +735,7 @@ func (c *IncidentController) EscalateMajorIncident(ctx *gin.Context) {
 // @Failure 500 {object} common.Response
 // @Router /api/v1/incidents/{id}/assign [post]
 func (c *IncidentController) AssignIncident(ctx *gin.Context) {
-	id, err := strconv.Atoi(ctx.Param("id"))
-	if err != nil {
-		common.Fail(ctx, common.ParamErrorCode, "无效的事件ID")
-		return
-	}
-
-	var req dto.AssignIncidentRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		common.Fail(ctx, common.ParamErrorCode, "请求参数错误: "+err.Error())
-		return
-	}
-	assigneeID := req.AssigneeID
-	if assigneeID <= 0 {
-		common.Fail(ctx, common.ParamErrorCode, "assigneeId 必填")
-		return
-	}
-
-	tenantID := ctx.GetInt("tenant_id")
-	incident, err := c.incidentService.AssignIncident(ctx.Request.Context(), id, assigneeID, tenantID)
-	if err != nil {
-		c.logger.Errorw("Failed to assign incident", "error", err, "id", id)
-		common.Fail(ctx, common.InternalErrorCode, err.Error())
-		return
-	}
-	common.Success(ctx, incident)
+	c.applyIncidentCommand(ctx, "assign")
 }
 
 // AcknowledgeAlert 确认告警
@@ -1005,49 +922,52 @@ func (c *IncidentController) GetAlertStatistics(ctx *gin.Context) {
 
 // ConvertToProblem 将事件转换为问题
 // @Summary 将事件转换为问题
-// @Description 将指定的事件转换为问题记录
+// @Description 将指定的事件转换为问题记录；同一 Idempotency-Key 与请求体重放返回原回执
 // @Tags incidents
 // @Accept json
 // @Produce json
 // @Param id path int true "事件ID"
+// @Param Idempotency-Key header string true "创建幂等键"
 // @Param request body dto.ConvertIncidentToProblemRequest true "转换请求"
-// @Success 200 {object} common.Response{data=dto.ProblemResponse}
+// @Success 201 {object} common.Response{data=workitemcreation.CreateWorkItemResult} "新建转换回执"
+// @Success 200 {object} common.Response{data=workitemcreation.CreateWorkItemResult} "幂等重放回执"
 // @Failure 400 {object} common.Response
+// @Failure 403 {object} common.Response
+// @Failure 409 {object} common.Response
 // @Failure 500 {object} common.Response
 // @Router /api/v1/incidents/{id}/convert-to-problem [post]
 func (c *IncidentController) ConvertToProblem(ctx *gin.Context) {
 	incidentID, err := strconv.Atoi(ctx.Param("id"))
-	if err != nil {
-		common.Fail(ctx, common.ParamErrorCode, "无效的事件ID")
+	if err != nil || incidentID <= 0 {
+		intakehttp.Fail(ctx, intakehttp.Invalid("id", "positive incident ID is required"))
 		return
 	}
-
 	var req dto.ConvertIncidentToProblemRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		common.Fail(ctx, common.ParamErrorCode, "请求参数错误: "+err.Error())
+	if !intakehttp.Bind(ctx, &req) {
 		return
 	}
-
-	userID, err := middleware.GetUserID(ctx)
-	if err != nil {
-		common.Fail(ctx, common.InternalErrorCode, "获取用户ID失败")
-		return
-	}
-
 	tenantID, ok := c.resolveTenantID(ctx)
 	if !ok {
 		return
 	}
-	created, err := c.problemConversionService.CreateFromIncident(
-		ctx.Request.Context(), tenantID, incidentID, userID, req,
-	)
-	if err != nil {
-		c.logger.Errorw("Failed to convert incident to problem", "error", err, "incident_id", incidentID)
-		common.Fail(ctx, common.InternalErrorCode, "转换失败: "+err.Error())
+	requesterID := 0
+	if req.RequesterID != nil {
+		requesterID = *req.RequesterID
+	}
+	if c.incidentService == nil {
+		intakehttp.Fail(ctx, creation.NewInternalFailure("incident identity owner is unavailable", nil))
 		return
 	}
-
-	common.Success(ctx, problemDomain.ToResponse(created))
+	source, err := c.incidentService.ResolveCreationSource(ctx.Request.Context(), incidentID, tenantID)
+	if err != nil {
+		intakehttp.Fail(ctx, err)
+		return
+	}
+	if source <= 0 {
+		intakehttp.Fail(ctx, creation.NewReferenceNotFound("incident work item is unavailable", nil))
+		return
+	}
+	intakehttp.Execute(ctx, c.creationApplication, tenantID, requesterID, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassProblem, IntakeKind: creation.IntakeKindProblem, Title: req.Title, Description: req.Description, Problem: &creation.ProblemInput{RootCause: req.RootCause}, SourceRelations: []creation.SourceRelationInput{{SourceWorkItemID: source, RelationType: "investigated_by", ExpectedVersion: req.ExpectedVersion}}})
 }
 
 // GetRootCause 获取根因分析
@@ -1112,7 +1032,10 @@ func (c *IncidentController) UpdateRootCause(ctx *gin.Context) {
 		return
 	}
 
-	var req dto.RootCause
+	var req struct {
+		dto.RootCause
+		Version int `json:"version" binding:"required,gt=0"`
+	}
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		c.logger.Errorw("Invalid request body", "error", err)
 		common.Fail(ctx, common.ParamErrorCode, "请求参数无效")
@@ -1125,15 +1048,10 @@ func (c *IncidentController) UpdateRootCause(ctx *gin.Context) {
 	}
 
 	_, err = c.incidentService.UpdateIncident(ctx.Request.Context(), id, &dto.UpdateIncidentRequest{
-		RootCause: &req,
+		RootCause: &req.RootCause, Version: req.Version,
 	}, tenantID)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			common.Fail(ctx, common.NotFoundErrorCode, "事件不存在")
-			return
-		}
-		c.logger.Errorw("Failed to update root cause", "error", err, "id", id)
-		common.Fail(ctx, common.InternalErrorCode, "更新根因分析失败")
+		respondIncidentMutationError(ctx, err)
 		return
 	}
 
@@ -1202,7 +1120,10 @@ func (c *IncidentController) UpdateImpactAssessment(ctx *gin.Context) {
 		return
 	}
 
-	var req dto.ImpactAnalysis
+	var req struct {
+		dto.ImpactAnalysis
+		Version int `json:"version" binding:"required,gt=0"`
+	}
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		c.logger.Errorw("Invalid request body", "error", err)
 		common.Fail(ctx, common.ParamErrorCode, "请求参数无效")
@@ -1215,15 +1136,10 @@ func (c *IncidentController) UpdateImpactAssessment(ctx *gin.Context) {
 	}
 
 	_, err = c.incidentService.UpdateIncident(ctx.Request.Context(), id, &dto.UpdateIncidentRequest{
-		ImpactAnalysis: &req,
+		ImpactAnalysis: &req.ImpactAnalysis, Version: req.Version,
 	}, tenantID)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			common.Fail(ctx, common.NotFoundErrorCode, "事件不存在")
-			return
-		}
-		c.logger.Errorw("Failed to update impact assessment", "error", err, "id", id)
-		common.Fail(ctx, common.InternalErrorCode, "更新影响评估失败")
+		respondIncidentMutationError(ctx, err)
 		return
 	}
 
@@ -1296,6 +1212,7 @@ func (c *IncidentController) UpdateClassification(ctx *gin.Context) {
 	var req struct {
 		Category    string `json:"category"`
 		Subcategory string `json:"subcategory"`
+		Version     int    `json:"version" binding:"required,gt=0"`
 	}
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		c.logger.Errorw("Invalid request body", "error", err)
@@ -1308,19 +1225,9 @@ func (c *IncidentController) UpdateClassification(ctx *gin.Context) {
 		return
 	}
 
-	cat := req.Category
-	sub := req.Subcategory
-	_, err = c.incidentService.UpdateIncident(ctx.Request.Context(), id, &dto.UpdateIncidentRequest{
-		Category:    &cat,
-		Subcategory: &sub,
-	}, tenantID)
+	_, err = c.incidentService.UpdateClassification(ctx.Request.Context(), id, tenantID, req.Version, req.Category, req.Subcategory)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			common.Fail(ctx, common.NotFoundErrorCode, "事件不存在")
-			return
-		}
-		c.logger.Errorw("Failed to update classification", "error", err, "id", id)
-		common.Fail(ctx, common.InternalErrorCode, "更新分类失败")
+		respondIncidentMutationError(ctx, err)
 		return
 	}
 

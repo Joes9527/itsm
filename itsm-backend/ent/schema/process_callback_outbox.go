@@ -3,6 +3,8 @@ package schema
 import (
 	"time"
 
+	"itsm-backend/internal/jsonvalue"
+
 	"entgo.io/ent"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
@@ -16,6 +18,8 @@ type ProcessCallbackOutbox struct {
 // Fields of the ProcessCallbackOutbox.
 func (ProcessCallbackOutbox) Fields() []ent.Field {
 	return []ent.Field{
+		field.Int("actor_id").Optional().Positive().Immutable(),
+		field.String("actor_source").Optional().Immutable(),
 		field.String("execution_key").Unique().NotEmpty(),
 		field.Int("tenant_id").Positive(),
 		field.Int("process_instance_id").Positive(),
@@ -29,9 +33,10 @@ func (ProcessCallbackOutbox) Fields() []ent.Field {
 		field.String("config_ref").
 			Comment("可信连接器配置引用；端点和凭据在执行时解析，绝不持久化到回调载荷").
 			Optional(),
-		field.JSON("variables", map[string]interface{}{}).
+		field.JSON("variables", jsonvalue.NumberMap{}).
 			Comment("按处理器声明字段过滤后的非敏感业务载荷").
 			Optional(),
+		field.Bool("optional_declared").Default(false),
 		field.String("status").Default("pending"),
 		field.Int("attempt_count").NonNegative().Default(0),
 		field.Time("next_attempt_at").Default(time.Now),

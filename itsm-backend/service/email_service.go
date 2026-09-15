@@ -3,39 +3,101 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"html/template"
+	"net"
 	"net/mail"
 	"net/smtp"
+	"net/textproto"
 	"strings"
 	"sync"
 	"time"
+
+	"itsm-backend/connector"
+	"itsm-backend/database"
 
 	"go.uber.org/zap"
 )
 
 // EmailConfig 邮件配置
 type EmailConfig struct {
-	Host     string // SMTP服务器地址
-	Port     int    // SMTP端口
-	Username string // 用户名
-	Password string // 密码
-	From     string // 发件人地址
-	FromName string // 发件人名称
+	DeliveryTransport string // trusted route for new durable intents
+	Host              string // SMTP服务器地址
+	Port              int    // SMTP端口
+	Username          string // 用户名
+	Password          string // 密码
+	From              string // 发件人地址
+	FromName          string // 发件人名称
 }
 
 // GraphMailSender Graph sendMail 发信后端（Exchange Online）。由 msgraph
 // 连接器的 Client.SendMail 实现，service 包只依赖该接口，不依赖具体类型。
 type GraphMailSender interface {
-	SendMail(ctx context.Context, mailbox, to, subject, body string) error
+	SendMail(ctx context.Context, mailbox, to, subject, body, deliveryID string) error
 }
 
 // GraphProvider resolves the configured Graph sender for one tenant only.
 type GraphProvider func(tenantID int) (GraphMailSender, string, bool)
 
-type smtpSendFunc func(addr string, auth smtp.Auth, from string, to []string, msg []byte) error
+type smtpSendFunc func(context.Context, string, smtp.Auth, string, []string, []byte) error
+
+type emailTransportOutcome string
+
+const (
+	emailNotAccepted       emailTransportOutcome = "not_accepted"
+	emailAcceptanceUnknown emailTransportOutcome = "acceptance_unknown"
+)
+
+type emailTransportError struct {
+	route   string
+	stage   string
+	outcome emailTransportOutcome
+	cause   error
+}
+
+func newEmailTransportError(route, stage string, outcome emailTransportOutcome, cause error) error {
+	return &emailTransportError{route: route, stage: stage, outcome: outcome, cause: cause}
+}
+
+func (e *emailTransportError) Error() string {
+	if e.route == "graph" {
+		return emailErrorClassGraphSend
+	}
+	return emailErrorClassSMTPSend
+}
+func (e *emailTransportError) Unwrap() error           { return e.cause }
+func (e *emailTransportError) DeliveryOutcome() string { return string(e.outcome) }
+func (e *emailTransportError) DeliveryStage() string   { return e.stage }
+func (e *emailTransportError) Is(target error) bool {
+	return (e.route == "graph" && target == errEmailGraphSend) || (e.route == "smtp" && target == errEmailSMTPSend)
+}
+
+type (
+	emailDeliveryOutcomeCarrier interface{ DeliveryOutcome() string }
+	emailDeliveryStageCarrier   interface{ DeliveryStage() string }
+)
+
+func emailTransportOutcomeOf(err error) emailTransportOutcome {
+	if errors.Is(err, errEmailRouteMissing) {
+		return emailNotAccepted
+	}
+	var carrier emailDeliveryOutcomeCarrier
+	if errors.As(err, &carrier) && carrier.DeliveryOutcome() == string(emailNotAccepted) {
+		return emailNotAccepted
+	}
+	return emailAcceptanceUnknown
+}
+
+func emailTransportStageOf(err error, fallback string) string {
+	var carrier emailDeliveryStageCarrier
+	if errors.As(err, &carrier) && carrier.DeliveryStage() != "" {
+		return carrier.DeliveryStage()
+	}
+	return fallback
+}
 
 const (
 	emailErrorClassGraphSend    = "graph_send_failed"
@@ -61,16 +123,20 @@ type EmailService struct {
 	// graphProvider 延迟绑定 Graph 发信后端：返回 sender + 发件邮箱 + 是否可用。
 	// connector 运行时 provision，不能启动时注入，故发信时动态查询。
 	graphProvider GraphProvider
+	targetManager *connector.Manager
+	targetPolicy  *database.ExecutionPolicy
 }
 
 // EmailMessage 邮件消息
 type EmailMessage struct {
-	To          []string          // 收件人列表
-	CC          []string          // 抄送人列表
-	Subject     string            // 邮件主题
-	Body        string            // 邮件正文（HTML）
-	BodyText    string            // 邮件正文（纯文本）
-	Attachments []EmailAttachment // 附件
+	To                      []string          // 收件人列表
+	CC                      []string          // 抄送人列表
+	Subject                 string            // 邮件主题
+	Body                    string            // 邮件正文（HTML）
+	BodyText                string            // 邮件正文（纯文本）
+	Attachments             []EmailAttachment // 附件
+	DeliveryID              string            // durable outbox correlation marker
+	DisableProviderFallback bool              // prevents ambiguous cross-provider replay
 }
 
 // EmailAttachment 邮件附件
@@ -86,7 +152,7 @@ func NewEmailService(config EmailConfig, logger *zap.SugaredLogger) *EmailServic
 		config:   config,
 		logger:   logger,
 		recent:   make(map[string][]time.Time),
-		smtpSend: smtp.SendMail,
+		smtpSend: sendSMTPWithContext,
 	}
 }
 
@@ -127,7 +193,15 @@ func (s *EmailService) SendForTenant(ctx context.Context, tenantID int, msg *Ema
 				return nil
 			} else {
 				routeErrors = append(routeErrors, err)
+				if msg.DisableProviderFallback || emailTransportOutcomeOf(err) == emailAcceptanceUnknown {
+					return emailDeliveryError(routeErrors...)
+				}
 			}
+		}
+		// A configured Graph route that cannot currently resolve is still not
+		// authorization to move a durable delivery to another provider.
+		if msg.DisableProviderFallback {
+			return emailDeliveryError(errEmailRouteMissing)
 		}
 	}
 	if s.smtpConfigured() {
@@ -159,10 +233,15 @@ func (s *EmailService) sendViaGraph(ctx context.Context, sender GraphMailSender,
 	if body == "" {
 		body = msg.Body
 	}
-	for _, to := range msg.To {
-		if err := sender.SendMail(ctx, mailbox, to, msg.Subject, body); err != nil {
+	for index, to := range msg.To {
+		if err := sender.SendMail(ctx, mailbox, to, msg.Subject, body, msg.DeliveryID); err != nil {
 			s.logger.Errorw("email Graph delivery failed", "error_class", emailErrorClassGraphSend)
-			return errEmailGraphSend
+			outcome := emailTransportOutcomeOf(err)
+			if index > 0 {
+				// Earlier recipients were accepted; retrying the whole intent could duplicate delivery.
+				outcome = emailAcceptanceUnknown
+			}
+			return newEmailTransportError("graph", emailTransportStageOf(err, "send_mail"), outcome, err)
 		}
 	}
 	s.logger.Infow("email delivered via Graph")
@@ -186,6 +265,10 @@ func (s *EmailService) sendViaSMTP(ctx context.Context, msg *EmailMessage) error
 		emailBody.WriteString(fmt.Sprintf("Cc: %s\r\n", strings.Join(msg.CC, ",")))
 	}
 	emailBody.WriteString(fmt.Sprintf("Subject: %s\r\n", msg.Subject))
+	if msg.DeliveryID != "" {
+		emailBody.WriteString(fmt.Sprintf("Message-ID: <%s@itsm.local>\r\n", msg.DeliveryID))
+		emailBody.WriteString(fmt.Sprintf("X-ITSM-Delivery-ID: %s\r\n", msg.DeliveryID))
+	}
 	emailBody.WriteString("MIME-Version: 1.0\r\n")
 	emailBody.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=\"%s\"\r\n", boundary))
 	emailBody.WriteString("\r\n")
@@ -227,27 +310,98 @@ func (s *EmailService) sendViaSMTP(ctx context.Context, msg *EmailMessage) error
 	auth := smtp.PlainAuth("", s.config.Username, s.config.Password, s.config.Host)
 	addr := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 
+	maxAttempts := 3
+	if msg.DisableProviderFallback {
+		maxAttempts = 1
+	}
 	var err error
-	for attempt := 0; attempt < 3; attempt++ {
-		err = s.smtpSend(addr, auth, s.config.From, append(append([]string{}, msg.To...), msg.CC...), []byte(emailBody.String()))
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		err = s.smtpSend(ctx, addr, auth, s.config.From, append(append([]string{}, msg.To...), msg.CC...), []byte(emailBody.String()))
 		if err == nil {
 			break
 		}
-		if attempt < 2 {
+		if _, typed := err.(*emailTransportError); !typed {
+			err = newEmailTransportError("smtp", "transport", emailAcceptanceUnknown, err)
+		}
+		if emailTransportOutcomeOf(err) == emailAcceptanceUnknown || msg.DisableProviderFallback {
+			break
+		}
+		if attempt < maxAttempts-1 {
 			select {
 			case <-ctx.Done():
 				s.logger.Errorw("email SMTP delivery failed", "error_class", emailErrorClassSMTPSend)
-				return errEmailSMTPSend
+				return newEmailTransportError("smtp", "context", emailNotAccepted, ctx.Err())
 			case <-time.After(time.Duration(attempt+1) * 200 * time.Millisecond):
 			}
 		}
 	}
 	if err != nil {
 		s.logger.Errorw("email SMTP delivery failed", "error_class", emailErrorClassSMTPSend)
-		return errEmailSMTPSend
+		return err
 	}
 
 	s.logger.Infow("email delivered via SMTP")
+	return nil
+}
+
+func sendSMTPWithContext(ctx context.Context, addr string, auth smtp.Auth, from string, recipients []string, msg []byte) error {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return newEmailTransportError("smtp", "address", emailNotAccepted, err)
+	}
+	connection, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return newEmailTransportError("smtp", "dial", emailNotAccepted, err)
+	}
+	defer connection.Close()
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := connection.SetDeadline(deadline); err != nil {
+			return newEmailTransportError("smtp", "deadline", emailNotAccepted, err)
+		}
+	}
+	client, err := smtp.NewClient(connection, host)
+	if err != nil {
+		return newEmailTransportError("smtp", "greeting", emailNotAccepted, err)
+	}
+	defer client.Close()
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		if err := client.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
+			return newEmailTransportError("smtp", "starttls", emailNotAccepted, err)
+		}
+	}
+	if auth != nil {
+		if err := client.Auth(auth); err != nil {
+			return newEmailTransportError("smtp", "auth", emailNotAccepted, err)
+		}
+	}
+	if err := client.Mail(from); err != nil {
+		return newEmailTransportError("smtp", "mail_from", emailNotAccepted, err)
+	}
+	for _, recipient := range recipients {
+		if err := client.Rcpt(recipient); err != nil {
+			return newEmailTransportError("smtp", "recipient", emailNotAccepted, err)
+		}
+	}
+	writer, err := client.Data()
+	if err != nil {
+		return newEmailTransportError("smtp", "data_start", emailNotAccepted, err)
+	}
+	if _, err := writer.Write(msg); err != nil {
+		// Abort by closing the SMTP connection via the deferred client.Close.
+		// Calling writer.Close here would emit the DATA terminator and could turn
+		// a known incomplete write into an ambiguous accepted message.
+		return newEmailTransportError("smtp", "data_write", emailNotAccepted, err)
+	}
+	if err := writer.Close(); err != nil {
+		var smtpRejection *textproto.Error
+		if errors.As(err, &smtpRejection) {
+			return newEmailTransportError("smtp", "data_rejected", emailNotAccepted, err)
+		}
+		return newEmailTransportError("smtp", "data_close", emailAcceptanceUnknown, err)
+	}
+	// A successful DATA close is the authoritative SMTP acceptance boundary;
+	// QUIT is session cleanup and cannot invalidate an already accepted mail.
+	_ = client.Quit()
 	return nil
 }
 
@@ -265,6 +419,9 @@ func (s *EmailService) validateMessage(msg *EmailMessage) error {
 	}
 	if strings.ContainsAny(msg.Subject, "\r\n") {
 		return fmt.Errorf("email subject contains invalid characters")
+	}
+	if strings.ContainsAny(msg.DeliveryID, "\r\n") {
+		return fmt.Errorf("email delivery id contains invalid characters")
 	}
 	for _, address := range append(append([]string{}, msg.To...), msg.CC...) {
 		if _, err := mail.ParseAddress(address); err != nil {

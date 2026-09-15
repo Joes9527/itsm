@@ -113,7 +113,7 @@
 2. `candidate_users` 包含 `currentUserIdStr` / `username` / `email`
 3. `candidate_groups` 包含 `currentUserBelongedGroupsCSV`（展开后的组名 CSV）
 
-返回的列表对应前端 `/approvals/pending` 页面中「我作为候选组员（BPMN）」Tab。
+返回的列表对应前端唯一 `/approvals` BPMN ProcessTask 待办页面。
 
 ## 6. 配置建议矩阵
 

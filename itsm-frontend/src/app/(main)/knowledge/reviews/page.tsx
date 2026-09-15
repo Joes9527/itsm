@@ -153,7 +153,7 @@ export default function KnowledgeReviewListPage() {
         <div>
           <Text strong>{title}</Text>
           {record.summary && (
-            <Paragraph type="secondary" ellipsis={{ rows: 1 }} className="text-xs mt-1">
+            <Paragraph type="secondary" ellipsis={{ rows: 1 }} className="text-[12px] mt-1">
               {record.summary}
             </Paragraph>
           )}
@@ -243,7 +243,7 @@ export default function KnowledgeReviewListPage() {
 
   return (
     <PageContainer title="知识库审核" description="审核和批准待发布的知识库文章">
-      <Card className="shadow-sm rounded-lg">
+      <Card className="shadow-none rounded-[8px]">
         <div className="mb-4">
           <Space wrap>
             <Select
@@ -363,7 +363,7 @@ export default function KnowledgeReviewListPage() {
               <>
                 <Divider>内容预览</Divider>
                 <SafeContent
-                  className="prose max-w-none"
+                  className="prose max-w-none text-[13px] text-foreground"
                   sanitizeHtml
                   content={
                     selectedArticle.content.substring(0, 500) +
@@ -418,7 +418,7 @@ export default function KnowledgeReviewListPage() {
               审核意见（可选）：
             </Text>
             <textarea
-              className="w-full border rounded p-2 min-h-[80px]"
+              className="w-full border border-border bg-surface text-foreground rounded-[6px] p-2 min-h-[80px]"
               placeholder="请输入审核意见..."
               value={reviewComment}
               onChange={e => setReviewComment(e.target.value)}

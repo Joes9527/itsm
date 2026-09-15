@@ -1,7 +1,14 @@
 'use client';
 
+import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
+import { CreationAttempts } from '@/components/work-item/CreationAttempts';
+import { CreationRequester } from '@/components/work-item/CreationRequester';
+
+import { WorkItemClassificationSelect } from '@/components/work-item/WorkItemClassificationSelect';
+import { classificationInput } from '@/components/work-item/classification';
+
 import React, { useState, useEffect } from 'react';
-import { Button, Card, Form, Input, Select, Upload, Space, Row, Col, message, Tabs, Typography, Divider, Tag, Spin } from 'antd';
+import { Button, Card, Form, Input, Select, Space, Row, Col, message, Tabs, Typography, Divider, Tag, Spin } from 'antd';
 import { ArrowLeft, Search, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { IncidentAPI } from '@/lib/api/incident-api';
@@ -27,18 +34,18 @@ interface IncidentFormValues {
   title: string;
   description: string;
   priority: 'critical' | 'high' | 'medium' | 'low';
-  source: 'manual' | 'monitoring' | 'system' | 'user';
+  source: 'manual' | 'user';
+  requesterId?: number;
   type: 'incident' | 'service_request' | 'security_event' | 'alert';
-  category?: string;
+  classification?: number[];
   impact?: 'critical' | 'high' | 'medium' | 'low';
   urgency?: 'critical' | 'high' | 'medium' | 'low';
   assignedTo?: number;
-  affectedSystems?: string[];
-  rootCause?: string;
 }
 
 export default function CreateIncidentPage() {
   const router = useRouter();
+  const creation = useWorkItemCreation();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('basic');
@@ -110,20 +117,19 @@ export default function CreateIncidentPage() {
   const handleSubmit = async (values: IncidentFormValues) => {
     setLoading(true);
     try {
-      await IncidentAPI.createIncident({
+      await creation.submit({
+        requesterId: values.requesterId,
         title: values.title,
         description: values.description,
         priority: values.priority,
         source: values.source || 'manual',
         type: values.type || 'incident',
-        category: values.category,
+        cti: classificationInput(values.classification),
         impact: values.impact,
         urgency: values.urgency,
         assigneeId: values.assignedTo,
         configurationItemIds: selectedCIs.map(ci => ci.id),
-      });
-      message.success('事件创建成功');
-      router.push('/incidents');
+      }, IncidentAPI.createIncident, () => router.push('/incidents'));
     } catch (error) {
       handleError(error, 'createIncident', '创建失败，请重试');
     } finally {
@@ -132,7 +138,7 @@ export default function CreateIncidentPage() {
   };
 
   return (
-    <div className="p-6 min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-page p-[16px] text-[13px] text-foreground md:p-[24px]">
       {/* 返回按钮 */}
       <div className="mb-6">
         <Button
@@ -151,6 +157,7 @@ export default function CreateIncidentPage() {
         <Text type="secondary">填写事件信息以创建新的事件记录</Text>
       </div>
 
+      <CreationAttempts creation={creation} />
       <Row gutter={24}>
         {/* 左侧表单 */}
         <Col xs={24} lg={16}>
@@ -168,6 +175,7 @@ export default function CreateIncidentPage() {
                 type: 'incident',
               }}
             >
+              <CreationRequester resource="incident" />
               <Tabs
                 activeKey={activeTab}
                 onChange={setActiveTab}
@@ -220,8 +228,6 @@ export default function CreateIncidentPage() {
                             >
                               <Select options={[
                                 { value: 'manual', label: '手动创建' },
-                                { value: 'monitoring', label: '监控告警' },
-                                { value: 'system', label: '系统' },
                                 { value: 'user', label: '用户' },
                               ]} />
                             </Form.Item>
@@ -244,16 +250,10 @@ export default function CreateIncidentPage() {
                         <Row gutter={16}>
                           <Col span={12}>
                             <Form.Item
-                              name="category"
+                              name="classification"
                               label="事件分类"
                             >
-                              <Select placeholder="选择分类" options={[
-                                { value: 'hardware', label: '硬件故障' },
-                                { value: 'software', label: '软件故障' },
-                                { value: 'network', label: '网络问题' },
-                                { value: 'security', label: '安全问题' },
-                                { value: 'other', label: '其他' },
-                              ]} />
+                              <WorkItemClassificationSelect />
                             </Form.Item>
                           </Col>
                           <Col span={12}>
@@ -307,16 +307,16 @@ export default function CreateIncidentPage() {
 
                               {/* 搜索结果下拉 */}
                               {ciSearchResults.length > 0 && (
-                                <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
+                                <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-[6px] border border-border bg-surface shadow-lg">
                                   {ciSearchResults.map(ci => (
                                     <div
                                       key={ci.id}
-                                      className="px-3 py-2 hover:bg-gray-50 cursor-pointer flex justify-between items-center"
+                                      className="px-3 py-2 hover:bg-raised cursor-pointer flex justify-between items-center"
                                       onClick={() => handleAddCI(ci)}
                                     >
                                       <div>
                                         <div className="font-medium">{ci.name}</div>
-										<div className="text-xs text-gray-500">{ci.type || 'CI'} - {ciStatusNameMap[ci.status] || ci.status}</div>
+										<div className="text-xs text-muted">{ci.type || 'CI'} - {ciStatusNameMap[ci.status] || ci.status}</div>
                                       </div>
                                       {selectedCIs.find(item => item.id === ci.id) && (
                                         <Tag color="green">已选择</Tag>
@@ -367,59 +367,13 @@ export default function CreateIncidentPage() {
                           </Col>
                         </Row>
 
-                        <Form.Item
-                          name="affectedSystems"
-                          label="受影响系统"
-                        >
-                          <Select
-                            mode="multiple"
-                            placeholder="选择受影响的系统"
-                            allowClear
-                            options={[
-                              { value: 'web', label: 'Web网站' },
-                              { value: 'api', label: 'API服务' },
-                              { value: 'database', label: '数据库' },
-                              { value: 'network', label: '网络' },
-                              { value: 'storage', label: '存储' },
-                            ]}
-                          />
-                        </Form.Item>
-
-                        <Form.Item
-                          name="rootCause"
-                          label="初步原因分析"
-                        >
-                          <TextArea
-                            rows={4}
-                            placeholder="初步分析可能的原因"
-                          />
-                        </Form.Item>
                       </>
                     ),
                   },
                   {
                     key: 'attachment',
                     label: '附件',
-                    children: (
-                      <>
-                        <Form.Item
-                          name="attachments"
-                          label="上传附件"
-                          valuePropName="fileList"
-                          getValueFromEvent={(e) => {
-                            if (Array.isArray(e)) return e;
-                            return e?.fileList;
-                          }}
-                        >
-                          <Upload name="logo" action="/upload.do" listType="text">
-                            <Button icon={<Upload />}>上传附件</Button>
-                          </Upload>
-                        </Form.Item>
-                        <Text type="secondary">
-                          支持上传图片、文档等附件，单个文件不超过10MB
-                        </Text>
-                      </>
-                    ),
+                    children: <Text type="secondary">创建后，可在关联工单详情的附件区上传文件。</Text>,
                   },
                 ]}
               />
@@ -449,7 +403,7 @@ export default function CreateIncidentPage() {
             <Space orientation="vertical" className="w-full">
               <div>
                 <Text strong>优先级说明</Text>
-                <ul className="mt-2 text-sm text-gray-600">
+                <ul className="mt-2 text-sm text-muted">
                   <li>🔴 紧急：系统完全不可用</li>
                   <li>🟠 高：核心功能受影响</li>
                   <li>🔵 中：非核心功能受影响</li>
@@ -459,7 +413,7 @@ export default function CreateIncidentPage() {
               <Divider className="!my-2" />
               <div>
                 <Text strong>紧急联系方式</Text>
-                <ul className="mt-2 text-sm text-gray-600">
+                <ul className="mt-2 text-sm text-muted">
                   <li>电话：400-XXX-XXXX</li>
                   <li>邮箱：support@example.com</li>
                 </ul>

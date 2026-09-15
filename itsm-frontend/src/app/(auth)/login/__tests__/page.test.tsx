@@ -27,7 +27,6 @@ jest.mock('next/navigation', () => ({
 
 // Mock auth store hydration
 jest.mock('@/lib/store/auth-store', () => ({
-  useAuthStoreHydration: jest.fn(),
 }));
 
 // Mock logger

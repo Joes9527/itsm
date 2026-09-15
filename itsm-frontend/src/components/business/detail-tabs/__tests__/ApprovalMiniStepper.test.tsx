@@ -7,16 +7,17 @@
  */
 
 import React from 'react';
+import { ApprovalDecisionHistoryProvider } from '../ApprovalDecisionHistoryContext';
 import { render, screen, waitFor } from '@testing-library/react';
 import { ApprovalMiniStepper } from '../ApprovalMiniStepper';
 
-jest.mock('@/lib/api/ticket-approval-api', () => ({
-  TicketApprovalApi: { getApprovalDecisions: jest.fn() },
+jest.mock('@/lib/api/bpmn-workflow-api', () => ({
+  BPMNWorkflowApi: { getTicketApprovalDecisions: jest.fn() },
 }));
 
-import { TicketApprovalApi } from '@/lib/api/ticket-approval-api';
+import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 
-const mockGetDecisions = TicketApprovalApi.getApprovalDecisions as jest.Mock;
+const mockGetDecisions = BPMNWorkflowApi.getTicketApprovalDecisions as jest.Mock;
 
 describe('ApprovalMiniStepper', () => {
   beforeEach(() => {
@@ -45,7 +46,7 @@ describe('ApprovalMiniStepper', () => {
       },
     ]);
 
-    render(<ApprovalMiniStepper ticketId={101} />);
+    render(<ApprovalDecisionHistoryProvider ticketId={101}><ApprovalMiniStepper ticketId={101} /></ApprovalDecisionHistoryProvider>);
 
     await waitFor(() => {
       expect(screen.getByText('主管审批')).toBeInTheDocument();
@@ -60,10 +61,10 @@ describe('ApprovalMiniStepper', () => {
   it('shows empty state when there are no approval decisions', async () => {
     mockGetDecisions.mockResolvedValueOnce([]);
 
-    render(<ApprovalMiniStepper ticketId={202} />);
+    render(<ApprovalDecisionHistoryProvider ticketId={202}><ApprovalMiniStepper ticketId={202} /></ApprovalDecisionHistoryProvider>);
 
     await waitFor(() => {
-      expect(screen.getByText('该工单未走审批流程')).toBeInTheDocument();
+      expect(screen.getByText('暂无审批决策记录')).toBeInTheDocument();
     });
   });
 });

@@ -19,6 +19,8 @@ type SLAAlertHistory struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
+	// NULL preserves historical notification_sent; version 1 projects linked deliveries
+	NotificationTrackingVersion *int `json:"notification_tracking_version,omitempty"`
 	// 工单ID
 	TicketID int `json:"ticket_id,omitempty"`
 	// 工单编号
@@ -93,7 +95,7 @@ func (*SLAAlertHistory) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case slaalerthistory.FieldActualPercentage:
 			values[i] = new(sql.NullFloat64)
-		case slaalerthistory.FieldID, slaalerthistory.FieldTicketID, slaalerthistory.FieldAlertRuleID, slaalerthistory.FieldThresholdPercentage, slaalerthistory.FieldEscalationLevel, slaalerthistory.FieldTenantID:
+		case slaalerthistory.FieldID, slaalerthistory.FieldNotificationTrackingVersion, slaalerthistory.FieldTicketID, slaalerthistory.FieldAlertRuleID, slaalerthistory.FieldThresholdPercentage, slaalerthistory.FieldEscalationLevel, slaalerthistory.FieldTenantID:
 			values[i] = new(sql.NullInt64)
 		case slaalerthistory.FieldTicketNumber, slaalerthistory.FieldTicketTitle, slaalerthistory.FieldAlertRuleName, slaalerthistory.FieldAlertLevel:
 			values[i] = new(sql.NullString)
@@ -120,6 +122,13 @@ func (_m *SLAAlertHistory) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
+		case slaalerthistory.FieldNotificationTrackingVersion:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field notification_tracking_version", values[i])
+			} else if value.Valid {
+				_m.NotificationTrackingVersion = new(int)
+				*_m.NotificationTrackingVersion = int(value.Int64)
+			}
 		case slaalerthistory.FieldTicketID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field ticket_id", values[i])
@@ -244,6 +253,11 @@ func (_m *SLAAlertHistory) String() string {
 	var builder strings.Builder
 	builder.WriteString("SLAAlertHistory(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	if v := _m.NotificationTrackingVersion; v != nil {
+		builder.WriteString("notification_tracking_version=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
 	builder.WriteString("ticket_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TicketID))
 	builder.WriteString(", ")

@@ -1,4 +1,4 @@
-package service_request
+package service_request_test
 
 import (
 	"bytes"
@@ -13,14 +13,16 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	_ "github.com/mattn/go-sqlite3"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
-	"itsm-backend/handlers/cmdb"
 	"itsm-backend/handlers/service_catalog"
+	"itsm-backend/middleware"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -41,6 +43,7 @@ func srUID() string {
 func srAuth(tid, uid int) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Set("tenant_id", tid)
+		c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: tid})
 		c.Set("user_id", uid)
 		c.Set("role", "manager")
 		c.Set("department", "IT")
@@ -54,6 +57,29 @@ func srDoReq(t *testing.T, r *gin.Engine, method, path string, body interface{})
 	if body != nil {
 		b, err := json.Marshal(body)
 		require.NoError(t, err)
+		if method == "POST" && path == "/api/v1/service-requests" {
+			var request map[string]interface{}
+			require.NoError(t, json.Unmarshal(b, &request))
+			if id, ok := request["catalogId"].(float64); ok && id > 0 {
+				confirmed := srDoReq(t, r, "GET", catalogFixturePath(int(id)), nil)
+				if confirmed.Code == common.SuccessCode {
+					catalog := confirmed.Data.(map[string]interface{})
+					request["recordClass"] = catalog["targetClass"]
+					request["catalogVersion"] = catalog["catalogVersion"]
+					request["formSchemaVersion"] = catalog["formSchemaVersion"]
+				}
+			}
+			if request["recordClass"] == "" || request["recordClass"] == nil {
+				request["recordClass"] = "service_request_item"
+				request["catalogVersion"] = "missing"
+				request["formSchemaVersion"] = "missing"
+			}
+			if request["quantity"] == float64(0) {
+				delete(request, "quantity")
+			}
+			b, err = json.Marshal(request)
+			require.NoError(t, err)
+		}
 		reader = bytes.NewReader(b)
 	}
 	req, err := http.NewRequest(method, path, reader)
@@ -61,6 +87,7 @@ func srDoReq(t *testing.T, r *gin.Engine, method, path string, body interface{})
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	req.Header.Set("Idempotency-Key", srUID())
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -92,14 +119,13 @@ func srSetup(t *testing.T) (*gin.Engine, *ent.Client, int, int, int) {
 
 	// 播种一个服务目录（无 CI 类型，走简单路径）
 	scRepo := service_catalog.NewEntRepository(client)
-	scSvc := service_catalog.NewService(scRepo, client, logger)
-	cat, err := scSvc.Create(ctx, "SRCatalog-"+srUID(), "software", "for test", 0, tenant.ID, "enabled", 0, 0, nil, "", "")
+	scSvc := service_catalog.NewService(scRepo, client, logger, sameTransactionDirectory{})
+	configureCatalogPublicationForTest(ctx, client, tenant.ID, scSvc)
+	cat, err := scSvc.Create(ctx, tenant.ID, catalogCreateInput("SRCatalog-"+srUID(), "software", "for test", 0, "enabled", 0, 0, nil, "", ""))
 	require.NoError(t, err)
 
-	repo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(repo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
+	repo := NewEntRepository(client, executionfixture.Standard())
+	svc := NewService(repo, client, logger, nil)
 	h := NewHandler(svc)
 
 	user, err := client.User.Create().
@@ -117,6 +143,7 @@ func srSetup(t *testing.T) (*gin.Engine, *ent.Client, int, int, int) {
 	r := gin.New()
 	r.Use(srAuth(tenant.ID, uid))
 	r.POST("/api/v1/service-requests", h.Create)
+	r.GET("/api/v1/service-catalogs/:id", service_catalog.NewHandler(scSvc).Get)
 	r.GET("/api/v1/service-requests", h.List)
 	r.GET("/api/v1/service-requests/by-ticket/:ticketId", h.GetByTicket)
 	r.GET("/api/v1/service-requests/:id", h.Get)
@@ -136,7 +163,7 @@ func srCreateOne(t *testing.T, r *gin.Engine, catalogID int) int {
 	resp := srDoReq(t, r, "POST", "/api/v1/service-requests", req)
 	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", srStr(resp))
 	data := resp.Data.(map[string]interface{})
-	return int(data["id"].(float64))
+	return receiptProfessionalID(data)
 }
 
 func TestServiceRequestHandler_Create_Success(t *testing.T) {
@@ -150,8 +177,14 @@ func TestServiceRequestHandler_Create_Success(t *testing.T) {
 	resp := srDoReq(t, r, "POST", "/api/v1/service-requests", req)
 	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", srStr(resp))
 	data := resp.Data.(map[string]interface{})
-	assert.EqualValues(t, catID, data["catalogId"])
-	assert.Greater(t, data["ticketId"], float64(0), "Create 必须委托创建关联 Ticket 并回写 ticketId")
+	assert.Greater(t, data["workItemId"], float64(0))
+	assert.Equal(t, "service_request_item", data["recordClass"])
+	assert.Equal(t, "pending", data["workflowStartStatus"])
+	assert.NotContains(t, data, "id")
+	assert.NotContains(t, data, "ticketId")
+	detail := srDoReq(t, r, "GET", "/api/v1/service-requests/"+strconv.Itoa(receiptProfessionalID(data)), nil)
+	require.Equal(t, common.SuccessCode, detail.Code)
+	assert.EqualValues(t, catID, detail.Data.(map[string]interface{})["catalogId"])
 }
 
 func TestHandler_Get_IncludesCustomFieldValues(t *testing.T) {
@@ -159,9 +192,9 @@ func TestHandler_Get_IncludesCustomFieldValues(t *testing.T) {
 	// catalogID（没有字段定义），另外建一个带字段的 ServiceCatalog。
 	r, client, tenantID, _, _ := srSetup(t)
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(context.Background(), "云主机申请-"+srUID(), "software", "desc", 1, tenantID, "enabled", 0, 0,
-		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", "")
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
+	configureCatalogPublicationForTest(context.Background(), client, tenantID, scService)
+	catalog, err := scService.Create(context.Background(), tenantID, catalogCreateInput("云主机申请-"+srUID(), "software", "desc", 1, "enabled", 0, 0, []service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", ""))
 	require.NoError(t, err)
 
 	createReq := dto.CreateServiceRequestRequest{
@@ -171,7 +204,7 @@ func TestHandler_Get_IncludesCustomFieldValues(t *testing.T) {
 	createResp := srDoReq(t, r, "POST", "/api/v1/service-requests", createReq)
 	require.Equal(t, common.SuccessCode, createResp.Code, "body=%s", srStr(createResp))
 	created := createResp.Data.(map[string]interface{})
-	id := int(created["id"].(float64))
+	id := receiptProfessionalID(created)
 
 	getResp := srDoReq(t, r, "GET", "/api/v1/service-requests/"+strconv.Itoa(id), nil)
 	require.Equal(t, common.SuccessCode, getResp.Code, "body=%s", srStr(getResp))
@@ -205,8 +238,9 @@ func TestServiceRequestHandler_Create_MissingComplianceAck(t *testing.T) {
 	ctx := context.Background()
 	// 创建一个 infra 类型的目录项（ComplianceAck 仅对 vm/network/database 类型强制）
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	infraCat, err := scService.Create(ctx, "VM-"+srUID(), "infrastructure", "for test", 0, tenantID, "enabled", 0, 0, nil, "", "vm")
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
+	configureCatalogPublicationForTest(ctx, client, tenantID, scService)
+	infraCat, err := scService.Create(ctx, tenantID, catalogCreateInput("VM-"+srUID(), "infrastructure", "for test", 0, "enabled", 0, 0, nil, "", "vm"))
 	require.NoError(t, err)
 
 	// ComplianceAck=false → service 返回 BadRequest → handler 映射 5001
@@ -231,14 +265,14 @@ func TestServiceRequestCreateDefersNewCIUntilProvisioning(t *testing.T) {
 	ciType, err := client.CIType.Create().SetName("Virtual Machine").SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 	scRepo := service_catalog.NewEntRepository(client)
-	catalog, err := service_catalog.NewService(scRepo, client, logger).
-		Create(ctx, "VM Request", "infrastructure", "Provision VM", 24, tenant.ID, "enabled", ciType.ID, 0, nil, "", "")
+	scSvc := service_catalog.NewService(scRepo, client, logger, sameTransactionDirectory{})
+	configureCatalogPublicationForTest(ctx, client, tenant.ID, scSvc)
+	catalog, err := scSvc.Create(ctx, tenant.ID, catalogCreateInput("VM Request", "infrastructure", "Provision VM", 24, "enabled", ciType.ID, 0, nil, "", ""))
 	require.NoError(t, err)
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	srSvc := NewService(NewEntRepository(client), scRepo, cmdb.NewEntRepository(client), client, logger, ticketSvc, nil, nil)
+	srSvc := NewService(NewEntRepository(client, executionfixture.Standard()), client, logger, nil)
 	expireAt := time.Now().Add(30 * 24 * time.Hour)
 
-	created, err := srSvc.Create(ctx, tenant.ID, user.ID, catalog.ID, &ServiceRequest{
+	created, err := srSvc.SubmitCreation(ctx, tenant.ID, user.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck: true, DataClassification: "internal", ExpireAt: &expireAt,
 		FormData: map[string]interface{}{"title": "Production VM"},
 	})
@@ -307,7 +341,7 @@ func TestServiceRequestHandler_PartialUpdatePreservesBooleanFields(t *testing.T)
 		NeedsPublicIP: true, SourceIPWhitelist: []string{"10.0.0.1"},
 	})
 	require.Equal(t, common.SuccessCode, create.Code, "body=%s", srStr(create))
-	id := int(create.Data.(map[string]interface{})["id"].(float64))
+	id := receiptProfessionalID(create.Data.(map[string]interface{}))
 
 	// Title is no longer part of UpdateServiceRequestRequest (it's ticket-owned, set only at
 	// creation time) — send an update payload that only touches an unrelated field (FormData)
@@ -323,6 +357,9 @@ func TestServiceRequestHandler_PartialUpdatePreservesBooleanFields(t *testing.T)
 func TestServiceRequestHandler_Delete(t *testing.T) {
 	r, client, _, _, catID := srSetup(t)
 	id := srCreateOne(t, r, catID)
+	wi := client.ServiceRequest.GetX(context.Background(), id)
+	requester := client.Ticket.GetX(context.Background(), wi.TicketID).RequesterID
+	client.User.UpdateOneID(requester).SetRole("super_admin").ExecX(context.Background())
 	resp := srDoReq(t, r, "DELETE", "/api/v1/service-requests/"+strconv.Itoa(id), nil)
 	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", srStr(resp))
 	// 删除后再查应 404
@@ -330,5 +367,5 @@ func TestServiceRequestHandler_Delete(t *testing.T) {
 	assert.EqualValues(t, 404, resp2.Code, "body=%s", srStr(resp2))
 	stored, err := client.ServiceRequest.Get(context.Background(), id)
 	require.NoError(t, err)
-	require.NotNil(t, stored.DeletedAt)
+	require.NotNil(t, client.Ticket.GetX(context.Background(), stored.TicketID).DeletedAt)
 }

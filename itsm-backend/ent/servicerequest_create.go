@@ -7,8 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"itsm-backend/ent/servicerequest"
+	"itsm-backend/ent/ticket"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,12 +20,7 @@ type ServiceRequestCreate struct {
 	config
 	mutation *ServiceRequestMutation
 	hooks    []Hook
-}
-
-// SetTenantID sets the "tenant_id" field.
-func (_c *ServiceRequestCreate) SetTenantID(v int) *ServiceRequestCreate {
-	_c.mutation.SetTenantID(v)
-	return _c
+	conflict []sql.ConflictOption
 }
 
 // SetTicketID sets the "ticket_id" field.
@@ -49,12 +46,6 @@ func (_c *ServiceRequestCreate) SetNillableCiID(v *int) *ServiceRequestCreate {
 	if v != nil {
 		_c.SetCiID(*v)
 	}
-	return _c
-}
-
-// SetRequesterID sets the "requester_id" field.
-func (_c *ServiceRequestCreate) SetRequesterID(v int) *ServiceRequestCreate {
-	_c.mutation.SetRequesterID(v)
 	return _c
 }
 
@@ -196,20 +187,6 @@ func (_c *ServiceRequestCreate) SetNillableExpectedAt(v *time.Time) *ServiceRequ
 	return _c
 }
 
-// SetProcessorID sets the "processor_id" field.
-func (_c *ServiceRequestCreate) SetProcessorID(v int) *ServiceRequestCreate {
-	_c.mutation.SetProcessorID(v)
-	return _c
-}
-
-// SetNillableProcessorID sets the "processor_id" field if the given value is not nil.
-func (_c *ServiceRequestCreate) SetNillableProcessorID(v *int) *ServiceRequestCreate {
-	if v != nil {
-		_c.SetProcessorID(*v)
-	}
-	return _c
-}
-
 // SetStartedAt sets the "started_at" field.
 func (_c *ServiceRequestCreate) SetStartedAt(v time.Time) *ServiceRequestCreate {
 	_c.mutation.SetStartedAt(v)
@@ -266,60 +243,15 @@ func (_c *ServiceRequestCreate) SetNillableLastError(v *string) *ServiceRequestC
 	return _c
 }
 
-// SetVersion sets the "version" field.
-func (_c *ServiceRequestCreate) SetVersion(v int) *ServiceRequestCreate {
-	_c.mutation.SetVersion(v)
+// SetWorkItemID sets the "work_item" edge to the Ticket entity by ID.
+func (_c *ServiceRequestCreate) SetWorkItemID(id int) *ServiceRequestCreate {
+	_c.mutation.SetWorkItemID(id)
 	return _c
 }
 
-// SetNillableVersion sets the "version" field if the given value is not nil.
-func (_c *ServiceRequestCreate) SetNillableVersion(v *int) *ServiceRequestCreate {
-	if v != nil {
-		_c.SetVersion(*v)
-	}
-	return _c
-}
-
-// SetCreatedAt sets the "created_at" field.
-func (_c *ServiceRequestCreate) SetCreatedAt(v time.Time) *ServiceRequestCreate {
-	_c.mutation.SetCreatedAt(v)
-	return _c
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_c *ServiceRequestCreate) SetNillableCreatedAt(v *time.Time) *ServiceRequestCreate {
-	if v != nil {
-		_c.SetCreatedAt(*v)
-	}
-	return _c
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (_c *ServiceRequestCreate) SetUpdatedAt(v time.Time) *ServiceRequestCreate {
-	_c.mutation.SetUpdatedAt(v)
-	return _c
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_c *ServiceRequestCreate) SetNillableUpdatedAt(v *time.Time) *ServiceRequestCreate {
-	if v != nil {
-		_c.SetUpdatedAt(*v)
-	}
-	return _c
-}
-
-// SetDeletedAt sets the "deleted_at" field.
-func (_c *ServiceRequestCreate) SetDeletedAt(v time.Time) *ServiceRequestCreate {
-	_c.mutation.SetDeletedAt(v)
-	return _c
-}
-
-// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
-func (_c *ServiceRequestCreate) SetNillableDeletedAt(v *time.Time) *ServiceRequestCreate {
-	if v != nil {
-		_c.SetDeletedAt(*v)
-	}
-	return _c
+// SetWorkItem sets the "work_item" edge to the Ticket entity.
+func (_c *ServiceRequestCreate) SetWorkItem(v *Ticket) *ServiceRequestCreate {
+	return _c.SetWorkItemID(v.ID)
 }
 
 // Mutation returns the ServiceRequestMutation object of the builder.
@@ -373,30 +305,10 @@ func (_c *ServiceRequestCreate) defaults() {
 		v := servicerequest.DefaultQuantity
 		_c.mutation.SetQuantity(v)
 	}
-	if _, ok := _c.mutation.Version(); !ok {
-		v := servicerequest.DefaultVersion
-		_c.mutation.SetVersion(v)
-	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		v := servicerequest.DefaultCreatedAt()
-		_c.mutation.SetCreatedAt(v)
-	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		v := servicerequest.DefaultUpdatedAt()
-		_c.mutation.SetUpdatedAt(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *ServiceRequestCreate) check() error {
-	if _, ok := _c.mutation.TenantID(); !ok {
-		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "ServiceRequest.tenant_id"`)}
-	}
-	if v, ok := _c.mutation.TenantID(); ok {
-		if err := servicerequest.TenantIDValidator(v); err != nil {
-			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.tenant_id": %w`, err)}
-		}
-	}
 	if _, ok := _c.mutation.TicketID(); !ok {
 		return &ValidationError{Name: "ticket_id", err: errors.New(`ent: missing required field "ServiceRequest.ticket_id"`)}
 	}
@@ -411,14 +323,6 @@ func (_c *ServiceRequestCreate) check() error {
 	if v, ok := _c.mutation.CatalogID(); ok {
 		if err := servicerequest.CatalogIDValidator(v); err != nil {
 			return &ValidationError{Name: "catalog_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.catalog_id": %w`, err)}
-		}
-	}
-	if _, ok := _c.mutation.RequesterID(); !ok {
-		return &ValidationError{Name: "requester_id", err: errors.New(`ent: missing required field "ServiceRequest.requester_id"`)}
-	}
-	if v, ok := _c.mutation.RequesterID(); ok {
-		if err := servicerequest.RequesterIDValidator(v); err != nil {
-			return &ValidationError{Name: "requester_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.requester_id": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.DataClassification(); !ok {
@@ -438,19 +342,8 @@ func (_c *ServiceRequestCreate) check() error {
 			return &ValidationError{Name: "quantity", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.quantity": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.Version(); !ok {
-		return &ValidationError{Name: "version", err: errors.New(`ent: missing required field "ServiceRequest.version"`)}
-	}
-	if v, ok := _c.mutation.Version(); ok {
-		if err := servicerequest.VersionValidator(v); err != nil {
-			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.version": %w`, err)}
-		}
-	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "ServiceRequest.created_at"`)}
-	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "ServiceRequest.updated_at"`)}
+	if len(_c.mutation.WorkItemIDs()) == 0 {
+		return &ValidationError{Name: "work_item", err: errors.New(`ent: missing required edge "ServiceRequest.work_item"`)}
 	}
 	return nil
 }
@@ -478,14 +371,7 @@ func (_c *ServiceRequestCreate) createSpec() (*ServiceRequest, *sqlgraph.CreateS
 		_node = &ServiceRequest{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(servicerequest.Table, sqlgraph.NewFieldSpec(servicerequest.FieldID, field.TypeInt))
 	)
-	if value, ok := _c.mutation.TenantID(); ok {
-		_spec.SetField(servicerequest.FieldTenantID, field.TypeInt, value)
-		_node.TenantID = value
-	}
-	if value, ok := _c.mutation.TicketID(); ok {
-		_spec.SetField(servicerequest.FieldTicketID, field.TypeInt, value)
-		_node.TicketID = value
-	}
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.CatalogID(); ok {
 		_spec.SetField(servicerequest.FieldCatalogID, field.TypeInt, value)
 		_node.CatalogID = value
@@ -493,10 +379,6 @@ func (_c *ServiceRequestCreate) createSpec() (*ServiceRequest, *sqlgraph.CreateS
 	if value, ok := _c.mutation.CiID(); ok {
 		_spec.SetField(servicerequest.FieldCiID, field.TypeInt, value)
 		_node.CiID = value
-	}
-	if value, ok := _c.mutation.RequesterID(); ok {
-		_spec.SetField(servicerequest.FieldRequesterID, field.TypeInt, value)
-		_node.RequesterID = value
 	}
 	if value, ok := _c.mutation.FormData(); ok {
 		_spec.SetField(servicerequest.FieldFormData, field.TypeJSON, value)
@@ -542,10 +424,6 @@ func (_c *ServiceRequestCreate) createSpec() (*ServiceRequest, *sqlgraph.CreateS
 		_spec.SetField(servicerequest.FieldExpectedAt, field.TypeTime, value)
 		_node.ExpectedAt = value
 	}
-	if value, ok := _c.mutation.ProcessorID(); ok {
-		_spec.SetField(servicerequest.FieldProcessorID, field.TypeInt, value)
-		_node.ProcessorID = value
-	}
 	if value, ok := _c.mutation.StartedAt(); ok {
 		_spec.SetField(servicerequest.FieldStartedAt, field.TypeTime, value)
 		_node.StartedAt = value
@@ -562,23 +440,809 @@ func (_c *ServiceRequestCreate) createSpec() (*ServiceRequest, *sqlgraph.CreateS
 		_spec.SetField(servicerequest.FieldLastError, field.TypeString, value)
 		_node.LastError = value
 	}
-	if value, ok := _c.mutation.Version(); ok {
-		_spec.SetField(servicerequest.FieldVersion, field.TypeInt, value)
-		_node.Version = value
-	}
-	if value, ok := _c.mutation.CreatedAt(); ok {
-		_spec.SetField(servicerequest.FieldCreatedAt, field.TypeTime, value)
-		_node.CreatedAt = value
-	}
-	if value, ok := _c.mutation.UpdatedAt(); ok {
-		_spec.SetField(servicerequest.FieldUpdatedAt, field.TypeTime, value)
-		_node.UpdatedAt = value
-	}
-	if value, ok := _c.mutation.DeletedAt(); ok {
-		_spec.SetField(servicerequest.FieldDeletedAt, field.TypeTime, value)
-		_node.DeletedAt = &value
+	if nodes := _c.mutation.WorkItemIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   servicerequest.WorkItemTable,
+			Columns: []string{servicerequest.WorkItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.TicketID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ServiceRequest.Create().
+//		SetTicketID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ServiceRequestUpsert) {
+//			SetTicketID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ServiceRequestCreate) OnConflict(opts ...sql.ConflictOption) *ServiceRequestUpsertOne {
+	_c.conflict = opts
+	return &ServiceRequestUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ServiceRequest.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ServiceRequestCreate) OnConflictColumns(columns ...string) *ServiceRequestUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ServiceRequestUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ServiceRequestUpsertOne is the builder for "upsert"-ing
+	//  one ServiceRequest node.
+	ServiceRequestUpsertOne struct {
+		create *ServiceRequestCreate
+	}
+
+	// ServiceRequestUpsert is the "OnConflict" setter.
+	ServiceRequestUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTicketID sets the "ticket_id" field.
+func (u *ServiceRequestUpsert) SetTicketID(v int) *ServiceRequestUpsert {
+	u.Set(servicerequest.FieldTicketID, v)
+	return u
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *ServiceRequestUpsert) UpdateTicketID() *ServiceRequestUpsert {
+	u.SetExcluded(servicerequest.FieldTicketID)
+	return u
+}
+
+// SetCatalogID sets the "catalog_id" field.
+func (u *ServiceRequestUpsert) SetCatalogID(v int) *ServiceRequestUpsert {
+	u.Set(servicerequest.FieldCatalogID, v)
+	return u
+}
+
+// UpdateCatalogID sets the "catalog_id" field to the value that was provided on create.
+func (u *ServiceRequestUpsert) UpdateCatalogID() *ServiceRequestUpsert {
+	u.SetExcluded(servicerequest.FieldCatalogID)
+	return u
+}
+
+// AddCatalogID adds v to the "catalog_id" field.
+func (u *ServiceRequestUpsert) AddCatalogID(v int) *ServiceRequestUpsert {
+	u.Add(servicerequest.FieldCatalogID, v)
+	return u
+}
+
+// SetCiID sets the "ci_id" field.
+func (u *ServiceRequestUpsert) SetCiID(v int) *ServiceRequestUpsert {
+	u.Set(servicerequest.FieldCiID, v)
+	return u
+}
+
+// UpdateCiID sets the "ci_id" field to the value that was provided on create.
+func (u *ServiceRequestUpsert) UpdateCiID() *ServiceRequestUpsert {
+	u.SetExcluded(servicerequest.FieldCiID)
+	return u
+}
+
+// AddCiID adds v to the "ci_id" field.
+func (u *ServiceRequestUpsert) AddCiID(v int) *ServiceRequestUpsert {
+	u.Add(servicerequest.FieldCiID, v)
+	return u
+}
+
+// ClearCiID clears the value of the "ci_id" field.
+func (u *ServiceRequestUpsert) ClearCiID() *ServiceRequestUpsert {
+	u.SetNull(servicerequest.FieldCiID)
+	return u
+}
+
+// SetFormData sets the "form_data" field.
+func (u *ServiceRequestUpsert) SetFormData(v map[string]interface{}) *ServiceRequestUpsert {
+	u.Set(servicerequest.FieldFormData, v)
+	return u
+}
+
+// UpdateFormData sets the "form_data" field to the value that was provided on create.
+func (u *ServiceRequestUpsert) UpdateFormData() *ServiceRequestUpsert {
+	u.SetExcluded(servicerequest.FieldFormData)
+	return u
+}
+
+// ClearFormData clears the value of the "form_data" field.
+func (u *ServiceRequestUpsert) ClearFormData() *ServiceRequestUpsert {
+	u.SetNull(servicerequest.FieldFormData)
+	return u
+}
+
+// SetCostCenter sets the "cost_center" field.
+func (u *ServiceRequestUpsert) SetCostCenter(v string) *ServiceRequestUpsert {
+	u.Set(servicerequest.FieldCostCenter, v)
+	return u
+}
+
+// UpdateCostCenter sets the "cost_center" field to the value that was provided on create.
+func (u *ServiceRequestUpsert) UpdateCostCenter() *ServiceRequestUpsert {
+	u.SetExcluded(servicerequest.FieldCostCenter)
+	return u
+}
+
+// ClearCostCenter clears the value of the "cost_center" field.
+func (u *ServiceRequestUpsert) ClearCostCenter() *ServiceRequestUpsert {
+	u.SetNull(servicerequest.FieldCostCenter)
+	return u
+}
+
+// SetDataClassification sets the "data_classification" field.
+func (u *ServiceRequestUpsert) SetDataClassification(v string) *ServiceRequestUpsert {
+	u.Set(servicerequest.FieldDataClassification, v)
+	return u
+}
+
+// UpdateDataClassification sets the "data_classification" field to the value that was provided on create.
+func (u *ServiceRequestUpsert) UpdateDataClassification() *ServiceRequestUpsert {
+	u.SetExcluded(servicerequest.FieldDataClassification)
+	return u
+}
+
+// SetNeedsPublicIP sets the "needs_public_ip" field.
+func (u *ServiceRequestUpsert) SetNeedsPublicIP(v bool) *ServiceRequestUpsert {
+	u.Set(servicerequest.FieldNeedsPublicIP, v)
+	return u
+}
+
+// UpdateNeedsPublicIP sets the "needs_public_ip" field to the value that was provided on create.
+func (u *ServiceRequestUpsert) UpdateNeedsPublicIP() *ServiceRequestUpsert {
+	u.SetExcluded(servicerequest.FieldNeedsPublicIP)
+	return u
+}
+
+// SetSourceIPWhitelist sets the "source_ip_whitelist" field.
+func (u *ServiceRequestUpsert) SetSourceIPWhitelist(v []string) *ServiceRequestUpsert {
+	u.Set(servicerequest.FieldSourceIPWhitelist, v)
+	return u
+}
+
+// UpdateSourceIPWhitelist sets the "source_ip_whitelist" field to the value that was provided on create.
+func (u *ServiceRequestUpsert) UpdateSourceIPWhitelist() *ServiceRequestUpsert {
+	u.SetExcluded(servicerequest.FieldSourceIPWhitelist)
+	return u
+}
+
+// ClearSourceIPWhitelist clears the value of the "source_ip_whitelist" field.
+func (u *ServiceRequestUpsert) ClearSourceIPWhitelist() *ServiceRequestUpsert {
+	u.SetNull(servicerequest.FieldSourceIPWhitelist)
+	return u
+}
+
+// SetExpireAt sets the "expire_at" field.
+func (u *ServiceRequestUpsert) SetExpireAt(v time.Time) *ServiceRequestUpsert {
+	u.Set(servicerequest.FieldExpireAt, v)
+	return u
+}
+
+// UpdateExpireAt sets the "expire_at" field to the value that was provided on create.
+func (u *ServiceRequestUpsert) UpdateExpireAt() *ServiceRequestUpsert {
+	u.SetExcluded(servicerequest.FieldExpireAt)
+	return u
+}
+
+// ClearExpireAt clears the value of the "expire_at" field.
+func (u *ServiceRequestUpsert) ClearExpireAt() *ServiceRequestUpsert {
+	u.SetNull(servicerequest.FieldExpireAt)
+	return u
+}
+
+// SetComplianceAck sets the "compliance_ack" field.
+func (u *ServiceRequestUpsert) SetComplianceAck(v bool) *ServiceRequestUpsert {
+	u.Set(servicerequest.FieldComplianceAck, v)
+	return u
+}
+
+// UpdateComplianceAck sets the "compliance_ack" field to the value that was provided on create.
+func (u *ServiceRequestUpsert) UpdateComplianceAck() *ServiceRequestUpsert {
+	u.SetExcluded(servicerequest.FieldComplianceAck)
+	return u
+}
+
+// SetContactName sets the "contact_name" field.
+func (u *ServiceRequestUpsert) SetContactName(v string) *ServiceRequestUpsert {
+	u.Set(servicerequest.FieldContactName, v)
+	return u
+}
+
+// UpdateContactName sets the "contact_name" field to the value that was provided on create.
+func (u *ServiceRequestUpsert) UpdateContactName() *ServiceRequestUpsert {
+	u.SetExcluded(servicerequest.FieldContactName)
+	return u
+}
+
+// ClearContactName clears the value of the "contact_name" field.
+func (u *ServiceRequestUpsert) ClearContactName() *ServiceRequestUpsert {
+	u.SetNull(servicerequest.FieldContactName)
+	return u
+}
+
+// SetContactEmail sets the "contact_email" field.
+func (u *ServiceRequestUpsert) SetContactEmail(v string) *ServiceRequestUpsert {
+	u.Set(servicerequest.FieldContactEmail, v)
+	return u
+}
+
+// UpdateContactEmail sets the "contact_email" field to the value that was provided on create.
+func (u *ServiceRequestUpsert) UpdateContactEmail() *ServiceRequestUpsert {
+	u.SetExcluded(servicerequest.FieldContactEmail)
+	return u
+}
+
+// ClearContactEmail clears the value of the "contact_email" field.
+func (u *ServiceRequestUpsert) ClearContactEmail() *ServiceRequestUpsert {
+	u.SetNull(servicerequest.FieldContactEmail)
+	return u
+}
+
+// SetQuantity sets the "quantity" field.
+func (u *ServiceRequestUpsert) SetQuantity(v int) *ServiceRequestUpsert {
+	u.Set(servicerequest.FieldQuantity, v)
+	return u
+}
+
+// UpdateQuantity sets the "quantity" field to the value that was provided on create.
+func (u *ServiceRequestUpsert) UpdateQuantity() *ServiceRequestUpsert {
+	u.SetExcluded(servicerequest.FieldQuantity)
+	return u
+}
+
+// AddQuantity adds v to the "quantity" field.
+func (u *ServiceRequestUpsert) AddQuantity(v int) *ServiceRequestUpsert {
+	u.Add(servicerequest.FieldQuantity, v)
+	return u
+}
+
+// SetExpectedAt sets the "expected_at" field.
+func (u *ServiceRequestUpsert) SetExpectedAt(v time.Time) *ServiceRequestUpsert {
+	u.Set(servicerequest.FieldExpectedAt, v)
+	return u
+}
+
+// UpdateExpectedAt sets the "expected_at" field to the value that was provided on create.
+func (u *ServiceRequestUpsert) UpdateExpectedAt() *ServiceRequestUpsert {
+	u.SetExcluded(servicerequest.FieldExpectedAt)
+	return u
+}
+
+// ClearExpectedAt clears the value of the "expected_at" field.
+func (u *ServiceRequestUpsert) ClearExpectedAt() *ServiceRequestUpsert {
+	u.SetNull(servicerequest.FieldExpectedAt)
+	return u
+}
+
+// SetStartedAt sets the "started_at" field.
+func (u *ServiceRequestUpsert) SetStartedAt(v time.Time) *ServiceRequestUpsert {
+	u.Set(servicerequest.FieldStartedAt, v)
+	return u
+}
+
+// UpdateStartedAt sets the "started_at" field to the value that was provided on create.
+func (u *ServiceRequestUpsert) UpdateStartedAt() *ServiceRequestUpsert {
+	u.SetExcluded(servicerequest.FieldStartedAt)
+	return u
+}
+
+// ClearStartedAt clears the value of the "started_at" field.
+func (u *ServiceRequestUpsert) ClearStartedAt() *ServiceRequestUpsert {
+	u.SetNull(servicerequest.FieldStartedAt)
+	return u
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (u *ServiceRequestUpsert) SetCompletedAt(v time.Time) *ServiceRequestUpsert {
+	u.Set(servicerequest.FieldCompletedAt, v)
+	return u
+}
+
+// UpdateCompletedAt sets the "completed_at" field to the value that was provided on create.
+func (u *ServiceRequestUpsert) UpdateCompletedAt() *ServiceRequestUpsert {
+	u.SetExcluded(servicerequest.FieldCompletedAt)
+	return u
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (u *ServiceRequestUpsert) ClearCompletedAt() *ServiceRequestUpsert {
+	u.SetNull(servicerequest.FieldCompletedAt)
+	return u
+}
+
+// SetCompletionNote sets the "completion_note" field.
+func (u *ServiceRequestUpsert) SetCompletionNote(v string) *ServiceRequestUpsert {
+	u.Set(servicerequest.FieldCompletionNote, v)
+	return u
+}
+
+// UpdateCompletionNote sets the "completion_note" field to the value that was provided on create.
+func (u *ServiceRequestUpsert) UpdateCompletionNote() *ServiceRequestUpsert {
+	u.SetExcluded(servicerequest.FieldCompletionNote)
+	return u
+}
+
+// ClearCompletionNote clears the value of the "completion_note" field.
+func (u *ServiceRequestUpsert) ClearCompletionNote() *ServiceRequestUpsert {
+	u.SetNull(servicerequest.FieldCompletionNote)
+	return u
+}
+
+// SetLastError sets the "last_error" field.
+func (u *ServiceRequestUpsert) SetLastError(v string) *ServiceRequestUpsert {
+	u.Set(servicerequest.FieldLastError, v)
+	return u
+}
+
+// UpdateLastError sets the "last_error" field to the value that was provided on create.
+func (u *ServiceRequestUpsert) UpdateLastError() *ServiceRequestUpsert {
+	u.SetExcluded(servicerequest.FieldLastError)
+	return u
+}
+
+// ClearLastError clears the value of the "last_error" field.
+func (u *ServiceRequestUpsert) ClearLastError() *ServiceRequestUpsert {
+	u.SetNull(servicerequest.FieldLastError)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ServiceRequest.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ServiceRequestUpsertOne) UpdateNewValues() *ServiceRequestUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ServiceRequest.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ServiceRequestUpsertOne) Ignore() *ServiceRequestUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ServiceRequestUpsertOne) DoNothing() *ServiceRequestUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ServiceRequestCreate.OnConflict
+// documentation for more info.
+func (u *ServiceRequestUpsertOne) Update(set func(*ServiceRequestUpsert)) *ServiceRequestUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ServiceRequestUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *ServiceRequestUpsertOne) SetTicketID(v int) *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *ServiceRequestUpsertOne) UpdateTicketID() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetCatalogID sets the "catalog_id" field.
+func (u *ServiceRequestUpsertOne) SetCatalogID(v int) *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetCatalogID(v)
+	})
+}
+
+// AddCatalogID adds v to the "catalog_id" field.
+func (u *ServiceRequestUpsertOne) AddCatalogID(v int) *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.AddCatalogID(v)
+	})
+}
+
+// UpdateCatalogID sets the "catalog_id" field to the value that was provided on create.
+func (u *ServiceRequestUpsertOne) UpdateCatalogID() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateCatalogID()
+	})
+}
+
+// SetCiID sets the "ci_id" field.
+func (u *ServiceRequestUpsertOne) SetCiID(v int) *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetCiID(v)
+	})
+}
+
+// AddCiID adds v to the "ci_id" field.
+func (u *ServiceRequestUpsertOne) AddCiID(v int) *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.AddCiID(v)
+	})
+}
+
+// UpdateCiID sets the "ci_id" field to the value that was provided on create.
+func (u *ServiceRequestUpsertOne) UpdateCiID() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateCiID()
+	})
+}
+
+// ClearCiID clears the value of the "ci_id" field.
+func (u *ServiceRequestUpsertOne) ClearCiID() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearCiID()
+	})
+}
+
+// SetFormData sets the "form_data" field.
+func (u *ServiceRequestUpsertOne) SetFormData(v map[string]interface{}) *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetFormData(v)
+	})
+}
+
+// UpdateFormData sets the "form_data" field to the value that was provided on create.
+func (u *ServiceRequestUpsertOne) UpdateFormData() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateFormData()
+	})
+}
+
+// ClearFormData clears the value of the "form_data" field.
+func (u *ServiceRequestUpsertOne) ClearFormData() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearFormData()
+	})
+}
+
+// SetCostCenter sets the "cost_center" field.
+func (u *ServiceRequestUpsertOne) SetCostCenter(v string) *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetCostCenter(v)
+	})
+}
+
+// UpdateCostCenter sets the "cost_center" field to the value that was provided on create.
+func (u *ServiceRequestUpsertOne) UpdateCostCenter() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateCostCenter()
+	})
+}
+
+// ClearCostCenter clears the value of the "cost_center" field.
+func (u *ServiceRequestUpsertOne) ClearCostCenter() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearCostCenter()
+	})
+}
+
+// SetDataClassification sets the "data_classification" field.
+func (u *ServiceRequestUpsertOne) SetDataClassification(v string) *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetDataClassification(v)
+	})
+}
+
+// UpdateDataClassification sets the "data_classification" field to the value that was provided on create.
+func (u *ServiceRequestUpsertOne) UpdateDataClassification() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateDataClassification()
+	})
+}
+
+// SetNeedsPublicIP sets the "needs_public_ip" field.
+func (u *ServiceRequestUpsertOne) SetNeedsPublicIP(v bool) *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetNeedsPublicIP(v)
+	})
+}
+
+// UpdateNeedsPublicIP sets the "needs_public_ip" field to the value that was provided on create.
+func (u *ServiceRequestUpsertOne) UpdateNeedsPublicIP() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateNeedsPublicIP()
+	})
+}
+
+// SetSourceIPWhitelist sets the "source_ip_whitelist" field.
+func (u *ServiceRequestUpsertOne) SetSourceIPWhitelist(v []string) *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetSourceIPWhitelist(v)
+	})
+}
+
+// UpdateSourceIPWhitelist sets the "source_ip_whitelist" field to the value that was provided on create.
+func (u *ServiceRequestUpsertOne) UpdateSourceIPWhitelist() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateSourceIPWhitelist()
+	})
+}
+
+// ClearSourceIPWhitelist clears the value of the "source_ip_whitelist" field.
+func (u *ServiceRequestUpsertOne) ClearSourceIPWhitelist() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearSourceIPWhitelist()
+	})
+}
+
+// SetExpireAt sets the "expire_at" field.
+func (u *ServiceRequestUpsertOne) SetExpireAt(v time.Time) *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetExpireAt(v)
+	})
+}
+
+// UpdateExpireAt sets the "expire_at" field to the value that was provided on create.
+func (u *ServiceRequestUpsertOne) UpdateExpireAt() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateExpireAt()
+	})
+}
+
+// ClearExpireAt clears the value of the "expire_at" field.
+func (u *ServiceRequestUpsertOne) ClearExpireAt() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearExpireAt()
+	})
+}
+
+// SetComplianceAck sets the "compliance_ack" field.
+func (u *ServiceRequestUpsertOne) SetComplianceAck(v bool) *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetComplianceAck(v)
+	})
+}
+
+// UpdateComplianceAck sets the "compliance_ack" field to the value that was provided on create.
+func (u *ServiceRequestUpsertOne) UpdateComplianceAck() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateComplianceAck()
+	})
+}
+
+// SetContactName sets the "contact_name" field.
+func (u *ServiceRequestUpsertOne) SetContactName(v string) *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetContactName(v)
+	})
+}
+
+// UpdateContactName sets the "contact_name" field to the value that was provided on create.
+func (u *ServiceRequestUpsertOne) UpdateContactName() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateContactName()
+	})
+}
+
+// ClearContactName clears the value of the "contact_name" field.
+func (u *ServiceRequestUpsertOne) ClearContactName() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearContactName()
+	})
+}
+
+// SetContactEmail sets the "contact_email" field.
+func (u *ServiceRequestUpsertOne) SetContactEmail(v string) *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetContactEmail(v)
+	})
+}
+
+// UpdateContactEmail sets the "contact_email" field to the value that was provided on create.
+func (u *ServiceRequestUpsertOne) UpdateContactEmail() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateContactEmail()
+	})
+}
+
+// ClearContactEmail clears the value of the "contact_email" field.
+func (u *ServiceRequestUpsertOne) ClearContactEmail() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearContactEmail()
+	})
+}
+
+// SetQuantity sets the "quantity" field.
+func (u *ServiceRequestUpsertOne) SetQuantity(v int) *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetQuantity(v)
+	})
+}
+
+// AddQuantity adds v to the "quantity" field.
+func (u *ServiceRequestUpsertOne) AddQuantity(v int) *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.AddQuantity(v)
+	})
+}
+
+// UpdateQuantity sets the "quantity" field to the value that was provided on create.
+func (u *ServiceRequestUpsertOne) UpdateQuantity() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateQuantity()
+	})
+}
+
+// SetExpectedAt sets the "expected_at" field.
+func (u *ServiceRequestUpsertOne) SetExpectedAt(v time.Time) *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetExpectedAt(v)
+	})
+}
+
+// UpdateExpectedAt sets the "expected_at" field to the value that was provided on create.
+func (u *ServiceRequestUpsertOne) UpdateExpectedAt() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateExpectedAt()
+	})
+}
+
+// ClearExpectedAt clears the value of the "expected_at" field.
+func (u *ServiceRequestUpsertOne) ClearExpectedAt() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearExpectedAt()
+	})
+}
+
+// SetStartedAt sets the "started_at" field.
+func (u *ServiceRequestUpsertOne) SetStartedAt(v time.Time) *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetStartedAt(v)
+	})
+}
+
+// UpdateStartedAt sets the "started_at" field to the value that was provided on create.
+func (u *ServiceRequestUpsertOne) UpdateStartedAt() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateStartedAt()
+	})
+}
+
+// ClearStartedAt clears the value of the "started_at" field.
+func (u *ServiceRequestUpsertOne) ClearStartedAt() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearStartedAt()
+	})
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (u *ServiceRequestUpsertOne) SetCompletedAt(v time.Time) *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetCompletedAt(v)
+	})
+}
+
+// UpdateCompletedAt sets the "completed_at" field to the value that was provided on create.
+func (u *ServiceRequestUpsertOne) UpdateCompletedAt() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateCompletedAt()
+	})
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (u *ServiceRequestUpsertOne) ClearCompletedAt() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearCompletedAt()
+	})
+}
+
+// SetCompletionNote sets the "completion_note" field.
+func (u *ServiceRequestUpsertOne) SetCompletionNote(v string) *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetCompletionNote(v)
+	})
+}
+
+// UpdateCompletionNote sets the "completion_note" field to the value that was provided on create.
+func (u *ServiceRequestUpsertOne) UpdateCompletionNote() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateCompletionNote()
+	})
+}
+
+// ClearCompletionNote clears the value of the "completion_note" field.
+func (u *ServiceRequestUpsertOne) ClearCompletionNote() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearCompletionNote()
+	})
+}
+
+// SetLastError sets the "last_error" field.
+func (u *ServiceRequestUpsertOne) SetLastError(v string) *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetLastError(v)
+	})
+}
+
+// UpdateLastError sets the "last_error" field to the value that was provided on create.
+func (u *ServiceRequestUpsertOne) UpdateLastError() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateLastError()
+	})
+}
+
+// ClearLastError clears the value of the "last_error" field.
+func (u *ServiceRequestUpsertOne) ClearLastError() *ServiceRequestUpsertOne {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearLastError()
+	})
+}
+
+// Exec executes the query.
+func (u *ServiceRequestUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ServiceRequestCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ServiceRequestUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ServiceRequestUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ServiceRequestUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
 }
 
 // ServiceRequestCreateBulk is the builder for creating many ServiceRequest entities in bulk.
@@ -586,6 +1250,7 @@ type ServiceRequestCreateBulk struct {
 	config
 	err      error
 	builders []*ServiceRequestCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ServiceRequest entities in the database.
@@ -615,6 +1280,7 @@ func (_c *ServiceRequestCreateBulk) Save(ctx context.Context) ([]*ServiceRequest
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -665,6 +1331,467 @@ func (_c *ServiceRequestCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ServiceRequestCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ServiceRequest.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ServiceRequestUpsert) {
+//			SetTicketID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ServiceRequestCreateBulk) OnConflict(opts ...sql.ConflictOption) *ServiceRequestUpsertBulk {
+	_c.conflict = opts
+	return &ServiceRequestUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ServiceRequest.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ServiceRequestCreateBulk) OnConflictColumns(columns ...string) *ServiceRequestUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ServiceRequestUpsertBulk{
+		create: _c,
+	}
+}
+
+// ServiceRequestUpsertBulk is the builder for "upsert"-ing
+// a bulk of ServiceRequest nodes.
+type ServiceRequestUpsertBulk struct {
+	create *ServiceRequestCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ServiceRequest.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ServiceRequestUpsertBulk) UpdateNewValues() *ServiceRequestUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ServiceRequest.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ServiceRequestUpsertBulk) Ignore() *ServiceRequestUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ServiceRequestUpsertBulk) DoNothing() *ServiceRequestUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ServiceRequestCreateBulk.OnConflict
+// documentation for more info.
+func (u *ServiceRequestUpsertBulk) Update(set func(*ServiceRequestUpsert)) *ServiceRequestUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ServiceRequestUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *ServiceRequestUpsertBulk) SetTicketID(v int) *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *ServiceRequestUpsertBulk) UpdateTicketID() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetCatalogID sets the "catalog_id" field.
+func (u *ServiceRequestUpsertBulk) SetCatalogID(v int) *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetCatalogID(v)
+	})
+}
+
+// AddCatalogID adds v to the "catalog_id" field.
+func (u *ServiceRequestUpsertBulk) AddCatalogID(v int) *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.AddCatalogID(v)
+	})
+}
+
+// UpdateCatalogID sets the "catalog_id" field to the value that was provided on create.
+func (u *ServiceRequestUpsertBulk) UpdateCatalogID() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateCatalogID()
+	})
+}
+
+// SetCiID sets the "ci_id" field.
+func (u *ServiceRequestUpsertBulk) SetCiID(v int) *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetCiID(v)
+	})
+}
+
+// AddCiID adds v to the "ci_id" field.
+func (u *ServiceRequestUpsertBulk) AddCiID(v int) *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.AddCiID(v)
+	})
+}
+
+// UpdateCiID sets the "ci_id" field to the value that was provided on create.
+func (u *ServiceRequestUpsertBulk) UpdateCiID() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateCiID()
+	})
+}
+
+// ClearCiID clears the value of the "ci_id" field.
+func (u *ServiceRequestUpsertBulk) ClearCiID() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearCiID()
+	})
+}
+
+// SetFormData sets the "form_data" field.
+func (u *ServiceRequestUpsertBulk) SetFormData(v map[string]interface{}) *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetFormData(v)
+	})
+}
+
+// UpdateFormData sets the "form_data" field to the value that was provided on create.
+func (u *ServiceRequestUpsertBulk) UpdateFormData() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateFormData()
+	})
+}
+
+// ClearFormData clears the value of the "form_data" field.
+func (u *ServiceRequestUpsertBulk) ClearFormData() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearFormData()
+	})
+}
+
+// SetCostCenter sets the "cost_center" field.
+func (u *ServiceRequestUpsertBulk) SetCostCenter(v string) *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetCostCenter(v)
+	})
+}
+
+// UpdateCostCenter sets the "cost_center" field to the value that was provided on create.
+func (u *ServiceRequestUpsertBulk) UpdateCostCenter() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateCostCenter()
+	})
+}
+
+// ClearCostCenter clears the value of the "cost_center" field.
+func (u *ServiceRequestUpsertBulk) ClearCostCenter() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearCostCenter()
+	})
+}
+
+// SetDataClassification sets the "data_classification" field.
+func (u *ServiceRequestUpsertBulk) SetDataClassification(v string) *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetDataClassification(v)
+	})
+}
+
+// UpdateDataClassification sets the "data_classification" field to the value that was provided on create.
+func (u *ServiceRequestUpsertBulk) UpdateDataClassification() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateDataClassification()
+	})
+}
+
+// SetNeedsPublicIP sets the "needs_public_ip" field.
+func (u *ServiceRequestUpsertBulk) SetNeedsPublicIP(v bool) *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetNeedsPublicIP(v)
+	})
+}
+
+// UpdateNeedsPublicIP sets the "needs_public_ip" field to the value that was provided on create.
+func (u *ServiceRequestUpsertBulk) UpdateNeedsPublicIP() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateNeedsPublicIP()
+	})
+}
+
+// SetSourceIPWhitelist sets the "source_ip_whitelist" field.
+func (u *ServiceRequestUpsertBulk) SetSourceIPWhitelist(v []string) *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetSourceIPWhitelist(v)
+	})
+}
+
+// UpdateSourceIPWhitelist sets the "source_ip_whitelist" field to the value that was provided on create.
+func (u *ServiceRequestUpsertBulk) UpdateSourceIPWhitelist() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateSourceIPWhitelist()
+	})
+}
+
+// ClearSourceIPWhitelist clears the value of the "source_ip_whitelist" field.
+func (u *ServiceRequestUpsertBulk) ClearSourceIPWhitelist() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearSourceIPWhitelist()
+	})
+}
+
+// SetExpireAt sets the "expire_at" field.
+func (u *ServiceRequestUpsertBulk) SetExpireAt(v time.Time) *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetExpireAt(v)
+	})
+}
+
+// UpdateExpireAt sets the "expire_at" field to the value that was provided on create.
+func (u *ServiceRequestUpsertBulk) UpdateExpireAt() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateExpireAt()
+	})
+}
+
+// ClearExpireAt clears the value of the "expire_at" field.
+func (u *ServiceRequestUpsertBulk) ClearExpireAt() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearExpireAt()
+	})
+}
+
+// SetComplianceAck sets the "compliance_ack" field.
+func (u *ServiceRequestUpsertBulk) SetComplianceAck(v bool) *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetComplianceAck(v)
+	})
+}
+
+// UpdateComplianceAck sets the "compliance_ack" field to the value that was provided on create.
+func (u *ServiceRequestUpsertBulk) UpdateComplianceAck() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateComplianceAck()
+	})
+}
+
+// SetContactName sets the "contact_name" field.
+func (u *ServiceRequestUpsertBulk) SetContactName(v string) *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetContactName(v)
+	})
+}
+
+// UpdateContactName sets the "contact_name" field to the value that was provided on create.
+func (u *ServiceRequestUpsertBulk) UpdateContactName() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateContactName()
+	})
+}
+
+// ClearContactName clears the value of the "contact_name" field.
+func (u *ServiceRequestUpsertBulk) ClearContactName() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearContactName()
+	})
+}
+
+// SetContactEmail sets the "contact_email" field.
+func (u *ServiceRequestUpsertBulk) SetContactEmail(v string) *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetContactEmail(v)
+	})
+}
+
+// UpdateContactEmail sets the "contact_email" field to the value that was provided on create.
+func (u *ServiceRequestUpsertBulk) UpdateContactEmail() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateContactEmail()
+	})
+}
+
+// ClearContactEmail clears the value of the "contact_email" field.
+func (u *ServiceRequestUpsertBulk) ClearContactEmail() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearContactEmail()
+	})
+}
+
+// SetQuantity sets the "quantity" field.
+func (u *ServiceRequestUpsertBulk) SetQuantity(v int) *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetQuantity(v)
+	})
+}
+
+// AddQuantity adds v to the "quantity" field.
+func (u *ServiceRequestUpsertBulk) AddQuantity(v int) *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.AddQuantity(v)
+	})
+}
+
+// UpdateQuantity sets the "quantity" field to the value that was provided on create.
+func (u *ServiceRequestUpsertBulk) UpdateQuantity() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateQuantity()
+	})
+}
+
+// SetExpectedAt sets the "expected_at" field.
+func (u *ServiceRequestUpsertBulk) SetExpectedAt(v time.Time) *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetExpectedAt(v)
+	})
+}
+
+// UpdateExpectedAt sets the "expected_at" field to the value that was provided on create.
+func (u *ServiceRequestUpsertBulk) UpdateExpectedAt() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateExpectedAt()
+	})
+}
+
+// ClearExpectedAt clears the value of the "expected_at" field.
+func (u *ServiceRequestUpsertBulk) ClearExpectedAt() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearExpectedAt()
+	})
+}
+
+// SetStartedAt sets the "started_at" field.
+func (u *ServiceRequestUpsertBulk) SetStartedAt(v time.Time) *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetStartedAt(v)
+	})
+}
+
+// UpdateStartedAt sets the "started_at" field to the value that was provided on create.
+func (u *ServiceRequestUpsertBulk) UpdateStartedAt() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateStartedAt()
+	})
+}
+
+// ClearStartedAt clears the value of the "started_at" field.
+func (u *ServiceRequestUpsertBulk) ClearStartedAt() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearStartedAt()
+	})
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (u *ServiceRequestUpsertBulk) SetCompletedAt(v time.Time) *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetCompletedAt(v)
+	})
+}
+
+// UpdateCompletedAt sets the "completed_at" field to the value that was provided on create.
+func (u *ServiceRequestUpsertBulk) UpdateCompletedAt() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateCompletedAt()
+	})
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (u *ServiceRequestUpsertBulk) ClearCompletedAt() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearCompletedAt()
+	})
+}
+
+// SetCompletionNote sets the "completion_note" field.
+func (u *ServiceRequestUpsertBulk) SetCompletionNote(v string) *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetCompletionNote(v)
+	})
+}
+
+// UpdateCompletionNote sets the "completion_note" field to the value that was provided on create.
+func (u *ServiceRequestUpsertBulk) UpdateCompletionNote() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateCompletionNote()
+	})
+}
+
+// ClearCompletionNote clears the value of the "completion_note" field.
+func (u *ServiceRequestUpsertBulk) ClearCompletionNote() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearCompletionNote()
+	})
+}
+
+// SetLastError sets the "last_error" field.
+func (u *ServiceRequestUpsertBulk) SetLastError(v string) *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.SetLastError(v)
+	})
+}
+
+// UpdateLastError sets the "last_error" field to the value that was provided on create.
+func (u *ServiceRequestUpsertBulk) UpdateLastError() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.UpdateLastError()
+	})
+}
+
+// ClearLastError clears the value of the "last_error" field.
+func (u *ServiceRequestUpsertBulk) ClearLastError() *ServiceRequestUpsertBulk {
+	return u.Update(func(s *ServiceRequestUpsert) {
+		s.ClearLastError()
+	})
+}
+
+// Exec executes the query.
+func (u *ServiceRequestUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ServiceRequestCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ServiceRequestCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ServiceRequestUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

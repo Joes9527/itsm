@@ -1,80 +1,167 @@
-import { TicketAttachmentApi } from '@/lib/api/ticket-attachment-api';
-import { httpClient } from '@/lib/api/http-client';
+import { TicketAttachmentApi } from '../ticket-attachment-api';
+import { httpClient, ApiError } from '../http-client';
+import { security } from '@/lib/security';
 
-jest.mock('@/lib/api/http-client', () => ({
-  httpClient: {
-    get: jest.fn(),
-    post: jest.fn(),
-    put: jest.fn(),
-    delete: jest.fn(),
-    patch: jest.fn(),
-    getAuthToken: jest.fn().mockReturnValue('mock-token'),
+jest.mock('@/lib/env', () => ({ logger: { debug: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
+jest.mock('@/lib/security', () => ({
+  security: {
+    csrf: { getToken: jest.fn().mockResolvedValue('csrf-current'), clearToken: jest.fn() },
+    network: { getSecureHeaders: () => ({ 'Content-Type': 'application/json' }) },
   },
 }));
 
-jest.mock('@/lib/api/api-config', () => ({
-  API_BASE_URL: 'http://localhost:8090',
-}));
-
-const mockGet = httpClient.get as jest.Mock;
-const mockDelete = httpClient.delete as jest.Mock;
-
-describe('TicketAttachmentApi', () => {
-  beforeEach(() => { jest.clearAllMocks(); });
-
-  describe('listAttachments', () => {
-    it('should list attachments for a ticket', async () => {
-      const mockData = { attachments: [{ id: 1, fileName: 'test.pdf' }], total: 1 };
-      mockGet.mockResolvedValue(mockData);
-      const result = await TicketAttachmentApi.listAttachments(10);
-      expect(mockGet).toHaveBeenCalledWith('/api/v1/tickets/10/attachments');
-      expect(result.attachments).toHaveLength(1);
+// Browser transport double: the API client, envelope parsing and retry policy stay real.
+class TestXHR extends EventTarget {
+  static sent: TestXHR[] = [];
+  static replies: Array<{ status?: number; body?: unknown; event?: string }> = [];
+  upload = new EventTarget();
+  headers: Record<string, string> = {};
+  withCredentials = false;
+  timeout = 0;
+  status = 200;
+  statusText = 'OK';
+  responseText = '';
+  url = '';
+  body?: Document | XMLHttpRequestBodyInit | null;
+  open(_method: string, url: string) {
+    this.url = url;
+  }
+  setRequestHeader(key: string, value: string) {
+    this.headers[key] = value;
+  }
+  getAllResponseHeaders() {
+    return 'content-type: application/json\r\n';
+  }
+  send(body?: Document | XMLHttpRequestBodyInit | null) {
+    this.body = body;
+    TestXHR.sent.push(this);
+    const reply = TestXHR.replies.shift() || {};
+    this.status = reply.status ?? 200;
+    this.responseText = JSON.stringify(
+      reply.body ?? { code: 0, data: { id: 17, fileName: 'log.txt' } }
+    );
+    queueMicrotask(() => {
+      this.upload.dispatchEvent(
+        new ProgressEvent('progress', { lengthComputable: true, loaded: 4, total: 8 })
+      );
+      this.dispatchEvent(new Event(reply.event || 'load'));
     });
+  }
+}
+
+const file = () => new File(['diagnostics'], 'log.txt', { type: 'text/plain' });
+beforeEach(() => {
+  TestXHR.sent = [];
+  TestXHR.replies = [];
+  jest
+    .spyOn(global, 'XMLHttpRequest')
+    .mockImplementation(() => new TestXHR() as unknown as XMLHttpRequest);
+});
+
+it('uploads with credentials, CSRF and progress and decodes code=0', async () => {
+  const progress = jest.fn();
+  await expect(TicketAttachmentApi.uploadAttachment(101, file(), progress)).resolves.toMatchObject({
+    id: 17,
   });
+  const request = TestXHR.sent[0];
+  expect(request.url).toBe('/api/v1/tickets/101/attachments');
+  expect(request.withCredentials).toBe(true);
+  expect(new Headers(request.headers).get('X-CSRF-Token')).toBe('csrf-current');
+  expect(new Headers(request.headers).has('Content-Type')).toBe(false);
+  expect((request.body as FormData).get('file')).toBeInstanceOf(File);
+  expect(progress).toHaveBeenCalledWith(50);
+  expect(security.csrf.clearToken).toHaveBeenCalled();
+});
 
-  describe('getDownloadUrl', () => {
-    it('should return correct download URL', () => {
-      const url = TicketAttachmentApi.getDownloadUrl(5, 3);
-      expect(url).toBe('/api/v1/tickets/5/attachments/3');
-    });
+it('retries an explicit CSRF rejection once but preserves ordinary permission errors', async () => {
+  TestXHR.replies = [{ status: 403, body: { code: 403, message: 'CSRF token mismatch' } }, {}];
+  await expect(TicketAttachmentApi.uploadAttachment(101, file(), jest.fn())).resolves.toMatchObject(
+    { id: 17 }
+  );
+  expect(TestXHR.sent).toHaveLength(2);
+  TestXHR.replies = [{ status: 403, body: { code: 403, message: 'Permission denied' } }];
+  await expect(TicketAttachmentApi.uploadAttachment(101, file(), jest.fn())).rejects.toMatchObject({
+    status: 403,
   });
+  expect(TestXHR.sent).toHaveLength(3);
+});
 
-  describe('getPreviewUrl', () => {
-    it('should return correct preview URL', () => {
-      const url = TicketAttachmentApi.getPreviewUrl(5, 3);
-      expect(url).toBe('/api/v1/tickets/5/attachments/3/preview');
-    });
-  });
+it.each(['error', 'timeout', 'abort'])(
+  'settles %s without retrying an uncertain upload',
+  async event => {
+    TestXHR.replies = [{ event }];
+    await expect(
+      TicketAttachmentApi.uploadAttachment(101, file(), jest.fn())
+    ).rejects.toBeInstanceOf(Error);
+    expect(TestXHR.sent).toHaveLength(1);
+  }
+);
 
-  describe('deleteAttachment', () => {
-    it('should delete an attachment', async () => {
-      mockDelete.mockResolvedValue(undefined);
-      await TicketAttachmentApi.deleteAttachment(5, 3);
-      expect(mockDelete).toHaveBeenCalledWith('/api/v1/tickets/5/attachments/3');
-    });
+it('uses the authenticated common request path without progress', async () => {
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    headers: new Headers(),
+    json: async () => ({ code: 0, data: { id: 19 } }),
   });
+  await expect(TicketAttachmentApi.uploadAttachment(101, file())).resolves.toEqual({ id: 19 });
+  expect(global.fetch).toHaveBeenCalledWith(
+    '/api/v1/tickets/101/attachments',
+    expect.objectContaining({
+      credentials: 'include',
+      headers: expect.objectContaining({ 'x-csrf-token': 'csrf-current' }),
+    })
+  );
+});
 
-  describe('formatFileSize', () => {
-    it('should format 0 bytes', () => {
-      expect(TicketAttachmentApi.formatFileSize(0)).toBe('0 B');
-    });
-    it('should format KB', () => {
-      expect(TicketAttachmentApi.formatFileSize(1024)).toBe('1 KB');
-    });
-    it('should format MB', () => {
-      expect(TicketAttachmentApi.formatFileSize(1048576)).toBe('1 MB');
-    });
+it('refreshes an expired session once and preserves final unauthorized response', async () => {
+  TestXHR.replies = [
+    { status: 401, body: { code: 401, message: 'expired' } },
+    { status: 401, body: { code: 401, message: 'still denied' } },
+  ];
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ code: 0 }) });
+  await expect(TicketAttachmentApi.uploadAttachment(101, file(), jest.fn())).rejects.toMatchObject({
+    status: 401,
   });
+  expect(TestXHR.sent).toHaveLength(2);
+  expect(global.fetch).toHaveBeenCalledTimes(1);
+});
 
-  describe('getFileIconType', () => {
-    it('should return image for image mime types', () => {
-      expect(TicketAttachmentApi.getFileIconType('image/png')).toBe('image');
-    });
-    it('should return pdf for pdf mime types', () => {
-      expect(TicketAttachmentApi.getFileIconType('application/pdf')).toBe('pdf');
-    });
-    it('should return file for unknown mime types', () => {
-      expect(TicketAttachmentApi.getFileIconType('application/octet-stream')).toBe('file');
-    });
-  });
+it('recovers CSRF after a session refresh without replaying permission failures', async () => {
+  TestXHR.replies = [
+    { status: 401, body: { code: 401, message: 'expired' } },
+    { status: 403, body: { code: 403, message: 'CSRF token mismatch' } },
+    {},
+  ];
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ code: 0 }) });
+  await expect(TicketAttachmentApi.uploadAttachment(101, file(), jest.fn())).resolves.toMatchObject(
+    { id: 17 }
+  );
+  expect(TestXHR.sent).toHaveLength(3);
+  expect(global.fetch).toHaveBeenCalledTimes(1);
+});
+
+it('preserves structured server failure in the shared multipart transport', async () => {
+  TestXHR.replies = [{ body: { code: 4001, message: 'invalid attachment' } }];
+  const form = new FormData();
+  form.append('file', file());
+  await expect(
+    httpClient.post('/upload', form, { onUploadProgress: jest.fn() })
+  ).rejects.toBeInstanceOf(ApiError);
+});
+
+it('does not replay an upload when its caller becomes stale during CSRF recovery', async () => {
+  let current = true;
+  jest.mocked(security.csrf.getToken).mockResolvedValueOnce('initial').mockImplementationOnce(async () => { current = false; return 'renewed'; });
+  TestXHR.replies = [{ status: 403, body: { code: 4031, message: 'CSRF token mismatch' } }, {}];
+  await expect(TicketAttachmentApi.uploadAttachment(101, file(), jest.fn(), () => {
+    if (!current) throw new Error('identity changed');
+  })).rejects.toThrow('identity changed');
+  expect(TestXHR.sent).toHaveLength(1);
+});
+it('loads binary previews through the authenticated shared client', async () => {
+  const blob = new Blob(['preview'], { type: 'text/plain' });
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, headers: new Headers(), blob: async () => blob });
+  await expect(TicketAttachmentApi.previewAttachment(101, 17)).resolves.toBe(blob);
+  expect(global.fetch).toHaveBeenCalledWith('/api/v1/tickets/101/attachments/17/preview', expect.objectContaining({ credentials: 'include' }));
 });

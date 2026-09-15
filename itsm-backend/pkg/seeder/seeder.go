@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common/workitemidentity"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/assetlicense"
 	"itsm-backend/ent/change"
@@ -32,12 +34,12 @@ import (
 	"itsm-backend/ent/tenant"
 	"itsm-backend/ent/ticketcategory"
 	"itsm-backend/ent/tickettemplate"
+	"itsm-backend/ent/tickettype"
 	"itsm-backend/ent/ticketview"
 	"itsm-backend/ent/user"
 	"itsm-backend/service"
 
 	"itsm-backend/config"
-	"itsm-backend/database"
 	"itsm-backend/pkg/tenantmode"
 
 	"go.uber.org/zap"
@@ -46,9 +48,9 @@ import (
 
 // Force import usage for ent packages (use predicate functions)
 var (
-	_ = incident.TitleEQ         // Used to ensure incident package is imported
-	_ = problem.TitleEQ          // Used to ensure problem package is imported
-	_ = change.TitleEQ           // Used to ensure change package is imported
+	_ = incident.IDEQ            // Used to ensure incident package is imported
+	_ = problem.IDEQ             // Used to ensure problem package is imported
+	_ = change.IDEQ              // Used to ensure change package is imported
 	_ = knowledgearticle.TitleEQ // Used to ensure knowledgearticle package is imported
 	_ = ticketcategory.NameEQ    // Used to ensure ticketcategory package is imported
 	_ = knownerror.TitleEQ       // Used to ensure knownerror package is imported
@@ -114,6 +116,7 @@ type SLADefinitionSeed struct {
 }
 
 type ServiceCatalogSeed struct {
+	TargetClass      string `json:"target_class"`
 	Name             string `json:"name"`
 	Description      string `json:"description"`
 	Category         string `json:"category"`
@@ -492,36 +495,37 @@ func getEmbeddedConfig() *SeedConfig {
 			{Name: "SLA-变更", Description: "变更请求SLA", ServiceType: "change", Priority: "high", ResponseTime: 60, ResolutionTime: 1440},
 		},
 		ServiceCatalog: []ServiceCatalogSeed{
-			{Name: "云服务器 ECS", Description: "弹性云服务器", Category: "云计算", ServiceType: "vm", RequiresApproval: true, DeliveryTime: 1},
-			{Name: "云数据库 RDS", Description: "MySQL/PostgreSQL数据库", Category: "数据库", ServiceType: "rds", RequiresApproval: true, DeliveryTime: 1},
-			{Name: "对象存储 OSS", Description: "海量云存储", Category: "存储", ServiceType: "oss", RequiresApproval: false, DeliveryTime: 0},
-			{Name: "CDN 加速", Description: "内容分发加速", Category: "网络", ServiceType: "network", RequiresApproval: false, DeliveryTime: 0},
-			{Name: "负载均衡 SLB", Description: "流量分发服务", Category: "网络", ServiceType: "network", RequiresApproval: true, DeliveryTime: 1},
-			{Name: "VPN 网关", Description: "VPN加密通道", Category: "安全", ServiceType: "security", RequiresApproval: true, DeliveryTime: 2},
-			{Name: "企业邮箱", Description: "企业域名邮箱", Category: "通讯", ServiceType: "custom", RequiresApproval: false, DeliveryTime: 1},
-			{Name: "企业网盘", Description: "文件存储共享", Category: "协作", ServiceType: "custom", RequiresApproval: false, DeliveryTime: 0},
-			{Name: "视频会议", Description: "高清视频会议", Category: "通讯", ServiceType: "custom", RequiresApproval: false, DeliveryTime: 0},
-			{Name: "企业IM", Description: "即时通讯工具", Category: "通讯", ServiceType: "custom", RequiresApproval: false, DeliveryTime: 0},
-			{Name: "漏洞扫描", Description: "Web漏洞扫描", Category: "安全", ServiceType: "security", RequiresApproval: true, DeliveryTime: 1},
-			{Name: "渗透测试", Description: "安全渗透测试", Category: "安全", ServiceType: "security", RequiresApproval: true, DeliveryTime: 5},
-			{Name: "等保合规", Description: "等级保护咨询", Category: "安全", ServiceType: "security", RequiresApproval: true, DeliveryTime: 30},
-			{Name: "IT服务台", Description: "IT问题咨询支持", Category: "支持", ServiceType: "custom", RequiresApproval: false, DeliveryTime: 0},
-			{Name: "软件安装", Description: "标准软件安装", Category: "支持", ServiceType: "custom", RequiresApproval: false, DeliveryTime: 1},
-			{Name: "账户申请", Description: "新员工账户开通", Category: "支持", ServiceType: "custom", RequiresApproval: true, DeliveryTime: 1},
-			{Name: "网络接入", Description: "网络接入申请", Category: "支持", ServiceType: "custom", RequiresApproval: true, DeliveryTime: 2},
-			{Name: "域名申请", Description: "内部域名注册", Category: "支持", ServiceType: "custom", RequiresApproval: true, DeliveryTime: 3},
-			{Name: "代码仓库", Description: "Git代码仓库", Category: "开发", ServiceType: "custom", RequiresApproval: false, DeliveryTime: 0},
-			{Name: "CI/CD流水线", Description: "自动化部署", Category: "开发", ServiceType: "custom", RequiresApproval: false, DeliveryTime: 0},
-			{Name: "测试环境", Description: "预发布测试环境", Category: "开发", ServiceType: "custom", RequiresApproval: true, DeliveryTime: 2},
-			{Name: "API网关", Description: "API接口管理", Category: "开发", ServiceType: "custom", RequiresApproval: true, DeliveryTime: 3},
+			{TargetClass: "service_request_item", Name: "云服务器 ECS", Description: "弹性云服务器", Category: "云计算", ServiceType: "vm", RequiresApproval: true, DeliveryTime: 1},
+			{TargetClass: "service_request_item", Name: "云数据库 RDS", Description: "MySQL/PostgreSQL数据库", Category: "数据库", ServiceType: "rds", RequiresApproval: true, DeliveryTime: 1},
+			{TargetClass: "service_request_item", Name: "对象存储 OSS", Description: "海量云存储", Category: "存储", ServiceType: "oss", RequiresApproval: false, DeliveryTime: 0},
+			{TargetClass: "service_request_item", Name: "CDN 加速", Description: "内容分发加速", Category: "网络", ServiceType: "network", RequiresApproval: false, DeliveryTime: 0},
+			{TargetClass: "service_request_item", Name: "负载均衡 SLB", Description: "流量分发服务", Category: "网络", ServiceType: "network", RequiresApproval: true, DeliveryTime: 1},
+			{TargetClass: "service_request_item", Name: "VPN 网关", Description: "VPN加密通道", Category: "安全", ServiceType: "security", RequiresApproval: true, DeliveryTime: 2},
+			{TargetClass: "service_request_item", Name: "企业邮箱", Description: "企业域名邮箱", Category: "通讯", ServiceType: "custom", RequiresApproval: false, DeliveryTime: 1},
+			{TargetClass: "service_request_item", Name: "企业网盘", Description: "文件存储共享", Category: "协作", ServiceType: "custom", RequiresApproval: false, DeliveryTime: 0},
+			{TargetClass: "service_request_item", Name: "视频会议", Description: "高清视频会议", Category: "通讯", ServiceType: "custom", RequiresApproval: false, DeliveryTime: 0},
+			{TargetClass: "service_request_item", Name: "企业IM", Description: "即时通讯工具", Category: "通讯", ServiceType: "custom", RequiresApproval: false, DeliveryTime: 0},
+			{TargetClass: "service_request_item", Name: "漏洞扫描", Description: "Web漏洞扫描", Category: "安全", ServiceType: "security", RequiresApproval: true, DeliveryTime: 1},
+			{TargetClass: "service_request_item", Name: "渗透测试", Description: "安全渗透测试", Category: "安全", ServiceType: "security", RequiresApproval: true, DeliveryTime: 5},
+			{TargetClass: "service_request_item", Name: "等保合规", Description: "等级保护咨询", Category: "安全", ServiceType: "security", RequiresApproval: true, DeliveryTime: 30},
+			{TargetClass: "service_request_item", Name: "IT服务台", Description: "IT问题咨询支持", Category: "支持", ServiceType: "custom", RequiresApproval: false, DeliveryTime: 0},
+			{TargetClass: "service_request_item", Name: "软件安装", Description: "标准软件安装", Category: "支持", ServiceType: "custom", RequiresApproval: false, DeliveryTime: 1},
+			{TargetClass: "service_request_item", Name: "账户申请", Description: "新员工账户开通", Category: "支持", ServiceType: "custom", RequiresApproval: true, DeliveryTime: 1},
+			{TargetClass: "service_request_item", Name: "网络接入", Description: "网络接入申请", Category: "支持", ServiceType: "custom", RequiresApproval: true, DeliveryTime: 2},
+			{TargetClass: "service_request_item", Name: "域名申请", Description: "内部域名注册", Category: "支持", ServiceType: "custom", RequiresApproval: true, DeliveryTime: 3},
+			{TargetClass: "service_request_item", Name: "代码仓库", Description: "Git代码仓库", Category: "开发", ServiceType: "custom", RequiresApproval: false, DeliveryTime: 0},
+			{TargetClass: "service_request_item", Name: "CI/CD流水线", Description: "自动化部署", Category: "开发", ServiceType: "custom", RequiresApproval: false, DeliveryTime: 0},
+			{TargetClass: "service_request_item", Name: "测试环境", Description: "预发布测试环境", Category: "开发", ServiceType: "custom", RequiresApproval: true, DeliveryTime: 2},
+			{TargetClass: "service_request_item", Name: "API网关", Description: "API接口管理", Category: "开发", ServiceType: "custom", RequiresApproval: true, DeliveryTime: 3},
 		},
 		ProcessBindings: []ProcessBindingSeed{
-			{BusinessType: "ticket", BusinessSubType: "incident", ProcessDefinitionKey: "incident_emergency_flow", IsDefault: true},
-			{BusinessType: "ticket", BusinessSubType: "problem", ProcessDefinitionKey: "problem_management_flow", IsDefault: true},
-			{BusinessType: "ticket", BusinessSubType: "change", ProcessDefinitionKey: "change_normal_flow", IsDefault: true},
-			{BusinessType: "ticket", BusinessSubType: "service_request", ProcessDefinitionKey: "service_request_flow", IsDefault: true},
-			{BusinessType: "ticket", BusinessSubType: "improvement", ProcessDefinitionKey: "ticket_general_flow", IsDefault: true},
-			{BusinessType: "ticket", ProcessDefinitionKey: "ticket_general_flow", IsDefault: true},
+			{BusinessType: "incident", ProcessDefinitionKey: "incident_emergency_flow", IsDefault: true},
+			{BusinessType: "problem", ProcessDefinitionKey: "problem_management_flow", IsDefault: true},
+			{BusinessType: "change_request", ProcessDefinitionKey: "change_normal_flow", IsDefault: true},
+			{BusinessType: "change_request", BusinessSubType: "emergency", ProcessDefinitionKey: "change_emergency_flow", IsDefault: false},
+			{BusinessType: "service_request_item", ProcessDefinitionKey: "service_request_flow", IsDefault: true},
+			{BusinessType: "generic", BusinessSubType: "improvement", ProcessDefinitionKey: "ticket_general_flow", IsDefault: true},
+			{BusinessType: "generic", ProcessDefinitionKey: "ticket_general_flow", IsDefault: true},
 		},
 		TicketViews: []TicketViewSeed{
 			{Name: "我的待办工单", Desc: "分配给我的未关闭工单", IsShared: false, Columns: []string{"id", "title", "priority", "status", "assignee", "created_at"}},
@@ -534,7 +538,10 @@ func getEmbeddedConfig() *SeedConfig {
 }
 
 // SeedAll runs all seeding operations
-func (s *Seeder) SeedAll(ctx context.Context) {
+func (s *Seeder) SeedAll(ctx context.Context) error {
+	if err := s.validateProcessBindingIdentities(); err != nil {
+		return err
+	}
 	// 解析目标租户（默认 default；SeedForTenant 可切换为其他租户）
 	s.tenant(ctx)
 	s.seedDepartments(ctx)
@@ -547,8 +554,10 @@ func (s *Seeder) SeedAll(ctx context.Context) {
 	// 使用配置的初始化数据
 	s.seedSLADefinitions(ctx)
 	s.seedSLAAlertRules(ctx)
-	s.seedProcessBindings(ctx)
-	s.seedBPMNWorkflows(ctx) // 部署BPMN工作流模板
+	s.seedBPMNWorkflows(ctx) // 绑定前部署并验证可执行流程
+	if err := s.seedProcessBindings(ctx); err != nil {
+		return err
+	}
 	s.seedTicketViews(ctx)
 	s.seedServiceCatalog(ctx)
 	s.seedTicketTypes(ctx)            // 新增：初始化工单类型
@@ -560,6 +569,7 @@ func (s *Seeder) SeedAll(ctx context.Context) {
 	s.seedTicketTags(ctx)             // 新增：初始化标签
 	s.seedMenuAndPermissionFixes(ctx) // 修复：更新菜单路径和补充缺失权限
 	s.seedRolePermissions(ctx)        // 新增：为角色分配权限
+	return nil
 }
 
 // SeedProduction applies product defaults and then verifies the minimum
@@ -568,7 +578,9 @@ func (s *Seeder) SeedAll(ctx context.Context) {
 // success when a required tenant, identity, RBAC, menu, or product template
 // was only partially initialized.
 func (s *Seeder) SeedProduction(ctx context.Context) error {
-	s.SeedAll(ctx)
+	if err := s.SeedAll(ctx); err != nil {
+		return err
+	}
 	return s.VerifyProduction(ctx)
 }
 
@@ -591,6 +603,15 @@ func (s *Seeder) VerifyProduction(ctx context.Context) error {
 				return s.client.User.Query().
 					Where(user.UsernameEQ("admin"), user.TenantIDEQ(rootTenant.ID)).
 					Exist(ctx)
+			},
+		},
+		{
+			name: "ticket types",
+			exist: func() (bool, error) {
+				count, err := s.client.TicketType.Query().
+					Where(tickettype.TenantIDEQ(int64(rootTenant.ID))).
+					Count(ctx)
+				return count >= 12, err
 			},
 		},
 		{
@@ -785,8 +806,7 @@ func (s *Seeder) SeedForTenant(ctx context.Context, target *ent.Tenant) error {
 	}
 	s.targetTenant = target
 	s.sugar.Infow("seeding for tenant", "tenant_id", target.ID, "tenant_code", target.Code)
-	s.SeedAll(ctx)
-	return nil
+	return s.SeedAll(ctx)
 }
 
 func (s *Seeder) deploymentMode() string {
@@ -794,13 +814,6 @@ func (s *Seeder) deploymentMode() string {
 		return tenantmode.DeploymentModePrivate
 	}
 	return s.appConfig.Deployment.Mode
-}
-
-func nilIfEmpty(value string) *string {
-	if strings.TrimSpace(value) == "" {
-		return nil
-	}
-	return &value
 }
 
 func (s *Seeder) seedAdmin(ctx context.Context) {
@@ -1034,7 +1047,7 @@ func (s *Seeder) seedSLAAlertRules(ctx context.Context) {
 		NotificationChans []string
 	}{
 		{"SLA-P0-响应告警", "SLA-P0-紧急", "warning", 50, []string{"email"}},
-		{"SLA-P0-解决告警", "SLA-P0-紧急", "critical", 80, []string{"email", "sms"}},
+		{"SLA-P0-解决告警", "SLA-P0-紧急", "critical", 80, []string{"email"}},
 		{"SLA-P1-响应告警", "SLA-P1-高", "warning", 50, []string{"email"}},
 		{"SLA-P1-解决告警", "SLA-P1-高", "warning", 80, []string{"email"}},
 		{"SLA-P2-响应告警", "SLA-P2-中", "info", 50, []string{"email"}},
@@ -1080,37 +1093,42 @@ func (s *Seeder) seedSLAAlertRules(ctx context.Context) {
 // seedApprovalWorkflows 曾负责创建 legacy ApprovalWorkflow 默认模板，已随引擎下线移除（见 Task 6）。
 // 审批能力现在完全由 seedBPMNWorkflows + seedProcessBindings 提供。
 
-func (s *Seeder) seedProcessBindings(ctx context.Context) {
+func (s *Seeder) validateProcessBindingIdentities() error {
+	if s.config == nil {
+		return fmt.Errorf("seed configuration is required")
+	}
+	for _, binding := range s.config.ProcessBindings {
+		if !workitemidentity.IsKnownProcessIdentity(binding.BusinessType) {
+			return fmt.Errorf("unsupported seed process business type %q", binding.BusinessType)
+		}
+	}
+	return nil
+}
+
+func (s *Seeder) seedProcessBindings(ctx context.Context) error {
+	if err := s.validateProcessBindingIdentities(); err != nil {
+		return err
+	}
 	t := s.tenant(ctx)
 	if t == nil {
-		s.sugar.Warnw("tenant not found; skip seed")
-		return
+		return fmt.Errorf("tenant required for process binding seed")
 	}
-
 	existing, err := s.client.ProcessBinding.Query().Where(processbinding.TenantIDEQ(t.ID)).Count(ctx)
 	if err != nil {
-		s.sugar.Warnw("check existing process bindings failed", "error", err)
-		return
+		return fmt.Errorf("check existing process bindings: %w", err)
 	}
 	if existing > 0 {
-		s.sugar.Infow("process bindings already seeded")
-		return
+		return nil
 	}
-
+	owner := service.NewProcessBindingService(s.client)
 	for _, b := range s.config.ProcessBindings {
-		_, err := s.client.ProcessBinding.Create().
-			SetBusinessType(b.BusinessType).
-			SetNillableBusinessSubType(nilIfEmpty(b.BusinessSubType)).
-			SetProcessDefinitionKey(b.ProcessDefinitionKey).
-			SetIsDefault(b.IsDefault).
-			SetIsActive(true).
-			SetTenantID(t.ID).
-			Save(ctx)
+		_, err := owner.CreateBinding(ctx, &dto.ProcessBinding{BusinessType: dto.BusinessType(b.BusinessType), BusinessSubType: b.BusinessSubType, ProcessDefinitionKey: b.ProcessDefinitionKey, IsDefault: b.IsDefault, IsActive: true, TenantID: t.ID})
 		if err != nil {
-			s.sugar.Warnw("seed process binding failed", "error", err, "business_type", b.BusinessType)
+			return fmt.Errorf("seed process binding %s: %w", b.BusinessType, err)
 		}
 	}
 	s.sugar.Infow("process bindings seeded", "count", len(s.config.ProcessBindings))
+	return nil
 }
 
 // seedBPMNWorkflows 部署BPMN工作流模板
@@ -1231,6 +1249,12 @@ func (s *Seeder) seedPermissions(ctx context.Context) {
 		{"ticket_template:create", "创建工单模板", "ticket_template", "create", "创建工单模板"},
 		{"ticket_template:update", "更新工单模板", "ticket_template", "update", "更新工单模板"},
 		{"ticket_template:delete", "删除工单模板", "ticket_template", "delete", "删除工单模板"},
+		// KAF delegated execution reconciliation. These permissions are seeded
+		// independently from ticket/workflow access because delivery evidence and
+		// repair operations are operationally sensitive.
+		{"delegated_execution:view", "查看委派执行", "delegated_execution", "view", "查看租户内 KAF 委派投递状态"},
+		{"delegated_execution:reconcile", "对账委派执行", "delegated_execution", "reconcile", "记录 KAF 委派投递对账结论"},
+		{"delegated_execution:requeue", "重发委派执行", "delegated_execution", "requeue", "仅在已确认未接受未开始时重入委派投递"},
 		// 事件权限
 		{"incident:read", "查看事件", "incident", "read", "查看事件列表和详情"},
 		{"incident:write", "管理事件", "incident", "write", "创建、编辑事件"},
@@ -1490,13 +1514,6 @@ func (s *Seeder) seedMenus(ctx context.Context) {
 		{Name: "变更管理", Path: "/changes", Icon: "BarChart3", PermissionCode: "change:read", SortOrder: 50},
 		{Name: "CMDB", Path: "/cmdb", Icon: "Database", PermissionCode: "cmdb:read", SortOrder: 60},
 		{Name: "服务目录", Path: "/service-catalog", Icon: "Book", PermissionCode: "service:read", SortOrder: 70},
-		// "我的待办"(/approvals/pending) 页面本身一直存在且能正常工作(BPMN UserTask 审批收件箱)，
-		// 但从未被加入过菜单种子——旧的 "审批管理"(/admin/approvals) 菜单在 34e4b951 因为指向已删除
-		// 的管理页面而被移除(见上面 SortOrder 260 处的注释)，但同一次改动没有补上这个真正给普通
-		// 审批人用的收件箱页面的菜单项，导致任何角色都无法从侧边栏发现它，只能靠直接输入 URL。
-		// PermissionCode 用 task:read 而不是 workflow:read——部门经理/普通用户/IT总监这些实际
-		// 需要审批的角色都有 task:read，但不是所有角色都有 workflow:read。
-		{Name: "我的待办", Path: "/approvals/pending", Icon: "CheckSquare", PermissionCode: "task:read", SortOrder: 75},
 		{Name: "知识库", Path: "/knowledge", Icon: "HelpCircle", PermissionCode: "knowledge:read", SortOrder: 80},
 		{Name: "SLA监控", Path: "/sla-dashboard", Icon: "Calendar", PermissionCode: "sla:read", SortOrder: 90},
 		{Name: "报表", Path: "/reports", Icon: "TrendingUp", PermissionCode: "report:read", SortOrder: 100},
@@ -1505,14 +1522,14 @@ func (s *Seeder) seedMenus(ctx context.Context) {
 		{Name: "MSP管理", Path: "/msp", Icon: "Shield", PermissionCode: "msp:read", SortOrder: 130},
 
 		// 管理菜单
-		{Name: "工作流", Path: "/workflow", Icon: "Workflow", PermissionCode: "workflow:read", SortOrder: 200},
+		{Name: "系统概览", Path: "/admin/overview", Icon: "LayoutDashboard", PermissionCode: "system:read", SortOrder: 190},
+		{Name: "工作流", Path: "/workflow", Icon: "GitMerge", PermissionCode: "workflow:read", SortOrder: 120},
 		{Name: "用户管理", Path: "/admin/users", Icon: "Users", PermissionCode: "user:read", SortOrder: 210},
 		{Name: "角色管理", Path: "/admin/roles", Icon: "Shield", PermissionCode: "role:read", SortOrder: 220},
 		{Name: "组管理", Path: "/admin/groups", Icon: "Users", PermissionCode: "groups:read", SortOrder: 230},
 		{Name: "部门管理", Path: "/admin/departments", Icon: "Activity", PermissionCode: "department:read", SortOrder: 240},
 		{Name: "团队管理", Path: "/admin/teams", Icon: "Users", PermissionCode: "team:read", SortOrder: 250},
-		// "审批管理"(/admin/approvals) 页面已在 34e4b951 删除(工单审批链 Tab 改用真实 BPMN
-		// 审批决策数据)，这里同步移除菜单种子，避免继续生成指向已删除页面的死链菜单项。
+		// 审批只通过 /approvals 的 BPMN ProcessTask 收件箱，不生成第二个管理入口。
 		{Name: "SLA配置", Path: "/admin/sla-definitions", Icon: "Calendar", PermissionCode: "sla:write", SortOrder: 270},
 		{Name: "系统配置", Path: "/admin/system-config", Icon: "Settings", PermissionCode: "system:write", SortOrder: 280},
 	}
@@ -1520,6 +1537,9 @@ func (s *Seeder) seedMenus(ctx context.Context) {
 	for _, item := range menus {
 		s.expectedMenus = append(s.expectedMenus, item.Path)
 	}
+	// The approvals reconciler owns creation and legacy migration so operator
+	// visibility settings survive initialization. Keep its route in verification.
+	s.expectedMenus = append(s.expectedMenus, "/approvals")
 
 	for _, m := range menus {
 		existing, err := s.client.Menu.Query().
@@ -1578,7 +1598,6 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 	menuPathFixes := map[string]string{
 		"/admin/sla":                "/admin/sla-definitions",
 		"/admin/system":             "/admin/system-config",
-		"/admin/workflows":          "/workflow",
 		"/admin/tickets/assignment": "/admin/tickets/assignment-rules",
 		"/admin/tickets/automation": "/admin/tickets/automation-rules",
 	}
@@ -1595,7 +1614,16 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 		}
 	}
 
-	_, err := s.client.Menu.Update().
+	// /admin 是系统管理路由命名空间，不是概览页。seedMenus 已确保规范菜单存在，
+	// 因此只删除旧 SQL 产生的同名重复记录，不触碰可能作为分组节点的其他 /admin 菜单。
+	_, err := s.client.Menu.Delete().
+		Where(menu.NameEQ("系统概览"), menu.PathEQ("/admin"), menu.TenantIDEQ(t.ID)).
+		Exec(ctx)
+	if err != nil {
+		s.sugar.Warnw("remove legacy admin overview menu failed", "error", err)
+	}
+
+	_, err = s.client.Menu.Update().
 		Where(menu.Path("/admin/groups"), menu.TenantIDEQ(t.ID)).
 		SetPermissionCode("groups:read").
 		Save(ctx)
@@ -1651,7 +1679,6 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 		PermissionCode string
 		SortOrder      int
 	}{
-		{"工单分类", "/admin/ticket-categories", "Tag", "ticket_category:read", 275},
 		{"CI类型管理", "/admin/cmdb-types", "Database", "cmdb:write", 290},
 		{"许可证管理", "/licenses", "Key", "license:read", 125},
 		{"SLA模板", "/admin/sla-templates", "Layers", "sla:write", 272},
@@ -1687,6 +1714,15 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 			s.sugar.Infow("missing menu created", "path", m.Path)
 		}
 	}
+	if err := reconcileWorkflowMenus(ctx, s.client, t.ID); err != nil {
+		s.sugar.Errorw("reconcile workflow menus failed", "tenant_id", t.ID, "error", err)
+	}
+	if err := reconcileCatalogMenus(ctx, s.client, t.ID); err != nil {
+		s.sugar.Errorw("reconcile catalog menus failed", "tenant_id", t.ID, "error", err)
+	}
+	if err := reconcileApprovalMenus(ctx, s.client, t.ID); err != nil {
+		s.sugar.Errorw("reconcile approval menus failed", "tenant_id", t.ID, "error", err)
+	}
 }
 
 // seedRolePermissions 为角色分配权限关联
@@ -1716,7 +1752,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 	// 定义角色权限映射
 	rolePermissionMap := map[string][]string{
 		// 系统管理员：所有权限
-		"sysadmin": allPermissionCodes(),
+		"sysadmin": append(allPermissionCodes(), "delegated_execution:view", "delegated_execution:reconcile", "delegated_execution:requeue"),
 		// IT总监：全局读写（不含系统管理）
 		"it_director": allExcept([]string{"system:write", "msp:write", "msp_allocation:write"}),
 		// 运维总监：运维相关读写
@@ -1857,10 +1893,8 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 			"problem:read", "change:read", "change:rollback", "report:read",
 			"user:read", "department:read", "team:read",
 			"knowledge:read", "release:read", "release:approve", "release:rollback",
-			// release:approve/rollback 只让业务域 API（/releases/:id/approve 等）能调，
-			// release:read 同理必须补：光有 approve 权限但没有 read，审批人连
-			// GET /releases/:id（发布详情页）都会被 RBAC 拒 403，真实浏览器验证时
-			// 点开发布详情直接 404，approve 按钮压根摸不到。
+			// release:read 允许审批人在BPMN待办中打开专业发布详情；审批决定本身只经
+			// canonical ProcessTask decision endpoint 提交。
 			// bpmn:read/bpmn:write：审批人查看"我的待办"（/api/v1/bpmn/tasks）、提交同意/拒绝
 			// （POST /api/v1/bpmn/tasks/:id/decisions）走的是 /api/v1/bpmn/* 这组接口，实际
 			// API 访问由 middleware.RequireLegacyBPMNRoles() 固定角色 allowlist 把关，
@@ -1906,8 +1940,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 			// allowlist 把关（end_user 本身就在该 allowlist 里），所以这两条 bpmn:* 授权现在只
 			// 控制 BPMN 菜单可见性，不是接口能不能调的门槛，保留它们是为了让申请人在菜单里也能
 			// 看到相应入口（backlog：BPMN 真正的 DB 驱动权限模型，见设计文档）。
-			// task:read：/api/v1/workflow/tasks、/api/v1/tenant/my-approvals 等"我的待办"路由
-			// 是真正按 RequirePermission("task","read") 做 DB 驱动校验的，这条是必需的真实授权。
+			// task:read：canonical /api/v1/bpmn/tasks 与 /approvals 待办页的真实授权。
 			"bpmn:read", "bpmn:write", "task:read",
 		},
 		// 访客
@@ -2102,13 +2135,14 @@ func (s *Seeder) seedServiceCatalog(ctx context.Context) {
 	for _, svc := range s.config.ServiceCatalog {
 		_, err := s.client.ServiceCatalog.Create().
 			SetName(svc.Name).
+			SetTargetClass(svc.TargetClass).
 			SetDescription(svc.Description).
 			SetCategory(svc.Category).
 			SetServiceType(svc.ServiceType).
 			SetRequiresApproval(svc.RequiresApproval).
 			SetDeliveryTime(svc.DeliveryTime).
-			SetStatus("active").
-			SetIsActive(true).
+			SetStatus("disabled").
+			SetIsActive(false).
 			SetTenantID(t.ID).
 			Save(ctx)
 		if err != nil {
@@ -2133,24 +2167,7 @@ func (s *Seeder) seedTicketTypes(ctx context.Context) {
 		return
 	}
 
-	// 检查ticket_types表是否存在
-	rawDB := database.GetRawDB()
-	if rawDB == nil {
-		s.sugar.Warnw("rawDB not available; skip ticket types seed")
-		return
-	}
-
-	// 检查 ticket_types 表是否存在
-	var tableExists bool
-	err = rawDB.QueryRowContext(ctx, "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'ticket_types')").Scan(&tableExists)
-	if err != nil || !tableExists {
-		s.sugar.Infow("ticket_types table does not exist; skip seed")
-		return
-	}
-
-	// 检查是否已有工单类型
-	var count int
-	err = rawDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM ticket_types WHERE tenant_id = $1", t.ID).Scan(&count)
+	count, err := s.client.TicketType.Query().Where(tickettype.TenantIDEQ(int64(t.ID))).Count(ctx)
 	if err != nil {
 		s.sugar.Warnw("check existing ticket types failed", "error", err)
 		return
@@ -2183,22 +2200,25 @@ func (s *Seeder) seedTicketTypes(ctx context.Context) {
 	}
 
 	for _, tt := range ticketTypes {
-		_, err := rawDB.ExecContext(
-			ctx, `
-			INSERT INTO ticket_types (
-				code, name, description, icon, color, status,
-				custom_fields, approval_enabled, approval_chain,
-				sla_enabled, auto_assign_enabled, assignment_rules,
-				notification_config, permission_config,
-				created_by, tenant_id, created_at, updated_at, usage_count
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 0)
-		`,
-			tt.Code, tt.Name, tt.Description, tt.Icon, tt.Color, "active",
-			"[]", false, "[]",
-			false, false, "[]",
-			"{}", "{}",
-			admin.ID, t.ID, time.Now(), time.Now(),
-		)
+		_, err := s.client.TicketType.Create().
+			SetCode(tt.Code).
+			SetName(tt.Name).
+			SetDescription(tt.Description).
+			SetIcon(tt.Icon).
+			SetColor(tt.Color).
+			SetStatus("active").
+			SetApprovalEnabled(false).
+			SetSLAEnabled(false).
+			SetAutoAssignEnabled(false).
+			SetAssignmentRules([]interface{}{}).
+			SetNotificationConfig(map[string]interface{}{}).
+			SetPermissionConfig(map[string]interface{}{}).
+			SetCreatedBy(int64(admin.ID)).
+			SetTenantID(int64(t.ID)).
+			SetCreatedAt(time.Now()).
+			SetUpdatedAt(time.Now()).
+			SetUsageCount(0).
+			Save(ctx)
 		if err != nil {
 			s.sugar.Warnw("seed ticket type failed", "error", err, "code", tt.Code)
 		}
@@ -2672,10 +2692,6 @@ func (s *Seeder) seedTicketTemplates(ctx context.Context) {
 
 		// 按序创建新定义
 		for i, fd := range tmpl.Fields {
-			opts := fd.Options
-			if opts == nil {
-				opts = []map[string]interface{}{}
-			}
 			sortOrder := fd.SortOrder
 			if sortOrder == 0 {
 				sortOrder = i

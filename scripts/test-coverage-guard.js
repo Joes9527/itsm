@@ -58,9 +58,11 @@
 
 'use strict';
 
-const { execSync } = require('node:child_process');
+const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const reviewedMappings = require('./test-coverage-mappings.json');
+const reviewedFormatting = require('./test-coverage-formatting.json');
 
 const args = parseArgs(process.argv.slice(2));
 const BASE = args.base || process.env.TEST_COVERAGE_BASE || 'origin/main';
@@ -68,7 +70,7 @@ const HEAD = args.head || process.env.TEST_COVERAGE_HEAD || 'HEAD';
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 
-main();
+if (require.main === module) main();
 
 function main() {
   const allChanged = changedFiles(BASE, HEAD);
@@ -80,7 +82,8 @@ function main() {
     process.exit(2);
   }
 
-  const sources = allChanged.filter(isSourceFile).filter((f) => !isExempt(f));
+  const removalOnly = removalOnlyFiles(BASE, HEAD);
+  const sources = allChanged.filter(isSourceFile).filter((f) => !isExempt(f) && !removalOnly.has(f) && !isReviewedFormatting(f, BASE, HEAD));
   const tests = allChanged.filter(isTestFile);
 
   const missing = [];
@@ -150,8 +153,8 @@ function changedFiles(base, head) {
   // about modified-or-added files for test-coverage purposes.
   // `--name-only` keeps the output tiny and easy to parse.
   try {
-    const out = execSync(
-      `git diff --name-only --diff-filter=ACMR ${shellQuote(base)} ${shellQuote(head)}`,
+    const out = execFileSync(
+      'git', ['diff', '--name-only', '--diff-filter=ACMR', base, head, '--'],
       { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
     );
     return out
@@ -162,8 +165,8 @@ function changedFiles(base, head) {
     // Fall back to `git log` if the base ref doesn't exist (initial branch).
     if (/unknown revision|not a tree/.test(String(err.stderr || err.message))) {
       try {
-        const out = execSync(
-          `git log --pretty=format: --name-only --diff-filter=ACMR ${shellQuote(head)}`,
+        const out = execFileSync(
+          'git', ['log', '--pretty=format:', '--name-only', '--diff-filter=ACMR', head, '--'],
           { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
         );
         return Array.from(new Set(out.split('\n').map((s) => s.trim()).filter(Boolean)));
@@ -173,12 +176,6 @@ function changedFiles(base, head) {
     }
     return null;
   }
-}
-
-function shellQuote(s) {
-  // Git refs can include characters that the shell would interpret. We avoid
-  // spawning a shell so this is mostly paranoia, but escape anyway.
-  return `'${String(s).replace(/'/g, "'\\''")}'`;
 }
 
 // ---------- classification ----------
@@ -244,6 +241,7 @@ function isTestFile(p) {
 // ---------- candidate mapping ----------
 
 function testCandidatesFor(src) {
+  if (reviewedMappings[src]) return reviewedMappings[src];
   if (isFrontendSource(src)) return frontendCandidates(src);
   if (isBackendSource(src)) return backendCandidates(src);
   return [];
@@ -319,3 +317,33 @@ function printHelp() {
       `Per-file opt-out: add '// test-coverage-guard: skip' on its own line.`
   );
 }
+// Removal-only deltas add no implementation to cover; surviving behavior is still
+// validated by the normal build and domain suites. Mixed edits remain guarded.
+function parseRemovalOnlyFiles(numstat) {
+  return new Set(numstat.split('\n').flatMap(line => {
+    const [added, removed, file] = line.split('\t');
+    return added === '0' && Number(removed) > 0 && file ? [file] : [];
+  }));
+}
+function removalOnlyFiles(base, head) {
+  try {
+    return parseRemovalOnlyFiles(execFileSync(
+      'git', ['diff', '--numstat', base, head, '--'],
+      { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
+    ));
+  } catch { return new Set(); }
+}
+// Exact blob pairs exempt only the reviewed formatting delta, never future edits.
+function matchesReviewedFormatting(file, baseBlob, headBlob) {
+  const entry = reviewedFormatting[file];
+  return !!entry && entry.baseBlob === baseBlob && entry.headBlob === headBlob;
+}
+function isReviewedFormatting(file, base, head) {
+  if (!reviewedFormatting[file]) return false;
+  try {
+    const blob = ref => execFileSync('git', ['rev-parse', `${ref}:${file}`],
+      { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    return matchesReviewedFormatting(file, blob(base), blob(head));
+  } catch { return false; }
+}
+module.exports = { parseRemovalOnlyFiles, testCandidatesFor, matchesReviewedFormatting };

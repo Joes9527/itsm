@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"itsm-backend/ent/processcallbackoutbox"
+	"itsm-backend/internal/jsonvalue"
 	"strings"
 	"time"
 
@@ -18,6 +19,10 @@ type ProcessCallbackOutbox struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
+	// ActorID holds the value of the "actor_id" field.
+	ActorID int `json:"actor_id,omitempty"`
+	// ActorSource holds the value of the "actor_source" field.
+	ActorSource string `json:"actor_source,omitempty"`
 	// ExecutionKey holds the value of the "execution_key" field.
 	ExecutionKey string `json:"execution_key,omitempty"`
 	// TenantID holds the value of the "tenant_id" field.
@@ -41,7 +46,9 @@ type ProcessCallbackOutbox struct {
 	// 可信连接器配置引用；端点和凭据在执行时解析，绝不持久化到回调载荷
 	ConfigRef string `json:"config_ref,omitempty"`
 	// 按处理器声明字段过滤后的非敏感业务载荷
-	Variables map[string]interface{} `json:"variables,omitempty"`
+	Variables jsonvalue.NumberMap `json:"variables,omitempty"`
+	// OptionalDeclared holds the value of the "optional_declared" field.
+	OptionalDeclared bool `json:"optional_declared,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
 	// AttemptCount holds the value of the "attempt_count" field.
@@ -70,9 +77,11 @@ func (*ProcessCallbackOutbox) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case processcallbackoutbox.FieldVariables:
 			values[i] = new([]byte)
-		case processcallbackoutbox.FieldID, processcallbackoutbox.FieldTenantID, processcallbackoutbox.FieldProcessInstanceID, processcallbackoutbox.FieldProcessTaskID, processcallbackoutbox.FieldAttemptCount:
+		case processcallbackoutbox.FieldOptionalDeclared:
+			values[i] = new(sql.NullBool)
+		case processcallbackoutbox.FieldID, processcallbackoutbox.FieldActorID, processcallbackoutbox.FieldTenantID, processcallbackoutbox.FieldProcessInstanceID, processcallbackoutbox.FieldProcessTaskID, processcallbackoutbox.FieldAttemptCount:
 			values[i] = new(sql.NullInt64)
-		case processcallbackoutbox.FieldExecutionKey, processcallbackoutbox.FieldTaskID, processcallbackoutbox.FieldCallbackKind, processcallbackoutbox.FieldHandlerID, processcallbackoutbox.FieldTaskType, processcallbackoutbox.FieldElementID, processcallbackoutbox.FieldAction, processcallbackoutbox.FieldConfigRef, processcallbackoutbox.FieldStatus, processcallbackoutbox.FieldLeaseOwner, processcallbackoutbox.FieldLastErrorClass:
+		case processcallbackoutbox.FieldActorSource, processcallbackoutbox.FieldExecutionKey, processcallbackoutbox.FieldTaskID, processcallbackoutbox.FieldCallbackKind, processcallbackoutbox.FieldHandlerID, processcallbackoutbox.FieldTaskType, processcallbackoutbox.FieldElementID, processcallbackoutbox.FieldAction, processcallbackoutbox.FieldConfigRef, processcallbackoutbox.FieldStatus, processcallbackoutbox.FieldLeaseOwner, processcallbackoutbox.FieldLastErrorClass:
 			values[i] = new(sql.NullString)
 		case processcallbackoutbox.FieldNextAttemptAt, processcallbackoutbox.FieldLeaseExpiresAt, processcallbackoutbox.FieldCompletedAt, processcallbackoutbox.FieldCreatedAt, processcallbackoutbox.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -97,6 +106,18 @@ func (_m *ProcessCallbackOutbox) assignValues(columns []string, values []any) er
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
+		case processcallbackoutbox.FieldActorID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field actor_id", values[i])
+			} else if value.Valid {
+				_m.ActorID = int(value.Int64)
+			}
+		case processcallbackoutbox.FieldActorSource:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field actor_source", values[i])
+			} else if value.Valid {
+				_m.ActorSource = value.String
+			}
 		case processcallbackoutbox.FieldExecutionKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field execution_key", values[i])
@@ -170,6 +191,12 @@ func (_m *ProcessCallbackOutbox) assignValues(columns []string, values []any) er
 				if err := json.Unmarshal(*value, &_m.Variables); err != nil {
 					return fmt.Errorf("unmarshal field variables: %w", err)
 				}
+			}
+		case processcallbackoutbox.FieldOptionalDeclared:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field optional_declared", values[i])
+			} else if value.Valid {
+				_m.OptionalDeclared = value.Bool
 			}
 		case processcallbackoutbox.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -261,6 +288,12 @@ func (_m *ProcessCallbackOutbox) String() string {
 	var builder strings.Builder
 	builder.WriteString("ProcessCallbackOutbox(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString("actor_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ActorID))
+	builder.WriteString(", ")
+	builder.WriteString("actor_source=")
+	builder.WriteString(_m.ActorSource)
+	builder.WriteString(", ")
 	builder.WriteString("execution_key=")
 	builder.WriteString(_m.ExecutionKey)
 	builder.WriteString(", ")
@@ -296,6 +329,9 @@ func (_m *ProcessCallbackOutbox) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("variables=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Variables))
+	builder.WriteString(", ")
+	builder.WriteString("optional_declared=")
+	builder.WriteString(fmt.Sprintf("%v", _m.OptionalDeclared))
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)

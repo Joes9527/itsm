@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/ent/enttest"
 	"itsm-backend/service/bpmn"
 
@@ -40,7 +42,7 @@ func TestApprovalGatewayReadsApplicationVariableName(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := zap.NewNop().Sugar()
-	engine := NewCustomProcessEngine(client, logger)
+	engine := NewCustomProcessEngine(client, logger, executionfixture.Standard())
 
 	deploymentSvc := NewBPMNTemplateService(client)
 
@@ -57,14 +59,15 @@ func TestApprovalGatewayReadsApplicationVariableName(t *testing.T) {
 		skipNode     string
 	}{
 		{"service_request_flow", "Activity_Approval", "Activity_Execute"},
-		{"change_normal_flow", "Activity_CABApproval", "Activity_Schedule"},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.processKey, func(t *testing.T) {
+			businessType := ""
+			businessID := 0
 			// Test case 1: approval_required=true should route to approval node
 			t.Run("approval_required=true", func(t *testing.T) {
-				instance, err := engine.StartProcess(ctx, tc.processKey, "test-business-key-approval-true-"+tc.processKey, "", 0, map[string]interface{}{
+				instance, err := engine.StartProcess(ctx, tc.processKey, "test-business-key-approval-true-"+tc.processKey, businessType, businessID, map[string]interface{}{
 					"approval_required": true,
 				})
 				require.NoError(t, err)
@@ -91,7 +94,7 @@ func TestApprovalGatewayReadsApplicationVariableName(t *testing.T) {
 
 			// Test case 2: approval_required=false should skip approval node and go to skip node
 			t.Run("approval_required=false", func(t *testing.T) {
-				instance, err := engine.StartProcess(ctx, tc.processKey, "test-business-key-approval-false-"+tc.processKey, "", 0, map[string]interface{}{
+				instance, err := engine.StartProcess(ctx, tc.processKey, "test-business-key-approval-false-"+tc.processKey, businessType, businessID, map[string]interface{}{
 					"approval_required": false,
 				})
 				require.NoError(t, err)

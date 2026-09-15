@@ -13,6 +13,10 @@ const (
 	Label = "process_callback_outbox"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldActorID holds the string denoting the actor_id field in the database.
+	FieldActorID = "actor_id"
+	// FieldActorSource holds the string denoting the actor_source field in the database.
+	FieldActorSource = "actor_source"
 	// FieldExecutionKey holds the string denoting the execution_key field in the database.
 	FieldExecutionKey = "execution_key"
 	// FieldTenantID holds the string denoting the tenant_id field in the database.
@@ -37,6 +41,8 @@ const (
 	FieldConfigRef = "config_ref"
 	// FieldVariables holds the string denoting the variables field in the database.
 	FieldVariables = "variables"
+	// FieldOptionalDeclared holds the string denoting the optional_declared field in the database.
+	FieldOptionalDeclared = "optional_declared"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldAttemptCount holds the string denoting the attempt_count field in the database.
@@ -62,6 +68,8 @@ const (
 // Columns holds all SQL columns for processcallbackoutbox fields.
 var Columns = []string{
 	FieldID,
+	FieldActorID,
+	FieldActorSource,
 	FieldExecutionKey,
 	FieldTenantID,
 	FieldProcessInstanceID,
@@ -74,6 +82,7 @@ var Columns = []string{
 	FieldAction,
 	FieldConfigRef,
 	FieldVariables,
+	FieldOptionalDeclared,
 	FieldStatus,
 	FieldAttemptCount,
 	FieldNextAttemptAt,
@@ -96,6 +105,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// ActorIDValidator is a validator for the "actor_id" field. It is called by the builders before save.
+	ActorIDValidator func(int) error
 	// ExecutionKeyValidator is a validator for the "execution_key" field. It is called by the builders before save.
 	ExecutionKeyValidator func(string) error
 	// TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
@@ -112,6 +123,8 @@ var (
 	TaskTypeValidator func(string) error
 	// ElementIDValidator is a validator for the "element_id" field. It is called by the builders before save.
 	ElementIDValidator func(string) error
+	// DefaultOptionalDeclared holds the default value on creation for the "optional_declared" field.
+	DefaultOptionalDeclared bool
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
 	// DefaultAttemptCount holds the default value on creation for the "attempt_count" field.
@@ -136,6 +149,16 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByActorID orders the results by the actor_id field.
+func ByActorID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldActorID, opts...).ToFunc()
+}
+
+// ByActorSource orders the results by the actor_source field.
+func ByActorSource(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldActorSource, opts...).ToFunc()
 }
 
 // ByExecutionKey orders the results by the execution_key field.
@@ -191,6 +214,11 @@ func ByAction(opts ...sql.OrderTermOption) OrderOption {
 // ByConfigRef orders the results by the config_ref field.
 func ByConfigRef(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldConfigRef, opts...).ToFunc()
+}
+
+// ByOptionalDeclared orders the results by the optional_declared field.
+func ByOptionalDeclared(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOptionalDeclared, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.

@@ -14,8 +14,10 @@ type BPMNAccessScope struct {
 	CanUpdateAllTasks     bool
 }
 
-type bpmnAccessScopeContextKey struct{}
-type bpmnTrustedTenantContextKey struct{}
+type (
+	bpmnAccessScopeContextKey   struct{}
+	bpmnTrustedTenantContextKey struct{}
+)
 
 func WithBPMNAccessScope(ctx context.Context, scope BPMNAccessScope) context.Context {
 	return context.WithValue(ctx, bpmnAccessScopeContextKey{}, scope)
@@ -56,6 +58,17 @@ func BPMNAccessScopeFromContext(ctx context.Context) (BPMNAccessScope, error) {
 	scope, ok := bpmnAccessScopeValue(ctx)
 	if !ok || scope.UserID <= 0 || scope.TenantID <= 0 {
 		return BPMNAccessScope{}, common.NewForbiddenError("缺少 BPMN 实例授权上下文")
+	}
+	return scope, nil
+}
+
+func RequireBPMNInstanceReadAll(ctx context.Context) (BPMNAccessScope, error) {
+	scope, err := BPMNAccessScopeFromContext(ctx)
+	if err != nil {
+		return BPMNAccessScope{}, err
+	}
+	if !scope.CanReadAllInstances {
+		return BPMNAccessScope{}, common.NewForbiddenError("无权读取流程实例汇总数据")
 	}
 	return scope, nil
 }

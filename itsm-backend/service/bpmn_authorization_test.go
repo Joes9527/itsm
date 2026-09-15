@@ -3,11 +3,14 @@ package service
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/common"
 	"itsm-backend/ent"
@@ -26,6 +29,7 @@ import (
 )
 
 type bpmnAuthorizationFixture struct {
+	workItems   map[int]*ent.Ticket
 	client      *ent.Client
 	engine      *CustomProcessEngine
 	resolver    *bpmnParticipationResolver
@@ -36,6 +40,22 @@ type bpmnAuthorizationFixture struct {
 	outsider    *ent.User
 	otherActor  *ent.User
 	definition  *ent.ProcessDefinition
+}
+
+// workItem gives each historical test identity a real canonical record, created
+// only when a start-path test needs it. Other fixture users keep their own rows.
+func (f *bpmnAuthorizationFixture) workItem(t *testing.T, key int) *ent.Ticket {
+	t.Helper()
+	if item := f.workItems[key]; item != nil {
+		return item
+	}
+	item := f.client.Ticket.Create().
+		SetTicketNumber("BPMN-AUTH-" + strconv.Itoa(key)).
+		SetTitle("Workflow authorization fixture").
+		SetRecordClass("generic").SetRequesterID(f.actor.ID).
+		SetTenantID(f.tenant.ID).SaveX(f.userCtx)
+	f.workItems[key] = item
+	return item
 }
 
 func newBPMNAuthorizationFixture(t *testing.T) *bpmnAuthorizationFixture {
@@ -135,9 +155,12 @@ func newBPMNAuthorizationFixtureWithClient(t *testing.T, client *ent.Client) *bp
 		SetIsLatest(true).
 		Save(ctx)
 	require.NoError(t, err)
-	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar()).(*CustomProcessEngine)
+	workItems := make(map[int]*ent.Ticket)
+
+	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard()).(*CustomProcessEngine)
 
 	return &bpmnAuthorizationFixture{
+		workItems:   workItems,
 		client:      client,
 		engine:      engine,
 		resolver:    &bpmnParticipationResolver{client: client, groupResolver: bpmn.NewGroupResolver(client)},
@@ -257,7 +280,7 @@ func TestStartProcessPersistsAuthenticatedInitiator(t *testing.T) {
 	ctx := context.WithValue(f.userCtx, bpmn.BPMNTenantIDContextKey, f.tenant.ID)
 	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, f.actor.ID)
 	ctx = WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: f.actor.ID, TenantID: f.tenant.ID})
-	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket-1", "ticket", 1, map[string]interface{}{
+	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket-1", "generic", f.workItem(t, 1).ID, map[string]interface{}{
 		"requester_id": f.outsider.ID,
 	})
 	require.NoError(t, err)
@@ -268,8 +291,9 @@ func TestStartProcessUsesTrustedRequesterFallback(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	ctx := context.WithValue(f.userCtx, bpmn.BPMNTenantIDContextKey, f.tenant.ID)
 	ctx = WithTrustedBPMNTenantContext(ctx, f.tenant.ID)
-	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket-2", "ticket", 2, map[string]interface{}{
+	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket-2", "generic", f.workItem(t, 2).ID, map[string]interface{}{
 		"requester_id": float64(f.actor.ID),
+		"triggered_by": strconv.Itoa(f.actor.ID),
 	})
 	require.NoError(t, err)
 	assert.Equal(t, strconv.Itoa(f.actor.ID), instance.Initiator)
@@ -280,8 +304,9 @@ func TestStartProcessUsesRequesterFallbackForZeroActor(t *testing.T) {
 	ctx := context.WithValue(f.userCtx, bpmn.BPMNTenantIDContextKey, f.tenant.ID)
 	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, 0)
 	ctx = WithTrustedBPMNTenantContext(ctx, f.tenant.ID)
-	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket-3", "ticket", 3, map[string]interface{}{
-		"requesterId": f.actor.ID,
+	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket-3", "generic", f.workItem(t, 3).ID, map[string]interface{}{
+		"requesterId":  f.actor.ID,
+		"triggered_by": strconv.Itoa(f.actor.ID),
 	})
 	require.NoError(t, err)
 	assert.Equal(t, strconv.Itoa(f.actor.ID), instance.Initiator)
@@ -613,6 +638,7 @@ func TestProcessInstanceMutationAuditMetadata(t *testing.T) {
 			if tt.prepare != nil {
 				instance = tt.prepare(t, f, instance)
 			}
+			//lint:ignore SA1029 Deliberately supplies a legacy raw key to verify typed authorization boundaries.
 			ctx := context.WithValue(f.scopedCtx(false, true, false, false), "user", f.outsider)
 			require.NoError(t, tt.mutate(f, ctx, instance))
 
@@ -647,6 +673,26 @@ func TestListUserTasksForcesCallerScopeWithoutTaskRead(t *testing.T) {
 	require.Equal(t, 1, total)
 	require.Len(t, rows, 1)
 	assert.Equal(t, mine.TaskID, rows[0].TaskID)
+}
+
+func TestListUserTasksFiltersByAuthoritativeBusinessIdentity(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	matching := f.createProcessInstance(t, f.tenant, "release-business-match")
+	matching = f.client.ProcessInstance.UpdateOne(matching).
+		SetBusinessType("release").SetBusinessID(42).SaveX(f.userCtx)
+	other := f.createProcessInstance(t, f.tenant, "release-business-other")
+	other = f.client.ProcessInstance.UpdateOne(other).
+		SetBusinessType("release").SetBusinessID(43).SaveX(f.userCtx)
+	wanted := f.createProcessTask(t, matching, f.tenant.ID, "release-business-match", strconv.Itoa(f.actor.ID), "", "")
+	f.createProcessTask(t, other, f.tenant.ID, "release-business-other", strconv.Itoa(f.actor.ID), "", "")
+
+	rows, total, err := f.engine.TaskService().ListUserTasks(f.scopedCtx(false, false, false, false), &ListUserTasksRequest{
+		BusinessType: "release", BusinessID: 42, Page: 1, PageSize: 20,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, total)
+	require.Len(t, rows, 1)
+	assert.Equal(t, wanted.ID, rows[0].ID)
 }
 
 func TestGetTaskRejectsSameTenantNonParticipant(t *testing.T) {
@@ -813,7 +859,7 @@ func TestTaskParticipantCanMutateOwnTask(t *testing.T) {
 			assert.Equal(t, f.tenant.ID, audit.TenantID)
 			if name == "counter-sign" {
 				assert.Equal(t, 1, f.client.ProcessTask.Query().Where(processtask.ParentTaskID(task.TaskID), processtask.TenantID(f.tenant.ID)).CountX(f.userCtx))
-				assert.Equal(t, float64(1), f.client.ProcessTask.GetX(f.userCtx, task.ID).TaskVariables["total"])
+				assert.Equal(t, json.Number("1"), f.client.ProcessTask.GetX(f.userCtx, task.ID).TaskVariables["total"])
 			}
 		})
 	}
@@ -1060,7 +1106,7 @@ func TestTaskAuditRejectsForeignProcessInstance(t *testing.T) {
 			after := f.client.ProcessTask.GetX(f.userCtx, task.ID)
 			assert.Equal(t, common.ProcessTaskStatusAssigned, after.Status)
 			assert.Equal(t, task.Assignee, after.Assignee)
-			assert.Equal(t, map[string]interface{}{"before": "unchanged"}, after.TaskVariables)
+			assert.Equal(t, map[string]interface{}{"before": "unchanged"}, map[string]any(after.TaskVariables))
 			assert.Zero(t, f.client.ProcessTask.Query().Where(processtask.ParentTaskID(task.TaskID)).CountX(f.userCtx))
 			assert.Zero(t, f.client.ProcessApprovalDecision.Query().CountX(f.userCtx))
 			assert.Zero(t, f.client.ProcessAuditLog.Query().CountX(f.userCtx))
@@ -1092,7 +1138,14 @@ func TestVoteDuplicateReturnsConflictWithoutDuplicateEffects(t *testing.T) {
 	assert.NotContains(t, err.Error(), task.TaskID)
 	assert.NotContains(t, err.Error(), f.tenant.Code)
 	assert.Equal(t, 1, f.client.ProcessApprovalDecision.Query().Where(processapprovaldecision.ProcessTaskID(task.ID)).CountX(f.userCtx))
-	assert.Equal(t, 1, f.client.ProcessAuditLog.Query().Where(processauditlog.ProcessInstanceID(instance.ID), processauditlog.ActivityID(task.TaskDefinitionKey)).CountX(f.userCtx))
+	assert.Equal(t, 1, f.client.ProcessAuditLog.Query().Where(
+		processauditlog.ProcessInstanceID(instance.ID), processauditlog.ActivityID(task.TaskDefinitionKey),
+		processauditlog.Action(AuditActionTaskCompleted),
+	).CountX(f.userCtx))
+	assert.Equal(t, 1, f.client.ProcessAuditLog.Query().Where(
+		processauditlog.ProcessInstanceID(instance.ID), processauditlog.ActivityID(task.TaskDefinitionKey),
+		processauditlog.Action(AuditActionTaskMutationRejected),
+	).CountX(f.userCtx))
 }
 
 func TestVoteConcurrentCallsCommitOnce(t *testing.T) {
@@ -1134,7 +1187,14 @@ func TestVoteConcurrentCallsCommitOnce(t *testing.T) {
 	assert.Equal(t, 1, successes, "concurrent vote errors: %v", errs)
 	assert.Equal(t, 1, conflicts, "concurrent vote errors: %v", errs)
 	assert.Equal(t, 1, f.client.ProcessApprovalDecision.Query().Where(processapprovaldecision.ProcessTaskID(task.ID)).CountX(f.userCtx))
-	assert.Equal(t, 1, f.client.ProcessAuditLog.Query().Where(processauditlog.ProcessInstanceID(instance.ID), processauditlog.ActivityID(task.TaskDefinitionKey)).CountX(f.userCtx))
+	assert.Equal(t, 1, f.client.ProcessAuditLog.Query().Where(
+		processauditlog.ProcessInstanceID(instance.ID), processauditlog.ActivityID(task.TaskDefinitionKey),
+		processauditlog.Action(AuditActionTaskCompleted),
+	).CountX(f.userCtx))
+	assert.Equal(t, 1, f.client.ProcessAuditLog.Query().Where(
+		processauditlog.ProcessInstanceID(instance.ID), processauditlog.ActivityID(task.TaskDefinitionKey),
+		processauditlog.Action(AuditActionTaskMutationRejected),
+	).CountX(f.userCtx))
 }
 
 type taskMutation func(*bpmnAuthorizationFixture, context.Context, *ent.ProcessTask) error

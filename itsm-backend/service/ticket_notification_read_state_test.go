@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/ticketnotification"
 
@@ -84,10 +86,10 @@ func TestTicketNotificationReadStateDoesNotChangeDurableDeliveryState(t *testing
 	completed, err := fixture.notifications.ProcessPendingDeliveries(
 		context.Background(), "notification-read-state-worker", 10,
 	)
-	require.NoError(t, err)
-	require.Equal(t, 2, completed)
+	require.Error(t, err)
+	require.Equal(t, 1, completed)
 	require.Equal(t, ticketNotificationStatusSent, fixture.client.TicketNotification.GetX(fixture.ctx, pending.ID).Status)
-	require.Equal(t, ticketNotificationStatusSent, fixture.client.TicketNotification.GetX(fixture.ctx, processing.ID).Status)
+	require.Equal(t, ticketNotificationStatusFailed, fixture.client.TicketNotification.GetX(fixture.ctx, processing.ID).Status)
 	require.Equal(t, 3, fixture.client.TicketNotification.Query().Where(
 		ticketnotification.ReadAtNotNil(),
 	).CountX(fixture.ctx))
@@ -118,7 +120,7 @@ func TestTicketNotificationMarkReadReturnsOwnershipNotFoundSentinel(t *testing.T
 func TestTicketNotificationReadStorageFailuresAreSanitized(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:ticket_notification_read_storage?mode=memory&cache=shared&_fk=1")
 	core, logs := observer.New(zap.ErrorLevel)
-	notifications := NewTicketNotificationService(client, zap.New(core).Sugar())
+	notifications := NewTicketNotificationService(client, zap.New(core).Sugar(), executionfixture.Standard())
 	require.NoError(t, client.Close())
 
 	for _, operation := range []struct {

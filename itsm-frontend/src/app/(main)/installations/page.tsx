@@ -49,8 +49,8 @@ const statusConfig = {
   },
   disabled: {
     label: '已禁用',
-    color: 'bg-gray-100 text-gray-800',
-    icon: <XCircle className="h-4 w-4 text-gray-500" />,
+    color: 'border border-border bg-raised text-muted',
+    icon: <XCircle className="h-4 w-4 text-muted" />,
   },
   failed: {
     label: '运行失败',
@@ -64,8 +64,8 @@ const statusConfig = {
   },
   uninstalled: {
     label: '已卸载',
-    color: 'bg-gray-100 text-gray-800',
-    icon: <XCircle className="h-4 w-4 text-gray-500" />,
+    color: 'border border-border bg-raised text-muted',
+    icon: <XCircle className="h-4 w-4 text-muted" />,
   },
 };
 
@@ -233,8 +233,8 @@ const InstallationsPage = () => {
     <div className="container mx-auto px-4 py-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">我的应用</h1>
-          <p className="text-gray-500 mt-1">管理已安装的连接器、AI技能和扩展插件</p>
+          <h1 className="text-[24px] font-semibold tracking-tight">我的应用</h1>
+          <p className="mt-1 text-[12px] text-muted">管理已安装的连接器、AI技能和扩展插件</p>
         </div>
         <Link href="/marketplace">
           <Button>
@@ -244,11 +244,11 @@ const InstallationsPage = () => {
         </Link>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+      <div className="mb-6 rounded-[8px] border border-border bg-surface p-[16px] shadow-none">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted" />
               <Input
                 placeholder="搜索应用名称或描述..."
                 value={search}
@@ -288,7 +288,7 @@ const InstallationsPage = () => {
       </div>
 
       {loadError && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700 flex items-start gap-2">
+        <div className="mb-4 flex items-start gap-2 rounded-[6px] border border-red-200 bg-red-50 p-3 text-[13px] text-red-700">
           <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
           <span>{loadError}</span>
         </div>
@@ -304,20 +304,20 @@ const InstallationsPage = () => {
           const isEditing = editingId === installation.id;
           const form = forms[installation.id] || makeForm(installation);
           return (
-            <Card key={installation.id} className="hover:shadow-sm transition-shadow">
-              <CardHeader className="pb-2">
+            <Card key={installation.id} className="rounded-[8px] border border-border bg-surface text-[13px] text-foreground shadow-none transition-colors hover:border-[var(--color-primary)]">
+              <CardHeader className="p-[16px] pb-[8px]">
                 <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-md overflow-hidden bg-gray-100 flex items-center justify-center">
+                    <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-[6px] bg-raised">
                       {item?.iconUrl ? (
                         <img src={item.iconUrl} alt={item.title} className="w-full h-full object-cover" />
                       ) : (
-                        <span className="text-sm">{item?.type ? typeNames[item.type] : '应用'}</span>
+                        <span className="text-[13px]">{item?.type ? typeNames[item.type] : '应用'}</span>
                       )}
                     </div>
                     <div>
                       <div className="flex flex-wrap items-center gap-3">
-                        <CardTitle className="text-xl">{item?.title || item?.name || `应用 #${installation.itemId}`}</CardTitle>
+                        <CardTitle className="text-[15px] font-semibold">{item?.title || item?.name || `应用 #${installation.itemId}`}</CardTitle>
                         {item?.type && <Badge variant="secondary">{typeNames[item.type]}</Badge>}
                         <Badge className={status.color}>
                           {status.icon}
@@ -346,15 +346,15 @@ const InstallationsPage = () => {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 px-[16px] pb-[16px]">
                 {(installation.status === 'failed' || runtimeConfig?.lastError) && (
-                  <div className="p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700 flex items-start gap-2">
+                  <div className="flex items-start gap-2 rounded-[6px] border border-red-200 bg-red-50 p-2 text-[13px] text-red-700">
                     <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                     <span>{installation.errorMessage || runtimeConfig?.lastError}</span>
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+                <div className="grid grid-cols-1 gap-4 text-[13px] md:grid-cols-4">
                   <Info label="已安装版本" value={`v${installation.installedVersion}`} />
                   <Info label="安装时间" value={new Date(installation.installedAt).toLocaleString()} />
                   <Info label="上次更新" value={new Date(installation.updatedAt || installation.lastUpdatedAt || installation.installedAt).toLocaleString()} />
@@ -362,13 +362,13 @@ const InstallationsPage = () => {
                 </div>
 
                 {item?.type === 'connector' && (
-                  <div className="rounded-md border bg-gray-50 p-3">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                  <div className="rounded-[6px] border border-border bg-raised p-3">
+                    <div className="grid grid-cols-1 gap-3 text-[13px] md:grid-cols-3">
                       <Info label="运行时名称" value={runtimeName || '未识别'} />
                       <Info label="启用状态" value={runtimeConfig?.enabled ? '已启用' : '未启用'} />
                       <Info label="健康状态" value={runtimeConfig ? (runtimeConfig.healthy ? '健康' : '待检查') : '未初始化'} />
                     </div>
-                    <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                    <div className="mt-3 grid grid-cols-1 gap-3 text-[13px] md:grid-cols-3">
                       {Object.entries((installation.config?.credentials || {}) as Record<string, unknown>).map(([key, value]) => (
                         <Info key={key} label={`凭据 ${key}`} value={maskSensitive(key, value)} />
                       ))}
@@ -388,7 +388,7 @@ const InstallationsPage = () => {
                       <Field label="Encrypt Key" type="password" value={form.encryptKey} onChange={value => updateForm(installation.id, { encryptKey: value })} />
                       <Field label="Debug Channel" value={form.debugChannel} onChange={value => updateForm(installation.id, { debugChannel: value })} />
                       <div>
-                        <div className="text-sm font-medium mb-1">区域</div>
+                        <div className="mb-1 text-[13px] font-medium">区域</div>
                         <Select value={form.region} onValueChange={value => updateForm(installation.id, { region: value })}>
                           <SelectTrigger>
                             <SelectValue />
@@ -421,11 +421,11 @@ const InstallationsPage = () => {
       </div>
 
       {filteredInstallations.length === 0 && (
-        <div className="bg-white rounded-lg shadow-sm p-10 text-center">
+        <div className="rounded-[8px] border border-border bg-surface p-[24px] text-center shadow-none">
           <div className="flex flex-col items-center justify-center">
-            <Search className="h-12 w-12 text-gray-300 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">没有找到匹配的应用</h3>
-            <p className="text-gray-500 mb-4">尝试调整搜索条件或过滤选项</p>
+            <Search className="mb-4 h-12 w-12 text-muted" />
+            <h3 className="mb-2 text-[15px] font-semibold text-foreground">没有找到匹配的应用</h3>
+            <p className="mb-4 text-[12px] text-muted">尝试调整搜索条件或过滤选项</p>
             <Link href="/marketplace">
               <Button>浏览应用市场</Button>
             </Link>
@@ -438,7 +438,7 @@ const InstallationsPage = () => {
 
 const Info = ({ label, value }: { label: string; value: string }) => (
   <div>
-    <div className="text-gray-500 mb-1">{label}</div>
+    <div className="mb-1 text-muted">{label}</div>
     <div className="break-all">{value}</div>
   </div>
 );
@@ -455,7 +455,7 @@ const Field = ({
   type?: string;
 }) => (
   <div>
-    <div className="text-sm font-medium mb-1">{label}</div>
+    <div className="mb-1 text-[13px] font-medium">{label}</div>
     <Input type={type} value={value} onChange={event => onChange(event.target.value)} />
   </div>
 );

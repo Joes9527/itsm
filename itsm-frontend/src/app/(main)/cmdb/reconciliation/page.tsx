@@ -202,8 +202,8 @@ export default function ReconciliationPage() {
   return (
     <Card>
       <div style={{ marginBottom: 16 }}>
-        <h1 className="text-2xl font-bold">云资源核对</h1>
-        <p className="text-gray-500 mt-1">核对云资源与 CMDB 配置项绑定状态，处理待绑定、孤儿和未关联资产。</p>
+        <h1 className="text-[24px] font-semibold">云资源核对</h1>
+        <p className="text-muted mt-1">核对云资源与 CMDB 配置项绑定状态，处理待绑定、孤儿和未关联资产。</p>
       </div>
 
       <Breadcrumb

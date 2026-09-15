@@ -86,13 +86,13 @@ func (c *GlobalSearchController) Search(ctx *gin.Context) {
 	// 搜索事件
 	incidents, err := c.client.Incident.Query().
 		Where(
-			incident.TenantID(tenantID),
+			incident.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil()),
 			incident.Or(
-				incident.TitleContainsFold(keyword),
-				incident.DescriptionContainsFold(keyword),
-				incident.IncidentNumberContainsFold(keyword),
+				incident.HasWorkItemWith(ticket.Or(ticket.TitleContainsFold(keyword), ticket.DescriptionContainsFold(keyword))),
+				incident.HasWorkItemWith(ticket.TicketNumberContainsFold(keyword)),
 			),
 		).
+		WithWorkItem().
 		Limit(10).
 		All(ctx)
 	if err == nil {
@@ -100,10 +100,10 @@ func (c *GlobalSearchController) Search(ctx *gin.Context) {
 			results = append(results, &SearchResult{
 				ID:          i.ID,
 				Type:        "incident",
-				Title:       i.Title,
-				Description: i.Description,
-				Status:      i.Status,
-				Number:      i.IncidentNumber,
+				Title:       i.Edges.WorkItem.Title,
+				Description: i.Edges.WorkItem.Description,
+				Status:      i.Edges.WorkItem.Status,
+				Number:      i.Edges.WorkItem.TicketNumber,
 			})
 		}
 	}
@@ -111,12 +111,10 @@ func (c *GlobalSearchController) Search(ctx *gin.Context) {
 	// 搜索问题
 	problems, err := c.client.Problem.Query().
 		Where(
-			problem.TenantID(tenantID),
-			problem.Or(
-				problem.TitleContainsFold(keyword),
-				problem.DescriptionContainsFold(keyword),
-			),
+			problem.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil()),
+			problem.HasWorkItemWith(ticket.Or(ticket.TitleContainsFold(keyword), ticket.DescriptionContainsFold(keyword))),
 		).
+		WithWorkItem().
 		Limit(10).
 		All(ctx)
 	if err == nil {
@@ -124,9 +122,9 @@ func (c *GlobalSearchController) Search(ctx *gin.Context) {
 			results = append(results, &SearchResult{
 				ID:          p.ID,
 				Type:        "problem",
-				Title:       p.Title,
-				Description: p.Description,
-				Status:      p.Status,
+				Title:       p.Edges.WorkItem.Title,
+				Description: p.Edges.WorkItem.Description,
+				Status:      p.Edges.WorkItem.Status,
 			})
 		}
 	}
@@ -134,12 +132,10 @@ func (c *GlobalSearchController) Search(ctx *gin.Context) {
 	// 搜索变更
 	changes, err := c.client.Change.Query().
 		Where(
-			change.TenantID(tenantID),
-			change.Or(
-				change.TitleContainsFold(keyword),
-				change.DescriptionContainsFold(keyword),
-			),
+			change.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil()),
+			change.HasWorkItemWith(ticket.Or(ticket.TitleContainsFold(keyword), ticket.DescriptionContainsFold(keyword))),
 		).
+		WithWorkItem().
 		Limit(10).
 		All(ctx)
 	if err == nil {
@@ -147,9 +143,9 @@ func (c *GlobalSearchController) Search(ctx *gin.Context) {
 			results = append(results, &SearchResult{
 				ID:          ch.ID,
 				Type:        "change",
-				Title:       ch.Title,
-				Description: ch.Description,
-				Status:      ch.Status,
+				Title:       ch.Edges.WorkItem.Title,
+				Description: ch.Edges.WorkItem.Description,
+				Status:      ch.Edges.WorkItem.Status,
 			})
 		}
 	}

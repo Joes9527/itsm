@@ -1,3 +1,4 @@
+import { ticketEditVersion, ticketEditOperation, type TicketEditResult } from '../api/ticket-edit';
 /**
  * TicketService - 工单服务
  *
@@ -27,6 +28,7 @@ export interface CreateTicketParams {
 
 /** 更新工单参数 */
 export interface UpdateTicketParams {
+  operationId: string;
   title?: string;
   description?: string;
   priority?: TicketPriority;
@@ -35,7 +37,7 @@ export interface UpdateTicketParams {
   tags?: string[];
   assigneeId?: number;
   resolution?: string;
-  version?: number; // 乐观锁
+  version: number; // 用户看到的版本，不在执行时重读
 }
 
 /** 工单查询参数 */
@@ -66,15 +68,8 @@ export interface TicketStats {
 }
 
 /** SLA 信息 */
-export interface TicketSLAInfo {
-  ticketId: number;
-  slaName: string;
-  responseDeadline: string | null;
-  resolutionDeadline: string | null;
-  isBreached: boolean;
-  responseTimeRemaining: number | null;
-  resolutionTimeRemaining: number | null;
-}
+export type { TicketSLAInfo } from '@/lib/api/ticket-api';
+import type { TicketSLAInfo } from '@/lib/api/ticket-api';
 
 /** 工单评论 */
 export interface TicketComment {
@@ -154,17 +149,12 @@ export class TicketService extends BaseService<Ticket, CreateTicketParams, Updat
   }
 
   /**
-   * 创建工单
-   */
-  async createTicket(data: CreateTicketParams): Promise<Ticket> {
-    return this.create(data);
-  }
-
-  /**
    * 更新工单
    */
-  async updateTicket(id: number, data: UpdateTicketParams): Promise<Ticket> {
-    return this.update(id, data);
+  async updateTicket(id: number, data: UpdateTicketParams): Promise<TicketEditResult> {
+    ticketEditVersion(data.version);
+    ticketEditOperation(data.operationId);
+    return this.put<TicketEditResult>(`/${id}`, data);
   }
 
   /**
@@ -225,26 +215,6 @@ export class TicketService extends BaseService<Ticket, CreateTicketParams, Updat
   }
 
   // ==================== 审批操作 ====================
-
-  /**
-   * 批准工单
-   */
-  async approve(
-    id: number,
-    data: { action: 'approve' | 'reject' | 'delegate'; comment?: string; delegateToUserId?: number }
-  ): Promise<{ success: boolean; message: string }> {
-    return this.post('/workflow/approve', {
-      ticketId: id,
-      ...data,
-    });
-  }
-
-  /**
-   * 拒绝工单
-   */
-  async reject(ticketId: number, reason: string): Promise<{ message: string }> {
-    return this.post('/workflow/reject', { ticketId: ticketId, reason });
-  }
 
   /**
    * 接单
@@ -446,16 +416,6 @@ export class TicketService extends BaseService<Ticket, CreateTicketParams, Updat
       `/${parentTicketId}/subtasks`
     );
     return (response as any).tickets || (response as any).data || [];
-  }
-
-  /**
-   * 创建子任务
-   */
-  async createSubtask(parentTicketId: number, data: Partial<Ticket>): Promise<Ticket> {
-    return this.post(`/${parentTicketId}/subtasks`, {
-      ...data,
-      parentTicketId: parentTicketId,
-    });
   }
 
   /**

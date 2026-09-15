@@ -2,12 +2,15 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"testing"
 
+	"itsm-backend/infrastructure/cloud"
+
+	"itsm-backend/authorization"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
-	"itsm-backend/middleware"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
@@ -46,7 +49,7 @@ func provisioningTestFixture(t *testing.T, client *ent.Client, label string) (sr
 
 	tkt, err := client.Ticket.Create().
 		SetTicketNumber("TKT-PROV-" + label).
-		SetTitle("Provisioning Test Ticket").
+		SetTitle("Provisioning Test Ticket").SetRecordClass("service_request_item").
 		SetDescription("desc").
 		SetPriority("medium").
 		SetStatus("open").
@@ -56,10 +59,8 @@ func provisioningTestFixture(t *testing.T, client *ent.Client, label string) (sr
 	require.NoError(t, err)
 
 	req, err := client.ServiceRequest.Create().
-		SetTenantID(tenant.ID).
 		SetTicketID(tkt.ID).
 		SetCatalogID(1).
-		SetRequesterID(requester.ID).
 		SetComplianceAck(true).
 		SetDataClassification("internal").
 		Save(ctx)
@@ -85,13 +86,14 @@ var provisioningTestActorID = 999999
 func TestCreateTaskFromServiceRequest_RejectsWithoutApprovalDecision(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:prov_no_decision?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 避免不同测试的租户ID复用造成缓存串号
+	authorization.InvalidateAllPermissionCaches() // 避免不同测试的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	sr, _ := provisioningTestFixture(t, client, "no-decision")
 
 	svc := NewProvisioningService(client, zaptest.NewLogger(t).Sugar())
-	task, err := svc.CreateTaskFromServiceRequest(ctx, sr.ID, sr.TenantID, provisioningTestActorID, provisioningTestRole)
+	svc.SetManualProvisioningGuard(&provisioningAccessGuard{})
+	task, err := svc.CreateTaskFromServiceRequest(ctx, sr.ID, client.Ticket.GetX(ctx, sr.TicketID).TenantID, provisioningTestActorID, provisioningTestRole)
 	require.Error(t, err)
 	assert.Nil(t, task)
 
@@ -101,13 +103,14 @@ func TestCreateTaskFromServiceRequest_RejectsWithoutApprovalDecision(t *testing.
 }
 
 // TestCreateTaskFromServiceRequest_SucceedsWithApprovalDecision proves provisioning starts once a
-// matching process_approval_decision row exists (business_type=ticket, business_id=<ticket ID>,
+// matching process_approval_decision row exists (business_type=<WorkItem record class>,
+// business_id=<WorkItem ID>,
 // decision=approved, same tenant) — the success path this precondition change had never been
 // exercised by an automated test for (only the rejection path had manual verification).
 func TestCreateTaskFromServiceRequest_SucceedsWithApprovalDecision(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:prov_decision_approved?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 避免不同测试的租户ID复用造成缓存串号
+	authorization.InvalidateAllPermissionCaches() // 避免不同测试的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	sr, ticket := provisioningTestFixture(t, client, "approved")
@@ -119,21 +122,22 @@ func TestCreateTaskFromServiceRequest_SucceedsWithApprovalDecision(t *testing.T)
 		SetTaskID("TASK-1").
 		SetProcessDefinitionKey("ticket_general_flow").
 		SetNodeKey("approval").
-		SetBusinessType("ticket").
+		SetBusinessType("service_request_item").
 		SetBusinessID(strconv.Itoa(ticket.ID)).
 		SetActorID(1).
 		SetAction("approve").
 		SetDecision("approved").
-		SetTenantID(sr.TenantID).
+		SetTenantID(client.Ticket.GetX(ctx, sr.TicketID).TenantID).
 		Save(ctx)
 	require.NoError(t, err)
 
 	svc := NewProvisioningService(client, zaptest.NewLogger(t).Sugar())
-	task, err := svc.CreateTaskFromServiceRequest(ctx, sr.ID, sr.TenantID, provisioningTestActorID, provisioningTestRole)
+	svc.SetManualProvisioningGuard(&provisioningAccessGuard{})
+	task, err := svc.CreateTaskFromServiceRequest(ctx, sr.ID, client.Ticket.GetX(ctx, sr.TicketID).TenantID, provisioningTestActorID, provisioningTestRole)
 	require.NoError(t, err)
 	require.NotNil(t, task)
 	assert.Equal(t, sr.ID, task.ServiceRequestID)
-	assert.Equal(t, sr.TenantID, task.TenantID)
+	assert.Equal(t, client.Ticket.GetX(ctx, sr.TicketID).TenantID, task.TenantID)
 
 	count, err := client.ProvisioningTask.Query().Count(ctx)
 	require.NoError(t, err)
@@ -148,7 +152,7 @@ func TestCreateTaskFromServiceRequest_SucceedsWithApprovalDecision(t *testing.T)
 func TestCreateTaskFromServiceRequest_CrossTenantApprovalDoesNotUnlock(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:prov_cross_tenant?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 避免不同测试的租户ID复用造成缓存串号
+	authorization.InvalidateAllPermissionCaches() // 避免不同测试的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	srA, ticketA := provisioningTestFixture(t, client, "tenant-a")
@@ -164,21 +168,105 @@ func TestCreateTaskFromServiceRequest_CrossTenantApprovalDoesNotUnlock(t *testin
 		SetTaskID("TASK-B").
 		SetProcessDefinitionKey("ticket_general_flow").
 		SetNodeKey("approval").
-		SetBusinessType("ticket").
+		SetBusinessType("service_request_item").
 		SetBusinessID(strconv.Itoa(ticketA.ID)).
 		SetActorID(1).
 		SetAction("approve").
 		SetDecision("approved").
-		SetTenantID(srB.TenantID).
+		SetTenantID(client.Ticket.GetX(ctx, srB.TicketID).TenantID).
 		Save(ctx)
 	require.NoError(t, err)
 
 	svc := NewProvisioningService(client, zaptest.NewLogger(t).Sugar())
-	task, err := svc.CreateTaskFromServiceRequest(ctx, srA.ID, srA.TenantID, provisioningTestActorID, provisioningTestRole)
+	svc.SetManualProvisioningGuard(&provisioningAccessGuard{})
+	task, err := svc.CreateTaskFromServiceRequest(ctx, srA.ID, client.Ticket.GetX(ctx, srA.TicketID).TenantID, provisioningTestActorID, provisioningTestRole)
 	require.Error(t, err, "a same-business_id approval decision filed under a different tenant must not unlock provisioning")
 	assert.Nil(t, task)
 
 	count, err := client.ProvisioningTask.Query().Count(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 0, count)
+}
+
+type authorityFailureProvider struct{ before func() }
+
+func (p authorityFailureProvider) Name() string { return "failure-test" }
+func (p authorityFailureProvider) Execute(context.Context, map[string]any) (*cloud.ExecuteResult, error) {
+	if p.before != nil {
+		p.before()
+	}
+	return nil, errors.New("provider refused request")
+}
+
+func TestProvisioningFailureUsesWorkItemVersionTransaction(t *testing.T) {
+	for _, conflict := range []bool{false, true} {
+		t.Run(strconv.FormatBool(conflict), func(t *testing.T) {
+			client := enttest.Open(t, "sqlite3", "file:provision-authority-"+strconv.FormatBool(conflict)+"?mode=memory&cache=shared&_fk=1")
+			defer client.Close()
+			ctx := context.Background()
+			sr, wi := provisioningTestFixture(t, client, "authority")
+			task := client.ProvisioningTask.Create().SetTenantID(wi.TenantID).SetServiceRequestID(sr.ID).SetProvider("alicloud").SetResourceType("ecs").SetStatus("pending").SaveX(ctx)
+			svc := NewProvisioningService(client, zaptest.NewLogger(t).Sugar())
+			svc.SetManualProvisioningGuard(&provisioningAccessGuard{})
+			provider := authorityFailureProvider{}
+			if conflict {
+				provider.before = func() { client.Ticket.UpdateOneID(wi.ID).AddVersion(1).ExecX(ctx) }
+			}
+			svc.provider = provider
+			_, err := svc.ExecuteTask(ctx, task.ID, wi.TenantID, provisioningTestActorID, provisioningTestRole)
+			require.Error(t, err)
+			current := client.Ticket.GetX(ctx, wi.ID)
+			require.Equal(t, wi.Version+1, current.Version)
+			if conflict {
+				require.ErrorContains(t, err, "WorkItem")
+				require.Empty(t, client.ServiceRequest.GetX(ctx, sr.ID).LastError)
+				require.Equal(t, "running", client.ProvisioningTask.GetX(ctx, task.ID).Status)
+			} else {
+				require.ErrorContains(t, err, "provider refused")
+				require.Equal(t, "provider refused request", client.ServiceRequest.GetX(ctx, sr.ID).LastError)
+				require.Equal(t, "failed", client.ProvisioningTask.GetX(ctx, task.ID).Status)
+			}
+		})
+	}
+}
+
+type provisioningAccessGuard struct {
+	blocked bool
+	calls   int
+}
+
+func (g *provisioningAccessGuard) ValidateManualProvisioning(ctx context.Context, client *ent.Client, tenantID, itemID int) error {
+	g.calls++
+	if g.blocked {
+		return errors.New("managed_access_requires_verified_delegation")
+	}
+	return nil
+}
+
+func TestManagedAccessManualProvisioningBlocked(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	authorization.InvalidateAllPermissionCaches()
+	ctx := context.Background()
+	sr, wi := provisioningTestFixture(t, client, "managed")
+	guard := &provisioningAccessGuard{blocked: true}
+	svc := NewProvisioningService(client, zaptest.NewLogger(t).Sugar())
+	svc.SetManualProvisioningGuard(guard)
+	// Even a legacy generic approval cannot override the domain owner.
+	client.ProcessApprovalDecision.Create().SetProcessInstanceID(1).SetProcessTaskID(1).SetProcessInstanceKey("PI-1").SetTaskID("TASK-1").SetProcessDefinitionKey("generic").SetNodeKey("approve").SetBusinessType("service_request_item").SetBusinessID(strconv.Itoa(wi.ID)).SetActorID(1).SetAction("approve").SetDecision("approved").SetTenantID(wi.TenantID).SaveX(ctx)
+	_, err := svc.CreateTaskFromServiceRequest(ctx, sr.ID, wi.TenantID, provisioningTestActorID, provisioningTestRole)
+	require.ErrorContains(t, err, "managed_access_requires_verified_delegation")
+	require.Zero(t, client.ProvisioningTask.Query().CountX(ctx))
+	task := client.ProvisioningTask.Create().SetTenantID(wi.TenantID).SetServiceRequestID(sr.ID).SetProvider("alicloud").SetResourceType("ecs").SetStatus("pending").SaveX(ctx)
+	called := false
+	svc.provider = authorityFailureProvider{before: func() { called = true }}
+	_, err = svc.ExecuteTask(ctx, task.ID, wi.TenantID, provisioningTestActorID, provisioningTestRole)
+	require.ErrorContains(t, err, "managed_access_requires_verified_delegation")
+	require.False(t, called)
+	require.Equal(t, "pending", client.ProvisioningTask.GetX(ctx, task.ID).Status)
+	require.Equal(t, 2, guard.calls)
+	svc.SetManualProvisioningGuard(nil)
+	_, err = svc.ExecuteTask(ctx, task.ID, wi.TenantID, provisioningTestActorID, provisioningTestRole)
+	require.ErrorContains(t, err, "manual_provisioning_owner_unavailable")
+	require.False(t, called)
 }

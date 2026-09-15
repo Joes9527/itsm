@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"itsm-backend/handlers/shared/workflowcallback"
+
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
@@ -23,10 +25,25 @@ type ticketStatusServiceEntStub struct {
 	client *ent.Client
 }
 
+type assignmentServiceStub struct{ id, target, tenant int }
+
+func (s *assignmentServiceStub) UpdateTicketStatusForWorkflow(context.Context, int, string, int, int) error {
+	return nil
+}
+
+func (s *assignmentServiceStub) AssignTicketForWorkflow(_ context.Context, id, target, tenant int) (workflowcallback.Result, error) {
+	s.id, s.target, s.tenant = id, target, tenant
+	return workflowcallback.Result{Status: workflowcallback.StatusApplied}, nil
+}
+
+func (s *ticketStatusServiceEntStub) AssignTicketForWorkflow(context.Context, int, int, int) (workflowcallback.Result, error) {
+	return workflowcallback.Result{Status: workflowcallback.StatusApplied}, nil
+}
+
 type ticketNotificationStub struct{}
 
-func (*ticketNotificationStub) SendNotification(context.Context, int, *dto.SendTicketNotificationRequest, int) error {
-	return nil
+func (*ticketNotificationStub) SendNotification(context.Context, int, *dto.SendTicketNotificationRequest, int) (*dto.SendTicketNotificationResult, error) {
+	return &dto.SendTicketNotificationResult{Effect: dto.TicketNotificationEffectApplied, AppliedCount: 1, DeliveryCount: 1}, nil
 }
 
 func (s *ticketStatusServiceEntStub) UpdateTicketStatusForWorkflow(ctx context.Context, ticketID int, status string, tenantID int, operatorID int) error {
@@ -127,7 +144,7 @@ func TestTicketServiceTaskHandler_UpdateTicketStatus(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, result)
-				assert.True(t, result.Success)
+				assert.Contains(t, []CallbackEffectStatus{CallbackEffectApplied, CallbackEffectIdempotent}, result.Status)
 
 				// 验证工单状态已更新
 				updatedTicket, err := client.Ticket.Get(ctx, tt.ticketID)
@@ -196,7 +213,7 @@ func TestTicketServiceTaskHandler_EscalateTicket(t *testing.T) {
 				"escalation_reason": "需要更快处理",
 			},
 			expectedPriority: "high",
-			expectedError:    false,
+			expectedError:    true,
 		},
 		{
 			name:     "升级工单到 critical",
@@ -208,7 +225,7 @@ func TestTicketServiceTaskHandler_EscalateTicket(t *testing.T) {
 				"escalation_reason": "紧急问题",
 			},
 			expectedPriority: "critical",
-			expectedError:    false,
+			expectedError:    true,
 		},
 		{
 			name:     "使用默认升级优先级",
@@ -218,7 +235,7 @@ func TestTicketServiceTaskHandler_EscalateTicket(t *testing.T) {
 				"action":      "escalate",
 			},
 			expectedPriority: "high",
-			expectedError:    false,
+			expectedError:    true,
 		},
 	}
 
@@ -237,7 +254,7 @@ func TestTicketServiceTaskHandler_EscalateTicket(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, result)
-				assert.True(t, result.Success)
+				assert.True(t, result.Status == CallbackEffectApplied)
 
 				// 验证工单优先级已更新
 				updatedTicket, err := client.Ticket.Get(ctx, tt.ticketID)
@@ -256,6 +273,8 @@ func TestTicketServiceTaskHandler_AssignTicket(t *testing.T) {
 	handler := NewTicketServiceTaskHandler(client, logger)
 	handler.SetNotificationService(&ticketNotificationStub{})
 
+	assignmentService := &assignmentServiceStub{}
+	handler.SetTicketService(assignmentService)
 	ctx := context.Background()
 
 	// 创建测试数据
@@ -358,12 +377,13 @@ func TestTicketServiceTaskHandler_AssignTicket(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, result)
-				assert.True(t, result.Success)
+				assert.Contains(t, []CallbackEffectStatus{CallbackEffectApplied, CallbackEffectIdempotent}, result.Status)
 
-				// 验证工单已被分配
-				updatedTicket, err := client.Ticket.Get(ctx, tt.ticketID)
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedAssigneeID, updatedTicket.AssigneeID)
+				// Handler binds commands; owning service integration verifies persistence.
+				assert.Equal(t, tt.ticketID, assignmentService.id)
+				assert.Equal(t, tt.expectedAssigneeID, assignmentService.target)
+				assert.Equal(t, testTenant.ID, assignmentService.tenant)
+				assert.Zero(t, client.Ticket.GetX(ctx, tt.ticketID).AssigneeID)
 			}
 		})
 	}
@@ -416,7 +436,7 @@ func TestTicketServiceTaskHandler_Execute(t *testing.T) {
 		name          string
 		variables     map[string]interface{}
 		expectedError bool
-		checkResult   func(*testing.T, *dto.ServiceTaskResult)
+		checkResult   func(*testing.T, *CallbackEffect)
 	}{
 		{
 			name: "执行 update_status 动作",
@@ -426,8 +446,8 @@ func TestTicketServiceTaskHandler_Execute(t *testing.T) {
 				"new_status":  "in_progress",
 			},
 			expectedError: false,
-			checkResult: func(t *testing.T, result *dto.ServiceTaskResult) {
-				assert.True(t, result.Success)
+			checkResult: func(t *testing.T, result *CallbackEffect) {
+				assert.True(t, result.Status == CallbackEffectApplied)
 			},
 		},
 		{
@@ -438,9 +458,9 @@ func TestTicketServiceTaskHandler_Execute(t *testing.T) {
 				"escalate_to":       "high",
 				"escalation_reason": "测试升级",
 			},
-			expectedError: false,
-			checkResult: func(t *testing.T, result *dto.ServiceTaskResult) {
-				assert.True(t, result.Success)
+			expectedError: true,
+			checkResult: func(t *testing.T, result *CallbackEffect) {
+				assert.True(t, result.Status == CallbackEffectApplied)
 			},
 		},
 		{
@@ -451,8 +471,8 @@ func TestTicketServiceTaskHandler_Execute(t *testing.T) {
 				"assignee_id": float64(testUser.ID),
 			},
 			expectedError: false,
-			checkResult: func(t *testing.T, result *dto.ServiceTaskResult) {
-				assert.True(t, result.Success)
+			checkResult: func(t *testing.T, result *CallbackEffect) {
+				assert.True(t, result.Status == CallbackEffectApplied)
 			},
 		},
 		{
@@ -522,25 +542,6 @@ func TestTicketServiceTaskHandler_GetHandlerID(t *testing.T) {
 	assert.Equal(t, "ticket_service_handler", handlerID)
 }
 
-func TestTicketServiceTaskHandler_Validate(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
-	defer client.Close()
-
-	logger := zaptest.NewLogger(t).Sugar()
-	handler := NewTicketServiceTaskHandler(client, logger)
-
-	ctx := context.Background()
-
-	// 测试配置验证
-	config := map[string]interface{}{
-		"action":     "update_status",
-		"new_status": "in_progress",
-	}
-
-	err := handler.Validate(ctx, config)
-	assert.NoError(t, err)
-}
-
 func TestTicketServiceTaskHandler_UpdateStatus_RequiresInjectedService(t *testing.T) {
 	handler := NewTicketServiceTaskHandler(nil, zap.NewNop().Sugar())
 	// statusService is nil (never injected) — must fail loud, not silently no-op.
@@ -603,4 +604,37 @@ func (f *fakeTicketStatusService) UpdateTicketStatusForWorkflow(ctx context.Cont
 	f.lastTicketID = ticketID
 	f.lastStatus = status
 	return nil
+}
+
+type notificationAcceptanceSpy struct {
+	result  *dto.SendTicketNotificationResult
+	request dto.SendTicketNotificationRequest
+}
+
+func (s *notificationAcceptanceSpy) SendNotification(_ context.Context, _ int, req *dto.SendTicketNotificationRequest, _ int) (*dto.SendTicketNotificationResult, error) {
+	s.request = *req
+	return s.result, nil
+}
+
+func TestTicketNotificationCallbackAcceptance(t *testing.T) {
+	for _, effect := range []string{dto.TicketNotificationEffectQueued, dto.TicketNotificationEffectIdempotent, dto.TicketNotificationEffectApplied} {
+		t.Run(effect, func(t *testing.T) {
+			spy := &notificationAcceptanceSpy{result: &dto.SendTicketNotificationResult{Effect: effect, QueuedCount: 1, ExternalIntentCount: 1}}
+			handler := NewTicketServiceTaskHandler(nil, zap.NewNop().Sugar())
+			handler.SetNotificationService(spy)
+			result, err := handler.sendNotification(context.Background(), 1, &dto.SendTicketNotificationRequest{UserIDs: []int{1}}, 1)
+			require.NoError(t, err)
+			require.NotContains(t, result.Message, "delivered")
+			require.NotNil(t, result.OutputVars)
+			require.NoError(t, ValidateHandlerEffect(result))
+		})
+	}
+	spy := &notificationAcceptanceSpy{result: &dto.SendTicketNotificationResult{Effect: dto.TicketNotificationEffectApplied, AppliedCount: 1}}
+	handler := NewTicketServiceTaskHandler(nil, zap.NewNop().Sugar())
+	handler.SetNotificationService(spy)
+	result, err := handler.sendNotification(WithBPMNCallbackExecutionKey(context.Background(), "stable-callback"), 1, &dto.SendTicketNotificationRequest{UserIDs: []int{1}}, 1)
+	require.NoError(t, err)
+	require.Equal(t, CallbackEffectApplied, result.Status)
+	require.True(t, spy.request.InAppOnly)
+	require.Equal(t, "stable-callback", spy.request.DeliveryKey)
 }

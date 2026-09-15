@@ -9,7 +9,8 @@ import (
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/changepir"
 	"itsm-backend/ent/predicate"
-	"itsm-backend/ent/problem"
+	"itsm-backend/ent/standardchange"
+	"itsm-backend/ent/ticket"
 	"math"
 
 	"entgo.io/ent"
@@ -21,13 +22,13 @@ import (
 // ChangeQuery is the builder for querying Change entities.
 type ChangeQuery struct {
 	config
-	ctx          *QueryContext
-	order        []change.OrderOption
-	inters       []Interceptor
-	predicates   []predicate.Change
-	withProblems *ProblemQuery
-	withPir      *ChangePIRQuery
-	withFKs      bool
+	ctx                  *QueryContext
+	order                []change.OrderOption
+	inters               []Interceptor
+	predicates           []predicate.Change
+	withStandardTemplate *StandardChangeQuery
+	withWorkItem         *TicketQuery
+	withPir              *ChangePIRQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -64,9 +65,9 @@ func (_q *ChangeQuery) Order(o ...change.OrderOption) *ChangeQuery {
 	return _q
 }
 
-// QueryProblems chains the current query on the "problems" edge.
-func (_q *ChangeQuery) QueryProblems() *ProblemQuery {
-	query := (&ProblemClient{config: _q.config}).Query()
+// QueryStandardTemplate chains the current query on the "standard_template" edge.
+func (_q *ChangeQuery) QueryStandardTemplate() *StandardChangeQuery {
+	query := (&StandardChangeClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
@@ -77,8 +78,30 @@ func (_q *ChangeQuery) QueryProblems() *ProblemQuery {
 		}
 		step := sqlgraph.NewStep(
 			sqlgraph.From(change.Table, change.FieldID, selector),
-			sqlgraph.To(problem.Table, problem.FieldID),
-			sqlgraph.Edge(sqlgraph.M2M, true, change.ProblemsTable, change.ProblemsPrimaryKey...),
+			sqlgraph.To(standardchange.Table, standardchange.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, change.StandardTemplateTable, change.StandardTemplateColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryWorkItem chains the current query on the "work_item" edge.
+func (_q *ChangeQuery) QueryWorkItem() *TicketQuery {
+	query := (&TicketClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(change.Table, change.FieldID, selector),
+			sqlgraph.To(ticket.Table, ticket.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, change.WorkItemTable, change.WorkItemColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -295,27 +318,39 @@ func (_q *ChangeQuery) Clone() *ChangeQuery {
 		return nil
 	}
 	return &ChangeQuery{
-		config:       _q.config,
-		ctx:          _q.ctx.Clone(),
-		order:        append([]change.OrderOption{}, _q.order...),
-		inters:       append([]Interceptor{}, _q.inters...),
-		predicates:   append([]predicate.Change{}, _q.predicates...),
-		withProblems: _q.withProblems.Clone(),
-		withPir:      _q.withPir.Clone(),
+		config:               _q.config,
+		ctx:                  _q.ctx.Clone(),
+		order:                append([]change.OrderOption{}, _q.order...),
+		inters:               append([]Interceptor{}, _q.inters...),
+		predicates:           append([]predicate.Change{}, _q.predicates...),
+		withStandardTemplate: _q.withStandardTemplate.Clone(),
+		withWorkItem:         _q.withWorkItem.Clone(),
+		withPir:              _q.withPir.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
 }
 
-// WithProblems tells the query-builder to eager-load the nodes that are connected to
-// the "problems" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *ChangeQuery) WithProblems(opts ...func(*ProblemQuery)) *ChangeQuery {
-	query := (&ProblemClient{config: _q.config}).Query()
+// WithStandardTemplate tells the query-builder to eager-load the nodes that are connected to
+// the "standard_template" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *ChangeQuery) WithStandardTemplate(opts ...func(*StandardChangeQuery)) *ChangeQuery {
+	query := (&StandardChangeClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	_q.withProblems = query
+	_q.withStandardTemplate = query
+	return _q
+}
+
+// WithWorkItem tells the query-builder to eager-load the nodes that are connected to
+// the "work_item" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *ChangeQuery) WithWorkItem(opts ...func(*TicketQuery)) *ChangeQuery {
+	query := (&TicketClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withWorkItem = query
 	return _q
 }
 
@@ -336,12 +371,12 @@ func (_q *ChangeQuery) WithPir(opts ...func(*ChangePIRQuery)) *ChangeQuery {
 // Example:
 //
 //	var v []struct {
-//		Title string `json:"title,omitempty"`
+//		Outcome string `json:"outcome,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Change.Query().
-//		GroupBy(change.FieldTitle).
+//		GroupBy(change.FieldOutcome).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *ChangeQuery) GroupBy(field string, fields ...string) *ChangeGroupBy {
@@ -359,11 +394,11 @@ func (_q *ChangeQuery) GroupBy(field string, fields ...string) *ChangeGroupBy {
 // Example:
 //
 //	var v []struct {
-//		Title string `json:"title,omitempty"`
+//		Outcome string `json:"outcome,omitempty"`
 //	}
 //
 //	client.Change.Query().
-//		Select(change.FieldTitle).
+//		Select(change.FieldOutcome).
 //		Scan(ctx, &v)
 func (_q *ChangeQuery) Select(fields ...string) *ChangeSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
@@ -407,16 +442,13 @@ func (_q *ChangeQuery) prepareQuery(ctx context.Context) error {
 func (_q *ChangeQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Change, error) {
 	var (
 		nodes       = []*Change{}
-		withFKs     = _q.withFKs
 		_spec       = _q.querySpec()
-		loadedTypes = [2]bool{
-			_q.withProblems != nil,
+		loadedTypes = [3]bool{
+			_q.withStandardTemplate != nil,
+			_q.withWorkItem != nil,
 			_q.withPir != nil,
 		}
 	)
-	if withFKs {
-		_spec.Node.Columns = append(_spec.Node.Columns, change.ForeignKeys...)
-	}
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Change).scanValues(nil, columns)
 	}
@@ -435,10 +467,15 @@ func (_q *ChangeQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Chang
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := _q.withProblems; query != nil {
-		if err := _q.loadProblems(ctx, query, nodes,
-			func(n *Change) { n.Edges.Problems = []*Problem{} },
-			func(n *Change, e *Problem) { n.Edges.Problems = append(n.Edges.Problems, e) }); err != nil {
+	if query := _q.withStandardTemplate; query != nil {
+		if err := _q.loadStandardTemplate(ctx, query, nodes, nil,
+			func(n *Change, e *StandardChange) { n.Edges.StandardTemplate = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withWorkItem; query != nil {
+		if err := _q.loadWorkItem(ctx, query, nodes, nil,
+			func(n *Change, e *Ticket) { n.Edges.WorkItem = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -452,63 +489,60 @@ func (_q *ChangeQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Chang
 	return nodes, nil
 }
 
-func (_q *ChangeQuery) loadProblems(ctx context.Context, query *ProblemQuery, nodes []*Change, init func(*Change), assign func(*Change, *Problem)) error {
-	edgeIDs := make([]driver.Value, len(nodes))
-	byID := make(map[int]*Change)
-	nids := make(map[int]map[*Change]struct{})
-	for i, node := range nodes {
-		edgeIDs[i] = node.ID
-		byID[node.ID] = node
-		if init != nil {
-			init(node)
+func (_q *ChangeQuery) loadStandardTemplate(ctx context.Context, query *StandardChangeQuery, nodes []*Change, init func(*Change), assign func(*Change, *StandardChange)) error {
+	ids := make([]int, 0, len(nodes))
+	nodeids := make(map[int][]*Change)
+	for i := range nodes {
+		fk := nodes[i].StandardTemplateID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
 		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
 	}
-	query.Where(func(s *sql.Selector) {
-		joinT := sql.Table(change.ProblemsTable)
-		s.Join(joinT).On(s.C(problem.FieldID), joinT.C(change.ProblemsPrimaryKey[0]))
-		s.Where(sql.InValues(joinT.C(change.ProblemsPrimaryKey[1]), edgeIDs...))
-		columns := s.SelectedColumns()
-		s.Select(joinT.C(change.ProblemsPrimaryKey[1]))
-		s.AppendSelect(columns...)
-		s.SetDistinct(false)
-	})
-	if err := query.prepareQuery(ctx); err != nil {
-		return err
+	if len(ids) == 0 {
+		return nil
 	}
-	qr := QuerierFunc(func(ctx context.Context, q Query) (Value, error) {
-		return query.sqlAll(ctx, func(_ context.Context, spec *sqlgraph.QuerySpec) {
-			assign := spec.Assign
-			values := spec.ScanValues
-			spec.ScanValues = func(columns []string) ([]any, error) {
-				values, err := values(columns[1:])
-				if err != nil {
-					return nil, err
-				}
-				return append([]any{new(sql.NullInt64)}, values...), nil
-			}
-			spec.Assign = func(columns []string, values []any) error {
-				outValue := int(values[0].(*sql.NullInt64).Int64)
-				inValue := int(values[1].(*sql.NullInt64).Int64)
-				if nids[inValue] == nil {
-					nids[inValue] = map[*Change]struct{}{byID[outValue]: {}}
-					return assign(columns[1:], values[1:])
-				}
-				nids[inValue][byID[outValue]] = struct{}{}
-				return nil
-			}
-		})
-	})
-	neighbors, err := withInterceptors[[]*Problem](ctx, query, qr, query.inters)
+	query.Where(standardchange.IDIn(ids...))
+	neighbors, err := query.All(ctx)
 	if err != nil {
 		return err
 	}
 	for _, n := range neighbors {
-		nodes, ok := nids[n.ID]
+		nodes, ok := nodeids[n.ID]
 		if !ok {
-			return fmt.Errorf(`unexpected "problems" node returned %v`, n.ID)
+			return fmt.Errorf(`unexpected foreign-key "standard_template_id" returned %v`, n.ID)
 		}
-		for kn := range nodes {
-			assign(kn, n)
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
+func (_q *ChangeQuery) loadWorkItem(ctx context.Context, query *TicketQuery, nodes []*Change, init func(*Change), assign func(*Change, *Ticket)) error {
+	ids := make([]int, 0, len(nodes))
+	nodeids := make(map[int][]*Change)
+	for i := range nodes {
+		fk := nodes[i].WorkItemID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(ticket.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "work_item_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
 		}
 	}
 	return nil
@@ -569,6 +603,12 @@ func (_q *ChangeQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != change.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
+		}
+		if _q.withStandardTemplate != nil {
+			_spec.Node.AddColumnOnce(change.FieldStandardTemplateID)
+		}
+		if _q.withWorkItem != nil {
+			_spec.Node.AddColumnOnce(change.FieldWorkItemID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

@@ -8,9 +8,6 @@ export declare const WorkflowCompleteCommand: React.FC<{
     outcome: string;
     comment?: string;
 }>;
-export declare const ApprovalListCommand: React.FC<{
-    status?: string;
-}>;
 export declare const ApprovalActionCommand: React.FC<{
     id: string;
     action: 'approve' | 'reject';

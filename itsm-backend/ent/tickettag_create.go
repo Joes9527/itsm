@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/tickettag"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type TicketTagCreate struct {
 	config
 	mutation *TicketTagMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -227,6 +229,7 @@ func (_c *TicketTagCreate) createSpec() (*TicketTag, *sqlgraph.CreateSpec) {
 		_node = &TicketTag{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(tickettag.Table, sqlgraph.NewFieldSpec(tickettag.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(tickettag.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -274,11 +277,342 @@ func (_c *TicketTagCreate) createSpec() (*TicketTag, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TicketTag.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TicketTagUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TicketTagCreate) OnConflict(opts ...sql.ConflictOption) *TicketTagUpsertOne {
+	_c.conflict = opts
+	return &TicketTagUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TicketTag.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TicketTagCreate) OnConflictColumns(columns ...string) *TicketTagUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TicketTagUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// TicketTagUpsertOne is the builder for "upsert"-ing
+	//  one TicketTag node.
+	TicketTagUpsertOne struct {
+		create *TicketTagCreate
+	}
+
+	// TicketTagUpsert is the "OnConflict" setter.
+	TicketTagUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *TicketTagUpsert) SetName(v string) *TicketTagUpsert {
+	u.Set(tickettag.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *TicketTagUpsert) UpdateName() *TicketTagUpsert {
+	u.SetExcluded(tickettag.FieldName)
+	return u
+}
+
+// SetColor sets the "color" field.
+func (u *TicketTagUpsert) SetColor(v string) *TicketTagUpsert {
+	u.Set(tickettag.FieldColor, v)
+	return u
+}
+
+// UpdateColor sets the "color" field to the value that was provided on create.
+func (u *TicketTagUpsert) UpdateColor() *TicketTagUpsert {
+	u.SetExcluded(tickettag.FieldColor)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *TicketTagUpsert) SetDescription(v string) *TicketTagUpsert {
+	u.Set(tickettag.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *TicketTagUpsert) UpdateDescription() *TicketTagUpsert {
+	u.SetExcluded(tickettag.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *TicketTagUpsert) ClearDescription() *TicketTagUpsert {
+	u.SetNull(tickettag.FieldDescription)
+	return u
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *TicketTagUpsert) SetIsActive(v bool) *TicketTagUpsert {
+	u.Set(tickettag.FieldIsActive, v)
+	return u
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *TicketTagUpsert) UpdateIsActive() *TicketTagUpsert {
+	u.SetExcluded(tickettag.FieldIsActive)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TicketTagUpsert) SetTenantID(v int) *TicketTagUpsert {
+	u.Set(tickettag.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TicketTagUpsert) UpdateTenantID() *TicketTagUpsert {
+	u.SetExcluded(tickettag.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TicketTagUpsert) AddTenantID(v int) *TicketTagUpsert {
+	u.Add(tickettag.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TicketTagUpsert) SetCreatedAt(v time.Time) *TicketTagUpsert {
+	u.Set(tickettag.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TicketTagUpsert) UpdateCreatedAt() *TicketTagUpsert {
+	u.SetExcluded(tickettag.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *TicketTagUpsert) SetUpdatedAt(v time.Time) *TicketTagUpsert {
+	u.Set(tickettag.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *TicketTagUpsert) UpdateUpdatedAt() *TicketTagUpsert {
+	u.SetExcluded(tickettag.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.TicketTag.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TicketTagUpsertOne) UpdateNewValues() *TicketTagUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TicketTag.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *TicketTagUpsertOne) Ignore() *TicketTagUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TicketTagUpsertOne) DoNothing() *TicketTagUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TicketTagCreate.OnConflict
+// documentation for more info.
+func (u *TicketTagUpsertOne) Update(set func(*TicketTagUpsert)) *TicketTagUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TicketTagUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *TicketTagUpsertOne) SetName(v string) *TicketTagUpsertOne {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *TicketTagUpsertOne) UpdateName() *TicketTagUpsertOne {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetColor sets the "color" field.
+func (u *TicketTagUpsertOne) SetColor(v string) *TicketTagUpsertOne {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.SetColor(v)
+	})
+}
+
+// UpdateColor sets the "color" field to the value that was provided on create.
+func (u *TicketTagUpsertOne) UpdateColor() *TicketTagUpsertOne {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.UpdateColor()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *TicketTagUpsertOne) SetDescription(v string) *TicketTagUpsertOne {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *TicketTagUpsertOne) UpdateDescription() *TicketTagUpsertOne {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *TicketTagUpsertOne) ClearDescription() *TicketTagUpsertOne {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *TicketTagUpsertOne) SetIsActive(v bool) *TicketTagUpsertOne {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *TicketTagUpsertOne) UpdateIsActive() *TicketTagUpsertOne {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TicketTagUpsertOne) SetTenantID(v int) *TicketTagUpsertOne {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TicketTagUpsertOne) AddTenantID(v int) *TicketTagUpsertOne {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TicketTagUpsertOne) UpdateTenantID() *TicketTagUpsertOne {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TicketTagUpsertOne) SetCreatedAt(v time.Time) *TicketTagUpsertOne {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TicketTagUpsertOne) UpdateCreatedAt() *TicketTagUpsertOne {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *TicketTagUpsertOne) SetUpdatedAt(v time.Time) *TicketTagUpsertOne {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *TicketTagUpsertOne) UpdateUpdatedAt() *TicketTagUpsertOne {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *TicketTagUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TicketTagCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TicketTagUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *TicketTagUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *TicketTagUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // TicketTagCreateBulk is the builder for creating many TicketTag entities in bulk.
 type TicketTagCreateBulk struct {
 	config
 	err      error
 	builders []*TicketTagCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the TicketTag entities in the database.
@@ -308,6 +642,7 @@ func (_c *TicketTagCreateBulk) Save(ctx context.Context) ([]*TicketTag, error) {
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -358,6 +693,222 @@ func (_c *TicketTagCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *TicketTagCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TicketTag.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TicketTagUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TicketTagCreateBulk) OnConflict(opts ...sql.ConflictOption) *TicketTagUpsertBulk {
+	_c.conflict = opts
+	return &TicketTagUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TicketTag.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TicketTagCreateBulk) OnConflictColumns(columns ...string) *TicketTagUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TicketTagUpsertBulk{
+		create: _c,
+	}
+}
+
+// TicketTagUpsertBulk is the builder for "upsert"-ing
+// a bulk of TicketTag nodes.
+type TicketTagUpsertBulk struct {
+	create *TicketTagCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.TicketTag.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TicketTagUpsertBulk) UpdateNewValues() *TicketTagUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TicketTag.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *TicketTagUpsertBulk) Ignore() *TicketTagUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TicketTagUpsertBulk) DoNothing() *TicketTagUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TicketTagCreateBulk.OnConflict
+// documentation for more info.
+func (u *TicketTagUpsertBulk) Update(set func(*TicketTagUpsert)) *TicketTagUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TicketTagUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *TicketTagUpsertBulk) SetName(v string) *TicketTagUpsertBulk {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *TicketTagUpsertBulk) UpdateName() *TicketTagUpsertBulk {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetColor sets the "color" field.
+func (u *TicketTagUpsertBulk) SetColor(v string) *TicketTagUpsertBulk {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.SetColor(v)
+	})
+}
+
+// UpdateColor sets the "color" field to the value that was provided on create.
+func (u *TicketTagUpsertBulk) UpdateColor() *TicketTagUpsertBulk {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.UpdateColor()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *TicketTagUpsertBulk) SetDescription(v string) *TicketTagUpsertBulk {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *TicketTagUpsertBulk) UpdateDescription() *TicketTagUpsertBulk {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *TicketTagUpsertBulk) ClearDescription() *TicketTagUpsertBulk {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *TicketTagUpsertBulk) SetIsActive(v bool) *TicketTagUpsertBulk {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *TicketTagUpsertBulk) UpdateIsActive() *TicketTagUpsertBulk {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TicketTagUpsertBulk) SetTenantID(v int) *TicketTagUpsertBulk {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TicketTagUpsertBulk) AddTenantID(v int) *TicketTagUpsertBulk {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TicketTagUpsertBulk) UpdateTenantID() *TicketTagUpsertBulk {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TicketTagUpsertBulk) SetCreatedAt(v time.Time) *TicketTagUpsertBulk {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TicketTagUpsertBulk) UpdateCreatedAt() *TicketTagUpsertBulk {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *TicketTagUpsertBulk) SetUpdatedAt(v time.Time) *TicketTagUpsertBulk {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *TicketTagUpsertBulk) UpdateUpdatedAt() *TicketTagUpsertBulk {
+	return u.Update(func(s *TicketTagUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *TicketTagUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the TicketTagCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TicketTagCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TicketTagUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

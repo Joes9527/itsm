@@ -161,7 +161,7 @@ const protectedRoutes = [
   '/releases',
   '/licenses',
   '/assets',
-  '/workflow',
+  '/admin/workflows',
   // ...
 ];
 
@@ -185,7 +185,7 @@ const protectedRoutes = [
   '/releases',      // 确保添加
   '/licenses',      // 确保添加
   '/assets',        // 确保添加
-  '/workflow',
+  '/admin/workflows',
   // ...
 ];
 ```

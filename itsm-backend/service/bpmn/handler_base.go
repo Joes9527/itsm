@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 )
 
@@ -53,20 +52,10 @@ type ServiceTaskHandlerInterface interface {
 	GetTaskType() string
 
 	// Execute 执行服务任务
-	Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error)
-
-	// Validate 验证参数
-	Validate(ctx context.Context, config map[string]interface{}) error
+	Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error)
 
 	// GetHandlerID 返回处理器标识
 	GetHandlerID() string
-}
-
-// CallbackPayloadPolicy declares the only participant/process fields a handler
-// permits in durable callback storage. Handlers without this interface receive
-// an empty durable payload.
-type CallbackPayloadPolicy interface {
-	CallbackPayloadFields(action string) []string
 }
 
 // CallbackPayloadNormalizer lets a handler derive its durable callback payload
@@ -83,17 +72,11 @@ type HandlerBase struct {
 
 // GetIntFromVars 从变量中提取整数
 func GetIntFromVars(variables map[string]interface{}, key string) int {
-	if v, ok := variables[key]; ok {
-		switch val := v.(type) {
-		case float64:
-			return int(val)
-		case int:
-			return val
-		case int64:
-			return int(val)
-		}
+	value, err := CallbackInteger(variables[key])
+	if err != nil {
+		return 0
 	}
-	return 0
+	return value
 }
 
 // GetIntSliceFromVars 从变量中提取整数切片

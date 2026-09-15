@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/processcallbackoutbox"
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -228,7 +229,7 @@ func (_u *ProcessCallbackOutboxUpdate) ClearConfigRef() *ProcessCallbackOutboxUp
 }
 
 // SetVariables sets the "variables" field.
-func (_u *ProcessCallbackOutboxUpdate) SetVariables(v map[string]interface{}) *ProcessCallbackOutboxUpdate {
+func (_u *ProcessCallbackOutboxUpdate) SetVariables(v jsonvalue.NumberMap) *ProcessCallbackOutboxUpdate {
 	_u.mutation.SetVariables(v)
 	return _u
 }
@@ -236,6 +237,20 @@ func (_u *ProcessCallbackOutboxUpdate) SetVariables(v map[string]interface{}) *P
 // ClearVariables clears the value of the "variables" field.
 func (_u *ProcessCallbackOutboxUpdate) ClearVariables() *ProcessCallbackOutboxUpdate {
 	_u.mutation.ClearVariables()
+	return _u
+}
+
+// SetOptionalDeclared sets the "optional_declared" field.
+func (_u *ProcessCallbackOutboxUpdate) SetOptionalDeclared(v bool) *ProcessCallbackOutboxUpdate {
+	_u.mutation.SetOptionalDeclared(v)
+	return _u
+}
+
+// SetNillableOptionalDeclared sets the "optional_declared" field if the given value is not nil.
+func (_u *ProcessCallbackOutboxUpdate) SetNillableOptionalDeclared(v *bool) *ProcessCallbackOutboxUpdate {
+	if v != nil {
+		_u.SetOptionalDeclared(*v)
+	}
 	return _u
 }
 
@@ -482,6 +497,12 @@ func (_u *ProcessCallbackOutboxUpdate) sqlSave(ctx context.Context) (_node int, 
 			}
 		}
 	}
+	if _u.mutation.ActorIDCleared() {
+		_spec.ClearField(processcallbackoutbox.FieldActorID, field.TypeInt)
+	}
+	if _u.mutation.ActorSourceCleared() {
+		_spec.ClearField(processcallbackoutbox.FieldActorSource, field.TypeString)
+	}
 	if value, ok := _u.mutation.ExecutionKey(); ok {
 		_spec.SetField(processcallbackoutbox.FieldExecutionKey, field.TypeString, value)
 	}
@@ -541,6 +562,9 @@ func (_u *ProcessCallbackOutboxUpdate) sqlSave(ctx context.Context) (_node int, 
 	}
 	if _u.mutation.VariablesCleared() {
 		_spec.ClearField(processcallbackoutbox.FieldVariables, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.OptionalDeclared(); ok {
+		_spec.SetField(processcallbackoutbox.FieldOptionalDeclared, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(processcallbackoutbox.FieldStatus, field.TypeString, value)
@@ -801,7 +825,7 @@ func (_u *ProcessCallbackOutboxUpdateOne) ClearConfigRef() *ProcessCallbackOutbo
 }
 
 // SetVariables sets the "variables" field.
-func (_u *ProcessCallbackOutboxUpdateOne) SetVariables(v map[string]interface{}) *ProcessCallbackOutboxUpdateOne {
+func (_u *ProcessCallbackOutboxUpdateOne) SetVariables(v jsonvalue.NumberMap) *ProcessCallbackOutboxUpdateOne {
 	_u.mutation.SetVariables(v)
 	return _u
 }
@@ -809,6 +833,20 @@ func (_u *ProcessCallbackOutboxUpdateOne) SetVariables(v map[string]interface{})
 // ClearVariables clears the value of the "variables" field.
 func (_u *ProcessCallbackOutboxUpdateOne) ClearVariables() *ProcessCallbackOutboxUpdateOne {
 	_u.mutation.ClearVariables()
+	return _u
+}
+
+// SetOptionalDeclared sets the "optional_declared" field.
+func (_u *ProcessCallbackOutboxUpdateOne) SetOptionalDeclared(v bool) *ProcessCallbackOutboxUpdateOne {
+	_u.mutation.SetOptionalDeclared(v)
+	return _u
+}
+
+// SetNillableOptionalDeclared sets the "optional_declared" field if the given value is not nil.
+func (_u *ProcessCallbackOutboxUpdateOne) SetNillableOptionalDeclared(v *bool) *ProcessCallbackOutboxUpdateOne {
+	if v != nil {
+		_u.SetOptionalDeclared(*v)
+	}
 	return _u
 }
 
@@ -1085,6 +1123,12 @@ func (_u *ProcessCallbackOutboxUpdateOne) sqlSave(ctx context.Context) (_node *P
 			}
 		}
 	}
+	if _u.mutation.ActorIDCleared() {
+		_spec.ClearField(processcallbackoutbox.FieldActorID, field.TypeInt)
+	}
+	if _u.mutation.ActorSourceCleared() {
+		_spec.ClearField(processcallbackoutbox.FieldActorSource, field.TypeString)
+	}
 	if value, ok := _u.mutation.ExecutionKey(); ok {
 		_spec.SetField(processcallbackoutbox.FieldExecutionKey, field.TypeString, value)
 	}
@@ -1144,6 +1188,9 @@ func (_u *ProcessCallbackOutboxUpdateOne) sqlSave(ctx context.Context) (_node *P
 	}
 	if _u.mutation.VariablesCleared() {
 		_spec.ClearField(processcallbackoutbox.FieldVariables, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.OptionalDeclared(); ok {
+		_spec.SetField(processcallbackoutbox.FieldOptionalDeclared, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(processcallbackoutbox.FieldStatus, field.TypeString, value)

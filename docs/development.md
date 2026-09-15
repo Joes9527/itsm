@@ -1,5 +1,7 @@
 # Development Guide
 
+> 已存在的 KAF/ITSM WSL 联调实例请先读[本机开发环境](development-environment.md)。以下 Quick Start 用于新环境，不能对现有共享数据库直接执行 init/quickstart。
+
 ## Prerequisites
 
 - **Go** 1.25+（`go.mod` 当前固定 1.25.12，与 `itsm-backend/Dockerfile.prod` 一致）
@@ -53,8 +55,15 @@ itsm/
 ```bash
 cd itsm-backend
 
-# Database migration
-go run -tags migrate main.go
+# Apply registered post-schema migrations to a database whose Ent schema was
+# created by the deployment/bootstrap job.
+go run -tags migrate ./cmd/migrate -up
+
+# A destructive local-only rebuild is explicit and guarded. Never use it
+# against a shared or production database.
+ITSM_ALLOW_DESTRUCTIVE_FRESH=true ITSM_FRESH_HOST="$DB_HOST" \
+  ITSM_FRESH_PORT="$DB_PORT" ITSM_FRESH_DATABASE="$DB_NAME" \
+  go run -tags migrate ./cmd/migrate -fresh
 
 # Run with hot reload
 go install github.com/air-verse/air@latest
@@ -165,8 +174,8 @@ cd itsm-backend
 # Create migration
 go generate ent new MigrationName
 
-# Apply migrations
-go run -tags migrate main.go
+# Apply registered post-schema migrations after Ent Schema.Create
+go run -tags migrate ./cmd/migrate -up
 
 # Rollback (manual)
 psql -U itsm -d itsm -f scripts/down.sql
@@ -217,7 +226,7 @@ cd itsm-frontend && rm -rf node_modules && npm install
 ```bash
 # Check what's using the port
 lsof -i :8090  # Backend
-lsof -i :3000  # Frontend
+lsof -i :3010  # Frontend
 lsof -i :5432  # PostgreSQL
 ```
 

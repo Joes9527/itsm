@@ -3,14 +3,20 @@ package controller
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	"itsm-backend/common/executionscope"
+
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/handlers/common/intakehttp"
+	creation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/middleware"
 	"itsm-backend/repository/ticket"
 	"itsm-backend/service"
@@ -20,6 +26,7 @@ import (
 )
 
 type TicketController struct {
+	creationApplication     creation.Application
 	ticketService           *service.TicketService
 	ticketDependencyService *service.TicketDependencyService
 	db                      *sql.DB
@@ -69,56 +76,10 @@ func (tc *TicketController) ticketListToResponse(ctx context.Context, ts []*tick
 // @Router /api/v1/tickets [post]
 func (tc *TicketController) CreateTicket(c *gin.Context) {
 	var req dto.CreateTicketRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		tc.logger.Errorw("CreateTicket param bind failed", "error", err.Error())
-		common.Fail(c, common.ParamErrorCode, "请求参数错误: "+err.Error())
+	if !intakehttp.Bind(c, &req) {
 		return
 	}
-
-	// source 只允许由受信任的内部调用链设置（例如 service_request.Service.Create 在
-	// provisioning 前置条件判断中依赖 source=service_catalog 配合真实的 ticket_id →
-	// process_approval_decision 链路）。公开 HTTP 创建接口必须忽略客户端自报的 source，
-	// 否则任何已认证调用方都能在没有真实关联 ServiceRequest 的情况下伪造
-	// source=service_catalog，误导 ServiceRequestPanel 等 UI 展示。清空后交给
-	// ent schema 的 Default("manual") 生效。
-	req.Source = ""
-
-	// 获取租户ID（从中间件注入）
-	tenantID := c.GetInt("tenant_id")
-	if tenantID == 0 {
-		// 尝试从TenantContext获取
-		if tenantCtx, ok := middleware.GetTenantContext(c); ok {
-			tenantID = tenantCtx.TenantID
-		}
-	}
-	if tenantID == 0 {
-		common.Fail(c, common.ParamErrorCode, "租户ID无效")
-		return
-	}
-
-	userID := c.GetInt("user_id")
-	if userID == 0 {
-		// 尝试从中间件获取
-		if uid, err := middleware.GetUserID(c); err == nil {
-			userID = uid
-		}
-	}
-	if userID == 0 {
-		common.Fail(c, common.ParamErrorCode, "无法获取当前用户信息，请重新登录")
-		return
-	}
-
-	// 设置请求者ID为当前用户
-	req.RequesterID = userID
-
-	ticket, err := tc.ticketService.CreateTicket(c.Request.Context(), &req, tenantID)
-	if err != nil {
-		tc.logger.Errorw("Failed to create ticket", "error", err, "tenant_id", tenantID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
-		return
-	}
-
-	common.Success(c, tc.ticketToResponse(c, ticket))
+	tc.createFromRequest(c, req)
 }
 
 // UpdateTicket 更新工单
@@ -136,21 +97,32 @@ func (tc *TicketController) UpdateTicket(c *gin.Context) {
 	}
 
 	tenantID := c.GetInt("tenant_id")
-	req.UserID = c.GetInt("user_id")
-
-	current, err := tc.ticketService.GetTicket(c.Request.Context(), ticketID, tenantID)
+	result, err := tc.ticketService.UpdateTicket(c.Request.Context(), dto.TicketEditCommand{WorkItemID: ticketID, Fields: req.TicketEditFields, Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: c.GetInt("user_id"), ExpectedVersion: req.Version, OperationID: req.OperationID, CorrelationID: c.GetString("request_id"), Source: "http"}})
 	if err != nil {
-		common.Fail(c, common.NotFoundCode, "工单不存在")
-		return
-	}
-	actor := service.ActionActor{Client: tc.client, TenantID: tenantID, UserID: req.UserID, Role: c.GetString("role")}
-	if perm := service.CanEdit(actor, current); !perm.Allowed {
-		common.Fail(c, common.ForbiddenCode, perm.Reason)
-		return
-	}
-
-	ticket, err := tc.ticketService.UpdateTicket(c.Request.Context(), ticketID, &req, tenantID)
-	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
+		if errors.Is(err, executionscope.ErrDenied) || errors.Is(err, creation.ErrPermissionDenied) {
+			common.Forbidden(c, "ticket edit permission or execution scope denied")
+			return
+		}
+		if app, ok := common.AsAppError(err); ok && app.Code == common.ErrCodeForbidden {
+			common.Forbidden(c, app.Message)
+			return
+		}
+		var operationConflict *workitemmutation.OperationConflictError
+		if errors.As(err, &operationConflict) {
+			common.Conflict(c, err.Error(), nil)
+			return
+		}
+		if app, ok := common.AsAppError(err); ok && (app.Code == common.ErrCodeValidation || app.Code == common.ErrCodeBadRequest) {
+			common.Fail(c, common.ParamErrorCode, app.Message)
+			return
+		}
+		if ent.IsNotFound(err) {
+			common.NotFound(c, "工单不存在")
+			return
+		}
 		// 处理版本冲突错误
 		if common.IsVersionConflictError(err) {
 			conflictErr := err.(*common.VersionConflictError)
@@ -179,7 +151,7 @@ func (tc *TicketController) UpdateTicket(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, tc.ticketToResponse(c, ticket))
+	common.Success(c, result)
 }
 
 // GetTicket 获取工单详情
@@ -259,21 +231,9 @@ func (tc *TicketController) DeleteTicket(c *gin.Context) {
 
 	tenantID := c.GetInt("tenant_id")
 
-	current, err := tc.ticketService.GetTicket(c.Request.Context(), ticketID, tenantID)
+	err = tc.ticketService.DeleteTicket(c.Request.Context(), ticketID, workitemmutation.Meta{TenantID: tenantID, ActorID: c.GetInt("user_id"), Source: "http"})
 	if err != nil {
-		common.Fail(c, common.NotFoundCode, "工单不存在")
-		return
-	}
-	actor := service.ActionActor{Client: tc.client, TenantID: tenantID, UserID: c.GetInt("user_id"), Role: c.GetString("role")}
-	if perm := service.CanDelete(c.Request.Context(), actor, current); !perm.Allowed {
-		common.Fail(c, common.ForbiddenCode, perm.Reason)
-		return
-	}
-
-	err = tc.ticketService.DeleteTicket(c.Request.Context(), ticketID, tenantID)
-	if err != nil {
-		tc.logger.Errorw("Failed to delete ticket", "error", err, "ticket_id", ticketID, "tenant_id", tenantID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
+		respondWorkItemDeletionError(c, err)
 		return
 	}
 
@@ -299,25 +259,9 @@ func (tc *TicketController) UpdateTicketStatus(c *gin.Context) {
 	tenantID := c.GetInt("tenant_id")
 	userID := c.GetInt("user_id")
 
-	// approved/rejected 是审批决策，需要 CanApprove/CanReject 的职责分离校验；
-	// 其它状态流转（in_progress/resolved 等）不属于审批语义，不走这道门。
 	if req.Status == "approved" || req.Status == "rejected" {
-		current, err := tc.ticketService.GetTicket(c.Request.Context(), ticketID, tenantID)
-		if err != nil {
-			common.Fail(c, common.NotFoundCode, "工单不存在")
-			return
-		}
-		actor := service.ActionActor{Client: tc.client, TenantID: tenantID, UserID: userID, Role: c.GetString("role")}
-		var perm dto.ActionPermission
-		if req.Status == "approved" {
-			perm = service.CanApprove(actor, current)
-		} else {
-			perm = service.CanReject(actor, current)
-		}
-		if !perm.Allowed {
-			common.Fail(c, common.ForbiddenCode, perm.Reason)
-			return
-		}
+		common.Fail(c, common.ForbiddenCode, "审批状态只能通过 BPMN 待办任务推进")
+		return
 	}
 
 	ticket, err := tc.ticketService.UpdateTicketStatus(c.Request.Context(), ticketID, req.Status, tenantID, userID)
@@ -333,17 +277,15 @@ func (tc *TicketController) UpdateTicketStatus(c *gin.Context) {
 // BatchDeleteTickets 批量删除工单
 func (tc *TicketController) BatchDeleteTickets(c *gin.Context) {
 	var req dto.BatchDeleteRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Fail(c, common.ParamErrorCode, "请求参数错误: "+err.Error())
+	if !intakehttp.Bind(c, &req) {
 		return
 	}
 
 	tenantID := c.GetInt("tenant_id")
 
-	err := tc.ticketService.BatchDeleteTickets(c.Request.Context(), req.TicketIDs, tenantID)
+	err := tc.ticketService.BatchDeleteTickets(c.Request.Context(), req.TicketIDs, workitemmutation.Meta{TenantID: tenantID, ActorID: c.GetInt("user_id"), Source: "http"})
 	if err != nil {
-		tc.logger.Errorw("Failed to batch delete tickets", "error", err, "tenant_id", tenantID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
+		respondWorkItemDeletionError(c, err)
 		return
 	}
 
@@ -400,8 +342,11 @@ func (tc *TicketController) AssignTicket(c *gin.Context) {
 		return
 	}
 
-	ticket, err := tc.ticketService.AssignTicket(c.Request.Context(), ticketID, assigneeID, tenantID)
+	ticket, err := tc.ticketService.AssignTicket(c.Request.Context(), ticketID, assigneeID, tenantID, creation.Identity{ActorID: assignedBy, TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
 		tc.logger.Errorw("Failed to assign ticket", "error", err, "ticket_id", ticketID, "tenant_id", tenantID)
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
@@ -413,7 +358,7 @@ func (tc *TicketController) AssignTicket(c *gin.Context) {
 // EscalateTicket 升级工单
 func (tc *TicketController) EscalateTicket(c *gin.Context) {
 	ticketID, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
+	if err != nil || ticketID <= 0 {
 		common.Fail(c, common.ParamErrorCode, "无效的工单ID")
 		return
 	}
@@ -427,14 +372,22 @@ func (tc *TicketController) EscalateTicket(c *gin.Context) {
 	tenantID := c.GetInt("tenant_id")
 	escalatedBy := c.GetInt("user_id")
 
-	ticket, err := tc.ticketService.EscalateTicket(c.Request.Context(), ticketID, req.Reason, tenantID, escalatedBy)
-	if err != nil {
-		tc.logger.Errorw("Failed to escalate ticket", "error", err, "ticket_id", ticketID, "tenant_id", tenantID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
+	if tenantID <= 0 || escalatedBy <= 0 {
+		common.Forbidden(c, "authenticated actor and tenant required")
 		return
 	}
 
-	common.Success(c, tc.ticketToResponse(c, ticket))
+	result, err := tc.ticketService.EscalateTicket(c.Request.Context(), dto.TicketEscalationCommand{WorkItemID: ticketID, Reason: req.Reason, Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: escalatedBy, ExpectedVersion: req.Version, OperationID: req.OperationID, CorrelationID: c.GetString("request_id"), Source: "http"}})
+	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
+		tc.logger.Errorw("Failed to escalate ticket", "error", err, "ticket_id", ticketID, "tenant_id", tenantID)
+		respondTicketEscalationError(c, err)
+		return
+	}
+
+	common.Success(c, result)
 }
 
 // ResolveTicket 解决工单
@@ -602,34 +555,6 @@ func (tc *TicketController) ExportTickets(c *gin.Context) {
 	c.Data(200, "application/octet-stream", data)
 }
 
-// ImportTickets 导入工单
-func (tc *TicketController) ImportTickets(c *gin.Context) {
-	var req dto.TicketImportRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Fail(c, common.ParamErrorCode, "请求参数错误: "+err.Error())
-		return
-	}
-
-	tenantID := c.GetInt("tenant_id")
-
-	// 解析文件数据
-	fileData := []byte(req.File) // 这里应该从文件上传中获取
-
-	// 实现导入功能
-	err := tc.ticketService.ImportTickets(c.Request.Context(), tenantID, fileData, req.Format)
-	if err != nil {
-		tc.logger.Errorw("Import tickets failed", "error", err, "tenant_id", tenantID)
-		common.Fail(c, common.InternalErrorCode, "导入失败: "+err.Error())
-		return
-	}
-
-	tc.logger.Infow("Import tickets successful", "format", req.Format, "tenant_id", tenantID)
-	common.Success(c, gin.H{
-		"message": "工单导入成功",
-		"format":  req.Format,
-	})
-}
-
 // AssignTickets 分配工单
 func (tc *TicketController) AssignTickets(c *gin.Context) {
 	var req dto.TicketAssignmentRequest
@@ -641,8 +566,11 @@ func (tc *TicketController) AssignTickets(c *gin.Context) {
 	tenantID := c.GetInt("tenant_id")
 
 	// 实现工单分配功能
-	err := tc.ticketService.AssignTickets(c.Request.Context(), tenantID, req.TicketIDs, req.AssigneeID)
+	err := tc.ticketService.AssignTickets(c.Request.Context(), tenantID, req.TicketIDs, req.AssigneeID, creation.Identity{ActorID: c.GetInt("user_id"), TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
 		tc.logger.Errorw("Assign tickets failed", "error", err, "ticket_ids", req.TicketIDs, "assignee_id", req.AssigneeID, "tenant_id", tenantID)
 		common.Fail(c, common.InternalErrorCode, "分配失败: "+err.Error())
 		return
@@ -980,52 +908,27 @@ func (tc *TicketController) GetSubtasks(c *gin.Context) {
 // CreateSubtask 创建子任务
 func (tc *TicketController) CreateSubtask(c *gin.Context) {
 	parentID, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		common.Fail(c, common.ParamErrorCode, "无效的工单ID")
+	if err != nil || parentID <= 0 {
+		intakehttp.Fail(c, intakehttp.Invalid("id", "positive parent work item ID is required"))
 		return
 	}
-
 	var req dto.CreateSubtaskRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Fail(c, common.ParamErrorCode, "请求参数错误: "+err.Error())
+	if !intakehttp.Bind(c, &req) {
 		return
 	}
-
-	tenantID := c.GetInt("tenant_id")
-	userID := c.GetInt("user_id")
-
-	// 转换为本服务的 CreateTicketRequest（补全父工单字段）
-	fullReq := dto.CreateTicketRequest{
-		Title:          req.Title,
-		Description:    req.Description,
-		Priority:       req.Priority,
-		Type:           req.Type,
-		RequesterID:    userID,
-		ParentTicketID: &parentID,
-		AssigneeID:     req.AssigneeID,
-		FormFields:     req.FormFields,
-	}
-
-	ticket, err := tc.ticketService.CreateTicket(c.Request.Context(), &fullReq, tenantID)
-	if err != nil {
-		tc.logger.Errorw("Failed to create subtask", "error", err, "parent_id", parentID, "tenant_id", tenantID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
-		return
-	}
-
-	common.Success(c, tc.ticketToResponse(c, ticket))
+	tc.createFromRequest(c, dto.CreateTicketRequest{Title: req.Title, Description: req.Description, Priority: req.Priority, Type: req.Type, ParentTicketID: &parentID, AssigneeID: req.AssigneeID, FormFields: req.FormFields})
 }
 
 // UpdateSubtask 更新子任务
 func (tc *TicketController) UpdateSubtask(c *gin.Context) {
 	parentID, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
+	if err != nil || parentID <= 0 {
 		common.Fail(c, common.ParamErrorCode, "无效的父工单ID")
 		return
 	}
 
 	subtaskID, err := strconv.Atoi(c.Param("subtask_id"))
-	if err != nil {
+	if err != nil || subtaskID <= 0 {
 		common.Fail(c, common.ParamErrorCode, "无效的子任务ID")
 		return
 	}
@@ -1037,30 +940,47 @@ func (tc *TicketController) UpdateSubtask(c *gin.Context) {
 	}
 
 	tenantID := c.GetInt("tenant_id")
-	req.UserID = c.GetInt("user_id")
-
-	// 验证子任务是否属于指定的父工单
-	ticket, err := tc.ticketService.GetTicket(c.Request.Context(), subtaskID, tenantID)
+	result, err := tc.ticketService.UpdateTicket(c.Request.Context(), dto.TicketEditCommand{WorkItemID: subtaskID, ExpectedParentID: parentID, Fields: req.TicketEditFields, Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: c.GetInt("user_id"), ExpectedVersion: req.Version, OperationID: req.OperationID, CorrelationID: c.GetString("request_id"), Source: "http"}})
 	if err != nil {
-		tc.logger.Errorw("Failed to get subtask", "error", err, "subtask_id", subtaskID, "tenant_id", tenantID)
-		common.Fail(c, common.NotFoundCode, "子任务不存在")
-		return
-	}
-
-	// 检查parent_ticket_id是否匹配（V2 是 *int）
-	if ticket.ParentTicketID == nil || *ticket.ParentTicketID != parentID {
-		common.Fail(c, common.ParamErrorCode, "子任务不属于指定的父工单")
-		return
-	}
-
-	updatedTicket, err := tc.ticketService.UpdateTicket(c.Request.Context(), subtaskID, &req, tenantID)
-	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
+		if errors.Is(err, executionscope.ErrDenied) || errors.Is(err, creation.ErrPermissionDenied) {
+			common.Forbidden(c, "ticket edit permission or execution scope denied")
+			return
+		}
+		if ent.IsNotFound(err) {
+			common.NotFound(c, "子任务不存在")
+			return
+		}
+		var operationConflict *workitemmutation.OperationConflictError
+		if errors.As(err, &operationConflict) {
+			common.Conflict(c, err.Error(), nil)
+			return
+		}
+		if common.IsVersionConflictError(err) {
+			common.Conflict(c, err.Error(), nil)
+			return
+		}
+		if app, ok := common.AsAppError(err); ok {
+			switch app.Code {
+			case common.ErrCodeForbidden:
+				common.Forbidden(c, app.Message)
+				return
+			case common.ErrCodeValidation, common.ErrCodeBadRequest:
+				common.Fail(c, common.ParamErrorCode, app.Message)
+				return
+			case common.ErrCodeNotFound:
+				common.NotFound(c, app.Message)
+				return
+			}
+		}
 		tc.logger.Errorw("Failed to update subtask", "error", err, "subtask_id", subtaskID, "tenant_id", tenantID)
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
 	}
 
-	common.Success(c, tc.ticketToResponse(c, updatedTicket))
+	common.Success(c, result)
 }
 
 // DeleteSubtask 删除子任务
@@ -1079,24 +999,9 @@ func (tc *TicketController) DeleteSubtask(c *gin.Context) {
 
 	tenantID := c.GetInt("tenant_id")
 
-	// 验证子任务是否属于指定的父工单
-	ticket, err := tc.ticketService.GetTicket(c.Request.Context(), subtaskID, tenantID)
+	err = tc.ticketService.DeleteSubtask(c.Request.Context(), parentID, subtaskID, workitemmutation.Meta{TenantID: tenantID, ActorID: c.GetInt("user_id"), Source: "http"})
 	if err != nil {
-		tc.logger.Errorw("Failed to get subtask", "error", err, "subtask_id", subtaskID, "tenant_id", tenantID)
-		common.Fail(c, common.NotFoundCode, "子任务不存在")
-		return
-	}
-
-	// 检查parent_ticket_id是否匹配（V2 是 *int）
-	if ticket.ParentTicketID == nil || *ticket.ParentTicketID != parentID {
-		common.Fail(c, common.ParamErrorCode, "子任务不属于指定的父工单")
-		return
-	}
-
-	err = tc.ticketService.DeleteTicket(c.Request.Context(), subtaskID, tenantID)
-	if err != nil {
-		tc.logger.Errorw("Failed to delete subtask", "error", err, "subtask_id", subtaskID, "tenant_id", tenantID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
+		respondWorkItemDeletionError(c, err)
 		return
 	}
 

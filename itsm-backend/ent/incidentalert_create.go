@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/incidentalert"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type IncidentAlertCreate struct {
 	config
 	mutation *IncidentAlertMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetIncidentID sets the "incident_id" field.
@@ -329,6 +331,7 @@ func (_c *IncidentAlertCreate) createSpec() (*IncidentAlert, *sqlgraph.CreateSpe
 		_node = &IncidentAlert{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(incidentalert.Table, sqlgraph.NewFieldSpec(incidentalert.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.AlertType(); ok {
 		_spec.SetField(incidentalert.FieldAlertType, field.TypeString, value)
 		_node.AlertType = value
@@ -409,11 +412,654 @@ func (_c *IncidentAlertCreate) createSpec() (*IncidentAlert, *sqlgraph.CreateSpe
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.IncidentAlert.Create().
+//		SetIncidentID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.IncidentAlertUpsert) {
+//			SetIncidentID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *IncidentAlertCreate) OnConflict(opts ...sql.ConflictOption) *IncidentAlertUpsertOne {
+	_c.conflict = opts
+	return &IncidentAlertUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.IncidentAlert.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *IncidentAlertCreate) OnConflictColumns(columns ...string) *IncidentAlertUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &IncidentAlertUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// IncidentAlertUpsertOne is the builder for "upsert"-ing
+	//  one IncidentAlert node.
+	IncidentAlertUpsertOne struct {
+		create *IncidentAlertCreate
+	}
+
+	// IncidentAlertUpsert is the "OnConflict" setter.
+	IncidentAlertUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetIncidentID sets the "incident_id" field.
+func (u *IncidentAlertUpsert) SetIncidentID(v int) *IncidentAlertUpsert {
+	u.Set(incidentalert.FieldIncidentID, v)
+	return u
+}
+
+// UpdateIncidentID sets the "incident_id" field to the value that was provided on create.
+func (u *IncidentAlertUpsert) UpdateIncidentID() *IncidentAlertUpsert {
+	u.SetExcluded(incidentalert.FieldIncidentID)
+	return u
+}
+
+// SetAlertType sets the "alert_type" field.
+func (u *IncidentAlertUpsert) SetAlertType(v string) *IncidentAlertUpsert {
+	u.Set(incidentalert.FieldAlertType, v)
+	return u
+}
+
+// UpdateAlertType sets the "alert_type" field to the value that was provided on create.
+func (u *IncidentAlertUpsert) UpdateAlertType() *IncidentAlertUpsert {
+	u.SetExcluded(incidentalert.FieldAlertType)
+	return u
+}
+
+// SetAlertName sets the "alert_name" field.
+func (u *IncidentAlertUpsert) SetAlertName(v string) *IncidentAlertUpsert {
+	u.Set(incidentalert.FieldAlertName, v)
+	return u
+}
+
+// UpdateAlertName sets the "alert_name" field to the value that was provided on create.
+func (u *IncidentAlertUpsert) UpdateAlertName() *IncidentAlertUpsert {
+	u.SetExcluded(incidentalert.FieldAlertName)
+	return u
+}
+
+// SetMessage sets the "message" field.
+func (u *IncidentAlertUpsert) SetMessage(v string) *IncidentAlertUpsert {
+	u.Set(incidentalert.FieldMessage, v)
+	return u
+}
+
+// UpdateMessage sets the "message" field to the value that was provided on create.
+func (u *IncidentAlertUpsert) UpdateMessage() *IncidentAlertUpsert {
+	u.SetExcluded(incidentalert.FieldMessage)
+	return u
+}
+
+// SetSeverity sets the "severity" field.
+func (u *IncidentAlertUpsert) SetSeverity(v string) *IncidentAlertUpsert {
+	u.Set(incidentalert.FieldSeverity, v)
+	return u
+}
+
+// UpdateSeverity sets the "severity" field to the value that was provided on create.
+func (u *IncidentAlertUpsert) UpdateSeverity() *IncidentAlertUpsert {
+	u.SetExcluded(incidentalert.FieldSeverity)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *IncidentAlertUpsert) SetStatus(v string) *IncidentAlertUpsert {
+	u.Set(incidentalert.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *IncidentAlertUpsert) UpdateStatus() *IncidentAlertUpsert {
+	u.SetExcluded(incidentalert.FieldStatus)
+	return u
+}
+
+// SetChannels sets the "channels" field.
+func (u *IncidentAlertUpsert) SetChannels(v []string) *IncidentAlertUpsert {
+	u.Set(incidentalert.FieldChannels, v)
+	return u
+}
+
+// UpdateChannels sets the "channels" field to the value that was provided on create.
+func (u *IncidentAlertUpsert) UpdateChannels() *IncidentAlertUpsert {
+	u.SetExcluded(incidentalert.FieldChannels)
+	return u
+}
+
+// ClearChannels clears the value of the "channels" field.
+func (u *IncidentAlertUpsert) ClearChannels() *IncidentAlertUpsert {
+	u.SetNull(incidentalert.FieldChannels)
+	return u
+}
+
+// SetRecipients sets the "recipients" field.
+func (u *IncidentAlertUpsert) SetRecipients(v []string) *IncidentAlertUpsert {
+	u.Set(incidentalert.FieldRecipients, v)
+	return u
+}
+
+// UpdateRecipients sets the "recipients" field to the value that was provided on create.
+func (u *IncidentAlertUpsert) UpdateRecipients() *IncidentAlertUpsert {
+	u.SetExcluded(incidentalert.FieldRecipients)
+	return u
+}
+
+// ClearRecipients clears the value of the "recipients" field.
+func (u *IncidentAlertUpsert) ClearRecipients() *IncidentAlertUpsert {
+	u.SetNull(incidentalert.FieldRecipients)
+	return u
+}
+
+// SetTriggeredAt sets the "triggered_at" field.
+func (u *IncidentAlertUpsert) SetTriggeredAt(v time.Time) *IncidentAlertUpsert {
+	u.Set(incidentalert.FieldTriggeredAt, v)
+	return u
+}
+
+// UpdateTriggeredAt sets the "triggered_at" field to the value that was provided on create.
+func (u *IncidentAlertUpsert) UpdateTriggeredAt() *IncidentAlertUpsert {
+	u.SetExcluded(incidentalert.FieldTriggeredAt)
+	return u
+}
+
+// SetAcknowledgedAt sets the "acknowledged_at" field.
+func (u *IncidentAlertUpsert) SetAcknowledgedAt(v time.Time) *IncidentAlertUpsert {
+	u.Set(incidentalert.FieldAcknowledgedAt, v)
+	return u
+}
+
+// UpdateAcknowledgedAt sets the "acknowledged_at" field to the value that was provided on create.
+func (u *IncidentAlertUpsert) UpdateAcknowledgedAt() *IncidentAlertUpsert {
+	u.SetExcluded(incidentalert.FieldAcknowledgedAt)
+	return u
+}
+
+// ClearAcknowledgedAt clears the value of the "acknowledged_at" field.
+func (u *IncidentAlertUpsert) ClearAcknowledgedAt() *IncidentAlertUpsert {
+	u.SetNull(incidentalert.FieldAcknowledgedAt)
+	return u
+}
+
+// SetResolvedAt sets the "resolved_at" field.
+func (u *IncidentAlertUpsert) SetResolvedAt(v time.Time) *IncidentAlertUpsert {
+	u.Set(incidentalert.FieldResolvedAt, v)
+	return u
+}
+
+// UpdateResolvedAt sets the "resolved_at" field to the value that was provided on create.
+func (u *IncidentAlertUpsert) UpdateResolvedAt() *IncidentAlertUpsert {
+	u.SetExcluded(incidentalert.FieldResolvedAt)
+	return u
+}
+
+// ClearResolvedAt clears the value of the "resolved_at" field.
+func (u *IncidentAlertUpsert) ClearResolvedAt() *IncidentAlertUpsert {
+	u.SetNull(incidentalert.FieldResolvedAt)
+	return u
+}
+
+// SetAcknowledgedBy sets the "acknowledged_by" field.
+func (u *IncidentAlertUpsert) SetAcknowledgedBy(v int) *IncidentAlertUpsert {
+	u.Set(incidentalert.FieldAcknowledgedBy, v)
+	return u
+}
+
+// UpdateAcknowledgedBy sets the "acknowledged_by" field to the value that was provided on create.
+func (u *IncidentAlertUpsert) UpdateAcknowledgedBy() *IncidentAlertUpsert {
+	u.SetExcluded(incidentalert.FieldAcknowledgedBy)
+	return u
+}
+
+// AddAcknowledgedBy adds v to the "acknowledged_by" field.
+func (u *IncidentAlertUpsert) AddAcknowledgedBy(v int) *IncidentAlertUpsert {
+	u.Add(incidentalert.FieldAcknowledgedBy, v)
+	return u
+}
+
+// ClearAcknowledgedBy clears the value of the "acknowledged_by" field.
+func (u *IncidentAlertUpsert) ClearAcknowledgedBy() *IncidentAlertUpsert {
+	u.SetNull(incidentalert.FieldAcknowledgedBy)
+	return u
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *IncidentAlertUpsert) SetMetadata(v map[string]interface{}) *IncidentAlertUpsert {
+	u.Set(incidentalert.FieldMetadata, v)
+	return u
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *IncidentAlertUpsert) UpdateMetadata() *IncidentAlertUpsert {
+	u.SetExcluded(incidentalert.FieldMetadata)
+	return u
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *IncidentAlertUpsert) ClearMetadata() *IncidentAlertUpsert {
+	u.SetNull(incidentalert.FieldMetadata)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *IncidentAlertUpsert) SetTenantID(v int) *IncidentAlertUpsert {
+	u.Set(incidentalert.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *IncidentAlertUpsert) UpdateTenantID() *IncidentAlertUpsert {
+	u.SetExcluded(incidentalert.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *IncidentAlertUpsert) AddTenantID(v int) *IncidentAlertUpsert {
+	u.Add(incidentalert.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *IncidentAlertUpsert) SetCreatedAt(v time.Time) *IncidentAlertUpsert {
+	u.Set(incidentalert.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *IncidentAlertUpsert) UpdateCreatedAt() *IncidentAlertUpsert {
+	u.SetExcluded(incidentalert.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *IncidentAlertUpsert) SetUpdatedAt(v time.Time) *IncidentAlertUpsert {
+	u.Set(incidentalert.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *IncidentAlertUpsert) UpdateUpdatedAt() *IncidentAlertUpsert {
+	u.SetExcluded(incidentalert.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.IncidentAlert.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *IncidentAlertUpsertOne) UpdateNewValues() *IncidentAlertUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.IncidentAlert.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *IncidentAlertUpsertOne) Ignore() *IncidentAlertUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *IncidentAlertUpsertOne) DoNothing() *IncidentAlertUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the IncidentAlertCreate.OnConflict
+// documentation for more info.
+func (u *IncidentAlertUpsertOne) Update(set func(*IncidentAlertUpsert)) *IncidentAlertUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&IncidentAlertUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetIncidentID sets the "incident_id" field.
+func (u *IncidentAlertUpsertOne) SetIncidentID(v int) *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetIncidentID(v)
+	})
+}
+
+// UpdateIncidentID sets the "incident_id" field to the value that was provided on create.
+func (u *IncidentAlertUpsertOne) UpdateIncidentID() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateIncidentID()
+	})
+}
+
+// SetAlertType sets the "alert_type" field.
+func (u *IncidentAlertUpsertOne) SetAlertType(v string) *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetAlertType(v)
+	})
+}
+
+// UpdateAlertType sets the "alert_type" field to the value that was provided on create.
+func (u *IncidentAlertUpsertOne) UpdateAlertType() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateAlertType()
+	})
+}
+
+// SetAlertName sets the "alert_name" field.
+func (u *IncidentAlertUpsertOne) SetAlertName(v string) *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetAlertName(v)
+	})
+}
+
+// UpdateAlertName sets the "alert_name" field to the value that was provided on create.
+func (u *IncidentAlertUpsertOne) UpdateAlertName() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateAlertName()
+	})
+}
+
+// SetMessage sets the "message" field.
+func (u *IncidentAlertUpsertOne) SetMessage(v string) *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetMessage(v)
+	})
+}
+
+// UpdateMessage sets the "message" field to the value that was provided on create.
+func (u *IncidentAlertUpsertOne) UpdateMessage() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateMessage()
+	})
+}
+
+// SetSeverity sets the "severity" field.
+func (u *IncidentAlertUpsertOne) SetSeverity(v string) *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetSeverity(v)
+	})
+}
+
+// UpdateSeverity sets the "severity" field to the value that was provided on create.
+func (u *IncidentAlertUpsertOne) UpdateSeverity() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateSeverity()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *IncidentAlertUpsertOne) SetStatus(v string) *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *IncidentAlertUpsertOne) UpdateStatus() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetChannels sets the "channels" field.
+func (u *IncidentAlertUpsertOne) SetChannels(v []string) *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetChannels(v)
+	})
+}
+
+// UpdateChannels sets the "channels" field to the value that was provided on create.
+func (u *IncidentAlertUpsertOne) UpdateChannels() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateChannels()
+	})
+}
+
+// ClearChannels clears the value of the "channels" field.
+func (u *IncidentAlertUpsertOne) ClearChannels() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.ClearChannels()
+	})
+}
+
+// SetRecipients sets the "recipients" field.
+func (u *IncidentAlertUpsertOne) SetRecipients(v []string) *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetRecipients(v)
+	})
+}
+
+// UpdateRecipients sets the "recipients" field to the value that was provided on create.
+func (u *IncidentAlertUpsertOne) UpdateRecipients() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateRecipients()
+	})
+}
+
+// ClearRecipients clears the value of the "recipients" field.
+func (u *IncidentAlertUpsertOne) ClearRecipients() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.ClearRecipients()
+	})
+}
+
+// SetTriggeredAt sets the "triggered_at" field.
+func (u *IncidentAlertUpsertOne) SetTriggeredAt(v time.Time) *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetTriggeredAt(v)
+	})
+}
+
+// UpdateTriggeredAt sets the "triggered_at" field to the value that was provided on create.
+func (u *IncidentAlertUpsertOne) UpdateTriggeredAt() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateTriggeredAt()
+	})
+}
+
+// SetAcknowledgedAt sets the "acknowledged_at" field.
+func (u *IncidentAlertUpsertOne) SetAcknowledgedAt(v time.Time) *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetAcknowledgedAt(v)
+	})
+}
+
+// UpdateAcknowledgedAt sets the "acknowledged_at" field to the value that was provided on create.
+func (u *IncidentAlertUpsertOne) UpdateAcknowledgedAt() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateAcknowledgedAt()
+	})
+}
+
+// ClearAcknowledgedAt clears the value of the "acknowledged_at" field.
+func (u *IncidentAlertUpsertOne) ClearAcknowledgedAt() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.ClearAcknowledgedAt()
+	})
+}
+
+// SetResolvedAt sets the "resolved_at" field.
+func (u *IncidentAlertUpsertOne) SetResolvedAt(v time.Time) *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetResolvedAt(v)
+	})
+}
+
+// UpdateResolvedAt sets the "resolved_at" field to the value that was provided on create.
+func (u *IncidentAlertUpsertOne) UpdateResolvedAt() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateResolvedAt()
+	})
+}
+
+// ClearResolvedAt clears the value of the "resolved_at" field.
+func (u *IncidentAlertUpsertOne) ClearResolvedAt() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.ClearResolvedAt()
+	})
+}
+
+// SetAcknowledgedBy sets the "acknowledged_by" field.
+func (u *IncidentAlertUpsertOne) SetAcknowledgedBy(v int) *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetAcknowledgedBy(v)
+	})
+}
+
+// AddAcknowledgedBy adds v to the "acknowledged_by" field.
+func (u *IncidentAlertUpsertOne) AddAcknowledgedBy(v int) *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.AddAcknowledgedBy(v)
+	})
+}
+
+// UpdateAcknowledgedBy sets the "acknowledged_by" field to the value that was provided on create.
+func (u *IncidentAlertUpsertOne) UpdateAcknowledgedBy() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateAcknowledgedBy()
+	})
+}
+
+// ClearAcknowledgedBy clears the value of the "acknowledged_by" field.
+func (u *IncidentAlertUpsertOne) ClearAcknowledgedBy() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.ClearAcknowledgedBy()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *IncidentAlertUpsertOne) SetMetadata(v map[string]interface{}) *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *IncidentAlertUpsertOne) UpdateMetadata() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *IncidentAlertUpsertOne) ClearMetadata() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *IncidentAlertUpsertOne) SetTenantID(v int) *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *IncidentAlertUpsertOne) AddTenantID(v int) *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *IncidentAlertUpsertOne) UpdateTenantID() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *IncidentAlertUpsertOne) SetCreatedAt(v time.Time) *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *IncidentAlertUpsertOne) UpdateCreatedAt() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *IncidentAlertUpsertOne) SetUpdatedAt(v time.Time) *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *IncidentAlertUpsertOne) UpdateUpdatedAt() *IncidentAlertUpsertOne {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *IncidentAlertUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for IncidentAlertCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *IncidentAlertUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *IncidentAlertUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *IncidentAlertUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // IncidentAlertCreateBulk is the builder for creating many IncidentAlert entities in bulk.
 type IncidentAlertCreateBulk struct {
 	config
 	err      error
 	builders []*IncidentAlertCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the IncidentAlert entities in the database.
@@ -443,6 +1089,7 @@ func (_c *IncidentAlertCreateBulk) Save(ctx context.Context) ([]*IncidentAlert, 
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -493,6 +1140,390 @@ func (_c *IncidentAlertCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *IncidentAlertCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.IncidentAlert.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.IncidentAlertUpsert) {
+//			SetIncidentID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *IncidentAlertCreateBulk) OnConflict(opts ...sql.ConflictOption) *IncidentAlertUpsertBulk {
+	_c.conflict = opts
+	return &IncidentAlertUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.IncidentAlert.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *IncidentAlertCreateBulk) OnConflictColumns(columns ...string) *IncidentAlertUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &IncidentAlertUpsertBulk{
+		create: _c,
+	}
+}
+
+// IncidentAlertUpsertBulk is the builder for "upsert"-ing
+// a bulk of IncidentAlert nodes.
+type IncidentAlertUpsertBulk struct {
+	create *IncidentAlertCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.IncidentAlert.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *IncidentAlertUpsertBulk) UpdateNewValues() *IncidentAlertUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.IncidentAlert.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *IncidentAlertUpsertBulk) Ignore() *IncidentAlertUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *IncidentAlertUpsertBulk) DoNothing() *IncidentAlertUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the IncidentAlertCreateBulk.OnConflict
+// documentation for more info.
+func (u *IncidentAlertUpsertBulk) Update(set func(*IncidentAlertUpsert)) *IncidentAlertUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&IncidentAlertUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetIncidentID sets the "incident_id" field.
+func (u *IncidentAlertUpsertBulk) SetIncidentID(v int) *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetIncidentID(v)
+	})
+}
+
+// UpdateIncidentID sets the "incident_id" field to the value that was provided on create.
+func (u *IncidentAlertUpsertBulk) UpdateIncidentID() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateIncidentID()
+	})
+}
+
+// SetAlertType sets the "alert_type" field.
+func (u *IncidentAlertUpsertBulk) SetAlertType(v string) *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetAlertType(v)
+	})
+}
+
+// UpdateAlertType sets the "alert_type" field to the value that was provided on create.
+func (u *IncidentAlertUpsertBulk) UpdateAlertType() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateAlertType()
+	})
+}
+
+// SetAlertName sets the "alert_name" field.
+func (u *IncidentAlertUpsertBulk) SetAlertName(v string) *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetAlertName(v)
+	})
+}
+
+// UpdateAlertName sets the "alert_name" field to the value that was provided on create.
+func (u *IncidentAlertUpsertBulk) UpdateAlertName() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateAlertName()
+	})
+}
+
+// SetMessage sets the "message" field.
+func (u *IncidentAlertUpsertBulk) SetMessage(v string) *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetMessage(v)
+	})
+}
+
+// UpdateMessage sets the "message" field to the value that was provided on create.
+func (u *IncidentAlertUpsertBulk) UpdateMessage() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateMessage()
+	})
+}
+
+// SetSeverity sets the "severity" field.
+func (u *IncidentAlertUpsertBulk) SetSeverity(v string) *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetSeverity(v)
+	})
+}
+
+// UpdateSeverity sets the "severity" field to the value that was provided on create.
+func (u *IncidentAlertUpsertBulk) UpdateSeverity() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateSeverity()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *IncidentAlertUpsertBulk) SetStatus(v string) *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *IncidentAlertUpsertBulk) UpdateStatus() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetChannels sets the "channels" field.
+func (u *IncidentAlertUpsertBulk) SetChannels(v []string) *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetChannels(v)
+	})
+}
+
+// UpdateChannels sets the "channels" field to the value that was provided on create.
+func (u *IncidentAlertUpsertBulk) UpdateChannels() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateChannels()
+	})
+}
+
+// ClearChannels clears the value of the "channels" field.
+func (u *IncidentAlertUpsertBulk) ClearChannels() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.ClearChannels()
+	})
+}
+
+// SetRecipients sets the "recipients" field.
+func (u *IncidentAlertUpsertBulk) SetRecipients(v []string) *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetRecipients(v)
+	})
+}
+
+// UpdateRecipients sets the "recipients" field to the value that was provided on create.
+func (u *IncidentAlertUpsertBulk) UpdateRecipients() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateRecipients()
+	})
+}
+
+// ClearRecipients clears the value of the "recipients" field.
+func (u *IncidentAlertUpsertBulk) ClearRecipients() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.ClearRecipients()
+	})
+}
+
+// SetTriggeredAt sets the "triggered_at" field.
+func (u *IncidentAlertUpsertBulk) SetTriggeredAt(v time.Time) *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetTriggeredAt(v)
+	})
+}
+
+// UpdateTriggeredAt sets the "triggered_at" field to the value that was provided on create.
+func (u *IncidentAlertUpsertBulk) UpdateTriggeredAt() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateTriggeredAt()
+	})
+}
+
+// SetAcknowledgedAt sets the "acknowledged_at" field.
+func (u *IncidentAlertUpsertBulk) SetAcknowledgedAt(v time.Time) *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetAcknowledgedAt(v)
+	})
+}
+
+// UpdateAcknowledgedAt sets the "acknowledged_at" field to the value that was provided on create.
+func (u *IncidentAlertUpsertBulk) UpdateAcknowledgedAt() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateAcknowledgedAt()
+	})
+}
+
+// ClearAcknowledgedAt clears the value of the "acknowledged_at" field.
+func (u *IncidentAlertUpsertBulk) ClearAcknowledgedAt() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.ClearAcknowledgedAt()
+	})
+}
+
+// SetResolvedAt sets the "resolved_at" field.
+func (u *IncidentAlertUpsertBulk) SetResolvedAt(v time.Time) *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetResolvedAt(v)
+	})
+}
+
+// UpdateResolvedAt sets the "resolved_at" field to the value that was provided on create.
+func (u *IncidentAlertUpsertBulk) UpdateResolvedAt() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateResolvedAt()
+	})
+}
+
+// ClearResolvedAt clears the value of the "resolved_at" field.
+func (u *IncidentAlertUpsertBulk) ClearResolvedAt() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.ClearResolvedAt()
+	})
+}
+
+// SetAcknowledgedBy sets the "acknowledged_by" field.
+func (u *IncidentAlertUpsertBulk) SetAcknowledgedBy(v int) *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetAcknowledgedBy(v)
+	})
+}
+
+// AddAcknowledgedBy adds v to the "acknowledged_by" field.
+func (u *IncidentAlertUpsertBulk) AddAcknowledgedBy(v int) *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.AddAcknowledgedBy(v)
+	})
+}
+
+// UpdateAcknowledgedBy sets the "acknowledged_by" field to the value that was provided on create.
+func (u *IncidentAlertUpsertBulk) UpdateAcknowledgedBy() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateAcknowledgedBy()
+	})
+}
+
+// ClearAcknowledgedBy clears the value of the "acknowledged_by" field.
+func (u *IncidentAlertUpsertBulk) ClearAcknowledgedBy() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.ClearAcknowledgedBy()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *IncidentAlertUpsertBulk) SetMetadata(v map[string]interface{}) *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *IncidentAlertUpsertBulk) UpdateMetadata() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *IncidentAlertUpsertBulk) ClearMetadata() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *IncidentAlertUpsertBulk) SetTenantID(v int) *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *IncidentAlertUpsertBulk) AddTenantID(v int) *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *IncidentAlertUpsertBulk) UpdateTenantID() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *IncidentAlertUpsertBulk) SetCreatedAt(v time.Time) *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *IncidentAlertUpsertBulk) UpdateCreatedAt() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *IncidentAlertUpsertBulk) SetUpdatedAt(v time.Time) *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *IncidentAlertUpsertBulk) UpdateUpdatedAt() *IncidentAlertUpsertBulk {
+	return u.Update(func(s *IncidentAlertUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *IncidentAlertUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the IncidentAlertCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for IncidentAlertCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *IncidentAlertUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

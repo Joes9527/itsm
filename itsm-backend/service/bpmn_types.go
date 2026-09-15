@@ -2,15 +2,17 @@ package service
 
 import (
 	"encoding/xml"
+	"fmt"
 	"strings"
 )
 
 // BPMN metaData keys are parsed into immutable ProcessTask callback fields.
 const (
-	bpmnMetaDataServiceTaskType = "service_task_type"
-	bpmnMetaDataAction          = "action"
-	bpmnMetaDataAllowedActions  = "allowed_actions"
-	bpmnMetaDataCallbackConfig  = "callback_config_ref"
+	bpmnMetaDataServiceTaskType  = "service_task_type"
+	bpmnMetaDataAction           = "action"
+	bpmnMetaDataAllowedActions   = "allowed_actions"
+	bpmnMetaDataCallbackConfig   = "callback_config_ref"
+	bpmnMetaDataCallbackOptional = "callback_optional"
 )
 
 // BPMNElement BPMN元素的基础接口
@@ -113,11 +115,43 @@ func (e *BPMNExtensionElements) GetMetaData(name string) string {
 	return ""
 }
 
+// callbackOptionalDeclared parses definition-declared callback optionality.
+// Absence is false; a declaration must be the exact trimmed lower-case value
+// "true" or "false" so malformed workflow definitions fail closed.
+func callbackOptionalDeclared(extensionElements *BPMNExtensionElements) (bool, error) {
+	if extensionElements == nil {
+		return false, nil
+	}
+	var (
+		declared        bool
+		declarationSeen bool
+	)
+	for _, metadata := range extensionElements.MetaData {
+		if metadata.Name != bpmnMetaDataCallbackOptional {
+			continue
+		}
+		if declarationSeen {
+			return false, fmt.Errorf("%s must be declared at most once", bpmnMetaDataCallbackOptional)
+		}
+		declarationSeen = true
+		switch strings.TrimSpace(metadata.Value) {
+		case "true":
+			declared = true
+		case "false":
+			declared = false
+		default:
+			return false, fmt.Errorf("%s must be exactly true or false", bpmnMetaDataCallbackOptional)
+		}
+	}
+	return declared, nil
+}
+
 // BPMNUserTask 用户任务
 type BPMNUserTask struct {
 	ID                      string `xml:"id,attr"`
 	Name                    string `xml:"name,attr"`
 	Assignee                string `xml:"assignee,attr"`
+	AssigneeSource          string `xml:"assigneeSource,attr"`
 	CandidateUsers          string `xml:"candidateUsers,attr"`
 	CandidateGroups         string `xml:"candidateGroups,attr"`
 	Priority                int    `xml:"priority,attr"`
@@ -156,6 +190,12 @@ func (e *BPMNUserTask) ServiceTaskAction() string {
 // CallbackConfigRef returns the trusted connector configuration reference.
 func (e *BPMNUserTask) CallbackConfigRef() string {
 	return e.ExtensionElements.GetMetaData(bpmnMetaDataCallbackConfig)
+}
+
+// CallbackOptionalDeclared returns whether this user task explicitly declares
+// its callback optional in the process definition.
+func (e *BPMNUserTask) CallbackOptionalDeclared() (bool, error) {
+	return callbackOptionalDeclared(e.ExtensionElements)
 }
 
 // GetID 获取ID
@@ -206,6 +246,12 @@ func (e *BPMNServiceTask) ServiceTaskAction() string {
 // CallbackConfigRef returns the trusted connector configuration reference.
 func (e *BPMNServiceTask) CallbackConfigRef() string {
 	return e.ExtensionElements.GetMetaData(bpmnMetaDataCallbackConfig)
+}
+
+// CallbackOptionalDeclared returns whether this service task explicitly
+// declares its callback optional in the process definition.
+func (e *BPMNServiceTask) CallbackOptionalDeclared() (bool, error) {
+	return callbackOptionalDeclared(e.ExtensionElements)
 }
 
 // AllowedActions 返回该服务任务声明的 allowed_actions metaData（逗号分隔的动作名列表），

@@ -1,0 +1,243 @@
+DO $verification$
+DECLARE
+    extension_table TEXT;
+	legacy_workflow_table TEXT;
+    extension_index TEXT;
+    extension_constraint TEXT;
+    expected_record_class TEXT;
+    shared_column TEXT;
+    shared_columns TEXT[];
+    invalid_link_exists BOOLEAN;
+    policy_using TEXT;
+    policy_check TEXT;
+    policy_roles OID[];
+    policy_command "char";
+    policy_permissive BOOLEAN;
+    canonical_policy_expression TEXT;
+    canonical_policy_name TEXT;
+BEGIN
+    IF to_regclass(format('%I.ticket_approvals', current_schema())) IS NOT NULL THEN
+        RAISE EXCEPTION 'legacy ticket_approvals table still exists in schema %', current_schema();
+    END IF;
+	FOR legacy_workflow_table IN SELECT unnest(ARRAY['workflows', 'workflow_instances', 'workflow_tasks', 'workflow_versions']) LOOP
+		IF to_regclass(format('%I.%I', current_schema(), legacy_workflow_table)) IS NOT NULL THEN
+			RAISE EXCEPTION 'legacy % table still exists in schema %', legacy_workflow_table, current_schema();
+		END IF;
+	END LOOP;
+	IF EXISTS (
+		SELECT 1 FROM information_schema.columns
+		WHERE table_schema = current_schema()
+		  AND table_name = 'releases'
+		  AND column_name = 'requires_approval'
+	) THEN
+		RAISE EXCEPTION 'release approval routing column releases.requires_approval still exists in schema %', current_schema();
+	END IF;
+	IF EXISTS (
+		SELECT 1 FROM information_schema.columns
+		WHERE table_schema = current_schema()
+		  AND table_name = 'ticket_categories'
+		  AND column_name = 'workflow_id'
+	) THEN
+		RAISE EXCEPTION 'legacy ticket_categories.workflow_id column still exists in schema %', current_schema();
+	END IF;
+
+    FOR extension_table, extension_index, extension_constraint, expected_record_class IN
+        SELECT * FROM (VALUES
+            ('incidents', 'incident_work_item_id', 'incidents_tickets_work_item', 'incident'),
+            ('problems', 'problem_work_item_id', 'problems_tickets_work_item', 'problem'),
+            ('changes', 'change_work_item_id', 'changes_tickets_work_item', 'change_request')
+        ) AS extensions(table_name, index_name, constraint_name, record_class)
+    LOOP
+        IF to_regclass(format('%I.%I', current_schema(), extension_table)) IS NULL THEN
+            RAISE EXCEPTION 'required professional extension table % is missing from schema %',
+                extension_table, current_schema();
+        END IF;
+
+        shared_columns := CASE extension_table
+            WHEN 'incidents' THEN ARRAY[
+                'title', 'description', 'status', 'priority', 'reporter_id', 'assignee_id',
+                'category', 'subcategory', 'source', 'tenant_id', 'version', 'created_at',
+                'updated_at', 'resolved_at', 'closed_at', 'deleted_at'
+            ]
+            WHEN 'problems' THEN ARRAY[
+                'title', 'description', 'status', 'priority', 'category', 'assignee_id',
+                'created_by', 'tenant_id', 'created_at', 'updated_at', 'resolved_at',
+                'closed_at', 'deleted_at'
+            ]
+            ELSE ARRAY[
+                'title', 'description', 'status', 'priority', 'assignee_id', 'created_by',
+                'tenant_id', 'related_tickets', 'created_at', 'updated_at'
+            ]
+        END;
+        FOREACH shared_column IN ARRAY shared_columns LOOP
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = extension_table
+                  AND column_name = shared_column
+            ) THEN
+                RAISE EXCEPTION 'WorkItem-owned column %.% still exists', extension_table, shared_column;
+            END IF;
+        END LOOP;
+
+        IF NOT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = extension_table
+              AND column_name = 'work_item_id'
+              AND is_nullable = 'NO'
+        ) THEN
+            RAISE EXCEPTION '%.work_item_id must exist and be NOT NULL', extension_table;
+        END IF;
+
+		IF NOT EXISTS (
+			SELECT 1
+			FROM pg_constraint constraint_relation
+			JOIN pg_class extension_relation ON extension_relation.oid = constraint_relation.conrelid
+			JOIN pg_namespace extension_schema ON extension_schema.oid = extension_relation.relnamespace
+			JOIN pg_class work_item_relation ON work_item_relation.oid = constraint_relation.confrelid
+			JOIN pg_namespace work_item_schema ON work_item_schema.oid = work_item_relation.relnamespace
+			JOIN pg_attribute extension_column
+			  ON extension_column.attrelid = extension_relation.oid
+			 AND extension_column.attnum = constraint_relation.conkey[1]
+			JOIN pg_attribute work_item_column
+			  ON work_item_column.attrelid = work_item_relation.oid
+			 AND work_item_column.attnum = constraint_relation.confkey[1]
+			WHERE constraint_relation.conname = extension_constraint
+			  AND constraint_relation.contype = 'f'
+			  AND constraint_relation.convalidated
+			  AND NOT constraint_relation.condeferrable
+			  AND constraint_relation.confdeltype = 'a'
+			  AND constraint_relation.confupdtype = 'a'
+			  AND cardinality(constraint_relation.conkey) = 1
+			  AND cardinality(constraint_relation.confkey) = 1
+			  AND extension_schema.nspname = current_schema()
+			  AND extension_relation.relname = extension_table
+			  AND extension_column.attname = 'work_item_id'
+			  AND work_item_schema.nspname = current_schema()
+			  AND work_item_relation.relname = 'tickets'
+			  AND work_item_column.attname = 'id'
+		) THEN
+			RAISE EXCEPTION '%.% must be an exact validated foreign key from %.work_item_id to tickets.id',
+				current_schema(), extension_constraint, extension_table;
+		END IF;
+
+		IF (SELECT COUNT(*)
+			FROM pg_constraint constraint_relation
+			JOIN pg_class extension_relation ON extension_relation.oid = constraint_relation.conrelid
+			JOIN pg_namespace extension_schema ON extension_schema.oid = extension_relation.relnamespace
+			JOIN pg_attribute extension_column
+			  ON extension_column.attrelid = extension_relation.oid
+			 AND extension_column.attnum = ANY (constraint_relation.conkey)
+			WHERE extension_schema.nspname = current_schema()
+			  AND extension_relation.relname = extension_table
+			  AND constraint_relation.contype = 'f'
+			  AND extension_column.attname = 'work_item_id') <> 1 THEN
+			RAISE EXCEPTION '%.work_item_id must have exactly one foreign key constraint', extension_table;
+		END IF;
+
+        IF NOT EXISTS (
+            SELECT 1
+            FROM pg_index i
+            JOIN pg_class index_relation ON index_relation.oid = i.indexrelid
+            JOIN pg_namespace index_schema ON index_schema.oid = index_relation.relnamespace
+            JOIN pg_class table_relation ON table_relation.oid = i.indrelid
+            JOIN pg_namespace table_schema ON table_schema.oid = table_relation.relnamespace
+            JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS key_column(attnum, ordinal) ON TRUE
+            JOIN pg_attribute attribute
+              ON attribute.attrelid = i.indrelid
+             AND attribute.attnum = key_column.attnum
+            WHERE index_schema.nspname = current_schema()
+              AND index_relation.relname = extension_index
+              AND table_schema.nspname = current_schema()
+              AND table_relation.relname = extension_table
+              AND i.indisunique
+              AND i.indisvalid
+              AND i.indisready
+              AND i.indnkeyatts = 1
+              AND i.indnatts = 1
+              AND i.indexprs IS NULL
+              AND i.indpred IS NULL
+            GROUP BY i.indexrelid
+            HAVING array_agg(attribute.attname ORDER BY key_column.ordinal) = ARRAY['work_item_id']::name[]
+        ) THEN
+            RAISE EXCEPTION '%.% must be a ready, valid, one-column unique index on %.work_item_id',
+                current_schema(), extension_index, extension_table;
+        END IF;
+
+        EXECUTE format(
+            'SELECT EXISTS ('
+            'SELECT 1 FROM %I.%I extension '
+            'LEFT JOIN %I.tickets work_item ON work_item.id = extension.work_item_id '
+            'WHERE work_item.id IS NULL OR work_item.record_class <> %L)',
+            current_schema(), extension_table, current_schema(), expected_record_class
+        ) INTO invalid_link_exists;
+        IF invalid_link_exists THEN
+            RAISE EXCEPTION '% extension has an invalid WorkItem record-class link',
+                extension_table;
+        END IF;
+    END LOOP;
+
+	FOR extension_table IN SELECT unnest(ARRAY['incidents', 'problems', 'changes']) LOOP
+		canonical_policy_name := 'tenant_isolation_' || extension_table;
+		canonical_policy_expression := format(
+			'(EXISTS ( SELECT 1 FROM tickets work_item WHERE ((work_item.id = %I.work_item_id) AND (work_item.tenant_id = (NULLIF(current_setting(''app.current_tenant''::text, true), ''''::text))::bigint) AND (work_item.deleted_at IS NULL))))',
+			extension_table
+		);
+		policy_using := NULL;
+		policy_check := NULL;
+		policy_roles := NULL;
+		policy_command := NULL;
+		policy_permissive := NULL;
+
+		SELECT pg_get_expr(policy.polqual, policy.polrelid),
+		       pg_get_expr(policy.polwithcheck, policy.polrelid),
+		       policy.polroles,
+		       policy.polcmd,
+		       policy.polpermissive
+		INTO policy_using, policy_check, policy_roles, policy_command, policy_permissive
+		FROM pg_policy policy
+		JOIN pg_class relation ON relation.oid = policy.polrelid
+		JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+		WHERE namespace.nspname = current_schema()
+		  AND relation.relname = extension_table
+		  AND policy.polname = canonical_policy_name;
+
+		IF policy_using IS NULL OR policy_check IS NULL
+		   OR regexp_replace(btrim(policy_using), '\s+', ' ', 'g') <> canonical_policy_expression
+		   OR regexp_replace(btrim(policy_check), '\s+', ' ', 'g') <> canonical_policy_expression THEN
+			RAISE EXCEPTION '%.% must use authoritative WorkItem tenant and soft-delete scope exactly',
+				extension_table, canonical_policy_name;
+		END IF;
+
+		IF policy_roles <> ARRAY[0::OID]
+		   OR policy_command <> '*'
+		   OR NOT policy_permissive THEN
+			RAISE EXCEPTION '%.% must have canonical PUBLIC/ALL/PERMISSIVE policy attributes',
+				extension_table, canonical_policy_name;
+		END IF;
+
+		IF (SELECT COUNT(*)
+			FROM pg_policy policy
+			JOIN pg_class relation ON relation.oid = policy.polrelid
+			JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+			WHERE namespace.nspname = current_schema()
+			  AND relation.relname = extension_table) <> 1 THEN
+			RAISE EXCEPTION '% must have exactly one canonical RLS policy', extension_table;
+		END IF;
+
+		IF NOT EXISTS (
+			SELECT 1
+			FROM pg_class relation
+			JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+			WHERE namespace.nspname = current_schema()
+			  AND relation.relname = extension_table
+			  AND relation.relrowsecurity
+			  AND NOT relation.relforcerowsecurity
+		) THEN
+			RAISE EXCEPTION '% RLS must be enabled without FORCE', extension_table;
+		END IF;
+	END LOOP;
+END $verification$;

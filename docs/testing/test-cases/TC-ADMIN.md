@@ -306,7 +306,7 @@
 
 - 租户ID: 1 (测试租户)
 - 用户角色: super_admin
-- 认证方式: Bearer Token
+- 认证方式: Secure/HttpOnly cookie 会话（登录 JSON 不含 JWT）
 
 ### D. 测试数据准备
 

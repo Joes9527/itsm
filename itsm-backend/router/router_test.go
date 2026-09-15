@@ -9,10 +9,14 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
+	"itsm-backend/authentication"
+	"itsm-backend/authorization"
 	"itsm-backend/controller"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
-	"itsm-backend/middleware"
+	delegatedexecution "itsm-backend/handlers/delegated_execution"
 	"itsm-backend/migration"
 	"itsm-backend/service"
 
@@ -35,7 +39,7 @@ func setupTestEngine(t *testing.T) (*gin.Engine, *ent.Client) {
 	cfg := &RouterConfig{
 		JWTSecret: "test-secret",
 		Logger:    logger,
-		Client:    client,
+		Client:    client, TenantDirectoryClient: client,
 		// All controllers nil — only public routes and health should register
 	}
 
@@ -57,7 +61,7 @@ func TestSetupRoutes_NoPanic(t *testing.T) {
 	cfg := &RouterConfig{
 		JWTSecret: "test-secret",
 		Logger:    logger,
-		Client:    client,
+		Client:    client, TenantDirectoryClient: client,
 	}
 
 	gin.SetMode(gin.TestMode)
@@ -76,7 +80,7 @@ func TestSetupRoutes_AllControllersNil(t *testing.T) {
 	cfg := &RouterConfig{
 		JWTSecret: "test-secret",
 		Logger:    logger,
-		Client:    client,
+		Client:    client, TenantDirectoryClient: client,
 		// All controller fields nil by default
 	}
 
@@ -96,6 +100,26 @@ func TestSetupRoutes_AllControllersNil(t *testing.T) {
 
 	assert.True(t, routeMap["GET /api/v1/health"], "health should be registered")
 	assert.True(t, routeMap["GET /api/v1/version"], "version should be registered")
+}
+
+func TestSetupRoutes_DelegatedExecutionRoutesAreRegistered(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:delegated_execution_routes?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	r := gin.New()
+	SetupRoutes(r, &RouterConfig{
+		JWTSecret: "test-secret",
+		Logger:    zaptest.NewLogger(t).Sugar(),
+		Client:    client, TenantDirectoryClient: client,
+		DelegatedExecutionHandler: delegatedexecution.NewHandler(delegatedexecution.NewService(client)),
+	})
+
+	routes := make(map[string]bool)
+	for _, route := range r.Routes() {
+		routes[route.Method+" "+route.Path] = true
+	}
+	assert.True(t, routes["GET /api/v1/delegated-executions"])
+	assert.True(t, routes["POST /api/v1/delegated-executions/:eventId/reconcile"])
+	assert.True(t, routes["POST /api/v1/delegated-executions/:eventId/requeue"])
 }
 
 // =====================================================================
@@ -176,9 +200,9 @@ func TestSetupRoutes_MSPControllerNil(t *testing.T) {
 	logger := zaptest.NewLogger(t).Sugar()
 
 	cfg := &RouterConfig{
-		JWTSecret:     "test-secret",
-		Logger:        logger,
-		Client:        client,
+		JWTSecret: "test-secret",
+		Logger:    logger,
+		Client:    client, TenantDirectoryClient: client,
 		MSPController: nil,
 	}
 
@@ -200,9 +224,9 @@ func TestSetupRoutes_DashboardHandlerNil(t *testing.T) {
 	logger := zaptest.NewLogger(t).Sugar()
 
 	cfg := &RouterConfig{
-		JWTSecret:        "test-secret",
-		Logger:           logger,
-		Client:           client,
+		JWTSecret: "test-secret",
+		Logger:    logger,
+		Client:    client, TenantDirectoryClient: client,
 		DashboardHandler: nil,
 	}
 
@@ -218,9 +242,9 @@ func TestSetupRoutes_CMDBControllerNil(t *testing.T) {
 	logger := zaptest.NewLogger(t).Sugar()
 
 	cfg := &RouterConfig{
-		JWTSecret:      "test-secret",
-		Logger:         logger,
-		Client:         client,
+		JWTSecret: "test-secret",
+		Logger:    logger,
+		Client:    client, TenantDirectoryClient: client,
 		CMDBController: nil,
 	}
 
@@ -236,9 +260,9 @@ func TestSetupRoutes_IncidentControllerNil(t *testing.T) {
 	logger := zaptest.NewLogger(t).Sugar()
 
 	cfg := &RouterConfig{
-		JWTSecret:          "test-secret",
-		Logger:             logger,
-		Client:             client,
+		JWTSecret: "test-secret",
+		Logger:    logger,
+		Client:    client, TenantDirectoryClient: client,
 		IncidentController: nil,
 	}
 
@@ -251,7 +275,7 @@ func TestSetupRoutes_IncidentControllerNil(t *testing.T) {
 func TestAssignRouteUsesIncidentWritePermission(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:assign_route_write?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches()
+	authorization.InvalidateAllPermissionCaches()
 	ctx := context.Background()
 	tenant, err := client.Tenant.Create().SetName("assign-route").SetCode("assign-route").SetDomain("assign-route.test").SetStatus("active").Save(ctx)
 	require.NoError(t, err)
@@ -270,21 +294,24 @@ func TestAssignRouteUsesIncidentWritePermission(t *testing.T) {
 		SetUsername("route-assignee").SetEmail("route-assignee@example.com").SetName("Route Assignee").
 		SetPasswordHash("x").SetRole(role.Code).SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
+	workItem, err := client.Ticket.Create().SetTitle("Route assignment incident").SetStatus("new").SetPriority("medium").
+		SetRecordClass("incident").SetTicketNumber("TKT-ROUTE-ASSIGN").
+		SetRequesterID(reporter.ID).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
 	incidentEntity, err := client.Incident.Create().
-		SetTitle("Route assignment").SetStatus("new").SetIncidentNumber("INC-ROUTE-ASSIGN").
-		SetReporterID(reporter.ID).SetTenantID(tenant.ID).Save(ctx)
+		SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	const jwtSecret = "assign-route-secret"
 	logger := zaptest.NewLogger(t).Sugar()
-	incidentController := controller.NewIncidentController(service.NewIncidentService(client, logger), nil, nil, nil, nil, nil, logger)
+	incidentController := controller.NewIncidentController(service.NewIncidentService(client, logger, executionfixture.Standard()), nil, nil, nil, nil, logger)
 	router := gin.New()
 	SetupRoutes(router, &RouterConfig{
-		JWTSecret: jwtSecret, Logger: logger, Client: client, IncidentController: incidentController,
+		JWTSecret: jwtSecret, Logger: logger, Client: client, TenantDirectoryClient: client, IncidentController: incidentController,
 	})
-	token, err := middleware.GenerateAccessToken(reporter.ID, reporter.Username, role.Code, tenant.ID, jwtSecret, time.Hour)
+	token, err := authentication.GenerateAccessToken(reporter.ID, reporter.Username, role.Code, tenant.ID, jwtSecret, time.Hour)
 	require.NoError(t, err)
-	body := []byte(fmt.Sprintf(`{"assigneeId":%d}`, assignee.ID))
+	body := []byte(fmt.Sprintf(`{"assigneeId":%d,"version":%d,"operationId":"route-assignment"}`, assignee.ID, workItem.Version))
 	request := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/incidents/%d/assign", incidentEntity.ID), bytes.NewReader(body))
 	request.Header.Set("Authorization", "Bearer "+token)
 	request.Header.Set("Content-Type", "application/json")
@@ -292,7 +319,7 @@ func TestAssignRouteUsesIncidentWritePermission(t *testing.T) {
 	router.ServeHTTP(recorder, request)
 
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
-	updated, err := client.Incident.Get(ctx, incidentEntity.ID)
+	updated, err := client.Ticket.Get(ctx, workItem.ID)
 	require.NoError(t, err)
 	require.Equal(t, assignee.ID, updated.AssigneeID)
 }
@@ -416,19 +443,19 @@ func TestRouterConfig_ZeroValue(t *testing.T) {
 }
 
 // =====================================================================
-// Routes exist for legacy compatibility stubs
+// Retired workflow compatibility endpoints must not remain callable. The
+// canonical contract is /api/v1/bpmn/process-*.
 // =====================================================================
 
-func TestSetupRoutes_LegacyStubs(t *testing.T) {
-	// Legacy stubs should return BadRequestCode (400-ish), not 500
+func TestSetupRoutes_DoesNotExposeRetiredWorkflowAliases(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:router_legacy?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 	logger := zaptest.NewLogger(t).Sugar()
 
 	cfg := &RouterConfig{
-		JWTSecret:        "test-secret",
-		Logger:           logger,
-		Client:           client,
+		JWTSecret: "test-secret",
+		Logger:    logger,
+		Client:    client, TenantDirectoryClient: client,
 		TenantController: nil, // triggers legacy stubs
 	}
 
@@ -436,21 +463,23 @@ func TestSetupRoutes_LegacyStubs(t *testing.T) {
 	r := gin.New()
 	SetupRoutes(r, cfg)
 
-	// These paths have stub handlers in the router
-	stubPaths := []string{
-		"/api/v1/workflows",
-		"/api/v1/ticket-types",
-		"/api/v1/services",
-		"/api/v1/slas",
-		"/api/v1/knowledge",
+	retired := map[string]bool{
+		"GET /api/v1/workflows":                        true,
+		"POST /api/v1/workflows":                       true,
+		"GET /api/v1/bpmn/definitions":                 true,
+		"POST /api/v1/bpmn/definitions":                true,
+		"GET /api/v1/workflow/instances":               true,
+		"GET /api/v1/workflow/instances/:id":           true,
+		"POST /api/v1/workflow/instances":              true,
+		"PUT /api/v1/workflow/instances/:id/terminate": true,
+		"PUT /api/v1/workflow/instances/:id/suspend":   true,
+		"PUT /api/v1/workflow/instances/:id/resume":    true,
+		"GET /api/v1/workflow/tasks":                   true,
+		"PUT /api/v1/workflow/tasks/:id/complete":      true,
+		"POST /api/v1/workflow/tasks/:id/claim":        true,
 	}
-
-	for _, path := range stubPaths {
-		req := httptest.NewRequest(http.MethodGet, path, nil)
-		// Add auth header to pass through middleware
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		// Should not panic or 500
-		assert.NotEqual(t, http.StatusInternalServerError, w.Code, "path %s should not 500", path)
+	for _, route := range r.Routes() {
+		key := route.Method + " " + route.Path
+		assert.False(t, retired[key], "retired workflow alias remains registered: %s", key)
 	}
 }

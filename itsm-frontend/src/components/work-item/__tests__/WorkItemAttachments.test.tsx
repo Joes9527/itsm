@@ -12,6 +12,7 @@ jest.mock('@/components/business/detail-tabs', () => ({
 }));
 
 const workItem: WorkItemCommon = {
+  version: 1,
   id: 9,
   number: 'C-1',
   recordClass: 'change_request',

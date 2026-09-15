@@ -42,11 +42,14 @@ export default function BPMNDashboardPage() {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>([dayjs().subtract(7, 'day'), dayjs()]);
 
-  // 优先使用当前登录租户；未登录时回退到默认 1
-  // TODO: 待接入用户/租户选择器后移除硬编码回退值，避免未登录态误指向租户 1
-  const tenantId = currentTenant?.id ?? 1;
+  const tenantId = currentTenant?.id;
 
   const fetchMetrics = async () => {
+    if (!tenantId) {
+      setMetrics(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const data = await BPMNDashboardApi.getDashboardMetrics(
@@ -64,7 +67,7 @@ export default function BPMNDashboardPage() {
 
   useEffect(() => {
     fetchMetrics();
-  }, [dateRange]);
+  }, [dateRange, tenantId]);
 
   const getHealthColor = (score: number) => {
     if (score >= 80) return 'green';
@@ -147,10 +150,10 @@ export default function BPMNDashboardPage() {
   }
 
   return (
-    <div className='p-6 space-y-6'>
+    <div className='p-[16px] md:p-[24px] space-y-6'>
       {/* Header */}
       <div className='flex justify-between items-center'>
-        <h1 className='text-2xl font-bold'>
+        <h1 className='text-[24px] font-semibold'>
           {t('workflow.bpmnDashboard.title') || 'BPMN流程监控仪表盘'}
         </h1>
         <Space>
@@ -169,7 +172,7 @@ export default function BPMNDashboardPage() {
       </div>
 
       {/* Summary Cards */}
-      <Row gutter={[16, 16]}>
+      <Row gutter={[14, 14]}>
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
@@ -212,10 +215,10 @@ export default function BPMNDashboardPage() {
       </Row>
 
       {/* Health & SLA */}
-      <Row gutter={[16, 16]}>
+      <Row gutter={[14, 14]}>
         <Col xs={24} lg={12}>
           <Card title={t('workflow.bpmnDashboard.processHealth') || '流程健康度'}>
-            <Row gutter={16}>
+            <Row gutter={14}>
               <Col span={8}>
                 <Statistic
                   title={t('workflow.bpmnDashboard.healthy') || '健康'}
@@ -261,7 +264,7 @@ export default function BPMNDashboardPage() {
                 suffix='%'
                 styles={{
                   content: {
-                    fontSize: 48,
+                    fontSize: 26,
                     color:
                       (metrics?.slaComplianceRate || 0) >= 90
                         ? '#52c41a'
@@ -271,7 +274,7 @@ export default function BPMNDashboardPage() {
                   },
                 }}
               />
-              <p className='text-gray-500 mt-2'>
+              <p className='text-muted mt-2'>
                 {t('workflow.bpmnDashboard.slaComplianceRate') || 'SLA合规率'}
               </p>
             </div>
@@ -280,7 +283,7 @@ export default function BPMNDashboardPage() {
       </Row>
 
       {/* Top Processes & Task Distribution */}
-      <Row gutter={[16, 16]}>
+      <Row gutter={[14, 14]}>
         <Col xs={24} lg={12}>
           <Card title={t('workflow.bpmnDashboard.topProcesses') || '热门流程'}>
             <Table

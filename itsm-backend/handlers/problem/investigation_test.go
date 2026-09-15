@@ -8,7 +8,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
+
+	"itsm-backend/handlers/shared/workitemmutation"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -35,6 +39,7 @@ func createProblemInvestigationTenant(t *testing.T, ctx context.Context, client 
 		SetStatus("active").
 		Save(ctx)
 	require.NoError(t, err)
+	configureProblemIntakeFixture(ctx, client, tenant.ID)
 	return tenant
 }
 
@@ -93,7 +98,6 @@ func createProblemInvestigationTables(t *testing.T, db *sql.DB) {
 		problem_id INTEGER NOT NULL,
 		analyst_id INTEGER NOT NULL,
 		analysis_method TEXT NOT NULL,
-		root_cause_description TEXT NOT NULL,
 		contributing_factors TEXT,
 		evidence TEXT,
 		confidence_level TEXT NOT NULL,
@@ -148,9 +152,9 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	user := createProblemInvestigationUser(t, ctx, client, tenant.ID, "dual-inv")
 
 	// Create problem
-	probRepo := problem.NewEntRepository(client)
-	probHandlerSvc := problem.NewService(probRepo, logger)
-	p, err := probHandlerSvc.Create(ctx, tenant.ID, &problem.Problem{
+	probRepo := NewEntRepository(client)
+	probHandlerSvc := NewService(probRepo, logger)
+	p, err := probHandlerSvc.SubmitCreation(ctx, tenant.ID, &problem.Problem{
 		Title:       "High Latency in API Gateway",
 		Description: "p99 latency > 2s",
 		Priority:    "critical",
@@ -161,7 +165,7 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	// =========================================================================
 	// Entry Point 1: /api/v1/problems/:id/investigate (handlers/problem/Handler)
 	// =========================================================================
-	probHandler := problem.NewHandler(probHandlerSvc, client)
+	probHandler := NewHandler(probHandlerSvc, client)
 	r1 := gin.New()
 	r1.Use(func(c *gin.Context) {
 		c.Set("tenant_id", tenant.ID)
@@ -172,12 +176,12 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	r1.POST("/api/v1/problems/:id/investigate", probHandler.InvestigateProblem)
 
 	w1 := httptest.NewRecorder()
-	req1 := httptest.NewRequest("POST", fmt.Sprintf("/api/v1/problems/%d/investigate", p.ID), nil)
+	req1 := httptest.NewRequest("POST", fmt.Sprintf("/api/v1/problems/%d/investigate", p.ID), strings.NewReader(fmt.Sprintf(`{"version":%d,"operationId":"investigate-1"}`, p.Version)))
 	r1.ServeHTTP(w1, req1)
 	require.Equal(t, http.StatusOK, w1.Code)
 
 	// Verify problem status changed to investigating
-	updatedP, err := probHandlerSvc.Get(ctx, p.ID, tenant.ID)
+	updatedP, err := probHandlerSvc.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"})
 	require.NoError(t, err)
 	assert.Equal(t, "investigating", updatedP.Status)
 
@@ -186,6 +190,7 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	// =========================================================================
 	invSvc := service.NewProblemInvestigationService(db, logger)
 	invCtrl := controller.NewProblemInvestigationController(logger, invSvc)
+	invCtrl.SetProblemDomain(probHandlerSvc.Service)
 
 	r2 := gin.New()
 	r2.Use(func(c *gin.Context) {
@@ -214,10 +219,11 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 		c.Set("user_id", user.ID)
 		c.Next()
 	})
-	r2_steps.GET("/api/v1/problem-investigation/investigations/:investigation_id/steps", invCtrl.GetInvestigationSteps)
+	r2_steps.GET("/api/v1/problem-investigation/investigations/:id/steps", invCtrl.GetInvestigationSteps)
 
 	// 2.1 Create Problem Investigation
 	createInvReq := dto.CreateProblemInvestigationRequest{
+		Version: updatedP.Version, OperationID: "investigate-details",
 		ProblemID:            p.ID,
 		InvestigatorID:       user.ID,
 		InvestigationSummary: "Investigating memory pools and thread starvation",
@@ -237,7 +243,8 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(w2_1.Body.Bytes(), &invRes))
 	assert.Equal(t, 0, invRes.Code, w2_1.Body.String())
-	invID := invRes.Data.InvestigationID
+	var invID int
+	require.NoError(t, db.QueryRow("SELECT id FROM problem_investigations WHERE problem_id = ?", p.ID).Scan(&invID))
 	require.Greater(t, invID, 0, "invID should be positive")
 
 	// 2.2 Get Problem Investigation
@@ -248,6 +255,7 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 
 	// 2.3 Create Investigation Step
 	stepReq := dto.CreateInvestigationStepRequest{
+		ProblemID: p.ID, Version: client.Ticket.GetX(ctx, *p.WorkItemID).Version, OperationID: "create-investigation-step",
 		InvestigationID: invID,
 		StepNumber:      1,
 		StepTitle:       "Check Envoy access logs",
@@ -259,7 +267,7 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	req2_3 := httptest.NewRequest("POST", "/api/v1/problem-investigation/steps", bytes.NewBuffer(bodyStep))
 	req2_3.Header.Set("Content-Type", "application/json")
 	r2.ServeHTTP(w2_3, req2_3)
-	require.Equal(t, http.StatusOK, w2_3.Code)
+	require.Equal(t, http.StatusOK, w2_3.Code, w2_3.Body.String())
 
 	// 2.4 Get Investigation Steps
 	w2_4 := httptest.NewRecorder()
@@ -269,6 +277,7 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 
 	// 2.5 Create Root Cause Analysis
 	rcaReq := dto.CreateRootCauseAnalysisRequest{
+		Version: client.Ticket.GetX(ctx, *p.WorkItemID).Version, OperationID: "create-rca",
 		ProblemID:            p.ID,
 		AnalystID:            user.ID,
 		AnalysisMethod:       "5_whys",
@@ -286,6 +295,7 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 
 	// 2.6 Create Problem Solution
 	solReq := dto.CreateProblemSolutionRequest{
+		Version: client.Ticket.GetX(ctx, *p.WorkItemID).Version, OperationID: "create-candidate",
 		ProblemID:           p.ID,
 		SolutionType:        dto.SolutionTypeFix,
 		SolutionDescription: "Increase connection pool max size and fix lock contention",
@@ -297,7 +307,7 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	req2_6 := httptest.NewRequest("POST", "/api/v1/problem-investigation/solutions", bytes.NewBuffer(bodySol))
 	req2_6.Header.Set("Content-Type", "application/json")
 	r2.ServeHTTP(w2_6, req2_6)
-	require.Equal(t, http.StatusOK, w2_6.Code)
+	require.Equal(t, http.StatusOK, w2_6.Code, w2_6.Body.String())
 
 	// 2.7 Get Problem Solutions
 	w2_7 := httptest.NewRecorder()
@@ -310,4 +320,109 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	req2_8 := httptest.NewRequest("GET", fmt.Sprintf("/api/v1/problem-investigation/problems/%d/summary", p.ID), nil)
 	r2.ServeHTTP(w2_8, req2_8)
 	require.Equal(t, http.StatusOK, w2_8.Code)
+}
+
+func TestRCAWritesProblemAuthorityAndKnownError(t *testing.T) {
+	dbName := fmt.Sprintf("file:rca-authority-%s?mode=memory&cache=shared&_fk=1", t.Name())
+	client := enttest.Open(t, "sqlite3", dbName)
+	defer client.Close()
+	db, err := sql.Open("sqlite3", dbName)
+	require.NoError(t, err)
+	defer db.Close()
+	createProblemInvestigationTables(t, db)
+	ctx := context.Background()
+	logger := zaptest.NewLogger(t).Sugar()
+	tenant := createProblemInvestigationTenant(t, ctx, client, "authority")
+	user := createProblemInvestigationUser(t, ctx, client, tenant.ID, "authority")
+	problemSvc := NewService(NewEntRepository(client), logger)
+	p, err := problemSvc.SubmitCreation(ctx, tenant.ID, &problem.Problem{Title: "RCA source", Description: "RCA source", Priority: "high", CreatedBy: user.ID})
+	require.NoError(t, err)
+	svc := service.NewProblemInvestigationService(db, logger)
+	created, err := createRCAFixture(t, problemSvc, svc, ctx, &dto.CreateRootCauseAnalysisRequest{ProblemID: p.ID, AnalystID: user.ID, AnalysisMethod: "5_whys", RootCauseDescription: "Connection pool leak", ConfidenceLevel: dto.ConfidenceHigh}, tenant.ID)
+	require.NoError(t, err)
+	stored, err := problemSvc.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"})
+	require.NoError(t, err)
+	require.Equal(t, created.RootCauseDescription, stored.RootCause)
+	root := "Unbounded retry exhausted the pool"
+	updated, err := updateRCAFixture(t, problemSvc, svc, ctx, created.ID, &dto.UpdateRootCauseAnalysisRequest{RootCauseDescription: &root}, tenant.ID)
+	require.NoError(t, err)
+	require.Equal(t, root, updated.RootCauseDescription)
+	stored, err = problemSvc.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"})
+	require.NoError(t, err)
+	require.Equal(t, root, stored.RootCause)
+	publisher := service.NewProblemService(client, logger)
+	publisher.SetKnownErrorService(service.NewKnownErrorService(client, logger))
+	published, err := publisher.CreateKnownErrorFromProblem(ctx, p.ID, user.ID, &dto.KEDBCreateRequest{Title: "Pool leak", Workaround: "Restart pool", Severity: "high"})
+	require.NoError(t, err)
+	require.Equal(t, root, published.RootCause)
+	// Changes through the professional Problem API must immediately project into RCA.
+	root = "Corrected after investigation"
+	_, err = problemSvc.Update(ctx, tenant.ID, p.ID, &Problem{Version: stored.Version, RootCause: root})
+	require.NoError(t, err)
+	read, err := svc.GetRootCauseAnalysis(ctx, created.ID, tenant.ID)
+	require.NoError(t, err)
+	require.Equal(t, root, read.RootCauseDescription)
+	summary, err := svc.GetProblemInvestigationSummary(ctx, p.ID, tenant.ID)
+	require.NoError(t, err)
+	require.NotNil(t, summary.RootCauseAnalysis)
+	require.Equal(t, root, summary.RootCauseAnalysis.RootCauseDescription)
+	// Simulate an unrelated edit loading the old root immediately before RCA changes it.
+	staleRepo := &rcaChangeAfterGetRepository{Repository: NewEntRepository(client), change: func() {
+		revised := "RCA changed concurrently"
+		_, err := updateRCAFixture(t, problemSvc, svc, ctx, created.ID, &dto.UpdateRootCauseAnalysisRequest{RootCauseDescription: &revised}, tenant.ID)
+		require.NoError(t, err)
+	}}
+	beforeEdit, err := problemSvc.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"})
+	require.NoError(t, err)
+	staleRepo.change()
+	_, err = problemSvc.Update(ctx, tenant.ID, p.ID, &Problem{Version: beforeEdit.Version, Title: "Unrelated title edit"})
+	require.Error(t, err, "concurrent RCA must invalidate an edit based on the previous version")
+	edited, err := problemSvc.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"})
+	require.NoError(t, err)
+	require.Equal(t, "RCA changed concurrently", edited.RootCause)
+}
+
+type rcaChangeAfterGetRepository struct {
+	problem.Repository
+	change func()
+}
+
+func (r *rcaChangeAfterGetRepository) Get(ctx context.Context, id, tenantID int) (*problem.Problem, error) {
+	p, err := r.Repository.Get(ctx, id, tenantID)
+	if err == nil {
+		r.change()
+	}
+	return p, err
+}
+
+func createRCAFixture(t *testing.T, owner *Service, reader *service.ProblemInvestigationService, ctx context.Context, req *dto.CreateRootCauseAnalysisRequest, tenantID int) (*dto.RootCauseAnalysisResponse, error) {
+	p, err := NewEntRepository(owner.client).Get(ctx, req.ProblemID, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	_, err = owner.ApplyMetadata(ctx, problem.MetadataCommand{Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: p.CreatedBy, ExpectedVersion: p.Version, Source: "http", OperationID: fmt.Sprintf("rca-%d", time.Now().UnixNano())}, ProblemID: p.ID, RootCauseAnalysis: &problem.RootCauseMetadata{Create: req}})
+	if err != nil {
+		return nil, err
+	}
+	summary, err := reader.GetProblemInvestigationSummary(ctx, p.ID, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	return summary.RootCauseAnalysis, nil
+}
+
+func updateRCAFixture(t *testing.T, owner *Service, reader *service.ProblemInvestigationService, ctx context.Context, id int, req *dto.UpdateRootCauseAnalysisRequest, tenantID int) (*dto.RootCauseAnalysisResponse, error) {
+	prior, err := reader.GetRootCauseAnalysis(ctx, id, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	p, err := NewEntRepository(owner.client).Get(ctx, prior.ProblemID, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	_, err = owner.ApplyMetadata(ctx, problem.MetadataCommand{Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: p.CreatedBy, ExpectedVersion: p.Version, Source: "http", OperationID: fmt.Sprintf("rca-%d", time.Now().UnixNano())}, ProblemID: p.ID, RootCauseAnalysis: &problem.RootCauseMetadata{ID: id, Update: req}})
+	if err != nil {
+		return nil, err
+	}
+	return reader.GetRootCauseAnalysis(ctx, id, tenantID)
 }

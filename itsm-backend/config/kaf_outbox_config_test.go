@@ -21,6 +21,8 @@ func TestKafOutboxConfigFromEnvironment(t *testing.T) {
 			want: KAFOutboxConfig{
 				BatchSize:    20,
 				PollInterval: 5 * time.Second,
+				MaxAttempts:  5,
+				HealthPort:   8081,
 			},
 		},
 		{
@@ -30,20 +32,38 @@ func TestKafOutboxConfigFromEnvironment(t *testing.T) {
 				"KAF_WEBHOOK_SECRET":       "test-secret",
 				"KAF_OUTBOX_BATCH_SIZE":    "100",
 				"KAF_OUTBOX_POLL_INTERVAL": "2s",
+				"KAF_OUTBOX_MAX_ATTEMPTS":  "9",
+				"KAF_WORKER_HEALTH_PORT":   "18081",
 			},
 			want: KAFOutboxConfig{
 				WebhookURL:    "https://kaf.example.test/webhooks/itsm",
 				WebhookSecret: "test-secret",
 				BatchSize:     100,
 				PollInterval:  2 * time.Second,
+				MaxAttempts:   9,
+				HealthPort:    18081,
 			},
 		},
 		{
-			name: "URL without secret is rejected",
+			name: "health port outside allowed range is rejected",
+			values: map[string]string{
+				"KAF_WORKER_HEALTH_PORT": "65536",
+			},
+			wantErr: "KAF_WORKER_HEALTH_PORT",
+		},
+		{
+			name: "max attempts outside allowed range is rejected",
+			values: map[string]string{
+				"KAF_OUTBOX_MAX_ATTEMPTS": "21",
+			},
+			wantErr: "KAF_OUTBOX_MAX_ATTEMPTS",
+		},
+		{
+			name: "API accepts public URL without worker secret",
 			values: map[string]string{
 				"KAF_WEBHOOK_URL": "https://kaf.example.test/webhooks/itsm",
 			},
-			wantErr: "KAF_WEBHOOK_SECRET",
+			want: KAFOutboxConfig{WebhookURL: "https://kaf.example.test/webhooks/itsm", BatchSize: 20, PollInterval: 5 * time.Second, MaxAttempts: 5, HealthPort: 8081},
 		},
 		{
 			name: "non HTTP URL is rejected",

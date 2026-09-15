@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Backend running on `http://localhost:8090`
-- Admin token (login with `admin` / `admin123`)
+- Admin cookie session (login with `admin` / `admin123`)
 - PostgreSQL container `itsm-postgres` accessible
 
 ## Validation Scenarios
@@ -11,15 +11,18 @@
 ### Scenario 1: Tickets API Pagination
 
 ```bash
-# Get token
-TOKEN=$(curl -s -X POST http://localhost:8090/api/v1/auth/login \
+# Establish the HttpOnly cookie session. JWTs are never returned in JSON.
+COOKIE_JAR=$(mktemp)
+trap 'rm -f "$COOKIE_JAR"' EXIT
+curl -fsS -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
+  -X POST http://localhost:8090/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"admin123"}' | \
-  python3 -c "import sys,json; print(json.load(sys.stdin)['data']['access_token'])")
+  python3 -c "import sys,json; d=json.load(sys.stdin); assert d['code']==0 and d['data']['user']['id']; assert 'access_token' not in d['data'] and 'refresh_token' not in d['data']"
 
 # Test pagination response
 curl -s "http://localhost:8090/api/v1/tickets?page=1&page_size=5" \
-  -H "Authorization: Bearer $TOKEN" | \
+  -b "$COOKIE_JAR" | \
   python3 -c "import sys,json; d=json.load(sys.stdin); data=d['data']
   keys=sorted(data.keys())
   print('Fields:', keys)
@@ -40,7 +43,7 @@ curl -s "http://localhost:8090/api/v1/tickets?page=1&page_size=5" \
 
 ```bash
 curl -s "http://localhost:8090/api/v1/assets?page=1&page_size=10" \
-  -H "Authorization: Bearer $TOKEN" | \
+  -b "$COOKIE_JAR" | \
   python3 -c "import sys,json; d=json.load(sys.stdin); data=d['data']
   keys=sorted(data.keys())
   print('Fields:', keys)
@@ -58,7 +61,7 @@ curl -s "http://localhost:8090/api/v1/assets?page=1&page_size=10" \
 
 ```bash
 curl -s "http://localhost:8090/api/v1/changes?page=1&page_size=5" \
-  -H "Authorization: Bearer $TOKEN" | \
+  -b "$COOKIE_JAR" | \
   python3 -c "import sys,json; d=json.load(sys.stdin); data=d['data']
   keys=sorted(data.keys())
   print('Fields:', keys)
@@ -76,7 +79,7 @@ curl -s "http://localhost:8090/api/v1/changes?page=1&page_size=5" \
 
 ```bash
 curl -s "http://localhost:8090/api/v1/incidents?page=1&page_size=3" \
-  -H "Authorization: Bearer $TOKEN" | \
+  -b "$COOKIE_JAR" | \
   python3 -c "import sys,json; d=json.load(sys.stdin); data=d['data']
   keys=sorted(data.keys())
   print('Fields:', keys)
@@ -118,14 +121,17 @@ go test ./pkg/seeder/... -v
 
 ```bash
 #!/bin/bash
-TOKEN=$(curl -s -X POST http://localhost:8090/api/v1/auth/login \
+COOKIE_JAR=$(mktemp)
+trap 'rm -f "$COOKIE_JAR"' EXIT
+curl -fsS -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
+  -X POST http://localhost:8090/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"admin123"}' | \
-  python3 -c "import sys,json; print(json.load(sys.stdin)['data']['access_token'])")
+  python3 -c "import sys,json; d=json.load(sys.stdin); assert d['code']==0 and d['data']['user']['id']; assert 'access_token' not in d['data'] and 'refresh_token' not in d['data']"
 
 echo "=== Scenario 1: Tickets ==="
 curl -s "http://localhost:8090/api/v1/tickets?page=1&page_size=5" \
-  -H "Authorization: Bearer $TOKEN" | \
+  -b "$COOKIE_JAR" | \
   python3 -c "import sys,json; d=json.load(sys.stdin); data=d['data']
   print('Fields:', sorted(data.keys()))
   assert 'totalPages' in data, 'FAIL: missing totalPages'"
@@ -133,7 +139,7 @@ echo "PASS"
 
 echo "=== Scenario 2: Assets ==="
 curl -s "http://localhost:8090/api/v1/assets?page=1&page_size=10" \
-  -H "Authorization: Bearer $TOKEN" | \
+  -b "$COOKIE_JAR" | \
   python3 -c "import sys,json; d=json.load(sys.stdin); data=d['data']
   print('Fields:', sorted(data.keys()))
   assert 'page' in data, 'FAIL: missing page'"
@@ -141,7 +147,7 @@ echo "PASS"
 
 echo "=== Scenario 3: Changes ==="
 curl -s "http://localhost:8090/api/v1/changes?page=1&page_size=5" \
-  -H "Authorization: Bearer $TOKEN" | \
+  -b "$COOKIE_JAR" | \
   python3 -c "import sys,json; d=json.load(sys.stdin); data=d['data']
   assert 'pageSize' in data, 'FAIL: missing pageSize'
   assert 'size' not in data, 'FAIL: old size field present'"

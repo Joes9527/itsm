@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"testing"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 
@@ -29,11 +31,12 @@ func TestEvaluateCondition_FailureReturnsFalse(t *testing.T) {
 	}
 
 	// 使用一个无效的表达式，评估应该失败并返回 false
-	result := engine.evaluateCondition(&BPMNSequenceFlow{
+	result, err := engine.evaluateCondition(&BPMNSequenceFlow{
 		ConditionExpression: &BPMNConditionExpression{
 			Expression: "invalid {{{{ expression",
 		},
 	}, variables)
+	assert.Error(t, err)
 
 	if result {
 		t.Error("无效表达式评估应返回 false，但返回了 true")
@@ -55,9 +58,10 @@ func TestEvaluateCondition_NoConditionReturnsTrue(t *testing.T) {
 	}
 
 	// 无条件表达式，应该默认通过
-	result := engine.evaluateCondition(&BPMNSequenceFlow{
+	result, err := engine.evaluateCondition(&BPMNSequenceFlow{
 		ConditionExpression: nil,
 	}, variables)
+	assert.NoError(t, err)
 
 	if !result {
 		t.Error("无条件表达式应返回 true")
@@ -79,11 +83,12 @@ func TestEvaluateCondition_EmptyExpressionReturnsTrue(t *testing.T) {
 	}
 
 	// 空条件表达式
-	result := engine.evaluateCondition(&BPMNSequenceFlow{
+	result, err := engine.evaluateCondition(&BPMNSequenceFlow{
 		ConditionExpression: &BPMNConditionExpression{
 			Expression: "",
 		},
 	}, variables)
+	assert.NoError(t, err)
 
 	if !result {
 		t.Error("空条件表达式应返回 true")
@@ -105,11 +110,12 @@ func TestEvaluateCondition_ValidExpression(t *testing.T) {
 	}
 
 	// 有效表达式：priority == 1
-	result := engine.evaluateCondition(&BPMNSequenceFlow{
+	result, err := engine.evaluateCondition(&BPMNSequenceFlow{
 		ConditionExpression: &BPMNConditionExpression{
 			Expression: "priority == 1",
 		},
 	}, variables)
+	assert.NoError(t, err)
 
 	if !result {
 		t.Error("priority == 1 评估应返回 true")
@@ -176,7 +182,7 @@ func TestResolveRoleCandidates_MatchesPrimaryAndAdditionalRole(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	engine := NewCustomProcessEngine(client, logger).(*CustomProcessEngine)
+	engine := NewCustomProcessEngine(client, logger, executionfixture.Standard()).(*CustomProcessEngine)
 	names, err := engine.resolveRoleCandidates(ctx, tenant.ID, "it_director")
 	require.NoError(t, err)
 
@@ -221,7 +227,7 @@ func TestCreateUserTask_AssigneeGmChain_ResolvesSubmitterOwnChain(t *testing.T) 
 		Save(ctx)
 	require.NoError(t, err)
 
-	engine := NewCustomProcessEngine(client, logger).(*CustomProcessEngine)
+	engine := NewCustomProcessEngine(client, logger, executionfixture.Standard()).(*CustomProcessEngine)
 
 	instance := &ent.ProcessInstance{TenantID: tenant.ID}
 	assignee := engine.resolveGmChainAssignee(ctx, instance, submitter)
@@ -255,7 +261,7 @@ func TestCreateUserTask_AssigneeGmChain_SelfApprovalFallsBackEmpty(t *testing.T)
 
 	// 提交人自己没有更上级的总经理（manager_id=0），resolveGmChainAssignee 应该返回空串，
 	// 而不是报错或者把提交人自己当成审批人。
-	engine := NewCustomProcessEngine(client, logger).(*CustomProcessEngine)
+	engine := NewCustomProcessEngine(client, logger, executionfixture.Standard()).(*CustomProcessEngine)
 	instance := &ent.ProcessInstance{TenantID: tenant.ID}
 	assignee := engine.resolveGmChainAssignee(ctx, instance, gmSubmitter)
 	assert.Equal(t, "", assignee)

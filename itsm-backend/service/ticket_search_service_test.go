@@ -59,7 +59,7 @@ func TestTicketSearchService_SearchTickets(t *testing.T) {
 			SetTitle(tc.title).
 			SetDescription(tc.description).
 			SetPriority("medium").
-			SetType("ticket").
+			SetGenericSubtype("ticket").
 			SetStatus("open").
 			SetTicketNumber(fmt.Sprintf("TKT-SEARCH-%03d", i+1)).
 			SetTenantID(testTenant.ID).
@@ -125,7 +125,7 @@ func TestTicketSearchService_GetOverdueTickets(t *testing.T) {
 		SetTitle("Overdue Ticket").
 		SetDescription("This ticket is overdue").
 		SetPriority("high").
-		SetType("ticket").
+		SetGenericSubtype("ticket").
 		SetStatus("open").
 		SetTicketNumber("TKT-OVERDUE-001").
 		SetTenantID(testTenant.ID).
@@ -189,7 +189,7 @@ func TestTicketSearchService_GetTicketStats(t *testing.T) {
 			SetTitle("Test Ticket " + string(rune('A'+i))).
 			SetDescription("Test description").
 			SetPriority(tc.priority).
-			SetType("ticket").
+			SetGenericSubtype("ticket").
 			SetStatus(tc.status).
 			SetTicketNumber(fmt.Sprintf("TKT-STATS-%03d", i+1)).
 			SetTenantID(testTenant.ID).

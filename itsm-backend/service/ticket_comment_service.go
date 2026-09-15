@@ -4,6 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
+
+	"itsm-backend/authorization"
+	"itsm-backend/common/tenantctx"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -17,6 +21,7 @@ import (
 
 type TicketCommentService struct {
 	client              *ent.Client
+	actorDirectory      *ent.Client
 	logger              *zap.SugaredLogger
 	notificationService *TicketNotificationService // 可选的通知服务
 }
@@ -26,6 +31,21 @@ func NewTicketCommentService(client *ent.Client, logger *zap.SugaredLogger) *Tic
 		client: client,
 		logger: logger,
 	}
+}
+
+// SetActorDirectory supplies the existing restricted directory capability.
+// Comment rows and WorkItem access always remain on the tenant client.
+func (s *TicketCommentService) SetActorDirectory(directory *ent.Client) {
+	s.actorDirectory = directory
+}
+
+func (s *TicketCommentService) commentActor(ctx context.Context, id int) (*ent.User, error) {
+	client := s.client
+	if s.actorDirectory != nil {
+		client = s.actorDirectory
+		ctx = tenantctx.SystemContext(ctx, "comments:actor", "resolve trusted comment actor or persisted author")
+	}
+	return client.User.Get(ctx, id)
 }
 
 // SetNotificationService 设置通知服务（用于依赖注入）
@@ -82,7 +102,7 @@ func (s *TicketCommentService) CreateTicketComment(ctx context.Context, ticketID
 	}
 
 	// 查询用户信息
-	user, err := s.client.User.Get(ctx, userID)
+	user, err := s.commentActor(ctx, userID)
 	if err != nil {
 		s.logger.Warnw("Failed to get user", "error", err, "user_id", userID)
 		// 用户信息获取失败不影响评论创建
@@ -166,7 +186,7 @@ func (s *TicketCommentService) ListTicketComments(ctx context.Context, ticketID,
 			userEntity = comment.Edges.User
 		} else {
 			// 如果没有加载用户信息，单独查询
-			userEntity, _ = s.client.User.Get(ctx, comment.UserID)
+			userEntity, _ = s.commentActor(ctx, comment.UserID)
 		}
 
 		responses = append(responses, dto.ToTicketCommentResponse(comment, userEntity))
@@ -250,22 +270,28 @@ func (s *TicketCommentService) UpdateTicketComment(ctx context.Context, ticketID
 	if comment.Edges.User != nil {
 		userEntity = comment.Edges.User
 	} else {
-		userEntity, _ = s.client.User.Get(ctx, updatedComment.UserID)
+		userEntity, _ = s.commentActor(ctx, updatedComment.UserID)
 	}
 
 	return dto.ToTicketCommentResponse(updatedComment, userEntity), nil
 }
 
 func (s *TicketCommentService) canManageInternalComments(ctx context.Context, userID, tenantID int) (bool, error) {
-	u, err := s.client.User.Query().Where(user.ID(userID), user.TenantID(tenantID), user.Active(true)).Only(ctx)
-	if err != nil {
+	u, err := s.commentActor(ctx, userID)
+	if err != nil || !u.Active {
 		return false, fmt.Errorf("authenticated user not found")
 	}
-	// 内部角色（非 end_user / guest）可执行内部评论操作
-	if u.Role != "" && u.Role != "end_user" && u.Role != "guest" {
-		return true, nil
+	directory := s.client
+	lookup := ctx
+	if s.actorDirectory != nil {
+		directory = s.actorDirectory
+		lookup = tenantctx.SystemContext(ctx, "comments:session", "authorize current comment actor selected tenant")
 	}
-	return false, nil
+	if _, err := authorization.AuthorizeTenantSession(lookup, directory, u, tenantID, time.Now()); err != nil {
+		return false, fmt.Errorf("comment actor tenant access denied: %w", err)
+	}
+	role := authorization.EffectiveSessionRole(u)
+	return role != "" && role != "end_user" && role != "guest", nil
 }
 
 func (s *TicketCommentService) validateCommentReferences(ctx context.Context, ticketID, tenantID int, mentions, attachments []int) error {

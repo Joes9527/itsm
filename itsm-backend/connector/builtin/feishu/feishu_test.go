@@ -3,6 +3,7 @@ package feishu
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"strings"
 	"testing"
 
 	"itsm-backend/connector"
@@ -79,5 +80,27 @@ func TestBuildFeishuMessageBody(t *testing.T) {
 	b := buildFeishuMessageBody(&m)
 	if b["msg_type"] != "text" || b["receive_id"] != "ou_x" {
 		t.Fatalf("unexpected body: %+v", b)
+	}
+}
+
+func TestParseInboundRejectsAmbiguousJSON(t *testing.T) {
+	for name, body := range map[string]string{
+		"duplicate type":    `{"type":"event_callback","type":"url_verification","challenge":"x"}`,
+		"duplicate token":   `{"type":"url_verification","token":"wrong","token":"right"}`,
+		"duplicate header":  `{"header":{},"header":{"event_type":"task.created"},"event":{}}`,
+		"duplicate event":   `{"header":{"event_type":"task.created"},"event":{},"event":{}}`,
+		"nested array":      `{"header":{"event_type":"task.created"},"event":{"items":[{"id":1,"id":2}]}}`,
+		"escaped duplicate": `{"type":"url_verification","to\u006ben":"a","token":"b"}`,
+		"multiple roots":    `{"type":"url_verification"}{}`,
+		"null":              `null`, "array": `[]`, "malformed": `{"type":`,
+		"oversized": `{"type":"url_verification","challenge":"` + strings.Repeat("a", 1<<20) + `"}`,
+		"overdeep":  `{"type":"url_verification","extra":` + strings.Repeat("[", 65) + `0` + strings.Repeat("]", 65) + `}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			msg, err := New().ParseInbound([]byte(body))
+			if err == nil || msg != nil {
+				t.Fatalf("ambiguous payload accepted: err=%v", err)
+			}
+		})
 	}
 }

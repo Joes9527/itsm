@@ -7,6 +7,8 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/processauditlog"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,7 +52,7 @@ func setupInstanceVariablesFixture(t *testing.T) (*ent.Client, *bpmnProcessInsta
 
 	instance, err := client.ProcessInstance.Create().
 		SetProcessInstanceID("PI-piv-1").
-		SetBusinessKey("ticket:1").
+		SetBusinessKey("generic:1").
 		SetProcessDefinitionKey("piv-flow").
 		SetProcessDefinitionID(definition.ID).
 		SetStatus("running").
@@ -60,6 +62,7 @@ func setupInstanceVariablesFixture(t *testing.T) (*ent.Client, *bpmnProcessInsta
 
 	logger := zaptest.NewLogger(t).Sugar()
 	svc := &bpmnProcessInstanceService{
+		execution:    executionfixture.Standard(),
 		client:       client,
 		logger:       logger,
 		auditService: NewBPMNAuditService(client, logger),
@@ -103,4 +106,57 @@ func TestSetProcessInstanceVariables_AllowsBusinessVars(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "x", after.Variables["custom"])
 	assert.Equal(t, "high", after.Variables["priority"])
+	assert.Equal(t, instance.Version+1, after.Version)
+	assert.Equal(t, 1, client.ProcessAuditLog.Query().Where(
+		processauditlog.ProcessInstanceID(instance.ID),
+		processauditlog.Action(AuditActionVariableChanged),
+	).CountX(ctx))
+}
+
+func TestSetProcessInstanceVariables_RejectsTerminalLifecycle(t *testing.T) {
+	for _, status := range []string{"completed", "terminated"} {
+		t.Run(status, func(t *testing.T) {
+			client, svc, tenantID, actorID, instance := setupInstanceVariablesFixture(t)
+			ctx := WithBPMNAccessScope(context.Background(), BPMNAccessScope{
+				UserID: actorID, TenantID: tenantID, CanUpdateAllInstances: true,
+			})
+			beforeVariables := map[string]interface{}{"preserved": true}
+			instance, err := client.ProcessInstance.UpdateOne(instance).
+				SetStatus(status).
+				SetVariables(beforeVariables).
+				Save(ctx)
+			require.NoError(t, err)
+
+			err = svc.SetProcessInstanceVariables(ctx, instance.ProcessInstanceID, map[string]interface{}{"late": true})
+			requireBPMNLifecycleConflict(t, err)
+			after := client.ProcessInstance.GetX(ctx, instance.ID)
+			assert.Equal(t, status, after.Status)
+			assert.Equal(t, instance.Version, after.Version)
+			assert.Equal(t, beforeVariables, map[string]any(after.Variables))
+			assert.Zero(t, client.ProcessAuditLog.Query().Where(
+				processauditlog.ProcessInstanceID(instance.ID),
+				processauditlog.Action(AuditActionVariableChanged),
+			).CountX(ctx))
+		})
+	}
+}
+
+func TestSetProcessInstanceVariables_RejectsUnknownLifecycle(t *testing.T) {
+	client, svc, tenantID, actorID, instance := setupInstanceVariablesFixture(t)
+	ctx := WithBPMNAccessScope(context.Background(), BPMNAccessScope{
+		UserID: actorID, TenantID: tenantID, CanUpdateAllInstances: true,
+	})
+	instance, err := client.ProcessInstance.UpdateOne(instance).SetStatus("unknown").Save(ctx)
+	require.NoError(t, err)
+
+	err = svc.SetProcessInstanceVariables(ctx, instance.ProcessInstanceID, map[string]interface{}{"late": true})
+	requireBPMNLifecycleConflict(t, err)
+	after := client.ProcessInstance.GetX(ctx, instance.ID)
+	assert.Equal(t, "unknown", after.Status)
+	assert.Equal(t, instance.Version, after.Version)
+	assert.Empty(t, after.Variables)
+	assert.Zero(t, client.ProcessAuditLog.Query().Where(
+		processauditlog.ProcessInstanceID(instance.ID),
+		processauditlog.Action(AuditActionVariableChanged),
+	).CountX(ctx))
 }

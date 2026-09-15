@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"itsm-backend/ent/processbinding"
 	"itsm-backend/ent/processdefinition"
+	"itsm-backend/internal/jsonvalue"
 	"strings"
 	"time"
 
@@ -44,13 +45,13 @@ type ProcessBinding struct {
 	// TicketCategory ID，可选——比 category 字符串更精确的分类匹配条件，后续 ProcessBindingService.FindBestBinding 可以按它精确匹配
 	CategoryID int `json:"category_id,omitempty"`
 	// 匹配条件JSON
-	Conditions map[string]interface{} `json:"conditions,omitempty"`
+	Conditions jsonvalue.NumberMap `json:"conditions,omitempty"`
 	// 审批链ID
 	ApprovalChainID string `json:"approval_chain_id,omitempty"`
 	// SLA策略ID
 	SLAPolicyID string `json:"sla_policy_id,omitempty"`
 	// 覆盖配置
-	Overrides map[string]interface{} `json:"overrides,omitempty"`
+	Overrides jsonvalue.NumberMap `json:"overrides,omitempty"`
 	// 租户ID
 	TenantID int `json:"tenant_id,omitempty"`
 	// 创建时间

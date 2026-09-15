@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itsm.example/contracts/kaf-access-result.schema.json",
+  "title": "Verified external access result",
+  "description": "C2 completion result. First verifiedAt and evidenceRef are persisted by KAF and replayed unchanged. ITSM computes finite expiry from its immutable approved policy; preexisting membership is unmanaged.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["outcome", "provider", "subjectId", "groupId", "baseline", "verifiedAt", "evidenceRef"],
+  "properties": {
+    "outcome": {"enum": ["granted", "already_present"]},
+    "provider": {"const": "graph"},
+    "subjectId": {"type": "string", "minLength": 1, "pattern": "\\S"},
+    "groupId": {"type": "string", "minLength": 1, "pattern": "\\S"},
+    "baseline": {"enum": ["not_member", "member"]},
+    "verifiedAt": {"type": "string", "format": "date-time"},
+    "evidenceRef": {"type": "string", "minLength": 1, "pattern": "\\S"}
+  },
+  "allOf": [
+    {"if": {"properties": {"outcome": {"const": "granted"}}}, "then": {"properties": {"baseline": {"const": "not_member"}}}},
+    {"if": {"properties": {"outcome": {"const": "already_present"}}}, "then": {"properties": {"baseline": {"const": "member"}}}}
+  ]
+}

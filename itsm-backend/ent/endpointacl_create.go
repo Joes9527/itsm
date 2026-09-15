@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/endpointacl"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +19,7 @@ type EndpointACLCreate struct {
 	config
 	mutation *EndpointACLMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTenantID sets the "tenant_id" field.
@@ -274,6 +276,7 @@ func (_c *EndpointACLCreate) createSpec() (*EndpointACL, *sqlgraph.CreateSpec) {
 		_node = &EndpointACL{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(endpointacl.Table, sqlgraph.NewFieldSpec(endpointacl.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(endpointacl.FieldTenantID, field.TypeInt, value)
 		_node.TenantID = value
@@ -321,11 +324,472 @@ func (_c *EndpointACLCreate) createSpec() (*EndpointACL, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.EndpointACL.Create().
+//		SetTenantID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.EndpointACLUpsert) {
+//			SetTenantID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *EndpointACLCreate) OnConflict(opts ...sql.ConflictOption) *EndpointACLUpsertOne {
+	_c.conflict = opts
+	return &EndpointACLUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.EndpointACL.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *EndpointACLCreate) OnConflictColumns(columns ...string) *EndpointACLUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &EndpointACLUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// EndpointACLUpsertOne is the builder for "upsert"-ing
+	//  one EndpointACL node.
+	EndpointACLUpsertOne struct {
+		create *EndpointACLCreate
+	}
+
+	// EndpointACLUpsert is the "OnConflict" setter.
+	EndpointACLUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTenantID sets the "tenant_id" field.
+func (u *EndpointACLUpsert) SetTenantID(v int) *EndpointACLUpsert {
+	u.Set(endpointacl.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *EndpointACLUpsert) UpdateTenantID() *EndpointACLUpsert {
+	u.SetExcluded(endpointacl.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *EndpointACLUpsert) AddTenantID(v int) *EndpointACLUpsert {
+	u.Add(endpointacl.FieldTenantID, v)
+	return u
+}
+
+// SetPathPattern sets the "path_pattern" field.
+func (u *EndpointACLUpsert) SetPathPattern(v string) *EndpointACLUpsert {
+	u.Set(endpointacl.FieldPathPattern, v)
+	return u
+}
+
+// UpdatePathPattern sets the "path_pattern" field to the value that was provided on create.
+func (u *EndpointACLUpsert) UpdatePathPattern() *EndpointACLUpsert {
+	u.SetExcluded(endpointacl.FieldPathPattern)
+	return u
+}
+
+// SetMethod sets the "method" field.
+func (u *EndpointACLUpsert) SetMethod(v string) *EndpointACLUpsert {
+	u.Set(endpointacl.FieldMethod, v)
+	return u
+}
+
+// UpdateMethod sets the "method" field to the value that was provided on create.
+func (u *EndpointACLUpsert) UpdateMethod() *EndpointACLUpsert {
+	u.SetExcluded(endpointacl.FieldMethod)
+	return u
+}
+
+// ClearMethod clears the value of the "method" field.
+func (u *EndpointACLUpsert) ClearMethod() *EndpointACLUpsert {
+	u.SetNull(endpointacl.FieldMethod)
+	return u
+}
+
+// SetResource sets the "resource" field.
+func (u *EndpointACLUpsert) SetResource(v string) *EndpointACLUpsert {
+	u.Set(endpointacl.FieldResource, v)
+	return u
+}
+
+// UpdateResource sets the "resource" field to the value that was provided on create.
+func (u *EndpointACLUpsert) UpdateResource() *EndpointACLUpsert {
+	u.SetExcluded(endpointacl.FieldResource)
+	return u
+}
+
+// SetAction sets the "action" field.
+func (u *EndpointACLUpsert) SetAction(v string) *EndpointACLUpsert {
+	u.Set(endpointacl.FieldAction, v)
+	return u
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *EndpointACLUpsert) UpdateAction() *EndpointACLUpsert {
+	u.SetExcluded(endpointacl.FieldAction)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *EndpointACLUpsert) SetDescription(v string) *EndpointACLUpsert {
+	u.Set(endpointacl.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *EndpointACLUpsert) UpdateDescription() *EndpointACLUpsert {
+	u.SetExcluded(endpointacl.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *EndpointACLUpsert) ClearDescription() *EndpointACLUpsert {
+	u.SetNull(endpointacl.FieldDescription)
+	return u
+}
+
+// SetPriority sets the "priority" field.
+func (u *EndpointACLUpsert) SetPriority(v int) *EndpointACLUpsert {
+	u.Set(endpointacl.FieldPriority, v)
+	return u
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *EndpointACLUpsert) UpdatePriority() *EndpointACLUpsert {
+	u.SetExcluded(endpointacl.FieldPriority)
+	return u
+}
+
+// AddPriority adds v to the "priority" field.
+func (u *EndpointACLUpsert) AddPriority(v int) *EndpointACLUpsert {
+	u.Add(endpointacl.FieldPriority, v)
+	return u
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *EndpointACLUpsert) SetIsActive(v bool) *EndpointACLUpsert {
+	u.Set(endpointacl.FieldIsActive, v)
+	return u
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *EndpointACLUpsert) UpdateIsActive() *EndpointACLUpsert {
+	u.SetExcluded(endpointacl.FieldIsActive)
+	return u
+}
+
+// SetIsWhitelist sets the "is_whitelist" field.
+func (u *EndpointACLUpsert) SetIsWhitelist(v bool) *EndpointACLUpsert {
+	u.Set(endpointacl.FieldIsWhitelist, v)
+	return u
+}
+
+// UpdateIsWhitelist sets the "is_whitelist" field to the value that was provided on create.
+func (u *EndpointACLUpsert) UpdateIsWhitelist() *EndpointACLUpsert {
+	u.SetExcluded(endpointacl.FieldIsWhitelist)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *EndpointACLUpsert) SetCreatedAt(v time.Time) *EndpointACLUpsert {
+	u.Set(endpointacl.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *EndpointACLUpsert) UpdateCreatedAt() *EndpointACLUpsert {
+	u.SetExcluded(endpointacl.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *EndpointACLUpsert) SetUpdatedAt(v time.Time) *EndpointACLUpsert {
+	u.Set(endpointacl.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *EndpointACLUpsert) UpdateUpdatedAt() *EndpointACLUpsert {
+	u.SetExcluded(endpointacl.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.EndpointACL.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *EndpointACLUpsertOne) UpdateNewValues() *EndpointACLUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.EndpointACL.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *EndpointACLUpsertOne) Ignore() *EndpointACLUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *EndpointACLUpsertOne) DoNothing() *EndpointACLUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the EndpointACLCreate.OnConflict
+// documentation for more info.
+func (u *EndpointACLUpsertOne) Update(set func(*EndpointACLUpsert)) *EndpointACLUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&EndpointACLUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *EndpointACLUpsertOne) SetTenantID(v int) *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *EndpointACLUpsertOne) AddTenantID(v int) *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *EndpointACLUpsertOne) UpdateTenantID() *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetPathPattern sets the "path_pattern" field.
+func (u *EndpointACLUpsertOne) SetPathPattern(v string) *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetPathPattern(v)
+	})
+}
+
+// UpdatePathPattern sets the "path_pattern" field to the value that was provided on create.
+func (u *EndpointACLUpsertOne) UpdatePathPattern() *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdatePathPattern()
+	})
+}
+
+// SetMethod sets the "method" field.
+func (u *EndpointACLUpsertOne) SetMethod(v string) *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetMethod(v)
+	})
+}
+
+// UpdateMethod sets the "method" field to the value that was provided on create.
+func (u *EndpointACLUpsertOne) UpdateMethod() *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdateMethod()
+	})
+}
+
+// ClearMethod clears the value of the "method" field.
+func (u *EndpointACLUpsertOne) ClearMethod() *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.ClearMethod()
+	})
+}
+
+// SetResource sets the "resource" field.
+func (u *EndpointACLUpsertOne) SetResource(v string) *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetResource(v)
+	})
+}
+
+// UpdateResource sets the "resource" field to the value that was provided on create.
+func (u *EndpointACLUpsertOne) UpdateResource() *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdateResource()
+	})
+}
+
+// SetAction sets the "action" field.
+func (u *EndpointACLUpsertOne) SetAction(v string) *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetAction(v)
+	})
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *EndpointACLUpsertOne) UpdateAction() *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdateAction()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *EndpointACLUpsertOne) SetDescription(v string) *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *EndpointACLUpsertOne) UpdateDescription() *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *EndpointACLUpsertOne) ClearDescription() *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetPriority sets the "priority" field.
+func (u *EndpointACLUpsertOne) SetPriority(v int) *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetPriority(v)
+	})
+}
+
+// AddPriority adds v to the "priority" field.
+func (u *EndpointACLUpsertOne) AddPriority(v int) *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.AddPriority(v)
+	})
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *EndpointACLUpsertOne) UpdatePriority() *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdatePriority()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *EndpointACLUpsertOne) SetIsActive(v bool) *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *EndpointACLUpsertOne) UpdateIsActive() *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetIsWhitelist sets the "is_whitelist" field.
+func (u *EndpointACLUpsertOne) SetIsWhitelist(v bool) *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetIsWhitelist(v)
+	})
+}
+
+// UpdateIsWhitelist sets the "is_whitelist" field to the value that was provided on create.
+func (u *EndpointACLUpsertOne) UpdateIsWhitelist() *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdateIsWhitelist()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *EndpointACLUpsertOne) SetCreatedAt(v time.Time) *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *EndpointACLUpsertOne) UpdateCreatedAt() *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *EndpointACLUpsertOne) SetUpdatedAt(v time.Time) *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *EndpointACLUpsertOne) UpdateUpdatedAt() *EndpointACLUpsertOne {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *EndpointACLUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for EndpointACLCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *EndpointACLUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *EndpointACLUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *EndpointACLUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // EndpointACLCreateBulk is the builder for creating many EndpointACL entities in bulk.
 type EndpointACLCreateBulk struct {
 	config
 	err      error
 	builders []*EndpointACLCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the EndpointACL entities in the database.
@@ -355,6 +819,7 @@ func (_c *EndpointACLCreateBulk) Save(ctx context.Context) ([]*EndpointACL, erro
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -405,6 +870,292 @@ func (_c *EndpointACLCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *EndpointACLCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.EndpointACL.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.EndpointACLUpsert) {
+//			SetTenantID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *EndpointACLCreateBulk) OnConflict(opts ...sql.ConflictOption) *EndpointACLUpsertBulk {
+	_c.conflict = opts
+	return &EndpointACLUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.EndpointACL.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *EndpointACLCreateBulk) OnConflictColumns(columns ...string) *EndpointACLUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &EndpointACLUpsertBulk{
+		create: _c,
+	}
+}
+
+// EndpointACLUpsertBulk is the builder for "upsert"-ing
+// a bulk of EndpointACL nodes.
+type EndpointACLUpsertBulk struct {
+	create *EndpointACLCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.EndpointACL.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *EndpointACLUpsertBulk) UpdateNewValues() *EndpointACLUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.EndpointACL.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *EndpointACLUpsertBulk) Ignore() *EndpointACLUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *EndpointACLUpsertBulk) DoNothing() *EndpointACLUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the EndpointACLCreateBulk.OnConflict
+// documentation for more info.
+func (u *EndpointACLUpsertBulk) Update(set func(*EndpointACLUpsert)) *EndpointACLUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&EndpointACLUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *EndpointACLUpsertBulk) SetTenantID(v int) *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *EndpointACLUpsertBulk) AddTenantID(v int) *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *EndpointACLUpsertBulk) UpdateTenantID() *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetPathPattern sets the "path_pattern" field.
+func (u *EndpointACLUpsertBulk) SetPathPattern(v string) *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetPathPattern(v)
+	})
+}
+
+// UpdatePathPattern sets the "path_pattern" field to the value that was provided on create.
+func (u *EndpointACLUpsertBulk) UpdatePathPattern() *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdatePathPattern()
+	})
+}
+
+// SetMethod sets the "method" field.
+func (u *EndpointACLUpsertBulk) SetMethod(v string) *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetMethod(v)
+	})
+}
+
+// UpdateMethod sets the "method" field to the value that was provided on create.
+func (u *EndpointACLUpsertBulk) UpdateMethod() *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdateMethod()
+	})
+}
+
+// ClearMethod clears the value of the "method" field.
+func (u *EndpointACLUpsertBulk) ClearMethod() *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.ClearMethod()
+	})
+}
+
+// SetResource sets the "resource" field.
+func (u *EndpointACLUpsertBulk) SetResource(v string) *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetResource(v)
+	})
+}
+
+// UpdateResource sets the "resource" field to the value that was provided on create.
+func (u *EndpointACLUpsertBulk) UpdateResource() *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdateResource()
+	})
+}
+
+// SetAction sets the "action" field.
+func (u *EndpointACLUpsertBulk) SetAction(v string) *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetAction(v)
+	})
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *EndpointACLUpsertBulk) UpdateAction() *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdateAction()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *EndpointACLUpsertBulk) SetDescription(v string) *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *EndpointACLUpsertBulk) UpdateDescription() *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *EndpointACLUpsertBulk) ClearDescription() *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetPriority sets the "priority" field.
+func (u *EndpointACLUpsertBulk) SetPriority(v int) *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetPriority(v)
+	})
+}
+
+// AddPriority adds v to the "priority" field.
+func (u *EndpointACLUpsertBulk) AddPriority(v int) *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.AddPriority(v)
+	})
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *EndpointACLUpsertBulk) UpdatePriority() *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdatePriority()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *EndpointACLUpsertBulk) SetIsActive(v bool) *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *EndpointACLUpsertBulk) UpdateIsActive() *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetIsWhitelist sets the "is_whitelist" field.
+func (u *EndpointACLUpsertBulk) SetIsWhitelist(v bool) *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetIsWhitelist(v)
+	})
+}
+
+// UpdateIsWhitelist sets the "is_whitelist" field to the value that was provided on create.
+func (u *EndpointACLUpsertBulk) UpdateIsWhitelist() *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdateIsWhitelist()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *EndpointACLUpsertBulk) SetCreatedAt(v time.Time) *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *EndpointACLUpsertBulk) UpdateCreatedAt() *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *EndpointACLUpsertBulk) SetUpdatedAt(v time.Time) *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *EndpointACLUpsertBulk) UpdateUpdatedAt() *EndpointACLUpsertBulk {
+	return u.Update(func(s *EndpointACLUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *EndpointACLUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the EndpointACLCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for EndpointACLCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *EndpointACLUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

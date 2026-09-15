@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="urn:itsm:acceptance">
+  <process id="work_item_assignment_acceptance" isExecutable="true">
+    <startEvent id="start"/>
+    <userTask id="helpdesk" name="Assignment acceptance Helpdesk" candidateGroups="assignment_acceptance_helpdesk"/>
+    <userTask id="fulfill" name="Assignment acceptance fulfillment" taskPurpose="fulfillment" assigneeSource="work_item_assignee"/>
+    <userTask id="manager" name="Assignment acceptance manager" candidateGroups="assignment_acceptance_manager"/>
+    <userTask id="confirm" name="Assignment acceptance confirmation"/>
+    <endEvent id="end"/>
+    <sequenceFlow id="s1" sourceRef="start" targetRef="helpdesk"/>
+    <sequenceFlow id="s2" sourceRef="helpdesk" targetRef="fulfill"/>
+    <sequenceFlow id="s3" sourceRef="fulfill" targetRef="manager"/>
+    <sequenceFlow id="s4" sourceRef="manager" targetRef="confirm"/>
+    <sequenceFlow id="s5" sourceRef="confirm" targetRef="end"/>
+  </process>
+</definitions>

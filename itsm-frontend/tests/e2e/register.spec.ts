@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { DEFAULT_LOGIN, loginThroughForm } from './auth-utils';
 
 test.describe('Register + Login Flow - 注册登录流程', () => {
   test('should register a new user and then login', async ({ page }) => {
@@ -32,53 +33,20 @@ test.describe('Register + Login Flow - 注册登录流程', () => {
     await roleSelect.click();
     await page.getByRole('option', { name: /普通用户/i }).click();
 
-    const registerResponsePromise = page
-      .waitForResponse(
-        resp => resp.url().includes('/api/v1/auth/register') && resp.request().method() === 'POST',
-        { timeout: 30000 }
-      )
-      .catch(() => null);
+    const registerResponsePromise = page.waitForResponse(
+      resp => resp.url().includes('/api/v1/auth/register') && resp.request().method() === 'POST',
+      { timeout: 30000 }
+    );
 
     await page.getByRole('button', { name: /注册|Register/i }).click();
 
     const registerResponse = await registerResponsePromise;
-    if (registerResponse) {
-      expect(registerResponse.status()).toBeGreaterThanOrEqual(200);
-      expect(registerResponse.status()).toBeLessThan(500);
-    }
+    expect(registerResponse.status()).toBe(200);
 
     await page.waitForLoadState('networkidle');
 
-    const failedAlert = page.locator('.ant-alert-error, .ant-message-error, text=注册失败');
-    if (await failedAlert.count()) {
-      const details = (await failedAlert.first().textContent()) || '注册失败';
-      throw new Error(details);
-    }
-
     await expect(page).toHaveURL(/\/login/, { timeout: 30000 });
 
-    await page.waitForSelector('input.ant-input', { timeout: 15000 });
-    const loginInputs = page.locator('input.ant-input');
-    await loginInputs.nth(0).fill(username);
-    await loginInputs.nth(1).fill(password);
-
-    const loginResponsePromise = page
-      .waitForResponse(
-        resp => resp.url().includes('/api/v1/auth/login') && resp.request().method() === 'POST',
-        { timeout: 30000 }
-      )
-      .catch(() => null);
-
-    await page.click('button[type="submit"]');
-
-    const loginResponse = await loginResponsePromise;
-    if (loginResponse) {
-      expect(loginResponse.status()).toBeGreaterThanOrEqual(200);
-      expect(loginResponse.status()).toBeLessThan(500);
-    }
-
-    await page.waitForURL(/\/(dashboard|tickets|incidents|problems|changes|service-catalog)/, {
-      timeout: 30000,
-    });
+    await loginThroughForm(page, { ...DEFAULT_LOGIN, username, password });
   });
 });

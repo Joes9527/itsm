@@ -1,6 +1,9 @@
 'use client';
+import { useDetailResource, useDetailIdentity } from './detail-tabs/useDetailResource';
+import { useDetailRefreshEntry } from './detail-tabs/DetailRefreshContext';
+import { DetailReadState } from './detail-tabs/DetailReadState';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Card,
   List,
@@ -30,11 +33,9 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import type {
-  TicketNotification,
-  SendTicketNotificationRequest} from '@/lib/api/ticket-notification-api';
-import {
-  TicketNotificationApi
+  SendTicketNotificationRequest,
 } from '@/lib/api/ticket-notification-api';
+import { TicketNotificationApi } from '@/lib/api/ticket-notification-api';
 import { UserSelect } from '@/components/common/UserSelect';
 import { App } from 'antd';
 import { useI18n } from '@/lib/i18n';
@@ -45,90 +46,110 @@ const { TextArea } = Input;
 interface TicketNotificationSectionProps {
   ticketId: number;
   canSend?: boolean;
-  onNotificationSent?: (notification: TicketNotification) => void;
 }
 
 /**
  * 工单通知管理组件
  */
-export const TicketNotificationSection: React.FC<TicketNotificationSectionProps> = ({
+export const TicketNotificationSection: React.FC<TicketNotificationSectionProps> = props => {
+  const identity = useDetailIdentity(props.ticketId);
+  return <TicketNotificationContent key={identity} {...props} />;
+};
+const TicketNotificationContent: React.FC<TicketNotificationSectionProps> = ({
   ticketId,
   canSend = true,
-  onNotificationSent,
 }) => {
   const { message: antMessage } = App.useApp();
+  const messages = useRef(antMessage);
+  messages.current = antMessage;
   const { t } = useI18n();
-  const [notifications, setNotifications] = useState<TicketNotification[]>([]);
-  const [loading, setLoading] = useState(false);
+  const busy = useRef(false);
+  const [writing, setWriting] = useState(false);
+  const resource = useDetailResource(ticketId, async () => {
+    const response = await TicketNotificationApi.getTicketNotifications(ticketId);
+    return response.notifications || [];
+  }, rows => rows.length);
+  const notifications = resource.data || [];
+  useDetailRefreshEntry({ key: 'notifications', label: '通知', reload: resource.reload, isWriting: () => busy.current });
   const [sendModalVisible, setSendModalVisible] = useState(false);
+  const [eventTypes, setEventTypes] = useState<Array<{ code: string; name: string }>>([]);
   const [form] = Form.useForm();
 
-  // 加载通知列表
-  const loadNotifications = async () => {
-    setLoading(true);
-    try {
-      const response = await TicketNotificationApi.getTicketNotifications(ticketId);
-      setNotifications(response.notifications || []);
-    } catch (error) {
-      antMessage.error('加载通知列表失败');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    if (ticketId) {
-      loadNotifications();
-    }
-  }, [ticketId]);
+    if (!resource.denied) return;
+    busy.current = false;
+    setWriting(false);
+    setSendModalVisible(false);
+    setEventTypes([]);
+    form.resetFields();
+  }, [resource.denied, form]);
+  useEffect(() => {
+    if (!canSend) { setSendModalVisible(false); form.resetFields(); }
+  }, [canSend, form]);
+  useEffect(() => {
+    if (!sendModalVisible) return;
+    const current = resource.capture();
+    let active = true;
+    TicketNotificationApi.getNotificationPreferences()
+      .then(response => { if (active && current()) setEventTypes(response.eventTypes || []); })
+      .catch(() => { if (active && current()) messages.current.error('加载通知事件类型失败'); });
+    return () => { active = false; };
+  }, [sendModalVisible, resource.capture]);
 
   // 发送通知
   const handleSendNotification = async (values: {
     userIds: number[];
-    type: string;
-    channel: 'email' | 'in_app' | 'sms';
+    eventType: string;
     content: string;
   }) => {
+    if (!canSend || !resource.ready || busy.current) return;
+    const current = resource.capture();
+    busy.current = true;
+    setWriting(true);
     try {
       const request: SendTicketNotificationRequest = {
         userIds: values.userIds,
-        type: values.type,
-        channel: values.channel,
+        eventType: values.eventType,
         content: values.content,
       };
-      await TicketNotificationApi.sendTicketNotification(ticketId, request);
-      antMessage.success('通知发送成功');
+      const result = await TicketNotificationApi.sendTicketNotification(ticketId, request);
+      if (!current()) return;
+      antMessage.success(
+        result.effect === 'queued'
+          ? '已加入发送队列'
+          : result.effect === 'idempotent'
+            ? '该通知已受理'
+            : `已生成 ${result.appliedCount} 条站内通知`
+      );
       setSendModalVisible(false);
       form.resetFields();
-      await loadNotifications();
-      // 触发回调
-      if (onNotificationSent) {
-        // 创建一个临时通知对象用于回调
-        const tempNotification: TicketNotification = {
-          id: Date.now(),
-          ticketId: ticketId,
-          userId: values.userIds[0],
-          type: values.type as any,
-          channel: values.channel,
-          content: values.content,
-          status: 'sent',
-          createdAt: new Date().toISOString(),
-        };
-        onNotificationSent(tempNotification);
-      }
+      await resource.reload({ afterWrite: true });
     } catch (error: unknown) {
+      if (!current()) return;
+      resource.deny(error);
       antMessage.error(error instanceof Error ? error.message : '通知发送失败');
+    } finally {
+      if (current()) { busy.current = false; setWriting(false); }
     }
   };
 
   // 标记为已读
   const handleMarkRead = async (notificationId: number) => {
+    if (!resource.ready || busy.current) return;
+    const current = resource.capture();
+    busy.current = true;
+    setWriting(true);
     try {
       await TicketNotificationApi.markTicketNotificationRead(notificationId);
+      if (!current()) return;
       antMessage.success('已标记为已读');
-      await loadNotifications();
+      await resource.reload({ afterWrite: true });
     } catch (error: unknown) {
+      if (!current()) return;
+      resource.deny(error);
       antMessage.error(error instanceof Error ? error.message : '标记失败');
+    } finally {
+      if (current()) { busy.current = false; setWriting(false); }
     }
   };
 
@@ -195,6 +216,7 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
 
   return (
     <div className="space-y-4">
+      <DetailReadState error={resource.error} loading={resource.loading} reload={resource.reload} />
       {/* 操作栏 */}
       <div className="flex justify-between items-center">
         <Space>
@@ -207,98 +229,98 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
             </Badge>
           )}
         </Space>
-        {canSend && (
-          <Button type="primary" icon={<Send />} onClick={() => setSendModalVisible(true)}>
+        {canSend && !resource.denied && (
+          <Button type="primary" icon={<Send />} disabled={!resource.ready || writing} onClick={() => setSendModalVisible(true)}>
             发送通知
           </Button>
         )}
       </div>
 
       {/* 通知列表 */}
-      <Card loading={loading}>
+      <Card loading={resource.loading && !resource.ready}>
         {notifications.length === 0 ? (
-          <Empty description="暂无通知" />
+          resource.ready ? <Empty description="暂无通知" /> : null
         ) : (
           <List
             dataSource={notifications}
             renderItem={notification => {
               const isRead = Boolean(notification.readAt);
               return (
-              <List.Item
-                className={isRead ? 'opacity-70' : ''}
-                actions={[
-                  !isRead && (
-                    <Tooltip title="标记为已读" key="read">
-                      <Button
-                        type="text"
-                        size="small"
-                        icon={<Eye />}
-                        onClick={() => handleMarkRead(notification.id)}
-                      >
-                        标记已读
-                      </Button>
-                    </Tooltip>
-                  ),
-                ].filter(Boolean)}
-              >
-                <List.Item.Meta
-                  avatar={
-                    <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-50">
-                      {isRead ? (
-                        <CheckCircle style={{ fontSize: 20, color: '#52c41a' }} />
-                      ) : (
-                        <Bell style={{ fontSize: 20, color: '#1890ff' }} />
-                      )}
-                    </div>
-                  }
-                  title={
-                    <Space>
-                      <Tag color={getNotificationTypeColor(notification.type)}>
-                        {getNotificationTypeLabel(notification.type)}
-                      </Tag>
-                      <Tag
-                        color={getChannelColor(notification.channel)}
-                        icon={getChannelIcon(notification.channel)}
-                      >
-                        {notification.channel === 'email'
-                          ? '邮件'
-                          : notification.channel === 'sms'
-                            ? '短信'
-                            : '站内消息'}
-                      </Tag>
-                      {!isRead && <Badge status="processing" text="未读" />}
-                    </Space>
-                  }
-                  description={
-                    <div className="space-y-1">
-                      <Text>{notification.content}</Text>
-                      <div className="flex items-center space-x-4 text-xs text-gray-500">
-                        <span>
-                          <Clock style={{ fontSize: 12, marginRight: 4 }} />
-                          创建时间: {formatDateTime(notification.createdAt)}
-                        </span>
-                        {notification.sentAt && (
-                          <span>
-                            <Send style={{ fontSize: 12, marginRight: 4 }} />
-                            发送时间: {formatDateTime(notification.sentAt)}
-                          </span>
-                        )}
-                        {notification.readAt && (
-                          <span>
-                            <Eye style={{ fontSize: 12, marginRight: 4 }} />
-                            阅读时间: {formatDateTime(notification.readAt)}
-                          </span>
-                        )}
-                        {notification.user && (
-                          <span>
-                            接收人: {notification.user.name || notification.user.username}
-                          </span>
+                <List.Item
+                  className={isRead ? 'opacity-70' : ''}
+                  actions={[
+                    !isRead && (
+                      <Tooltip title="标记为已读" key="read">
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<Eye />}
+                          disabled={writing} onClick={() => handleMarkRead(notification.id)}
+                        >
+                          标记已读
+                        </Button>
+                      </Tooltip>
+                    ),
+                  ].filter(Boolean)}
+                >
+                  <List.Item.Meta
+                    avatar={
+                      <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-50">
+                        {isRead ? (
+                          <CheckCircle style={{ fontSize: 20, color: '#52c41a' }} />
+                        ) : (
+                          <Bell style={{ fontSize: 20, color: '#1890ff' }} />
                         )}
                       </div>
-                    </div>
-                  }
-                />
-              </List.Item>
+                    }
+                    title={
+                      <Space>
+                        <Tag color={getNotificationTypeColor(notification.type)}>
+                          {getNotificationTypeLabel(notification.type)}
+                        </Tag>
+                        <Tag
+                          color={getChannelColor(notification.channel)}
+                          icon={getChannelIcon(notification.channel)}
+                        >
+                          {notification.channel === 'email'
+                            ? '邮件'
+                            : notification.channel === 'sms'
+                              ? '短信'
+                              : '站内消息'}
+                        </Tag>
+                        {!isRead && <Badge status="processing" text="未读" />}
+                      </Space>
+                    }
+                    description={
+                      <div className="space-y-1">
+                        <Text>{notification.content}</Text>
+                        <div className="flex items-center space-x-4 text-[12px] text-muted">
+                          <span>
+                            <Clock style={{ fontSize: 12, marginRight: 4 }} />
+                            创建时间: {formatDateTime(notification.createdAt)}
+                          </span>
+                          {notification.sentAt && (
+                            <span>
+                              <Send style={{ fontSize: 12, marginRight: 4 }} />
+                              发送时间: {formatDateTime(notification.sentAt)}
+                            </span>
+                          )}
+                          {notification.readAt && (
+                            <span>
+                              <Eye style={{ fontSize: 12, marginRight: 4 }} />
+                              阅读时间: {formatDateTime(notification.readAt)}
+                            </span>
+                          )}
+                          {notification.user && (
+                            <span>
+                              接收人: {notification.user.name || notification.user.username}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    }
+                  />
+                </List.Item>
               );
             }}
           />
@@ -309,6 +331,7 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
       <Modal
         title="发送通知"
         open={sendModalVisible}
+        confirmLoading={writing}
         onOk={() => form.submit()}
         onCancel={() => {
           setSendModalVisible(false);
@@ -318,15 +341,7 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
         cancelText={t('common.cancel')}
         width={600}
       >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleSendNotification}
-          initialValues={{
-            channel: 'in_app',
-            type: 'commented',
-          }}
-        >
+        <Form form={form} layout="vertical" onFinish={handleSendNotification}>
           <Form.Item
             label="接收人"
             name="userIds"
@@ -337,30 +352,16 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
 
           <Form.Item
             label="通知类型"
-            name="type"
+            name="eventType"
             rules={[{ required: true, message: '请选择通知类型' }]}
           >
-            <Select placeholder="请选择通知类型" options={[
-              { value: "created", label: "工单创建" },
-              { value: "assigned", label: "工单分配" },
-              { value: "status_changed", label: "状态变更" },
-              { value: "commented", label: "新增评论" },
-              { value: "sla_warning", label: "SLA警告" },
-              { value: "resolved", label: "工单已解决" },
-              { value: "closed", label: "工单已关闭" },
-            ]} />
-          </Form.Item>
-
-          <Form.Item
-            label="通知渠道"
-            name="channel"
-            rules={[{ required: true, message: '请选择通知渠道' }]}
-          >
-            <Select placeholder="请选择通知渠道" options={[
-              { value: "in_app", label: "站内消息" },
-              { value: "email", label: "邮件" },
-              { value: "sms", label: "短信" },
-            ]} />
+            <Select
+              placeholder="请选择通知类型"
+              options={eventTypes.map(eventType => ({
+                value: eventType.code,
+                label: eventType.name,
+              }))}
+            />
           </Form.Item>
 
           <Form.Item

@@ -31,7 +31,7 @@
     - `/api/v1/incident-rules` 在代码中未发现引用，同上。
     - `/api/v1/process-instances` 实际有效路径为 `/api/v1/bpmn/process-instances`（已在 `prd/工作流模块详细设计.md` 与 `controller/bpmn_workflow_controller.go` 注册）；前端 `workflow-engine-service.ts` 使用相对 baseUrl 的 `/process-instances`，由 baseUrl 决定真实前缀。
   - 决议：
-    - 冒烟脚本与本 spec 中相关条目 MUST 改用 `/api/v1/bpmn/process-instances`（process）与 `/api/v1/workflow/instances`（workflow）的真实路径。
+    - 冒烟脚本与本 spec 中相关条目 MUST 仅使用 `/api/v1/bpmn/process-instances` 与 `/api/v1/bpmn/tasks`。
     - 对未实现的 `templates/tickets` 与 `incident-rules`，从测试矩阵移除，列入 post-GA 路线图。
     - 强化 FR-1002：菜单项的可达性由 DB + auth/menus + 真实路由三方校验，而非前端静态配置。
     - 新增 FR-1004：前端 `menu-config.ts` 中与 DB 菜单不一致的冗余项 MUST 在 GA 前清理；菜单加载以 DB 为唯一权威源。
@@ -94,7 +94,7 @@
 
 1. **Given** super_admin 登录，**When** `GET /api/v1/auth/menus`，**Then** 返回 ≥80 个菜单项且包含所有顶级模块。
 2. **Given** super_admin，**When** `GET /api/v1/readiness/ga`，**Then** 返回 `12/12 ready`。
-3. **Given** 新建租户后切换上下文，**When** 使用新租户 token 调 `/api/v1/users`，**Then** 用户列表与原租户隔离。
+3. **Given** 新建租户后切换上下文，**When** 使用服务端重新签发的新租户 cookie 会话调 `/api/v1/users`，**Then** 用户列表与原租户隔离。
 4. **Given** super_admin 调整 `/api/v1/roles/{id}/permissions`，**When** 受影响用户复登录，**Then** 新权限实时生效。
 5. **Given** super_admin 调用 `/api/v1/connectors/{id}/lifecycle` 安装 → enable → health → disable → uninstall，**Then** 每步 `code=0` 且 health 返回 `ready`。
 
@@ -184,8 +184,8 @@
 
 #### FR-100 系列：认证与会话
 
-- **FR-101**: 系统 MUST 支持账号密码登录，登录成功返回 `{code:0, data:{access_token, refresh_token, user, menus}}`。
-- **FR-102**: 系统 MUST 在所有受保护 API 上强制 JWT 校验，过期/篡改/缺失 Token 一律 401。
+- **FR-101**: 系统 MUST 支持账号密码登录；登录成功仅通过 Secure/HttpOnly cookie 交付 access/refresh session，JSON 仅返回用户与上下文且不得含 JWT。
+- **FR-102**: 系统 MUST 在所有受保护 API 上验证后端签发的 cookie 会话，过期、篡改或缺失一律 401；浏览器不得保存或拼接 JWT。
 - **FR-103**: 系统 MUST 在登录失败 ≥5 次/min 时触发限流，且写 `audit-logs.action=login_failed`。
 - **FR-104**: 系统 MUST 在 `/api/v1/auth/menus` 中按当前用户权限返回菜单子集，super_admin 应能看到 ≥80 项。
 
@@ -220,7 +220,7 @@
 
 #### FR-600 系列：RBAC / 多租户
 
-- **FR-601**: 系统 MUST 强制租户隔离：服务端忽略客户端 `tenant_id` 字段，强制使用 token 中值。
+- **FR-601**: 系统 MUST 强制租户隔离：服务端忽略客户端 `tenant_id` 字段，强制使用已验证会话 claims 中的值。
 - **FR-602**: end_user MUST 仅看到 `requester_id == self` 的工单。
 - **FR-603**: security MUST 拥有 `audit-logs:read` 但不得拥有任何业务写权限。
 - **FR-604**: 角色 `super_admin / security / end_user` MUST 在默认 seed 中存在；`engineer / manager / tenant_admin` 业务角色 MUST 可通过 seed 或脚本快速创建。

@@ -29,11 +29,34 @@ type ListTicketNotificationsResponse struct {
 
 // SendTicketNotificationRequest 发送工单通知请求
 type SendTicketNotificationRequest struct {
-	UserIDs     []int  `json:"userIds" binding:"required,min=1"` // 接收人ID列表
-	EventType   string `json:"eventType" binding:"required"`     // 事件类型（偏好查询键）：ticket_created / comment_added 等
-	Content     string `json:"content" binding:"required"`       // 通知内容
-	DeliveryKey string `json:"-"`                                // 仅供内部 durable callback 去重
-	InAppOnly   bool   `json:"-"`                                // durable callback 不直接调用无幂等协议的外部渠道
+	SLAAlertHistoryID *int   `json:"-"`                                // server-owned immutable delivery provenance
+	UserIDs           []int  `json:"userIds" binding:"required,min=1"` // 接收人ID列表
+	EventType         string `json:"eventType" binding:"required"`     // 事件类型（偏好查询键）：ticket_created / comment_added 等
+	Content           string `json:"content" binding:"required"`       // 通知内容
+	DeliveryKey       string `json:"-"`                                // 仅供内部 durable callback 去重
+	InAppOnly         bool   `json:"-"`                                // durable callback 不直接调用无幂等协议的外部渠道
+}
+
+const (
+	TicketNotificationEffectQueued     = "queued"
+	TicketNotificationEffectApplied    = "applied"
+	TicketNotificationEffectIdempotent = "idempotent"
+	TicketNotificationEffectBlocked    = "blocked"
+)
+
+// SendTicketNotificationResult is the durable evidence produced by the
+// authoritative ticket-notification service. BlockCode is internal-only so a
+// deterministic delivery block cannot expose implementation detail through the
+// public API.
+type SendTicketNotificationResult struct {
+	Effect              string `json:"effect"`
+	RecipientCount      int    `json:"recipientCount"`
+	AppliedCount        int    `json:"appliedCount"`        // Recipients with a newly materialized in-app notification.
+	IdempotentCount     int    `json:"idempotentCount"`     // Recipients whose existing intents were replayed.
+	DeliveryCount       int    `json:"deliveryCount"`       // Total durable intents, including replays; not delivery receipts.
+	QueuedCount         int    `json:"queuedCount"`         // Newly queued external intents.
+	ExternalIntentCount int    `json:"externalIntentCount"` // External intents, new or replayed, irrespective of delivery status.
+	BlockCode           string `json:"-"`
 }
 
 // UpdateNotificationPreferencesRequest 更新通知偏好请求

@@ -1,4 +1,4 @@
-package problem
+package problem_test
 
 import (
 	"context"
@@ -7,9 +7,12 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
+
+	"itsm-backend/common"
+	"itsm-backend/handlers/shared/workitemmutation"
+	relationService "itsm-backend/service"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
@@ -22,6 +25,7 @@ import (
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/incidentevent"
 	"itsm-backend/ent/workitemrelation"
+	creation "itsm-backend/handlers/common/workitemcreation"
 )
 
 type conversionFixture struct {
@@ -34,7 +38,7 @@ type conversionFixture struct {
 	incidentWorkItem int
 }
 
-func newConversionFixture(t *testing.T, status string, withWorkItem bool) *conversionFixture {
+func newConversionFixture(t *testing.T, status string, _ bool) *conversionFixture {
 	t.Helper()
 	suffix := strings.NewReplacer("/", "-", " ", "-").Replace(t.Name())
 	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:problem-conversion-%s?mode=memory&cache=shared&_fk=1&_busy_timeout=5000&_txlock=immediate", suffix))
@@ -43,43 +47,29 @@ func newConversionFixture(t *testing.T, status string, withWorkItem bool) *conve
 	tenant := createProblemHandlerTenant(t, ctx, client, suffix)
 	actor := createProblemHandlerUser(t, ctx, client, tenant.ID, suffix)
 
-	var workItemID int
-	if withWorkItem {
-		workItem, err := client.Ticket.Create().
-			SetTitle("Intermittent API outage").
-			SetDescription("Requests intermittently return 503").
-			SetType("incident").
-			SetRecordClass("incident").
-			SetPriority("high").
-			SetTicketNumber("CONV-SRC-" + suffix).
-			SetRequesterID(actor.ID).
-			SetTenantID(tenant.ID).
-			Save(ctx)
-		require.NoError(t, err)
-		workItemID = workItem.ID
-	}
-
-	create := client.Incident.Create().
+	category := createProblemHandlerCategory(t, ctx, client, tenant.ID, "platform")
+	workItem, err := client.Ticket.Create().
 		SetTitle("Intermittent API outage").
 		SetDescription("Requests intermittently return 503").
 		SetStatus(status).
-		SetType("incident").
+		SetRecordClass("incident").
 		SetPriority("high").
+		SetTicketNumber("CONV-SRC-" + suffix).
+		SetRequesterID(actor.ID).
+		SetTenantID(tenant.ID).
+		SetCategoryID(category.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	create := client.Incident.Create().
 		SetSeverity("high").
 		SetImpact("high").
 		SetUrgency("high").
-		SetIncidentNumber("CONV-INC-" + suffix).
-		SetReporterID(actor.ID).
-		SetCategory("platform").
-		SetTenantID(tenant.ID)
-	if withWorkItem {
-		create.SetWorkItemID(workItemID)
-	}
+		SetWorkItemID(workItem.ID)
 	incident, err := create.Save(ctx)
 	require.NoError(t, err)
 
-	repo := NewEntRepository(client)
-	repo.SetSequenceService(&atomicSequenceProvider{})
+	repo := newTestProblemRepository(client)
 	return &conversionFixture{
 		client:           client,
 		service:          NewService(repo, zaptest.NewLogger(t).Sugar()),
@@ -87,16 +77,8 @@ func newConversionFixture(t *testing.T, status string, withWorkItem bool) *conve
 		tenantID:         tenant.ID,
 		actorID:          actor.ID,
 		incidentID:       incident.ID,
-		incidentWorkItem: workItemID,
+		incidentWorkItem: workItem.ID,
 	}
-}
-
-type atomicSequenceProvider struct {
-	next atomic.Int64
-}
-
-func (p *atomicSequenceProvider) GetNextSequenceWithExpiry(context.Context, string, time.Time) (int64, error) {
-	return p.next.Add(1), nil
 }
 
 type conversionCounts struct {
@@ -135,7 +117,7 @@ func TestCreateFromIncidentCreatesWorkItemsRelationAndAuditAtomically(t *testing
 		RootCause:   "Sensitive root cause hypothesis",
 	}
 
-	created, err := f.service.CreateFromIncident(f.ctx, f.tenantID, f.incidentID, f.actorID, req)
+	created, err := f.service.SubmitIncidentConversion(f.ctx, f.tenantID, f.incidentID, f.actorID, req)
 	require.NoError(t, err)
 	require.NotNil(t, created.WorkItemID)
 	assert.Equal(t, req.Title, created.Title)
@@ -188,51 +170,51 @@ func TestCreateFromIncidentCreatesWorkItemsRelationAndAuditAtomically(t *testing
 	assert.NotContains(t, *audit.RequestBody, req.Description)
 	assert.NotContains(t, *audit.RequestBody, req.RootCause)
 
-	incidentEnt, err := f.client.Incident.Get(f.ctx, f.incidentID)
+	// Old-only SQL fixture below independently verifies retired storage exclusion.
+	withAssociations, err := f.service.Get(f.ctx, created.ID, workitemmutation.Meta{TenantID: f.tenantID, ActorID: f.actorID, Source: "http"})
 	require.NoError(t, err)
-	legacyProblems, err := f.client.Incident.QueryProblems(incidentEnt).Count(f.ctx)
-	require.NoError(t, err)
-	assert.Zero(t, legacyProblems, "conversion must not write the legacy Problem-Incident edge")
-
-	withAssociations, err := f.service.GetWithAssociations(f.ctx, created.ID, f.tenantID)
-	require.NoError(t, err)
-	require.Len(t, withAssociations.Incidents, 1, "converted Problem must expose its source Incident")
-	assert.Equal(t, f.incidentID, withAssociations.Incidents[0].ID)
-	assert.Equal(t, "CONV-INC-"+strings.NewReplacer("/", "-", " ", "-").Replace(t.Name()), withAssociations.Incidents[0].Number)
+	require.Len(t, withAssociations.Relations, 1, "converted Problem must expose its source Incident")
+	assert.Equal(t, f.incidentWorkItem, withAssociations.Relations[0].Source.WorkItemID)
+	assert.Equal(t, "CONV-SRC-"+strings.NewReplacer("/", "-", " ", "-").Replace(t.Name()), withAssociations.Relations[0].Source.Number)
 }
 
 func TestGetWithAssociationsOmitsDeletedConvertedIncident(t *testing.T) {
 	f := newConversionFixture(t, "new", true)
-	created, err := f.service.CreateFromIncident(
+	created, err := f.service.SubmitIncidentConversion(
 		f.ctx, f.tenantID, f.incidentID, f.actorID,
 		dto.ConvertIncidentToProblemRequest{Title: "Deleted source trace"},
 	)
 	require.NoError(t, err)
 
-	_, err = f.client.Incident.UpdateOneID(f.incidentID).SetDeletedAt(time.Now()).Save(f.ctx)
+	_, err = f.client.Ticket.UpdateOneID(f.incidentWorkItem).SetDeletedAt(time.Now()).Save(f.ctx)
 	require.NoError(t, err)
 
-	withAssociations, err := f.service.GetWithAssociations(f.ctx, created.ID, f.tenantID)
-	require.NoError(t, err)
-	assert.Empty(t, withAssociations.Incidents)
+	withAssociations, err := f.service.Get(f.ctx, created.ID, workitemmutation.Meta{TenantID: f.tenantID, ActorID: f.actorID, Source: "http"})
+	require.Error(t, err, "active relation with deleted endpoint must fail closed")
+	require.Nil(t, withAssociations)
 }
 
 func TestGetWithAssociationsOmitsDeletedLegacyIncident(t *testing.T) {
 	f := newConversionFixture(t, "new", true)
-	created, err := f.service.Create(f.ctx, f.tenantID, &Problem{
+	created, err := f.service.SubmitCreation(f.ctx, f.tenantID, &Problem{
 		Title: "Legacy association", Priority: "medium", CreatedBy: f.actorID,
 	})
 	require.NoError(t, err)
-	require.NoError(t, f.service.AddAssociations(
-		f.ctx, f.tenantID, created.ID, f.actorID, "incident", []int{f.incidentID},
-	))
 
-	_, err = f.client.Incident.UpdateOneID(f.incidentID).SetDeletedAt(time.Now()).Save(f.ctx)
+	tx, err := f.client.Tx(f.ctx)
+	require.NoError(t, err)
+	_, err = tx.ExecContext(f.ctx, "CREATE TABLE IF NOT EXISTS problem_incidents (problem_id integer, incident_id integer)")
+	require.NoError(t, err)
+	_, err = tx.ExecContext(f.ctx, "INSERT INTO problem_incidents (problem_id,incident_id) VALUES (?,?)", created.ID, f.incidentID)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+
+	_, err = f.client.Ticket.UpdateOneID(f.incidentWorkItem).SetDeletedAt(time.Now()).Save(f.ctx)
 	require.NoError(t, err)
 
-	withAssociations, err := f.service.GetWithAssociations(f.ctx, created.ID, f.tenantID)
+	withAssociations, err := f.service.Get(f.ctx, created.ID, workitemmutation.Meta{TenantID: f.tenantID, ActorID: f.actorID, Source: "http"})
 	require.NoError(t, err)
-	assert.Empty(t, withAssociations.Incidents)
+	assert.Empty(t, withAssociations.Relations)
 }
 
 func TestCreateFromIncidentRejectsIneligibleSourceWithoutWrites(t *testing.T) {
@@ -242,8 +224,8 @@ func TestCreateFromIncidentRejectsIneligibleSourceWithoutWrites(t *testing.T) {
 		foreignActor := createProblemHandlerUser(t, f.ctx, f.client, foreignTenant.ID, "foreign-"+strings.ReplaceAll(t.Name(), "/", "-"))
 		before := readConversionCounts(t, f)
 
-		_, err := f.service.CreateFromIncident(f.ctx, foreignTenant.ID, f.incidentID, foreignActor.ID, dto.ConvertIncidentToProblemRequest{})
-		require.ErrorContains(t, err, "incident not found")
+		_, err := f.service.SubmitIncidentConversion(f.ctx, foreignTenant.ID, f.incidentID, foreignActor.ID, dto.ConvertIncidentToProblemRequest{})
+		require.ErrorIs(t, err, creation.ErrReferenceNotFound)
 		requireConversionCounts(t, f, before)
 	})
 
@@ -251,8 +233,8 @@ func TestCreateFromIncidentRejectsIneligibleSourceWithoutWrites(t *testing.T) {
 		f := newConversionFixture(t, "closed", true)
 		before := readConversionCounts(t, f)
 
-		_, err := f.service.CreateFromIncident(f.ctx, f.tenantID, f.incidentID, f.actorID, dto.ConvertIncidentToProblemRequest{})
-		require.ErrorContains(t, err, "closed")
+		_, err := f.service.SubmitIncidentConversion(f.ctx, f.tenantID, f.incidentID, f.actorID, dto.ConvertIncidentToProblemRequest{})
+		require.ErrorIs(t, err, creation.ErrDomainValidationFailed)
 		requireConversionCounts(t, f, before)
 	})
 
@@ -260,17 +242,8 @@ func TestCreateFromIncidentRejectsIneligibleSourceWithoutWrites(t *testing.T) {
 		f := newConversionFixture(t, "cancelled", true)
 		before := readConversionCounts(t, f)
 
-		_, err := f.service.CreateFromIncident(f.ctx, f.tenantID, f.incidentID, f.actorID, dto.ConvertIncidentToProblemRequest{})
-		require.ErrorContains(t, err, "cancelled")
-		requireConversionCounts(t, f, before)
-	})
-
-	t.Run("missing source work item", func(t *testing.T) {
-		f := newConversionFixture(t, "new", false)
-		before := readConversionCounts(t, f)
-
-		_, err := f.service.CreateFromIncident(f.ctx, f.tenantID, f.incidentID, f.actorID, dto.ConvertIncidentToProblemRequest{})
-		require.ErrorContains(t, err, "work item")
+		_, err := f.service.SubmitIncidentConversion(f.ctx, f.tenantID, f.incidentID, f.actorID, dto.ConvertIncidentToProblemRequest{})
+		require.ErrorIs(t, err, creation.ErrDomainValidationFailed)
 		requireConversionCounts(t, f, before)
 	})
 
@@ -281,7 +254,6 @@ func TestCreateFromIncidentRejectsIneligibleSourceWithoutWrites(t *testing.T) {
 		foreignUser := createProblemHandlerUser(t, f.ctx, f.client, foreignTenant.ID, suffix)
 		foreignWorkItem, err := f.client.Ticket.Create().
 			SetTitle("Foreign incident work item").
-			SetType("incident").
 			SetRecordClass("incident").
 			SetPriority("high").
 			SetTicketNumber("CONV-FOREIGN-" + suffix).
@@ -293,22 +265,29 @@ func TestCreateFromIncidentRejectsIneligibleSourceWithoutWrites(t *testing.T) {
 		require.NoError(t, err)
 		before := readConversionCounts(t, f)
 
-		_, err = f.service.CreateFromIncident(f.ctx, f.tenantID, f.incidentID, f.actorID, dto.ConvertIncidentToProblemRequest{})
-		require.ErrorContains(t, err, "source work item not found")
+		_, err = f.service.SubmitIncidentConversion(f.ctx, f.tenantID, f.incidentID, f.actorID, dto.ConvertIncidentToProblemRequest{})
+		require.ErrorIs(t, err, creation.ErrReferenceNotFound)
 		requireConversionCounts(t, f, before)
 	})
 }
 
-func TestDeleteConvertedProblemSoftDeletesInvestigationRelation(t *testing.T) {
+func TestDeleteConvertedProblemRequiresExplicitRelationRemoval(t *testing.T) {
 	f := newConversionFixture(t, "new", true)
-	created, err := f.service.CreateFromIncident(
+	created, err := f.service.SubmitIncidentConversion(
 		f.ctx, f.tenantID, f.incidentID, f.actorID,
 		dto.ConvertIncidentToProblemRequest{Title: "Temporary investigation"},
 	)
 	require.NoError(t, err)
 	require.NotNil(t, created.WorkItemID)
 
-	require.NoError(t, f.service.Delete(f.ctx, created.ID, f.tenantID))
+	meta := workitemmutation.Meta{TenantID: f.tenantID, ActorID: f.actorID, Source: "http", OperationID: "explicit-unlink", ExpectedVersion: f.client.Ticket.GetX(f.ctx, f.incidentWorkItem).Version}
+	err = f.service.Delete(f.ctx, created.ID, meta)
+	app, ok := common.AsAppError(err)
+	require.True(t, ok)
+	require.Equal(t, common.ErrCodeConflict, app.Code)
+	_, err = relationService.NewWorkItemRelationService(f.client, sameTransactionDirectory{}).Apply(f.ctx, relationService.RelationCommand{Meta: meta, SourceID: f.incidentWorkItem, TargetID: *created.WorkItemID, Type: "investigated_by"}, true)
+	require.NoError(t, err)
+	require.NoError(t, f.service.Delete(f.ctx, created.ID, meta))
 	live, err := f.client.WorkItemRelation.Query().Where(
 		workitemrelation.TenantID(f.tenantID),
 		workitemrelation.SourceWorkItemID(f.incidentWorkItem),
@@ -319,7 +298,7 @@ func TestDeleteConvertedProblemSoftDeletesInvestigationRelation(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, live)
 
-	recreated, err := f.service.CreateFromIncident(
+	recreated, err := f.service.SubmitIncidentConversion(
 		f.ctx, f.tenantID, f.incidentID, f.actorID,
 		dto.ConvertIncidentToProblemRequest{Title: "Replacement investigation"},
 	)
@@ -329,7 +308,7 @@ func TestDeleteConvertedProblemSoftDeletesInvestigationRelation(t *testing.T) {
 
 func TestCreateFromIncidentRollsBackWhenRelationAlreadyExists(t *testing.T) {
 	f := newConversionFixture(t, "new", true)
-	existing, err := f.service.Create(f.ctx, f.tenantID, &Problem{
+	existing, err := f.service.SubmitCreation(f.ctx, f.tenantID, &Problem{
 		Title: "Existing investigation", Priority: "high", CreatedBy: f.actorID,
 	})
 	require.NoError(t, err)
@@ -344,7 +323,7 @@ func TestCreateFromIncidentRollsBackWhenRelationAlreadyExists(t *testing.T) {
 	require.NoError(t, err)
 	before := readConversionCounts(t, f)
 
-	_, err = f.service.CreateFromIncident(f.ctx, f.tenantID, f.incidentID, f.actorID, dto.ConvertIncidentToProblemRequest{})
+	_, err = f.service.SubmitIncidentConversion(f.ctx, f.tenantID, f.incidentID, f.actorID, dto.ConvertIncidentToProblemRequest{})
 	require.ErrorContains(t, err, "already")
 	requireConversionCounts(t, f, before)
 }
@@ -360,7 +339,7 @@ func TestCreateFromIncidentConcurrentRequestsCreateOneProblem(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			_, err := f.service.CreateFromIncident(f.ctx, f.tenantID, f.incidentID, f.actorID, dto.ConvertIncidentToProblemRequest{})
+			_, err := f.service.SubmitIncidentConversion(f.ctx, f.tenantID, f.incidentID, f.actorID, dto.ConvertIncidentToProblemRequest{})
 			results <- err
 		}()
 	}
@@ -383,7 +362,7 @@ func TestCreateFromIncidentConcurrentRequestsCreateOneProblem(t *testing.T) {
 	assert.Equal(t, before.problems+1, after.problems)
 	assert.Equal(t, before.relations+1, after.relations)
 	assert.Equal(t, before.events+1, after.events)
-	assert.Equal(t, before.audits+1, after.audits)
+	assert.Equal(t, before.audits+3, after.audits, "conversion, source relation receipt and Intake creation audit")
 }
 
 func TestCreateFromIncidentRollsBackOnSideEffectFailure(t *testing.T) {
@@ -417,8 +396,12 @@ func TestCreateFromIncidentRollsBackOnSideEffectFailure(t *testing.T) {
 			before := readConversionCounts(t, f)
 			tt.installHook(f.client)
 
-			_, err := f.service.CreateFromIncident(f.ctx, f.tenantID, f.incidentID, f.actorID, dto.ConvertIncidentToProblemRequest{})
+			_, err := f.service.SubmitIncidentConversion(f.ctx, f.tenantID, f.incidentID, f.actorID, dto.ConvertIncidentToProblemRequest{})
 			require.Error(t, err)
+			require.ErrorIs(t, err, creation.ErrInfrastructureUnavailable)
+			for errors.Unwrap(err) != nil {
+				err = errors.Unwrap(err)
+			}
 			assert.ErrorContains(t, err, "injected")
 			requireConversionCounts(t, f, before)
 		})

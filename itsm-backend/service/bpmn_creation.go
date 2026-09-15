@@ -1,0 +1,104 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"regexp"
+	"strconv"
+	"strings"
+
+	"go.uber.org/zap"
+	"itsm-backend/common/workitemidentity"
+	"itsm-backend/ent"
+	"itsm-backend/ent/user"
+	creation "itsm-backend/handlers/common/workitemcreation"
+)
+
+// ResolveCreationWorkflow freezes the owning process service's creation binding.
+// A catalog key takes precedence. Only configured conditions.no_process permits
+// skipping orchestration; absent/unsupported configurations fail closed.
+func (s *ProcessBindingService) ResolveCreationWorkflow(ctx context.Context, tx *ent.Tx, plan *creation.CreationPlan, key string) (creation.ResolvedWorkflowBinding, *int, error) {
+	var result creation.ResolvedWorkflowBinding
+	if plan == nil {
+		return result, nil, creation.NewInternalFailure("prepared creation plan is required for routing", nil)
+	}
+	in := plan.Resolved
+	var slaID *int
+	version := 0
+	key = strings.TrimSpace(key)
+	if key == "" {
+		// 路由词表就是 recordClass：流程身份的唯一定义在 common/workitemidentity。
+		// 这里曾经把 recordClass 再翻回 Wave-1 旧词表（change_request -> change、
+		// generic -> ticket），那会让绑定匹配与实例身份各用一套词表。
+		business := in.RecordClass
+		if !workitemidentity.IsRecordClass(business) {
+			return result, nil, creation.NewUnsupportedRecordClass("unsupported workflow creation class", nil)
+		}
+		subtype := plan.BusinessSubtype
+		requester, err := tx.User.Query().Where(user.IDEQ(in.Identity.RequesterID), user.TenantIDEQ(in.Identity.TenantID), user.ActiveEQ(true)).Only(ctx)
+		if ent.IsNotFound(err) {
+			return result, nil, creation.NewReferenceNotFound("workflow requester is unavailable", err)
+		}
+		if err != nil {
+			return result, nil, creation.NewInfrastructureUnavailable("could not load workflow requester", err)
+		}
+		variables := map[string]interface{}{}
+		for key, value := range in.Command.FormValues {
+			variables[key] = value
+		}
+		for key, value := range plan.RoutingValues {
+			variables[key] = value
+		}
+		variables["priority"] = plan.WorkItem.Priority
+		routing := &RoutingContext{TenantID: in.Identity.TenantID, BusinessType: business, BusinessSubType: subtype, DepartmentID: requester.DepartmentID, Category: in.CTI.CategoryName, Variables: variables}
+		if in.CTI.CategoryID != nil {
+			routing.CategoryID = *in.CTI.CategoryID
+		}
+		selected, err := NewProcessRoutingService(tx.Client(), zap.NewNop().Sugar()).FindBestRouteTx(ctx, tx, routing)
+		if err != nil {
+			var configurationError *RoutingConfigurationError
+			if errors.As(err, &configurationError) {
+				return result, nil, creation.NewDomainValidationFailed("invalid workflow routing configuration", err)
+			}
+			return result, nil, creation.NewInfrastructureUnavailable("could not select configured workflow", err)
+		}
+		if selected == nil {
+			return result, nil, creation.NewWorkflowBindingRequired("active workflow binding is required", nil)
+		}
+		if selected.SLAPolicyID != "" {
+			id, err := strconv.Atoi(selected.SLAPolicyID)
+			if err != nil || id <= 0 {
+				return result, nil, creation.NewDomainValidationFailed("invalid workflow SLA policy", err)
+			}
+			slaID = &id
+		}
+		if selected.NoProcess {
+			return creation.ResolvedWorkflowBinding{NoProcess: true}, slaID, nil
+		}
+		key, version = selected.ProcessDefinitionKey, selected.ProcessVersion
+	}
+	definition, err := selectExecutableProcessDefinition(ctx, tx.Client(), in.Identity.TenantID, key, version)
+	if err != nil {
+		return result, nil, creation.NewInfrastructureUnavailable("could not resolve executable workflow definition", err)
+	}
+	if definition == nil {
+		return result, nil, creation.NewWorkflowBindingRequired("active workflow definition for the configured major version is required", nil)
+	}
+	if _, err := creationProcessDefinitionMajorVersion(definition.Version); err != nil {
+		return result, nil, creation.NewDomainValidationFailed("unsupported workflow definition version", err)
+	}
+	return creation.ResolvedWorkflowBinding{DefinitionID: &definition.ID, DefinitionKey: definition.Key, DefinitionVersion: definition.Version, DefinitionDigest: FreezeProcessDefinition(definition).Digest}, slaID, nil
+}
+
+// ProcessBinding stores a major-version reference. Definition snapshots retain
+// the exact selected version; supported stored versions are integer, dotted
+// numeric (up to three components), and their conventional v-prefixed forms.
+var creationProcessVersionPattern = regexp.MustCompile(`^v?([1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*)){0,2}$`)
+
+func creationProcessDefinitionMajorVersion(version string) (int, error) {
+	matches := creationProcessVersionPattern.FindStringSubmatch(strings.TrimSpace(version))
+	if matches == nil {
+		return 0, errors.New("workflow version must be a positive numeric major or dotted numeric version")
+	}
+	return strconv.Atoi(matches[1])
+}

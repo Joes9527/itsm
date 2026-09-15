@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/citype"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type CIAttributeDefinitionCreate struct {
 	config
 	mutation *CIAttributeDefinitionMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -436,6 +438,7 @@ func (_c *CIAttributeDefinitionCreate) createSpec() (*CIAttributeDefinition, *sq
 		_node = &CIAttributeDefinition{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(ciattributedefinition.Table, sqlgraph.NewFieldSpec(ciattributedefinition.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(ciattributedefinition.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -536,11 +539,810 @@ func (_c *CIAttributeDefinitionCreate) createSpec() (*CIAttributeDefinition, *sq
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.CIAttributeDefinition.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.CIAttributeDefinitionUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *CIAttributeDefinitionCreate) OnConflict(opts ...sql.ConflictOption) *CIAttributeDefinitionUpsertOne {
+	_c.conflict = opts
+	return &CIAttributeDefinitionUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.CIAttributeDefinition.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *CIAttributeDefinitionCreate) OnConflictColumns(columns ...string) *CIAttributeDefinitionUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &CIAttributeDefinitionUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// CIAttributeDefinitionUpsertOne is the builder for "upsert"-ing
+	//  one CIAttributeDefinition node.
+	CIAttributeDefinitionUpsertOne struct {
+		create *CIAttributeDefinitionCreate
+	}
+
+	// CIAttributeDefinitionUpsert is the "OnConflict" setter.
+	CIAttributeDefinitionUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *CIAttributeDefinitionUpsert) SetName(v string) *CIAttributeDefinitionUpsert {
+	u.Set(ciattributedefinition.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsert) UpdateName() *CIAttributeDefinitionUpsert {
+	u.SetExcluded(ciattributedefinition.FieldName)
+	return u
+}
+
+// SetDisplayName sets the "display_name" field.
+func (u *CIAttributeDefinitionUpsert) SetDisplayName(v string) *CIAttributeDefinitionUpsert {
+	u.Set(ciattributedefinition.FieldDisplayName, v)
+	return u
+}
+
+// UpdateDisplayName sets the "display_name" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsert) UpdateDisplayName() *CIAttributeDefinitionUpsert {
+	u.SetExcluded(ciattributedefinition.FieldDisplayName)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *CIAttributeDefinitionUpsert) SetDescription(v string) *CIAttributeDefinitionUpsert {
+	u.Set(ciattributedefinition.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsert) UpdateDescription() *CIAttributeDefinitionUpsert {
+	u.SetExcluded(ciattributedefinition.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *CIAttributeDefinitionUpsert) ClearDescription() *CIAttributeDefinitionUpsert {
+	u.SetNull(ciattributedefinition.FieldDescription)
+	return u
+}
+
+// SetType sets the "type" field.
+func (u *CIAttributeDefinitionUpsert) SetType(v string) *CIAttributeDefinitionUpsert {
+	u.Set(ciattributedefinition.FieldType, v)
+	return u
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsert) UpdateType() *CIAttributeDefinitionUpsert {
+	u.SetExcluded(ciattributedefinition.FieldType)
+	return u
+}
+
+// SetRequired sets the "required" field.
+func (u *CIAttributeDefinitionUpsert) SetRequired(v bool) *CIAttributeDefinitionUpsert {
+	u.Set(ciattributedefinition.FieldRequired, v)
+	return u
+}
+
+// UpdateRequired sets the "required" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsert) UpdateRequired() *CIAttributeDefinitionUpsert {
+	u.SetExcluded(ciattributedefinition.FieldRequired)
+	return u
+}
+
+// SetUnique sets the "unique" field.
+func (u *CIAttributeDefinitionUpsert) SetUnique(v bool) *CIAttributeDefinitionUpsert {
+	u.Set(ciattributedefinition.FieldUnique, v)
+	return u
+}
+
+// UpdateUnique sets the "unique" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsert) UpdateUnique() *CIAttributeDefinitionUpsert {
+	u.SetExcluded(ciattributedefinition.FieldUnique)
+	return u
+}
+
+// SetDefaultValue sets the "default_value" field.
+func (u *CIAttributeDefinitionUpsert) SetDefaultValue(v string) *CIAttributeDefinitionUpsert {
+	u.Set(ciattributedefinition.FieldDefaultValue, v)
+	return u
+}
+
+// UpdateDefaultValue sets the "default_value" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsert) UpdateDefaultValue() *CIAttributeDefinitionUpsert {
+	u.SetExcluded(ciattributedefinition.FieldDefaultValue)
+	return u
+}
+
+// ClearDefaultValue clears the value of the "default_value" field.
+func (u *CIAttributeDefinitionUpsert) ClearDefaultValue() *CIAttributeDefinitionUpsert {
+	u.SetNull(ciattributedefinition.FieldDefaultValue)
+	return u
+}
+
+// SetValidationRules sets the "validation_rules" field.
+func (u *CIAttributeDefinitionUpsert) SetValidationRules(v string) *CIAttributeDefinitionUpsert {
+	u.Set(ciattributedefinition.FieldValidationRules, v)
+	return u
+}
+
+// UpdateValidationRules sets the "validation_rules" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsert) UpdateValidationRules() *CIAttributeDefinitionUpsert {
+	u.SetExcluded(ciattributedefinition.FieldValidationRules)
+	return u
+}
+
+// ClearValidationRules clears the value of the "validation_rules" field.
+func (u *CIAttributeDefinitionUpsert) ClearValidationRules() *CIAttributeDefinitionUpsert {
+	u.SetNull(ciattributedefinition.FieldValidationRules)
+	return u
+}
+
+// SetEnumValues sets the "enum_values" field.
+func (u *CIAttributeDefinitionUpsert) SetEnumValues(v []string) *CIAttributeDefinitionUpsert {
+	u.Set(ciattributedefinition.FieldEnumValues, v)
+	return u
+}
+
+// UpdateEnumValues sets the "enum_values" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsert) UpdateEnumValues() *CIAttributeDefinitionUpsert {
+	u.SetExcluded(ciattributedefinition.FieldEnumValues)
+	return u
+}
+
+// ClearEnumValues clears the value of the "enum_values" field.
+func (u *CIAttributeDefinitionUpsert) ClearEnumValues() *CIAttributeDefinitionUpsert {
+	u.SetNull(ciattributedefinition.FieldEnumValues)
+	return u
+}
+
+// SetReferenceType sets the "reference_type" field.
+func (u *CIAttributeDefinitionUpsert) SetReferenceType(v string) *CIAttributeDefinitionUpsert {
+	u.Set(ciattributedefinition.FieldReferenceType, v)
+	return u
+}
+
+// UpdateReferenceType sets the "reference_type" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsert) UpdateReferenceType() *CIAttributeDefinitionUpsert {
+	u.SetExcluded(ciattributedefinition.FieldReferenceType)
+	return u
+}
+
+// ClearReferenceType clears the value of the "reference_type" field.
+func (u *CIAttributeDefinitionUpsert) ClearReferenceType() *CIAttributeDefinitionUpsert {
+	u.SetNull(ciattributedefinition.FieldReferenceType)
+	return u
+}
+
+// SetDisplayOrder sets the "display_order" field.
+func (u *CIAttributeDefinitionUpsert) SetDisplayOrder(v int) *CIAttributeDefinitionUpsert {
+	u.Set(ciattributedefinition.FieldDisplayOrder, v)
+	return u
+}
+
+// UpdateDisplayOrder sets the "display_order" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsert) UpdateDisplayOrder() *CIAttributeDefinitionUpsert {
+	u.SetExcluded(ciattributedefinition.FieldDisplayOrder)
+	return u
+}
+
+// AddDisplayOrder adds v to the "display_order" field.
+func (u *CIAttributeDefinitionUpsert) AddDisplayOrder(v int) *CIAttributeDefinitionUpsert {
+	u.Add(ciattributedefinition.FieldDisplayOrder, v)
+	return u
+}
+
+// SetGroupName sets the "group_name" field.
+func (u *CIAttributeDefinitionUpsert) SetGroupName(v string) *CIAttributeDefinitionUpsert {
+	u.Set(ciattributedefinition.FieldGroupName, v)
+	return u
+}
+
+// UpdateGroupName sets the "group_name" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsert) UpdateGroupName() *CIAttributeDefinitionUpsert {
+	u.SetExcluded(ciattributedefinition.FieldGroupName)
+	return u
+}
+
+// ClearGroupName clears the value of the "group_name" field.
+func (u *CIAttributeDefinitionUpsert) ClearGroupName() *CIAttributeDefinitionUpsert {
+	u.SetNull(ciattributedefinition.FieldGroupName)
+	return u
+}
+
+// SetPlaceholder sets the "placeholder" field.
+func (u *CIAttributeDefinitionUpsert) SetPlaceholder(v string) *CIAttributeDefinitionUpsert {
+	u.Set(ciattributedefinition.FieldPlaceholder, v)
+	return u
+}
+
+// UpdatePlaceholder sets the "placeholder" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsert) UpdatePlaceholder() *CIAttributeDefinitionUpsert {
+	u.SetExcluded(ciattributedefinition.FieldPlaceholder)
+	return u
+}
+
+// ClearPlaceholder clears the value of the "placeholder" field.
+func (u *CIAttributeDefinitionUpsert) ClearPlaceholder() *CIAttributeDefinitionUpsert {
+	u.SetNull(ciattributedefinition.FieldPlaceholder)
+	return u
+}
+
+// SetHelpText sets the "help_text" field.
+func (u *CIAttributeDefinitionUpsert) SetHelpText(v string) *CIAttributeDefinitionUpsert {
+	u.Set(ciattributedefinition.FieldHelpText, v)
+	return u
+}
+
+// UpdateHelpText sets the "help_text" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsert) UpdateHelpText() *CIAttributeDefinitionUpsert {
+	u.SetExcluded(ciattributedefinition.FieldHelpText)
+	return u
+}
+
+// ClearHelpText clears the value of the "help_text" field.
+func (u *CIAttributeDefinitionUpsert) ClearHelpText() *CIAttributeDefinitionUpsert {
+	u.SetNull(ciattributedefinition.FieldHelpText)
+	return u
+}
+
+// SetIsSearchable sets the "is_searchable" field.
+func (u *CIAttributeDefinitionUpsert) SetIsSearchable(v bool) *CIAttributeDefinitionUpsert {
+	u.Set(ciattributedefinition.FieldIsSearchable, v)
+	return u
+}
+
+// UpdateIsSearchable sets the "is_searchable" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsert) UpdateIsSearchable() *CIAttributeDefinitionUpsert {
+	u.SetExcluded(ciattributedefinition.FieldIsSearchable)
+	return u
+}
+
+// SetIsSystem sets the "is_system" field.
+func (u *CIAttributeDefinitionUpsert) SetIsSystem(v bool) *CIAttributeDefinitionUpsert {
+	u.Set(ciattributedefinition.FieldIsSystem, v)
+	return u
+}
+
+// UpdateIsSystem sets the "is_system" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsert) UpdateIsSystem() *CIAttributeDefinitionUpsert {
+	u.SetExcluded(ciattributedefinition.FieldIsSystem)
+	return u
+}
+
+// SetCiTypeID sets the "ci_type_id" field.
+func (u *CIAttributeDefinitionUpsert) SetCiTypeID(v int) *CIAttributeDefinitionUpsert {
+	u.Set(ciattributedefinition.FieldCiTypeID, v)
+	return u
+}
+
+// UpdateCiTypeID sets the "ci_type_id" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsert) UpdateCiTypeID() *CIAttributeDefinitionUpsert {
+	u.SetExcluded(ciattributedefinition.FieldCiTypeID)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *CIAttributeDefinitionUpsert) SetTenantID(v int) *CIAttributeDefinitionUpsert {
+	u.Set(ciattributedefinition.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsert) UpdateTenantID() *CIAttributeDefinitionUpsert {
+	u.SetExcluded(ciattributedefinition.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *CIAttributeDefinitionUpsert) AddTenantID(v int) *CIAttributeDefinitionUpsert {
+	u.Add(ciattributedefinition.FieldTenantID, v)
+	return u
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *CIAttributeDefinitionUpsert) SetIsActive(v bool) *CIAttributeDefinitionUpsert {
+	u.Set(ciattributedefinition.FieldIsActive, v)
+	return u
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsert) UpdateIsActive() *CIAttributeDefinitionUpsert {
+	u.SetExcluded(ciattributedefinition.FieldIsActive)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *CIAttributeDefinitionUpsert) SetCreatedAt(v time.Time) *CIAttributeDefinitionUpsert {
+	u.Set(ciattributedefinition.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsert) UpdateCreatedAt() *CIAttributeDefinitionUpsert {
+	u.SetExcluded(ciattributedefinition.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *CIAttributeDefinitionUpsert) SetUpdatedAt(v time.Time) *CIAttributeDefinitionUpsert {
+	u.Set(ciattributedefinition.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsert) UpdateUpdatedAt() *CIAttributeDefinitionUpsert {
+	u.SetExcluded(ciattributedefinition.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.CIAttributeDefinition.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *CIAttributeDefinitionUpsertOne) UpdateNewValues() *CIAttributeDefinitionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.CIAttributeDefinition.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *CIAttributeDefinitionUpsertOne) Ignore() *CIAttributeDefinitionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *CIAttributeDefinitionUpsertOne) DoNothing() *CIAttributeDefinitionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the CIAttributeDefinitionCreate.OnConflict
+// documentation for more info.
+func (u *CIAttributeDefinitionUpsertOne) Update(set func(*CIAttributeDefinitionUpsert)) *CIAttributeDefinitionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&CIAttributeDefinitionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *CIAttributeDefinitionUpsertOne) SetName(v string) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertOne) UpdateName() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDisplayName sets the "display_name" field.
+func (u *CIAttributeDefinitionUpsertOne) SetDisplayName(v string) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetDisplayName(v)
+	})
+}
+
+// UpdateDisplayName sets the "display_name" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertOne) UpdateDisplayName() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateDisplayName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *CIAttributeDefinitionUpsertOne) SetDescription(v string) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertOne) UpdateDescription() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *CIAttributeDefinitionUpsertOne) ClearDescription() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *CIAttributeDefinitionUpsertOne) SetType(v string) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertOne) UpdateType() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateType()
+	})
+}
+
+// SetRequired sets the "required" field.
+func (u *CIAttributeDefinitionUpsertOne) SetRequired(v bool) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetRequired(v)
+	})
+}
+
+// UpdateRequired sets the "required" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertOne) UpdateRequired() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateRequired()
+	})
+}
+
+// SetUnique sets the "unique" field.
+func (u *CIAttributeDefinitionUpsertOne) SetUnique(v bool) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetUnique(v)
+	})
+}
+
+// UpdateUnique sets the "unique" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertOne) UpdateUnique() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateUnique()
+	})
+}
+
+// SetDefaultValue sets the "default_value" field.
+func (u *CIAttributeDefinitionUpsertOne) SetDefaultValue(v string) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetDefaultValue(v)
+	})
+}
+
+// UpdateDefaultValue sets the "default_value" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertOne) UpdateDefaultValue() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateDefaultValue()
+	})
+}
+
+// ClearDefaultValue clears the value of the "default_value" field.
+func (u *CIAttributeDefinitionUpsertOne) ClearDefaultValue() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.ClearDefaultValue()
+	})
+}
+
+// SetValidationRules sets the "validation_rules" field.
+func (u *CIAttributeDefinitionUpsertOne) SetValidationRules(v string) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetValidationRules(v)
+	})
+}
+
+// UpdateValidationRules sets the "validation_rules" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertOne) UpdateValidationRules() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateValidationRules()
+	})
+}
+
+// ClearValidationRules clears the value of the "validation_rules" field.
+func (u *CIAttributeDefinitionUpsertOne) ClearValidationRules() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.ClearValidationRules()
+	})
+}
+
+// SetEnumValues sets the "enum_values" field.
+func (u *CIAttributeDefinitionUpsertOne) SetEnumValues(v []string) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetEnumValues(v)
+	})
+}
+
+// UpdateEnumValues sets the "enum_values" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertOne) UpdateEnumValues() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateEnumValues()
+	})
+}
+
+// ClearEnumValues clears the value of the "enum_values" field.
+func (u *CIAttributeDefinitionUpsertOne) ClearEnumValues() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.ClearEnumValues()
+	})
+}
+
+// SetReferenceType sets the "reference_type" field.
+func (u *CIAttributeDefinitionUpsertOne) SetReferenceType(v string) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetReferenceType(v)
+	})
+}
+
+// UpdateReferenceType sets the "reference_type" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertOne) UpdateReferenceType() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateReferenceType()
+	})
+}
+
+// ClearReferenceType clears the value of the "reference_type" field.
+func (u *CIAttributeDefinitionUpsertOne) ClearReferenceType() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.ClearReferenceType()
+	})
+}
+
+// SetDisplayOrder sets the "display_order" field.
+func (u *CIAttributeDefinitionUpsertOne) SetDisplayOrder(v int) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetDisplayOrder(v)
+	})
+}
+
+// AddDisplayOrder adds v to the "display_order" field.
+func (u *CIAttributeDefinitionUpsertOne) AddDisplayOrder(v int) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.AddDisplayOrder(v)
+	})
+}
+
+// UpdateDisplayOrder sets the "display_order" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertOne) UpdateDisplayOrder() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateDisplayOrder()
+	})
+}
+
+// SetGroupName sets the "group_name" field.
+func (u *CIAttributeDefinitionUpsertOne) SetGroupName(v string) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetGroupName(v)
+	})
+}
+
+// UpdateGroupName sets the "group_name" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertOne) UpdateGroupName() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateGroupName()
+	})
+}
+
+// ClearGroupName clears the value of the "group_name" field.
+func (u *CIAttributeDefinitionUpsertOne) ClearGroupName() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.ClearGroupName()
+	})
+}
+
+// SetPlaceholder sets the "placeholder" field.
+func (u *CIAttributeDefinitionUpsertOne) SetPlaceholder(v string) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetPlaceholder(v)
+	})
+}
+
+// UpdatePlaceholder sets the "placeholder" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertOne) UpdatePlaceholder() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdatePlaceholder()
+	})
+}
+
+// ClearPlaceholder clears the value of the "placeholder" field.
+func (u *CIAttributeDefinitionUpsertOne) ClearPlaceholder() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.ClearPlaceholder()
+	})
+}
+
+// SetHelpText sets the "help_text" field.
+func (u *CIAttributeDefinitionUpsertOne) SetHelpText(v string) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetHelpText(v)
+	})
+}
+
+// UpdateHelpText sets the "help_text" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertOne) UpdateHelpText() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateHelpText()
+	})
+}
+
+// ClearHelpText clears the value of the "help_text" field.
+func (u *CIAttributeDefinitionUpsertOne) ClearHelpText() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.ClearHelpText()
+	})
+}
+
+// SetIsSearchable sets the "is_searchable" field.
+func (u *CIAttributeDefinitionUpsertOne) SetIsSearchable(v bool) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetIsSearchable(v)
+	})
+}
+
+// UpdateIsSearchable sets the "is_searchable" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertOne) UpdateIsSearchable() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateIsSearchable()
+	})
+}
+
+// SetIsSystem sets the "is_system" field.
+func (u *CIAttributeDefinitionUpsertOne) SetIsSystem(v bool) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetIsSystem(v)
+	})
+}
+
+// UpdateIsSystem sets the "is_system" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertOne) UpdateIsSystem() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateIsSystem()
+	})
+}
+
+// SetCiTypeID sets the "ci_type_id" field.
+func (u *CIAttributeDefinitionUpsertOne) SetCiTypeID(v int) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetCiTypeID(v)
+	})
+}
+
+// UpdateCiTypeID sets the "ci_type_id" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertOne) UpdateCiTypeID() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateCiTypeID()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *CIAttributeDefinitionUpsertOne) SetTenantID(v int) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *CIAttributeDefinitionUpsertOne) AddTenantID(v int) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertOne) UpdateTenantID() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *CIAttributeDefinitionUpsertOne) SetIsActive(v bool) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertOne) UpdateIsActive() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *CIAttributeDefinitionUpsertOne) SetCreatedAt(v time.Time) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertOne) UpdateCreatedAt() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *CIAttributeDefinitionUpsertOne) SetUpdatedAt(v time.Time) *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertOne) UpdateUpdatedAt() *CIAttributeDefinitionUpsertOne {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *CIAttributeDefinitionUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for CIAttributeDefinitionCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *CIAttributeDefinitionUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *CIAttributeDefinitionUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *CIAttributeDefinitionUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // CIAttributeDefinitionCreateBulk is the builder for creating many CIAttributeDefinition entities in bulk.
 type CIAttributeDefinitionCreateBulk struct {
 	config
 	err      error
 	builders []*CIAttributeDefinitionCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the CIAttributeDefinition entities in the database.
@@ -570,6 +1372,7 @@ func (_c *CIAttributeDefinitionCreateBulk) Save(ctx context.Context) ([]*CIAttri
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -620,6 +1423,474 @@ func (_c *CIAttributeDefinitionCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *CIAttributeDefinitionCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.CIAttributeDefinition.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.CIAttributeDefinitionUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *CIAttributeDefinitionCreateBulk) OnConflict(opts ...sql.ConflictOption) *CIAttributeDefinitionUpsertBulk {
+	_c.conflict = opts
+	return &CIAttributeDefinitionUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.CIAttributeDefinition.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *CIAttributeDefinitionCreateBulk) OnConflictColumns(columns ...string) *CIAttributeDefinitionUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &CIAttributeDefinitionUpsertBulk{
+		create: _c,
+	}
+}
+
+// CIAttributeDefinitionUpsertBulk is the builder for "upsert"-ing
+// a bulk of CIAttributeDefinition nodes.
+type CIAttributeDefinitionUpsertBulk struct {
+	create *CIAttributeDefinitionCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.CIAttributeDefinition.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *CIAttributeDefinitionUpsertBulk) UpdateNewValues() *CIAttributeDefinitionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.CIAttributeDefinition.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *CIAttributeDefinitionUpsertBulk) Ignore() *CIAttributeDefinitionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *CIAttributeDefinitionUpsertBulk) DoNothing() *CIAttributeDefinitionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the CIAttributeDefinitionCreateBulk.OnConflict
+// documentation for more info.
+func (u *CIAttributeDefinitionUpsertBulk) Update(set func(*CIAttributeDefinitionUpsert)) *CIAttributeDefinitionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&CIAttributeDefinitionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *CIAttributeDefinitionUpsertBulk) SetName(v string) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertBulk) UpdateName() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDisplayName sets the "display_name" field.
+func (u *CIAttributeDefinitionUpsertBulk) SetDisplayName(v string) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetDisplayName(v)
+	})
+}
+
+// UpdateDisplayName sets the "display_name" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertBulk) UpdateDisplayName() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateDisplayName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *CIAttributeDefinitionUpsertBulk) SetDescription(v string) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertBulk) UpdateDescription() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *CIAttributeDefinitionUpsertBulk) ClearDescription() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *CIAttributeDefinitionUpsertBulk) SetType(v string) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertBulk) UpdateType() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateType()
+	})
+}
+
+// SetRequired sets the "required" field.
+func (u *CIAttributeDefinitionUpsertBulk) SetRequired(v bool) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetRequired(v)
+	})
+}
+
+// UpdateRequired sets the "required" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertBulk) UpdateRequired() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateRequired()
+	})
+}
+
+// SetUnique sets the "unique" field.
+func (u *CIAttributeDefinitionUpsertBulk) SetUnique(v bool) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetUnique(v)
+	})
+}
+
+// UpdateUnique sets the "unique" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertBulk) UpdateUnique() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateUnique()
+	})
+}
+
+// SetDefaultValue sets the "default_value" field.
+func (u *CIAttributeDefinitionUpsertBulk) SetDefaultValue(v string) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetDefaultValue(v)
+	})
+}
+
+// UpdateDefaultValue sets the "default_value" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertBulk) UpdateDefaultValue() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateDefaultValue()
+	})
+}
+
+// ClearDefaultValue clears the value of the "default_value" field.
+func (u *CIAttributeDefinitionUpsertBulk) ClearDefaultValue() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.ClearDefaultValue()
+	})
+}
+
+// SetValidationRules sets the "validation_rules" field.
+func (u *CIAttributeDefinitionUpsertBulk) SetValidationRules(v string) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetValidationRules(v)
+	})
+}
+
+// UpdateValidationRules sets the "validation_rules" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertBulk) UpdateValidationRules() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateValidationRules()
+	})
+}
+
+// ClearValidationRules clears the value of the "validation_rules" field.
+func (u *CIAttributeDefinitionUpsertBulk) ClearValidationRules() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.ClearValidationRules()
+	})
+}
+
+// SetEnumValues sets the "enum_values" field.
+func (u *CIAttributeDefinitionUpsertBulk) SetEnumValues(v []string) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetEnumValues(v)
+	})
+}
+
+// UpdateEnumValues sets the "enum_values" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertBulk) UpdateEnumValues() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateEnumValues()
+	})
+}
+
+// ClearEnumValues clears the value of the "enum_values" field.
+func (u *CIAttributeDefinitionUpsertBulk) ClearEnumValues() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.ClearEnumValues()
+	})
+}
+
+// SetReferenceType sets the "reference_type" field.
+func (u *CIAttributeDefinitionUpsertBulk) SetReferenceType(v string) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetReferenceType(v)
+	})
+}
+
+// UpdateReferenceType sets the "reference_type" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertBulk) UpdateReferenceType() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateReferenceType()
+	})
+}
+
+// ClearReferenceType clears the value of the "reference_type" field.
+func (u *CIAttributeDefinitionUpsertBulk) ClearReferenceType() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.ClearReferenceType()
+	})
+}
+
+// SetDisplayOrder sets the "display_order" field.
+func (u *CIAttributeDefinitionUpsertBulk) SetDisplayOrder(v int) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetDisplayOrder(v)
+	})
+}
+
+// AddDisplayOrder adds v to the "display_order" field.
+func (u *CIAttributeDefinitionUpsertBulk) AddDisplayOrder(v int) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.AddDisplayOrder(v)
+	})
+}
+
+// UpdateDisplayOrder sets the "display_order" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertBulk) UpdateDisplayOrder() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateDisplayOrder()
+	})
+}
+
+// SetGroupName sets the "group_name" field.
+func (u *CIAttributeDefinitionUpsertBulk) SetGroupName(v string) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetGroupName(v)
+	})
+}
+
+// UpdateGroupName sets the "group_name" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertBulk) UpdateGroupName() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateGroupName()
+	})
+}
+
+// ClearGroupName clears the value of the "group_name" field.
+func (u *CIAttributeDefinitionUpsertBulk) ClearGroupName() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.ClearGroupName()
+	})
+}
+
+// SetPlaceholder sets the "placeholder" field.
+func (u *CIAttributeDefinitionUpsertBulk) SetPlaceholder(v string) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetPlaceholder(v)
+	})
+}
+
+// UpdatePlaceholder sets the "placeholder" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertBulk) UpdatePlaceholder() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdatePlaceholder()
+	})
+}
+
+// ClearPlaceholder clears the value of the "placeholder" field.
+func (u *CIAttributeDefinitionUpsertBulk) ClearPlaceholder() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.ClearPlaceholder()
+	})
+}
+
+// SetHelpText sets the "help_text" field.
+func (u *CIAttributeDefinitionUpsertBulk) SetHelpText(v string) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetHelpText(v)
+	})
+}
+
+// UpdateHelpText sets the "help_text" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertBulk) UpdateHelpText() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateHelpText()
+	})
+}
+
+// ClearHelpText clears the value of the "help_text" field.
+func (u *CIAttributeDefinitionUpsertBulk) ClearHelpText() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.ClearHelpText()
+	})
+}
+
+// SetIsSearchable sets the "is_searchable" field.
+func (u *CIAttributeDefinitionUpsertBulk) SetIsSearchable(v bool) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetIsSearchable(v)
+	})
+}
+
+// UpdateIsSearchable sets the "is_searchable" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertBulk) UpdateIsSearchable() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateIsSearchable()
+	})
+}
+
+// SetIsSystem sets the "is_system" field.
+func (u *CIAttributeDefinitionUpsertBulk) SetIsSystem(v bool) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetIsSystem(v)
+	})
+}
+
+// UpdateIsSystem sets the "is_system" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertBulk) UpdateIsSystem() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateIsSystem()
+	})
+}
+
+// SetCiTypeID sets the "ci_type_id" field.
+func (u *CIAttributeDefinitionUpsertBulk) SetCiTypeID(v int) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetCiTypeID(v)
+	})
+}
+
+// UpdateCiTypeID sets the "ci_type_id" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertBulk) UpdateCiTypeID() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateCiTypeID()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *CIAttributeDefinitionUpsertBulk) SetTenantID(v int) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *CIAttributeDefinitionUpsertBulk) AddTenantID(v int) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertBulk) UpdateTenantID() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *CIAttributeDefinitionUpsertBulk) SetIsActive(v bool) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertBulk) UpdateIsActive() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *CIAttributeDefinitionUpsertBulk) SetCreatedAt(v time.Time) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertBulk) UpdateCreatedAt() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *CIAttributeDefinitionUpsertBulk) SetUpdatedAt(v time.Time) *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *CIAttributeDefinitionUpsertBulk) UpdateUpdatedAt() *CIAttributeDefinitionUpsertBulk {
+	return u.Update(func(s *CIAttributeDefinitionUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *CIAttributeDefinitionUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the CIAttributeDefinitionCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for CIAttributeDefinitionCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *CIAttributeDefinitionUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

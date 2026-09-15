@@ -15,6 +15,7 @@ import (
 	"itsm-backend/ent/sladefinition"
 	"itsm-backend/ent/slaviolation"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/ent/ticketcategory"
 	"itsm-backend/ent/user"
 
 	"go.uber.org/zap"
@@ -428,11 +429,6 @@ func (s *DashboardService) getResourceMetrics(ctx context.Context, tenantID int)
 	sort.Slice(healthStatus, func(i, j int) bool { return healthStatus[i].Name < healthStatus[j].Name })
 
 	return &dto.ResourceMetrics{TotalResources: totalResources, ByCloud: byCloud, ByType: byType, ByStatus: byStatus, Distribution: distribution, HealthStatus: healthStatus}, nil
-}
-
-// stringPtr 返回字符串指针
-func (s *DashboardService) stringPtr(str string) *string {
-	return &str
 }
 
 // DashboardOverviewData Dashboard概览数据结构（匹配前端期望格式）
@@ -994,8 +990,11 @@ func (s *DashboardService) getIncidentDistribution(ctx context.Context, tenantID
 	for i, category := range categories {
 		count, err := s.client.Incident.Query().
 			Where(
-				incident.TenantIDEQ(tenantID),
-				incident.CategoryEQ(category),
+				incident.HasWorkItemWith(
+					ticket.TenantIDEQ(tenantID),
+					ticket.DeletedAtIsNil(),
+					ticket.HasCategoryWith(ticketcategory.NameEQ(category)),
+				),
 			).
 			Count(ctx)
 		if err != nil {

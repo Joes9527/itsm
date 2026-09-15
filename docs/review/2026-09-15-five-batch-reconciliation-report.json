@@ -1,0 +1,542 @@
+{
+  "started_at": "2026-09-15T06:47:27.516568+00:00",
+  "revisions": {
+    "tool": "7c8cee6fae181400573308bfb7e73043d11ed0b9",
+    "seed_bytes": "372d605235f45b597e5b4ba256683cdc904a8ea32e4a2939c074e423d89ac191"
+  },
+  "batches": {
+    "B0": {
+      "id": "B0-seed-20260914",
+      "targets": 288,
+      "tables": {
+        "ci_types": 9,
+        "field_definitions": 59,
+        "known_errors": 1,
+        "service_catalogs": 8,
+        "sla_definitions": 7,
+        "standard_changes": 3,
+        "ticket_categories": 182,
+        "ticket_tags": 4,
+        "ticket_templates": 10,
+        "ticket_views": 5
+      },
+      "source_hash_matches": true,
+      "mapping_hash_matches": true,
+      "artifact_hash_matches": true,
+      "receipt_post_matches_historical": true,
+      "source_sha256": "a3d496334681a61b756525467920609f84e2b7b906abd9842e837803a3fec1cb",
+      "mapping_sha256": "62e83549fe7e4807d709b994a7c57277559e496466a6dcb67fb8bbd34b3eeef1",
+      "recorded_post": "7dc8d4673e87d5243b052fe26cdd9d928e85901cc429f9c97a837c7f1b4cbb14",
+      "current_replay_post": "1da75af17f79a628c6ff34dce6086ea0e75f93151d53222c0ae3c6ae9ab50510",
+      "receipt_context_keys": [
+        "actor",
+        "code_revision",
+        "database",
+        "expected_pre_state_sha256",
+        "ga_revision",
+        "schema",
+        "source_byte_sha256",
+        "source_id"
+      ],
+      "committed_at": "2026-09-14T14:41:07.782492+00:00",
+      "replay_matched": 288,
+      "replay_missing": 0,
+      "replay_ambiguous": 0,
+      "target_matched": 288,
+      "target_missing": 0,
+      "target_ambiguous": 0,
+      "cross_database_equal_objects": 288
+    },
+    "Process": {
+      "id": "B0-process-20260914",
+      "targets": 47,
+      "tables": {
+        "process_bindings": 7,
+        "process_definitions": 20,
+        "process_deployments": 20
+      },
+      "source_hash_matches": true,
+      "mapping_hash_matches": true,
+      "artifact_hash_matches": true,
+      "receipt_post_matches_historical": true,
+      "source_sha256": "deaef3ddd8822d569753ac3064b00414fd0a56420cb7ae07be276bc354777551",
+      "mapping_sha256": "d7b3f1e37b2aed94a314197ff78d9e8cd5868a9f8fcc94a9cfa0f9ecc2663501",
+      "recorded_post": "d9ae059217d8d2496b8eb169942a72224881ad5d264409ad5b9096dc870b7dfc",
+      "current_replay_post": "d9ae059217d8d2496b8eb169942a72224881ad5d264409ad5b9096dc870b7dfc",
+      "receipt_context_keys": [
+        "actor",
+        "code_revision",
+        "database",
+        "expected_pre_state_sha256",
+        "ga_revision",
+        "schema",
+        "source_byte_sha256",
+        "source_id"
+      ],
+      "committed_at": "2026-09-14T14:41:14.059214+00:00",
+      "replay_matched": 47,
+      "replay_missing": 0,
+      "replay_ambiguous": 0,
+      "target_matched": 47,
+      "target_missing": 0,
+      "target_ambiguous": 0,
+      "cross_database_equal_objects": 47
+    },
+    "B1": {
+      "id": "B1-config-20260914",
+      "targets": 49,
+      "tables": {
+        "configuration_items": 46,
+        "ticket_categories": 3
+      },
+      "source_hash_matches": true,
+      "mapping_hash_matches": true,
+      "artifact_hash_matches": true,
+      "receipt_post_matches_historical": true,
+      "source_sha256": "40fc59fb2b5ff9829886b2fb4fa172d480044856d06c0ddd314c5796cbba8f3d",
+      "mapping_sha256": "09addc07e681aa30a53185a1226d823523b3992768a17560df76cb8573149dd5",
+      "recorded_post": "e38933c7a5e536a7a83d3c819d264e7733dd9ae0770ec5f91d93671e0a8d34de",
+      "current_replay_post": "e38933c7a5e536a7a83d3c819d264e7733dd9ae0770ec5f91d93671e0a8d34de",
+      "receipt_context_keys": [
+        "actor",
+        "code_revision",
+        "database",
+        "expected_pre_state_sha256",
+        "ga_revision",
+        "schema",
+        "source_byte_sha256",
+        "source_id"
+      ],
+      "committed_at": "2026-09-14T14:41:16.339468+00:00",
+      "replay_matched": 49,
+      "replay_missing": 0,
+      "replay_ambiguous": 0,
+      "target_matched": 49,
+      "target_missing": 0,
+      "target_ambiguous": 0,
+      "cross_database_equal_objects": 49
+    },
+    "B2": {
+      "id": "B2-options-20260914",
+      "targets": 5,
+      "tables": {
+        "field_definitions": 5
+      },
+      "source_hash_matches": true,
+      "mapping_hash_matches": true,
+      "artifact_hash_matches": true,
+      "receipt_post_matches_historical": true,
+      "source_sha256": "33dc23abe12650223000aa1a0ba39419873fc43165956c798ad8afc9188a7f56",
+      "mapping_sha256": "d638531b881003bae73c351eaa97ca11188a20172409c6e3263bc54c71ef0ed5",
+      "recorded_post": "c758ad172d21ee94b9c0ec47011cbdc4e41a43cbe7e47c5c090c459ecdbd4dcc",
+      "current_replay_post": "c758ad172d21ee94b9c0ec47011cbdc4e41a43cbe7e47c5c090c459ecdbd4dcc",
+      "receipt_context_keys": [
+        "actor",
+        "code_revision",
+        "database",
+        "expected_pre_state_sha256",
+        "ga_revision",
+        "schema",
+        "source_byte_sha256",
+        "source_id"
+      ],
+      "committed_at": "2026-09-14T14:41:18.728164+00:00",
+      "replay_matched": 5,
+      "replay_missing": 0,
+      "replay_ambiguous": 0,
+      "target_matched": 5,
+      "target_missing": 0,
+      "target_ambiguous": 0,
+      "cross_database_equal_objects": 5
+    },
+    "B4": {
+      "id": "B4-calendar-20260914",
+      "targets": 7,
+      "tables": {
+        "sla_definitions": 7
+      },
+      "source_hash_matches": true,
+      "mapping_hash_matches": true,
+      "artifact_hash_matches": true,
+      "receipt_post_matches_historical": true,
+      "source_sha256": "9781d15f463e83cd3a259f5ee189eff4b5251d508b0fa2912ad7f18bb2a97ddd",
+      "mapping_sha256": "2030592a42fa9e0f381a02d67a37a68853ab531155bf001f064f2c05f8a8d647",
+      "recorded_post": "e6dc181589168b1c6a015a518893e29615ad907c083d3c3267317c54c4c6f959",
+      "current_replay_post": "e6dc181589168b1c6a015a518893e29615ad907c083d3c3267317c54c4c6f959",
+      "receipt_context_keys": [
+        "actor",
+        "code_revision",
+        "database",
+        "expected_pre_state_sha256",
+        "ga_revision",
+        "schema",
+        "source_byte_sha256",
+        "source_id"
+      ],
+      "committed_at": "2026-09-14T14:41:20.927089+00:00",
+      "replay_matched": 7,
+      "replay_missing": 0,
+      "replay_ambiguous": 0,
+      "target_matched": 7,
+      "target_missing": 0,
+      "target_ambiguous": 0,
+      "cross_database_equal_objects": 7
+    }
+  },
+  "db": {
+    "replay": {
+      "identity": {
+        "at": "2026-09-15T06:47:28.03888+00:00",
+        "version": "PostgreSQL 17.10 (Debian 17.10-1.pgdg12+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+        "database": "gb_replay_review",
+        "connections": 1
+      },
+      "counts": {
+        "ci_types": 9,
+        "configuration_items": 46,
+        "field_definitions": 59,
+        "known_errors": 1,
+        "process_bindings": 7,
+        "process_definitions": 20,
+        "process_deployments": 20,
+        "service_catalogs": 8,
+        "sla_definitions": 7,
+        "standard_changes": 3,
+        "ticket_categories": 185,
+        "ticket_tags": 4,
+        "ticket_templates": 10,
+        "ticket_views": 5
+      },
+      "start_semantic_raw_sha256": "e84cac07dd7a8b5e24815c6061c8a72c08360664650f0b433e084a9dc1eb9897",
+      "end_semantic_raw_sha256": "e84cac07dd7a8b5e24815c6061c8a72c08360664650f0b433e084a9dc1eb9897",
+      "stable_during_check": true
+    },
+    "target": {
+      "identity": {
+        "at": "2026-09-15T06:47:28.146915+00:00",
+        "version": "PostgreSQL 17.10 (Debian 17.10-1.pgdg12+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+        "database": "itsm_ga_ready",
+        "connections": 2
+      },
+      "counts": {
+        "ci_types": 9,
+        "configuration_items": 46,
+        "field_definitions": 59,
+        "known_errors": 1,
+        "process_bindings": 7,
+        "process_definitions": 20,
+        "process_deployments": 20,
+        "service_catalogs": 8,
+        "sla_definitions": 7,
+        "standard_changes": 3,
+        "ticket_categories": 185,
+        "ticket_tags": 4,
+        "ticket_templates": 10,
+        "ticket_views": 5
+      },
+      "start_semantic_raw_sha256": "f47bd8a63101c990daa208c04f79d8afca4103135d47bae80f74d6d9726a082b",
+      "end_semantic_raw_sha256": "f47bd8a63101c990daa208c04f79d8afca4103135d47bae80f74d6d9726a082b",
+      "stable_during_check": true
+    }
+  },
+  "diffs": [],
+  "finished_at": "2026-09-15T06:47:30.036578+00:00",
+  "supplement": {
+    "at": "2026-09-15T06:50:06.279765+00:00",
+    "source_expected": {
+      "replay": {
+        "checked": 384,
+        "passed": 384,
+        "differences": [],
+        "B2_additions": 25,
+        "option_duplicate_values": 0,
+        "sla_policy_blank": 7
+      },
+      "target": {
+        "checked": 384,
+        "passed": 384,
+        "differences": [],
+        "B2_additions": 25,
+        "option_duplicate_values": 0,
+        "sla_policy_blank": 7
+      }
+    },
+    "source_provenance": {
+      "extracted_at": "2026-09-14T06:57:53.013862+00:00",
+      "manifest_byte_sha256": "e7aaf0cc815d946b7992166070d52d09c638f84a06baf38049b74e4ed875fe86",
+      "resources": {
+        "cti_tree": {
+          "rows": 82,
+          "manifest_rows": 82,
+          "byte_sha256": "c189b7e8b85adace6676c5cc8360f817c2684543636f49434022bde203d63366",
+          "byte_hash_matches": true
+        },
+        "config_dictionaries": {
+          "rows": 988,
+          "manifest_rows": 988,
+          "byte_sha256": "301bde312c85f609edd95b71d270b0c042805cfff8182f1640eec19b6e6914f6",
+          "byte_hash_matches": true
+        },
+        "priority_levels": {
+          "rows": 15,
+          "manifest_rows": 15,
+          "byte_sha256": "b2359b26f8de132686ee6233d61cb2c1e1e04946dd1c202983e6fe503f147ee3",
+          "byte_hash_matches": true
+        },
+        "priority_matrix": {
+          "rows": 86,
+          "manifest_rows": 86,
+          "byte_sha256": "f8cb73b4c69d1acc42c213d308037c162958712e8fe6478bb8fff347e86c2e48",
+          "byte_hash_matches": true
+        },
+        "cti_authorized": {
+          "rows": 720,
+          "manifest_rows": 720,
+          "byte_sha256": "e39e0a6294c541828e79615060787003f460aecd86a2a2bc9df0d2f09b6416da",
+          "byte_hash_matches": true
+        },
+        "modules": {
+          "rows": 4,
+          "manifest_rows": 4,
+          "byte_sha256": "accce29ed0c277c6505c94cbdc1209cd952d45adacab78b91ad398c987073180",
+          "byte_hash_matches": true
+        },
+        "holidays": {
+          "rows": 611,
+          "manifest_rows": 611,
+          "byte_sha256": "ed715091e9f5135f19ede0d0184fbd4ec85dd7ab3e74fa12953817ed178be148",
+          "byte_hash_matches": true
+        },
+        "process_definitions": {
+          "rows": 145,
+          "manifest_rows": 145,
+          "byte_sha256": "2be1474cd1d34f22bac298a9e65fe86c1a3aa773608525d26ad94b1b748faaa5",
+          "byte_hash_matches": true
+        },
+        "process_models": {
+          "rows": 24,
+          "manifest_rows": 24,
+          "byte_sha256": "a00955c12c91e16e2048f935b93c57959fa774ca5485a529c50db3fc9e822491",
+          "byte_hash_matches": true
+        },
+        "departments": {
+          "rows": 3175,
+          "manifest_rows": 3175,
+          "byte_sha256": "10c631b5bb9803011df651f62318d796d992ec1771ea0c56ca3fadceba23f83e",
+          "byte_hash_matches": true
+        }
+      },
+      "B1_cti": {
+        "assets": 46,
+        "matched_ids": 46,
+        "matched_names": 45,
+        "matched_paths": 17,
+        "differences": [
+          {
+            "key_sha256": "96fb5e2980f490dea80238b0fdba4065fa70886560eae2c116d991e7708101ce",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "7ccbab4533d3ad795b58da16f41e1414776b55ad7b92dc87e0fa3bd9c5f5b765",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "f952c43d85015e9504937d5f80e3bd81deba3c06441bb3a17735f57fdda80749",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "83a41a8ee193a39cf533efb84704e25ba9998665b871e7e14b8343407d01777a",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "fcb54e2e284b7afd5c735501ee810386d808ade7c8902ea435b9f09e09e3e68b",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "ee133098232d15647c57949fc1cd5d62821ba29022e9d656a73cd3b504ee4393",
+            "count": 1,
+            "name_matches": false,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "543ac5b055809f77d02837df980625b450591ac0f379c077c5ea2fdacf16ab3b",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "97166f60dd97e721dde13ebbb9b0d711958d4f78e24a61b7bd4ce48d140f7cfe",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "fbde53e184c3d11c632eb813fe8f1ca77c5a97002e41ff125de91eb36ddc5368",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "32817c7305a9e9d25886df0bb9829670b783bf73715a345a9685c86ce8bc8b0f",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "c126b70b12fb18a19df990f0aeeb515bea4a48533058d6305d651952ee565656",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "6854a8922a4b154248c981f42d603fab3b8f059ad114781d871b9d0587a767d8",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "71d85fbcae664c9f89793918007e44c1263862c161cc37ddf1975fe10fc26f1b",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "65498cb6b5fba101c71812b35b6f478f2e470af3b49a205692fc6584e93d940b",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "b51a0041f998e97c9f4037c43d434b2dca4055879df44f78c2ceff19f5cf3379",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "76e8b1eedca70c70735adeefa262115624037a304bd7808dccdf4b91e789be24",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "d55615823d9958d2ea3f797a375f4d0c01ea4069a4daf6980a5032330c23a526",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "1be71467c48a3050e42faf63e7847a25a4aef2c7109f6c54d43545d75485a1b1",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "bae05811d6bde1327cefee114154f858d527a9ce2b2ece9ca06501d42e7ae3bb",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "feac608b04da3ea7733637c79b440ae0cb64aa71c5f0510dcdb8381121a35899",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "87e90ed752e56ed2aadee76e4e9388b7ea252f85933fcf7649e5f9a5eab2dd9e",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "a9461b7ca8122999454bf14d19671ce0488f886874cc65d3e32b3e1ba5f93295",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "801e1800d0c46187d10070726a8ff15a4c541ea27a26fb0526de11fb22182f7c",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "0927b74210f7507001c87e68d73c9390c4f9d4470cf87de2e6989831eed0b3dc",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "6d11767490f4585d9ea1c955b8a6bdafa72406c9723838c384be7dcc64a53bbb",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "a76807e2c3082774a74bea7b759485392b3e34c6ebcfe2fd48399f69f089bebb",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "756d0a24546ac383030659e78203d550b6fd92f9f04d13da79d756ff1967bbec",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "4edd5b68f2d6e4ddd73cf571681286064a356200c75005e7efb1af2bf1ae9bed",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          },
+          {
+            "key_sha256": "fe2155b9b7b1a8b84b3a124e0b39364c820885ecdf3949ed75552a0bebe526d0",
+            "count": 1,
+            "name_matches": true,
+            "path_matches": false
+          }
+        ],
+        "normalized_name_matches": 46,
+        "parent_graph_path_matches": 46
+      },
+      "calendar_keys": [
+        "work_days",
+        "start_time",
+        "end_time",
+        "time_zone",
+        "holiday_list"
+      ],
+      "calendar_counts": {
+        "work_days": 5,
+        "holiday_list": 89
+      },
+      "B4_holiday_dates": {
+        "expected": 89,
+        "source_matching": 0,
+        "sets_equal": false
+      }
+    }
+  },
+  "final_window": {
+    "at": "2026-09-15T06:52:47.861832+00:00",
+    "end_hashes": {
+      "replay": "e84cac07dd7a8b5e24815c6061c8a72c08360664650f0b433e084a9dc1eb9897",
+      "target": "f47bd8a63101c990daa208c04f79d8afca4103135d47bae80f74d6d9726a082b"
+    },
+    "stable_since_initial": {
+      "replay": true,
+      "target": true
+    }
+  }
+}

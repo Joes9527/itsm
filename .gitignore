@@ -218,7 +218,7 @@ itsm-backend/service.test
 itsm-backend/logs/
 itsm-frontend/.next/
 itsm-frontend/tests/e2e/venv/
-release/
+/release/
 
 # 防止再次误提交大文件/二进制
 /itsm-agent/itsm-agent

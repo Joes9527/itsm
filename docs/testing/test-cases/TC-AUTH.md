@@ -15,7 +15,7 @@
 | AUTH-004 | 空用户名登录 | 无 | 1. 用户名留空<br>2. 输入密码<br>3. 点击登录 | 提示"用户名不能为空" |
 | AUTH-005 | 空密码登录 | 用户已注册 | 1. 输入用户名<br>2. 密码留空<br>3. 点击登录 | 提示"密码不能为空" |
 | AUTH-006 | 连续3次错误密码 | 用户已注册 | 1. 输入正确用户名<br>2. 输入错误密码<br>3. 重复3次 | 账户锁定30分钟 |
-| AUTH-007 | 登录后Token存储 | 登录成功 | 检查localStorage | access_token和refresh_token已存储 |
+| AUTH-007 | 登录后会话存储 | 登录成功 | 检查登录响应的 Set-Cookie 与 JSON body | access/refresh 会话均为 HttpOnly cookie，JSON 与 localStorage 不含 JWT |
 | AUTH-008 | 登录后重定向 | 登录成功 | 检查路由 | 跳转到Dashboard或之前页面 |
 
 ### 1.2 注册功能
@@ -41,11 +41,11 @@
 
 | 用例ID | 用例名称 | 前置条件 | 测试步骤 | 预期结果 |
 |--------|----------|----------|----------|----------|
-| AUTH-301 | Token即将过期刷新 | access_token即将过期 | 发起API请求 | 自动刷新Token |
-| AUTH-302 | Token已过期刷新 | access_token已过期 | 发起API请求 | 使用refresh_token刷新 |
-| AUTH-403 | RefreshToken过期 | refresh_token已过期 | 发起API请求 | 跳转登录页 |
+| AUTH-301 | Access 会话即将过期 | 已建立 cookie 会话 | 发起API请求 | 自动调用 `/auth/refresh` 并轮换 HttpOnly cookies |
+| AUTH-302 | Access 会话已过期 | refresh cookie 仍有效 | 发起API请求 | 刷新成功且 JSON 不返回 JWT |
+| AUTH-403 | Refresh 会话过期 | refresh cookie 已过期 | 发起API请求 | 跳转登录页 |
 | AUTH-304 | 并发刷新去重 | 多个请求同时触发 | 并发发起5个API请求 | 仅发起1次刷新请求 |
-| AUTH-305 | 刷新失败降级 | refresh_token无效 | 发起API请求 | 清除token，跳转登录 |
+| AUTH-305 | 刷新失败关闭 | refresh cookie 无效 | 发起API请求 | 清除会话，跳转登录 |
 
 ### 1.5 密码重置
 

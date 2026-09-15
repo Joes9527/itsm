@@ -14,6 +14,8 @@ const (
 	Label = "sla_alert_history"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldNotificationTrackingVersion holds the string denoting the notification_tracking_version field in the database.
+	FieldNotificationTrackingVersion = "notification_tracking_version"
 	// FieldTicketID holds the string denoting the ticket_id field in the database.
 	FieldTicketID = "ticket_id"
 	// FieldTicketNumber holds the string denoting the ticket_number field in the database.
@@ -65,6 +67,7 @@ const (
 // Columns holds all SQL columns for slaalerthistory fields.
 var Columns = []string{
 	FieldID,
+	FieldNotificationTrackingVersion,
 	FieldTicketID,
 	FieldTicketNumber,
 	FieldTicketTitle,
@@ -91,6 +94,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// NotificationTrackingVersionValidator is a validator for the "notification_tracking_version" field. It is called by the builders before save.
+	NotificationTrackingVersionValidator func(int) error
 	// TicketIDValidator is a validator for the "ticket_id" field. It is called by the builders before save.
 	TicketIDValidator func(int) error
 	// TicketNumberValidator is a validator for the "ticket_number" field. It is called by the builders before save.
@@ -123,6 +128,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByNotificationTrackingVersion orders the results by the notification_tracking_version field.
+func ByNotificationTrackingVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldNotificationTrackingVersion, opts...).ToFunc()
 }
 
 // ByTicketID orders the results by the ticket_id field.

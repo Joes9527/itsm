@@ -4,31 +4,27 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { loginAndReturn } from './auth-utils';
 
 test.describe('Asset Management - 资产管理', () => {
   test.beforeEach(async ({ page }) => {
-    // 先登录
-    await page.goto('/login');
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForSelector('.ant-input, input.ant-input', { timeout: 15000 });
-    const inputs = page.locator('input.ant-input');
-    await inputs.nth(0).fill('admin');
-    await inputs.nth(1).fill('admin123');
-    await page.click('button[type="submit"]');
-    await page.waitForURL(/\/(dashboard|tickets|incidents)/, { timeout: 20000 });
+    await loginAndReturn(page);
   });
 
   test.describe('Asset List - 资产列表', () => {
     test('should navigate to asset management page', async ({ page }) => {
+      const listResponsePromise = page.waitForResponse(response => {
+        const url = new URL(response.url());
+        return response.request().method() === 'GET' && url.pathname === '/api/v1/assets';
+      });
       await page.goto('/assets');
       await page.waitForURL(/\/assets/);
-      await expect(page.locator('h1, h2').first()).toBeVisible();
-    });
-
-    test('should display asset list page', async ({ page }) => {
-      await page.goto('/assets');
-      await page.waitForLoadState('networkidle');
-      await expect(page.locator('body')).toBeVisible();
+      const listResponse = await listResponsePromise;
+      expect(listResponse.status()).toBe(200);
+      const envelope = await listResponse.json();
+      expect(envelope).toHaveProperty('code', 0);
+      expect(envelope).toHaveProperty('data');
+      await expect(page.getByRole('heading', { name: '资产管理' })).toBeVisible();
     });
   });
 
@@ -36,7 +32,7 @@ test.describe('Asset Management - 资产管理', () => {
     test('should display create asset form', async ({ page }) => {
       await page.goto('/assets/new');
       await page.waitForLoadState('networkidle');
-      await expect(page.locator('form, .ant-form').first()).toBeVisible({ timeout: 10000 });
+      await expect(page.getByLabel('资产编号')).toBeVisible({ timeout: 10000 });
     });
   });
 });

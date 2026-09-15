@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"itsm-backend/ent/processdefinition"
 	"itsm-backend/ent/processinstance"
+	"itsm-backend/internal/jsonvalue"
 	"strings"
 	"time"
 
@@ -19,13 +20,17 @@ type ProcessInstance struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
+	// Immutable execution WorkItem reference; historical rows remain NULL; FK managed by migration 039
+	ExecutionWorkItemID *int `json:"execution_work_item_id,omitempty"`
 	// 流程实例ID，BPMN标准
 	ProcessInstanceID string `json:"process_instance_id,omitempty"`
+	// Immutable digest of a durable start request; NULL for legacy non-idempotent starts
+	StartRequestDigest string `json:"-"`
 	// 业务键，关联业务实体
 	BusinessKey string `json:"business_key,omitempty"`
-	// 结构化业务类型。Wave 1 写入的是 dto.BusinessType 取值（ticket/change/incident/service_request/problem/release，见 dto/bpmn_process_trigger_dto.go），即迁移前的词表；不是 recordClass 词表——两者有两个值对不上：change vs change_request、ticket vs generic。收敛到 recordClass（generic/service_request_item/incident/problem/change_request/catalog_task）由 Wave 2 各域迁移任务负责，在对应域拥有 WorkItem 之后进行。与 business_key 由同一次 TriggerProcess 调用原子写入，不从 variables JSON 里现取
+	// 结构化业务类型。按统一 WorkItem 设计 §15.2.2，本字段就是 WorkItem.recordClass（generic/service_request_item/incident/problem/change_request/catalog_task），词表与业务键格式的唯一权威是 common/workitemidentity；Wave-1 旧词表（ticket/change/service_request）已退役，不再写入也不被解析。Release 保留其显式遗留值 "release"，它不是 WorkItem。与 business_key 由同一次 TriggerProcess 调用原子写入，不从 variables JSON 里现取
 	BusinessType string `json:"business_type,omitempty"`
-	// 结构化业务主键（迁移完成前是各专业域自己的表主键，迁移完成后是 WorkItem ID/tickets.id），与 business_type 成对使用
+	// 结构化业务主键，恒为 WorkItem ID（tickets.id），与 business_type 成对使用；专业扩展表主键从不写入此处
 	BusinessID int `json:"business_id,omitempty"`
 	// 流程定义Key
 	ProcessDefinitionKey string `json:"process_definition_key,omitempty"`
@@ -38,7 +43,7 @@ type ProcessInstance struct {
 	// 当前活动名称
 	CurrentActivityName string `json:"current_activity_name,omitempty"`
 	// 流程变量
-	Variables map[string]interface{} `json:"variables,omitempty"`
+	Variables jsonvalue.NumberMap `json:"variables,omitempty"`
 	// 开始时间
 	StartTime time.Time `json:"start_time,omitempty"`
 	// 结束时间
@@ -129,9 +134,9 @@ func (*ProcessInstance) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case processinstance.FieldVariables, processinstance.FieldStateSnapshot:
 			values[i] = new([]byte)
-		case processinstance.FieldID, processinstance.FieldBusinessID, processinstance.FieldProcessDefinitionID, processinstance.FieldTenantID, processinstance.FieldVersion:
+		case processinstance.FieldID, processinstance.FieldExecutionWorkItemID, processinstance.FieldBusinessID, processinstance.FieldProcessDefinitionID, processinstance.FieldTenantID, processinstance.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case processinstance.FieldProcessInstanceID, processinstance.FieldBusinessKey, processinstance.FieldBusinessType, processinstance.FieldProcessDefinitionKey, processinstance.FieldStatus, processinstance.FieldCurrentActivityID, processinstance.FieldCurrentActivityName, processinstance.FieldSuspendedReason, processinstance.FieldInitiator, processinstance.FieldParentProcessInstanceID, processinstance.FieldRootProcessInstanceID:
+		case processinstance.FieldProcessInstanceID, processinstance.FieldStartRequestDigest, processinstance.FieldBusinessKey, processinstance.FieldBusinessType, processinstance.FieldProcessDefinitionKey, processinstance.FieldStatus, processinstance.FieldCurrentActivityID, processinstance.FieldCurrentActivityName, processinstance.FieldSuspendedReason, processinstance.FieldInitiator, processinstance.FieldParentProcessInstanceID, processinstance.FieldRootProcessInstanceID:
 			values[i] = new(sql.NullString)
 		case processinstance.FieldStartTime, processinstance.FieldEndTime, processinstance.FieldSuspendedTime, processinstance.FieldCreatedAt, processinstance.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -156,11 +161,24 @@ func (_m *ProcessInstance) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
+		case processinstance.FieldExecutionWorkItemID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field execution_work_item_id", values[i])
+			} else if value.Valid {
+				_m.ExecutionWorkItemID = new(int)
+				*_m.ExecutionWorkItemID = int(value.Int64)
+			}
 		case processinstance.FieldProcessInstanceID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field process_instance_id", values[i])
 			} else if value.Valid {
 				_m.ProcessInstanceID = value.String
+			}
+		case processinstance.FieldStartRequestDigest:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field start_request_digest", values[i])
+			} else if value.Valid {
+				_m.StartRequestDigest = value.String
 			}
 		case processinstance.FieldBusinessKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -348,8 +366,15 @@ func (_m *ProcessInstance) String() string {
 	var builder strings.Builder
 	builder.WriteString("ProcessInstance(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	if v := _m.ExecutionWorkItemID; v != nil {
+		builder.WriteString("execution_work_item_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
 	builder.WriteString("process_instance_id=")
 	builder.WriteString(_m.ProcessInstanceID)
+	builder.WriteString(", ")
+	builder.WriteString("start_request_digest=<sensitive>")
 	builder.WriteString(", ")
 	builder.WriteString("business_key=")
 	builder.WriteString(_m.BusinessKey)

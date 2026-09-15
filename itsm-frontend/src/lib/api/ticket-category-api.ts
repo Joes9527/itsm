@@ -15,7 +15,6 @@ export interface TicketCategory {
   path?: string;
   sortOrder: number;
   isActive: boolean;
-  workflowId?: number | null;
   departmentId?: number | null;
   ticketCount?: number;
   children?: TicketCategory[];
@@ -31,7 +30,6 @@ export interface CreateCategoryRequest {
   parentId?: number;
   sortOrder?: number;
   isActive?: boolean;
-  workflowId?: number;
   departmentId?: number;
 }
 
@@ -43,7 +41,6 @@ export interface UpdateCategoryRequest {
   parentId?: number;
   sortOrder?: number;
   isActive?: boolean;
-  workflowId?: number;
   departmentId?: number;
 }
 
@@ -73,10 +70,9 @@ export class TicketCategoryApi {
     return httpClient.get(`/api/v1/ticket-categories/${id}`);
   }
 
-  // 创建分类（兼容旧版后端：请求体携带 tenantId，新版后端会以认证上下文为准）
+  // 创建分类：租户由后端会话上下文唯一决定。
   static async createCategory(data: CreateCategoryRequest): Promise<TicketCategory> {
-    const tenantId = httpClient.getTenantId() || 1;
-    return httpClient.post('/api/v1/ticket-categories', { ...data, tenantId });
+    return httpClient.post('/api/v1/ticket-categories', data);
   }
 
   // 更新分类

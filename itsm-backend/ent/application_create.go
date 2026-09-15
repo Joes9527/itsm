@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent/tag"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -21,6 +22,7 @@ type ApplicationCreate struct {
 	config
 	mutation *ApplicationMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -305,6 +307,7 @@ func (_c *ApplicationCreate) createSpec() (*Application, *sqlgraph.CreateSpec) {
 		_node = &Application{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(application.Table, sqlgraph.NewFieldSpec(application.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(application.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -397,11 +400,498 @@ func (_c *ApplicationCreate) createSpec() (*Application, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Application.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ApplicationUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ApplicationCreate) OnConflict(opts ...sql.ConflictOption) *ApplicationUpsertOne {
+	_c.conflict = opts
+	return &ApplicationUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Application.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ApplicationCreate) OnConflictColumns(columns ...string) *ApplicationUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ApplicationUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ApplicationUpsertOne is the builder for "upsert"-ing
+	//  one Application node.
+	ApplicationUpsertOne struct {
+		create *ApplicationCreate
+	}
+
+	// ApplicationUpsert is the "OnConflict" setter.
+	ApplicationUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *ApplicationUpsert) SetName(v string) *ApplicationUpsert {
+	u.Set(application.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ApplicationUpsert) UpdateName() *ApplicationUpsert {
+	u.SetExcluded(application.FieldName)
+	return u
+}
+
+// SetCode sets the "code" field.
+func (u *ApplicationUpsert) SetCode(v string) *ApplicationUpsert {
+	u.Set(application.FieldCode, v)
+	return u
+}
+
+// UpdateCode sets the "code" field to the value that was provided on create.
+func (u *ApplicationUpsert) UpdateCode() *ApplicationUpsert {
+	u.SetExcluded(application.FieldCode)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *ApplicationUpsert) SetDescription(v string) *ApplicationUpsert {
+	u.Set(application.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ApplicationUpsert) UpdateDescription() *ApplicationUpsert {
+	u.SetExcluded(application.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ApplicationUpsert) ClearDescription() *ApplicationUpsert {
+	u.SetNull(application.FieldDescription)
+	return u
+}
+
+// SetType sets the "type" field.
+func (u *ApplicationUpsert) SetType(v string) *ApplicationUpsert {
+	u.Set(application.FieldType, v)
+	return u
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *ApplicationUpsert) UpdateType() *ApplicationUpsert {
+	u.SetExcluded(application.FieldType)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *ApplicationUpsert) SetStatus(v string) *ApplicationUpsert {
+	u.Set(application.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ApplicationUpsert) UpdateStatus() *ApplicationUpsert {
+	u.SetExcluded(application.FieldStatus)
+	return u
+}
+
+// SetOwnerID sets the "owner_id" field.
+func (u *ApplicationUpsert) SetOwnerID(v int) *ApplicationUpsert {
+	u.Set(application.FieldOwnerID, v)
+	return u
+}
+
+// UpdateOwnerID sets the "owner_id" field to the value that was provided on create.
+func (u *ApplicationUpsert) UpdateOwnerID() *ApplicationUpsert {
+	u.SetExcluded(application.FieldOwnerID)
+	return u
+}
+
+// AddOwnerID adds v to the "owner_id" field.
+func (u *ApplicationUpsert) AddOwnerID(v int) *ApplicationUpsert {
+	u.Add(application.FieldOwnerID, v)
+	return u
+}
+
+// ClearOwnerID clears the value of the "owner_id" field.
+func (u *ApplicationUpsert) ClearOwnerID() *ApplicationUpsert {
+	u.SetNull(application.FieldOwnerID)
+	return u
+}
+
+// SetProjectID sets the "project_id" field.
+func (u *ApplicationUpsert) SetProjectID(v int) *ApplicationUpsert {
+	u.Set(application.FieldProjectID, v)
+	return u
+}
+
+// UpdateProjectID sets the "project_id" field to the value that was provided on create.
+func (u *ApplicationUpsert) UpdateProjectID() *ApplicationUpsert {
+	u.SetExcluded(application.FieldProjectID)
+	return u
+}
+
+// ClearProjectID clears the value of the "project_id" field.
+func (u *ApplicationUpsert) ClearProjectID() *ApplicationUpsert {
+	u.SetNull(application.FieldProjectID)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ApplicationUpsert) SetTenantID(v int) *ApplicationUpsert {
+	u.Set(application.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ApplicationUpsert) UpdateTenantID() *ApplicationUpsert {
+	u.SetExcluded(application.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ApplicationUpsert) AddTenantID(v int) *ApplicationUpsert {
+	u.Add(application.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ApplicationUpsert) SetCreatedAt(v time.Time) *ApplicationUpsert {
+	u.Set(application.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ApplicationUpsert) UpdateCreatedAt() *ApplicationUpsert {
+	u.SetExcluded(application.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ApplicationUpsert) SetUpdatedAt(v time.Time) *ApplicationUpsert {
+	u.Set(application.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ApplicationUpsert) UpdateUpdatedAt() *ApplicationUpsert {
+	u.SetExcluded(application.FieldUpdatedAt)
+	return u
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (u *ApplicationUpsert) SetDeletedAt(v time.Time) *ApplicationUpsert {
+	u.Set(application.FieldDeletedAt, v)
+	return u
+}
+
+// UpdateDeletedAt sets the "deleted_at" field to the value that was provided on create.
+func (u *ApplicationUpsert) UpdateDeletedAt() *ApplicationUpsert {
+	u.SetExcluded(application.FieldDeletedAt)
+	return u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (u *ApplicationUpsert) ClearDeletedAt() *ApplicationUpsert {
+	u.SetNull(application.FieldDeletedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.Application.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ApplicationUpsertOne) UpdateNewValues() *ApplicationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Application.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ApplicationUpsertOne) Ignore() *ApplicationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ApplicationUpsertOne) DoNothing() *ApplicationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ApplicationCreate.OnConflict
+// documentation for more info.
+func (u *ApplicationUpsertOne) Update(set func(*ApplicationUpsert)) *ApplicationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ApplicationUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *ApplicationUpsertOne) SetName(v string) *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ApplicationUpsertOne) UpdateName() *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetCode sets the "code" field.
+func (u *ApplicationUpsertOne) SetCode(v string) *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetCode(v)
+	})
+}
+
+// UpdateCode sets the "code" field to the value that was provided on create.
+func (u *ApplicationUpsertOne) UpdateCode() *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateCode()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *ApplicationUpsertOne) SetDescription(v string) *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ApplicationUpsertOne) UpdateDescription() *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ApplicationUpsertOne) ClearDescription() *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *ApplicationUpsertOne) SetType(v string) *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *ApplicationUpsertOne) UpdateType() *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateType()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ApplicationUpsertOne) SetStatus(v string) *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ApplicationUpsertOne) UpdateStatus() *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetOwnerID sets the "owner_id" field.
+func (u *ApplicationUpsertOne) SetOwnerID(v int) *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetOwnerID(v)
+	})
+}
+
+// AddOwnerID adds v to the "owner_id" field.
+func (u *ApplicationUpsertOne) AddOwnerID(v int) *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.AddOwnerID(v)
+	})
+}
+
+// UpdateOwnerID sets the "owner_id" field to the value that was provided on create.
+func (u *ApplicationUpsertOne) UpdateOwnerID() *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateOwnerID()
+	})
+}
+
+// ClearOwnerID clears the value of the "owner_id" field.
+func (u *ApplicationUpsertOne) ClearOwnerID() *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.ClearOwnerID()
+	})
+}
+
+// SetProjectID sets the "project_id" field.
+func (u *ApplicationUpsertOne) SetProjectID(v int) *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetProjectID(v)
+	})
+}
+
+// UpdateProjectID sets the "project_id" field to the value that was provided on create.
+func (u *ApplicationUpsertOne) UpdateProjectID() *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateProjectID()
+	})
+}
+
+// ClearProjectID clears the value of the "project_id" field.
+func (u *ApplicationUpsertOne) ClearProjectID() *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.ClearProjectID()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ApplicationUpsertOne) SetTenantID(v int) *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ApplicationUpsertOne) AddTenantID(v int) *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ApplicationUpsertOne) UpdateTenantID() *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ApplicationUpsertOne) SetCreatedAt(v time.Time) *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ApplicationUpsertOne) UpdateCreatedAt() *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ApplicationUpsertOne) SetUpdatedAt(v time.Time) *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ApplicationUpsertOne) UpdateUpdatedAt() *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (u *ApplicationUpsertOne) SetDeletedAt(v time.Time) *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetDeletedAt(v)
+	})
+}
+
+// UpdateDeletedAt sets the "deleted_at" field to the value that was provided on create.
+func (u *ApplicationUpsertOne) UpdateDeletedAt() *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateDeletedAt()
+	})
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (u *ApplicationUpsertOne) ClearDeletedAt() *ApplicationUpsertOne {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.ClearDeletedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ApplicationUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ApplicationCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ApplicationUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ApplicationUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ApplicationUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ApplicationCreateBulk is the builder for creating many Application entities in bulk.
 type ApplicationCreateBulk struct {
 	config
 	err      error
 	builders []*ApplicationCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the Application entities in the database.
@@ -431,6 +921,7 @@ func (_c *ApplicationCreateBulk) Save(ctx context.Context) ([]*Application, erro
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -481,6 +972,306 @@ func (_c *ApplicationCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ApplicationCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Application.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ApplicationUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ApplicationCreateBulk) OnConflict(opts ...sql.ConflictOption) *ApplicationUpsertBulk {
+	_c.conflict = opts
+	return &ApplicationUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Application.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ApplicationCreateBulk) OnConflictColumns(columns ...string) *ApplicationUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ApplicationUpsertBulk{
+		create: _c,
+	}
+}
+
+// ApplicationUpsertBulk is the builder for "upsert"-ing
+// a bulk of Application nodes.
+type ApplicationUpsertBulk struct {
+	create *ApplicationCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.Application.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ApplicationUpsertBulk) UpdateNewValues() *ApplicationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Application.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ApplicationUpsertBulk) Ignore() *ApplicationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ApplicationUpsertBulk) DoNothing() *ApplicationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ApplicationCreateBulk.OnConflict
+// documentation for more info.
+func (u *ApplicationUpsertBulk) Update(set func(*ApplicationUpsert)) *ApplicationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ApplicationUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *ApplicationUpsertBulk) SetName(v string) *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ApplicationUpsertBulk) UpdateName() *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetCode sets the "code" field.
+func (u *ApplicationUpsertBulk) SetCode(v string) *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetCode(v)
+	})
+}
+
+// UpdateCode sets the "code" field to the value that was provided on create.
+func (u *ApplicationUpsertBulk) UpdateCode() *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateCode()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *ApplicationUpsertBulk) SetDescription(v string) *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ApplicationUpsertBulk) UpdateDescription() *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ApplicationUpsertBulk) ClearDescription() *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *ApplicationUpsertBulk) SetType(v string) *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *ApplicationUpsertBulk) UpdateType() *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateType()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ApplicationUpsertBulk) SetStatus(v string) *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ApplicationUpsertBulk) UpdateStatus() *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetOwnerID sets the "owner_id" field.
+func (u *ApplicationUpsertBulk) SetOwnerID(v int) *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetOwnerID(v)
+	})
+}
+
+// AddOwnerID adds v to the "owner_id" field.
+func (u *ApplicationUpsertBulk) AddOwnerID(v int) *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.AddOwnerID(v)
+	})
+}
+
+// UpdateOwnerID sets the "owner_id" field to the value that was provided on create.
+func (u *ApplicationUpsertBulk) UpdateOwnerID() *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateOwnerID()
+	})
+}
+
+// ClearOwnerID clears the value of the "owner_id" field.
+func (u *ApplicationUpsertBulk) ClearOwnerID() *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.ClearOwnerID()
+	})
+}
+
+// SetProjectID sets the "project_id" field.
+func (u *ApplicationUpsertBulk) SetProjectID(v int) *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetProjectID(v)
+	})
+}
+
+// UpdateProjectID sets the "project_id" field to the value that was provided on create.
+func (u *ApplicationUpsertBulk) UpdateProjectID() *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateProjectID()
+	})
+}
+
+// ClearProjectID clears the value of the "project_id" field.
+func (u *ApplicationUpsertBulk) ClearProjectID() *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.ClearProjectID()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ApplicationUpsertBulk) SetTenantID(v int) *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ApplicationUpsertBulk) AddTenantID(v int) *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ApplicationUpsertBulk) UpdateTenantID() *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ApplicationUpsertBulk) SetCreatedAt(v time.Time) *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ApplicationUpsertBulk) UpdateCreatedAt() *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ApplicationUpsertBulk) SetUpdatedAt(v time.Time) *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ApplicationUpsertBulk) UpdateUpdatedAt() *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (u *ApplicationUpsertBulk) SetDeletedAt(v time.Time) *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.SetDeletedAt(v)
+	})
+}
+
+// UpdateDeletedAt sets the "deleted_at" field to the value that was provided on create.
+func (u *ApplicationUpsertBulk) UpdateDeletedAt() *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.UpdateDeletedAt()
+	})
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (u *ApplicationUpsertBulk) ClearDeletedAt() *ApplicationUpsertBulk {
+	return u.Update(func(s *ApplicationUpsert) {
+		s.ClearDeletedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ApplicationUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ApplicationCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ApplicationCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ApplicationUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

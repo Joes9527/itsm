@@ -70,9 +70,9 @@ func Status(v string) predicate.Ticket {
 	return predicate.Ticket(sql.FieldEQ(FieldStatus, v))
 }
 
-// Type applies equality check predicate on the "type" field. It's identical to TypeEQ.
-func Type(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldEQ(FieldType, v))
+// GenericSubtype applies equality check predicate on the "generic_subtype" field. It's identical to GenericSubtypeEQ.
+func GenericSubtype(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldGenericSubtype, v))
 }
 
 // Source applies equality check predicate on the "source" field. It's identical to SourceEQ.
@@ -153,6 +153,21 @@ func DepartmentID(v int) predicate.Ticket {
 // ParentTicketID applies equality check predicate on the "parent_ticket_id" field. It's identical to ParentTicketIDEQ.
 func ParentTicketID(v int) predicate.Ticket {
 	return predicate.Ticket(sql.FieldEQ(FieldParentTicketID, v))
+}
+
+// SLACycleNumber applies equality check predicate on the "sla_cycle_number" field. It's identical to SLACycleNumberEQ.
+func SLACycleNumber(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldSLACycleNumber, v))
+}
+
+// SLACycleStartedAt applies equality check predicate on the "sla_cycle_started_at" field. It's identical to SLACycleStartedAtEQ.
+func SLACycleStartedAt(v time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldSLACycleStartedAt, v))
+}
+
+// SLAPausedMinutes applies equality check predicate on the "sla_paused_minutes" field. It's identical to SLAPausedMinutesEQ.
+func SLAPausedMinutes(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldSLAPausedMinutes, v))
 }
 
 // SLADefinitionID applies equality check predicate on the "sla_definition_id" field. It's identical to SLADefinitionIDEQ.
@@ -460,69 +475,79 @@ func StatusContainsFold(v string) predicate.Ticket {
 	return predicate.Ticket(sql.FieldContainsFold(FieldStatus, v))
 }
 
-// TypeEQ applies the EQ predicate on the "type" field.
-func TypeEQ(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldEQ(FieldType, v))
+// GenericSubtypeEQ applies the EQ predicate on the "generic_subtype" field.
+func GenericSubtypeEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldGenericSubtype, v))
 }
 
-// TypeNEQ applies the NEQ predicate on the "type" field.
-func TypeNEQ(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldNEQ(FieldType, v))
+// GenericSubtypeNEQ applies the NEQ predicate on the "generic_subtype" field.
+func GenericSubtypeNEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNEQ(FieldGenericSubtype, v))
 }
 
-// TypeIn applies the In predicate on the "type" field.
-func TypeIn(vs ...string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldIn(FieldType, vs...))
+// GenericSubtypeIn applies the In predicate on the "generic_subtype" field.
+func GenericSubtypeIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldIn(FieldGenericSubtype, vs...))
 }
 
-// TypeNotIn applies the NotIn predicate on the "type" field.
-func TypeNotIn(vs ...string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldNotIn(FieldType, vs...))
+// GenericSubtypeNotIn applies the NotIn predicate on the "generic_subtype" field.
+func GenericSubtypeNotIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotIn(FieldGenericSubtype, vs...))
 }
 
-// TypeGT applies the GT predicate on the "type" field.
-func TypeGT(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldGT(FieldType, v))
+// GenericSubtypeGT applies the GT predicate on the "generic_subtype" field.
+func GenericSubtypeGT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGT(FieldGenericSubtype, v))
 }
 
-// TypeGTE applies the GTE predicate on the "type" field.
-func TypeGTE(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldGTE(FieldType, v))
+// GenericSubtypeGTE applies the GTE predicate on the "generic_subtype" field.
+func GenericSubtypeGTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGTE(FieldGenericSubtype, v))
 }
 
-// TypeLT applies the LT predicate on the "type" field.
-func TypeLT(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldLT(FieldType, v))
+// GenericSubtypeLT applies the LT predicate on the "generic_subtype" field.
+func GenericSubtypeLT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLT(FieldGenericSubtype, v))
 }
 
-// TypeLTE applies the LTE predicate on the "type" field.
-func TypeLTE(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldLTE(FieldType, v))
+// GenericSubtypeLTE applies the LTE predicate on the "generic_subtype" field.
+func GenericSubtypeLTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLTE(FieldGenericSubtype, v))
 }
 
-// TypeContains applies the Contains predicate on the "type" field.
-func TypeContains(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldContains(FieldType, v))
+// GenericSubtypeContains applies the Contains predicate on the "generic_subtype" field.
+func GenericSubtypeContains(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContains(FieldGenericSubtype, v))
 }
 
-// TypeHasPrefix applies the HasPrefix predicate on the "type" field.
-func TypeHasPrefix(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldHasPrefix(FieldType, v))
+// GenericSubtypeHasPrefix applies the HasPrefix predicate on the "generic_subtype" field.
+func GenericSubtypeHasPrefix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasPrefix(FieldGenericSubtype, v))
 }
 
-// TypeHasSuffix applies the HasSuffix predicate on the "type" field.
-func TypeHasSuffix(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldHasSuffix(FieldType, v))
+// GenericSubtypeHasSuffix applies the HasSuffix predicate on the "generic_subtype" field.
+func GenericSubtypeHasSuffix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasSuffix(FieldGenericSubtype, v))
 }
 
-// TypeEqualFold applies the EqualFold predicate on the "type" field.
-func TypeEqualFold(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldEqualFold(FieldType, v))
+// GenericSubtypeIsNil applies the IsNil predicate on the "generic_subtype" field.
+func GenericSubtypeIsNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldIsNull(FieldGenericSubtype))
 }
 
-// TypeContainsFold applies the ContainsFold predicate on the "type" field.
-func TypeContainsFold(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldContainsFold(FieldType, v))
+// GenericSubtypeNotNil applies the NotNil predicate on the "generic_subtype" field.
+func GenericSubtypeNotNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotNull(FieldGenericSubtype))
+}
+
+// GenericSubtypeEqualFold applies the EqualFold predicate on the "generic_subtype" field.
+func GenericSubtypeEqualFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEqualFold(FieldGenericSubtype, v))
+}
+
+// GenericSubtypeContainsFold applies the ContainsFold predicate on the "generic_subtype" field.
+func GenericSubtypeContainsFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContainsFold(FieldGenericSubtype, v))
 }
 
 // SourceEQ applies the EQ predicate on the "source" field.
@@ -1280,26 +1305,6 @@ func CategoryIDNotIn(vs ...int) predicate.Ticket {
 	return predicate.Ticket(sql.FieldNotIn(FieldCategoryID, vs...))
 }
 
-// CategoryIDGT applies the GT predicate on the "category_id" field.
-func CategoryIDGT(v int) predicate.Ticket {
-	return predicate.Ticket(sql.FieldGT(FieldCategoryID, v))
-}
-
-// CategoryIDGTE applies the GTE predicate on the "category_id" field.
-func CategoryIDGTE(v int) predicate.Ticket {
-	return predicate.Ticket(sql.FieldGTE(FieldCategoryID, v))
-}
-
-// CategoryIDLT applies the LT predicate on the "category_id" field.
-func CategoryIDLT(v int) predicate.Ticket {
-	return predicate.Ticket(sql.FieldLT(FieldCategoryID, v))
-}
-
-// CategoryIDLTE applies the LTE predicate on the "category_id" field.
-func CategoryIDLTE(v int) predicate.Ticket {
-	return predicate.Ticket(sql.FieldLTE(FieldCategoryID, v))
-}
-
 // CategoryIDIsNil applies the IsNil predicate on the "category_id" field.
 func CategoryIDIsNil() predicate.Ticket {
 	return predicate.Ticket(sql.FieldIsNull(FieldCategoryID))
@@ -1408,6 +1413,146 @@ func ParentTicketIDIsNil() predicate.Ticket {
 // ParentTicketIDNotNil applies the NotNil predicate on the "parent_ticket_id" field.
 func ParentTicketIDNotNil() predicate.Ticket {
 	return predicate.Ticket(sql.FieldNotNull(FieldParentTicketID))
+}
+
+// SLACycleNumberEQ applies the EQ predicate on the "sla_cycle_number" field.
+func SLACycleNumberEQ(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldSLACycleNumber, v))
+}
+
+// SLACycleNumberNEQ applies the NEQ predicate on the "sla_cycle_number" field.
+func SLACycleNumberNEQ(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNEQ(FieldSLACycleNumber, v))
+}
+
+// SLACycleNumberIn applies the In predicate on the "sla_cycle_number" field.
+func SLACycleNumberIn(vs ...int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldIn(FieldSLACycleNumber, vs...))
+}
+
+// SLACycleNumberNotIn applies the NotIn predicate on the "sla_cycle_number" field.
+func SLACycleNumberNotIn(vs ...int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotIn(FieldSLACycleNumber, vs...))
+}
+
+// SLACycleNumberGT applies the GT predicate on the "sla_cycle_number" field.
+func SLACycleNumberGT(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGT(FieldSLACycleNumber, v))
+}
+
+// SLACycleNumberGTE applies the GTE predicate on the "sla_cycle_number" field.
+func SLACycleNumberGTE(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGTE(FieldSLACycleNumber, v))
+}
+
+// SLACycleNumberLT applies the LT predicate on the "sla_cycle_number" field.
+func SLACycleNumberLT(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLT(FieldSLACycleNumber, v))
+}
+
+// SLACycleNumberLTE applies the LTE predicate on the "sla_cycle_number" field.
+func SLACycleNumberLTE(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLTE(FieldSLACycleNumber, v))
+}
+
+// SLACycleStartedAtEQ applies the EQ predicate on the "sla_cycle_started_at" field.
+func SLACycleStartedAtEQ(v time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldSLACycleStartedAt, v))
+}
+
+// SLACycleStartedAtNEQ applies the NEQ predicate on the "sla_cycle_started_at" field.
+func SLACycleStartedAtNEQ(v time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNEQ(FieldSLACycleStartedAt, v))
+}
+
+// SLACycleStartedAtIn applies the In predicate on the "sla_cycle_started_at" field.
+func SLACycleStartedAtIn(vs ...time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldIn(FieldSLACycleStartedAt, vs...))
+}
+
+// SLACycleStartedAtNotIn applies the NotIn predicate on the "sla_cycle_started_at" field.
+func SLACycleStartedAtNotIn(vs ...time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotIn(FieldSLACycleStartedAt, vs...))
+}
+
+// SLACycleStartedAtGT applies the GT predicate on the "sla_cycle_started_at" field.
+func SLACycleStartedAtGT(v time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGT(FieldSLACycleStartedAt, v))
+}
+
+// SLACycleStartedAtGTE applies the GTE predicate on the "sla_cycle_started_at" field.
+func SLACycleStartedAtGTE(v time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGTE(FieldSLACycleStartedAt, v))
+}
+
+// SLACycleStartedAtLT applies the LT predicate on the "sla_cycle_started_at" field.
+func SLACycleStartedAtLT(v time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLT(FieldSLACycleStartedAt, v))
+}
+
+// SLACycleStartedAtLTE applies the LTE predicate on the "sla_cycle_started_at" field.
+func SLACycleStartedAtLTE(v time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLTE(FieldSLACycleStartedAt, v))
+}
+
+// SLACycleStartedAtIsNil applies the IsNil predicate on the "sla_cycle_started_at" field.
+func SLACycleStartedAtIsNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldIsNull(FieldSLACycleStartedAt))
+}
+
+// SLACycleStartedAtNotNil applies the NotNil predicate on the "sla_cycle_started_at" field.
+func SLACycleStartedAtNotNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotNull(FieldSLACycleStartedAt))
+}
+
+// SLAPausedMinutesEQ applies the EQ predicate on the "sla_paused_minutes" field.
+func SLAPausedMinutesEQ(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldSLAPausedMinutes, v))
+}
+
+// SLAPausedMinutesNEQ applies the NEQ predicate on the "sla_paused_minutes" field.
+func SLAPausedMinutesNEQ(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNEQ(FieldSLAPausedMinutes, v))
+}
+
+// SLAPausedMinutesIn applies the In predicate on the "sla_paused_minutes" field.
+func SLAPausedMinutesIn(vs ...int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldIn(FieldSLAPausedMinutes, vs...))
+}
+
+// SLAPausedMinutesNotIn applies the NotIn predicate on the "sla_paused_minutes" field.
+func SLAPausedMinutesNotIn(vs ...int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotIn(FieldSLAPausedMinutes, vs...))
+}
+
+// SLAPausedMinutesGT applies the GT predicate on the "sla_paused_minutes" field.
+func SLAPausedMinutesGT(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGT(FieldSLAPausedMinutes, v))
+}
+
+// SLAPausedMinutesGTE applies the GTE predicate on the "sla_paused_minutes" field.
+func SLAPausedMinutesGTE(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGTE(FieldSLAPausedMinutes, v))
+}
+
+// SLAPausedMinutesLT applies the LT predicate on the "sla_paused_minutes" field.
+func SLAPausedMinutesLT(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLT(FieldSLAPausedMinutes, v))
+}
+
+// SLAPausedMinutesLTE applies the LTE predicate on the "sla_paused_minutes" field.
+func SLAPausedMinutesLTE(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLTE(FieldSLAPausedMinutes, v))
+}
+
+// AppliedSLAPolicyIsNil applies the IsNil predicate on the "applied_sla_policy" field.
+func AppliedSLAPolicyIsNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldIsNull(FieldAppliedSLAPolicy))
+}
+
+// AppliedSLAPolicyNotNil applies the NotNil predicate on the "applied_sla_policy" field.
+func AppliedSLAPolicyNotNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotNull(FieldAppliedSLAPolicy))
 }
 
 // SLADefinitionIDEQ applies the EQ predicate on the "sla_definition_id" field.
@@ -2542,29 +2687,6 @@ func HasRelatedTicketsWith(preds ...predicate.Ticket) predicate.Ticket {
 	})
 }
 
-// HasApprovals applies the HasEdge predicate on the "approvals" edge.
-func HasApprovals() predicate.Ticket {
-	return predicate.Ticket(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, ApprovalsTable, ApprovalsColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasApprovalsWith applies the HasEdge predicate on the "approvals" edge with a given conditions (other predicates).
-func HasApprovalsWith(preds ...predicate.TicketApproval) predicate.Ticket {
-	return predicate.Ticket(func(s *sql.Selector) {
-		step := newApprovalsStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
 // HasWorkflowRecords applies the HasEdge predicate on the "workflow_records" edge.
 func HasWorkflowRecords() predicate.Ticket {
 	return predicate.Ticket(func(s *sql.Selector) {
@@ -2777,7 +2899,7 @@ func HasCategory() predicate.Ticket {
 	return predicate.Ticket(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2M, true, CategoryTable, CategoryPrimaryKey...),
+			sqlgraph.Edge(sqlgraph.M2O, true, CategoryTable, CategoryColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})

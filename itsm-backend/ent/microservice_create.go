@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/tag"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -20,6 +21,7 @@ type MicroserviceCreate struct {
 	config
 	mutation *MicroserviceMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -296,6 +298,7 @@ func (_c *MicroserviceCreate) createSpec() (*Microservice, *sqlgraph.CreateSpec)
 		_node = &Microservice{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(microservice.Table, sqlgraph.NewFieldSpec(microservice.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(microservice.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -376,11 +379,537 @@ func (_c *MicroserviceCreate) createSpec() (*Microservice, *sqlgraph.CreateSpec)
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Microservice.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.MicroserviceUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *MicroserviceCreate) OnConflict(opts ...sql.ConflictOption) *MicroserviceUpsertOne {
+	_c.conflict = opts
+	return &MicroserviceUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Microservice.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *MicroserviceCreate) OnConflictColumns(columns ...string) *MicroserviceUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &MicroserviceUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// MicroserviceUpsertOne is the builder for "upsert"-ing
+	//  one Microservice node.
+	MicroserviceUpsertOne struct {
+		create *MicroserviceCreate
+	}
+
+	// MicroserviceUpsert is the "OnConflict" setter.
+	MicroserviceUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *MicroserviceUpsert) SetName(v string) *MicroserviceUpsert {
+	u.Set(microservice.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *MicroserviceUpsert) UpdateName() *MicroserviceUpsert {
+	u.SetExcluded(microservice.FieldName)
+	return u
+}
+
+// SetCode sets the "code" field.
+func (u *MicroserviceUpsert) SetCode(v string) *MicroserviceUpsert {
+	u.Set(microservice.FieldCode, v)
+	return u
+}
+
+// UpdateCode sets the "code" field to the value that was provided on create.
+func (u *MicroserviceUpsert) UpdateCode() *MicroserviceUpsert {
+	u.SetExcluded(microservice.FieldCode)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *MicroserviceUpsert) SetDescription(v string) *MicroserviceUpsert {
+	u.Set(microservice.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *MicroserviceUpsert) UpdateDescription() *MicroserviceUpsert {
+	u.SetExcluded(microservice.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *MicroserviceUpsert) ClearDescription() *MicroserviceUpsert {
+	u.SetNull(microservice.FieldDescription)
+	return u
+}
+
+// SetLanguage sets the "language" field.
+func (u *MicroserviceUpsert) SetLanguage(v string) *MicroserviceUpsert {
+	u.Set(microservice.FieldLanguage, v)
+	return u
+}
+
+// UpdateLanguage sets the "language" field to the value that was provided on create.
+func (u *MicroserviceUpsert) UpdateLanguage() *MicroserviceUpsert {
+	u.SetExcluded(microservice.FieldLanguage)
+	return u
+}
+
+// ClearLanguage clears the value of the "language" field.
+func (u *MicroserviceUpsert) ClearLanguage() *MicroserviceUpsert {
+	u.SetNull(microservice.FieldLanguage)
+	return u
+}
+
+// SetFramework sets the "framework" field.
+func (u *MicroserviceUpsert) SetFramework(v string) *MicroserviceUpsert {
+	u.Set(microservice.FieldFramework, v)
+	return u
+}
+
+// UpdateFramework sets the "framework" field to the value that was provided on create.
+func (u *MicroserviceUpsert) UpdateFramework() *MicroserviceUpsert {
+	u.SetExcluded(microservice.FieldFramework)
+	return u
+}
+
+// ClearFramework clears the value of the "framework" field.
+func (u *MicroserviceUpsert) ClearFramework() *MicroserviceUpsert {
+	u.SetNull(microservice.FieldFramework)
+	return u
+}
+
+// SetGitRepo sets the "git_repo" field.
+func (u *MicroserviceUpsert) SetGitRepo(v string) *MicroserviceUpsert {
+	u.Set(microservice.FieldGitRepo, v)
+	return u
+}
+
+// UpdateGitRepo sets the "git_repo" field to the value that was provided on create.
+func (u *MicroserviceUpsert) UpdateGitRepo() *MicroserviceUpsert {
+	u.SetExcluded(microservice.FieldGitRepo)
+	return u
+}
+
+// ClearGitRepo clears the value of the "git_repo" field.
+func (u *MicroserviceUpsert) ClearGitRepo() *MicroserviceUpsert {
+	u.SetNull(microservice.FieldGitRepo)
+	return u
+}
+
+// SetCiPipeline sets the "ci_pipeline" field.
+func (u *MicroserviceUpsert) SetCiPipeline(v string) *MicroserviceUpsert {
+	u.Set(microservice.FieldCiPipeline, v)
+	return u
+}
+
+// UpdateCiPipeline sets the "ci_pipeline" field to the value that was provided on create.
+func (u *MicroserviceUpsert) UpdateCiPipeline() *MicroserviceUpsert {
+	u.SetExcluded(microservice.FieldCiPipeline)
+	return u
+}
+
+// ClearCiPipeline clears the value of the "ci_pipeline" field.
+func (u *MicroserviceUpsert) ClearCiPipeline() *MicroserviceUpsert {
+	u.SetNull(microservice.FieldCiPipeline)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *MicroserviceUpsert) SetStatus(v string) *MicroserviceUpsert {
+	u.Set(microservice.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *MicroserviceUpsert) UpdateStatus() *MicroserviceUpsert {
+	u.SetExcluded(microservice.FieldStatus)
+	return u
+}
+
+// SetApplicationID sets the "application_id" field.
+func (u *MicroserviceUpsert) SetApplicationID(v int) *MicroserviceUpsert {
+	u.Set(microservice.FieldApplicationID, v)
+	return u
+}
+
+// UpdateApplicationID sets the "application_id" field to the value that was provided on create.
+func (u *MicroserviceUpsert) UpdateApplicationID() *MicroserviceUpsert {
+	u.SetExcluded(microservice.FieldApplicationID)
+	return u
+}
+
+// ClearApplicationID clears the value of the "application_id" field.
+func (u *MicroserviceUpsert) ClearApplicationID() *MicroserviceUpsert {
+	u.SetNull(microservice.FieldApplicationID)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *MicroserviceUpsert) SetTenantID(v int) *MicroserviceUpsert {
+	u.Set(microservice.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *MicroserviceUpsert) UpdateTenantID() *MicroserviceUpsert {
+	u.SetExcluded(microservice.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *MicroserviceUpsert) AddTenantID(v int) *MicroserviceUpsert {
+	u.Add(microservice.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *MicroserviceUpsert) SetCreatedAt(v time.Time) *MicroserviceUpsert {
+	u.Set(microservice.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *MicroserviceUpsert) UpdateCreatedAt() *MicroserviceUpsert {
+	u.SetExcluded(microservice.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *MicroserviceUpsert) SetUpdatedAt(v time.Time) *MicroserviceUpsert {
+	u.Set(microservice.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *MicroserviceUpsert) UpdateUpdatedAt() *MicroserviceUpsert {
+	u.SetExcluded(microservice.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.Microservice.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *MicroserviceUpsertOne) UpdateNewValues() *MicroserviceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Microservice.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *MicroserviceUpsertOne) Ignore() *MicroserviceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *MicroserviceUpsertOne) DoNothing() *MicroserviceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the MicroserviceCreate.OnConflict
+// documentation for more info.
+func (u *MicroserviceUpsertOne) Update(set func(*MicroserviceUpsert)) *MicroserviceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&MicroserviceUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *MicroserviceUpsertOne) SetName(v string) *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *MicroserviceUpsertOne) UpdateName() *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetCode sets the "code" field.
+func (u *MicroserviceUpsertOne) SetCode(v string) *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetCode(v)
+	})
+}
+
+// UpdateCode sets the "code" field to the value that was provided on create.
+func (u *MicroserviceUpsertOne) UpdateCode() *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateCode()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *MicroserviceUpsertOne) SetDescription(v string) *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *MicroserviceUpsertOne) UpdateDescription() *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *MicroserviceUpsertOne) ClearDescription() *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetLanguage sets the "language" field.
+func (u *MicroserviceUpsertOne) SetLanguage(v string) *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetLanguage(v)
+	})
+}
+
+// UpdateLanguage sets the "language" field to the value that was provided on create.
+func (u *MicroserviceUpsertOne) UpdateLanguage() *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateLanguage()
+	})
+}
+
+// ClearLanguage clears the value of the "language" field.
+func (u *MicroserviceUpsertOne) ClearLanguage() *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.ClearLanguage()
+	})
+}
+
+// SetFramework sets the "framework" field.
+func (u *MicroserviceUpsertOne) SetFramework(v string) *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetFramework(v)
+	})
+}
+
+// UpdateFramework sets the "framework" field to the value that was provided on create.
+func (u *MicroserviceUpsertOne) UpdateFramework() *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateFramework()
+	})
+}
+
+// ClearFramework clears the value of the "framework" field.
+func (u *MicroserviceUpsertOne) ClearFramework() *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.ClearFramework()
+	})
+}
+
+// SetGitRepo sets the "git_repo" field.
+func (u *MicroserviceUpsertOne) SetGitRepo(v string) *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetGitRepo(v)
+	})
+}
+
+// UpdateGitRepo sets the "git_repo" field to the value that was provided on create.
+func (u *MicroserviceUpsertOne) UpdateGitRepo() *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateGitRepo()
+	})
+}
+
+// ClearGitRepo clears the value of the "git_repo" field.
+func (u *MicroserviceUpsertOne) ClearGitRepo() *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.ClearGitRepo()
+	})
+}
+
+// SetCiPipeline sets the "ci_pipeline" field.
+func (u *MicroserviceUpsertOne) SetCiPipeline(v string) *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetCiPipeline(v)
+	})
+}
+
+// UpdateCiPipeline sets the "ci_pipeline" field to the value that was provided on create.
+func (u *MicroserviceUpsertOne) UpdateCiPipeline() *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateCiPipeline()
+	})
+}
+
+// ClearCiPipeline clears the value of the "ci_pipeline" field.
+func (u *MicroserviceUpsertOne) ClearCiPipeline() *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.ClearCiPipeline()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *MicroserviceUpsertOne) SetStatus(v string) *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *MicroserviceUpsertOne) UpdateStatus() *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetApplicationID sets the "application_id" field.
+func (u *MicroserviceUpsertOne) SetApplicationID(v int) *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetApplicationID(v)
+	})
+}
+
+// UpdateApplicationID sets the "application_id" field to the value that was provided on create.
+func (u *MicroserviceUpsertOne) UpdateApplicationID() *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateApplicationID()
+	})
+}
+
+// ClearApplicationID clears the value of the "application_id" field.
+func (u *MicroserviceUpsertOne) ClearApplicationID() *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.ClearApplicationID()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *MicroserviceUpsertOne) SetTenantID(v int) *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *MicroserviceUpsertOne) AddTenantID(v int) *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *MicroserviceUpsertOne) UpdateTenantID() *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *MicroserviceUpsertOne) SetCreatedAt(v time.Time) *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *MicroserviceUpsertOne) UpdateCreatedAt() *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *MicroserviceUpsertOne) SetUpdatedAt(v time.Time) *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *MicroserviceUpsertOne) UpdateUpdatedAt() *MicroserviceUpsertOne {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *MicroserviceUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for MicroserviceCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *MicroserviceUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *MicroserviceUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *MicroserviceUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // MicroserviceCreateBulk is the builder for creating many Microservice entities in bulk.
 type MicroserviceCreateBulk struct {
 	config
 	err      error
 	builders []*MicroserviceCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the Microservice entities in the database.
@@ -410,6 +939,7 @@ func (_c *MicroserviceCreateBulk) Save(ctx context.Context) ([]*Microservice, er
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -460,6 +990,327 @@ func (_c *MicroserviceCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *MicroserviceCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Microservice.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.MicroserviceUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *MicroserviceCreateBulk) OnConflict(opts ...sql.ConflictOption) *MicroserviceUpsertBulk {
+	_c.conflict = opts
+	return &MicroserviceUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Microservice.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *MicroserviceCreateBulk) OnConflictColumns(columns ...string) *MicroserviceUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &MicroserviceUpsertBulk{
+		create: _c,
+	}
+}
+
+// MicroserviceUpsertBulk is the builder for "upsert"-ing
+// a bulk of Microservice nodes.
+type MicroserviceUpsertBulk struct {
+	create *MicroserviceCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.Microservice.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *MicroserviceUpsertBulk) UpdateNewValues() *MicroserviceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Microservice.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *MicroserviceUpsertBulk) Ignore() *MicroserviceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *MicroserviceUpsertBulk) DoNothing() *MicroserviceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the MicroserviceCreateBulk.OnConflict
+// documentation for more info.
+func (u *MicroserviceUpsertBulk) Update(set func(*MicroserviceUpsert)) *MicroserviceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&MicroserviceUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *MicroserviceUpsertBulk) SetName(v string) *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *MicroserviceUpsertBulk) UpdateName() *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetCode sets the "code" field.
+func (u *MicroserviceUpsertBulk) SetCode(v string) *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetCode(v)
+	})
+}
+
+// UpdateCode sets the "code" field to the value that was provided on create.
+func (u *MicroserviceUpsertBulk) UpdateCode() *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateCode()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *MicroserviceUpsertBulk) SetDescription(v string) *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *MicroserviceUpsertBulk) UpdateDescription() *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *MicroserviceUpsertBulk) ClearDescription() *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetLanguage sets the "language" field.
+func (u *MicroserviceUpsertBulk) SetLanguage(v string) *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetLanguage(v)
+	})
+}
+
+// UpdateLanguage sets the "language" field to the value that was provided on create.
+func (u *MicroserviceUpsertBulk) UpdateLanguage() *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateLanguage()
+	})
+}
+
+// ClearLanguage clears the value of the "language" field.
+func (u *MicroserviceUpsertBulk) ClearLanguage() *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.ClearLanguage()
+	})
+}
+
+// SetFramework sets the "framework" field.
+func (u *MicroserviceUpsertBulk) SetFramework(v string) *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetFramework(v)
+	})
+}
+
+// UpdateFramework sets the "framework" field to the value that was provided on create.
+func (u *MicroserviceUpsertBulk) UpdateFramework() *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateFramework()
+	})
+}
+
+// ClearFramework clears the value of the "framework" field.
+func (u *MicroserviceUpsertBulk) ClearFramework() *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.ClearFramework()
+	})
+}
+
+// SetGitRepo sets the "git_repo" field.
+func (u *MicroserviceUpsertBulk) SetGitRepo(v string) *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetGitRepo(v)
+	})
+}
+
+// UpdateGitRepo sets the "git_repo" field to the value that was provided on create.
+func (u *MicroserviceUpsertBulk) UpdateGitRepo() *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateGitRepo()
+	})
+}
+
+// ClearGitRepo clears the value of the "git_repo" field.
+func (u *MicroserviceUpsertBulk) ClearGitRepo() *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.ClearGitRepo()
+	})
+}
+
+// SetCiPipeline sets the "ci_pipeline" field.
+func (u *MicroserviceUpsertBulk) SetCiPipeline(v string) *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetCiPipeline(v)
+	})
+}
+
+// UpdateCiPipeline sets the "ci_pipeline" field to the value that was provided on create.
+func (u *MicroserviceUpsertBulk) UpdateCiPipeline() *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateCiPipeline()
+	})
+}
+
+// ClearCiPipeline clears the value of the "ci_pipeline" field.
+func (u *MicroserviceUpsertBulk) ClearCiPipeline() *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.ClearCiPipeline()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *MicroserviceUpsertBulk) SetStatus(v string) *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *MicroserviceUpsertBulk) UpdateStatus() *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetApplicationID sets the "application_id" field.
+func (u *MicroserviceUpsertBulk) SetApplicationID(v int) *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetApplicationID(v)
+	})
+}
+
+// UpdateApplicationID sets the "application_id" field to the value that was provided on create.
+func (u *MicroserviceUpsertBulk) UpdateApplicationID() *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateApplicationID()
+	})
+}
+
+// ClearApplicationID clears the value of the "application_id" field.
+func (u *MicroserviceUpsertBulk) ClearApplicationID() *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.ClearApplicationID()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *MicroserviceUpsertBulk) SetTenantID(v int) *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *MicroserviceUpsertBulk) AddTenantID(v int) *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *MicroserviceUpsertBulk) UpdateTenantID() *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *MicroserviceUpsertBulk) SetCreatedAt(v time.Time) *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *MicroserviceUpsertBulk) UpdateCreatedAt() *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *MicroserviceUpsertBulk) SetUpdatedAt(v time.Time) *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *MicroserviceUpsertBulk) UpdateUpdatedAt() *MicroserviceUpsertBulk {
+	return u.Update(func(s *MicroserviceUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *MicroserviceUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the MicroserviceCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for MicroserviceCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *MicroserviceUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

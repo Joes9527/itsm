@@ -1,5 +1,7 @@
 package migration
 
+import "itsm-backend/migrations"
+
 // LegacyMigrations documents the pre-unified migration history. These versions
 // were superseded by the Ent schema and must never be replayed by active
 // migration entry points.
@@ -34,10 +36,331 @@ var LegacyMigrations = []Migration{
 		Description: "Add change approvals table for change workflow",
 		RollbackSQL: `DROP TABLE IF EXISTS change_approvals;`,
 	},
+	{
+		Version:     "010_add_ticket_types",
+		Description: "Retired: ticket_types is now owned by the Ent schema; retained only for checksum/history lookup",
+		RollbackSQL: "",
+	},
+	{
+		Version:     "022_drop_professional_extension_shared_fields",
+		Description: "Remove WorkItem-owned extension fields and retire legacy TicketApproval and Workflow runtimes",
+		RollbackSQL: "",
+	},
+	{Version: "027_work_item_identity_field_retirement", Description: "Retire duplicate Ticket type and Incident number identity fields"},
 }
 
 // RegisteredMigrations is the single canonical active migration stream used
 // by bootstrap, migrate up, and migration status.
+const workItemNumberAllocatorEmptyDevelopmentRollbackSQL = `
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM tickets LIMIT 1) THEN
+        RAISE EXCEPTION
+            'rollback requires an empty tickets table; use only after development reset';
+    END IF;
+END $$;
+DROP INDEX IF EXISTS ticket_tenant_id_ticket_number;
+CREATE UNIQUE INDEX IF NOT EXISTS ticket_ticket_number
+    ON tickets (ticket_number);
+DROP TABLE IF EXISTS work_item_number_sequences;
+`
+
+const professionalExtensionSharedFieldsSQL = `
+DO $migration$
+DECLARE
+    extension_table TEXT;
+    extension_index TEXT;
+    extension_constraint TEXT;
+    duplicate_work_item_id BIGINT;
+    existing_index_oid OID;
+    existing_index_unique BOOLEAN;
+    existing_constraint_oid OID;
+    work_item_foreign_key_count INTEGER;
+    orphan_work_item_id BIGINT;
+BEGIN
+    -- Development cutover: BPMN ProcessTask/ProcessApprovalDecision are the
+    -- only ticket approval runtime. No legacy row migration is supported.
+    EXECUTE format('DROP TABLE IF EXISTS %I.ticket_approvals CASCADE', current_schema());
+	EXECUTE format('DROP TABLE IF EXISTS %I.workflow_tasks CASCADE', current_schema());
+	EXECUTE format('DROP TABLE IF EXISTS %I.workflow_instances CASCADE', current_schema());
+	EXECUTE format('DROP TABLE IF EXISTS %I.workflow_versions CASCADE', current_schema());
+	EXECUTE format('DROP TABLE IF EXISTS %I.workflows CASCADE', current_schema());
+	IF to_regclass(format('%I.releases', current_schema())) IS NOT NULL THEN
+		EXECUTE format('ALTER TABLE %I.releases DROP COLUMN IF EXISTS requires_approval', current_schema());
+	END IF;
+	IF to_regclass(format('%I.ticket_categories', current_schema())) IS NOT NULL THEN
+		EXECUTE format('ALTER TABLE %I.ticket_categories DROP COLUMN IF EXISTS workflow_id', current_schema());
+	END IF;
+
+    IF to_regclass(format('%I.tickets', current_schema())) IS NULL THEN
+        RAISE EXCEPTION 'required WorkItem table tickets is missing from schema %', current_schema();
+    END IF;
+
+    -- Legacy direct tenant policies depend on columns removed below. Replace every
+    -- professional extension policy in this same authoritative cutover.
+    FOR extension_table IN SELECT unnest(ARRAY['incidents', 'problems', 'changes']) LOOP
+        IF to_regclass(format('%I.%I', current_schema(), extension_table)) IS NOT NULL THEN
+            EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I.%I', current_schema(), extension_table);
+            EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I',
+                'tenant_isolation_' || extension_table, current_schema(), extension_table);
+        END IF;
+    END LOOP;
+
+    FOR extension_table, extension_index, extension_constraint IN
+        SELECT * FROM (VALUES
+            ('incidents', 'incident_work_item_id', 'incidents_tickets_work_item'),
+            ('problems', 'problem_work_item_id', 'problems_tickets_work_item'),
+            ('changes', 'change_work_item_id', 'changes_tickets_work_item')
+        ) AS extensions(table_name, index_name, constraint_name)
+    LOOP
+        IF to_regclass(format('%I.%I', current_schema(), extension_table)) IS NULL THEN
+            RAISE EXCEPTION 'required professional extension table % is missing from schema %',
+                extension_table, current_schema();
+        END IF;
+
+        EXECUTE format(
+            'SELECT extension.work_item_id FROM %I.%I extension '
+            'LEFT JOIN %I.tickets work_item ON work_item.id = extension.work_item_id '
+            'WHERE work_item.id IS NULL LIMIT 1',
+            current_schema(), extension_table, current_schema()
+        ) INTO orphan_work_item_id;
+        IF orphan_work_item_id IS NOT NULL THEN
+            RAISE EXCEPTION '%.work_item_id has orphan WorkItem reference %', extension_table, orphan_work_item_id;
+        END IF;
+
+        SELECT constraint_relation.oid
+        INTO existing_constraint_oid
+        FROM pg_constraint constraint_relation
+        JOIN pg_class extension_relation ON extension_relation.oid = constraint_relation.conrelid
+        JOIN pg_namespace extension_schema ON extension_schema.oid = extension_relation.relnamespace
+        WHERE extension_schema.nspname = current_schema()
+          AND extension_relation.relname = extension_table
+          AND constraint_relation.conname = extension_constraint;
+
+        SELECT COUNT(*)
+        INTO work_item_foreign_key_count
+        FROM pg_constraint constraint_relation
+        JOIN pg_class extension_relation ON extension_relation.oid = constraint_relation.conrelid
+        JOIN pg_namespace extension_schema ON extension_schema.oid = extension_relation.relnamespace
+        JOIN pg_attribute extension_column
+          ON extension_column.attrelid = extension_relation.oid
+         AND extension_column.attnum = ANY (constraint_relation.conkey)
+        WHERE extension_schema.nspname = current_schema()
+          AND extension_relation.relname = extension_table
+          AND constraint_relation.contype = 'f'
+          AND extension_column.attname = 'work_item_id';
+
+        IF existing_constraint_oid IS NOT NULL AND work_item_foreign_key_count <> 1 THEN
+            RAISE EXCEPTION '%.work_item_id has an additional foreign key constraint', extension_table;
+        END IF;
+
+        IF existing_constraint_oid IS NOT NULL AND NOT EXISTS (
+            SELECT 1
+            FROM pg_constraint constraint_relation
+            JOIN pg_class extension_relation ON extension_relation.oid = constraint_relation.conrelid
+            JOIN pg_namespace extension_schema ON extension_schema.oid = extension_relation.relnamespace
+            JOIN pg_class work_item_relation ON work_item_relation.oid = constraint_relation.confrelid
+            JOIN pg_namespace work_item_schema ON work_item_schema.oid = work_item_relation.relnamespace
+            JOIN pg_attribute extension_column
+              ON extension_column.attrelid = extension_relation.oid
+             AND extension_column.attnum = constraint_relation.conkey[1]
+            JOIN pg_attribute work_item_column
+              ON work_item_column.attrelid = work_item_relation.oid
+             AND work_item_column.attnum = constraint_relation.confkey[1]
+            WHERE constraint_relation.oid = existing_constraint_oid
+              AND constraint_relation.contype = 'f'
+              AND constraint_relation.convalidated
+              AND NOT constraint_relation.condeferrable
+              AND constraint_relation.confdeltype = 'a'
+              AND constraint_relation.confupdtype = 'a'
+              AND cardinality(constraint_relation.conkey) = 1
+              AND cardinality(constraint_relation.confkey) = 1
+              AND extension_schema.nspname = current_schema()
+              AND extension_relation.relname = extension_table
+              AND extension_column.attname = 'work_item_id'
+              AND work_item_schema.nspname = current_schema()
+              AND work_item_relation.relname = 'tickets'
+              AND work_item_column.attname = 'id'
+        ) THEN
+            RAISE EXCEPTION 'constraint %.% conflicts with required %.work_item_id foreign key',
+                current_schema(), extension_constraint, extension_table;
+        END IF;
+
+        IF existing_constraint_oid IS NULL THEN
+            IF EXISTS (
+                SELECT 1
+                FROM pg_constraint constraint_relation
+                JOIN pg_class extension_relation ON extension_relation.oid = constraint_relation.conrelid
+                JOIN pg_namespace extension_schema ON extension_schema.oid = extension_relation.relnamespace
+                JOIN pg_attribute extension_column
+                  ON extension_column.attrelid = extension_relation.oid
+                 AND extension_column.attnum = ANY (constraint_relation.conkey)
+                WHERE extension_schema.nspname = current_schema()
+                  AND extension_relation.relname = extension_table
+                  AND constraint_relation.contype = 'f'
+                  AND extension_column.attname = 'work_item_id'
+            ) THEN
+                RAISE EXCEPTION '%.work_item_id has a non-authoritative foreign key constraint', extension_table;
+            END IF;
+            EXECUTE format(
+                'ALTER TABLE %I.%I ADD CONSTRAINT %I FOREIGN KEY (work_item_id) REFERENCES %I.tickets(id)',
+                current_schema(), extension_table, extension_constraint, current_schema()
+            );
+        END IF;
+
+        EXECUTE format(
+            'SELECT work_item_id FROM %I.%I WHERE work_item_id IS NOT NULL '
+            'GROUP BY work_item_id HAVING COUNT(*) > 1 LIMIT 1',
+            current_schema(), extension_table
+        ) INTO duplicate_work_item_id;
+        IF duplicate_work_item_id IS NOT NULL THEN
+            RAISE EXCEPTION '%.work_item_id has duplicate work_item_id %',
+                extension_table, duplicate_work_item_id;
+        END IF;
+
+        -- Validate a pre-existing named index before dropping shared columns. PostgreSQL
+        -- may otherwise remove a conflicting index as a dependency of a dropped column,
+        -- silently turning an invalid catalog shape into an apparently valid migration.
+        SELECT index_relation.oid
+        INTO existing_index_oid
+        FROM pg_class index_relation
+        JOIN pg_namespace index_schema ON index_schema.oid = index_relation.relnamespace
+        JOIN pg_index i ON i.indexrelid = index_relation.oid
+        WHERE index_schema.nspname = current_schema()
+          AND index_relation.relname = extension_index;
+
+        IF existing_index_oid IS NOT NULL AND NOT EXISTS (
+            SELECT 1
+            FROM pg_index i
+            JOIN pg_class table_relation ON table_relation.oid = i.indrelid
+            JOIN pg_namespace table_schema ON table_schema.oid = table_relation.relnamespace
+            JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS key_column(attnum, ordinal) ON TRUE
+            JOIN pg_attribute attribute
+              ON attribute.attrelid = i.indrelid
+             AND attribute.attnum = key_column.attnum
+            WHERE i.indexrelid = existing_index_oid
+              AND table_schema.nspname = current_schema()
+              AND table_relation.relname = extension_table
+              AND i.indisvalid
+              AND i.indisready
+              AND i.indnkeyatts = 1
+              AND i.indnatts = 1
+              AND i.indexprs IS NULL
+              AND i.indpred IS NULL
+            GROUP BY i.indexrelid
+            HAVING array_agg(attribute.attname ORDER BY key_column.ordinal) = ARRAY['work_item_id']::name[]
+        ) THEN
+            RAISE EXCEPTION 'index %.% conflicts with required %.work_item_id index',
+                current_schema(), extension_index, extension_table;
+        END IF;
+
+        IF extension_table = 'incidents' THEN
+            EXECUTE format(
+                'ALTER TABLE %I.incidents '
+                'DROP COLUMN IF EXISTS title, DROP COLUMN IF EXISTS description, '
+                'DROP COLUMN IF EXISTS status, DROP COLUMN IF EXISTS priority, '
+                'DROP COLUMN IF EXISTS reporter_id, DROP COLUMN IF EXISTS assignee_id, '
+                'DROP COLUMN IF EXISTS category, DROP COLUMN IF EXISTS subcategory, '
+                'DROP COLUMN IF EXISTS source, DROP COLUMN IF EXISTS tenant_id, '
+                'DROP COLUMN IF EXISTS version, DROP COLUMN IF EXISTS created_at, '
+                'DROP COLUMN IF EXISTS updated_at, DROP COLUMN IF EXISTS resolved_at, '
+                'DROP COLUMN IF EXISTS closed_at, DROP COLUMN IF EXISTS deleted_at, '
+                'ALTER COLUMN work_item_id SET NOT NULL', current_schema());
+        ELSIF extension_table = 'problems' THEN
+            EXECUTE format(
+                'ALTER TABLE %I.problems '
+                'DROP COLUMN IF EXISTS title, DROP COLUMN IF EXISTS description, '
+                'DROP COLUMN IF EXISTS status, DROP COLUMN IF EXISTS priority, '
+                'DROP COLUMN IF EXISTS category, DROP COLUMN IF EXISTS assignee_id, '
+                'DROP COLUMN IF EXISTS created_by, DROP COLUMN IF EXISTS tenant_id, '
+                'DROP COLUMN IF EXISTS created_at, DROP COLUMN IF EXISTS updated_at, '
+                'DROP COLUMN IF EXISTS resolved_at, DROP COLUMN IF EXISTS closed_at, '
+                'DROP COLUMN IF EXISTS deleted_at, ALTER COLUMN work_item_id SET NOT NULL',
+                current_schema());
+        ELSE
+            EXECUTE format(
+                'ALTER TABLE %I.changes '
+                'DROP COLUMN IF EXISTS title, DROP COLUMN IF EXISTS description, '
+                'DROP COLUMN IF EXISTS status, DROP COLUMN IF EXISTS priority, '
+                'DROP COLUMN IF EXISTS assignee_id, DROP COLUMN IF EXISTS created_by, '
+                'DROP COLUMN IF EXISTS tenant_id, DROP COLUMN IF EXISTS related_tickets, '
+                'DROP COLUMN IF EXISTS created_at, DROP COLUMN IF EXISTS updated_at, '
+                'ALTER COLUMN work_item_id SET NOT NULL', current_schema());
+        END IF;
+
+        SELECT index_relation.oid, i.indisunique
+        INTO existing_index_oid, existing_index_unique
+        FROM pg_class index_relation
+        JOIN pg_namespace index_schema ON index_schema.oid = index_relation.relnamespace
+        JOIN pg_index i ON i.indexrelid = index_relation.oid
+        WHERE index_schema.nspname = current_schema()
+          AND index_relation.relname = extension_index;
+
+        IF existing_index_oid IS NOT NULL AND NOT EXISTS (
+            SELECT 1
+            FROM pg_index i
+            JOIN pg_class table_relation ON table_relation.oid = i.indrelid
+            JOIN pg_namespace table_schema ON table_schema.oid = table_relation.relnamespace
+            JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS key_column(attnum, ordinal) ON TRUE
+            JOIN pg_attribute attribute
+              ON attribute.attrelid = i.indrelid
+             AND attribute.attnum = key_column.attnum
+            WHERE i.indexrelid = existing_index_oid
+              AND table_schema.nspname = current_schema()
+              AND table_relation.relname = extension_table
+              AND i.indisvalid
+              AND i.indisready
+              AND i.indnkeyatts = 1
+              AND i.indnatts = 1
+              AND i.indexprs IS NULL
+              AND i.indpred IS NULL
+            GROUP BY i.indexrelid
+            HAVING array_agg(attribute.attname ORDER BY key_column.ordinal) = ARRAY['work_item_id']::name[]
+        ) THEN
+            RAISE EXCEPTION 'index %.% conflicts with required %.work_item_id index',
+                current_schema(), extension_index, extension_table;
+        END IF;
+
+        IF existing_index_oid IS NOT NULL AND NOT existing_index_unique THEN
+            EXECUTE format('DROP INDEX %I.%I', current_schema(), extension_index);
+            existing_index_oid := NULL;
+        END IF;
+
+        IF existing_index_oid IS NULL THEN
+            EXECUTE format(
+                'CREATE UNIQUE INDEX %I ON %I.%I (work_item_id)',
+                extension_index, current_schema(), extension_table
+            );
+        END IF;
+
+        duplicate_work_item_id := NULL;
+        existing_index_oid := NULL;
+        existing_index_unique := NULL;
+        existing_constraint_oid := NULL;
+        work_item_foreign_key_count := NULL;
+        orphan_work_item_id := NULL;
+    END LOOP;
+
+    FOR extension_table IN SELECT unnest(ARRAY['incidents', 'problems', 'changes']) LOOP
+        EXECUTE format(
+            'CREATE POLICY %I ON %I.%I AS PERMISSIVE FOR ALL TO PUBLIC '
+            'USING (EXISTS (SELECT 1 FROM %I.tickets work_item '
+            'WHERE work_item.id = %I.work_item_id '
+            'AND work_item.tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint '
+            'AND work_item.deleted_at IS NULL)) '
+            'WITH CHECK (EXISTS (SELECT 1 FROM %I.tickets work_item '
+            'WHERE work_item.id = %I.work_item_id '
+            'AND work_item.tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint '
+            'AND work_item.deleted_at IS NULL))',
+            'tenant_isolation_' || extension_table, current_schema(), extension_table,
+            current_schema(), extension_table, current_schema(), extension_table
+        );
+        EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', current_schema(), extension_table);
+        EXECUTE format('ALTER TABLE %I.%I NO FORCE ROW LEVEL SECURITY', current_schema(), extension_table);
+    END LOOP;
+END $migration$;
+`
+
 var RegisteredMigrations = []Migration{
 	{
 		Version:     "007_add_change_execution_tables",
@@ -52,11 +375,6 @@ var RegisteredMigrations = []Migration{
 	{
 		Version:     "009_enable_rls_tenant_isolation",
 		Description: "Enable RLS row-level tenant isolation on all tenant-scoped tables",
-		RollbackSQL: "",
-	},
-	{
-		Version:     "010_add_ticket_types",
-		Description: "Add ticket_types table for structured ticket type definitions with JSON config fields",
 		RollbackSQL: "",
 	},
 	{
@@ -118,6 +436,40 @@ var RegisteredMigrations = []Migration{
 		Description: "Enable and force tenant RLS on KAF action ledgers and completion receipts",
 		RollbackSQL: "",
 	},
+	{
+		Version:     "020_work_item_number_allocator",
+		Description: "Create tenant/month WorkItem number sequences and replace global ticket_number uniqueness with tenant-scoped uniqueness",
+		RollbackSQL: workItemNumberAllocatorEmptyDevelopmentRollbackSQL,
+	},
+	{
+		Version:     "021_add_callback_optional_declared",
+		Description: "Snapshot definition-declared callback optionality in the callback outbox",
+		RollbackSQL: "ALTER TABLE process_callback_outboxes DROP COLUMN IF EXISTS optional_declared;",
+	},
+	{Version: WorkItemPrepareVersion, Description: "Prepare WorkItem structure with controlled evidence"},
+	{Version: "023_add_process_start_request_digest", Description: "Persist immutable original BPMN start context for durable replay conflicts", RollbackSQL: processStartRequestDigestDevelopmentResetSQL},
+	{Version: "024_incident_rule_action_receipts", Description: "Freeze creation rule decisions and commit action receipts with domain effects", RollbackSQL: incidentRuleActionReceiptsDevelopmentResetSQL},
+	{Version: "025_email_attachment_source_identity", Description: "Persist scoped inbound attachment identity for recoverable delivery", RollbackSQL: emailAttachmentSourceIdentityDevelopmentResetSQL},
+	{Version: "026_intake_actor_provenance", Description: "Preserve immutable native actor provenance for Intake and committed tenant policy effects", RollbackSQL: intakeActorProvenanceDevelopmentResetSQL},
+	{Version: "028_service_request_work_item_authority", Description: "Use WorkItem authority for ServiceRequest shared fields"},
+	{Version: "029_catalog_target_class_authority", Description: "Retire legacy Catalog class inference"},
+	{Version: "030_catalog_access_policy_result", Description: "Finite catalog access policy and immutable verified results"},
+	{Version: "031_kaf_action_request_digest", Description: "Bind verified access completion to immutable canonical request digest"},
+	{Version: "032_workitem_sla_cycle", Description: "Freeze applied SLA cycles and immutable action audit receipts"},
+	{Version: "033_incident_status_events", Description: "Authorize Incident status events from immutable command receipts"},
+	{Version: "034_problem_investigation_completion", Description: "Problem investigation schema and verified resolution evidence"},
+	{Version: "035_change_professional_evidence", Description: "Change outcome, review and standard policy evidence"},
+	{Version: "036_intake_frozen_workflow_context", Description: "Freeze workflow definition content and prepared variables in intake snapshots"},
+	{Version: CandidateExecutionScopeVersion, Description: "Register new candidate WorkItems in bounded deployment execution scopes"},
+	{Version: SLAAlertNotificationVersion, Description: "Link SLA alert delivery identities and preserve historical notification facts"},
+	{Version: ToolInvocationExecutionScopeVersion, Description: "Register new tool invocation execution provenance without enrolling history"},
+	{Version: ToolExecutionAuthorityLockVersion, Description: "Lock candidate tool authority within the caller transaction"},
+	{Version: ToolExecutionAuthorizationLockVersion, Description: "Hold candidate tool approval and current authorization through transaction completion"},
+	{Version: NotificationConnectorTargetVersion, Description: "Freeze connector notification target identity without binding historical intents"},
+	{Version: NotificationEmailTargetVersion, Description: "Freeze email notification transport and identity without rebinding history"},
+	{Version: AuthTokenStateVersion, Description: "Persist append-only token revocation and refresh consumption authority"},
+	{Version: "047_bpmn_assignment_source", Description: "Persist immutable BPMN WorkItem assignment source"},
+	{Version: WorkItemRetireVersion, Description: "Retire WorkItem legacy structures with controlled evidence"},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -130,6 +482,22 @@ func PostSchemaMigrations() []Migration {
 // GetMigrationSQL returns the SQL for a specific migration
 func GetMigrationSQL(version string) string {
 	switch version {
+	case AuthTokenStateVersion:
+		return authTokenStateSQL
+	case NotificationEmailTargetVersion:
+		return notificationEmailTargetSQL
+	case NotificationConnectorTargetVersion:
+		return notificationConnectorTargetSQL
+	case ToolExecutionAuthorizationLockVersion:
+		return toolExecutionAuthorizationLockSQL
+	case ToolExecutionAuthorityLockVersion:
+		return toolExecutionAuthorityLockSQL
+	case ToolInvocationExecutionScopeVersion:
+		return toolInvocationExecutionScopeSQL
+	case SLAAlertNotificationVersion:
+		return slaAlertNotificationSQL
+	case CandidateExecutionScopeVersion:
+		return candidateExecutionScopeSQL
 	case "002_add_notification_preferences":
 		return `
 CREATE TABLE IF NOT EXISTS user_notification_preferences (
@@ -303,20 +671,31 @@ ALTER TABLE change_rollback_executions ADD COLUMN IF NOT EXISTS tenant_id BIGINT
 ALTER TABLE change_implementation_plans ADD COLUMN IF NOT EXISTS tenant_id BIGINT;
 
 UPDATE change_approvals ca
-SET tenant_id = c.tenant_id
+SET tenant_id = wi.tenant_id
 FROM changes c
+JOIN tickets wi ON wi.id = c.work_item_id
 WHERE ca.change_id = c.id AND (ca.tenant_id IS NULL OR ca.tenant_id = 0);
 
-UPDATE change_approval_chains t SET tenant_id = c.tenant_id
-FROM changes c WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
-UPDATE change_risk_assessments t SET tenant_id = c.tenant_id
-FROM changes c WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
-UPDATE change_rollback_plans t SET tenant_id = c.tenant_id
-FROM changes c WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
-UPDATE change_rollback_executions t SET tenant_id = c.tenant_id
-FROM changes c WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
-UPDATE change_implementation_plans t SET tenant_id = c.tenant_id
-FROM changes c WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
+UPDATE change_approval_chains t SET tenant_id = wi.tenant_id
+FROM changes c
+JOIN tickets wi ON wi.id = c.work_item_id
+WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
+UPDATE change_risk_assessments t SET tenant_id = wi.tenant_id
+FROM changes c
+JOIN tickets wi ON wi.id = c.work_item_id
+WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
+UPDATE change_rollback_plans t SET tenant_id = wi.tenant_id
+FROM changes c
+JOIN tickets wi ON wi.id = c.work_item_id
+WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
+UPDATE change_rollback_executions t SET tenant_id = wi.tenant_id
+FROM changes c
+JOIN tickets wi ON wi.id = c.work_item_id
+WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
+UPDATE change_implementation_plans t SET tenant_id = wi.tenant_id
+FROM changes c
+JOIN tickets wi ON wi.id = c.work_item_id
+WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
 
 DO $$
 BEGIN
@@ -447,144 +826,72 @@ CREATE INDEX IF NOT EXISTS idx_init_managed_scope_component
 `
 	case "009_enable_rls_tenant_isolation":
 		return `
--- Enable RLS on all tenant-scoped tables
--- Policy: users can only see rows where tenant_id matches current_setting('app.current_tenant_id')
-
--- Helper function to get current tenant_id safely
-CREATE OR REPLACE FUNCTION get_current_tenant_id() RETURNS INTEGER AS $$
+-- Current-schema direct-tenant policy reconciler. Ent creates the base schema
+-- before this post-schema migration; policies intentionally cover only tables
+-- that directly own tenant_id. Professional extensions without tenant_id use
+-- their WorkItem relation and receive indirect policies in their own schema wave.
+DO $$
+DECLARE
+    target RECORD;
+    canonical_policy TEXT;
+    unexpected_policy TEXT;
 BEGIN
-    RETURN NULLIF(current_setting('app.current_tenant_id', true)::INTEGER, 0);
-END;
-$$ LANGUAGE plpgsql STABLE;
+    IF EXISTS (
+        SELECT 1
+        FROM pg_class relation
+        JOIN pg_namespace schema ON schema.oid = relation.relnamespace
+        JOIN pg_attribute attribute ON attribute.attrelid = relation.oid
+        WHERE schema.oid = current_schema()::regnamespace
+          AND relation.relkind = 'r'
+          AND attribute.attname = 'tenant_id'
+          AND attribute.attnum > 0
+          AND NOT attribute.attisdropped
+          AND attribute.atttypid NOT IN ('int4'::regtype, 'int8'::regtype)
+    ) THEN
+        RAISE EXCEPTION 'tenant RLS target has a non-integer tenant_id in schema %', current_schema();
+    END IF;
 
--- Teams
-ALTER TABLE teams ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_teams ON teams;
-CREATE POLICY tenant_isolation_teams ON teams
-    USING (tenant_id = get_current_tenant_id())
-    WITH CHECK (tenant_id = get_current_tenant_id());
+    FOR target IN
+        SELECT schema.nspname AS schema_name, relation.relname AS table_name, relation.oid AS relation_id
+        FROM pg_class relation
+        JOIN pg_namespace schema ON schema.oid = relation.relnamespace
+        JOIN pg_attribute attribute ON attribute.attrelid = relation.oid
+        WHERE schema.oid = current_schema()::regnamespace
+          AND relation.relkind = 'r'
+          AND attribute.attname = 'tenant_id'
+          AND attribute.attnum > 0
+          AND NOT attribute.attisdropped
+          AND attribute.atttypid IN ('int4'::regtype, 'int8'::regtype)
+        ORDER BY relation.relname
+    LOOP
+        canonical_policy := format('tenant_isolation_%s', target.table_name);
+        IF length(canonical_policy) > 63 THEN
+            RAISE EXCEPTION 'tenant RLS policy name exceeds PostgreSQL identifier limit for %.%', target.schema_name, target.table_name;
+        END IF;
 
--- Roles
-ALTER TABLE roles ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_roles ON roles;
-CREATE POLICY tenant_isolation_roles ON roles
-    USING (tenant_id = get_current_tenant_id())
-    WITH CHECK (tenant_id = get_current_tenant_id());
+        EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', canonical_policy, target.schema_name, target.table_name);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', 'tenant_isolation', target.schema_name, target.table_name);
 
--- Users
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_users ON users;
-CREATE POLICY tenant_isolation_users ON users
-    USING (tenant_id = get_current_tenant_id())
-    WITH CHECK (tenant_id = get_current_tenant_id());
+        SELECT policy.polname
+        INTO unexpected_policy
+        FROM pg_policy policy
+        WHERE policy.polrelid = target.relation_id
+        LIMIT 1;
+        IF unexpected_policy IS NOT NULL THEN
+            RAISE EXCEPTION 'unexpected RLS policy % remains on %.%; refusing dual policy contract', unexpected_policy, target.schema_name, target.table_name;
+        END IF;
 
--- SLA Policies
-ALTER TABLE sla_policies ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_sla_policies ON sla_policies;
-CREATE POLICY tenant_isolation_sla_policies ON sla_policies
-    USING (tenant_id = get_current_tenant_id())
-    WITH CHECK (tenant_id = get_current_tenant_id());
+        EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', target.schema_name, target.table_name);
+        EXECUTE format(
+            'CREATE POLICY %I ON %I.%I USING (tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint) WITH CHECK (tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint)',
+            canonical_policy,
+            target.schema_name,
+            target.table_name
+        );
+    END LOOP;
+END $$;
 
--- Service Catalogs
-ALTER TABLE service_catalogs ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_service_catalogs ON service_catalogs;
-CREATE POLICY tenant_isolation_service_catalogs ON service_catalogs
-    USING (tenant_id = get_current_tenant_id())
-    WITH CHECK (tenant_id = get_current_tenant_id());
-
--- CI Types
-ALTER TABLE ci_types ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_ci_types ON ci_types;
-CREATE POLICY tenant_isolation_ci_types ON ci_types
-    USING (tenant_id = get_current_tenant_id())
-    WITH CHECK (tenant_id = get_current_tenant_id());
-
--- Standard Changes
-ALTER TABLE standard_changes ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_standard_changes ON standard_changes;
-CREATE POLICY tenant_isolation_standard_changes ON standard_changes
-    USING (tenant_id = get_current_tenant_id())
-    WITH CHECK (tenant_id = get_current_tenant_id());
-
--- Known Errors
-ALTER TABLE known_errors ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_known_errors ON known_errors;
-CREATE POLICY tenant_isolation_known_errors ON known_errors
-    USING (tenant_id = get_current_tenant_id())
-    WITH CHECK (tenant_id = get_current_tenant_id());
-
--- SLA Alert Rules
-ALTER TABLE sla_alert_rules ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_sla_alert_rules ON sla_alert_rules;
-CREATE POLICY tenant_isolation_sla_alert_rules ON sla_alert_rules
-    USING (tenant_id = get_current_tenant_id())
-    WITH CHECK (tenant_id = get_current_tenant_id());
-
--- Tags
-ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_tags ON tags;
-CREATE POLICY tenant_isolation_tags ON tags
-    USING (tenant_id = get_current_tenant_id())
-    WITH CHECK (tenant_id = get_current_tenant_id());
-
--- Departments
-ALTER TABLE departments ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_departments ON departments;
-CREATE POLICY tenant_isolation_departments ON departments
-    USING (tenant_id = get_current_tenant_id())
-    WITH CHECK (tenant_id = get_current_tenant_id());
-
--- Ticket Categories
-ALTER TABLE ticket_categories ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_ticket_categories ON ticket_categories;
-CREATE POLICY tenant_isolation_ticket_categories ON ticket_categories
-    USING (tenant_id = get_current_tenant_id())
-    WITH CHECK (tenant_id = get_current_tenant_id());
-
--- Process Bindings
-ALTER TABLE process_bindings ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_process_bindings ON process_bindings;
-CREATE POLICY tenant_isolation_process_bindings ON process_bindings
-    USING (tenant_id = get_current_tenant_id())
-    WITH CHECK (tenant_id = get_current_tenant_id());
-
--- Process Definitions
-ALTER TABLE process_definitions ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_process_definitions ON process_definitions;
-CREATE POLICY tenant_isolation_process_definitions ON process_definitions
-    USING (tenant_id = get_current_tenant_id())
-    WITH CHECK (tenant_id = get_current_tenant_id());
-
--- Process Deployments
-ALTER TABLE process_deployments ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_process_deployments ON process_deployments;
-CREATE POLICY tenant_isolation_process_deployments ON process_deployments
-    USING (tenant_id = get_current_tenant_id())
-    WITH CHECK (tenant_id = get_current_tenant_id());
-
--- Approval Workflows
-ALTER TABLE approval_workflows ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_approval_workflows ON approval_workflows;
-CREATE POLICY tenant_isolation_approval_workflows ON approval_workflows
-    USING (tenant_id = get_current_tenant_id())
-    WITH CHECK (tenant_id = get_current_tenant_id());
-
--- Ticket Views
-ALTER TABLE ticket_views ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_ticket_views ON ticket_views;
-CREATE POLICY tenant_isolation_ticket_views ON ticket_views
-    USING (tenant_id = get_current_tenant_id())
-    WITH CHECK (tenant_id = get_current_tenant_id());
-
--- Force role to bypass RLS for system operations (e.g., itsm-backend service account)
--- The itsm_backend_role is the service account used by the application
--- Uncomment if you need a superuser role to bypass RLS:
--- ALTER TABLE teams FORCE ROW LEVEL SECURITY;
--- ALTER TABLE roles FORCE ROW LEVEL SECURITY;
--- etc. for other tables
-
-COMMENT ON FUNCTION get_current_tenant_id() IS
-    'Returns the current tenant ID from session settings, used by RLS policies for tenant isolation';
+DROP FUNCTION IF EXISTS get_current_tenant_id();
 `
 	case "010_add_ticket_types":
 		return `
@@ -695,7 +1002,7 @@ WHERE id IN (SELECT id FROM ranked WHERE rn > 1);
 
 -- Enforce at most one running process instance per (tenant, business key). No domain
 -- in this codebase treats "same business key, two concurrently running instances" as
--- a legitimate state (BPMNApprovalBridge/handlers/change's SubmitChange both assume
+-- a legitimate state (canonical BPMN ProcessTask commands assume
 -- businessKey -> running instance is 1:1) — this is a data-integrity invariant that
 -- belongs at the DB layer, not just the application-level check-then-act guard.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_process_instances_running_unique
@@ -772,7 +1079,142 @@ CREATE POLICY tenant_isolation_kaf_task_completion_receipts ON kaf_task_completi
     USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)
     WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint);
 `
+	case "020_work_item_number_allocator":
+		return `
+CREATE TABLE IF NOT EXISTS work_item_number_sequences (
+    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
+    period VARCHAR(6) NOT NULL,
+    last_value BIGINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT work_item_number_sequences_period_check
+        CHECK (period ~ '^[0-9]{6}$'),
+    CONSTRAINT work_item_number_sequences_last_value_check
+        CHECK (last_value BETWEEN 0 AND 999999)
+);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint c
+        JOIN pg_class sequence_table ON sequence_table.oid = c.conrelid
+        JOIN pg_namespace table_schema ON table_schema.oid = sequence_table.relnamespace
+        WHERE table_schema.nspname = current_schema()
+          AND sequence_table.relname = 'work_item_number_sequences'
+          AND c.conname = 'work_item_number_sequences_period_check'
+          AND c.contype = 'c'
+    ) THEN
+        ALTER TABLE work_item_number_sequences
+            ADD CONSTRAINT work_item_number_sequences_period_check
+            CHECK (period ~ '^[0-9]{6}$');
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint c
+        JOIN pg_class sequence_table ON sequence_table.oid = c.conrelid
+        JOIN pg_namespace table_schema ON table_schema.oid = sequence_table.relnamespace
+        WHERE table_schema.nspname = current_schema()
+          AND sequence_table.relname = 'work_item_number_sequences'
+          AND c.conname = 'work_item_number_sequences_last_value_check'
+          AND c.contype = 'c'
+    ) THEN
+        ALTER TABLE work_item_number_sequences
+            ADD CONSTRAINT work_item_number_sequences_last_value_check
+            CHECK (last_value BETWEEN 0 AND 999999);
+    END IF;
+END $$;
+CREATE UNIQUE INDEX IF NOT EXISTS workitemnumbersequence_tenant_id_period
+    ON work_item_number_sequences (tenant_id, period);
+DROP INDEX IF EXISTS ticket_ticket_number;
+ALTER TABLE tickets DROP CONSTRAINT IF EXISTS ticket_ticket_number;
+ALTER TABLE tickets DROP CONSTRAINT IF EXISTS tickets_ticket_number_key;
+CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number
+    ON tickets (tenant_id, ticket_number);
+`
+	case "021_add_callback_optional_declared":
+		return `ALTER TABLE process_callback_outboxes
+    ADD COLUMN IF NOT EXISTS optional_declared boolean NOT NULL DEFAULT false;`
+	case "033_incident_status_events":
+		return incidentStatusEventsSQL
+	case "034_problem_investigation_completion":
+		return migrations.ProblemInvestigationCompletionSQL
+	case "035_change_professional_evidence":
+		return migrations.ChangeProfessionalEvidenceSQL
+	case "032_workitem_sla_cycle":
+		return migrations.WorkItemSLACycleSQL
+	case "031_kaf_action_request_digest":
+		return kafActionRequestDigestSQL
+	case "047_bpmn_assignment_source":
+		return bpmnAssignmentSourceSQL
+	case "030_catalog_access_policy_result":
+		return catalogAccessPolicyResultSQL
+	case "029_catalog_target_class_authority":
+		return catalogTargetClassAuthoritySQL
+	case "036_intake_frozen_workflow_context":
+		return intakeFrozenWorkflowContextSQL
+	case "028_service_request_work_item_authority":
+		return serviceRequestWorkItemAuthoritySQL
+	case WorkItemRetireVersion:
+		return workItemRetirementSQL
+	case WorkItemPrepareVersion:
+		return workItemPreparationSQL
+	case "027_work_item_identity_field_retirement":
+		return workItemIdentityRetirementSQL
+	case "026_intake_actor_provenance":
+		return intakeActorProvenanceSQL
+	case "025_email_attachment_source_identity":
+		return emailAttachmentSourceIdentitySQL
+	case "024_incident_rule_action_receipts":
+		return incidentRuleActionReceiptsSQL
+	case "023_add_process_start_request_digest":
+		return processStartRequestDigestSQL
+	case "022_drop_professional_extension_shared_fields":
+		return professionalExtensionSharedFieldsSQL
 	default:
 		return ""
+	}
+}
+
+// Reserved identities; Task 1 does not register or execute these stages.
+const (
+	ControlledCatalogRevision = "workitem-controlled-retirement-v1"
+	WorkItemPrepareVersion    = "037_work_item_structure_preparation"
+	WorkItemRetireVersion     = "038_work_item_controlled_retirement"
+)
+
+// frozenMigrationVersions preserves the exact pre-conversion active order.
+func frozenMigrationVersions() []string {
+	return []string{
+		"007_add_change_execution_tables",
+		"008_add_initialization_ledger",
+		"009_enable_rls_tenant_isolation",
+		"011_add_tool_invocation_tenant_id",
+		"012_drop_service_catalog_item",
+		"013_service_request_delegates_to_ticket",
+		"014_drop_legacy_approval_workflow",
+		"015_process_instance_running_unique_guard",
+		"016_add_service_request_contact_fields",
+		"017_drop_ticket_type_legacy_approval_fields",
+		"018_convert_legacy_serial_ids_to_identity",
+		"019_kaf_execution_integrity_rls",
+		"020_work_item_number_allocator",
+		"021_add_callback_optional_declared",
+		"022_drop_professional_extension_shared_fields",
+		"023_add_process_start_request_digest",
+		"024_incident_rule_action_receipts",
+		"025_email_attachment_source_identity",
+		"026_intake_actor_provenance",
+		"027_work_item_identity_field_retirement",
+		"028_service_request_work_item_authority",
+		"029_catalog_target_class_authority",
+		"030_catalog_access_policy_result",
+		"031_kaf_action_request_digest",
+		"032_workitem_sla_cycle",
+		"033_incident_status_events",
+		"034_problem_investigation_completion",
+		"035_change_professional_evidence",
+		"036_intake_frozen_workflow_context",
 	}
 }

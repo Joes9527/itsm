@@ -9,7 +9,7 @@
 //
 // Prerequisites:
 //   - itsm_app / itsm_admin roles exist (see migrations/001_roles.sql)
-//   - `changes` table has rows for at least tenant_id=1
+//   - `changes` has rows whose authoritative WorkItem belongs to tenant_id=1
 //   - The connecting DB is the SAME one you migrated (see caveat below)
 //
 // Caveat on host environments:
@@ -34,6 +34,8 @@ import (
 	"testing"
 
 	_ "github.com/lib/pq"
+
+	"itsm-backend/common/tenantctx"
 )
 
 func openTestDB(t *testing.T) *sql.DB {
@@ -59,11 +61,21 @@ func setupPolicy(t *testing.T, db *sql.DB) func() {
 	ctx := context.Background()
 	stmts := []string{
 		`ALTER TABLE changes ENABLE ROW LEVEL SECURITY`,
-		`ALTER TABLE changes FORCE ROW LEVEL SECURITY`,
 		`DROP POLICY IF EXISTS tenant_isolation ON changes`,
-		`CREATE POLICY tenant_isolation ON changes
-			USING       (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)
-			WITH CHECK  (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)`,
+		`DROP POLICY IF EXISTS tenant_isolation_changes ON changes`,
+		`CREATE POLICY tenant_isolation_changes ON changes
+			USING (EXISTS (
+				SELECT 1 FROM tickets work_item
+				WHERE work_item.id = changes.work_item_id
+				  AND work_item.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint
+				  AND work_item.deleted_at IS NULL
+			))
+			WITH CHECK (EXISTS (
+				SELECT 1 FROM tickets work_item
+				WHERE work_item.id = changes.work_item_id
+				  AND work_item.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint
+				  AND work_item.deleted_at IS NULL
+			))`,
 	}
 	for _, s := range stmts {
 		if _, err := db.ExecContext(ctx, s); err != nil {
@@ -73,7 +85,7 @@ func setupPolicy(t *testing.T, db *sql.DB) func() {
 	return func() {
 		teardown := []string{
 			`DROP POLICY IF EXISTS tenant_isolation ON changes`,
-			`ALTER TABLE changes NO FORCE ROW LEVEL SECURITY`,
+			`DROP POLICY IF EXISTS tenant_isolation_changes ON changes`,
 			`ALTER TABLE changes DISABLE ROW LEVEL SECURITY`,
 		}
 		for _, s := range teardown {
@@ -117,14 +129,14 @@ func TestAcquireConn_TenantScopeIsolation(t *testing.T) {
 	defer teardown()
 
 	// tenant=1 must see > 0 rows (assumes dev DB has changes for tenant 1)
-	ctx1 := WithTenant(context.Background(), 1)
+	ctx1 := tenantctx.WithTenantID(context.Background(), 1)
 	n1 := countChangesAs(t, db, ctx1)
 	if n1 == 0 {
 		t.Fatalf("tenant 1 saw 0 rows; dev DB may be missing seed data")
 	}
 
 	// tenant=999 must see 0 rows (unless someone seeded it, which is a bug)
-	ctx999 := WithTenant(context.Background(), 999)
+	ctx999 := tenantctx.WithTenantID(context.Background(), 999)
 	n999 := countChangesAs(t, db, ctx999)
 	if n999 != 0 {
 		t.Fatalf("tenant 999 saw %d rows; expected 0 (RLS bypassed?)", n999)
@@ -137,7 +149,7 @@ func TestKafExecutionIntegrityTablesRejectCrossTenantRows(t *testing.T) {
 	db := openTestDB(t)
 	defer db.Close()
 	for _, table := range []string{"kaf_task_action_ledgers", "kaf_task_completion_receipts"} {
-		ctx := WithTenant(context.Background(), 999999)
+		ctx := tenantctx.WithTenantID(context.Background(), 999999)
 		conn, err := AcquireConn(ctx, db)
 		if err != nil {
 			t.Fatalf("acquire %s connection: %v", table, err)
@@ -182,7 +194,7 @@ func TestAcquireConn_SystemBypassSkipsSet(t *testing.T) {
 	db := openTestDB(t)
 	defer db.Close()
 
-	ctx := WithSystemBypass(context.Background())
+	ctx := tenantctx.WithSystemBypass(context.Background())
 	conn, err := AcquireConn(ctx, db)
 	if err != nil {
 		t.Fatalf("bypass acquire should not error: %v", err)
@@ -207,7 +219,7 @@ func TestReleaseConn_DiscardsSessionState(t *testing.T) {
 	db.SetMaxIdleConns(1)
 
 	// First borrow: tenant=1
-	ctx1 := WithTenant(context.Background(), 1)
+	ctx1, cancelRequest := context.WithCancel(tenantctx.WithTenantID(context.Background(), 1))
 	conn1, err := AcquireConn(ctx1, db)
 	if err != nil {
 		t.Fatalf("acquire 1: %v", err)
@@ -221,6 +233,7 @@ func TestReleaseConn_DiscardsSessionState(t *testing.T) {
 	if tid1.String != "1" {
 		t.Fatalf("expected tenant var '1', got %q", tid1.String)
 	}
+	cancelRequest()
 	if err := ReleaseConn(ctx1, conn1); err != nil {
 		t.Fatalf("release 1: %v", err)
 	}

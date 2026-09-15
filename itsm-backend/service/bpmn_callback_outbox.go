@@ -7,21 +7,30 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common/executionscope"
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/database"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processcallbackoutbox"
+	"itsm-backend/ent/processinstance"
+	"itsm-backend/metrics"
 	"itsm-backend/service/bpmn"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 const (
 	bpmnCallbackStatusPending    = "pending"
 	bpmnCallbackStatusProcessing = "processing"
 	bpmnCallbackStatusCompleted  = "completed"
+	bpmnCallbackStatusBlocked    = "blocked"
 	bpmnCallbackLeaseDuration    = 60 * time.Second
 )
 
 type bpmnCallbackEnqueueRequest struct {
+	ActorID           int
+	ActorSource       string
 	ExecutionKey      string
 	TenantID          int
 	ProcessInstanceID int
@@ -34,6 +43,7 @@ type bpmnCallbackEnqueueRequest struct {
 	Action            string
 	ConfigRef         string
 	Variables         map[string]interface{}
+	OptionalDeclared  bool
 }
 
 type bpmnCallbackExecutor interface {
@@ -42,6 +52,7 @@ type bpmnCallbackExecutor interface {
 
 type bpmnCallbackExecutionResult struct {
 	CompletionCommitted bool
+	Effect              *bpmn.CallbackEffect
 }
 
 // bpmnCallbackExecutionError carries only an allowlisted operational class.
@@ -73,14 +84,38 @@ func newBPMNCallbackAdvanceError(_ error) error {
 // bpmnCallbackOutbox owns the durable callback lease lifecycle. Task 3 supplies
 // the executor that performs the BPMN-specific callback and token advancement.
 type bpmnCallbackOutbox struct {
-	client   *ent.Client
-	executor bpmnCallbackExecutor
-	now      func() time.Time
+	client          *ent.Client
+	execution       *database.ExecutionPolicy
+	candidateClient *ent.Client
+	executor        bpmnCallbackExecutor
+	now             func() time.Time
 }
 
-func (o *bpmnCallbackOutbox) enqueue(ctx context.Context, client *ent.Client, request bpmnCallbackEnqueueRequest) (*ent.ProcessCallbackOutbox, error) {
+func (o *bpmnCallbackOutbox) enqueue(ctx context.Context, client *ent.Client, request bpmnCallbackEnqueueRequest, tx *ent.Tx) (*ent.ProcessCallbackOutbox, error) {
 	if client == nil {
 		return nil, fmt.Errorf("bpmn callback outbox client is required")
+	}
+	if o.execution == nil {
+		return nil, executionscope.ErrDenied
+	}
+	if tx != nil {
+		client = tx.Client()
+	}
+	if o.execution.IsCandidate() {
+		if tx == nil {
+			return nil, executionscope.ErrDenied
+		}
+		scope, err := o.execution.TenantPredicate(ctx, tx, request.TenantID, processinstance.FieldTenantID, processinstance.FieldExecutionWorkItemID)
+		if err != nil {
+			return nil, err
+		}
+		allowed, err := tx.ProcessInstance.Query().Where(scope, processinstance.IDEQ(request.ProcessInstanceID), processinstance.TenantIDEQ(request.TenantID)).Exist(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !allowed {
+			return nil, executionscope.ErrDenied
+		}
 	}
 	executionKey := strings.TrimSpace(request.ExecutionKey)
 	if executionKey == "" {
@@ -98,15 +133,68 @@ func (o *bpmnCallbackOutbox) enqueue(ctx context.Context, client *ent.Client, re
 		SetElementID(request.ElementID).
 		SetAction(request.Action).
 		SetConfigRef(request.ConfigRef).
+		SetOptionalDeclared(request.OptionalDeclared).
 		SetStatus(bpmnCallbackStatusPending).
 		SetNextAttemptAt(o.clock())
 	if request.ProcessTaskID > 0 {
 		create.SetProcessTaskID(request.ProcessTaskID)
 	}
+	if request.ActorID > 0 {
+		create.SetActorID(request.ActorID).SetActorSource(request.ActorSource)
+	}
 	if request.Variables != nil {
 		create.SetVariables(copyBPMNCallbackVariables(request.Variables))
 	}
-	return create.Save(ctx)
+	row, err := create.Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := recordCallbackProvenance(ctx, client, row); err != nil {
+		return nil, err
+	}
+	return row, nil
+}
+
+// enqueueBlocked records a definition-time contract failure as a terminal
+// outbox row.  It deliberately uses the same durable/audited representation
+// as a worker-discovered blocked effect: a malformed definition must never be
+// retried as if it were transient infrastructure failure.
+func (o *bpmnCallbackOutbox) enqueueBlocked(ctx context.Context, client *ent.Client, request bpmnCallbackEnqueueRequest, code bpmn.CallbackBlockCode, tx *ent.Tx) (*ent.ProcessCallbackOutbox, error) {
+	if !bpmn.IsAllowedCallbackBlockCode(code) {
+		return nil, fmt.Errorf("bpmn callback block code is invalid")
+	}
+	if tx != nil {
+		client = tx.Client()
+	}
+	row, err := o.enqueue(ctx, client, request, tx)
+	if err != nil {
+		return nil, err
+	}
+	update := client.ProcessCallbackOutbox.Update()
+	if o.execution.IsCandidate() {
+		scope, err := o.execution.CallbackPredicate(ctx, tx, row.TenantID)
+		if err != nil {
+			return nil, err
+		}
+		update = update.Where(scope)
+	}
+	updated, err := update.
+		Where(processcallbackoutbox.ID(row.ID), processcallbackoutbox.TenantID(row.TenantID), processcallbackoutbox.StatusEQ(bpmnCallbackStatusPending)).
+		SetStatus(bpmnCallbackStatusBlocked).
+		SetCompletedAt(o.clock()).
+		SetLastErrorClass(string(code)).
+		Save(ctx)
+	if err != nil || updated != 1 {
+		return nil, fmt.Errorf("bpmn callback blocked enqueue failed")
+	}
+	row.Status = bpmnCallbackStatusBlocked
+	row.CompletedAt = o.clock()
+	row.LastErrorClass = string(code)
+	if err := NewBPMNAuditService(client, zap.NewNop().Sugar()).RecordCallbackBlocked(ctx, row, code); err != nil {
+		return nil, fmt.Errorf("bpmn callback blocked audit persistence failed")
+	}
+	metrics.RecordBPMNCallbackEffect(row.HandlerID, row.Action, string(bpmn.CallbackEffectBlocked))
+	return row, nil
 }
 
 func (o *bpmnCallbackOutbox) processPending(ctx context.Context, workerID string, limit int) (int, error) {
@@ -120,7 +208,25 @@ func (o *bpmnCallbackOutbox) processPending(ctx context.Context, workerID string
 	now := o.clock()
 	// This is a system worker scan. Every row-specific claim and transition below
 	// includes the authoritative tenant predicate carried by the candidate row.
-	candidates, err := o.client.ProcessCallbackOutbox.Query().
+	candidateClient := o.client
+	if _, scoped := tenantctx.TenantID(ctx); !scoped && o.candidateClient != nil {
+		candidateClient = o.candidateClient
+	}
+	tenantID, _ := tenantctx.TenantID(ctx)
+	scanCtx := ctx
+	if tenantID == 0 {
+		scanCtx = tenantctx.SystemContext(ctx, "bpmn:callback_scan", "discover scoped callback work")
+	}
+	scanTx, err := candidateClient.Tx(scanCtx)
+	if err != nil {
+		return 0, err
+	}
+	defer scanTx.Rollback()
+	scope, err := o.execution.CallbackPredicate(scanCtx, scanTx, tenantID)
+	if err != nil {
+		return 0, err
+	}
+	candidates, err := scanTx.ProcessCallbackOutbox.Query().Where(scope).
 		Where(processcallbackoutbox.Or(
 			processcallbackoutbox.And(
 				processcallbackoutbox.StatusEQ(bpmnCallbackStatusPending),
@@ -133,14 +239,18 @@ func (o *bpmnCallbackOutbox) processPending(ctx context.Context, workerID string
 		)).
 		Order(ent.Asc(processcallbackoutbox.FieldNextAttemptAt), ent.Asc(processcallbackoutbox.FieldID)).
 		Limit(limit).
-		All(ctx)
+		All(scanCtx)
 	if err != nil {
 		return 0, fmt.Errorf("bpmn callback candidate scan failed")
 	}
 
+	if err := scanTx.Rollback(); err != nil {
+		return 0, err
+	}
 	completed := 0
 	failed := false
 	for _, row := range candidates {
+		ctx := tenantctx.WithTenantID(ctx, row.TenantID)
 		claimed, claimErr := o.claim(ctx, workerID, row)
 		if claimErr != nil {
 			failed = true
@@ -184,12 +294,16 @@ func (o *bpmnCallbackOutbox) processPending(ctx context.Context, workerID string
 			continue
 		}
 
-		completedRow, completeErr := o.complete(ctx, workerID, &claimedRow)
-		if completeErr != nil || !completedRow {
+		outcome := bpmn.ResolveCallbackOutcome(executionResult.Effect, claimedRow.OptionalDeclared)
+		persisted, persistErr := o.persistCallbackOutcome(ctx, workerID, &claimedRow, outcome)
+		if persistErr != nil || !persisted {
 			failed = true
+			_ = o.retry(ctx, workerID, &claimedRow, "unknown_error")
 			continue
 		}
-		completed++
+		if outcome.Advance {
+			completed++
+		}
 	}
 	if failed {
 		return completed, fmt.Errorf("one or more bpmn callbacks were not completed")
@@ -209,7 +323,16 @@ func (o *bpmnCallbackOutbox) processExecutionKeys(ctx context.Context, workerID 
 		return 0, err
 	}
 	now := o.clock()
-	rows, err := o.client.ProcessCallbackOutbox.Query().
+	scanTx, err := o.client.Tx(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer scanTx.Rollback()
+	scope, err := o.execution.CallbackPredicate(ctx, scanTx, tenantID)
+	if err != nil {
+		return 0, err
+	}
+	rows, err := scanTx.ProcessCallbackOutbox.Query().Where(scope).
 		Where(processcallbackoutbox.TenantID(tenantID), processcallbackoutbox.ExecutionKeyIn(keys...)).
 		Order(ent.Asc(processcallbackoutbox.FieldNextAttemptAt), ent.Asc(processcallbackoutbox.FieldID)).
 		All(ctx)
@@ -217,6 +340,9 @@ func (o *bpmnCallbackOutbox) processExecutionKeys(ctx context.Context, workerID 
 		return 0, fmt.Errorf("bpmn callback execution key scan failed")
 	}
 
+	if err := scanTx.Rollback(); err != nil {
+		return 0, err
+	}
 	completed := 0
 	failed := false
 	for _, row := range rows {
@@ -258,12 +384,16 @@ func (o *bpmnCallbackOutbox) processExecutionKeys(ctx context.Context, workerID 
 			completed++
 			continue
 		}
-		completedRow, completeErr := o.complete(ctx, workerID, &claimedRow)
-		if completeErr != nil || !completedRow {
+		outcome := bpmn.ResolveCallbackOutcome(executionResult.Effect, claimedRow.OptionalDeclared)
+		persisted, persistErr := o.persistCallbackOutcome(ctx, workerID, &claimedRow, outcome)
+		if persistErr != nil || !persisted {
 			failed = true
+			_ = o.retry(ctx, workerID, &claimedRow, "unknown_error")
 			continue
 		}
-		completed++
+		if outcome.Advance {
+			completed++
+		}
 	}
 	if failed {
 		return completed, fmt.Errorf("one or more bpmn callbacks were not completed")
@@ -279,7 +409,16 @@ func (o *bpmnCallbackOutbox) claim(ctx context.Context, workerID string, row *en
 		return false, fmt.Errorf("bpmn callback row is missing tenant")
 	}
 	now := o.clock()
-	affected, err := o.client.ProcessCallbackOutbox.Update().
+	tx, err := o.client.Tx(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	scope, err := o.execution.CallbackPredicate(ctx, tx, row.TenantID)
+	if err != nil {
+		return false, err
+	}
+	affected, err := tx.ProcessCallbackOutbox.Update().Where(scope).
 		Where(
 			processcallbackoutbox.ID(row.ID),
 			processcallbackoutbox.TenantID(row.TenantID),
@@ -296,18 +435,37 @@ func (o *bpmnCallbackOutbox) claim(ctx context.Context, workerID string, row *en
 	if err != nil {
 		return false, fmt.Errorf("bpmn callback claim failed")
 	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
 	return affected == 1, nil
 }
 
 func (o *bpmnCallbackOutbox) complete(ctx context.Context, workerID string, row *ent.ProcessCallbackOutbox) (bool, error) {
-	return o.completeWithClient(ctx, o.client, workerID, row)
+	tx, err := o.client.Tx(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	completed, err := o.completeTx(ctx, tx, workerID, row)
+	if err != nil {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return completed, nil
 }
 
-func (o *bpmnCallbackOutbox) completeWithClient(ctx context.Context, client *ent.Client, workerID string, row *ent.ProcessCallbackOutbox) (bool, error) {
+func (o *bpmnCallbackOutbox) completeTx(ctx context.Context, tx *ent.Tx, workerID string, row *ent.ProcessCallbackOutbox) (bool, error) {
 	if err := validateBPMNCallbackWorkerID(workerID); err != nil {
 		return false, err
 	}
-	affected, err := client.ProcessCallbackOutbox.Update().
+	scope, err := o.execution.CallbackPredicate(ctx, tx, row.TenantID)
+	if err != nil {
+		return false, err
+	}
+	affected, err := tx.ProcessCallbackOutbox.Update().Where(scope).
 		Where(
 			processcallbackoutbox.ID(row.ID),
 			processcallbackoutbox.TenantID(row.TenantID),
@@ -324,6 +482,79 @@ func (o *bpmnCallbackOutbox) completeWithClient(ctx context.Context, client *ent
 		return false, fmt.Errorf("bpmn callback completion failed")
 	}
 	return affected == 1, nil
+}
+
+// persistCallbackOutcome atomically makes a handler effect terminal and, for
+// blocked outcomes, stores only sanitized audit metadata. A blocked row cannot
+// be reclaimed because neither the candidate scan nor claim predicate selects
+// the terminal blocked status.
+func (o *bpmnCallbackOutbox) persistCallbackOutcome(ctx context.Context, workerID string, row *ent.ProcessCallbackOutbox, outcome bpmn.CallbackOutcome) (bool, error) {
+	if err := validateBPMNCallbackWorkerID(workerID); err != nil {
+		return false, err
+	}
+	if row == nil || row.TenantID <= 0 {
+		return false, fmt.Errorf("bpmn callback row is missing tenant")
+	}
+	if outcome.OutboxStatus != bpmn.CallbackOutboxCompleted && outcome.OutboxStatus != bpmn.CallbackOutboxBlocked {
+		return false, fmt.Errorf("bpmn callback outcome status is invalid")
+	}
+	if outcome.OutboxStatus == bpmn.CallbackOutboxBlocked && !bpmn.IsAllowedCallbackBlockCode(outcome.LastErrorClass) {
+		return false, fmt.Errorf("bpmn callback block code is invalid")
+	}
+
+	tx, err := o.client.Tx(ctx)
+	if err != nil {
+		return false, fmt.Errorf("bpmn callback outcome transaction failed")
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	scope, err := o.execution.CallbackPredicate(ctx, tx, row.TenantID)
+	if err != nil {
+		return false, err
+	}
+	update := tx.ProcessCallbackOutbox.Update().Where(scope).
+		Where(
+			processcallbackoutbox.ID(row.ID),
+			processcallbackoutbox.TenantID(row.TenantID),
+			processcallbackoutbox.StatusEQ(bpmnCallbackStatusProcessing),
+			processcallbackoutbox.LeaseOwner(workerID),
+		).
+		SetStatus(outcome.OutboxStatus).
+		SetCompletedAt(o.clock()).
+		ClearLeaseOwner().
+		ClearLeaseExpiresAt()
+	if outcome.OutboxStatus == bpmn.CallbackOutboxBlocked {
+		update.SetLastErrorClass(string(outcome.LastErrorClass))
+	} else {
+		update.ClearLastErrorClass()
+	}
+	affected, err := update.Save(ctx)
+	if err != nil {
+		return false, fmt.Errorf("bpmn callback outcome persistence failed")
+	}
+	if affected != 1 {
+		return false, fmt.Errorf("bpmn callback lease lost")
+	}
+
+	if outcome.AuditAction != "" {
+		audit := NewBPMNAuditService(tx.Client(), zap.NewNop().Sugar())
+		switch outcome.AuditAction {
+		case bpmn.CallbackAuditActionBlocked:
+			err = audit.RecordCallbackBlocked(ctx, row, outcome.BlockCode)
+		case bpmn.CallbackAuditActionSkippedOptional:
+			err = audit.RecordCallbackSkippedOptional(ctx, row, outcome.BlockCode)
+		default:
+			return false, fmt.Errorf("bpmn callback audit action is invalid")
+		}
+		if err != nil {
+			return false, fmt.Errorf("bpmn callback audit persistence failed")
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("bpmn callback outcome commit failed")
+	}
+	metrics.RecordBPMNCallbackEffect(row.HandlerID, row.Action, string(outcome.MetricEffect))
+	return true, nil
 }
 
 func (o *bpmnCallbackOutbox) completionPersisted(ctx context.Context, row *ent.ProcessCallbackOutbox) (bool, error) {
@@ -348,7 +579,16 @@ func (o *bpmnCallbackOutbox) retry(ctx context.Context, workerID string, row *en
 	if !isBPMNCallbackErrorClass(errorClass) {
 		errorClass = "unknown_error"
 	}
-	affected, err := o.client.ProcessCallbackOutbox.Update().
+	tx, err := o.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	scope, err := o.execution.CallbackPredicate(ctx, tx, row.TenantID)
+	if err != nil {
+		return err
+	}
+	affected, err := tx.ProcessCallbackOutbox.Update().Where(scope).
 		Where(
 			processcallbackoutbox.ID(row.ID),
 			processcallbackoutbox.TenantID(row.TenantID),
@@ -367,7 +607,7 @@ func (o *bpmnCallbackOutbox) retry(ctx context.Context, workerID string, row *en
 	if affected != 1 {
 		return fmt.Errorf("bpmn callback lease lost")
 	}
-	return nil
+	return tx.Commit()
 }
 
 func (o *bpmnCallbackOutbox) clock() time.Time {

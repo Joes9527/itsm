@@ -16,6 +16,9 @@ export interface Incident {
   reporterId?: number;
   assigneeId?: number;
   configurationItemId?: number;
+  categoryId?: number;
+  urgency?: string;
+  impact?: string;
   category: string;
   subcategory: string;
   impactAnalysis?: Record<string, any>;
@@ -23,7 +26,7 @@ export interface Incident {
   resolutionSteps?: Record<string, any>[];
   problemId?: number; // 关联的问题记录ID
   /** 版本号（乐观锁） */
-  version?: number;
+  version: number;
   detectedAt?: string;
   resolvedAt?: string;
   closedAt?: string;

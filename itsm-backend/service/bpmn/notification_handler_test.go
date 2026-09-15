@@ -15,16 +15,18 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 )
 
-func TestNotificationHandler_DurableExternalActionFailsWithoutLoggingPayload(t *testing.T) {
+func TestNotificationHandler_DurableExternalActionBlocksWithoutLoggingPayload(t *testing.T) {
 	core, logs := observer.New(zapcore.DebugLevel)
 	handler := NewNotificationHandler(nil, zap.New(core).Sugar())
 	ctx := WithBPMNCallbackExecutionKey(context.Background(), "notification-retry-key")
 	sentinel := "callback-secret-message"
 
-	_, err := handler.Execute(ctx, nil, map[string]interface{}{
+	effect, err := handler.Execute(ctx, nil, map[string]interface{}{
 		"action": "send_sms", "phone_numbers": "+8613800000000", "message": sentinel,
 	})
-	require.Error(t, err)
+	require.NoError(t, err)
+	require.Equal(t, CallbackEffectBlocked, effect.Status)
+	require.Equal(t, CallbackBlockChannelUnavailable, effect.BlockCode)
 	assert.NotContains(t, logs.AllUntimed(), sentinel)
 	for _, entry := range logs.All() {
 		assert.NotContains(t, entry.Message+fmt.Sprint(entry.ContextMap()), sentinel)

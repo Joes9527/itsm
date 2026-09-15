@@ -235,7 +235,7 @@ const CreateCIPage: React.FC = () => {
         }
       />
 
-      <Card className='rounded-xl shadow-sm'>
+      <Card className='rounded-[8px] shadow-none'>
         {formReady ? (
           <CIEditorForm
             form={form}

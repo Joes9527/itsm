@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/servicerequest"
+	"itsm-backend/ent/ticket"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -29,30 +30,8 @@ func (_u *ServiceRequestUpdate) Where(ps ...predicate.ServiceRequest) *ServiceRe
 	return _u
 }
 
-// SetTenantID sets the "tenant_id" field.
-func (_u *ServiceRequestUpdate) SetTenantID(v int) *ServiceRequestUpdate {
-	_u.mutation.ResetTenantID()
-	_u.mutation.SetTenantID(v)
-	return _u
-}
-
-// SetNillableTenantID sets the "tenant_id" field if the given value is not nil.
-func (_u *ServiceRequestUpdate) SetNillableTenantID(v *int) *ServiceRequestUpdate {
-	if v != nil {
-		_u.SetTenantID(*v)
-	}
-	return _u
-}
-
-// AddTenantID adds value to the "tenant_id" field.
-func (_u *ServiceRequestUpdate) AddTenantID(v int) *ServiceRequestUpdate {
-	_u.mutation.AddTenantID(v)
-	return _u
-}
-
 // SetTicketID sets the "ticket_id" field.
 func (_u *ServiceRequestUpdate) SetTicketID(v int) *ServiceRequestUpdate {
-	_u.mutation.ResetTicketID()
 	_u.mutation.SetTicketID(v)
 	return _u
 }
@@ -62,12 +41,6 @@ func (_u *ServiceRequestUpdate) SetNillableTicketID(v *int) *ServiceRequestUpdat
 	if v != nil {
 		_u.SetTicketID(*v)
 	}
-	return _u
-}
-
-// AddTicketID adds value to the "ticket_id" field.
-func (_u *ServiceRequestUpdate) AddTicketID(v int) *ServiceRequestUpdate {
-	_u.mutation.AddTicketID(v)
 	return _u
 }
 
@@ -116,27 +89,6 @@ func (_u *ServiceRequestUpdate) AddCiID(v int) *ServiceRequestUpdate {
 // ClearCiID clears the value of the "ci_id" field.
 func (_u *ServiceRequestUpdate) ClearCiID() *ServiceRequestUpdate {
 	_u.mutation.ClearCiID()
-	return _u
-}
-
-// SetRequesterID sets the "requester_id" field.
-func (_u *ServiceRequestUpdate) SetRequesterID(v int) *ServiceRequestUpdate {
-	_u.mutation.ResetRequesterID()
-	_u.mutation.SetRequesterID(v)
-	return _u
-}
-
-// SetNillableRequesterID sets the "requester_id" field if the given value is not nil.
-func (_u *ServiceRequestUpdate) SetNillableRequesterID(v *int) *ServiceRequestUpdate {
-	if v != nil {
-		_u.SetRequesterID(*v)
-	}
-	return _u
-}
-
-// AddRequesterID adds value to the "requester_id" field.
-func (_u *ServiceRequestUpdate) AddRequesterID(v int) *ServiceRequestUpdate {
-	_u.mutation.AddRequesterID(v)
 	return _u
 }
 
@@ -333,33 +285,6 @@ func (_u *ServiceRequestUpdate) ClearExpectedAt() *ServiceRequestUpdate {
 	return _u
 }
 
-// SetProcessorID sets the "processor_id" field.
-func (_u *ServiceRequestUpdate) SetProcessorID(v int) *ServiceRequestUpdate {
-	_u.mutation.ResetProcessorID()
-	_u.mutation.SetProcessorID(v)
-	return _u
-}
-
-// SetNillableProcessorID sets the "processor_id" field if the given value is not nil.
-func (_u *ServiceRequestUpdate) SetNillableProcessorID(v *int) *ServiceRequestUpdate {
-	if v != nil {
-		_u.SetProcessorID(*v)
-	}
-	return _u
-}
-
-// AddProcessorID adds value to the "processor_id" field.
-func (_u *ServiceRequestUpdate) AddProcessorID(v int) *ServiceRequestUpdate {
-	_u.mutation.AddProcessorID(v)
-	return _u
-}
-
-// ClearProcessorID clears the value of the "processor_id" field.
-func (_u *ServiceRequestUpdate) ClearProcessorID() *ServiceRequestUpdate {
-	_u.mutation.ClearProcessorID()
-	return _u
-}
-
 // SetStartedAt sets the "started_at" field.
 func (_u *ServiceRequestUpdate) SetStartedAt(v time.Time) *ServiceRequestUpdate {
 	_u.mutation.SetStartedAt(v)
@@ -440,65 +365,15 @@ func (_u *ServiceRequestUpdate) ClearLastError() *ServiceRequestUpdate {
 	return _u
 }
 
-// SetVersion sets the "version" field.
-func (_u *ServiceRequestUpdate) SetVersion(v int) *ServiceRequestUpdate {
-	_u.mutation.ResetVersion()
-	_u.mutation.SetVersion(v)
+// SetWorkItemID sets the "work_item" edge to the Ticket entity by ID.
+func (_u *ServiceRequestUpdate) SetWorkItemID(id int) *ServiceRequestUpdate {
+	_u.mutation.SetWorkItemID(id)
 	return _u
 }
 
-// SetNillableVersion sets the "version" field if the given value is not nil.
-func (_u *ServiceRequestUpdate) SetNillableVersion(v *int) *ServiceRequestUpdate {
-	if v != nil {
-		_u.SetVersion(*v)
-	}
-	return _u
-}
-
-// AddVersion adds value to the "version" field.
-func (_u *ServiceRequestUpdate) AddVersion(v int) *ServiceRequestUpdate {
-	_u.mutation.AddVersion(v)
-	return _u
-}
-
-// SetCreatedAt sets the "created_at" field.
-func (_u *ServiceRequestUpdate) SetCreatedAt(v time.Time) *ServiceRequestUpdate {
-	_u.mutation.SetCreatedAt(v)
-	return _u
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *ServiceRequestUpdate) SetNillableCreatedAt(v *time.Time) *ServiceRequestUpdate {
-	if v != nil {
-		_u.SetCreatedAt(*v)
-	}
-	return _u
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (_u *ServiceRequestUpdate) SetUpdatedAt(v time.Time) *ServiceRequestUpdate {
-	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetDeletedAt sets the "deleted_at" field.
-func (_u *ServiceRequestUpdate) SetDeletedAt(v time.Time) *ServiceRequestUpdate {
-	_u.mutation.SetDeletedAt(v)
-	return _u
-}
-
-// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
-func (_u *ServiceRequestUpdate) SetNillableDeletedAt(v *time.Time) *ServiceRequestUpdate {
-	if v != nil {
-		_u.SetDeletedAt(*v)
-	}
-	return _u
-}
-
-// ClearDeletedAt clears the value of the "deleted_at" field.
-func (_u *ServiceRequestUpdate) ClearDeletedAt() *ServiceRequestUpdate {
-	_u.mutation.ClearDeletedAt()
-	return _u
+// SetWorkItem sets the "work_item" edge to the Ticket entity.
+func (_u *ServiceRequestUpdate) SetWorkItem(v *Ticket) *ServiceRequestUpdate {
+	return _u.SetWorkItemID(v.ID)
 }
 
 // Mutation returns the ServiceRequestMutation object of the builder.
@@ -506,9 +381,14 @@ func (_u *ServiceRequestUpdate) Mutation() *ServiceRequestMutation {
 	return _u.mutation
 }
 
+// ClearWorkItem clears the "work_item" edge to the Ticket entity.
+func (_u *ServiceRequestUpdate) ClearWorkItem() *ServiceRequestUpdate {
+	_u.mutation.ClearWorkItem()
+	return _u
+}
+
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *ServiceRequestUpdate) Save(ctx context.Context) (int, error) {
-	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -534,21 +414,8 @@ func (_u *ServiceRequestUpdate) ExecX(ctx context.Context) {
 	}
 }
 
-// defaults sets the default values of the builder before save.
-func (_u *ServiceRequestUpdate) defaults() {
-	if _, ok := _u.mutation.UpdatedAt(); !ok {
-		v := servicerequest.UpdateDefaultUpdatedAt()
-		_u.mutation.SetUpdatedAt(v)
-	}
-}
-
 // check runs all checks and user-defined validators on the builder.
 func (_u *ServiceRequestUpdate) check() error {
-	if v, ok := _u.mutation.TenantID(); ok {
-		if err := servicerequest.TenantIDValidator(v); err != nil {
-			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.tenant_id": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.TicketID(); ok {
 		if err := servicerequest.TicketIDValidator(v); err != nil {
 			return &ValidationError{Name: "ticket_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.ticket_id": %w`, err)}
@@ -559,20 +426,13 @@ func (_u *ServiceRequestUpdate) check() error {
 			return &ValidationError{Name: "catalog_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.catalog_id": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.RequesterID(); ok {
-		if err := servicerequest.RequesterIDValidator(v); err != nil {
-			return &ValidationError{Name: "requester_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.requester_id": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.Quantity(); ok {
 		if err := servicerequest.QuantityValidator(v); err != nil {
 			return &ValidationError{Name: "quantity", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.quantity": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.Version(); ok {
-		if err := servicerequest.VersionValidator(v); err != nil {
-			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.version": %w`, err)}
-		}
+	if _u.mutation.WorkItemCleared() && len(_u.mutation.WorkItemIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "ServiceRequest.work_item"`)
 	}
 	return nil
 }
@@ -589,18 +449,6 @@ func (_u *ServiceRequestUpdate) sqlSave(ctx context.Context) (_node int, err err
 			}
 		}
 	}
-	if value, ok := _u.mutation.TenantID(); ok {
-		_spec.SetField(servicerequest.FieldTenantID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedTenantID(); ok {
-		_spec.AddField(servicerequest.FieldTenantID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.TicketID(); ok {
-		_spec.SetField(servicerequest.FieldTicketID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedTicketID(); ok {
-		_spec.AddField(servicerequest.FieldTicketID, field.TypeInt, value)
-	}
 	if value, ok := _u.mutation.CatalogID(); ok {
 		_spec.SetField(servicerequest.FieldCatalogID, field.TypeInt, value)
 	}
@@ -615,12 +463,6 @@ func (_u *ServiceRequestUpdate) sqlSave(ctx context.Context) (_node int, err err
 	}
 	if _u.mutation.CiIDCleared() {
 		_spec.ClearField(servicerequest.FieldCiID, field.TypeInt)
-	}
-	if value, ok := _u.mutation.RequesterID(); ok {
-		_spec.SetField(servicerequest.FieldRequesterID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedRequesterID(); ok {
-		_spec.AddField(servicerequest.FieldRequesterID, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.FormData(); ok {
 		_spec.SetField(servicerequest.FieldFormData, field.TypeJSON, value)
@@ -684,15 +526,6 @@ func (_u *ServiceRequestUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if _u.mutation.ExpectedAtCleared() {
 		_spec.ClearField(servicerequest.FieldExpectedAt, field.TypeTime)
 	}
-	if value, ok := _u.mutation.ProcessorID(); ok {
-		_spec.SetField(servicerequest.FieldProcessorID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedProcessorID(); ok {
-		_spec.AddField(servicerequest.FieldProcessorID, field.TypeInt, value)
-	}
-	if _u.mutation.ProcessorIDCleared() {
-		_spec.ClearField(servicerequest.FieldProcessorID, field.TypeInt)
-	}
 	if value, ok := _u.mutation.StartedAt(); ok {
 		_spec.SetField(servicerequest.FieldStartedAt, field.TypeTime, value)
 	}
@@ -717,23 +550,34 @@ func (_u *ServiceRequestUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if _u.mutation.LastErrorCleared() {
 		_spec.ClearField(servicerequest.FieldLastError, field.TypeString)
 	}
-	if value, ok := _u.mutation.Version(); ok {
-		_spec.SetField(servicerequest.FieldVersion, field.TypeInt, value)
+	if _u.mutation.WorkItemCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   servicerequest.WorkItemTable,
+			Columns: []string{servicerequest.WorkItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if value, ok := _u.mutation.AddedVersion(); ok {
-		_spec.AddField(servicerequest.FieldVersion, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(servicerequest.FieldCreatedAt, field.TypeTime, value)
-	}
-	if value, ok := _u.mutation.UpdatedAt(); ok {
-		_spec.SetField(servicerequest.FieldUpdatedAt, field.TypeTime, value)
-	}
-	if value, ok := _u.mutation.DeletedAt(); ok {
-		_spec.SetField(servicerequest.FieldDeletedAt, field.TypeTime, value)
-	}
-	if _u.mutation.DeletedAtCleared() {
-		_spec.ClearField(servicerequest.FieldDeletedAt, field.TypeTime)
+	if nodes := _u.mutation.WorkItemIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   servicerequest.WorkItemTable,
+			Columns: []string{servicerequest.WorkItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -755,30 +599,8 @@ type ServiceRequestUpdateOne struct {
 	mutation *ServiceRequestMutation
 }
 
-// SetTenantID sets the "tenant_id" field.
-func (_u *ServiceRequestUpdateOne) SetTenantID(v int) *ServiceRequestUpdateOne {
-	_u.mutation.ResetTenantID()
-	_u.mutation.SetTenantID(v)
-	return _u
-}
-
-// SetNillableTenantID sets the "tenant_id" field if the given value is not nil.
-func (_u *ServiceRequestUpdateOne) SetNillableTenantID(v *int) *ServiceRequestUpdateOne {
-	if v != nil {
-		_u.SetTenantID(*v)
-	}
-	return _u
-}
-
-// AddTenantID adds value to the "tenant_id" field.
-func (_u *ServiceRequestUpdateOne) AddTenantID(v int) *ServiceRequestUpdateOne {
-	_u.mutation.AddTenantID(v)
-	return _u
-}
-
 // SetTicketID sets the "ticket_id" field.
 func (_u *ServiceRequestUpdateOne) SetTicketID(v int) *ServiceRequestUpdateOne {
-	_u.mutation.ResetTicketID()
 	_u.mutation.SetTicketID(v)
 	return _u
 }
@@ -788,12 +610,6 @@ func (_u *ServiceRequestUpdateOne) SetNillableTicketID(v *int) *ServiceRequestUp
 	if v != nil {
 		_u.SetTicketID(*v)
 	}
-	return _u
-}
-
-// AddTicketID adds value to the "ticket_id" field.
-func (_u *ServiceRequestUpdateOne) AddTicketID(v int) *ServiceRequestUpdateOne {
-	_u.mutation.AddTicketID(v)
 	return _u
 }
 
@@ -842,27 +658,6 @@ func (_u *ServiceRequestUpdateOne) AddCiID(v int) *ServiceRequestUpdateOne {
 // ClearCiID clears the value of the "ci_id" field.
 func (_u *ServiceRequestUpdateOne) ClearCiID() *ServiceRequestUpdateOne {
 	_u.mutation.ClearCiID()
-	return _u
-}
-
-// SetRequesterID sets the "requester_id" field.
-func (_u *ServiceRequestUpdateOne) SetRequesterID(v int) *ServiceRequestUpdateOne {
-	_u.mutation.ResetRequesterID()
-	_u.mutation.SetRequesterID(v)
-	return _u
-}
-
-// SetNillableRequesterID sets the "requester_id" field if the given value is not nil.
-func (_u *ServiceRequestUpdateOne) SetNillableRequesterID(v *int) *ServiceRequestUpdateOne {
-	if v != nil {
-		_u.SetRequesterID(*v)
-	}
-	return _u
-}
-
-// AddRequesterID adds value to the "requester_id" field.
-func (_u *ServiceRequestUpdateOne) AddRequesterID(v int) *ServiceRequestUpdateOne {
-	_u.mutation.AddRequesterID(v)
 	return _u
 }
 
@@ -1059,33 +854,6 @@ func (_u *ServiceRequestUpdateOne) ClearExpectedAt() *ServiceRequestUpdateOne {
 	return _u
 }
 
-// SetProcessorID sets the "processor_id" field.
-func (_u *ServiceRequestUpdateOne) SetProcessorID(v int) *ServiceRequestUpdateOne {
-	_u.mutation.ResetProcessorID()
-	_u.mutation.SetProcessorID(v)
-	return _u
-}
-
-// SetNillableProcessorID sets the "processor_id" field if the given value is not nil.
-func (_u *ServiceRequestUpdateOne) SetNillableProcessorID(v *int) *ServiceRequestUpdateOne {
-	if v != nil {
-		_u.SetProcessorID(*v)
-	}
-	return _u
-}
-
-// AddProcessorID adds value to the "processor_id" field.
-func (_u *ServiceRequestUpdateOne) AddProcessorID(v int) *ServiceRequestUpdateOne {
-	_u.mutation.AddProcessorID(v)
-	return _u
-}
-
-// ClearProcessorID clears the value of the "processor_id" field.
-func (_u *ServiceRequestUpdateOne) ClearProcessorID() *ServiceRequestUpdateOne {
-	_u.mutation.ClearProcessorID()
-	return _u
-}
-
 // SetStartedAt sets the "started_at" field.
 func (_u *ServiceRequestUpdateOne) SetStartedAt(v time.Time) *ServiceRequestUpdateOne {
 	_u.mutation.SetStartedAt(v)
@@ -1166,70 +934,26 @@ func (_u *ServiceRequestUpdateOne) ClearLastError() *ServiceRequestUpdateOne {
 	return _u
 }
 
-// SetVersion sets the "version" field.
-func (_u *ServiceRequestUpdateOne) SetVersion(v int) *ServiceRequestUpdateOne {
-	_u.mutation.ResetVersion()
-	_u.mutation.SetVersion(v)
+// SetWorkItemID sets the "work_item" edge to the Ticket entity by ID.
+func (_u *ServiceRequestUpdateOne) SetWorkItemID(id int) *ServiceRequestUpdateOne {
+	_u.mutation.SetWorkItemID(id)
 	return _u
 }
 
-// SetNillableVersion sets the "version" field if the given value is not nil.
-func (_u *ServiceRequestUpdateOne) SetNillableVersion(v *int) *ServiceRequestUpdateOne {
-	if v != nil {
-		_u.SetVersion(*v)
-	}
-	return _u
-}
-
-// AddVersion adds value to the "version" field.
-func (_u *ServiceRequestUpdateOne) AddVersion(v int) *ServiceRequestUpdateOne {
-	_u.mutation.AddVersion(v)
-	return _u
-}
-
-// SetCreatedAt sets the "created_at" field.
-func (_u *ServiceRequestUpdateOne) SetCreatedAt(v time.Time) *ServiceRequestUpdateOne {
-	_u.mutation.SetCreatedAt(v)
-	return _u
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *ServiceRequestUpdateOne) SetNillableCreatedAt(v *time.Time) *ServiceRequestUpdateOne {
-	if v != nil {
-		_u.SetCreatedAt(*v)
-	}
-	return _u
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (_u *ServiceRequestUpdateOne) SetUpdatedAt(v time.Time) *ServiceRequestUpdateOne {
-	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetDeletedAt sets the "deleted_at" field.
-func (_u *ServiceRequestUpdateOne) SetDeletedAt(v time.Time) *ServiceRequestUpdateOne {
-	_u.mutation.SetDeletedAt(v)
-	return _u
-}
-
-// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
-func (_u *ServiceRequestUpdateOne) SetNillableDeletedAt(v *time.Time) *ServiceRequestUpdateOne {
-	if v != nil {
-		_u.SetDeletedAt(*v)
-	}
-	return _u
-}
-
-// ClearDeletedAt clears the value of the "deleted_at" field.
-func (_u *ServiceRequestUpdateOne) ClearDeletedAt() *ServiceRequestUpdateOne {
-	_u.mutation.ClearDeletedAt()
-	return _u
+// SetWorkItem sets the "work_item" edge to the Ticket entity.
+func (_u *ServiceRequestUpdateOne) SetWorkItem(v *Ticket) *ServiceRequestUpdateOne {
+	return _u.SetWorkItemID(v.ID)
 }
 
 // Mutation returns the ServiceRequestMutation object of the builder.
 func (_u *ServiceRequestUpdateOne) Mutation() *ServiceRequestMutation {
 	return _u.mutation
+}
+
+// ClearWorkItem clears the "work_item" edge to the Ticket entity.
+func (_u *ServiceRequestUpdateOne) ClearWorkItem() *ServiceRequestUpdateOne {
+	_u.mutation.ClearWorkItem()
+	return _u
 }
 
 // Where appends a list predicates to the ServiceRequestUpdate builder.
@@ -1247,7 +971,6 @@ func (_u *ServiceRequestUpdateOne) Select(field string, fields ...string) *Servi
 
 // Save executes the query and returns the updated ServiceRequest entity.
 func (_u *ServiceRequestUpdateOne) Save(ctx context.Context) (*ServiceRequest, error) {
-	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -1273,21 +996,8 @@ func (_u *ServiceRequestUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
-// defaults sets the default values of the builder before save.
-func (_u *ServiceRequestUpdateOne) defaults() {
-	if _, ok := _u.mutation.UpdatedAt(); !ok {
-		v := servicerequest.UpdateDefaultUpdatedAt()
-		_u.mutation.SetUpdatedAt(v)
-	}
-}
-
 // check runs all checks and user-defined validators on the builder.
 func (_u *ServiceRequestUpdateOne) check() error {
-	if v, ok := _u.mutation.TenantID(); ok {
-		if err := servicerequest.TenantIDValidator(v); err != nil {
-			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.tenant_id": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.TicketID(); ok {
 		if err := servicerequest.TicketIDValidator(v); err != nil {
 			return &ValidationError{Name: "ticket_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.ticket_id": %w`, err)}
@@ -1298,20 +1008,13 @@ func (_u *ServiceRequestUpdateOne) check() error {
 			return &ValidationError{Name: "catalog_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.catalog_id": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.RequesterID(); ok {
-		if err := servicerequest.RequesterIDValidator(v); err != nil {
-			return &ValidationError{Name: "requester_id", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.requester_id": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.Quantity(); ok {
 		if err := servicerequest.QuantityValidator(v); err != nil {
 			return &ValidationError{Name: "quantity", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.quantity": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.Version(); ok {
-		if err := servicerequest.VersionValidator(v); err != nil {
-			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "ServiceRequest.version": %w`, err)}
-		}
+	if _u.mutation.WorkItemCleared() && len(_u.mutation.WorkItemIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "ServiceRequest.work_item"`)
 	}
 	return nil
 }
@@ -1345,18 +1048,6 @@ func (_u *ServiceRequestUpdateOne) sqlSave(ctx context.Context) (_node *ServiceR
 			}
 		}
 	}
-	if value, ok := _u.mutation.TenantID(); ok {
-		_spec.SetField(servicerequest.FieldTenantID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedTenantID(); ok {
-		_spec.AddField(servicerequest.FieldTenantID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.TicketID(); ok {
-		_spec.SetField(servicerequest.FieldTicketID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedTicketID(); ok {
-		_spec.AddField(servicerequest.FieldTicketID, field.TypeInt, value)
-	}
 	if value, ok := _u.mutation.CatalogID(); ok {
 		_spec.SetField(servicerequest.FieldCatalogID, field.TypeInt, value)
 	}
@@ -1371,12 +1062,6 @@ func (_u *ServiceRequestUpdateOne) sqlSave(ctx context.Context) (_node *ServiceR
 	}
 	if _u.mutation.CiIDCleared() {
 		_spec.ClearField(servicerequest.FieldCiID, field.TypeInt)
-	}
-	if value, ok := _u.mutation.RequesterID(); ok {
-		_spec.SetField(servicerequest.FieldRequesterID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedRequesterID(); ok {
-		_spec.AddField(servicerequest.FieldRequesterID, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.FormData(); ok {
 		_spec.SetField(servicerequest.FieldFormData, field.TypeJSON, value)
@@ -1440,15 +1125,6 @@ func (_u *ServiceRequestUpdateOne) sqlSave(ctx context.Context) (_node *ServiceR
 	if _u.mutation.ExpectedAtCleared() {
 		_spec.ClearField(servicerequest.FieldExpectedAt, field.TypeTime)
 	}
-	if value, ok := _u.mutation.ProcessorID(); ok {
-		_spec.SetField(servicerequest.FieldProcessorID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedProcessorID(); ok {
-		_spec.AddField(servicerequest.FieldProcessorID, field.TypeInt, value)
-	}
-	if _u.mutation.ProcessorIDCleared() {
-		_spec.ClearField(servicerequest.FieldProcessorID, field.TypeInt)
-	}
 	if value, ok := _u.mutation.StartedAt(); ok {
 		_spec.SetField(servicerequest.FieldStartedAt, field.TypeTime, value)
 	}
@@ -1473,23 +1149,34 @@ func (_u *ServiceRequestUpdateOne) sqlSave(ctx context.Context) (_node *ServiceR
 	if _u.mutation.LastErrorCleared() {
 		_spec.ClearField(servicerequest.FieldLastError, field.TypeString)
 	}
-	if value, ok := _u.mutation.Version(); ok {
-		_spec.SetField(servicerequest.FieldVersion, field.TypeInt, value)
+	if _u.mutation.WorkItemCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   servicerequest.WorkItemTable,
+			Columns: []string{servicerequest.WorkItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if value, ok := _u.mutation.AddedVersion(); ok {
-		_spec.AddField(servicerequest.FieldVersion, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(servicerequest.FieldCreatedAt, field.TypeTime, value)
-	}
-	if value, ok := _u.mutation.UpdatedAt(); ok {
-		_spec.SetField(servicerequest.FieldUpdatedAt, field.TypeTime, value)
-	}
-	if value, ok := _u.mutation.DeletedAt(); ok {
-		_spec.SetField(servicerequest.FieldDeletedAt, field.TypeTime, value)
-	}
-	if _u.mutation.DeletedAtCleared() {
-		_spec.ClearField(servicerequest.FieldDeletedAt, field.TypeTime)
+	if nodes := _u.mutation.WorkItemIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   servicerequest.WorkItemTable,
+			Columns: []string{servicerequest.WorkItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &ServiceRequest{config: _u.config}
 	_spec.Assign = _node.assignValues

@@ -17,7 +17,6 @@ import {
   useDeleteTemplateMutation,
   usePublishTemplateMutation,
   useDuplicateTemplateMutation,
-  useCreateTicketFromTemplateMutation,
   useRateTemplateMutation,
   useFavoriteTemplateMutation,
   useUnfavoriteTemplateMutation,
@@ -362,22 +361,6 @@ describe('useTemplateQuery hooks', () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(mockApi.duplicateTemplate).toHaveBeenCalled();
-    });
-  });
-
-  describe('useCreateTicketFromTemplateMutation', () => {
-    it('should create ticket from template', async () => {
-      mockApi.createTicketFromTemplate.mockResolvedValue({ id: 1 } as any);
-      mockApi.recordTemplateUsage.mockResolvedValue(undefined);
-
-      const { result } = renderHook(() => useCreateTicketFromTemplateMutation(), {
-        wrapper: createWrapper(),
-      });
-
-      result.current.mutate({ templateId: 't1', title: 'New Ticket' } as any);
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(mockApi.createTicketFromTemplate).toHaveBeenCalled();
     });
   });
 

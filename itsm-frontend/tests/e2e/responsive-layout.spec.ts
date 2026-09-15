@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { loginAndReturn } from './auth-utils';
+import { DEFAULT_LOGIN, loginAndReturn } from './auth-utils';
 
 const viewports = [
   { name: '14-inch', width: 1440, height: 900 },
@@ -24,28 +24,30 @@ async function assertNoHorizontalScroll(page: import('@playwright/test').Page) {
 
 test.describe('Compatibility - 响应式布局', () => {
   test('Dashboard layout should be stable across common resolutions', async ({ page }) => {
-    await loginAndReturn(page, 'admin', 'admin123');
+    await loginAndReturn(page, DEFAULT_LOGIN);
 
     for (const vp of viewports) {
       await test.step(`viewport: ${vp.name} ${vp.width}x${vp.height}`, async () => {
         await page.setViewportSize({ width: vp.width, height: vp.height });
         await page.goto('/dashboard');
         await page.waitForLoadState('networkidle');
-        await expect(page.locator('body')).toBeVisible();
+        await expect(
+          page.getByRole('heading', { name: 'AI-Native ITSM 运营仪表盘' })
+        ).toBeVisible();
         await assertNoHorizontalScroll(page);
       });
     }
   });
 
   test('Ticket list layout should be stable across common resolutions', async ({ page }) => {
-    await loginAndReturn(page, 'admin', 'admin123');
+    await loginAndReturn(page, DEFAULT_LOGIN);
 
     for (const vp of viewports) {
       await test.step(`viewport: ${vp.name} ${vp.width}x${vp.height}`, async () => {
         await page.setViewportSize({ width: vp.width, height: vp.height });
         await page.goto('/tickets');
         await page.waitForLoadState('networkidle');
-        await expect(page.locator('body')).toBeVisible();
+        await expect(page.getByRole('heading', { name: '工单管理' })).toBeVisible();
         await assertNoHorizontalScroll(page);
       });
     }

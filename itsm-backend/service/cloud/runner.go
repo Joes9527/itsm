@@ -8,6 +8,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"itsm-backend/database"
 	"itsm-backend/ent"
 	"itsm-backend/ent/cloudaccount"
 	"itsm-backend/ent/cloudservice"
@@ -16,17 +17,21 @@ import (
 
 // Runner 负责三层架构的调度：Discover → Transform → Reconcile
 type Runner struct {
-	client *ent.Client
-	logger *zap.SugaredLogger
+	execution *database.ExecutionPolicy
+	client    *ent.Client
+	logger    *zap.SugaredLogger
 }
 
 // NewRunner 构造 Runner
-func NewRunner(client *ent.Client, logger *zap.SugaredLogger) *Runner {
-	return &Runner{client: client, logger: logger}
+func NewRunner(client *ent.Client, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) *Runner {
+	return &Runner{client: client, logger: logger, execution: execution}
 }
 
 // RunAll 执行全量云资源发现
 func (r *Runner) RunAll(ctx context.Context, tenantID int, opts ...Option) error {
+	if err := r.execution.RequireCapability(ctx, tenantID, "cloud_discovery"); err != nil {
+		return err
+	}
 	cfg := &Config{}
 	for _, o := range opts {
 		o(cfg)

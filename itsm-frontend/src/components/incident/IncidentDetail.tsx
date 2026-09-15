@@ -1,11 +1,21 @@
 'use client';
+import { WorkItemClassificationSelect } from '@/components/work-item/WorkItemClassificationSelect';
+import { classificationUpdate } from '@/components/work-item/classification';
+
+import { professionalCreationPath } from '@/lib/api/work-item-creation';
+
+
+import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
+import { CreationAttempts } from '@/components/work-item/CreationAttempts';
+import { CreationRequester } from '@/components/work-item/CreationRequester';
+
 
 /**
  * 事件详情组件
  * 包含：基本信息、根因分析、影响评估、事件分类的编辑入口
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Card,
   Descriptions,
@@ -37,7 +47,6 @@ import {
   CheckCircle,
   Plug,
   AreaChart,
-  UserCheck,
   Siren,
 } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
@@ -115,6 +124,19 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
 }) => {
   const params = useParams();
   const router = useRouter();
+  const creation = useWorkItemCreation();
+  const [conversionForm] = Form.useForm();
+  const [conversionOpen, setConversionOpen] = useState(false);
+  const commandAttempts = useRef(new Map<string, string>());
+  const commandMeta = (action: string, payload = '') => {
+    if (!data || typeof data.version !== 'number' || !Number.isInteger(data.version) || data.version <= 0) throw new Error('请刷新事件以获取当前版本');
+    const key = JSON.stringify([data.id, data.version, action, payload]);
+    let operationId = commandAttempts.current.get(key);
+    if (!operationId) { operationId = crypto.randomUUID(); commandAttempts.current.set(key, operationId); }
+    return { version: data.version, operationId };
+  };
+  const [closeModalVisible, setCloseModalVisible] = useState(false);
+  const [closeReason, setCloseReason] = useState('');
   // 支持通过props传入id，或通过useParams获取
   const id = propId || (params?.id as string);
   const workItemContext = useOptionalWorkItemContext();
@@ -130,15 +152,13 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
   const [escalating, setEscalating] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [reopening, setReopening] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [form] = Form.useForm();
   const [resolveForm] = Form.useForm();
 
   // ===== 指派：用户列表 + 指派弹窗状态 =====
   const [users, setUsers] = useState<User[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
-  const [assignModalVisible, setAssignModalVisible] = useState(false);
-  const [assigning, setAssigning] = useState(false);
-  const [assignForm] = Form.useForm<{ assigneeId: number }>();
+  const [, setLoadingUsers] = useState(false);
 
   // ===== 升级为重大事件：弹窗状态 =====
   const [majorModalVisible, setMajorModalVisible] = useState(false);
@@ -169,7 +189,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
   const [categoryForm] = Form.useForm();
   const actions = workItemContext?.actions ?? fallbackActions ?? EMPTY_ACTIONS;
   const actionMutationInFlight =
-    escalating || assigning || escalatingMajor || resolving || closing || converting || reopening;
+    escalating || escalatingMajor || resolving || closing || converting || reopening || starting;
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -299,8 +319,8 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
     try {
       // 使用专门的 resolve 端点，而非直接更新状态
       await IncidentAPI.resolveIncident(data.id, {
+        ...commandMeta('resolve', values.resolution.trim()),
         resolution: values.resolution,
-        resolutionCode: values.resolutionCode,
       });
       message.success('事件已解决');
       setResolveModalVisible(false);
@@ -317,7 +337,9 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
 
     setClosing(true);
     try {
-      await IncidentAPI.closeIncident(data.id);
+      if (!closeReason.trim()) { message.error('请填写关闭说明'); return; }
+      await IncidentAPI.closeIncident(data.id, { ...commandMeta('close', closeReason.trim()), reason: closeReason.trim() });
+      setCloseModalVisible(false);
       message.success('事件已关闭');
       loadData();
     } catch (error) {
@@ -327,19 +349,19 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
     }
   };
 
-  const handleConvertToProblem = async () => {
+  const handleConvertToProblem = () => setConversionOpen(true);
+
+  const submitConversion = async () => {
     if (!data) return;
 
     setConverting(true);
     try {
-      const result = await IncidentAPI.convertToProblem(data.id, {
-        title: data.title,
-        description: data.description,
-      });
-      message.success(`已转为问题单 #${result.id}`);
-      router.push(`/problems/${result.id}`);
+      const values = await conversionForm.validateFields();
+      await creation.submit({ incidentId: data.id, expectedVersion: data.version, title: data.title, description: data.description, requesterId: values.requesterId },
+        ({ incidentId, ...body }, options) => IncidentAPI.convertToProblem(incidentId, body, options),
+        receipt => { router.push(professionalCreationPath(receipt, 'problem')); setConversionOpen(false); });
     } catch (error) {
-      handleError(error, 'convertToProblem', '转为问题失败');
+      handleError(error, 'convertToProblem', '创建关联问题失败');
     } finally {
       setConverting(false);
     }
@@ -350,7 +372,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
 
     setReopening(true);
     try {
-      await IncidentAPI.reopenIncident(data.id);
+      await IncidentAPI.reopenIncident(data.id, commandMeta('reopen'));
       message.success('事件已重新打开');
       loadData();
     } catch (error) {
@@ -360,27 +382,12 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
     }
   };
 
-  // 打开指派弹窗
-  const handleAssignClick = () => {
-    assignForm.setFieldsValue({ assigneeId: data?.assigneeId ?? undefined });
-    setAssignModalVisible(true);
-  };
-
-  // 提交指派（使用专用 assign 端点）
-  const handleAssignSubmit = async (values: { assigneeId: number }) => {
+  const handleStart = async () => {
     if (!data) return;
-    setAssigning(true);
-    try {
-      await IncidentAPI.assignIncident(data.id, values.assigneeId);
-      message.success('事件指派成功');
-      setAssignModalVisible(false);
-      assignForm.resetFields();
-      loadData();
-    } catch (error) {
-      handleError(error, 'assignIncident', '指派失败');
-    } finally {
-      setAssigning(false);
-    }
+    setStarting(true);
+    try { await IncidentAPI.startIncident(data.id, commandMeta('start')); await loadData(); }
+    catch (error) { handleError(error, 'startIncident', '开始处理失败'); }
+    finally { setStarting(false); }
   };
 
   // 提交升级为重大事件（使用专用 major-incident 端点）
@@ -435,13 +442,14 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
       };
 
       if (rootCauseData?.id) {
-        await IncidentAPI.updateRootCauseAnalysis(rootCauseData.id, request);
+        await IncidentAPI.updateRootCauseAnalysis(rootCauseData.id, { ...request, version: data.version });
         message.success('根因分析已更新');
       } else {
         await IncidentAPI.createRootCauseAnalysis(request);
         message.success('根因分析已创建');
       }
       setRootCauseModalVisible(false);
+      await loadData();
       loadAnalysisData();
     } catch (error) {
       handleError(error, 'saveRootCause', '保存根因分析失败');
@@ -487,13 +495,14 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
       };
 
       if (impactData?.id) {
-        await IncidentAPI.updateImpactAssessment(impactData.id, request);
+        await IncidentAPI.updateImpactAssessment(impactData.id, { ...request, version: data.version });
         message.success('影响评估已更新');
       } else {
         await IncidentAPI.createImpactAssessment(request);
         message.success('影响评估已创建');
       }
       setImpactModalVisible(false);
+      await loadData();
       loadAnalysisData();
     } catch (error) {
       handleError(error, 'saveImpact', '保存影响评估失败');
@@ -504,14 +513,8 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
 
   // 打开事件分类编辑弹窗
   const handleEditCategory = () => {
-    categoryForm.setFieldsValue({
-      category: classificationData?.category || data?.category || '',
-      subcategory: classificationData?.subcategory || data?.subcategory || '',
-      serviceType: classificationData?.serviceType || '',
-      failureType: classificationData?.failureType || '',
-      urgency: classificationData?.urgency || 'medium',
-      impact: classificationData?.impact || 'medium',
-    });
+    categoryForm.resetFields();
+    categoryForm.setFieldsValue({ urgency: data?.urgency || 'medium', impact: data?.impact || 'medium' });
     setCategoryModalVisible(true);
   };
 
@@ -520,33 +523,16 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
     if (!data) return;
     setSavingAnalysis(true);
     try {
-      const request = {
-        incidentId: data.id,
-        category: values.category,
-        subcategory: values.subcategory,
-        serviceType: values.serviceType,
-        failureType: values.failureType,
+      await IncidentAPI.updateIncident(data.id, {
+        version: data.version,
+        ...classificationUpdate(values.classification, categoryForm.isFieldTouched('classification')),
         urgency: values.urgency,
         impact: values.impact,
-        classificationConfidence: 100,
-        autoClassified: false,
-      };
-
-      if (classificationData?.id) {
-        await IncidentAPI.updateIncidentClassification(classificationData.id, request);
-        message.success('事件分类已更新');
-      } else {
-        await IncidentAPI.createIncidentClassification(request);
-        message.success('事件分类已创建');
-      }
-
-      // 同时更新事件的基本分类信息
-      await IncidentAPI.updateIncident(data.id, {
-        category: values.category,
-        subcategory: values.subcategory,
       });
+      message.success('事件分类已更新');
 
       setCategoryModalVisible(false);
+      await loadData();
       loadAnalysisData();
       loadData(); // 刷新事件基本信息
     } catch (error) {
@@ -591,6 +577,18 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
 
   return (
     <>
+      <CreationAttempts creation={creation} beforeNewConfirmation={async () => {
+        try { const current = await IncidentAPI.getIncident(Number(id)); setData(current as IncidentDetailData); onIncidentLoaded?.(current as IncidentDetailData); return true; }
+        catch { message.error('刷新事件失败，保留原申请与表单'); return false; }
+      }} />
+      <Modal open={closeModalVisible} title='关闭事件' okText='确认关闭' onCancel={() => setCloseModalVisible(false)} onOk={handleClose} confirmLoading={closing}>
+        <label htmlFor='incident-close-reason'>关闭说明</label>
+        <Input.TextArea id='incident-close-reason' value={closeReason} onChange={event => setCloseReason(event.target.value)} />
+      </Modal>
+      <Modal open={conversionOpen} title='创建关联问题' onCancel={() => setConversionOpen(false)} onOk={submitConversion} confirmLoading={converting}>
+        <p>保留当前事件并创建关联问题，请确认申请人。</p>
+        <Form form={conversionForm}><CreationRequester resource="problem" /></Form>
+      </Modal>
       <Space orientation='vertical' style={{ width: '100%' }} size='middle'>
         {/* 头部操作栏 */}
         <Card styles={{ body: { padding: '16px 24px' } }}>
@@ -635,18 +633,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
               >
                 升级
               </WorkItemActionButton>
-              <WorkItemActionButton
-                action={actions.assign}
-                actionName='assign'
-                button={{
-                  icon: <UserCheck />,
-                  onClick: handleAssignClick,
-                  loading: loadingUsers,
-                  disabled: actionMutationInFlight,
-                }}
-              >
-                指派
-              </WorkItemActionButton>
+
               <WorkItemActionButton
                 action={actions.markMajorIncident}
                 actionName='mark-major-incident'
@@ -658,6 +645,9 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
                 }}
               >
                 升级为重大事件
+              </WorkItemActionButton>
+              <WorkItemActionButton action={actions.start} actionName='start' button={{ onClick: handleStart, loading: starting, disabled: actionMutationInFlight }}>
+                {data.status === 'on_hold' || data.status === 'escalated' ? '恢复处理' : '开始处理'}
               </WorkItemActionButton>
               <WorkItemActionButton
                 action={actions.resolve}
@@ -677,7 +667,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
                 actionName='close'
                 button={{
                   danger: true,
-                  onClick: handleClose,
+                  onClick: () => { setCloseReason(''); setCloseModalVisible(true); },
                   loading: closing,
                   disabled: actionMutationInFlight,
                 }}
@@ -694,7 +684,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
                   disabled: actionMutationInFlight,
                 }}
               >
-                转为问题
+                创建关联问题
               </WorkItemActionButton>
               <WorkItemActionButton
                 action={actions.reopen}
@@ -938,33 +928,33 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
               }
               extra={
                 <Button type='link' icon={<Pencil />} onClick={handleEditCategory}>
-                  {classificationData?.id ? '编辑' : '添加'}
+                  编辑
                 </Button>
               }
             >
-              {classificationData ? (
+              {data ? (
                 <Descriptions column={3} size='small'>
                   <Descriptions.Item label='分类'>
-                    {classificationData.category || '-'}
+                    {data.category || '-'}
                   </Descriptions.Item>
                   <Descriptions.Item label='子分类'>
-                    {classificationData.subcategory || '-'}
+                    {data.subcategory || '-'}
                   </Descriptions.Item>
                   <Descriptions.Item label='服务类型'>
-                    {classificationData.serviceType || '-'}
+                    {classificationData?.serviceType || '-'}
                   </Descriptions.Item>
                   <Descriptions.Item label='故障类型'>
-                    {classificationData.failureType || '-'}
+                    {classificationData?.failureType || '-'}
                   </Descriptions.Item>
                   <Descriptions.Item label='紧急程度'>
-                    {renderImpactTag(classificationData.urgency)}
+                    {renderImpactTag(data.urgency)}
                   </Descriptions.Item>
                   <Descriptions.Item label='影响程度'>
-                    {renderImpactTag(classificationData.impact)}
+                    {renderImpactTag(data.impact)}
                   </Descriptions.Item>
                   <Descriptions.Item label='创建时间' span={3}>
-                    {classificationData.createdAt
-                      ? dayjs(classificationData.createdAt).format('YYYY-MM-DD HH:mm')
+                    {classificationData?.createdAt
+                      ? dayjs(classificationData?.createdAt).format('YYYY-MM-DD HH:mm')
                       : '-'}
                   </Descriptions.Item>
                 </Descriptions>
@@ -986,7 +976,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
               {data.resolutionSteps.map((step, index) => (
                 <Timeline.Item key={index}>
                   <p>{(step as unknown as { description?: string }).description || '处理步骤'}</p>
-                  <span style={{ fontSize: '12px', color: '#999' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
                     {(step as unknown as { timestamp?: string }).timestamp}
                   </span>
                 </Timeline.Item>
@@ -1034,45 +1024,6 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
         </Modal>
       )}
 
-      {/* 指派弹窗 */}
-      <Modal
-        title={
-          <Space>
-            <UserCheck style={{ color: '#F06820' }} />
-            指派事件
-          </Space>
-        }
-        open={assignModalVisible}
-        onCancel={() => {
-          setAssignModalVisible(false);
-          assignForm.resetFields();
-        }}
-        confirmLoading={assigning}
-        onOk={() => assignForm.submit()}
-        okText='确认指派'
-        cancelText='取消'
-        width={480}
-      >
-        <Form form={assignForm} layout='vertical' onFinish={handleAssignSubmit}>
-          <Form.Item
-            name='assigneeId'
-            label='指派给'
-            rules={[{ required: true, message: '请选择处理人' }]}
-          >
-            <Select
-              placeholder='请选择处理人'
-              loading={loadingUsers}
-              showSearch
-              optionFilterProp='label'
-              options={users.map(user => ({
-                value: user.id,
-                label: `${user.name || user.username}${user.department ? ` (${user.department})` : ''}`,
-              }))}
-            />
-          </Form.Item>
-        </Form>
-      </Modal>
-
       {/* 升级为重大事件弹窗（影响评估 + 危机沟通） */}
       <Modal
         title={
@@ -1093,7 +1044,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
         cancelText='取消'
         width={520}
       >
-        <div style={{ marginBottom: 16, color: '#8c8c8c', fontSize: 13 }}>
+        <div style={{ marginBottom: 16, color: 'var(--color-text-muted)', fontSize: 13 }}>
           升级后事件严重程度将提升为“严重”，并记录影响评估与审计日志，此操作不可撤销。
         </div>
         <Form form={majorForm} layout='vertical' onFinish={handleMajorSubmit}>
@@ -1177,7 +1128,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
             </Select>
           </Form.Item>
           {data?.problemId && (
-            <div style={{ padding: '8px 12px', background: '#f5f5f5', borderRadius: 4 }}>
+            <div style={{ padding: '8px 12px', background: 'var(--color-bg-tertiary)', borderRadius: 6 }}>
               <AlertCircle style={{ marginRight: 8, color: '#faad14' }} />
               <span>此事件已关联问题记录 #{data.problemId}</span>
             </div>
@@ -1334,43 +1285,8 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
         width={600}
       >
         <Form form={categoryForm} layout='vertical' onFinish={handleSaveCategory}>
-          <Form.Item
-            name='category'
-            label='事件分类'
-            rules={[{ required: true, message: '请选择事件分类' }]}
-          >
-            <Select placeholder='选择事件分类'>
-              <Select.Option value='基础设施'>基础设施</Select.Option>
-              <Select.Option value='应用系统'>应用系统</Select.Option>
-              <Select.Option value='网络连接'>网络连接</Select.Option>
-              <Select.Option value='安全事件'>安全事件</Select.Option>
-              <Select.Option value='数据问题'>数据问题</Select.Option>
-              <Select.Option value='用户体验'>用户体验</Select.Option>
-              <Select.Option value='其他'>其他</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name='subcategory' label='子分类'>
-            <Input placeholder='请输入子分类' />
-          </Form.Item>
-          <Form.Item name='serviceType' label='服务类型'>
-            <Select placeholder='选择服务类型'>
-              <Select.Option value='计算'>计算</Select.Option>
-              <Select.Option value='存储'>存储</Select.Option>
-              <Select.Option value='网络'>网络</Select.Option>
-              <Select.Option value='数据库'>数据库</Select.Option>
-              <Select.Option value='中间件'>中间件</Select.Option>
-              <Select.Option value='应用服务'>应用服务</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name='failureType' label='故障类型'>
-            <Select placeholder='选择故障类型'>
-              <Select.Option value='性能下降'>性能下降</Select.Option>
-              <Select.Option value='服务不可用'>服务不可用</Select.Option>
-              <Select.Option value='功能异常'>功能异常</Select.Option>
-              <Select.Option value='数据丢失'>数据丢失</Select.Option>
-              <Select.Option value='安全漏洞'>安全漏洞</Select.Option>
-              <Select.Option value='配置错误'>配置错误</Select.Option>
-            </Select>
+          <Form.Item name="classification" label="事件分类">
+            <WorkItemClassificationSelect initialCategoryId={data?.categoryId} />
           </Form.Item>
           <Form.Item name='urgency' label='紧急程度' rules={[{ required: true }]}>
             <Select placeholder='选择紧急程度'>

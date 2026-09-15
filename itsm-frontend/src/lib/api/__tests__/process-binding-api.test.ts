@@ -20,17 +20,17 @@ describe('ProcessBindingApi', () => {
 
   describe('list', () => {
     it('should list bindings without query', async () => {
-      mockGet.mockResolvedValue([{ id: 1, businessType: 'ticket', processDefinitionKey: 'proc1' }]);
+      mockGet.mockResolvedValue([{ id: 1, businessType: 'generic', processDefinitionKey: 'proc1' }]);
       const result = await ProcessBindingApi.list();
       expect(mockGet).toHaveBeenCalledWith('/api/v1/process-bindings', undefined);
       expect(result[0].id).toBe(1);
-      expect(result[0].businessType).toBe('ticket');
+      expect(result[0].businessType).toBe('generic');
     });
 
     it('should list bindings with query', async () => {
       mockGet.mockResolvedValue([]);
-      await ProcessBindingApi.list({ businessType: 'change', isActive: true });
-      expect(mockGet).toHaveBeenCalledWith('/api/v1/process-bindings', { businessType: 'change', isActive: true });
+      await ProcessBindingApi.list({ businessType: 'change_request', isActive: true });
+      expect(mockGet).toHaveBeenCalledWith('/api/v1/process-bindings', { businessType: 'change_request', isActive: true });
     });
 
     it('should normalize with defaults', async () => {
@@ -53,26 +53,26 @@ describe('ProcessBindingApi', () => {
 
   describe('get', () => {
     it('should get binding by id', async () => {
-      mockGet.mockResolvedValue({ id: 1, businessType: 'ticket', processDefinitionKey: 'p1', priority: 10 });
+      mockGet.mockResolvedValue({ id: 1, businessType: 'generic', processDefinitionKey: 'p1', priority: 10 });
       const result = await ProcessBindingApi.get(1);
       expect(mockGet).toHaveBeenCalledWith('/api/v1/process-bindings/1');
-      expect(result.businessType).toBe('ticket');
+      expect(result.businessType).toBe('generic');
       expect(result.priority).toBe(10);
     });
   });
 
   describe('create', () => {
     it('should create binding and clean payload', async () => {
-      mockPost.mockResolvedValue({ id: 1, businessType: 'ticket', processDefinitionKey: 'p1' });
-      const payload = { businessType: 'ticket', processDefinitionKey: 'p1', isActive: true, priority: 1, isDefault: false };
+      mockPost.mockResolvedValue({ id: 1, businessType: 'generic', processDefinitionKey: 'p1' });
+      const payload = { businessType: 'generic', processDefinitionKey: 'p1', isActive: true, priority: 1, isDefault: false };
       const result = await ProcessBindingApi.create(payload as any);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/process-bindings', expect.objectContaining({ businessType: 'ticket' }));
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/process-bindings', expect.objectContaining({ businessType: 'generic' }));
       expect(result.id).toBe(1);
     });
 
     it('should strip undefined/null/empty values', async () => {
-      mockPost.mockResolvedValue({ id: 1, businessType: 'ticket', processDefinitionKey: 'p1' });
-      const payload = { businessType: 'ticket', processDefinitionKey: 'p1', isActive: true, priority: 1, isDefault: false, businessSubType: undefined, scenario: '' };
+      mockPost.mockResolvedValue({ id: 1, businessType: 'generic', processDefinitionKey: 'p1' });
+      const payload = { businessType: 'generic', processDefinitionKey: 'p1', isActive: true, priority: 1, isDefault: false, businessSubType: undefined, scenario: '' };
       await ProcessBindingApi.create(payload as any);
       const calledWith = mockPost.mock.calls[0][1];
       expect(calledWith.businessSubType).toBeUndefined();
@@ -82,7 +82,7 @@ describe('ProcessBindingApi', () => {
 
   describe('update', () => {
     it('should update binding', async () => {
-      mockPut.mockResolvedValue({ id: 1, businessType: 'ticket', processDefinitionKey: 'p2' });
+      mockPut.mockResolvedValue({ id: 1, businessType: 'generic', processDefinitionKey: 'p2' });
       const result = await ProcessBindingApi.update(1, { processDefinitionKey: 'p2' } as any);
       expect(mockPut).toHaveBeenCalledWith('/api/v1/process-bindings/1', { processDefinitionKey: 'p2' });
       expect(result.processDefinitionKey).toBe('p2');
@@ -99,7 +99,7 @@ describe('ProcessBindingApi', () => {
 
   describe('listDepartmentProcesses', () => {
     it('should list department processes', async () => {
-      mockGet.mockResolvedValue([{ id: 1, businessType: 'ticket' }]);
+      mockGet.mockResolvedValue([{ id: 1, businessType: 'generic' }]);
       const result = await ProcessBindingApi.listDepartmentProcesses(5);
       expect(mockGet).toHaveBeenCalledWith('/api/v1/departments/5/processes');
       expect(result).toHaveLength(1);

@@ -3,6 +3,7 @@ package msgraph
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -192,9 +193,11 @@ func TestClient_PollDelta_FollowsNextLinkUntilDeltaLink(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"@odata.nextLink": pageTwoURL,
 			"value": []map[string]interface{}{
-				{"id": "msg-1", "internetMessageId": "<p1@contoso.com>", "subject": "Page 1",
+				{
+					"id": "msg-1", "internetMessageId": "<p1@contoso.com>", "subject": "Page 1",
 					"from": map[string]interface{}{"emailAddress": map[string]interface{}{"address": "a@contoso.com"}},
-					"body": map[string]interface{}{"contentType": "text", "content": "p1"}},
+					"body": map[string]interface{}{"contentType": "text", "content": "p1"},
+				},
 			},
 		})
 	})
@@ -203,9 +206,11 @@ func TestClient_PollDelta_FollowsNextLinkUntilDeltaLink(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"@odata.deltaLink": "https://graph.example/delta-link-final",
 			"value": []map[string]interface{}{
-				{"id": "msg-2", "internetMessageId": "<p2@contoso.com>", "subject": "Page 2",
+				{
+					"id": "msg-2", "internetMessageId": "<p2@contoso.com>", "subject": "Page 2",
 					"from": map[string]interface{}{"emailAddress": map[string]interface{}{"address": "b@contoso.com"}},
-					"body": map[string]interface{}{"contentType": "text", "content": "p2"}},
+					"body": map[string]interface{}{"contentType": "text", "content": "p2"},
+				},
 			},
 		})
 	})
@@ -235,7 +240,7 @@ func TestClient_SendMail(t *testing.T) {
 	defer graph.Close()
 
 	c := NewClient("test-tenant", "id", "secret", aad.URL, graph.URL)
-	err := c.SendMail(context.Background(), "support@contoso.com", "alice@contoso.com", "Re: Help", "We got it, ticket #123")
+	err := c.SendMail(context.Background(), "support@contoso.com", "alice@contoso.com", "Re: Help", "We got it, ticket #123", "delivery-123")
 	require.NoError(t, err)
 
 	message := captured["message"].(map[string]interface{})
@@ -251,16 +256,54 @@ func TestClient_SendMail(t *testing.T) {
 	// which would otherwise create a mail loop.
 	headers, ok := message["internetMessageHeaders"].([]interface{})
 	require.True(t, ok, "message must include internetMessageHeaders")
-	var found bool
+	var found, foundDeliveryID bool
 	for _, h := range headers {
 		hm := h.(map[string]interface{})
 		if hm["name"] == "X-Auto-Submitted" {
 			found = true
 			assert.Equal(t, "auto-replied", hm["value"])
 		}
+		if hm["name"] == "X-ITSM-Delivery-ID" {
+			foundDeliveryID = true
+			assert.Equal(t, "delivery-123", hm["value"])
+		}
 	}
 	assert.True(t, found, "internetMessageHeaders must include an X-Auto-Submitted header")
+	assert.True(t, foundDeliveryID, "durable delivery id must be passed to Graph")
 }
+
+func TestClient_SendMailClassifiesRejectedResponseAsNotAccepted(t *testing.T) {
+	aad := httptest.NewServer(tokenHandler())
+	defer aad.Close()
+	graph := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusServiceUnavailable) }))
+	defer graph.Close()
+	c := NewClient("test-tenant", "id", "secret", aad.URL, graph.URL)
+	err := c.SendMail(context.Background(), "support@contoso.com", "alice@contoso.com", "subject", "body", "delivery-1")
+	require.Error(t, err)
+	var outcome interface{ DeliveryOutcome() string }
+	require.ErrorAs(t, err, &outcome)
+	assert.Equal(t, "not_accepted", outcome.DeliveryOutcome())
+}
+
+func TestClient_SendMailClassifiesLostHTTPResponseAsAcceptanceUnknown(t *testing.T) {
+	aad := httptest.NewServer(tokenHandler())
+	defer aad.Close()
+	c := NewClient("test-tenant", "id", "secret", aad.URL, "http://graph.invalid")
+	_, err := c.Token(context.Background())
+	require.NoError(t, err)
+	c.hc = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return nil, errors.New("response lost after request write")
+	})}
+	err = c.SendMail(context.Background(), "support@contoso.com", "alice@contoso.com", "subject", "body", "delivery-1")
+	require.Error(t, err)
+	var outcome interface{ DeliveryOutcome() string }
+	require.ErrorAs(t, err, &outcome)
+	assert.Equal(t, "acceptance_unknown", outcome.DeliveryOutcome())
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) { return f(request) }
 
 func TestClient_ReplyMessage(t *testing.T) {
 	aad := httptest.NewServer(tokenHandler())

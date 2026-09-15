@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent/tag"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -21,6 +22,7 @@ type ProjectCreate struct {
 	config
 	mutation *ProjectMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -298,6 +300,7 @@ func (_c *ProjectCreate) createSpec() (*Project, *sqlgraph.CreateSpec) {
 		_node = &Project{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(project.Table, sqlgraph.NewFieldSpec(project.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(project.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -390,11 +393,511 @@ func (_c *ProjectCreate) createSpec() (*Project, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Project.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProjectUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProjectCreate) OnConflict(opts ...sql.ConflictOption) *ProjectUpsertOne {
+	_c.conflict = opts
+	return &ProjectUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Project.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProjectCreate) OnConflictColumns(columns ...string) *ProjectUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProjectUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ProjectUpsertOne is the builder for "upsert"-ing
+	//  one Project node.
+	ProjectUpsertOne struct {
+		create *ProjectCreate
+	}
+
+	// ProjectUpsert is the "OnConflict" setter.
+	ProjectUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *ProjectUpsert) SetName(v string) *ProjectUpsert {
+	u.Set(project.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ProjectUpsert) UpdateName() *ProjectUpsert {
+	u.SetExcluded(project.FieldName)
+	return u
+}
+
+// SetCode sets the "code" field.
+func (u *ProjectUpsert) SetCode(v string) *ProjectUpsert {
+	u.Set(project.FieldCode, v)
+	return u
+}
+
+// UpdateCode sets the "code" field to the value that was provided on create.
+func (u *ProjectUpsert) UpdateCode() *ProjectUpsert {
+	u.SetExcluded(project.FieldCode)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *ProjectUpsert) SetDescription(v string) *ProjectUpsert {
+	u.Set(project.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ProjectUpsert) UpdateDescription() *ProjectUpsert {
+	u.SetExcluded(project.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ProjectUpsert) ClearDescription() *ProjectUpsert {
+	u.SetNull(project.FieldDescription)
+	return u
+}
+
+// SetManagerID sets the "manager_id" field.
+func (u *ProjectUpsert) SetManagerID(v int) *ProjectUpsert {
+	u.Set(project.FieldManagerID, v)
+	return u
+}
+
+// UpdateManagerID sets the "manager_id" field to the value that was provided on create.
+func (u *ProjectUpsert) UpdateManagerID() *ProjectUpsert {
+	u.SetExcluded(project.FieldManagerID)
+	return u
+}
+
+// AddManagerID adds v to the "manager_id" field.
+func (u *ProjectUpsert) AddManagerID(v int) *ProjectUpsert {
+	u.Add(project.FieldManagerID, v)
+	return u
+}
+
+// ClearManagerID clears the value of the "manager_id" field.
+func (u *ProjectUpsert) ClearManagerID() *ProjectUpsert {
+	u.SetNull(project.FieldManagerID)
+	return u
+}
+
+// SetDepartmentID sets the "department_id" field.
+func (u *ProjectUpsert) SetDepartmentID(v int) *ProjectUpsert {
+	u.Set(project.FieldDepartmentID, v)
+	return u
+}
+
+// UpdateDepartmentID sets the "department_id" field to the value that was provided on create.
+func (u *ProjectUpsert) UpdateDepartmentID() *ProjectUpsert {
+	u.SetExcluded(project.FieldDepartmentID)
+	return u
+}
+
+// ClearDepartmentID clears the value of the "department_id" field.
+func (u *ProjectUpsert) ClearDepartmentID() *ProjectUpsert {
+	u.SetNull(project.FieldDepartmentID)
+	return u
+}
+
+// SetStartDate sets the "start_date" field.
+func (u *ProjectUpsert) SetStartDate(v time.Time) *ProjectUpsert {
+	u.Set(project.FieldStartDate, v)
+	return u
+}
+
+// UpdateStartDate sets the "start_date" field to the value that was provided on create.
+func (u *ProjectUpsert) UpdateStartDate() *ProjectUpsert {
+	u.SetExcluded(project.FieldStartDate)
+	return u
+}
+
+// ClearStartDate clears the value of the "start_date" field.
+func (u *ProjectUpsert) ClearStartDate() *ProjectUpsert {
+	u.SetNull(project.FieldStartDate)
+	return u
+}
+
+// SetEndDate sets the "end_date" field.
+func (u *ProjectUpsert) SetEndDate(v time.Time) *ProjectUpsert {
+	u.Set(project.FieldEndDate, v)
+	return u
+}
+
+// UpdateEndDate sets the "end_date" field to the value that was provided on create.
+func (u *ProjectUpsert) UpdateEndDate() *ProjectUpsert {
+	u.SetExcluded(project.FieldEndDate)
+	return u
+}
+
+// ClearEndDate clears the value of the "end_date" field.
+func (u *ProjectUpsert) ClearEndDate() *ProjectUpsert {
+	u.SetNull(project.FieldEndDate)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *ProjectUpsert) SetStatus(v string) *ProjectUpsert {
+	u.Set(project.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ProjectUpsert) UpdateStatus() *ProjectUpsert {
+	u.SetExcluded(project.FieldStatus)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProjectUpsert) SetTenantID(v int) *ProjectUpsert {
+	u.Set(project.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProjectUpsert) UpdateTenantID() *ProjectUpsert {
+	u.SetExcluded(project.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProjectUpsert) AddTenantID(v int) *ProjectUpsert {
+	u.Add(project.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProjectUpsert) SetCreatedAt(v time.Time) *ProjectUpsert {
+	u.Set(project.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProjectUpsert) UpdateCreatedAt() *ProjectUpsert {
+	u.SetExcluded(project.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProjectUpsert) SetUpdatedAt(v time.Time) *ProjectUpsert {
+	u.Set(project.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProjectUpsert) UpdateUpdatedAt() *ProjectUpsert {
+	u.SetExcluded(project.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.Project.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProjectUpsertOne) UpdateNewValues() *ProjectUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Project.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ProjectUpsertOne) Ignore() *ProjectUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProjectUpsertOne) DoNothing() *ProjectUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProjectCreate.OnConflict
+// documentation for more info.
+func (u *ProjectUpsertOne) Update(set func(*ProjectUpsert)) *ProjectUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProjectUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *ProjectUpsertOne) SetName(v string) *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ProjectUpsertOne) UpdateName() *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetCode sets the "code" field.
+func (u *ProjectUpsertOne) SetCode(v string) *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetCode(v)
+	})
+}
+
+// UpdateCode sets the "code" field to the value that was provided on create.
+func (u *ProjectUpsertOne) UpdateCode() *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateCode()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *ProjectUpsertOne) SetDescription(v string) *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ProjectUpsertOne) UpdateDescription() *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ProjectUpsertOne) ClearDescription() *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetManagerID sets the "manager_id" field.
+func (u *ProjectUpsertOne) SetManagerID(v int) *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetManagerID(v)
+	})
+}
+
+// AddManagerID adds v to the "manager_id" field.
+func (u *ProjectUpsertOne) AddManagerID(v int) *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.AddManagerID(v)
+	})
+}
+
+// UpdateManagerID sets the "manager_id" field to the value that was provided on create.
+func (u *ProjectUpsertOne) UpdateManagerID() *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateManagerID()
+	})
+}
+
+// ClearManagerID clears the value of the "manager_id" field.
+func (u *ProjectUpsertOne) ClearManagerID() *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.ClearManagerID()
+	})
+}
+
+// SetDepartmentID sets the "department_id" field.
+func (u *ProjectUpsertOne) SetDepartmentID(v int) *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetDepartmentID(v)
+	})
+}
+
+// UpdateDepartmentID sets the "department_id" field to the value that was provided on create.
+func (u *ProjectUpsertOne) UpdateDepartmentID() *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateDepartmentID()
+	})
+}
+
+// ClearDepartmentID clears the value of the "department_id" field.
+func (u *ProjectUpsertOne) ClearDepartmentID() *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.ClearDepartmentID()
+	})
+}
+
+// SetStartDate sets the "start_date" field.
+func (u *ProjectUpsertOne) SetStartDate(v time.Time) *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetStartDate(v)
+	})
+}
+
+// UpdateStartDate sets the "start_date" field to the value that was provided on create.
+func (u *ProjectUpsertOne) UpdateStartDate() *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateStartDate()
+	})
+}
+
+// ClearStartDate clears the value of the "start_date" field.
+func (u *ProjectUpsertOne) ClearStartDate() *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.ClearStartDate()
+	})
+}
+
+// SetEndDate sets the "end_date" field.
+func (u *ProjectUpsertOne) SetEndDate(v time.Time) *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetEndDate(v)
+	})
+}
+
+// UpdateEndDate sets the "end_date" field to the value that was provided on create.
+func (u *ProjectUpsertOne) UpdateEndDate() *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateEndDate()
+	})
+}
+
+// ClearEndDate clears the value of the "end_date" field.
+func (u *ProjectUpsertOne) ClearEndDate() *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.ClearEndDate()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ProjectUpsertOne) SetStatus(v string) *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ProjectUpsertOne) UpdateStatus() *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProjectUpsertOne) SetTenantID(v int) *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProjectUpsertOne) AddTenantID(v int) *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProjectUpsertOne) UpdateTenantID() *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProjectUpsertOne) SetCreatedAt(v time.Time) *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProjectUpsertOne) UpdateCreatedAt() *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProjectUpsertOne) SetUpdatedAt(v time.Time) *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProjectUpsertOne) UpdateUpdatedAt() *ProjectUpsertOne {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProjectUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProjectCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProjectUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ProjectUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ProjectUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ProjectCreateBulk is the builder for creating many Project entities in bulk.
 type ProjectCreateBulk struct {
 	config
 	err      error
 	builders []*ProjectCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the Project entities in the database.
@@ -424,6 +927,7 @@ func (_c *ProjectCreateBulk) Save(ctx context.Context) ([]*Project, error) {
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -474,6 +978,313 @@ func (_c *ProjectCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ProjectCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Project.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProjectUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProjectCreateBulk) OnConflict(opts ...sql.ConflictOption) *ProjectUpsertBulk {
+	_c.conflict = opts
+	return &ProjectUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Project.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProjectCreateBulk) OnConflictColumns(columns ...string) *ProjectUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProjectUpsertBulk{
+		create: _c,
+	}
+}
+
+// ProjectUpsertBulk is the builder for "upsert"-ing
+// a bulk of Project nodes.
+type ProjectUpsertBulk struct {
+	create *ProjectCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.Project.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProjectUpsertBulk) UpdateNewValues() *ProjectUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Project.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ProjectUpsertBulk) Ignore() *ProjectUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProjectUpsertBulk) DoNothing() *ProjectUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProjectCreateBulk.OnConflict
+// documentation for more info.
+func (u *ProjectUpsertBulk) Update(set func(*ProjectUpsert)) *ProjectUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProjectUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *ProjectUpsertBulk) SetName(v string) *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ProjectUpsertBulk) UpdateName() *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetCode sets the "code" field.
+func (u *ProjectUpsertBulk) SetCode(v string) *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetCode(v)
+	})
+}
+
+// UpdateCode sets the "code" field to the value that was provided on create.
+func (u *ProjectUpsertBulk) UpdateCode() *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateCode()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *ProjectUpsertBulk) SetDescription(v string) *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ProjectUpsertBulk) UpdateDescription() *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ProjectUpsertBulk) ClearDescription() *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetManagerID sets the "manager_id" field.
+func (u *ProjectUpsertBulk) SetManagerID(v int) *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetManagerID(v)
+	})
+}
+
+// AddManagerID adds v to the "manager_id" field.
+func (u *ProjectUpsertBulk) AddManagerID(v int) *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.AddManagerID(v)
+	})
+}
+
+// UpdateManagerID sets the "manager_id" field to the value that was provided on create.
+func (u *ProjectUpsertBulk) UpdateManagerID() *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateManagerID()
+	})
+}
+
+// ClearManagerID clears the value of the "manager_id" field.
+func (u *ProjectUpsertBulk) ClearManagerID() *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.ClearManagerID()
+	})
+}
+
+// SetDepartmentID sets the "department_id" field.
+func (u *ProjectUpsertBulk) SetDepartmentID(v int) *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetDepartmentID(v)
+	})
+}
+
+// UpdateDepartmentID sets the "department_id" field to the value that was provided on create.
+func (u *ProjectUpsertBulk) UpdateDepartmentID() *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateDepartmentID()
+	})
+}
+
+// ClearDepartmentID clears the value of the "department_id" field.
+func (u *ProjectUpsertBulk) ClearDepartmentID() *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.ClearDepartmentID()
+	})
+}
+
+// SetStartDate sets the "start_date" field.
+func (u *ProjectUpsertBulk) SetStartDate(v time.Time) *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetStartDate(v)
+	})
+}
+
+// UpdateStartDate sets the "start_date" field to the value that was provided on create.
+func (u *ProjectUpsertBulk) UpdateStartDate() *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateStartDate()
+	})
+}
+
+// ClearStartDate clears the value of the "start_date" field.
+func (u *ProjectUpsertBulk) ClearStartDate() *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.ClearStartDate()
+	})
+}
+
+// SetEndDate sets the "end_date" field.
+func (u *ProjectUpsertBulk) SetEndDate(v time.Time) *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetEndDate(v)
+	})
+}
+
+// UpdateEndDate sets the "end_date" field to the value that was provided on create.
+func (u *ProjectUpsertBulk) UpdateEndDate() *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateEndDate()
+	})
+}
+
+// ClearEndDate clears the value of the "end_date" field.
+func (u *ProjectUpsertBulk) ClearEndDate() *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.ClearEndDate()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ProjectUpsertBulk) SetStatus(v string) *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ProjectUpsertBulk) UpdateStatus() *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProjectUpsertBulk) SetTenantID(v int) *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProjectUpsertBulk) AddTenantID(v int) *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProjectUpsertBulk) UpdateTenantID() *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProjectUpsertBulk) SetCreatedAt(v time.Time) *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProjectUpsertBulk) UpdateCreatedAt() *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProjectUpsertBulk) SetUpdatedAt(v time.Time) *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProjectUpsertBulk) UpdateUpdatedAt() *ProjectUpsertBulk {
+	return u.Update(func(s *ProjectUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProjectUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ProjectCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProjectCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProjectUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

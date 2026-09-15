@@ -1,5 +1,5 @@
 import type { ApprovalStep, ApprovalStepStatus } from './types';
-import type { ProcessApprovalDecision } from '@/lib/api/ticket-approval-api';
+import type { ProcessApprovalDecision } from '@/lib/api/bpmn-workflow-api';
 
 /**
  * 审批决策 → 步骤状态映射，供 ApprovalWorkflowPanel 与 ApprovalMiniStepper 共用。

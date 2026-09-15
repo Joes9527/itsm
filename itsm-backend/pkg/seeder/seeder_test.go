@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"itsm-backend/config"
+	"itsm-backend/ent"
 	"itsm-backend/ent/citype"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/menu"
@@ -71,7 +72,7 @@ func TestSeedDefaultTenantPrivateMode(t *testing.T) {
 func TestProductSeedDoesNotCreateSampleMSPCustomers(t *testing.T) {
 	seeder, ctx := newTestSeeder(t, tenantmode.DeploymentModeSaaSMSP)
 
-	seeder.SeedAll(ctx)
+	require.NoError(t, seeder.SeedAll(ctx))
 
 	for _, code := range []string{"customer-a", "customer-b"} {
 		exists, err := seeder.client.Tenant.Query().Where(tenant.CodeEQ(code)).Exist(ctx)
@@ -86,7 +87,7 @@ func TestProductSeedDoesNotCreateSampleMSPCustomers(t *testing.T) {
 func TestSeedAllSaaSModeCreatesPlatformTenantAndAdmin(t *testing.T) {
 	seeder, ctx := newTestSeeder(t, tenantmode.DeploymentModeSaaS)
 
-	seeder.SeedAll(ctx)
+	require.NoError(t, seeder.SeedAll(ctx))
 
 	rootTenant, err := seeder.client.Tenant.Query().Where(tenant.CodeEQ("default")).Only(ctx)
 	require.NoError(t, err)
@@ -103,7 +104,7 @@ func TestSeedAllSaaSModeCreatesPlatformTenantAndAdmin(t *testing.T) {
 func TestSeedAllSaaSMSPModeCreatesOnlyProviderTenant(t *testing.T) {
 	seeder, ctx := newTestSeeder(t, tenantmode.DeploymentModeSaaSMSP)
 
-	seeder.SeedAll(ctx)
+	require.NoError(t, seeder.SeedAll(ctx))
 
 	rootTenant, err := seeder.client.Tenant.Query().Where(tenant.CodeEQ("default")).Only(ctx)
 	require.NoError(t, err)
@@ -129,7 +130,7 @@ func TestSeedAllSaaSMSPModeCreatesOnlyProviderTenant(t *testing.T) {
 func TestSeedAllProductDefaultsDoNotCreateBusinessSamples(t *testing.T) {
 	seeder, ctx := newTestSeeder(t, tenantmode.DeploymentModePrivate)
 
-	seeder.SeedAll(ctx)
+	require.NoError(t, seeder.SeedAll(ctx))
 
 	incidentCount, err := seeder.client.Incident.Query().Count(ctx)
 	require.NoError(t, err)
@@ -175,10 +176,6 @@ func TestSeedAllProductDefaultsDoNotCreateBusinessSamples(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, processInstanceCount)
 
-	workflowInstanceCount, err := seeder.client.WorkflowInstance.Query().Count(ctx)
-	require.NoError(t, err)
-	assert.Zero(t, workflowInstanceCount)
-
 	notificationCount, err := seeder.client.Notification.Query().Count(ctx)
 	require.NoError(t, err)
 	assert.Zero(t, notificationCount)
@@ -207,7 +204,7 @@ func TestSeedAllProductDefaultsDoNotCreateBusinessSamples(t *testing.T) {
 func TestSeedAllDoesNotCreateTestTenantOrFixedPasswordAccounts(t *testing.T) {
 	seeder, ctx := newTestSeeder(t, tenantmode.DeploymentModePrivate)
 
-	seeder.SeedAll(ctx)
+	require.NoError(t, seeder.SeedAll(ctx))
 
 	exists, err := seeder.client.Tenant.Query().Where(tenant.CodeEQ("tenant_test")).Exist(ctx)
 	require.NoError(t, err)
@@ -303,6 +300,20 @@ func TestProductionInitializersApplyAndVerifyCompleteDAG(t *testing.T) {
 		require.NoError(t, err, component.Name())
 		require.NoError(t, component.Verify(ctx, scope, plan), component.Name())
 	}
+	ticketTypeCount, err := seeder.client.TicketType.Query().Count(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 12, ticketTypeCount)
+}
+
+func TestSeedProductionFailsClosedWhenTicketTypeWritesFail(t *testing.T) {
+	seeder, ctx := newTestSeeder(t, tenantmode.DeploymentModePrivate)
+	seeder.client.TicketType.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(context.Context, ent.Mutation) (ent.Value, error) {
+			return nil, errors.New("injected ticket type write failure")
+		})
+	})
+
+	require.ErrorContains(t, seeder.SeedProduction(ctx), "verify ticket types")
 }
 
 func TestProductionComponentRollsBackWhenTransactionalVerificationFails(t *testing.T) {
@@ -376,6 +387,35 @@ func TestSeedProductionRepairsPartialRBACAndMenuInitialization(t *testing.T) {
 	assert.True(t, roleExists)
 }
 
+func TestSeedProductionConvergesAdminOverviewMenuToCanonicalPath(t *testing.T) {
+	seeder, ctx := newTestSeeder(t, tenantmode.DeploymentModePrivate)
+	require.NoError(t, seeder.SeedProduction(ctx))
+	rootTenant, err := seeder.client.Tenant.Query().Where(tenant.CodeEQ("default")).Only(ctx)
+	require.NoError(t, err)
+
+	_, err = seeder.client.Menu.Create().
+		SetName("系统概览").
+		SetPath("/admin").
+		SetIcon("LayoutDashboard").
+		SetPermissionCode("admin:write").
+		SetSortOrder(301).
+		SetTenantID(rootTenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	require.NoError(t, seeder.SeedProduction(ctx))
+
+	overviewMenus, err := seeder.client.Menu.Query().
+		Where(menu.NameEQ("系统概览"), menu.TenantIDEQ(rootTenant.ID)).
+		All(ctx)
+	require.NoError(t, err)
+	require.Len(t, overviewMenus, 1)
+	assert.Equal(t, "/admin/overview", overviewMenus[0].Path)
+	assert.Equal(t, "system:read", overviewMenus[0].PermissionCode)
+	assert.True(t, overviewMenus[0].IsVisible)
+	assert.True(t, overviewMenus[0].IsEnabled)
+}
+
 func TestSeedProductionPreservesTenantOwnedGrantOnManagedRole(t *testing.T) {
 	seeder, ctx := newTestSeeder(t, tenantmode.DeploymentModePrivate)
 	require.NoError(t, seeder.SeedProduction(ctx))
@@ -434,6 +474,12 @@ func TestProvisionTenantReadinessAcrossDeploymentModes(t *testing.T) {
 			require.NoError(t, err)
 			require.Positive(t, firstRoles)
 			require.NoError(t, seeder.validateTenantReadiness(ctx, target.ID))
+			overviewMenu, err := seeder.client.Menu.Query().Where(
+				menu.PathEQ("/admin/overview"),
+				menu.TenantIDEQ(target.ID),
+			).Only(ctx)
+			require.NoError(t, err)
+			assert.Equal(t, "system:read", overviewMenu.PermissionCode)
 
 			_, err = seeder.client.Role.Create().
 				SetName("Customer Custom Role").SetCode("customer_custom").
@@ -501,4 +547,20 @@ func mustCount(t *testing.T, query func() (int, error)) int {
 	count, err := query()
 	require.NoError(t, err)
 	return count
+}
+
+func TestCatalogSeedsRemainRepairableDrafts(t *testing.T) {
+	s, ctx := newTestSeeder(t, tenantmode.DeploymentModePrivate)
+	require.NotNil(t, s.seedDefaultTenant(ctx))
+	s.seedServiceCatalog(ctx)
+	rows := s.client.ServiceCatalog.Query().AllX(ctx)
+	require.NotEmpty(t, rows)
+	for _, row := range rows {
+		require.False(t, row.IsActive)
+		require.Equal(t, "disabled", row.Status)
+		require.NotEmpty(t, row.TargetClass)
+	}
+	original := rows[0].Update().SetStatus("enabled").SetIsActive(true).SaveX(ctx)
+	s.seedServiceCatalog(ctx)
+	require.True(t, s.client.ServiceCatalog.GetX(ctx, original.ID).IsActive)
 }

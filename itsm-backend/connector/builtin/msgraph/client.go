@@ -13,8 +13,10 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -62,7 +64,7 @@ func NewClient(tenantID, clientID, clientSecret, aadBaseURL, graphBaseURL string
 		clientID:     clientID,
 		clientSecret: clientSecret,
 		logger:       zap.S().Named("connector.msgraph"),
-		hc:           &http.Client{Timeout: 15 * time.Second},
+		hc:           &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
 	}
 }
 
@@ -110,6 +112,9 @@ func (c *Client) Token(ctx context.Context) (string, error) {
 	if out.Error != "" {
 		return "", fmt.Errorf("msgraph: token error: %s - %s", out.Error, out.ErrorDesc)
 	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("msgraph: token request rejected (status %d)", resp.StatusCode)
+	}
 	if out.AccessToken == "" {
 		return "", fmt.Errorf("msgraph: empty access token in response (status %d)", resp.StatusCode)
 	}
@@ -140,7 +145,7 @@ func (c *Client) getJSON(ctx context.Context, absoluteURL string, out interface{
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("msgraph: GET %s: status %d: %s", absoluteURL, resp.StatusCode, string(raw))
 	}
 	if out != nil {
@@ -156,29 +161,49 @@ func (c *Client) getJSON(ctx context.Context, absoluteURL string, out interface{
 func (c *Client) postJSON(ctx context.Context, path string, payload interface{}) error {
 	tok, err := c.Token(ctx)
 	if err != nil {
-		return err
+		return &deliveryOutcomeError{stage: "token", outcome: "not_accepted", err: err}
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("msgraph: encode request body: %w", err)
+		return &deliveryOutcomeError{stage: "encode", outcome: "not_accepted", err: fmt.Errorf("msgraph: encode request body: %w", err)}
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.graphBaseURL+path, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return &deliveryOutcomeError{stage: "request", outcome: "not_accepted", err: err}
 	}
 	req.Header.Set("Authorization", "Bearer "+tok)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.hc.Do(req)
 	if err != nil {
-		return fmt.Errorf("msgraph: POST %s: %w", path, err)
+		stage, outcome := classifyGraphRequestError(err)
+		return &deliveryOutcomeError{stage: stage, outcome: outcome, err: fmt.Errorf("msgraph: POST %s: %w", path, err)}
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		raw, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("msgraph: POST %s: status %d: %s", path, resp.StatusCode, string(raw))
+		return &deliveryOutcomeError{stage: "rejected", outcome: "not_accepted", err: fmt.Errorf("msgraph: POST %s: status %d: %s", path, resp.StatusCode, string(raw))}
 	}
 	return nil
 }
+
+func classifyGraphRequestError(err error) (string, string) {
+	var networkError *net.OpError
+	if errors.As(err, &networkError) && networkError.Op == "dial" {
+		return "dial", "not_accepted"
+	}
+	return "response", "acceptance_unknown"
+}
+
+type deliveryOutcomeError struct {
+	stage   string
+	outcome string
+	err     error
+}
+
+func (e *deliveryOutcomeError) Error() string           { return e.err.Error() }
+func (e *deliveryOutcomeError) Unwrap() error           { return e.err }
+func (e *deliveryOutcomeError) DeliveryOutcome() string { return e.outcome }
+func (e *deliveryOutcomeError) DeliveryStage() string   { return e.stage }
 
 // Message is a parsed inbound email, ready for ticket creation.
 type Message struct {
@@ -270,7 +295,11 @@ func (c *Client) PollDelta(ctx context.Context, mailbox, deltaLink string) ([]Me
 // SendMail sends a plain-text email from the shared mailbox to an arbitrary
 // recipient. It carries no conversation threading — use ReplyMessage to reply
 // to a specific inbound message within the same conversation thread.
-func (c *Client) SendMail(ctx context.Context, mailbox, toAddress, subject, body string) error {
+func (c *Client) SendMail(ctx context.Context, mailbox, toAddress, subject, body, deliveryID string) error {
+	headers := []map[string]interface{}{{"name": "X-Auto-Submitted", "value": "auto-replied"}}
+	if deliveryID != "" {
+		headers = append(headers, map[string]interface{}{"name": "X-ITSM-Delivery-ID", "value": deliveryID})
+	}
 	payload := map[string]interface{}{
 		"message": map[string]interface{}{
 			"subject": subject,
@@ -290,9 +319,7 @@ func (c *Client) SendMail(ctx context.Context, mailbox, toAddress, subject, body
 			// loop. Note: Graph's internetMessageHeaders only accepts custom
 			// headers prefixed with "x-", so the RFC 3834 standard header
 			// "Auto-Submitted" must be sent as "X-Auto-Submitted".
-			"internetMessageHeaders": []map[string]interface{}{
-				{"name": "X-Auto-Submitted", "value": "auto-replied"},
-			},
+			"internetMessageHeaders": headers,
 		},
 		"saveToSentItems": "false",
 	}
@@ -390,7 +417,7 @@ func (c *Client) DownloadAttachment(ctx context.Context, mailbox, messageID, att
 		return nil, fmt.Errorf("msgraph: GET %s: %w", path, err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		raw, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("msgraph: GET %s: status %d: %s", path, resp.StatusCode, string(raw))
 	}

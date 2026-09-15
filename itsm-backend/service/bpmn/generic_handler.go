@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketnotification"
@@ -38,9 +37,24 @@ func (h *GenericServiceTaskHandler) GetHandlerID() string {
 	return "generic_service_handler"
 }
 
+// CallbackContract declares every synchronous action supported by the generic
+// handler. Unknown actions have no contract and are blocked before enqueue.
+func (h *GenericServiceTaskHandler) CallbackContract(action string) (CallbackActionContract, bool) {
+	switch action {
+	case "complete_service":
+		return callbackActionContract([]string{"operation"}, nil), true
+	case "notify_rejection":
+		return callbackActionContract([]string{"reject_reason"}, nil), true
+	case "notify":
+		return callbackActionContract(nil, nil), true
+	default:
+		return CallbackActionContract{}, false
+	}
+}
+
 // Execute 执行通用服务任务。已知 action 对应内置模板的真实业务写入；
 // 未知 action 必须失败关闭，不能在未产生业务效果时推进流程。
-func (h *GenericServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *GenericServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error) {
 	action, _ := variables["action"].(string)
 	switch action {
 	case "complete_service":
@@ -52,11 +66,6 @@ func (h *GenericServiceTaskHandler) Execute(ctx context.Context, task *ent.Proce
 	default:
 		return nil, fmt.Errorf("不支持的通用回调动作")
 	}
-}
-
-// Validate 验证配置
-func (h *GenericServiceTaskHandler) Validate(ctx context.Context, config map[string]interface{}) error {
-	return nil
 }
 
 // ticketBackedBusinessTypes 列出 business_id 确实指向 Ticket 主键的业务类型。
@@ -90,11 +99,11 @@ func (h *GenericServiceTaskHandler) getTicket(ctx context.Context, ticketID, ten
 
 // completeService 对应"服务完成"节点（service_request_flow.bpmn 的 Activity_Complete）：
 // 把关联的工单状态置为 resolved，跟 TicketServiceTaskHandler.updateTicketStatus 同款写法。
-func (h *GenericServiceTaskHandler) completeService(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *GenericServiceTaskHandler) completeService(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	if !isTicketBackedFlow(variables) {
-		h.logger.Warnw("complete_service 节点被非工单业务类型的流程触发，跳过（business_id 不是工单ID）",
+		h.logger.Warnw("complete_service 节点被非工单业务类型的流程触发",
 			"business_type", GetStringFromVars(variables, "business_type"))
-		return &dto.ServiceTaskResult{Success: true, Message: "非工单业务类型，跳过服务完成写入"}, nil
+		return BlockedEffect(CallbackBlockTargetTypeMismatch, "business target is not ticket-backed"), nil
 	}
 	ticketID := GetIntFromVars(variables, "business_id")
 	if ticketID <= 0 {
@@ -109,7 +118,7 @@ func (h *GenericServiceTaskHandler) completeService(ctx context.Context, variabl
 		return nil, fmt.Errorf("完成服务请求失败: %w", err)
 	}
 	if current.Status == "resolved" && !current.ResolvedAt.IsZero() {
-		return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("工单 %d 已完成", ticketID)}, nil
+		return IdempotentEffect(fmt.Sprintf("工单 %d 已完成", ticketID), nil), nil
 	}
 	update := current.Update().SetStatus("resolved").SetUpdatedAt(time.Now())
 	if current.ResolvedAt.IsZero() {
@@ -119,7 +128,7 @@ func (h *GenericServiceTaskHandler) completeService(ctx context.Context, variabl
 		return nil, fmt.Errorf("完成服务请求失败: %w", err)
 	}
 	h.logger.Infow("Service request completed via BPMN generic handler", "ticket_id", ticketID)
-	return &dto.ServiceTaskResult{Success: true, Message: fmt.Sprintf("工单 %d 已完成", ticketID)}, nil
+	return &CallbackEffect{Status: CallbackEffectApplied, Message: fmt.Sprintf("工单 %d 已完成", ticketID)}, nil
 }
 
 // notifyRequester 对应"驳回通知"/"通知相关方"这类纯通知节点：给工单申请人真实创建一条
@@ -135,12 +144,12 @@ func (h *GenericServiceTaskHandler) completeService(ctx context.Context, variabl
 // 查不到工单按空态跳过而不是硬失败：通知是流程的旁路副作用，不是状态流转，
 // 让它把整条流程卡在通知节点上（handleElement 会把 error 往上抛）得不偿失。
 // 跳过一律留 Warnw，便于事后排查。
-func (h *GenericServiceTaskHandler) notifyRequester(ctx context.Context, variables map[string]interface{}, defaultContent string) (*dto.ServiceTaskResult, error) {
+func (h *GenericServiceTaskHandler) notifyRequester(ctx context.Context, variables map[string]interface{}, defaultContent string) (*CallbackEffect, error) {
 	businessType := GetStringFromVars(variables, "business_type")
 	if !isTicketBackedFlow(variables) {
-		h.logger.Warnw("通知节点被非工单业务类型的流程触发，跳过（business_id 不是工单ID）",
+		h.logger.Warnw("通知节点被非工单业务类型的流程触发",
 			"business_type", businessType, "business_id", GetIntFromVars(variables, "business_id"))
-		return &dto.ServiceTaskResult{Success: true, Message: "非工单业务类型，跳过工单通知"}, nil
+		return BlockedEffect(CallbackBlockTargetTypeMismatch, "business target is not ticket-backed"), nil
 	}
 
 	ticketID := GetIntFromVars(variables, "business_id")
@@ -155,9 +164,9 @@ func (h *GenericServiceTaskHandler) notifyRequester(ctx context.Context, variabl
 	ticketEntity, err := h.getTicket(ctx, ticketID, tenantID)
 	if err != nil {
 		if ent.IsNotFound(err) {
-			h.logger.Warnw("通知节点未在当前租户下找到对应工单，跳过通知",
+			h.logger.Warnw("通知节点未在当前租户下找到对应工单",
 				"ticket_id", ticketID, "tenant_id", tenantID, "business_type", businessType)
-			return &dto.ServiceTaskResult{Success: true, Message: "未找到对应工单，跳过通知"}, nil
+			return BlockedEffect(CallbackBlockTargetMissing, "ticket target is missing"), nil
 		}
 		return nil, fmt.Errorf("获取工单失败: %w", err)
 	}
@@ -185,7 +194,7 @@ func (h *GenericServiceTaskHandler) notifyRequester(ctx context.Context, variabl
 			return nil, fmt.Errorf("检查通知幂等状态失败: %w", err)
 		}
 		if exists {
-			return &dto.ServiceTaskResult{Success: true, Message: "通知已发送"}, nil
+			return IdempotentEffect("通知已发送", nil), nil
 		}
 	}
 
@@ -223,7 +232,7 @@ func (h *GenericServiceTaskHandler) notifyRequester(ctx context.Context, variabl
 		return nil, fmt.Errorf("提交通知事务失败: %w", err)
 	}
 
-	return &dto.ServiceTaskResult{Success: true, Message: "通知已发送"}, nil
+	return &CallbackEffect{Status: CallbackEffectApplied, Message: "通知已发送"}, nil
 }
 
 // 确保 GenericServiceTaskHandler 实现了 ServiceTaskHandlerInterface

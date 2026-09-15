@@ -1,4 +1,84 @@
 definitions:
+  service.RelationContext:
+    type: object
+    properties:
+      mutation:
+        $ref: '#/definitions/service.RelationMutationAvailability'
+      source:
+        $ref: '#/definitions/relationmetadata.Endpoint'
+  service.RelationMutationAvailability:
+    type: object
+    properties:
+      allowed:
+        type: boolean
+      reason:
+        type: string
+  change.MetadataRequest:
+    type: object
+    required:
+    - expectedVersion
+    - operationId
+    properties:
+      affectedCis:
+        description: 受影响的配置项
+        type: array
+        items:
+          type: string
+      assigneeId:
+        type: integer
+      contingencyPlan:
+        type: string
+      description:
+        description: 变更描述
+        type: string
+      expectedVersion:
+        type: integer
+      impactAnalysis:
+        type: string
+      impactScope:
+        description: 影响范围
+        allOf:
+        - $ref: '#/definitions/dto.ChangeImpact'
+      implementationPlan:
+        description: 实施计划
+        type: string
+      justification:
+        description: 变更理由
+        type: string
+      mitigationMeasures:
+        type: string
+      operationId:
+        type: string
+      plannedEndDate:
+        description: 计划结束时间
+        type: string
+      plannedStartDate:
+        description: 计划开始时间
+        type: string
+      priority:
+        description: 优先级
+        allOf:
+        - $ref: '#/definitions/dto.ChangePriority'
+      riskDescription:
+        type: string
+      riskLevel:
+        description: 风险等级
+        allOf:
+        - $ref: '#/definitions/dto.ChangeRisk'
+      riskOwner:
+        type: string
+      riskReviewDate:
+        type: string
+      rollbackPlan:
+        description: 回滚计划
+        type: string
+      title:
+        description: 变更标题
+        type: string
+      type:
+        description: 变更类型
+        allOf:
+        - $ref: '#/definitions/dto.ChangeType'
   cirelationship.ImpactLevel:
     enum:
     - medium
@@ -27,12 +107,65 @@ definitions:
     - StrengthHigh
     - StrengthMedium
     - StrengthLow
+  common.AuthResult:
+    properties:
+      user:
+        $ref: '#/definitions/common.User'
+    type: object
+  common.LoginRequest:
+    properties:
+      password:
+        type: string
+      tenantCode:
+        type: string
+      tenantId:
+        type: integer
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
   common.Response:
+    type: object
     properties:
       code:
         type: integer
       data: {}
       message:
+        type: string
+  common.User:
+    properties:
+      active:
+        type: boolean
+      createdAt:
+        type: string
+      department:
+        type: string
+      departmentId:
+        type: integer
+      email:
+        type: string
+      id:
+        type: integer
+      mspRole:
+        type: string
+      name:
+        type: string
+      permissions:
+        description: 用户权限列表
+        items:
+          type: string
+        type: array
+      phone:
+        type: string
+      role:
+        type: string
+      tenantId:
+        type: integer
+      updatedAt:
+        type: string
+      username:
         type: string
     type: object
   dto.AcceptTicketRequest:
@@ -42,6 +175,13 @@ definitions:
       ticketId:
         type: integer
     type: object
+  dto.ActionPermission:
+    type: object
+    properties:
+      allowed:
+        type: boolean
+      reason:
+        type: string
   dto.AddCITagsRequest:
     properties:
       tagIds:
@@ -85,70 +225,6 @@ definitions:
         type: string
       title:
         type: string
-    type: object
-  dto.ApprovalRecord:
-    properties:
-      action:
-        description: approve, reject, delegate
-        type: string
-      approver:
-        $ref: '#/definitions/dto.WorkflowUserInfo'
-      attachments:
-        items:
-          $ref: '#/definitions/dto.AttachmentInfo'
-        type: array
-      comment:
-        type: string
-      createdAt:
-        type: string
-      delegateTo:
-        $ref: '#/definitions/dto.WorkflowUserInfo'
-      id:
-        type: integer
-      level:
-        type: integer
-      levelName:
-        type: string
-      processedAt:
-        type: string
-      status:
-        $ref: '#/definitions/dto.ApprovalStatus'
-      ticketId:
-        type: integer
-    type: object
-  dto.ApprovalStatus:
-    enum:
-    - pending
-    - in_progress
-    - approved
-    - rejected
-    - cancelled
-    type: string
-    x-enum-varnames:
-    - ApprovalStatusPending
-    - ApprovalStatusInProgress
-    - ApprovalStatusApproved
-    - ApprovalStatusRejected
-    - ApprovalStatusCancelled
-  dto.ApproveTicketRequest:
-    properties:
-      action:
-        enum:
-        - approve
-        - reject
-        - delegate
-        type: string
-      approvalId:
-        type: integer
-      comment:
-        type: string
-      delegateToUserId:
-        type: integer
-      ticketId:
-        type: integer
-    required:
-    - action
-    - approvalId
     type: object
   dto.ArticleParticipantResponse:
     properties:
@@ -201,15 +277,6 @@ definitions:
         type: integer
     required:
     - customerTenantId
-    type: object
-  dto.AttachmentInfo:
-    properties:
-      filename:
-        type: string
-      id:
-        type: integer
-      url:
-        type: string
     type: object
   dto.AutomationRuleResponse:
     properties:
@@ -970,6 +1037,263 @@ definitions:
       updatedAt:
         type: string
     type: object
+  dto.ChangeImpact:
+    type: string
+    enum:
+    - low
+    - medium
+    - high
+    x-enum-comments:
+      ChangeImpactHigh: 高
+      ChangeImpactLow: 低
+      ChangeImpactMedium: 中
+    x-enum-descriptions:
+    - 低
+    - 中
+    - 高
+    x-enum-varnames:
+    - ChangeImpactLow
+    - ChangeImpactMedium
+    - ChangeImpactHigh
+  dto.ChangeListResponse:
+    type: object
+    properties:
+      changes:
+        description: 变更列表
+        type: array
+        items:
+          $ref: '#/definitions/dto.ChangeResponse'
+      pageSize:
+        description: 每页数量
+        type: integer
+      total:
+        description: 总数
+        type: integer
+      totalPages:
+        description: 总页数
+        type: integer
+  dto.ChangePriority:
+    type: string
+    enum:
+    - low
+    - medium
+    - high
+    - critical
+    x-enum-comments:
+      ChangePriorityCritical: 紧急
+      ChangePriorityHigh: 高
+      ChangePriorityLow: 低
+      ChangePriorityMedium: 中
+    x-enum-descriptions:
+    - 低
+    - 中
+    - 高
+    - 紧急
+    x-enum-varnames:
+    - ChangePriorityLow
+    - ChangePriorityMedium
+    - ChangePriorityHigh
+    - ChangePriorityCritical
+  dto.ChangeResponse:
+    type: object
+    properties:
+      actions:
+        type: object
+        additionalProperties:
+          $ref: '#/definitions/dto.ActionPermission'
+      actualEndDate:
+        description: 实际结束时间
+        type: string
+      actualStartDate:
+        description: 实际开始时间
+        type: string
+      affectedCis:
+        description: 受影响的配置项
+        type: array
+        items:
+          type: string
+      assigneeId:
+        description: 处理人ID
+        type: integer
+      assigneeName:
+        description: 处理人姓名
+        type: string
+      createdAt:
+        description: 创建时间
+        type: string
+      createdBy:
+        description: 创建人ID
+        type: integer
+      createdByName:
+        description: 创建人姓名
+        type: string
+      currentTasks:
+        type: object
+        additionalProperties:
+          type: string
+      description:
+        description: 变更描述
+        type: string
+      id:
+        description: 变更ID
+        type: integer
+      impactScope:
+        description: 影响范围
+        allOf:
+        - $ref: '#/definitions/dto.ChangeImpact'
+      implementationPlan:
+        description: 实施计划
+        type: string
+      justification:
+        description: 变更理由
+        type: string
+      number:
+        type: string
+      outcome:
+        type: string
+      outcomeEvidence:
+        type: string
+      plannedEndDate:
+        description: 计划结束时间
+        type: string
+      plannedStartDate:
+        description: 计划开始时间
+        type: string
+      priority:
+        description: 优先级
+        allOf:
+        - $ref: '#/definitions/dto.ChangePriority'
+      relations:
+        type: array
+        items:
+          $ref: '#/definitions/relationmetadata.View'
+      reviewEvidence:
+        type: string
+      reviewedAt:
+        type: string
+      reviewedBy:
+        type: integer
+      riskLevel:
+        description: 风险等级
+        allOf:
+        - $ref: '#/definitions/dto.ChangeRisk'
+      rollbackPlan:
+        description: 回滚计划
+        type: string
+      standardTemplateId:
+        type: integer
+      status:
+        description: 状态
+        allOf:
+        - $ref: '#/definitions/dto.ChangeStatus'
+      tenantId:
+        description: 租户ID
+        type: integer
+      title:
+        description: 变更标题
+        type: string
+      type:
+        description: 变更类型
+        allOf:
+        - $ref: '#/definitions/dto.ChangeType'
+      updatedAt:
+        description: 更新时间
+        type: string
+      version:
+        type: integer
+      workItemId:
+        description: 'WorkItemID 关联的 WorkItem（tickets.id）。Change 创建事务保证该值存在；nil 表示
+
+          开发数据违反 WorkItem 创建不变量。与 dto.IncidentResponse.WorkItemID /
+
+          dto.ProblemResponse.WorkItemID 同一模式，供前端 WorkItemShell 使用。'
+        type: integer
+  dto.ChangeRisk:
+    type: string
+    enum:
+    - low
+    - medium
+    - high
+    x-enum-comments:
+      ChangeRiskHigh: 高
+      ChangeRiskLow: 低
+      ChangeRiskMedium: 中
+    x-enum-descriptions:
+    - 低
+    - 中
+    - 高
+    x-enum-varnames:
+    - ChangeRiskLow
+    - ChangeRiskMedium
+    - ChangeRiskHigh
+  dto.ChangeStatus:
+    type: string
+    enum:
+    - draft
+    - submitted
+    - pending
+    - approved
+    - rejected
+    - scheduled
+    - in_progress
+    - completed
+    - failed
+    - rolled_back
+    - cancelled
+    x-enum-comments:
+      ChangeStatusApproved: 已批准
+      ChangeStatusCancelled: 已取消
+      ChangeStatusCompleted: 已完成
+      ChangeStatusDraft: 草稿
+      ChangeStatusFailed: 实施失败
+      ChangeStatusInProgress: 实施中
+      ChangeStatusPending: 待审批
+      ChangeStatusRejected: 已拒绝
+      ChangeStatusRolledBack: 已回滚
+      ChangeStatusScheduled: 已排期
+      ChangeStatusSubmitted: 已提交待审批
+    x-enum-descriptions:
+    - 草稿
+    - 已提交待审批
+    - 待审批
+    - 已批准
+    - 已拒绝
+    - 已排期
+    - 实施中
+    - 已完成
+    - 实施失败
+    - 已回滚
+    - 已取消
+    x-enum-varnames:
+    - ChangeStatusDraft
+    - ChangeStatusSubmitted
+    - ChangeStatusPending
+    - ChangeStatusApproved
+    - ChangeStatusRejected
+    - ChangeStatusScheduled
+    - ChangeStatusInProgress
+    - ChangeStatusCompleted
+    - ChangeStatusFailed
+    - ChangeStatusRolledBack
+    - ChangeStatusCancelled
+  dto.ChangeType:
+    type: string
+    enum:
+    - normal
+    - standard
+    - emergency
+    x-enum-comments:
+      ChangeTypeEmergency: 紧急变更
+      ChangeTypeNormal: 普通变更
+      ChangeTypeStandard: 标准变更
+    x-enum-descriptions:
+    - 普通变更
+    - 标准变更
+    - 紧急变更
+    x-enum-varnames:
+    - ChangeTypeNormal
+    - ChangeTypeStandard
+    - ChangeTypeEmergency
   dto.ChangeUserStatusRequest:
     properties:
       active:
@@ -1532,6 +1856,56 @@ definitions:
     required:
     - name
     type: object
+  dto.CreateChangeRequest:
+    type: object
+    required:
+    - title
+    properties:
+      affectedCis:
+        description: 受影响的配置项
+        type: array
+        items:
+          type: string
+      description:
+        description: 变更描述
+        type: string
+      impactScope:
+        description: '影响范围: low, medium, high'
+        type: string
+      implementationPlan:
+        description: 实施计划
+        type: string
+      justification:
+        description: 变更理由
+        type: string
+      plannedEndDate:
+        description: 计划结束时间
+        type: string
+      plannedStartDate:
+        description: 计划开始时间
+        type: string
+      priority:
+        description: '优先级: low, medium, high, critical'
+        type: string
+      requesterId:
+        description: 可选目标租户申请人
+        type: integer
+      riskLevel:
+        description: '风险等级: low, medium, high'
+        type: string
+      rollbackPlan:
+        description: 回滚计划
+        type: string
+      sourceRelations:
+        type: array
+        items:
+          $ref: '#/definitions/workitemcreation.SourceRelationInput'
+      title:
+        description: 变更标题
+        type: string
+      type:
+        description: '变更类型: normal, standard, emergency'
+        type: string
   dto.CreateCloudAccountRequest:
     properties:
       accountId:
@@ -1765,6 +2139,35 @@ definitions:
     - name
     - path
     type: object
+  dto.CreateProblemRequest:
+    type: object
+    required:
+    - description
+    - priority
+    - title
+    properties:
+      cti:
+        $ref: '#/definitions/workitemcreation.CTIInput'
+      description:
+        type: string
+        maxLength: 5000
+        minLength: 10
+      impact:
+        type: string
+      impactScope:
+        description: 影响范围
+        type: string
+      priority:
+        type: string
+      requesterId:
+        description: 可选目标租户申请人
+        type: integer
+      rootCause:
+        type: string
+      title:
+        type: string
+        maxLength: 200
+        minLength: 2
   dto.CreateRoleRequest:
     properties:
       code:
@@ -2691,6 +3094,10 @@ definitions:
     type: object
   dto.IncidentResponse:
     properties:
+      actions:
+        additionalProperties:
+          $ref: '#/definitions/dto.ActionPermission'
+        type: object
       assigneeId:
         example: 2
         type: integer
@@ -2808,6 +3215,30 @@ definitions:
       totalIncidents:
         type: integer
     type: object
+  dto.InstantiateStandardChangeRequest:
+    type: object
+    properties:
+      affectedCis:
+        description: 受影响配置项（可覆盖）
+        type: array
+        items:
+          type: string
+      plannedEndDate:
+        description: 计划结束时间
+        type: string
+      plannedStartDate:
+        description: 计划开始时间
+        type: string
+      requesterId:
+        description: 可选目标租户申请人
+        type: integer
+      sourceRelations:
+        type: array
+        items:
+          $ref: '#/definitions/workitemcreation.SourceRelationInput'
+      title:
+        description: 可选：自定义标题
+        type: string
   dto.KnowledgeArticleListResponse:
     properties:
       articles:
@@ -2906,6 +3337,21 @@ definitions:
       total:
         type: integer
     type: object
+  dto.ListProblemsResponse:
+    type: object
+    properties:
+      page:
+        type: integer
+      pageSize:
+        type: integer
+      problems:
+        type: array
+        items:
+          $ref: '#/definitions/dto.ProblemResponse'
+      total:
+        type: integer
+      totalPages:
+        type: integer
   dto.ListResponse-dto_CIResponse:
     properties:
       items:
@@ -2957,19 +3403,6 @@ definitions:
         type: integer
       total:
         type: integer
-    type: object
-  dto.LoginRequest:
-    properties:
-      password:
-        type: string
-      tenantCode:
-        description: 可选的租户代码
-        type: string
-      username:
-        type: string
-    required:
-    - password
-    - username
     type: object
   dto.LoginResponse:
     properties:
@@ -3129,6 +3562,63 @@ definitions:
         description: 适用场景说明
         type: string
     type: object
+  dto.ProblemResponse:
+    type: object
+    properties:
+      actions:
+        type: object
+        additionalProperties:
+          $ref: '#/definitions/dto.ActionPermission'
+      assigneeId:
+        type: integer
+      category:
+        type: string
+      categoryId:
+        type: integer
+      createdAt:
+        type: string
+      createdBy:
+        type: integer
+      description:
+        type: string
+      id:
+        type: integer
+      impact:
+        type: string
+      number:
+        type: string
+      priority:
+        type: string
+      relations:
+        description: Relations is omitted in metadata mutation responses without a current-authorized query; reads return an array, including empty.
+        type: array
+        items:
+          $ref: '#/definitions/relationmetadata.View'
+      resolution:
+        type: string
+      rootCause:
+        type: string
+      status:
+        type: string
+      tenantId:
+        type: integer
+      title:
+        type: string
+      updatedAt:
+        type: string
+      verificationNote:
+        type: string
+      verifiedVersion:
+        type: integer
+      version:
+        type: integer
+      workItemId:
+        description: 'WorkItemID 关联的 WorkItem（tickets.id）。Problem 创建事务保证该值存在；nil 表示
+
+          开发数据违反 WorkItem 创建不变量。与 dto.IncidentResponse.WorkItemID 同一模式。'
+        type: integer
+      workaround:
+        type: string
   dto.ProcessApprovalDecisionResponse:
     properties:
       action:
@@ -3231,16 +3721,6 @@ definitions:
       updatedAt:
         type: string
     type: object
-  dto.RefreshTokenRequest:
-    properties:
-      refreshToken:
-        description: |-
-          Kept for non-browser clients during the migration to cookie-only browser
-          sessions. Browser requests obtain this value from the HttpOnly cookie.
-        type: string
-    type: object
-  dto.RefreshTokenResponse:
-    type: object
   dto.RegisterRequest:
     properties:
       company:
@@ -3278,20 +3758,6 @@ definitions:
         type: string
       username:
         type: string
-    type: object
-  dto.RejectTicketRequest:
-    properties:
-      comment:
-        type: string
-      reason:
-        type: string
-      returnToStatus:
-        type: string
-      ticketId:
-        type: integer
-    required:
-    - comment
-    - reason
     type: object
   dto.RelationshipStrength:
     enum:
@@ -3647,42 +4113,30 @@ definitions:
   dto.TicketWorkflowAction:
     enum:
     - accept
-    - reject
     - withdraw
     - forward
     - cc
     - escalate
-    - approve
-    - approve_reject
-    - delegate
     - resolve
     - close
     - reopen
     type: string
     x-enum-varnames:
     - WorkflowActionAccept
-    - WorkflowActionReject
     - WorkflowActionWithdraw
     - WorkflowActionForward
     - WorkflowActionCC
     - WorkflowActionEscalate
-    - WorkflowActionApprove
-    - WorkflowActionApproveReject
-    - WorkflowActionDelegate
     - WorkflowActionResolve
     - WorkflowActionClose
     - WorkflowActionReopen
   dto.TicketWorkflowState:
     properties:
-      approvalStatus:
-        $ref: '#/definitions/dto.ApprovalStatus'
       availableActions:
         items:
           $ref: '#/definitions/dto.TicketWorkflowAction'
         type: array
       canAccept:
-        type: boolean
-      canApprove:
         type: boolean
       canCc:
         type: boolean
@@ -3690,29 +4144,15 @@ definitions:
         type: boolean
       canForward:
         type: boolean
-      canReject:
-        type: boolean
       canResolve:
         type: boolean
       canWithdraw:
         type: boolean
-      completedApprovals:
-        items:
-          $ref: '#/definitions/dto.ApprovalRecord'
-        type: array
-      currentApprovalLevel:
-        type: integer
       currentAssignee:
         $ref: '#/definitions/dto.WorkflowUserInfo'
       currentStatus:
         type: string
-      pendingApprovers:
-        items:
-          $ref: '#/definitions/dto.WorkflowUserInfo'
-        type: array
       ticketId:
-        type: integer
-      totalApprovalLevels:
         type: integer
     type: object
   dto.TimeImpact:
@@ -4183,6 +4623,55 @@ definitions:
       sortOrder:
         type: integer
     type: object
+  dto.UpdateProblemRequest:
+    type: object
+    required:
+    - version
+    properties:
+      categoryId:
+        type: integer
+        minimum: 0
+      description:
+        type: string
+        maxLength: 5000
+        minLength: 10
+      impact:
+        type: string
+      priority:
+        type: string
+      rootCause:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+        maxLength: 200
+        minLength: 2
+      version:
+        type: integer
+  dto.UpdateProblemResolutionRequest:
+    type: object
+    required:
+    - version
+    properties:
+      resolution:
+        type: string
+      solution:
+        type: string
+      version:
+        type: integer
+      workaround:
+        type: string
+  dto.UpdateProblemRootCauseRequest:
+    type: object
+    required:
+    - rootCause
+    - version
+    properties:
+      rootCause:
+        type: string
+      version:
+        type: integer
   dto.UpdateTenantRequest:
     properties:
       billingEnabled:
@@ -4427,6 +4916,27 @@ definitions:
     required:
     - reason
     type: object
+  dto.WorkItemRelationRequest:
+    type: object
+    required:
+    - expectedVersion
+    - operationId
+    - relationType
+    - sourceWorkItemId
+    - targetWorkItemId
+    properties:
+      expectedVersion:
+        type: integer
+      metadata:
+        $ref: '#/definitions/relationmetadata.Metadata'
+      operationId:
+        type: string
+      relationType:
+        type: string
+      sourceWorkItemId:
+        type: integer
+      targetWorkItemId:
+        type: integer
   dto.WorkflowUserInfo:
     properties:
       avatar:
@@ -4810,18 +5320,6 @@ definitions:
         items:
           type: string
         type: array
-      assignee_id:
-        description: 处理人ID
-        type: integer
-      created_at:
-        description: 创建时间
-        type: string
-      created_by:
-        description: 创建人ID
-        type: integer
-      description:
-        description: 变更描述
-        type: string
       edges:
         allOf:
         - $ref: '#/definitions/ent.ChangeEdges'
@@ -4846,52 +5344,31 @@ definitions:
       planned_start_date:
         description: 计划开始时间
         type: string
-      priority:
-        description: 优先级
-        type: string
-      related_tickets:
-        description: 相关工单
-        items:
-          type: string
-        type: array
       risk_level:
         description: 风险等级
         type: string
       rollback_plan:
         description: 回滚计划
         type: string
-      status:
-        description: 状态
-        type: string
-      tenant_id:
-        description: 租户ID
-        type: integer
-      title:
-        description: 变更标题
-        type: string
       type:
         description: 变更类型
         type: string
-      updated_at:
-        description: 更新时间
-        type: string
       work_item_id:
-        description: 关联的 WorkItem（tickets.id），唯一，必填——迁移完成前允许为空
+        description: 关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入
         type: integer
     type: object
   ent.ChangeEdges:
+    type: object
     properties:
       pir:
         description: 实施后审查
+        type: array
         items:
           $ref: '#/definitions/ent.ChangePIR'
-        type: array
-      problems:
-        description: 关联的问题
-        items:
-          $ref: '#/definitions/ent.Problem'
-        type: array
-    type: object
+      work_item:
+        description: 共享字段的唯一权威 WorkItem
+        allOf:
+        - $ref: '#/definitions/ent.Ticket'
   ent.ChangePIR:
     properties:
       actual_duration_minutes:
@@ -5504,11 +5981,6 @@ definitions:
         items:
           $ref: '#/definitions/ent.User'
         type: array
-      workflows:
-        description: 部门工作流
-        items:
-          $ref: '#/definitions/ent.Workflow'
-        type: array
     type: object
   ent.FeishuTicketSync:
     properties:
@@ -5596,27 +6068,9 @@ definitions:
     type: object
   ent.Incident:
     properties:
-      assignee_id:
-        description: 处理人ID
-        type: integer
-      category:
-        description: 事件分类
-        type: string
-      closed_at:
-        description: 关闭时间
-        type: string
       configuration_item_id:
         description: 配置项ID
         type: integer
-      created_at:
-        description: 创建时间
-        type: string
-      deleted_at:
-        description: 软删除时间
-        type: string
-      description:
-        description: 事件描述
-        type: string
       detected_at:
         description: 检测时间
         type: string
@@ -5655,21 +6109,12 @@ definitions:
         additionalProperties: true
         description: 元数据
         type: object
-      priority:
-        description: 优先级
-        type: string
-      reporter_id:
-        description: 报告人ID
-        type: integer
       resolution_steps:
         description: 解决步骤
         items:
           additionalProperties: true
           type: object
         type: array
-      resolved_at:
-        description: 解决时间
-        type: string
       root_cause:
         additionalProperties: true
         description: 根本原因
@@ -5677,36 +6122,14 @@ definitions:
       severity:
         description: 严重程度
         type: string
-      source:
-        description: 事件来源
-        type: string
-      status:
-        description: 状态
-        type: string
-      subcategory:
-        description: 事件子分类
-        type: string
-      tenant_id:
-        description: 租户ID
-        type: integer
-      title:
-        description: 事件标题
-        type: string
       type:
         description: 事件类型
-        type: string
-      updated_at:
-        description: 更新时间
         type: string
       urgency:
         description: 紧急程度：low/medium/high/critical
         type: string
-      version:
-        description: 版本号（乐观锁）
-        type: integer
       work_item_id:
-        description: 关联的 WorkItem（tickets.id），唯一，必填——Incident 迁移到 WorkItem 后每条记录必须有且仅有一条对应的
-          tickets 行
+        description: 关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入
         type: integer
     type: object
   ent.IncidentAlert:
@@ -5782,43 +6205,42 @@ definitions:
         description: 事件
     type: object
   ent.IncidentEdges:
+    type: object
     properties:
       configuration_items:
         description: 关联的配置项
+        type: array
         items:
           $ref: '#/definitions/ent.ConfigurationItem'
-        type: array
       incident_alerts:
         description: 事件告警
+        type: array
         items:
           $ref: '#/definitions/ent.IncidentAlert'
-        type: array
       incident_events:
         description: 事件活动记录
+        type: array
         items:
           $ref: '#/definitions/ent.IncidentEvent'
-        type: array
       incident_metrics:
         description: 事件指标
+        type: array
         items:
           $ref: '#/definitions/ent.IncidentMetric'
-        type: array
       parent_incident:
         description: 父事件
+        type: array
         items:
           $ref: '#/definitions/ent.Incident'
-        type: array
-      problems:
-        description: 关联的问题
-        items:
-          $ref: '#/definitions/ent.Problem'
-        type: array
       related_incidents:
         description: 关联事件
+        type: array
         items:
           $ref: '#/definitions/ent.Incident'
-        type: array
-    type: object
+      work_item:
+        description: 共享字段的唯一权威 WorkItem
+        allOf:
+        - $ref: '#/definitions/ent.Ticket'
   ent.IncidentEvent:
     properties:
       created_at:
@@ -6600,27 +7022,6 @@ definitions:
     type: object
   ent.Problem:
     properties:
-      assignee_id:
-        description: 处理人ID
-        type: integer
-      category:
-        description: 问题分类
-        type: string
-      closed_at:
-        description: 关闭时间
-        type: string
-      created_at:
-        description: 创建时间
-        type: string
-      created_by:
-        description: 创建人ID
-        type: integer
-      deleted_at:
-        description: 删除时间
-        type: string
-      description:
-        description: 问题描述
-        type: string
       edges:
         allOf:
         - $ref: '#/definitions/ent.ProblemEdges'
@@ -6633,55 +7034,26 @@ definitions:
       impact:
         description: 影响范围
         type: string
-      priority:
-        description: 优先级
-        type: string
       resolution:
         description: 最终解决方案
-        type: string
-      resolved_at:
-        description: 解决时间
         type: string
       root_cause:
         description: 根本原因
         type: string
-      status:
-        description: 状态
-        type: string
-      tenant_id:
-        description: 租户ID
-        type: integer
-      title:
-        description: 问题标题
-        type: string
-      updated_at:
-        description: 更新时间
-        type: string
       work_item_id:
-        description: 关联的 WorkItem（tickets.id），唯一，必填——迁移完成前允许为空
+        description: 关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入
         type: integer
       workaround:
         description: 临时解决方案
         type: string
     type: object
   ent.ProblemEdges:
-    properties:
-      changes:
-        description: 关联的变更
-        items:
-          $ref: '#/definitions/ent.Change'
-        type: array
-      incidents:
-        description: 关联的事件
-        items:
-          $ref: '#/definitions/ent.Incident'
-        type: array
-      tickets:
-        description: 关联的工单
-        items:
-          $ref: '#/definitions/ent.Ticket'
-        type: array
     type: object
+    properties:
+      work_item:
+        description: 共享字段的唯一权威 WorkItem
+        allOf:
+        - $ref: '#/definitions/ent.Ticket'
   ent.ProcessBinding:
     properties:
       approval_chain_id:
@@ -7081,11 +7453,26 @@ definitions:
     type: object
   ent.ProcessTask:
     properties:
+      aggregation_version:
+        description: 会签父任务聚合串行化版本；原子递增用于获取父行写锁
+        type: integer
       assigned_time:
         description: 分配时间
         type: string
       assignee:
         description: 任务负责人
+        type: string
+      callback_action:
+        description: 创建任务时从流程定义解析的不可变回调动作
+        type: string
+      callback_config_ref:
+        description: 创建任务时从流程定义解析的可信连接器配置引用，不包含端点或密钥
+        type: string
+      callback_handler_id:
+        description: 创建任务时从流程定义解析的不可变回调处理器 ID；显式哨兵表示无回调或无法解析
+        type: string
+      callback_task_type:
+        description: 创建任务时从流程定义解析的不可变回调任务类型
         type: string
       candidate_groups:
         description: 候选组，逗号分隔
@@ -7095,6 +7482,9 @@ definitions:
         type: string
       completed_time:
         description: 完成时间
+        type: string
+      correlation_id:
+        description: 跨系统关联 ID（如 KAF session/Langfuse trace），用于委派任务的端到端追踪
         type: string
       created_at:
         description: 创建时间
@@ -7155,7 +7545,7 @@ definitions:
         type: string
       task_variables:
         additionalProperties: true
-        description: 任务变量
+        description: 参与者可编辑的任务表单变量；回调路由和系统元数据不得存放在此字段
         type: object
       tenant_id:
         description: 租户ID
@@ -8131,8 +8521,7 @@ definitions:
         description: 评分评论
         type: string
       record_class:
-        description: WorkItem 记录类型：generic/service_request_item/incident/problem/change_request/catalog_task；创建后不可变，由领域服务在事务内校验，不在
-          schema 层强制
+        description: WorkItem 记录类型：generic/service_request_item/incident/problem/change_request/catalog_task；创建后不可变，由领域服务在事务内校验
         type: string
       requester_id:
         description: 申请人ID
@@ -8182,61 +8571,6 @@ definitions:
       version:
         description: 版本号（乐观锁）
         type: integer
-    type: object
-  ent.TicketApproval:
-    properties:
-      action:
-        description: '审批动作: approve/reject/delegate'
-        type: string
-      approver_id:
-        description: 审批人ID
-        type: integer
-      comment:
-        description: 审批意见
-        type: string
-      created_at:
-        description: 创建时间
-        type: string
-      delegate_to_user_id:
-        description: 委派目标用户ID
-        type: integer
-      edges:
-        allOf:
-        - $ref: '#/definitions/ent.TicketApprovalEdges'
-        description: |-
-          Edges holds the relations/edges for other nodes in the graph.
-          The values are being populated by the TicketApprovalQuery when eager-loading is set.
-      id:
-        description: ID of the ent.
-        type: integer
-      level:
-        description: 审批级别（1=一级,2=二级...）
-        type: integer
-      level_name:
-        description: 级别名称
-        type: string
-      processed_at:
-        description: 处理时间
-        type: string
-      status:
-        description: '审批状态: pending/approved/rejected/cancelled'
-        type: string
-      tenant_id:
-        description: 租户ID
-        type: integer
-      ticket_id:
-        description: 工单ID
-        type: integer
-      updated_at:
-        description: 更新时间
-        type: string
-    type: object
-  ent.TicketApprovalEdges:
-    properties:
-      ticket:
-        allOf:
-        - $ref: '#/definitions/ent.Ticket'
-        description: 所属工单
     type: object
   ent.TicketAttachment:
     properties:
@@ -8387,9 +8721,6 @@ definitions:
       updated_at:
         description: 更新时间
         type: string
-      workflow_id:
-        description: 关联工作流ID
-        type: integer
     type: object
   ent.TicketCategoryEdges:
     properties:
@@ -8411,10 +8742,6 @@ definitions:
         items:
           $ref: '#/definitions/ent.Ticket'
         type: array
-      workflow:
-        allOf:
-        - $ref: '#/definitions/ent.Workflow'
-        description: 关联工作流
     type: object
   ent.TicketComment:
     properties:
@@ -8472,11 +8799,6 @@ definitions:
     type: object
   ent.TicketEdges:
     properties:
-      approvals:
-        description: Approvals holds the value of the approvals edge.
-        items:
-          $ref: '#/definitions/ent.TicketApproval'
-        type: array
       assignee:
         allOf:
         - $ref: '#/definitions/ent.User'
@@ -8487,10 +8809,9 @@ definitions:
           $ref: '#/definitions/ent.TicketAttachment'
         type: array
       category:
+        allOf:
+        - $ref: '#/definitions/ent.TicketCategory'
         description: Category holds the value of the category edge.
-        items:
-          $ref: '#/definitions/ent.TicketCategory'
-        type: array
       cc_users:
         description: CcUsers holds the value of the cc_users edge.
         items:
@@ -8574,7 +8895,7 @@ definitions:
         description: 发送时间
         type: string
       status:
-        description: '状态: pending, sent, read'
+        description: '状态: pending, processing, sent, read'
         type: string
       tenant_id:
         description: 租户ID
@@ -8939,260 +9260,6 @@ definitions:
           $ref: '#/definitions/ent.ProcessVersionChangelog'
         type: array
     type: object
-  ent.Workflow:
-    properties:
-      created_at:
-        description: 创建时间
-        type: string
-      definition:
-        description: 工作流定义
-        items:
-          type: integer
-        type: array
-      department_id:
-        description: 部门ID
-        type: integer
-      description:
-        description: 工作流描述
-        type: string
-      edges:
-        allOf:
-        - $ref: '#/definitions/ent.WorkflowEdges'
-        description: |-
-          Edges holds the relations/edges for other nodes in the graph.
-          The values are being populated by the WorkflowQuery when eager-loading is set.
-      id:
-        description: ID of the ent.
-        type: integer
-      is_active:
-        description: 是否启用
-        type: boolean
-      name:
-        description: 工作流名称
-        type: string
-      tenant_id:
-        description: 租户ID
-        type: integer
-      type:
-        description: 工作流类型
-        type: string
-      updated_at:
-        description: 更新时间
-        type: string
-      version:
-        description: 版本号
-        type: string
-    type: object
-  ent.WorkflowEdges:
-    properties:
-      department:
-        allOf:
-        - $ref: '#/definitions/ent.Department'
-        description: 所属部门
-      workflow_instances:
-        description: 工作流实例
-        items:
-          $ref: '#/definitions/ent.WorkflowInstance'
-        type: array
-      workflow_versions:
-        description: 版本历史
-        items:
-          $ref: '#/definitions/ent.WorkflowVersion'
-        type: array
-    type: object
-  ent.WorkflowInstance:
-    properties:
-      completed_at:
-        description: 完成时间
-        type: string
-      context:
-        description: 执行上下文
-        items:
-          type: integer
-        type: array
-      created_at:
-        description: 创建时间
-        type: string
-      current_step:
-        description: 当前步骤
-        type: string
-      edges:
-        allOf:
-        - $ref: '#/definitions/ent.WorkflowInstanceEdges'
-        description: |-
-          Edges holds the relations/edges for other nodes in the graph.
-          The values are being populated by the WorkflowInstanceQuery when eager-loading is set.
-      entity_id:
-        description: 关联实体ID
-        type: integer
-      entity_type:
-        description: 关联实体类型
-        type: string
-      id:
-        description: ID of the ent.
-        type: integer
-      started_at:
-        description: 开始时间
-        type: string
-      status:
-        description: 实例状态
-        type: string
-      tenant_id:
-        description: 租户ID
-        type: integer
-      updated_at:
-        description: 更新时间
-        type: string
-      workflow_id:
-        description: 工作流ID
-        type: integer
-    type: object
-  ent.WorkflowInstanceEdges:
-    properties:
-      workflow:
-        allOf:
-        - $ref: '#/definitions/ent.Workflow'
-        description: Workflow holds the value of the workflow edge.
-      workflow_tasks:
-        description: 任务列表
-        items:
-          $ref: '#/definitions/ent.WorkflowTask'
-        type: array
-    type: object
-  ent.WorkflowTask:
-    properties:
-      activity_id:
-        description: 活动ID
-        type: string
-      assignee:
-        description: 处理人
-        type: string
-      candidate_groups:
-        description: 候选人组，多个用逗号分隔
-        type: string
-      candidate_users:
-        description: 候选人用户，多个用逗号分隔
-        type: string
-      comment:
-        description: 备注
-        type: string
-      completed_at:
-        description: 完成时间
-        type: string
-      completed_by:
-        description: 完成人
-        type: string
-      created_at:
-        description: 创建时间
-        type: string
-      due_date:
-        description: 截止时间
-        type: string
-      edges:
-        allOf:
-        - $ref: '#/definitions/ent.WorkflowTaskEdges'
-        description: |-
-          Edges holds the relations/edges for other nodes in the graph.
-          The values are being populated by the WorkflowTaskQuery when eager-loading is set.
-      form_data:
-        description: 表单数据
-        items:
-          type: integer
-        type: array
-      id:
-        description: ID of the ent.
-        type: integer
-      instance_id:
-        description: 实例ID
-        type: integer
-      name:
-        description: 任务名称
-        type: string
-      priority:
-        description: '优先级: low, medium, high, urgent'
-        type: string
-      status:
-        description: '任务状态: pending, in_progress, completed, failed, cancelled'
-        type: string
-      task_id:
-        description: 任务ID
-        type: string
-      tenant_id:
-        description: 租户ID
-        type: integer
-      type:
-        description: '任务类型: user_task, service_task, script_task, call_activity'
-        type: string
-      updated_at:
-        description: 更新时间
-        type: string
-      variables:
-        description: 流程变量
-        items:
-          type: integer
-        type: array
-    type: object
-  ent.WorkflowTaskEdges:
-    properties:
-      instance:
-        allOf:
-        - $ref: '#/definitions/ent.WorkflowInstance'
-        description: Instance holds the value of the instance edge.
-    type: object
-  ent.WorkflowVersion:
-    properties:
-      bpmn_xml:
-        description: BPMN XML内容
-        type: string
-      change_log:
-        description: 变更日志
-        type: string
-      created_at:
-        description: 创建时间
-        type: string
-      created_by:
-        description: 创建人
-        type: string
-      edges:
-        allOf:
-        - $ref: '#/definitions/ent.WorkflowVersionEdges'
-        description: |-
-          Edges holds the relations/edges for other nodes in the graph.
-          The values are being populated by the WorkflowVersionQuery when eager-loading is set.
-      id:
-        description: ID of the ent.
-        type: integer
-      is_current:
-        description: 是否为当前版本
-        type: boolean
-      process_variables:
-        description: 流程变量定义
-        items:
-          type: integer
-        type: array
-      status:
-        description: '版本状态: draft, active, deprecated'
-        type: string
-      tenant_id:
-        description: 租户ID
-        type: integer
-      updated_at:
-        description: 更新时间
-        type: string
-      version:
-        description: 版本号，如 1.0.0
-        type: string
-      workflow_id:
-        description: 工作流ID
-        type: integer
-    type: object
-  ent.WorkflowVersionEdges:
-    properties:
-      workflow:
-        allOf:
-        - $ref: '#/definitions/ent.Workflow'
-        description: Workflow holds the value of the workflow edge.
-    type: object
   handlers.DashboardOverview:
     properties:
       incidentDistribution:
@@ -9440,6 +9507,39 @@ definitions:
     - TypeConnector
     - TypeSkill
     - TypePlugin
+  relationmetadata.Endpoint:
+    type: object
+    properties:
+      number:
+        type: string
+      recordClass:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+      version:
+        type: integer
+      workItemId:
+        type: integer
+  relationmetadata.Metadata:
+    type: object
+    properties:
+      required:
+        type: boolean
+  relationmetadata.View:
+    type: object
+    properties:
+      id:
+        type: integer
+      relationType:
+        type: string
+      required:
+        type: boolean
+      source:
+        $ref: '#/definitions/relationmetadata.Endpoint'
+      target:
+        $ref: '#/definitions/relationmetadata.Endpoint'
   service.AIRecommendation:
     properties:
       confidence:
@@ -9488,34 +9588,9 @@ definitions:
         type: integer
       tenantId:
         type: integer
-      workflowId:
-        type: integer
     required:
     - code
     - name
-    type: object
-  service.CreateWorkflowRequest:
-    properties:
-      definition:
-        additionalProperties: true
-        type: object
-      description:
-        type: string
-      isActive:
-        type: boolean
-      name:
-        type: string
-      tenantId:
-        type: integer
-      type:
-        type: string
-      version:
-        type: string
-    required:
-    - definition
-    - name
-    - tenantId
-    - type
     type: object
   service.EscalationLevel:
     properties:
@@ -9652,9 +9727,86 @@ definitions:
     - MspRoleProviderAdmin
     - MspRoleProviderAgent
     - MspRoleCustomerUser
+  workitemcreation.CTIInput:
+    type: object
+    properties:
+      categoryId:
+        type: integer
+      itemId:
+        type: integer
+      typeId:
+        type: integer
+  workitemcreation.CreateWorkItemResult:
+    type: object
+    properties:
+      number:
+        type: string
+      professionalReference:
+        $ref: '#/definitions/workitemcreation.ProfessionalReference'
+      recordClass:
+        type: string
+      replayed:
+        type: boolean
+      workItemId:
+        type: integer
+      workflowStartStatus:
+        type: string
+  workitemcreation.ProfessionalReference:
+    type: object
+    properties:
+      id:
+        type: integer
+      type:
+        type: string
+  workitemcreation.SourceRelationInput:
+    type: object
+    properties:
+      expectedVersion:
+        type: integer
+      metadata:
+        $ref: '#/definitions/relationmetadata.Metadata'
+      relationType:
+        type: string
+      sourceWorkItemId:
+        type: integer
+  workitemmutation.Result:
+    type: object
+    properties:
+      replayed:
+        type: boolean
+      status:
+        type: string
+      version:
+        type: integer
+      workItemId:
+        type: integer
 info:
   contact: {}
 paths:
+  /api/v1/work-items/{id}/relation-context:
+    get:
+      description: Read-only current-actor source context; target authorization and relation validity are checked on mutation.
+      produces:
+      - application/json
+      tags:
+      - work-items
+      summary: Get WorkItem relation context
+      parameters:
+      - type: integer
+        description: Source WorkItem ID
+        name: id
+        in: path
+        required: true
+      responses:
+        '200':
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - type: object
+              properties:
+                data:
+                  $ref: '#/definitions/service.RelationContext'
   /api/knowledge/search:
     post:
       consumes:
@@ -10151,52 +10303,53 @@ paths:
     post:
       consumes:
       - application/json
-      description: 使用用户名/邮箱和密码登录，通过 HttpOnly Cookie 建立会话
       parameters:
-      - description: 登录请求（username/email + password）
+      - description: 登录请求
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.LoginRequest'
+          $ref: '#/definitions/common.LoginRequest'
       produces:
       - application/json
       responses:
         "200":
-          description: 登录成功，返回用户和租户信息
+          description: OK
           schema:
-            $ref: '#/definitions/dto.LoginResponse'
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/common.AuthResult'
+              type: object
         "400":
-          description: 请求参数错误
+          description: Bad Request
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/common.Response'
         "401":
-          description: 认证失败（用户名或密码错误）
+          description: Unauthorized
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/common.Response'
       summary: 用户登录
       tags:
       - 认证
   /api/v1/auth/logout:
     post:
-      consumes:
-      - application/json
-      description: 使当前用户的令牌失效，退出登录
       produces:
       - application/json
       responses:
         "200":
-          description: 登出成功
+          description: OK
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/common.Response'
         "401":
-          description: 用户未认证
+          description: Unauthorized
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/common.Response'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/common.Response'
       security:
       - BearerAuth: []
       summary: 用户登出
@@ -10242,30 +10395,30 @@ paths:
     post:
       consumes:
       - application/json
-      description: 使用 HttpOnly 刷新令牌 Cookie 获取新的访问令牌
-      parameters:
-      - description: 非浏览器客户端的刷新令牌（兼容）
-        in: body
-        name: request
-        schema:
-          $ref: '#/definitions/dto.RefreshTokenRequest'
       produces:
       - application/json
       responses:
         "200":
-          description: 刷新成功，Cookie 已更新
+          description: OK
           schema:
-            $ref: '#/definitions/dto.RefreshTokenResponse'
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/common.AuthResult'
+              type: object
         "400":
-          description: 请求参数错误
+          description: Bad Request
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/common.Response'
         "401":
-          description: 刷新令牌无效或已过期
+          description: Unauthorized
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/common.Response'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/common.Response'
       summary: 刷新访问令牌
       tags:
       - 认证
@@ -10540,6 +10693,118 @@ paths:
       summary: 获取流程模板建议
       tags:
       - BPMN AI
+  /api/v1/changes:
+    get:
+      description: Current base read scope before pagination/count; relations use current actor RR projection.
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      tags:
+      - changes
+      summary: ListChanges
+      responses:
+        '200':
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - type: object
+              properties:
+                data:
+                  $ref: '#/definitions/dto.ChangeListResponse'
+    post:
+      description: Source relations use observed WorkItem versions and typed metadata; target, extension, links, audit and receipt commit atomically. Idempotency-Key required; replay HTTP 200.
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      tags:
+      - changes
+      summary: CreateChange
+      parameters:
+      - description: Request
+        name: body
+        in: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateChangeRequest'
+      responses:
+        '200':
+          description: Replay
+          schema:
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - type: object
+              properties:
+                data:
+                  $ref: '#/definitions/workitemcreation.CreateWorkItemResult'
+        '201':
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - type: object
+              properties:
+                data:
+                  $ref: '#/definitions/workitemcreation.CreateWorkItemResult'
+  /api/v1/changes/{id}:
+    get:
+      description: Current actor RR detail and relation endpoint projection.
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      tags:
+      - changes
+      summary: GetChange
+      parameters:
+      - type: integer
+        description: Professional extension ID
+        name: id
+        in: path
+        required: true
+      responses:
+        '200':
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - type: object
+              properties:
+                data:
+                  $ref: '#/definitions/dto.ChangeResponse'
+    put:
+      description: Immutable mutation receipt. RelatedTickets is unsupported; refresh separately.
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      tags:
+      - changes
+      summary: UpdateChange
+      parameters:
+      - type: integer
+        description: Professional extension ID
+        name: id
+        in: path
+        required: true
+      - description: Request
+        name: body
+        in: body
+        required: true
+        schema:
+          $ref: '#/definitions/change.MetadataRequest'
+      responses:
+        '200':
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - type: object
+              properties:
+                data:
+                  $ref: '#/definitions/workitemmutation.Result'
   /api/v1/cloud/accounts:
     get:
       consumes:
@@ -13625,7 +13890,7 @@ paths:
             - $ref: '#/definitions/common.Response'
             - properties:
                 data:
-                  $ref: '#/definitions/ent.Problem'
+                  $ref: '#/definitions/dto.ProblemResponse'
               type: object
         "400":
           description: Bad Request
@@ -15131,6 +15396,182 @@ paths:
       summary: 标记所有通知为已读
       tags:
       - 通知管理
+  /api/v1/problems:
+    get:
+      description: Current read scope applies before pagination and count; each relation endpoint is authorized.
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      tags:
+      - problems
+      summary: List
+      responses:
+        '200':
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - type: object
+              properties:
+                data:
+                  $ref: '#/definitions/dto.ListProblemsResponse'
+    post:
+      description: Creation returns immutable intake receipt; replay is HTTP 200.
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      tags:
+      - problems
+      summary: Create
+      parameters:
+      - description: Request
+        name: body
+        in: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateProblemRequest'
+      responses:
+        '200':
+          description: Replay
+          schema:
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - type: object
+              properties:
+                data:
+                  $ref: '#/definitions/workitemcreation.CreateWorkItemResult'
+        '201':
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - type: object
+              properties:
+                data:
+                  $ref: '#/definitions/workitemcreation.CreateWorkItemResult'
+  /api/v1/problems/{id}:
+    get:
+      description: Current actor RR read; relations is an authoritative array, including empty array.
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      tags:
+      - problems
+      summary: Get
+      parameters:
+      - type: integer
+        description: Professional extension ID
+        name: id
+        in: path
+        required: true
+      responses:
+        '200':
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - type: object
+              properties:
+                data:
+                  $ref: '#/definitions/dto.ProblemResponse'
+    put:
+      description: Committed metadata response omits relations. Refresh separately; denied refresh does not undo the committed update.
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      tags:
+      - problems
+      summary: Update
+      parameters:
+      - type: integer
+        description: Professional extension ID
+        name: id
+        in: path
+        required: true
+      - description: Request
+        name: body
+        in: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateProblemRequest'
+      responses:
+        '200':
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - type: object
+              properties:
+                data:
+                  $ref: '#/definitions/dto.ProblemResponse'
+  /api/v1/problems/{id}/root-cause:
+    put:
+      description: Committed metadata response omits relations; refresh separately.
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      tags:
+      - problems
+      summary: UpdateRootCause
+      parameters:
+      - type: integer
+        description: Professional extension ID
+        name: id
+        in: path
+        required: true
+      - description: Request
+        name: body
+        in: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateProblemRootCauseRequest'
+      responses:
+        '200':
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - type: object
+              properties:
+                data:
+                  $ref: '#/definitions/dto.ProblemResponse'
+  /api/v1/problems/{id}/solution:
+    put:
+      description: Committed metadata response omits relations; refresh separately.
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      tags:
+      - problems
+      summary: UpdateSolution
+      parameters:
+      - type: integer
+        description: Professional extension ID
+        name: id
+        in: path
+        required: true
+      - description: Request
+        name: body
+        in: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateProblemResolutionRequest'
+      responses:
+        '200':
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - type: object
+              properties:
+                data:
+                  $ref: '#/definitions/dto.ProblemResponse'
   /api/v1/process-trigger:
     post:
       consumes:
@@ -15373,6 +15814,47 @@ paths:
       summary: 标记通知为已读
       tags:
       - 通知管理
+  /api/v1/standard-changes/{id}/instantiate:
+    post:
+      description: Uses frozen approved template and observed sourceRelations; Idempotency-Key required; replay HTTP 200 returns original receipt.
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      tags:
+      - changes
+      summary: InstantiateStandardChange
+      parameters:
+      - type: integer
+        description: Professional extension ID
+        name: id
+        in: path
+        required: true
+      - description: Request
+        name: body
+        in: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.InstantiateStandardChangeRequest'
+      responses:
+        '200':
+          description: Replay
+          schema:
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - type: object
+              properties:
+                data:
+                  $ref: '#/definitions/workitemcreation.CreateWorkItemResult'
+        '201':
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - type: object
+              properties:
+                data:
+                  $ref: '#/definitions/workitemcreation.CreateWorkItemResult'
   /api/v1/tags:
     post:
       consumes:
@@ -16035,35 +16517,6 @@ paths:
       summary: 接单
       tags:
       - 工单流转
-  /api/v1/tickets/workflow/approve:
-    post:
-      consumes:
-      - application/json
-      description: 审批工单（通过/拒绝/委派）
-      parameters:
-      - description: 审批请求
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.ApproveTicketRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/common.Response'
-            - properties:
-                data:
-                  additionalProperties:
-                    type: string
-                  type: object
-              type: object
-      summary: 审批工单
-      tags:
-      - 工单流转
   /api/v1/tickets/workflow/cc:
     post:
       consumes:
@@ -16149,35 +16602,6 @@ paths:
                   type: object
               type: object
       summary: 转发工单
-      tags:
-      - 工单流转
-  /api/v1/tickets/workflow/reject:
-    post:
-      consumes:
-      - application/json
-      description: 驳回工单并说明原因
-      parameters:
-      - description: 驳回请求
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.RejectTicketRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/common.Response'
-            - properties:
-                data:
-                  additionalProperties:
-                    type: string
-                  type: object
-              type: object
-      summary: 驳回工单
       tags:
       - 工单流转
   /api/v1/tickets/workflow/reopen:
@@ -16618,116 +17042,94 @@ paths:
       summary: 获取用户统计
       tags:
       - 用户管理
-  /api/v1/workflows:
+  /api/v1/work-items/{id}/relations:
     get:
+      description: Current persisted actor, registry permission and both endpoint row scopes are rechecked. The path is a WorkItem ID; mutation body sourceWorkItemId must match. Writes return immutable receipts; refresh separately.
       consumes:
       - application/json
-      description: 获取所有工作流列表，支持分页
-      parameters:
-      - description: 页码
-        in: query
-        name: page
-        type: integer
-      - description: 每页数量
-        in: query
-        name: page_size
-        type: integer
       produces:
       - application/json
+      tags:
+      - work-items
+      summary: List WorkItem relations
+      parameters:
+      - type: integer
+        description: Source WorkItem ID (read may traverse either endpoint)
+        name: id
+        in: path
+        required: true
       responses:
-        "200":
+        '200':
           description: OK
           schema:
-            $ref: '#/definitions/common.Response'
-      summary: 获取工作流列表
-      tags:
-      - 工作流管理
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - type: object
+              properties:
+                data:
+                  type: array
+                  items:
+                    $ref: '#/definitions/relationmetadata.View'
     post:
+      description: Current persisted actor, registry permission and both endpoint row scopes are rechecked. The path is a WorkItem ID; mutation body sourceWorkItemId must match. Writes return immutable receipts; refresh separately.
       consumes:
       - application/json
-      description: 创建新的工作流定义
-      parameters:
-      - description: 工作流信息
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/service.CreateWorkflowRequest'
       produces:
       - application/json
+      tags:
+      - work-items
+      summary: Add WorkItem relations
+      parameters:
+      - type: integer
+        description: Source WorkItem ID (read may traverse either endpoint)
+        name: id
+        in: path
+        required: true
+      - description: Observed source version, stable operationId, exact directed endpoints and typed metadata
+        name: body
+        in: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.WorkItemRelationRequest'
       responses:
-        "200":
+        '200':
           description: OK
           schema:
-            $ref: '#/definitions/common.Response'
-      summary: 创建工作流
-      tags:
-      - 工作流管理
-  /api/v1/workflows/{id}:
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - type: object
+              properties:
+                data:
+                  $ref: '#/definitions/workitemmutation.Result'
     delete:
+      description: Current persisted actor, registry permission and both endpoint row scopes are rechecked. The path is a WorkItem ID; mutation body sourceWorkItemId must match. Writes return immutable receipts; refresh separately.
       consumes:
       - application/json
-      description: 删除指定的工作流
-      parameters:
-      - description: 工作流ID
-        in: path
-        name: id
-        required: true
-        type: integer
       produces:
       - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 删除工作流
       tags:
-      - 工作流管理
-    get:
-      consumes:
-      - application/json
-      description: 获取指定工作流的详细信息
+      - work-items
+      summary: Remove WorkItem relations
       parameters:
-      - description: 工作流ID
-        in: path
+      - type: integer
+        description: Source WorkItem ID (read may traverse either endpoint)
         name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/common.Response'
-      summary: 获取工作流详情
-      tags:
-      - 工作流管理
-    put:
-      consumes:
-      - application/json
-      description: 更新已有的工作流定义
-      parameters:
-      - description: 工作流ID
         in: path
-        name: id
         required: true
-        type: integer
-      - description: 工作流信息
+      - description: Observed source version, stable operationId, exact directed endpoints and typed metadata
+        name: body
         in: body
-        name: request
         required: true
         schema:
-          $ref: '#/definitions/service.CreateWorkflowRequest'
-      produces:
-      - application/json
+          $ref: '#/definitions/dto.WorkItemRelationRequest'
       responses:
-        "200":
+        '200':
           description: OK
           schema:
-            $ref: '#/definitions/common.Response'
-      summary: 更新工作流
-      tags:
-      - 工作流管理
+            allOf:
+            - $ref: '#/definitions/common.Response'
+            - type: object
+              properties:
+                data:
+                  $ref: '#/definitions/workitemmutation.Result'
 swagger: "2.0"

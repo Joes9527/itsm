@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 )
@@ -30,6 +31,6 @@ func (IncidentRule) Fields() []ent.Field {
 
 func (IncidentRule) Edges() []ent.Edge {
 	return []ent.Edge{
-		edge.To("rule_executions", IncidentRuleExecution.Type).Comment("规则执行记录"),
+		edge.To("rule_executions", IncidentRuleExecution.Type).Annotations(entsql.OnDelete(entsql.Restrict)).Comment("规则执行记录"),
 	}
 }

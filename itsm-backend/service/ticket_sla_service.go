@@ -2,9 +2,13 @@ package service
 
 import (
 	"context"
-	"strconv"
+	"fmt"
 	"strings"
 	"time"
+
+	"itsm-backend/database"
+	"itsm-backend/dto"
+	"itsm-backend/handlers/shared/slacontract"
 
 	"itsm-backend/common"
 	"itsm-backend/ent"
@@ -33,17 +37,22 @@ type TicketSLAServiceInterface interface {
 
 // TicketSLAInfoResult 工单SLA信息（计算结果）
 type TicketSLAInfoResult struct {
-	TicketID           int        `json:"ticketId"`
-	TicketNumber       string     `json:"ticketNumber"`
-	Priority           string     `json:"priority"`
-	TicketType         string     `json:"ticketType"`
-	ResponseDeadline   *time.Time `json:"responseDeadline"`
-	ResolutionDeadline *time.Time `json:"resolutionDeadline"`
-	ResponseTimeUsed   int        `json:"responseTimeUsed"`   // 分钟
-	ResolutionTimeUsed int        `json:"resolutionTimeUsed"` // 分钟
-	ResponseBreached   bool       `json:"responseBreached"`
-	ResolutionBreached bool       `json:"resolutionBreached"`
-	SLAStatus          string     `json:"slaStatus"` // ok, warning, breached
+	CycleNumber        int                  `json:"cycleNumber"`
+	CycleStartedAt     *time.Time           `json:"cycleStartedAt"`
+	PausedMinutes      int                  `json:"pausedMinutes"`
+	AppliedPolicy      *slacontract.Policy  `json:"appliedPolicy"`
+	History            []dto.SLACycleResult `json:"history"`
+	TicketID           int                  `json:"ticketId"`
+	TicketNumber       string               `json:"ticketNumber"`
+	Priority           string               `json:"priority"`
+	TicketType         string               `json:"ticketType"`
+	ResponseDeadline   *time.Time           `json:"responseDeadline"`
+	ResolutionDeadline *time.Time           `json:"resolutionDeadline"`
+	ResponseTimeUsed   int                  `json:"responseTimeUsed"`   // 分钟
+	ResolutionTimeUsed int                  `json:"resolutionTimeUsed"` // 分钟
+	ResponseBreached   bool                 `json:"responseBreached"`
+	ResolutionBreached bool                 `json:"resolutionBreached"`
+	SLAStatus          string               `json:"slaStatus"` // ok, warning, breached
 }
 
 // SLADeadlineResult SLA截止时间计算结果
@@ -67,8 +76,9 @@ type TicketStats struct {
 
 // TicketSLAService 工单SLA服务
 type TicketSLAService struct {
-	client *ent.Client
-	logger *zap.SugaredLogger
+	directory database.DirectorySnapshot
+	client    *ent.Client
+	logger    *zap.SugaredLogger
 }
 
 // NewTicketSLAService 创建工单SLA服务
@@ -90,103 +100,30 @@ func (s *TicketSLAService) GetTicketSLAInfo(ctx context.Context, ticketID int, t
 		return nil, err
 	}
 
-	// 计算已用时间
-	responseTimeUsed := int(time.Since(t.CreatedAt).Minutes())
-	resolutionTimeUsed := int(time.Since(t.CreatedAt).Minutes())
-
-	// 如果已有首次响应时间或解决时间，使用实际时间
-	if !t.FirstResponseAt.IsZero() {
-		responseTimeUsed = int(t.FirstResponseAt.Sub(t.CreatedAt).Minutes())
-	}
-	if !t.ResolvedAt.IsZero() {
-		resolutionTimeUsed = int(t.ResolvedAt.Sub(t.CreatedAt).Minutes())
-	}
-	slaDef, err := s.getSLADefinition(ctx, tenantID, t.Type, t.Priority, 0)
+	result := projectSLACycle(t, time.Now())
+	result.TicketType = common.WorkItemLegacyType(t.RecordClass, t.GenericSubtype)
+	result.History, err = s.cycleHistory(ctx, t)
 	if err != nil {
-		s.logger.Warnw("Failed to get SLA definition", "error", err)
-		// 返回没有SLA信息的结果
-		return &TicketSLAInfoResult{
-			TicketID:           t.ID,
-			TicketNumber:       t.TicketNumber,
-			Priority:           t.Priority,
-			TicketType:         t.Type,
-			ResponseTimeUsed:   responseTimeUsed,
-			ResolutionTimeUsed: resolutionTimeUsed,
-			SLAStatus:          "unknown",
-		}, nil
+		return nil, err
 	}
-
-	// 计算截止时间。
-	// 阻断7/C-8 修复：统一读取 slaDef.BusinessHours 配置，与 CalculateSLADeadlineFromRequest
-	// 使用同一口径，消除"建单落库调整 / 查询展示不调整"的两路径结论相反问题。
-	var responseDeadline, resolutionDeadline *time.Time
-	if slaDef.ResponseTime > 0 {
-		respDeadline := s.calculateDeadlineWithBusinessHours(t.CreatedAt, slaDef.ResponseTime, slaDef.BusinessHours)
-		responseDeadline = &respDeadline
-	}
-	if slaDef.ResolutionTime > 0 {
-		resDeadline := s.calculateDeadlineWithBusinessHours(t.CreatedAt, slaDef.ResolutionTime, slaDef.BusinessHours)
-		resolutionDeadline = &resDeadline
-	}
-
-	// 判断是否违规
-	responseBreached := false
-	resolutionBreached := false
-	slaStatus := "ok"
-
-	if responseDeadline != nil && time.Now().After(*responseDeadline) {
-		responseBreached = true
-		slaStatus = "breached"
-	}
-
-	if resolutionDeadline != nil && time.Now().After(*resolutionDeadline) {
-		resolutionBreached = true
-		slaStatus = "breached"
-	}
-
-	// 检查警告状态（默认30分钟警告）
-	if !responseBreached && !resolutionBreached && responseDeadline != nil {
-		timeLeft := time.Until(*responseDeadline)
-		if timeLeft.Minutes() < 30 {
-			slaStatus = "warning"
-		}
-	}
-
-	return &TicketSLAInfoResult{
-		TicketID:           t.ID,
-		TicketNumber:       t.TicketNumber,
-		Priority:           t.Priority,
-		TicketType:         t.Type,
-		ResponseDeadline:   responseDeadline,
-		ResolutionDeadline: resolutionDeadline,
-		ResponseTimeUsed:   responseTimeUsed,
-		ResolutionTimeUsed: resolutionTimeUsed,
-		ResponseBreached:   responseBreached,
-		ResolutionBreached: resolutionBreached,
-		SLAStatus:          slaStatus,
-	}, nil
+	return &result, nil
 }
 
 // GetOverdueTickets 获取逾期工单
 func (s *TicketSLAService) GetOverdueTickets(ctx context.Context, tenantID int) ([]*ent.Ticket, error) {
-	// SLA 截止时间在建单时已落库，直接由数据库筛选，避免逐工单查询 SLA 定义的 N+1。
-	now := time.Now()
-	tickets, err := s.client.Ticket.Query().
-		Where(
-			ticket.TenantID(tenantID),
-			ticket.DeletedAtIsNil(),
-			ticket.StatusNEQ(common.TicketStatusClosed),
-			ticket.StatusNEQ(common.TicketStatusResolved),
-			ticket.SLAResolutionDeadlineNotNil(),
-			ticket.SLAResolutionDeadlineLT(now),
-		).
-		All(ctx)
+	// Persisted deadlines already include pauses; keep the active deadline filter
+	// in SQL rather than scanning every unresolved WorkItem in the tenant.
+	items, err := s.client.Ticket.Query().Where(ticket.TenantID(tenantID), ticket.DeletedAtIsNil(), ticket.ResolvedAtIsNil(), ticket.ClosedAtIsNil(), ticket.SLAResolutionDeadlineLT(time.Now())).All(ctx)
 	if err != nil {
-		s.logger.Errorw("Failed to query tickets", "error", err)
 		return nil, err
 	}
-
-	return tickets, nil
+	result := make([]*ent.Ticket, 0)
+	for _, item := range items {
+		if projectSLACycle(item, time.Now()).ResolutionBreached {
+			result = append(result, item)
+		}
+	}
+	return result, nil
 }
 
 // GetTicketStats 获取工单统计
@@ -242,6 +179,17 @@ func (s *TicketSLAService) GetTicketStats(ctx context.Context, tenantID int) (*T
 	}
 	stats.OverdueTickets = len(overdueTickets)
 
+	items, err := s.client.Ticket.Query().Where(ticket.TenantID(tenantID), ticket.DeletedAtIsNil()).All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range items {
+		p := projectSLACycle(item, time.Now())
+		if p.ResponseBreached || p.ResolutionBreached {
+			stats.BreachedTickets++
+		}
+	}
+
 	return stats, nil
 }
 
@@ -257,12 +205,18 @@ func (s *TicketSLAService) CalculateSLADeadline(ctx context.Context, tenantID in
 	now := time.Now()
 
 	if slaDef.ResponseTime > 0 {
-		respDeadline := s.calculateDeadlineWithBusinessHours(now, slaDef.ResponseTime, slaDef.BusinessHours)
+		respDeadline, err := s.calculateDeadlineWithBusinessHours(now, slaDef.ResponseTime, slaDef.BusinessHours)
+		if err != nil {
+			return nil, err
+		}
 		result.ResponseDeadline = &respDeadline
 	}
 
 	if slaDef.ResolutionTime > 0 {
-		resDeadline := s.calculateDeadlineWithBusinessHours(now, slaDef.ResolutionTime, slaDef.BusinessHours)
+		resDeadline, err := s.calculateDeadlineWithBusinessHours(now, slaDef.ResolutionTime, slaDef.BusinessHours)
+		if err != nil {
+			return nil, err
+		}
 		result.ResolutionDeadline = &resDeadline
 	}
 
@@ -332,18 +286,26 @@ func (s *TicketSLAService) defaultSLADefinition() *ent.SLADefinition {
 
 // calculateDeadlineWithBusinessHours applies an SLA definition's configured
 // business calendar. An empty calendar intentionally preserves 24x7 SLA time.
-func (s *TicketSLAService) calculateDeadlineWithBusinessHours(startTime time.Time, durationMinutes int, businessHours map[string]interface{}) time.Time {
-	if len(businessHours) == 0 || durationMinutes <= 0 {
-		return startTime.Add(time.Duration(durationMinutes) * time.Minute)
+func (s *TicketSLAService) calculateDeadlineWithBusinessHours(startTime time.Time, durationMinutes int, businessHours map[string]interface{}) (time.Time, error) {
+	if durationMinutes < 0 || int64(durationMinutes) > int64(^uint64(0)>>1)/int64(time.Minute) {
+		return time.Time{}, fmt.Errorf("SLA duration is out of range")
 	}
-	return addBusinessMinutes(startTime, durationMinutes, parseBusinessHoursConfig(businessHours))
+	if len(businessHours) == 0 {
+		return startTime.Add(time.Duration(durationMinutes) * time.Minute), nil
+	}
+	cfg, err := parseBusinessHoursConfig(businessHours)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return addBusinessMinutes(startTime, durationMinutes, cfg)
 }
 
 // AdjustToBusinessHours 调整到工作时间（公开方法，供外部调用）。
 // 阻断7 说明：此方法保留向后兼容，仅用于"把某个时刻对齐到最近的工作时段起点"，
 // 不能用于计算 SLA 截止时间（截止时间必须用 calculateDeadline/addBusinessMinutes）。
 func (s *TicketSLAService) AdjustToBusinessHours(t time.Time) time.Time {
-	return adjustToBusinessHoursStart(t, defaultBusinessHoursConfig())
+	result, _ := adjustToBusinessHoursStart(t, defaultBusinessHoursConfig())
+	return result
 }
 
 // businessHoursConfig 业务时间配置。
@@ -376,57 +338,65 @@ func defaultBusinessHoursConfig() businessHoursConfig {
 //	{ "work_days": [1,2,3,4,5], "start_time": "09:00", "end_time": "18:00",
 //	  "time_zone": "Asia/Shanghai", "holiday_list": ["2026-01-01"] }
 //
-// 空或解析失败时返回默认配置（不阻断 SLA 计算）。
-func parseBusinessHoursConfig(raw map[string]interface{}) businessHoursConfig {
+// Missing calendar attributes use documented defaults; invalid declarations fail closed.
+func parseBusinessHoursConfig(raw map[string]interface{}) (businessHoursConfig, error) {
 	cfg := defaultBusinessHoursConfig()
-	if len(raw) == 0 {
-		return cfg
-	}
-	if days, ok := raw["work_days"].([]interface{}); ok && len(days) > 0 {
+	if value, exists := raw["work_days"]; exists {
+		days, ok := value.([]interface{})
+		if !ok || len(days) == 0 {
+			return cfg, fmt.Errorf("SLA work_days must be a nonempty array")
+		}
 		cfg.workDays = map[time.Weekday]bool{}
-		// work_days 用 1-7 表示周一到周日（与 time.Weekday 0=Sunday 不同）
-		dayMap := map[int]time.Weekday{
-			1: time.Monday, 2: time.Tuesday, 3: time.Wednesday,
-			4: time.Thursday, 5: time.Friday, 6: time.Saturday, 7: time.Sunday,
-		}
-		for _, d := range days {
-			if dv, ok := d.(float64); ok {
-				if wd, ok := dayMap[int(dv)]; ok {
-					cfg.workDays[wd] = true
-				}
+		for _, day := range days {
+			n, err := slaConfigurationInteger(day, 1, 7)
+			if err != nil {
+				return cfg, fmt.Errorf("invalid SLA work day: %w", err)
 			}
+			cfg.workDays[time.Weekday(n%7)] = true
 		}
 	}
-	parseHM := func(s string) (int, int) {
-		parts := strings.Split(s, ":")
-		if len(parts) != 2 {
-			return -1, -1
+	parseHM := func(key string, hour, minute *int) error {
+		rawValue, exists := raw[key]
+		if !exists {
+			return nil
 		}
-		h, e1 := strconv.Atoi(parts[0])
-		m, e2 := strconv.Atoi(parts[1])
-		if e1 != nil || e2 != nil {
-			return -1, -1
+		value, ok := rawValue.(string)
+		if !ok {
+			return fmt.Errorf("invalid SLA %s", key)
 		}
-		return h, m
+		parsed, err := time.Parse("15:04", value)
+		if err != nil {
+			return fmt.Errorf("invalid SLA %s", key)
+		}
+		*hour, *minute = parsed.Hour(), parsed.Minute()
+		return nil
 	}
-	if st, ok := raw["start_time"].(string); ok {
-		if h, m := parseHM(st); h >= 0 {
-			cfg.startHour, cfg.startMin = h, m
-		}
+	if err := parseHM("start_time", &cfg.startHour, &cfg.startMin); err != nil {
+		return cfg, err
 	}
-	if et, ok := raw["end_time"].(string); ok {
-		if h, m := parseHM(et); h >= 0 {
-			cfg.endHour, cfg.endMin = h, m
-		}
+	if err := parseHM("end_time", &cfg.endHour, &cfg.endMin); err != nil {
+		return cfg, err
 	}
-	if holidays, ok := raw["holiday_list"].([]interface{}); ok {
-		for _, h := range holidays {
-			if hs, ok := h.(string); ok {
-				cfg.holidays[hs] = true
+	if cfg.endHour*60+cfg.endMin <= cfg.startHour*60+cfg.startMin {
+		return cfg, fmt.Errorf("SLA work period must end after it starts")
+	}
+	if value, exists := raw["holiday_list"]; exists {
+		holidays, ok := value.([]interface{})
+		if !ok {
+			return cfg, fmt.Errorf("invalid SLA holiday_list")
+		}
+		for _, value := range holidays {
+			day, ok := value.(string)
+			if !ok {
+				return cfg, fmt.Errorf("invalid SLA holiday")
 			}
+			if _, err := time.Parse("2006-01-02", day); err != nil {
+				return cfg, fmt.Errorf("invalid SLA holiday")
+			}
+			cfg.holidays[day] = true
 		}
 	}
-	return cfg
+	return cfg, nil
 }
 
 // isHoliday 判断给定日期是否为节假日。
@@ -455,60 +425,58 @@ func (c businessHoursConfig) workDayEnd(t time.Time) time.Time {
 }
 
 // nextWorkDayStart 返回 t 之后下一个工作日的工时开始时刻。
-func (c businessHoursConfig) nextWorkDayStart(t time.Time) time.Time {
-	next := t.AddDate(0, 0, 1)
-	for !c.isWorkDay(next) {
-		next = next.AddDate(0, 0, 1)
+func (c businessHoursConfig) nextWorkDayStart(t time.Time) (time.Time, error) {
+	if len(c.workDays) == 0 {
+		return time.Time{}, fmt.Errorf("SLA has no working days")
 	}
-	return c.workDayStart(next)
+	// Each holiday can exclude at most one candidate date. Seven days per
+	// holiday plus one complete week bounds the search even for sparse calendars.
+	for i := 1; i <= 7*(len(c.holidays)+1); i++ {
+		next := t.AddDate(0, 0, i)
+		if c.isWorkDay(next) {
+			return c.workDayStart(next), nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("SLA has no reachable working day")
 }
 
-// adjustToBusinessHoursStart 把时刻 t 对齐到最近的工作时段起点。
-// 若 t 已在工作时段内，返回 t；否则返回下一个工作时段起点。
-func adjustToBusinessHoursStart(t time.Time, cfg businessHoursConfig) time.Time {
-	// 跳过非工作日
-	for !cfg.isWorkDay(t) {
-		t = cfg.nextWorkDayStart(t)
-	}
-	dayStart := cfg.workDayStart(t)
-	dayEnd := cfg.workDayEnd(t)
-	if t.Before(dayStart) {
-		return dayStart
-	}
-	if !t.Before(dayEnd) {
-		// 当天工时已结束，跳到下一个工作日
+func adjustToBusinessHoursStart(t time.Time, cfg businessHoursConfig) (time.Time, error) {
+	if !cfg.isWorkDay(t) {
 		return cfg.nextWorkDayStart(t)
 	}
-	return t
+	if t.Before(cfg.workDayStart(t)) {
+		return cfg.workDayStart(t), nil
+	}
+	if !t.Before(cfg.workDayEnd(t)) {
+		return cfg.nextWorkDayStart(t)
+	}
+	return t, nil
 }
 
-// addBusinessMinutes 从 start 开始，只在工作时段内消耗 minutes 分钟，返回截止时刻。
-// 阻断7 核心修复：正确排除非工作时段，而非把截止时刻平移到最近工时起点。
-// 算法：
-//  1. 若 start 在非工作时段，先把指针移到最近的工作时段起点。
-//  2. 计算当天剩余工时；若 minutes <= 当天剩余工时，截止时刻 = 当前指针 + minutes。
-//  3. 否则扣减当天剩余工时，跳到下一个工作日起点继续消耗，直到 minutes 耗尽。
-func addBusinessMinutes(start time.Time, minutes int, cfg businessHoursConfig) time.Time {
+func addBusinessMinutes(start time.Time, minutes int, cfg businessHoursConfig) (time.Time, error) {
+	if minutes == 0 {
+		return start, nil
+	}
+	cursor, err := adjustToBusinessHoursStart(start, cfg)
+	if err != nil {
+		return time.Time{}, err
+	}
 	remaining := time.Duration(minutes) * time.Minute
-	cursor := adjustToBusinessHoursStart(start, cfg)
-
-	// 防御性上限：避免极端 minutes 导致死循环（最多循环 365 天）。
 	for i := 0; i < 366 && remaining > 0; i++ {
-		dayEnd := cfg.workDayEnd(cursor)
-		available := dayEnd.Sub(cursor)
+		available := cfg.workDayEnd(cursor).Sub(cursor)
 		if available <= 0 {
-			// 理论上 adjustToBusinessHoursStart 已保证 cursor 在工时内，
-			// 此分支仅为防御性兜底，避免死循环。
-			cursor = cfg.nextWorkDayStart(cursor)
-			continue
+			return time.Time{}, fmt.Errorf("invalid SLA work period")
 		}
 		if remaining <= available {
-			return cursor.Add(remaining)
+			return cursor.Add(remaining), nil
 		}
 		remaining -= available
-		cursor = cfg.nextWorkDayStart(cursor)
+		cursor, err = cfg.nextWorkDayStart(cursor)
+		if err != nil {
+			return time.Time{}, err
+		}
 	}
-	return cursor
+	return time.Time{}, fmt.Errorf("SLA business duration exceeds supported calendar span")
 }
 
 // CalculateSLADeadlineFromRequest 根据请求参数计算SLA截止时间（包含SLADefinitionID）
@@ -529,8 +497,14 @@ func (s *TicketSLAService) CalculateSLADeadlineFromRequest(ctx context.Context, 
 		}, nil
 	}
 	businessHoursOnly := len(slaDef.BusinessHours) > 0
-	responseDeadline := s.calculateDeadlineWithBusinessHours(now, slaDef.ResponseTime, slaDef.BusinessHours)
-	resolutionDeadline := s.calculateDeadlineWithBusinessHours(now, slaDef.ResolutionTime, slaDef.BusinessHours)
+	responseDeadline, err := s.calculateDeadlineWithBusinessHours(now, slaDef.ResponseTime, slaDef.BusinessHours)
+	if err != nil {
+		return nil, err
+	}
+	resolutionDeadline, err := s.calculateDeadlineWithBusinessHours(now, slaDef.ResolutionTime, slaDef.BusinessHours)
+	if err != nil {
+		return nil, err
+	}
 	return &SLADeadlineResult{
 		SLADefinitionID:    slaDef.ID,
 		ResponseDeadline:   &responseDeadline,
@@ -551,4 +525,8 @@ func mapTicketTypeToServiceType(ticketType string) string {
 // toPointer 返回指针（辅助函数）
 func toPointer[T any](v T) *T {
 	return &v
+}
+
+func (s *TicketSLAService) SetDirectorySnapshot(directory database.DirectorySnapshot) {
+	s.directory = directory
 }

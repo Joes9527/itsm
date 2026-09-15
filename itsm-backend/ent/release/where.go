@@ -149,11 +149,6 @@ func IsEmergency(v bool) predicate.Release {
 	return predicate.Release(sql.FieldEQ(FieldIsEmergency, v))
 }
 
-// RequiresApproval applies equality check predicate on the "requires_approval" field. It's identical to RequiresApprovalEQ.
-func RequiresApproval(v bool) predicate.Release {
-	return predicate.Release(sql.FieldEQ(FieldRequiresApproval, v))
-}
-
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.Release {
 	return predicate.Release(sql.FieldEQ(FieldCreatedAt, v))
@@ -1282,16 +1277,6 @@ func IsEmergencyEQ(v bool) predicate.Release {
 // IsEmergencyNEQ applies the NEQ predicate on the "is_emergency" field.
 func IsEmergencyNEQ(v bool) predicate.Release {
 	return predicate.Release(sql.FieldNEQ(FieldIsEmergency, v))
-}
-
-// RequiresApprovalEQ applies the EQ predicate on the "requires_approval" field.
-func RequiresApprovalEQ(v bool) predicate.Release {
-	return predicate.Release(sql.FieldEQ(FieldRequiresApproval, v))
-}
-
-// RequiresApprovalNEQ applies the NEQ predicate on the "requires_approval" field.
-func RequiresApprovalNEQ(v bool) predicate.Release {
-	return predicate.Release(sql.FieldNEQ(FieldRequiresApproval, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

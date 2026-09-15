@@ -4,6 +4,8 @@ import React from 'react';
 import { Result, Button } from 'antd';
 import { LayoutDashboard, Home } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { getDefaultHomePath } from '@/config/persona/persona-config';
+import { useAuthStore } from '@/lib/store/auth-store';
 
 /**
  * 404 页面
@@ -13,17 +15,17 @@ export default function NotFound() {
   const router = useRouter();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-page">
       <Result
         status="404"
-        title="404"
+        title={<span className="text-[24px] font-semibold">404</span>}
         subTitle="抱歉，您访问的页面不存在。"
         extra={[
           <Button
             key="dashboard"
             type="primary"
             icon={<LayoutDashboard />}
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push(getDefaultHomePath(useAuthStore.getState().user?.role))}
           >
             返回仪表盘
           </Button>,

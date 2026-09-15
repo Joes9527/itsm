@@ -96,7 +96,7 @@ pending → approved
 
 ## 多租户隔离约束（FR-601 / FLOW-9）
 
-所有写操作的 `tenant_id` 强制取 token 中值，忽略客户端传入：
+所有写操作的 `tenant_id` 强制取后端已验证会话 claims 中的值，忽略客户端传入：
 
 ```go
 // 伪代码示意

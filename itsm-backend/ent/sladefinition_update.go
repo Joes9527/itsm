@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent/slametric"
 	"itsm-backend/ent/slaviolation"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -168,7 +169,7 @@ func (_u *SLADefinitionUpdate) AddResolutionTime(v int) *SLADefinitionUpdate {
 }
 
 // SetBusinessHours sets the "business_hours" field.
-func (_u *SLADefinitionUpdate) SetBusinessHours(v map[string]interface{}) *SLADefinitionUpdate {
+func (_u *SLADefinitionUpdate) SetBusinessHours(v jsonvalue.NumberMap) *SLADefinitionUpdate {
 	_u.mutation.SetBusinessHours(v)
 	return _u
 }
@@ -180,7 +181,7 @@ func (_u *SLADefinitionUpdate) ClearBusinessHours() *SLADefinitionUpdate {
 }
 
 // SetEscalationRules sets the "escalation_rules" field.
-func (_u *SLADefinitionUpdate) SetEscalationRules(v map[string]interface{}) *SLADefinitionUpdate {
+func (_u *SLADefinitionUpdate) SetEscalationRules(v jsonvalue.NumberMap) *SLADefinitionUpdate {
 	_u.mutation.SetEscalationRules(v)
 	return _u
 }
@@ -192,7 +193,7 @@ func (_u *SLADefinitionUpdate) ClearEscalationRules() *SLADefinitionUpdate {
 }
 
 // SetConditions sets the "conditions" field.
-func (_u *SLADefinitionUpdate) SetConditions(v map[string]interface{}) *SLADefinitionUpdate {
+func (_u *SLADefinitionUpdate) SetConditions(v jsonvalue.NumberMap) *SLADefinitionUpdate {
 	_u.mutation.SetConditions(v)
 	return _u
 }
@@ -926,7 +927,7 @@ func (_u *SLADefinitionUpdateOne) AddResolutionTime(v int) *SLADefinitionUpdateO
 }
 
 // SetBusinessHours sets the "business_hours" field.
-func (_u *SLADefinitionUpdateOne) SetBusinessHours(v map[string]interface{}) *SLADefinitionUpdateOne {
+func (_u *SLADefinitionUpdateOne) SetBusinessHours(v jsonvalue.NumberMap) *SLADefinitionUpdateOne {
 	_u.mutation.SetBusinessHours(v)
 	return _u
 }
@@ -938,7 +939,7 @@ func (_u *SLADefinitionUpdateOne) ClearBusinessHours() *SLADefinitionUpdateOne {
 }
 
 // SetEscalationRules sets the "escalation_rules" field.
-func (_u *SLADefinitionUpdateOne) SetEscalationRules(v map[string]interface{}) *SLADefinitionUpdateOne {
+func (_u *SLADefinitionUpdateOne) SetEscalationRules(v jsonvalue.NumberMap) *SLADefinitionUpdateOne {
 	_u.mutation.SetEscalationRules(v)
 	return _u
 }
@@ -950,7 +951,7 @@ func (_u *SLADefinitionUpdateOne) ClearEscalationRules() *SLADefinitionUpdateOne
 }
 
 // SetConditions sets the "conditions" field.
-func (_u *SLADefinitionUpdateOne) SetConditions(v map[string]interface{}) *SLADefinitionUpdateOne {
+func (_u *SLADefinitionUpdateOne) SetConditions(v jsonvalue.NumberMap) *SLADefinitionUpdateOne {
 	_u.mutation.SetConditions(v)
 	return _u
 }

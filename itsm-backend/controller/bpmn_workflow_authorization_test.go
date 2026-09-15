@@ -12,11 +12,16 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
+	"itsm-backend/authentication"
+	"itsm-backend/authorization"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
+	"itsm-backend/service/bpmn"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/mattn/go-sqlite3"
@@ -28,6 +33,16 @@ import (
 type contextCapturingProcessInstanceService struct {
 	listCtx  context.Context
 	statsCtx context.Context
+}
+
+type startContextCapturingProcessEngine struct {
+	*fakeProcessEngine
+	startCtx context.Context
+}
+
+func (e *startContextCapturingProcessEngine) StartProcess(ctx context.Context, _ string, _ string, _ string, _ int, _ map[string]interface{}) (*ent.ProcessInstance, error) {
+	e.startCtx = ctx
+	return &ent.ProcessInstance{}, nil
 }
 
 func (s *contextCapturingProcessInstanceService) GetProcessInstance(context.Context, string) (*ent.ProcessInstance, error) {
@@ -80,6 +95,32 @@ func TestGetBPMNTenantContextBuildsTrustedScope(t *testing.T) {
 	assert.True(t, scope.CanUpdateAllTasks)
 }
 
+func TestStartProcessPassesAuthenticatedActorScope(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := &startContextCapturingProcessEngine{fakeProcessEngine: &fakeProcessEngine{taskSvc: &fakeTaskService{}}}
+	controller := NewBPMNWorkflowController(engine, nil, executionfixture.Standard())
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/v1/bpmn/process-instances", strings.NewReader(`{
+		"processDefinitionKey":"flow","businessKey":"generic:1",
+		"variables":{"triggered_by":"999"}
+	}`))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+	ctx.Request = ctx.Request.WithContext(middleware.WithAuthenticatedTenantID(ctx.Request.Context(), 42))
+	ctx.Set("tenant_id", 42)
+	ctx.Set("user_id", 7)
+
+	controller.StartProcess(ctx)
+
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.NotNil(t, engine.startCtx)
+	scope, err := service.BPMNAccessScopeFromContext(engine.startCtx)
+	require.NoError(t, err)
+	assert.Equal(t, 7, scope.UserID)
+	assert.Equal(t, 42, scope.TenantID)
+	assert.Equal(t, 7, engine.startCtx.Value(bpmn.BPMNUserIDContextKey))
+}
+
 func seedBPMNRolePermissions(t *testing.T, client *ent.Client, tenantID int, roleCode string, permissions ...string) {
 	t.Helper()
 	dbCtx := context.Background()
@@ -107,7 +148,7 @@ func seedBPMNRolePermissions(t *testing.T, client *ent.Client, tenantID int, rol
 			Save(dbCtx)
 		require.NoError(t, createErr)
 	}
-	middleware.InvalidateAllPermissionCaches()
+	authorization.InvalidateAllPermissionCaches()
 }
 
 func TestGetBPMNTenantContextBuildsSelectiveOrdinaryRoleScope(t *testing.T) {
@@ -140,7 +181,7 @@ func TestGetBPMNTenantContextBuildsSelectiveOrdinaryRoleScope(t *testing.T) {
 			gin.SetMode(gin.TestMode)
 			client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:bpmn_scope_%d?mode=memory&cache=shared&_fk=1", time.Now().UnixNano()))
 			t.Cleanup(func() { require.NoError(t, client.Close()) })
-			t.Cleanup(middleware.InvalidateAllPermissionCaches)
+			t.Cleanup(authorization.InvalidateAllPermissionCaches)
 			dbCtx := context.Background()
 			tenant, err := client.Tenant.Create().SetCode("scope-tenant").SetName("scope-tenant").SetStatus("active").Save(dbCtx)
 			require.NoError(t, err)
@@ -198,7 +239,7 @@ func TestGetBPMNTenantContextRejectsRequestSelectedTenantForTenantlessJWT(t *tes
 	require.NoError(t, err)
 
 	const jwtSecret = "bpmn-scope-request-tenant-secret"
-	token, err := middleware.GenerateAccessToken(7, "operator", "super_admin", 0, jwtSecret, time.Hour)
+	token, err := authentication.GenerateAccessToken(7, "operator", "super_admin", 0, jwtSecret, time.Hour)
 	require.NoError(t, err)
 
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
@@ -208,16 +249,17 @@ func TestGetBPMNTenantContextRejectsRequestSelectedTenantForTenantlessJWT(t *tes
 	c.Set("client", client)
 
 	middleware.AuthMiddleware(jwtSecret)(c)
-	require.False(t, c.IsAborted())
-	authenticatedTenantID, ok := middleware.AuthenticatedTenantIDFromContext(c.Request.Context())
-	require.True(t, ok)
-	require.Zero(t, authenticatedTenantID)
-	middleware.TenantMiddleware(client)(c)
-	require.False(t, c.IsAborted())
-	require.Equal(t, requestTenant.ID, c.GetInt("tenant_id"))
-	require.Equal(t, "header", c.GetString("tenant_source"))
+	require.True(t, c.IsAborted(), "tenantless JWT must be rejected before request tenant selection")
+}
 
-	_, _, ok = getBPMNTenantContext(c)
+func TestGetBPMNTenantContextRejectsRequestTenantWithoutAuthenticatedTenant(t *testing.T) {
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/bpmn/tasks", nil)
+	c.Request = c.Request.WithContext(middleware.WithAuthenticatedTenantID(c.Request.Context(), 0))
+	c.Set("tenant_id", 42)
+	c.Set("tenant_source", "header")
+	c.Set("user_id", 7)
+	_, _, ok := getBPMNTenantContext(c)
 	assert.False(t, ok)
 }
 
@@ -229,7 +271,7 @@ func TestProcessInstanceListAndStatsPassWorkflowContext(t *testing.T) {
 	controller := NewBPMNWorkflowController(&fakeProcessEngine{
 		taskSvc:            &fakeTaskService{},
 		processInstanceSvc: instanceSvc,
-	}, nil)
+	}, nil, executionfixture.Standard())
 
 	for path, handler := range map[string]gin.HandlerFunc{
 		"/api/v1/bpmn/process-instances": controller.ListProcessInstances,
@@ -262,7 +304,7 @@ func TestTaskListAndStatsPassWorkflowContext(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:bpmn_controller_task_context?mode=memory&cache=shared&_fk=1")
 	t.Cleanup(func() { _ = client.Close() })
 	taskSvc := &fakeTaskService{}
-	controller := NewBPMNWorkflowController(&fakeProcessEngine{taskSvc: taskSvc}, nil)
+	controller := NewBPMNWorkflowController(&fakeProcessEngine{taskSvc: taskSvc}, nil, executionfixture.Standard())
 
 	for path, handler := range map[string]gin.HandlerFunc{
 		"/api/v1/bpmn/tasks":       controller.ListUserTasks,
@@ -357,8 +399,8 @@ func TestListUserTasksHTTPRejectsFilterOverride(t *testing.T) {
 	createTask("controller-task-mine", strconv.Itoa(actor.ID))
 	createTask("controller-task-other", strconv.Itoa(other.ID))
 
-	engine := service.NewCustomProcessEngine(client, zap.NewNop().Sugar())
-	controller := NewBPMNWorkflowController(engine, nil)
+	engine := service.NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard())
+	controller := NewBPMNWorkflowController(engine, nil, executionfixture.Standard())
 	recorder := httptest.NewRecorder()
 	ginCtx, _ := gin.CreateTestContext(recorder)
 	path := "/api/v1/bpmn/tasks?userId=" + strconv.Itoa(other.ID) + "&Assignee=" + strconv.Itoa(other.ID)
@@ -400,8 +442,8 @@ func newBPMNHTTPAuthorizationFixture(t *testing.T) *bpmnHTTPAuthorizationFixture
 	gin.SetMode(gin.TestMode)
 	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:bpmn_http_authorization_%d?mode=memory&cache=shared&_fk=1", time.Now().UnixNano()))
 	t.Cleanup(func() { require.NoError(t, client.Close()) })
-	middleware.InvalidateAllPermissionCaches()
-	t.Cleanup(middleware.InvalidateAllPermissionCaches)
+	authorization.InvalidateAllPermissionCaches()
+	t.Cleanup(authorization.InvalidateAllPermissionCaches)
 
 	dbCtx := context.Background()
 	createTenant := func(code string) *ent.Tenant {
@@ -432,12 +474,10 @@ func newBPMNHTTPAuthorizationFixture(t *testing.T) *bpmnHTTPAuthorizationFixture
 	seedBPMNRolePermissions(t, client, tenant.ID, "change_manager", "process_instance:read")
 	seedBPMNRolePermissions(t, client, tenant.ID, "dept_manager", "task:read")
 	actors := map[string]*ent.User{
-		"participant":     createUser("http.participant", "end_user", tenant.ID),
-		"outsider":        createUser("http.outsider", "end_user", tenant.ID),
-		"elevated":        createUser("http.elevated", "sysadmin", tenant.ID),
-		"instance_reader": createUser("http.instance.reader", "change_manager", tenant.ID),
-		"task_reader":     createUser("http.task.reader", "dept_manager", tenant.ID),
-		"cross_tenant":    createUser("http.cross.tenant", "sysadmin", otherTenant.ID),
+		"participant":  createUser("http.participant", "end_user", tenant.ID),
+		"outsider":     createUser("http.outsider", "end_user", tenant.ID),
+		"elevated":     createUser("http.elevated", "sysadmin", tenant.ID),
+		"cross_tenant": createUser("http.cross.tenant", "sysadmin", otherTenant.ID),
 	}
 
 	deployment, err := client.ProcessDeployment.Create().
@@ -486,8 +526,8 @@ func newBPMNHTTPAuthorizationFixture(t *testing.T) *bpmnHTTPAuthorizationFixture
 		Save(dbCtx)
 	require.NoError(t, err)
 
-	engine := service.NewCustomProcessEngine(client, zap.NewNop().Sugar())
-	controller := NewBPMNWorkflowController(engine, nil)
+	engine := service.NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard())
+	controller := NewBPMNWorkflowController(engine, nil, executionfixture.Standard())
 	router := gin.New()
 	api := router.Group("/api/v1")
 	api.Use(func(ctx *gin.Context) {
@@ -507,7 +547,6 @@ func newBPMNHTTPAuthorizationFixture(t *testing.T) *bpmnHTTPAuthorizationFixture
 		ctx.Next()
 	})
 	controller.RegisterRoutes(api)
-	controller.RegisterWorkflowAliasRoutes(api)
 
 	return &bpmnHTTPAuthorizationFixture{
 		client: client, router: router, tenant: tenant, otherTenant: otherTenant, actors: actors, instance: instance, task: task,
@@ -688,26 +727,11 @@ func TestBPMNAuthorizationMatrix(t *testing.T) {
 	}
 }
 
-func TestBPMNWorkflowAliasesRetainStricterRBAC(t *testing.T) {
-	cases := []struct {
-		name, actor, path string
-		want              int
-	}{
-		{"participant instance alias denied", "participant", "/api/v1/workflow/instances", http.StatusForbidden},
-		{"instance reader alias allowed", "instance_reader", "/api/v1/workflow/instances", http.StatusOK},
-		{"task reader cannot use instance alias", "task_reader", "/api/v1/workflow/instances", http.StatusForbidden},
-		{"participant task alias denied", "participant", "/api/v1/workflow/tasks", http.StatusForbidden},
-		{"task reader alias allowed", "task_reader", "/api/v1/workflow/tasks", http.StatusOK},
-		{"instance reader cannot use task alias", "instance_reader", "/api/v1/workflow/tasks", http.StatusForbidden},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newBPMNHTTPAuthorizationFixture(t)
-			response := f.doAsActor(t, tc.actor, http.MethodGet, tc.path, "")
-			require.Equal(t, tc.want, response.Code, response.Body.String())
-			if tc.want == http.StatusForbidden {
-				assertBPMNDenialBodyIsSafe(t, response, f.tenant.Code, f.otherTenant.Code, "sensitive-candidate-expression", "select ", "sql", "task-variable-secret", "privateVariable")
-			}
-		})
-	}
+func TestBPMNDefinitionExecutionEditReturnsValidationError(t *testing.T) {
+	f := newBPMNHTTPAuthorizationFixture(t)
+	d := f.client.ProcessDefinition.GetX(context.Background(), f.instance.ProcessDefinitionID)
+	w := f.doAsActor(t, "elevated", http.MethodPut, "/api/v1/bpmn/process-definitions/"+d.Key+"?version="+d.Version, `{"bpmnXml":"<definitions/>"}`)
+	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	require.Contains(t, w.Body.String(), "new process version")
+	require.Equal(t, d.BpmnXML, f.client.ProcessDefinition.GetX(context.Background(), d.ID).BpmnXML)
 }

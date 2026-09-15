@@ -1,0 +1,1158 @@
+openapi: 3.1.0
+info:
+  title: Unified Intake contract
+  version: 4.0.0
+  description: Creation digest intake-v4; assertion v2 only. Existing creation URLs
+    return the shared receipt with new 201/replay 200. The new unified routes activate
+    in A6.
+paths:
+  /api/v1/intake/work-items:
+    post:
+      operationId: createWorkItem
+      security:
+      - intakeBearer: []
+      description: Requires aud=itsm-intake and intake:create. Every request rechecks
+        current mapping version/enabled state, user permissions and tenant. JSON key
+        is authoritative.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkItemCommand'
+      responses:
+        '201':
+          description: Created; replayed=false
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateWorkItemResultEnvelope'
+        '200':
+          description: Idempotent replay; replayed=true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateWorkItemResultEnvelope'
+        '400': &id001
+          description: InvalidCommand (numeric code 1001), or DomainValidationFailed,
+            UnsupportedRecordClass, WorkflowBindingRequired (numeric code 1002); HTTP
+            400 follows current main validation policy.
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ErrorEnvelope'
+                - properties:
+                    code:
+                      enum:
+                      - 1001
+                      - 1002
+        '401': &id002
+          description: 'AuthenticationRequired: re-exchange; retain submission key'
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ErrorEnvelope'
+                - properties:
+                    code:
+                      enum:
+                      - 2001
+        '403': &id003
+          description: 'PermissionDenied: stop automatic retry'
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ErrorEnvelope'
+                - properties:
+                    code:
+                      enum:
+                      - 2003
+        '404': &id004
+          description: ReferenceNotFound
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ErrorEnvelope'
+                - properties:
+                    code:
+                      enum:
+                      - 4004
+        '409': &id005
+          description: 'IdempotencyConflict or CatalogVersionConflict: explicit reconfirmation
+            required'
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ErrorEnvelope'
+                - properties:
+                    code:
+                      enum:
+                      - 4090
+        '500': &id006
+          description: 'InternalFailure: result may be unknown, recover with original
+            key'
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ErrorEnvelope'
+                - properties:
+                    code:
+                      enum:
+                      - 5001
+        '503': &id007
+          description: 'InfrastructureUnavailable: recover with original key'
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ErrorEnvelope'
+                - properties:
+                    code:
+                      enum:
+                      - 5003
+  /api/v1/intake/identity-exchange:
+    post:
+      operationId: exchangeCreateIdentity
+      description: Verified server assertion purpose=create; fixed aud=itsm-intake
+        and scope=intake:create. Read/write credentials do not imply each other or
+        general API access. Same nonce store across routes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/IdentityAssertion'
+              - properties:
+                  purpose:
+                    const: create
+      responses:
+        '200':
+          description: Exchanged; do not persist token in pending context
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExchangeResultEnvelope'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '500': *id006
+        '503': *id007
+  /api/v1/intake/identity-exchange/read:
+    post:
+      operationId: exchangeReadIdentity
+      description: Verified server assertion purpose=read; fixed aud=itsm-intake and
+        scope=intake:catalog:read intake:workitem:read. Read/write credentials do
+        not imply each other or general API access. Same nonce store across routes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/IdentityAssertion'
+              - properties:
+                  purpose:
+                    const: read
+      responses:
+        '200':
+          description: Exchanged; do not persist token in pending context
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExchangeResultEnvelope'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '500': *id006
+        '503': *id007
+  /api/v1/intake/catalog-items:
+    get:
+      operationId: getCatalogPage
+      security:
+      - intakeBearer: []
+      description: Requires intake:catalog:read and current object/row authorization;
+        revocation is immediate. Catalog list contains only enabled visible items,
+        default maximum 50; cursor binds tenant and query.
+      parameters:
+      - name: q
+        in: query
+        schema: &id008
+          type: string
+      - name: cursor
+        in: query
+        schema: *id008
+      responses:
+        '200':
+          description: Authorized current projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogPageEnvelope'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '500': *id006
+        '503': *id007
+  /api/v1/intake/catalog-items/{id}:
+    get:
+      operationId: getCatalogContract
+      security:
+      - intakeBearer: []
+      description: Requires intake:catalog:read and current object/row authorization;
+        revocation is immediate. Catalog list contains only enabled visible items,
+        default maximum 50; cursor binds tenant and query.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: &id009
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Authorized current projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogContractEnvelope'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '500': *id006
+        '503': *id007
+  /api/v1/intake/work-items/{id}:
+    get:
+      operationId: getWorkItemView
+      security:
+      - intakeBearer: []
+      description: Requires intake:workitem:read and current object/row authorization;
+        revocation is immediate. Catalog list contains only enabled visible items,
+        default maximum 50; cursor binds tenant and query.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: *id009
+      responses:
+        '200':
+          description: Authorized current projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkItemViewEnvelope'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '500': *id006
+        '503': *id007
+components:
+  securitySchemes:
+    intakeBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    CTIInput:
+      type: object
+      additionalProperties: false
+      properties:
+        categoryId:
+          type: integer
+          minimum: 1
+        typeId:
+          type: integer
+          minimum: 1
+        itemId:
+          type: integer
+          minimum: 1
+    SourceReference:
+      type: object
+      additionalProperties: false
+      properties:
+        provider:
+          type: string
+          minLength: 1
+          pattern: \S
+        eventId:
+          type: string
+          minLength: 1
+          pattern: \S
+        conversationId:
+          type: string
+      required:
+      - provider
+      - eventId
+    ImpactAnalysis:
+      type: object
+      additionalProperties: false
+      properties:
+        businessImpact:
+          $ref: '#/components/schemas/BusinessImpact'
+        technicalImpact:
+          type: string
+        affectedUsers:
+          type: integer
+        timeImpact:
+          $ref: '#/components/schemas/TimeImpact'
+    BusinessImpact:
+      type: object
+      additionalProperties: false
+      properties:
+        affectedUsers:
+          type: integer
+        revenueImpact:
+          type: number
+          description: Exact JSON decimal number, preserved without binary floating-point
+            rounding through canonicalization. Quoted numbers are rejected; later
+            domain conversion requires an explicit checked policy.
+        serviceAvailability:
+          type: number
+          description: Exact JSON decimal number, preserved without binary floating-point
+            rounding through canonicalization. Quoted numbers are rejected; later
+            domain conversion requires an explicit checked policy.
+    TimeImpact:
+      type: object
+      additionalProperties: false
+      properties:
+        isOverdue:
+          type: boolean
+        hoursSinceCreation:
+          type: integer
+        responseDeadline:
+          type: string
+          format: date-time
+        resolutionDeadline:
+          type: string
+          format: date-time
+    GenericInput:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+        typeId:
+          type: string
+          pattern: ^\s*(?:\+?0*[1-9][0-9]*)?\s*$
+        source:
+          type: string
+        category:
+          type: string
+    ProblemInput:
+      type: object
+      additionalProperties: false
+      properties:
+        category:
+          type: string
+        rootCause:
+          type: string
+        impact:
+          type: string
+        sourceIncidentId:
+          type: integer
+          minimum: 1
+          description: Creates a new Problem and an investigated_by relation atomically;
+            current Incident access is required.
+    ServiceRequestInput:
+      type: object
+      additionalProperties: false
+      properties:
+        amount:
+          type: number
+          minimum: 0
+          description: Exact decimal estimated amount used by the owning approval
+            policy.
+        cloudResourceRefId:
+          type: integer
+          minimum: 1
+          description: Existing tenant-authorized cloud resource reference; creation
+            does not provision a CI.
+        costCenter:
+          type: string
+        dataClassification:
+          type: string
+        needsPublicIp:
+          type: boolean
+        sourceIpWhitelist:
+          type: array
+          items: *id008
+        expireAt:
+          type: string
+          format: date-time
+        complianceAck:
+          type: boolean
+        contactName:
+          type: string
+        contactEmail:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 1000
+        expectedAt:
+          type: string
+          format: date-time
+    IncidentInput:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+        severity:
+          type: string
+          enum:
+          - ''
+          - low
+          - medium
+          - high
+          - critical
+        impact:
+          type: string
+          enum:
+          - ''
+          - low
+          - medium
+          - high
+          - critical
+        urgency:
+          type: string
+          enum:
+          - ''
+          - low
+          - medium
+          - high
+          - critical
+        category:
+          type: string
+        subcategory:
+          type: string
+        detectedAt:
+          type: string
+          format: date-time
+        impactAnalysis:
+          $ref: '#/components/schemas/ImpactAnalysis'
+        metadata:
+          type: object
+          additionalProperties: true
+        source:
+          type: string
+    ChangeInput:
+      type: object
+      additionalProperties: false
+      properties:
+        category:
+          type: string
+          description: Tenant-scoped category name; explicit cti.categoryId takes precedence.
+        justification:
+          type: string
+        type:
+          type: string
+        impactScope:
+          type: string
+        riskLevel:
+          type: string
+        plannedStartDate:
+          type: string
+          format: date-time
+        plannedEndDate:
+          type: string
+          format: date-time
+        implementationPlan:
+          type: string
+        rollbackPlan:
+          type: string
+        affectedCis:
+          type: array
+          items:
+            type: string
+            pattern: ^\s*\+?0*[1-9][0-9]*\s*$
+        standardTemplateId:
+          type: integer
+          minimum: 1
+    SourceRelationInput:
+      type: object
+      additionalProperties: false
+      required: [sourceWorkItemId, relationType, expectedVersion]
+      description: Each source appears once. Versions are caller observed; no latest-version translation. Nulls and duplicate or unknown JSON keys are rejected. Required is valid only for resolved_by_change.
+      properties:
+        sourceWorkItemId:
+          type: integer
+          minimum: 1
+        relationType:
+          type: string
+          enum: [related_to, investigated_by, caused_by, resolved_by_change, requested_change, fulfilled_by, duplicate_of, parent_child]
+        expectedVersion:
+          type: integer
+          minimum: 1
+        metadata:
+          type: object
+          additionalProperties: false
+          properties:
+            required:
+              type: boolean
+              default: false
+    CreateWorkItemCommand:
+      type: object
+      additionalProperties: false
+      properties:
+        sourceRelations:
+          type: array
+          items:
+            $ref: '#/components/schemas/SourceRelationInput'
+        recordClass:
+          type: string
+          enum: &id010
+          - generic
+          - incident
+          - problem
+          - change_request
+          - service_request_item
+        confirmation:
+          const: confirmed
+        catalogVersion:
+          type: string
+          minLength: 1
+          pattern: \S
+        formSchemaVersion:
+          type: string
+          minLength: 1
+          pattern: \S
+        priority:
+          type: string
+        assigneeId:
+          type: integer
+          minimum: 1
+        assignmentGroupId:
+          type: integer
+          minimum: 1
+        generic:
+          $ref: '#/components/schemas/GenericInput'
+        problem:
+          $ref: '#/components/schemas/ProblemInput'
+        serviceRequest:
+          $ref: '#/components/schemas/ServiceRequestInput'
+        idempotencyKey:
+          type: string
+          minLength: 1
+          maxLength: 200
+          pattern: \S
+        intakeKind:
+          type: string
+          enum:
+          - catalog_item
+          - generic
+          - incident
+          - problem
+          - change_request
+        title:
+          type: string
+          maxLength: 500
+        description:
+          type: string
+          maxLength: 20000
+        catalogItemId:
+          type: integer
+          minimum: 1
+        cti:
+          $ref: '#/components/schemas/CTIInput'
+        ciIds:
+          type: array
+          items: *id009
+        formValues:
+          type: object
+          additionalProperties: true
+        sourceReference:
+          $ref: '#/components/schemas/SourceReference'
+        incident:
+          $ref: '#/components/schemas/IncidentInput'
+        change:
+          $ref: '#/components/schemas/ChangeInput'
+        templateId:
+          type: integer
+          minimum: 1
+          description: >-
+            Tenant-scoped database template. Legacy workflow_steps must be absent,
+            null, or an empty list; other definitions fail with WorkflowBindingRequired.
+            Process bindings remain authoritative. Completed replays retain the
+            original resolved workflow snapshot.
+        parentTicketId:
+          type: integer
+          minimum: 1
+        tagIds:
+          type: array
+          items: *id009
+        workflowDefinitionKey:
+          type: string
+        adHocFields:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              name:
+                type: string
+                minLength: 1
+                maxLength: 100
+              label:
+                type: string
+                maxLength: 255
+            required:
+            - name
+      required:
+      - recordClass
+      - confirmation
+      - idempotencyKey
+      - intakeKind
+      allOf:
+      - if:
+          properties:
+            intakeKind:
+              const: catalog_item
+        then:
+          required:
+          - catalogItemId
+          - catalogVersion
+          - formSchemaVersion
+        else:
+          not:
+            anyOf:
+            - required:
+              - catalogItemId
+            - required:
+              - catalogVersion
+            - required:
+              - formSchemaVersion
+      - if:
+          required:
+          - incident
+        then:
+          properties:
+            recordClass:
+              const: incident
+      - if:
+          required:
+          - problem
+        then:
+          properties:
+            recordClass:
+              const: problem
+      - if:
+          required:
+          - generic
+        then:
+          properties:
+            recordClass:
+              const: generic
+      - if:
+          required:
+          - change
+        then:
+          properties:
+            recordClass:
+              const: change_request
+      - if:
+          required:
+          - serviceRequest
+        then:
+          properties:
+            recordClass:
+              const: service_request_item
+      - if:
+          properties:
+            intakeKind:
+              const: generic
+        then:
+          properties:
+            recordClass:
+              const: generic
+      - if:
+          properties:
+            intakeKind:
+              const: incident
+        then:
+          properties:
+            recordClass:
+              const: incident
+      - if:
+          properties:
+            intakeKind:
+              const: problem
+        then:
+          properties:
+            recordClass:
+              const: problem
+      - if:
+          properties:
+            intakeKind:
+              const: change_request
+        then:
+          properties:
+            recordClass:
+              const: change_request
+      - if:
+          not:
+            anyOf:
+            - required:
+              - problem
+              properties:
+                problem:
+                  required:
+                  - sourceIncidentId
+            - required:
+              - change
+              properties:
+                change:
+                  required:
+                  - standardTemplateId
+        then:
+          required:
+          - title
+          properties:
+            title:
+              minLength: 1
+              pattern: \S
+      description: The unified endpoint activates in A6. Shared template, parent,
+        tag and workflow inputs exist only at the root; nested Generic aliases are
+        rejected. Ad-hoc definitions cannot be combined with a catalog or template.
+        Legacy HTTP creation uses Idempotency-Key header and its documented DTO mapped
+        to this command. Identity comes from verified context. Catalog class/versions,
+        permissions and professional rules must be validated against authority by
+        the application. formValues contains dynamic fields only; typed professional
+        inputs own their fields. Source claims require trusted ingress validation.
+        No catalog_task creator is supported. Typed object fields require exact camelCase
+        keys with no duplicates; explicit null is invalid for every typed field, including
+        optional fields. Dynamic formValues/metadata objects retain arbitrary JSON
+        values (including nested null). Limits count Unicode characters after trimming.
+    ProfessionalReference:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+        id:
+          type: integer
+      required:
+      - type
+      - id
+      description: Generic has no extension and returns the value {"type":"","id":0};
+        other classes return their real extension reference.
+    CreateWorkItemResult:
+      type: object
+      additionalProperties: false
+      properties:
+        workItemId:
+          type: integer
+          minimum: 1
+        number:
+          type: string
+        recordClass:
+          type: string
+        professionalReference:
+          $ref: '#/components/schemas/ProfessionalReference'
+        workflowStartStatus:
+          type: string
+          enum:
+          - active
+          - not_required
+          - pending
+          - awaiting_submit
+          - manual_intervention_required
+          description: Authoritative workflow start state. A Change with a frozen
+            workflow returns awaiting_submit until its professional submit command
+            starts that exact definition. Pending, awaiting_submit or blocked must
+            not be presented as started.
+        replayed:
+          type: boolean
+      required:
+      - workItemId
+      - number
+      - recordClass
+      - professionalReference
+      - workflowStartStatus
+      - replayed
+      description: Authoritative committed creation receipt. Use workItemId for shared
+        operations and professionalReference.id for existing professional detail GETs;
+        Generic has no professional extension. workflowStartStatus pending is not
+        workflow completion. No legacy id/ticketId aliases or post-commit detail lookup
+        are returned.
+    FieldError:
+      type: object
+      additionalProperties: false
+      properties:
+        field: *id008
+        message: *id008
+      required:
+      - field
+      - message
+    IdentityAssertion:
+      type: object
+      additionalProperties: false
+      properties:
+        provider:
+          type: string
+          minLength: 1
+          pattern: ^[^\s\r\n](?:[^\r\n]*[^\s\r\n])?$
+        subject:
+          type: string
+          minLength: 1
+          pattern: ^[^\s\r\n](?:[^\r\n]*[^\s\r\n])?$
+        channel:
+          type: string
+          minLength: 1
+          pattern: ^[^\s\r\n](?:[^\r\n]*[^\s\r\n])?$
+        workspace:
+          type: string
+          minLength: 1
+          pattern: ^[^\s\r\n](?:[^\r\n]*[^\s\r\n])?$
+          format: uuid
+        eventId:
+          type: string
+          minLength: 1
+          pattern: ^[^\s\r\n](?:[^\r\n]*[^\s\r\n])?$
+        nonce:
+          type: string
+          minLength: 1
+          pattern: ^[^\s\r\n](?:[^\r\n]*[^\s\r\n])?$
+        version:
+          type: integer
+          const: 2
+        audience:
+          const: itsm-intake
+        purpose:
+          enum:
+          - create
+          - read
+        issuedAt:
+          type: integer
+        signature:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+      required:
+      - provider
+      - subject
+      - channel
+      - workspace
+      - eventId
+      - nonce
+      - version
+      - audience
+      - purpose
+      - issuedAt
+      - signature
+      description: HMAC-SHA256 UTF-8 input is LF-joined ["2",audience,purpose,provider,workspace,subject,channel,eventId,decimal(issuedAt),nonce],
+        with no trailing LF. Reject CR/LF, edge whitespace, unknown fields/provider
+        and old versions. Purpose must match route. Shared provider/channel/workspace/nonce
+        store excludes purpose; atomically claim only after verification. now < issuedAt
+        + maxAge; nonce TTL rounds up remaining acceptance including future skew.
+        A6 owns implementation.
+    ExchangeResult:
+      type: object
+      additionalProperties: false
+      properties:
+        token: *id008
+        tokenType:
+          const: Bearer
+        expiresIn: *id009
+        scope:
+          enum:
+          - intake:create
+          - intake:catalog:read intake:workitem:read
+      required:
+      - token
+      - tokenType
+      - expiresIn
+      - scope
+    CatalogSummary:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id009
+        name: *id008
+        description: *id008
+        targetClass: &id011
+          enum: *id010
+      required:
+      - id
+      - name
+      - description
+      - targetClass
+    CatalogOption:
+      description: key is an opaque server-generated identifier. Return it unchanged
+        in formValues (or an array of keys for multiselect); clients must not encode,
+        decode or infer the underlying value. The field definition owner resolves
+        the key to the original configured JSON type after confirmation-version
+        validation and after successful receipt replay lookup.
+      type: object
+      additionalProperties: false
+      properties:
+        key: *id008
+        label: *id008
+      required:
+      - key
+      - label
+    CatalogField:
+      type: object
+      additionalProperties: false
+      properties:
+        key: *id008
+        label: *id008
+        type:
+          enum:
+          - text
+          - textarea
+          - number
+          - date
+          - select
+          - multiselect
+          - boolean
+          - file
+        required:
+          type: boolean
+        readOnly:
+          type: boolean
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogOption'
+      required:
+      - key
+      - label
+      - type
+      - required
+      - readOnly
+      - options
+    CatalogContract:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id009
+        name: *id008
+        description: *id008
+        targetClass: *id011
+        catalogVersion: *id008
+        formSchemaVersion: *id008
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogField'
+      required:
+      - id
+      - name
+      - description
+      - targetClass
+      - catalogVersion
+      - formSchemaVersion
+      - fields
+    CatalogPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogSummary'
+        nextCursor:
+          type:
+          - string
+          - 'null'
+      required:
+      - items
+      - nextCursor
+    AccessResult:
+      type: object
+      additionalProperties: false
+      description: First verified external membership. Already-present membership is unmanaged and has no expiry or original grant timestamp owned by this request. No automatic revocation is promised.
+      properties:
+        outcome:
+          enum: [granted, already_present]
+        verifiedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: [string, 'null']
+          format: date-time
+        managed:
+          type: boolean
+      required:
+      - outcome
+      - verifiedAt
+      - expiresAt
+      - managed
+      allOf:
+      - if:
+          properties:
+            outcome: {const: already_present}
+        then:
+          properties:
+            expiresAt: {type: 'null'}
+            managed: {const: false}
+      - if:
+          properties:
+            outcome: {const: granted}
+        then:
+          properties:
+            expiresAt: {type: string, format: date-time}
+            managed: {const: true}
+    WorkItemView:
+      type: object
+      additionalProperties: false
+      properties:
+        workItemId: *id009
+        number: *id008
+        recordClass:
+          enum: *id010
+        status: *id008
+        version: *id009
+        fulfillmentState:
+          enum:
+          - awaiting_approval
+          - fulfilling
+          - unknown
+          - completed
+          - rejected
+          - cancelled
+        accessResult:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/AccessResult'
+      required:
+      - workItemId
+      - number
+      - recordClass
+      - status
+      - version
+      - fulfillmentState
+      - accessResult
+      description: Current user row-authorized projection. status retains professional
+        lifecycle value. Fulfillment comes from SR, BPMN approval/delegation and persisted verified results. Never expose provider raw
+        receipts.
+    ErrorDetails:
+      type: object
+      additionalProperties: false
+      properties:
+        errorCode:
+          type: string
+          enum:
+          - InvalidCommand
+          - AuthenticationRequired
+          - PermissionDenied
+          - ReferenceNotFound
+          - IdempotencyConflict
+          - CatalogVersionConflict
+          - DomainValidationFailed
+          - InfrastructureUnavailable
+          - InternalFailure
+          - UnsupportedRecordClass
+          - WorkflowBindingRequired
+        retryable:
+          type: boolean
+        fieldErrors:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldError'
+      required:
+      - errorCode
+      - retryable
+    ErrorEnvelope:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          type: integer
+          enum:
+          - 1001
+          - 1002
+          - 2001
+          - 2003
+          - 4004
+          - 4090
+          - 5001
+          - 5003
+        message: *id008
+        data:
+          $ref: '#/components/schemas/ErrorDetails'
+      required:
+      - code
+      - message
+      - data
+    CreateWorkItemResultEnvelope:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          const: 0
+        message: *id008
+        data:
+          $ref: '#/components/schemas/CreateWorkItemResult'
+      required:
+      - code
+      - message
+      - data
+    ExchangeResultEnvelope:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          const: 0
+        message: *id008
+        data:
+          $ref: '#/components/schemas/ExchangeResult'
+      required:
+      - code
+      - message
+      - data
+    CatalogPageEnvelope:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          const: 0
+        message: *id008
+        data:
+          $ref: '#/components/schemas/CatalogPage'
+      required:
+      - code
+      - message
+      - data
+    CatalogContractEnvelope:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          const: 0
+        message: *id008
+        data:
+          $ref: '#/components/schemas/CatalogContract'
+      required:
+      - code
+      - message
+      - data
+    WorkItemViewEnvelope:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          const: 0
+        message: *id008
+        data:
+          $ref: '#/components/schemas/WorkItemView'
+      required:
+      - code
+      - message
+      - data

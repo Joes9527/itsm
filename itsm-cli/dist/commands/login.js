@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
-import { saveCredentials } from '../lib/credentials.js';
 import { apiClient } from '../lib/api-client.js';
 export const LoginCommand = ({ username, password }) => {
     const [done, setDone] = useState(null);
@@ -13,14 +12,7 @@ export const LoginCommand = ({ username, password }) => {
         }
         apiClient.login({ username, password })
             .then(result => {
-            saveCredentials({
-                token: result.token,
-                refreshToken: result.refresh_token,
-                user: result.user,
-                tenantId: result.tenant_id,
-                tenantName: result.tenant_name,
-            });
-            setMessage(`Logged in as ${result.user.name} (${result.tenant_name})`);
+            setMessage(`Logged in as ${result.user.name} (${result.tenant.name})`);
             setDone('ok');
         })
             .catch(err => {
@@ -36,5 +28,18 @@ export const LoginCommand = ({ username, password }) => {
             done === 'ok' ? '✓' : '✗',
             " ",
             message),
-        done === 'ok' && React.createElement(Text, { dimColor: true }, "Token saved to ~/.itsm/credentials")));
+        done === 'ok' && React.createElement(Text, { dimColor: true }, "Secure session saved to ~/.itsm/credentials")));
+};
+export const LogoutCommand = () => {
+    const [state, setState] = useState('loading');
+    useEffect(() => {
+        apiClient.logout()
+            .then(() => setState('ok'))
+            .catch(() => setState('error'));
+    }, []);
+    if (state === 'loading')
+        return React.createElement(Text, { color: "cyan" }, "Logging out...");
+    if (state === 'error')
+        return React.createElement(Text, { color: "red" }, "\u2717 Logout failed; local session cleared");
+    return React.createElement(Text, { color: "yellow" }, "\u2713 Logged out");
 };

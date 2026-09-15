@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"itsm-backend/authorization"
 	"itsm-backend/ent/enttest"
 
 	"github.com/gin-gonic/gin"
@@ -22,7 +23,7 @@ func TestRBACMiddleware(t *testing.T) {
 		c, _ := gin.CreateTestContext(w)
 		c.Request, _ = http.NewRequest("GET", "/api/v1/tickets", nil)
 
-		RBACMiddleware(nil)(c)
+		RBACMiddleware(nil, nil)(c)
 
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 		assert.Contains(t, w.Body.String(), "用户未认证")
@@ -34,7 +35,7 @@ func TestRBACMiddleware(t *testing.T) {
 		c.Request, _ = http.NewRequest("GET", "/api/v1/tickets", nil)
 		c.Set("user_id", 1)
 
-		RBACMiddleware(nil)(c)
+		RBACMiddleware(nil, nil)(c)
 
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 		assert.Contains(t, w.Body.String(), "租户信息缺失")
@@ -68,7 +69,7 @@ func TestRBACMiddleware_NoLongerPerformsPermissionCheck(t *testing.T) {
 		SetUsername("test_no_perm_check").
 		SetEmail("test_no_perm_check@example.com").
 		SetName("Test No Perm Check").
-		SetPasswordHash("x").
+		SetPasswordHash("x").SetRole("end_user").
 		SetActive(true).
 		SetTenantID(tenant.ID).
 		Save(ctx)
@@ -81,7 +82,7 @@ func TestRBACMiddleware_NoLongerPerformsPermissionCheck(t *testing.T) {
 	c.Set("tenant_id", tenant.ID)
 	c.Set("role", "end_user")
 
-	RBACMiddleware(client)(c)
+	RBACMiddleware(client, client)(c)
 
 	assert.False(t, c.IsAborted())
 }
@@ -215,53 +216,79 @@ func TestRequireLegacyBPMNRoles(t *testing.T) {
 
 func TestHasResourcePermission(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	original := PermissionConfig.Mode
-	PermissionConfig.Mode = PermissionConfigModeHardcodeOnly
-	t.Cleanup(func() { PermissionConfig.Mode = original })
+	original := authorization.PermissionConfig.Mode
+	authorization.PermissionConfig.Mode = authorization.PermissionConfigModeHardcodeOnly
+	t.Cleanup(func() { authorization.PermissionConfig.Mode = original })
 
 	t.Run("Super Admin Has All Permissions", func(t *testing.T) {
-		result := hasResourcePermission(nil, "super_admin", "any_resource", "any_action", 1)
+		result := authorization.HasResourcePermission(nil, "super_admin", "any_resource", "any_action", 1)
 		assert.True(t, result)
 	})
 
 	t.Run("End User Has Ticket Read Permission", func(t *testing.T) {
-		result := hasResourcePermission(nil, "end_user", "ticket", "read", 1)
+		result := authorization.HasResourcePermission(nil, "end_user", "ticket", "read", 1)
 		assert.True(t, result)
 	})
 
 	t.Run("End User Does Not Have Ticket Delete Permission", func(t *testing.T) {
-		result := hasResourcePermission(nil, "end_user", "ticket", "delete", 1)
+		result := authorization.HasResourcePermission(nil, "end_user", "ticket", "delete", 1)
 		assert.False(t, result)
 	})
 
 	t.Run("Unknown Role Has No Permissions", func(t *testing.T) {
-		result := hasResourcePermission(nil, "unknown_role", "ticket", "read", 1)
+		result := authorization.HasResourcePermission(nil, "unknown_role", "ticket", "read", 1)
 		assert.False(t, result)
 	})
 
 	t.Run("Wildcard Permission", func(t *testing.T) {
 		// Super admin has wildcard "*" permission
-		result := hasResourcePermission(nil, "super_admin", "ticket", "delete", 1)
+		result := authorization.HasResourcePermission(nil, "super_admin", "ticket", "delete", 1)
 		assert.True(t, result)
 
-		result = hasResourcePermission(nil, "super_admin", "anything", "anything", 1)
+		result = authorization.HasResourcePermission(nil, "super_admin", "anything", "anything", 1)
 		assert.True(t, result)
 	})
 }
 
 func TestCheckPermissionMatch_ResourceAdminIncludesActions(t *testing.T) {
-	permissions := []Permission{{Resource: "ticket", Action: "admin"}}
+	permissions := []authorization.Permission{{Resource: "ticket", Action: "admin"}}
 
-	assert.True(t, checkPermissionMatch(permissions, "ticket", "assign"))
-	assert.False(t, checkPermissionMatch(permissions, "incident", "assign"))
+	assert.True(t, authorization.CheckPermissionMatch(permissions, "ticket", "assign"))
+	assert.False(t, authorization.CheckPermissionMatch(permissions, "incident", "assign"))
 }
 
 func TestDBOnlyPermissionModeDoesNotUseHardcodedFallback(t *testing.T) {
-	original := PermissionConfig.Mode
-	PermissionConfig.Mode = PermissionConfigModeDBOnly
-	t.Cleanup(func() { PermissionConfig.Mode = original })
+	original := authorization.PermissionConfig.Mode
+	authorization.PermissionConfig.Mode = authorization.PermissionConfigModeDBOnly
+	t.Cleanup(func() { authorization.PermissionConfig.Mode = original })
 
-	permissions := loadPermissionsByMode(nil, "admin", 1)
+	permissions := authorization.LoadPermissionsByMode(nil, "admin", 1)
 	assert.Empty(t, permissions)
-	assert.False(t, checkPermissionMatch(permissions, "ticket", "read"))
+	assert.False(t, authorization.CheckPermissionMatch(permissions, "ticket", "read"))
+}
+
+func TestRBACMiddlewareRejectsStaleSignedRole(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:rbac_stale?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant := client.Tenant.Create().SetCode("stale").SetName("Stale").SaveX(ctx)
+	actor := client.User.Create().SetTenantID(tenant.ID).SetUsername("stale").SetEmail("stale@example.test").SetName("Stale").SetPasswordHash("unused").SetRole("end_user").SaveX(ctx)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest("GET", "/api/v1/tickets", nil)
+	c.Set("user_id", actor.ID)
+	c.Set("tenant_id", tenant.ID)
+	c.Set("role", "admin")
+	RBACMiddleware(client, client)(c)
+	require.True(t, c.IsAborted(), "a stale token role must be rejected")
+}
+
+func TestRBACMiddlewareMissingDirectoryIsUnavailable(t *testing.T) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/api/v1/tickets", nil)
+	c.Set("user_id", 1)
+	c.Set("tenant_id", 1)
+	c.Set("role", "end_user")
+	RBACMiddleware(nil, nil)(c)
+	require.Equal(t, http.StatusServiceUnavailable, w.Code)
 }

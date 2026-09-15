@@ -3,6 +3,8 @@
 package ent
 
 import (
+	"time"
+
 	"itsm-backend/ent/application"
 	"itsm-backend/ent/approvalchain"
 	"itsm-backend/ent/asset"
@@ -11,6 +13,7 @@ import (
 	"itsm-backend/ent/bootstraptoken"
 	"itsm-backend/ent/bpmnpermission"
 	"itsm-backend/ent/cabmember"
+	"itsm-backend/ent/catalogaccesspolicy"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/changepir"
 	"itsm-backend/ent/ciattributedefinition"
@@ -35,6 +38,7 @@ import (
 	"itsm-backend/ent/domainconfig"
 	"itsm-backend/ent/endpointacl"
 	"itsm-backend/ent/engineerskill"
+	"itsm-backend/ent/externalidentity"
 	"itsm-backend/ent/feishuticketsync"
 	"itsm-backend/ent/fielddefinition"
 	"itsm-backend/ent/fieldvalue"
@@ -45,7 +49,10 @@ import (
 	"itsm-backend/ent/incidentevent"
 	"itsm-backend/ent/incidentmetric"
 	"itsm-backend/ent/incidentrule"
+	"itsm-backend/ent/incidentruleactionreceipt"
 	"itsm-backend/ent/incidentruleexecution"
+	"itsm-backend/ent/intakerequest"
+	"itsm-backend/ent/intakeresolutionsnapshot"
 	"itsm-backend/ent/itemversion"
 	"itsm-backend/ent/kaftaskactionledger"
 	"itsm-backend/ent/kaftaskcompletionreceipt"
@@ -66,7 +73,6 @@ import (
 	"itsm-backend/ent/passwordresettoken"
 	"itsm-backend/ent/permission"
 	"itsm-backend/ent/permissiondefinition"
-	"itsm-backend/ent/problem"
 	"itsm-backend/ent/processapprovaldecision"
 	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processbinding"
@@ -88,6 +94,8 @@ import (
 	"itsm-backend/ent/schema"
 	"itsm-backend/ent/servicecatalog"
 	"itsm-backend/ent/servicerequest"
+	"itsm-backend/ent/servicerequestaccessresult"
+	"itsm-backend/ent/servicerequestaccesssnapshot"
 	"itsm-backend/ent/slaalerthistory"
 	"itsm-backend/ent/slaalertrule"
 	"itsm-backend/ent/sladefinition"
@@ -102,7 +110,6 @@ import (
 	"itsm-backend/ent/tenant"
 	"itsm-backend/ent/tenantinstallation"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/ticketapproval"
 	"itsm-backend/ent/ticketassignmentrule"
 	"itsm-backend/ent/ticketattachment"
 	"itsm-backend/ent/ticketautomationrule"
@@ -118,12 +125,9 @@ import (
 	"itsm-backend/ent/toolinvocation"
 	"itsm-backend/ent/user"
 	"itsm-backend/ent/vendor"
-	"itsm-backend/ent/workflow"
-	"itsm-backend/ent/workflowinstance"
-	"itsm-backend/ent/workflowtask"
-	"itsm-backend/ent/workflowversion"
+	"itsm-backend/ent/workitemnumbersequence"
 	"itsm-backend/ent/workitemrelation"
-	"time"
+	"itsm-backend/internal/jsonvalue"
 )
 
 // The init function reads all schema descriptors with runtime code
@@ -257,23 +261,23 @@ func init() {
 	auditlogFields := schema.AuditLog{}.Fields()
 	_ = auditlogFields
 	// auditlogDescCreatedAt is the schema descriptor for created_at field.
-	auditlogDescCreatedAt := auditlogFields[0].Descriptor()
+	auditlogDescCreatedAt := auditlogFields[4].Descriptor()
 	// auditlog.DefaultCreatedAt holds the default value on creation for the created_at field.
 	auditlog.DefaultCreatedAt = auditlogDescCreatedAt.Default.(func() time.Time)
 	// auditlogDescIP is the schema descriptor for ip field.
-	auditlogDescIP := auditlogFields[4].Descriptor()
+	auditlogDescIP := auditlogFields[8].Descriptor()
 	// auditlog.DefaultIP holds the default value on creation for the ip field.
 	auditlog.DefaultIP = auditlogDescIP.Default.(string)
 	// auditlogDescResource is the schema descriptor for resource field.
-	auditlogDescResource := auditlogFields[5].Descriptor()
+	auditlogDescResource := auditlogFields[9].Descriptor()
 	// auditlog.DefaultResource holds the default value on creation for the resource field.
 	auditlog.DefaultResource = auditlogDescResource.Default.(string)
 	// auditlogDescAction is the schema descriptor for action field.
-	auditlogDescAction := auditlogFields[6].Descriptor()
+	auditlogDescAction := auditlogFields[10].Descriptor()
 	// auditlog.DefaultAction holds the default value on creation for the action field.
 	auditlog.DefaultAction = auditlogDescAction.Default.(string)
 	// auditlogDescStatusCode is the schema descriptor for status_code field.
-	auditlogDescStatusCode := auditlogFields[9].Descriptor()
+	auditlogDescStatusCode := auditlogFields[13].Descriptor()
 	// auditlog.DefaultStatusCode holds the default value on creation for the status_code field.
 	auditlog.DefaultStatusCode = auditlogDescStatusCode.Default.(int)
 	bpmnpermissionFields := schema.BPMNPermission{}.Fields()
@@ -602,50 +606,44 @@ func init() {
 	cmdbsavedview.DefaultUpdatedAt = cmdbsavedviewDescUpdatedAt.Default.(func() time.Time)
 	// cmdbsavedview.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	cmdbsavedview.UpdateDefaultUpdatedAt = cmdbsavedviewDescUpdatedAt.UpdateDefault.(func() time.Time)
+	catalogaccesspolicyFields := schema.CatalogAccessPolicy{}.Fields()
+	_ = catalogaccesspolicyFields
+	// catalogaccesspolicyDescCatalogID is the schema descriptor for catalog_id field.
+	catalogaccesspolicyDescCatalogID := catalogaccesspolicyFields[0].Descriptor()
+	// catalogaccesspolicy.CatalogIDValidator is a validator for the "catalog_id" field. It is called by the builders before save.
+	catalogaccesspolicy.CatalogIDValidator = catalogaccesspolicyDescCatalogID.Validators[0].(func(int) error)
+	// catalogaccesspolicyDescVersion is the schema descriptor for version field.
+	catalogaccesspolicyDescVersion := catalogaccesspolicyFields[1].Descriptor()
+	// catalogaccesspolicy.DefaultVersion holds the default value on creation for the version field.
+	catalogaccesspolicy.DefaultVersion = catalogaccesspolicyDescVersion.Default.(int)
+	// catalogaccesspolicy.VersionValidator is a validator for the "version" field. It is called by the builders before save.
+	catalogaccesspolicy.VersionValidator = catalogaccesspolicyDescVersion.Validators[0].(func(int) error)
+	// catalogaccesspolicyDescExternalSystem is the schema descriptor for external_system field.
+	catalogaccesspolicyDescExternalSystem := catalogaccesspolicyFields[3].Descriptor()
+	// catalogaccesspolicy.ExternalSystemValidator is a validator for the "external_system" field. It is called by the builders before save.
+	catalogaccesspolicy.ExternalSystemValidator = catalogaccesspolicyDescExternalSystem.Validators[0].(func(string) error)
+	// catalogaccesspolicyDescGroupID is the schema descriptor for group_id field.
+	catalogaccesspolicyDescGroupID := catalogaccesspolicyFields[4].Descriptor()
+	// catalogaccesspolicy.GroupIDValidator is a validator for the "group_id" field. It is called by the builders before save.
+	catalogaccesspolicy.GroupIDValidator = catalogaccesspolicyDescGroupID.Validators[0].(func(string) error)
+	// catalogaccesspolicyDescDurationField is the schema descriptor for duration_field field.
+	catalogaccesspolicyDescDurationField := catalogaccesspolicyFields[5].Descriptor()
+	// catalogaccesspolicy.DurationFieldValidator is a validator for the "duration_field" field. It is called by the builders before save.
+	catalogaccesspolicy.DurationFieldValidator = catalogaccesspolicyDescDurationField.Validators[0].(func(string) error)
 	changeFields := schema.Change{}.Fields()
 	_ = changeFields
-	// changeDescTitle is the schema descriptor for title field.
-	changeDescTitle := changeFields[0].Descriptor()
-	// change.TitleValidator is a validator for the "title" field. It is called by the builders before save.
-	change.TitleValidator = changeDescTitle.Validators[0].(func(string) error)
 	// changeDescType is the schema descriptor for type field.
-	changeDescType := changeFields[3].Descriptor()
+	changeDescType := changeFields[13].Descriptor()
 	// change.DefaultType holds the default value on creation for the type field.
 	change.DefaultType = changeDescType.Default.(string)
-	// changeDescStatus is the schema descriptor for status field.
-	changeDescStatus := changeFields[4].Descriptor()
-	// change.DefaultStatus holds the default value on creation for the status field.
-	change.DefaultStatus = changeDescStatus.Default.(string)
-	// changeDescPriority is the schema descriptor for priority field.
-	changeDescPriority := changeFields[5].Descriptor()
-	// change.DefaultPriority holds the default value on creation for the priority field.
-	change.DefaultPriority = changeDescPriority.Default.(string)
 	// changeDescImpactScope is the schema descriptor for impact_scope field.
-	changeDescImpactScope := changeFields[6].Descriptor()
+	changeDescImpactScope := changeFields[14].Descriptor()
 	// change.DefaultImpactScope holds the default value on creation for the impact_scope field.
 	change.DefaultImpactScope = changeDescImpactScope.Default.(string)
 	// changeDescRiskLevel is the schema descriptor for risk_level field.
-	changeDescRiskLevel := changeFields[7].Descriptor()
+	changeDescRiskLevel := changeFields[15].Descriptor()
 	// change.DefaultRiskLevel holds the default value on creation for the risk_level field.
 	change.DefaultRiskLevel = changeDescRiskLevel.Default.(string)
-	// changeDescCreatedBy is the schema descriptor for created_by field.
-	changeDescCreatedBy := changeFields[9].Descriptor()
-	// change.CreatedByValidator is a validator for the "created_by" field. It is called by the builders before save.
-	change.CreatedByValidator = changeDescCreatedBy.Validators[0].(func(int) error)
-	// changeDescTenantID is the schema descriptor for tenant_id field.
-	changeDescTenantID := changeFields[11].Descriptor()
-	// change.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	change.TenantIDValidator = changeDescTenantID.Validators[0].(func(int) error)
-	// changeDescCreatedAt is the schema descriptor for created_at field.
-	changeDescCreatedAt := changeFields[20].Descriptor()
-	// change.DefaultCreatedAt holds the default value on creation for the created_at field.
-	change.DefaultCreatedAt = changeDescCreatedAt.Default.(func() time.Time)
-	// changeDescUpdatedAt is the schema descriptor for updated_at field.
-	changeDescUpdatedAt := changeFields[21].Descriptor()
-	// change.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	change.DefaultUpdatedAt = changeDescUpdatedAt.Default.(func() time.Time)
-	// change.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	change.UpdateDefaultUpdatedAt = changeDescUpdatedAt.UpdateDefault.(func() time.Time)
 	changepirFields := schema.ChangePIR{}.Fields()
 	_ = changepirFields
 	// changepirDescOverallResult is the schema descriptor for overall_result field.
@@ -1172,6 +1170,48 @@ func init() {
 	engineerskill.DefaultUpdatedAt = engineerskillDescUpdatedAt.Default.(func() time.Time)
 	// engineerskill.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	engineerskill.UpdateDefaultUpdatedAt = engineerskillDescUpdatedAt.UpdateDefault.(func() time.Time)
+	externalidentityFields := schema.ExternalIdentity{}.Fields()
+	_ = externalidentityFields
+	// externalidentityDescTenantID is the schema descriptor for tenant_id field.
+	externalidentityDescTenantID := externalidentityFields[0].Descriptor()
+	// externalidentity.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	externalidentity.TenantIDValidator = externalidentityDescTenantID.Validators[0].(func(int) error)
+	// externalidentityDescProvider is the schema descriptor for provider field.
+	externalidentityDescProvider := externalidentityFields[1].Descriptor()
+	// externalidentity.ProviderValidator is a validator for the "provider" field. It is called by the builders before save.
+	externalidentity.ProviderValidator = externalidentityDescProvider.Validators[0].(func(string) error)
+	// externalidentityDescWorkspace is the schema descriptor for workspace field.
+	externalidentityDescWorkspace := externalidentityFields[2].Descriptor()
+	// externalidentity.WorkspaceValidator is a validator for the "workspace" field. It is called by the builders before save.
+	externalidentity.WorkspaceValidator = externalidentityDescWorkspace.Validators[0].(func(string) error)
+	// externalidentityDescSubject is the schema descriptor for subject field.
+	externalidentityDescSubject := externalidentityFields[3].Descriptor()
+	// externalidentity.SubjectValidator is a validator for the "subject" field. It is called by the builders before save.
+	externalidentity.SubjectValidator = externalidentityDescSubject.Validators[0].(func(string) error)
+	// externalidentityDescUserID is the schema descriptor for user_id field.
+	externalidentityDescUserID := externalidentityFields[4].Descriptor()
+	// externalidentity.UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
+	externalidentity.UserIDValidator = externalidentityDescUserID.Validators[0].(func(int) error)
+	// externalidentityDescActive is the schema descriptor for active field.
+	externalidentityDescActive := externalidentityFields[5].Descriptor()
+	// externalidentity.DefaultActive holds the default value on creation for the active field.
+	externalidentity.DefaultActive = externalidentityDescActive.Default.(bool)
+	// externalidentityDescVersion is the schema descriptor for version field.
+	externalidentityDescVersion := externalidentityFields[6].Descriptor()
+	// externalidentity.DefaultVersion holds the default value on creation for the version field.
+	externalidentity.DefaultVersion = externalidentityDescVersion.Default.(int)
+	// externalidentity.VersionValidator is a validator for the "version" field. It is called by the builders before save.
+	externalidentity.VersionValidator = externalidentityDescVersion.Validators[0].(func(int) error)
+	// externalidentityDescCreatedAt is the schema descriptor for created_at field.
+	externalidentityDescCreatedAt := externalidentityFields[7].Descriptor()
+	// externalidentity.DefaultCreatedAt holds the default value on creation for the created_at field.
+	externalidentity.DefaultCreatedAt = externalidentityDescCreatedAt.Default.(func() time.Time)
+	// externalidentityDescUpdatedAt is the schema descriptor for updated_at field.
+	externalidentityDescUpdatedAt := externalidentityFields[8].Descriptor()
+	// externalidentity.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	externalidentity.DefaultUpdatedAt = externalidentityDescUpdatedAt.Default.(func() time.Time)
+	// externalidentity.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	externalidentity.UpdateDefaultUpdatedAt = externalidentityDescUpdatedAt.UpdateDefault.(func() time.Time)
 	feishuticketsyncFields := schema.FeishuTicketSync{}.Fields()
 	_ = feishuticketsyncFields
 	// feishuticketsyncDescTenantID is the schema descriptor for tenant_id field.
@@ -1300,88 +1340,42 @@ func init() {
 	group.UpdateDefaultUpdatedAt = groupDescUpdatedAt.UpdateDefault.(func() time.Time)
 	incidentFields := schema.Incident{}.Fields()
 	_ = incidentFields
-	// incidentDescTitle is the schema descriptor for title field.
-	incidentDescTitle := incidentFields[0].Descriptor()
-	// incident.TitleValidator is a validator for the "title" field. It is called by the builders before save.
-	incident.TitleValidator = incidentDescTitle.Validators[0].(func(string) error)
-	// incidentDescStatus is the schema descriptor for status field.
-	incidentDescStatus := incidentFields[2].Descriptor()
-	// incident.DefaultStatus holds the default value on creation for the status field.
-	incident.DefaultStatus = incidentDescStatus.Default.(string)
 	// incidentDescType is the schema descriptor for type field.
-	incidentDescType := incidentFields[3].Descriptor()
+	incidentDescType := incidentFields[0].Descriptor()
 	// incident.DefaultType holds the default value on creation for the type field.
 	incident.DefaultType = incidentDescType.Default.(string)
-	// incidentDescPriority is the schema descriptor for priority field.
-	incidentDescPriority := incidentFields[4].Descriptor()
-	// incident.DefaultPriority holds the default value on creation for the priority field.
-	incident.DefaultPriority = incidentDescPriority.Default.(string)
-	// incident.PriorityValidator is a validator for the "priority" field. It is called by the builders before save.
-	incident.PriorityValidator = incidentDescPriority.Validators[0].(func(string) error)
 	// incidentDescSeverity is the schema descriptor for severity field.
-	incidentDescSeverity := incidentFields[5].Descriptor()
+	incidentDescSeverity := incidentFields[1].Descriptor()
 	// incident.DefaultSeverity holds the default value on creation for the severity field.
 	incident.DefaultSeverity = incidentDescSeverity.Default.(string)
 	// incidentDescImpact is the schema descriptor for impact field.
-	incidentDescImpact := incidentFields[6].Descriptor()
+	incidentDescImpact := incidentFields[2].Descriptor()
 	// incident.DefaultImpact holds the default value on creation for the impact field.
 	incident.DefaultImpact = incidentDescImpact.Default.(string)
 	// incident.ImpactValidator is a validator for the "impact" field. It is called by the builders before save.
 	incident.ImpactValidator = incidentDescImpact.Validators[0].(func(string) error)
 	// incidentDescUrgency is the schema descriptor for urgency field.
-	incidentDescUrgency := incidentFields[7].Descriptor()
+	incidentDescUrgency := incidentFields[3].Descriptor()
 	// incident.DefaultUrgency holds the default value on creation for the urgency field.
 	incident.DefaultUrgency = incidentDescUrgency.Default.(string)
 	// incident.UrgencyValidator is a validator for the "urgency" field. It is called by the builders before save.
 	incident.UrgencyValidator = incidentDescUrgency.Validators[0].(func(string) error)
-	// incidentDescIncidentNumber is the schema descriptor for incident_number field.
-	incidentDescIncidentNumber := incidentFields[8].Descriptor()
-	// incident.IncidentNumberValidator is a validator for the "incident_number" field. It is called by the builders before save.
-	incident.IncidentNumberValidator = incidentDescIncidentNumber.Validators[0].(func(string) error)
-	// incidentDescReporterID is the schema descriptor for reporter_id field.
-	incidentDescReporterID := incidentFields[9].Descriptor()
-	// incident.ReporterIDValidator is a validator for the "reporter_id" field. It is called by the builders before save.
-	incident.ReporterIDValidator = incidentDescReporterID.Validators[0].(func(int) error)
 	// incidentDescDetectedAt is the schema descriptor for detected_at field.
-	incidentDescDetectedAt := incidentFields[18].Descriptor()
+	incidentDescDetectedAt := incidentFields[9].Descriptor()
 	// incident.DefaultDetectedAt holds the default value on creation for the detected_at field.
 	incident.DefaultDetectedAt = incidentDescDetectedAt.Default.(func() time.Time)
 	// incidentDescEscalationLevel is the schema descriptor for escalation_level field.
-	incidentDescEscalationLevel := incidentFields[22].Descriptor()
+	incidentDescEscalationLevel := incidentFields[11].Descriptor()
 	// incident.DefaultEscalationLevel holds the default value on creation for the escalation_level field.
 	incident.DefaultEscalationLevel = incidentDescEscalationLevel.Default.(int)
 	// incidentDescIsAutomated is the schema descriptor for is_automated field.
-	incidentDescIsAutomated := incidentFields[23].Descriptor()
+	incidentDescIsAutomated := incidentFields[12].Descriptor()
 	// incident.DefaultIsAutomated holds the default value on creation for the is_automated field.
 	incident.DefaultIsAutomated = incidentDescIsAutomated.Default.(bool)
 	// incidentDescIsMajorIncident is the schema descriptor for is_major_incident field.
-	incidentDescIsMajorIncident := incidentFields[24].Descriptor()
+	incidentDescIsMajorIncident := incidentFields[13].Descriptor()
 	// incident.DefaultIsMajorIncident holds the default value on creation for the is_major_incident field.
 	incident.DefaultIsMajorIncident = incidentDescIsMajorIncident.Default.(bool)
-	// incidentDescSource is the schema descriptor for source field.
-	incidentDescSource := incidentFields[25].Descriptor()
-	// incident.DefaultSource holds the default value on creation for the source field.
-	incident.DefaultSource = incidentDescSource.Default.(string)
-	// incidentDescTenantID is the schema descriptor for tenant_id field.
-	incidentDescTenantID := incidentFields[27].Descriptor()
-	// incident.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	incident.TenantIDValidator = incidentDescTenantID.Validators[0].(func(int) error)
-	// incidentDescVersion is the schema descriptor for version field.
-	incidentDescVersion := incidentFields[28].Descriptor()
-	// incident.DefaultVersion holds the default value on creation for the version field.
-	incident.DefaultVersion = incidentDescVersion.Default.(int)
-	// incident.VersionValidator is a validator for the "version" field. It is called by the builders before save.
-	incident.VersionValidator = incidentDescVersion.Validators[0].(func(int) error)
-	// incidentDescCreatedAt is the schema descriptor for created_at field.
-	incidentDescCreatedAt := incidentFields[29].Descriptor()
-	// incident.DefaultCreatedAt holds the default value on creation for the created_at field.
-	incident.DefaultCreatedAt = incidentDescCreatedAt.Default.(func() time.Time)
-	// incidentDescUpdatedAt is the schema descriptor for updated_at field.
-	incidentDescUpdatedAt := incidentFields[30].Descriptor()
-	// incident.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	incident.DefaultUpdatedAt = incidentDescUpdatedAt.Default.(func() time.Time)
-	// incident.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	incident.UpdateDefaultUpdatedAt = incidentDescUpdatedAt.UpdateDefault.(func() time.Time)
 	incidentalertFields := schema.IncidentAlert{}.Fields()
 	_ = incidentalertFields
 	// incidentalertDescIncidentID is the schema descriptor for incident_id field.
@@ -1582,34 +1576,168 @@ func init() {
 	incidentrule.DefaultUpdatedAt = incidentruleDescUpdatedAt.Default.(func() time.Time)
 	// incidentrule.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	incidentrule.UpdateDefaultUpdatedAt = incidentruleDescUpdatedAt.UpdateDefault.(func() time.Time)
+	incidentruleactionreceiptFields := schema.IncidentRuleActionReceipt{}.Fields()
+	_ = incidentruleactionreceiptFields
+	// incidentruleactionreceiptDescTenantID is the schema descriptor for tenant_id field.
+	incidentruleactionreceiptDescTenantID := incidentruleactionreceiptFields[0].Descriptor()
+	// incidentruleactionreceipt.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	incidentruleactionreceipt.TenantIDValidator = incidentruleactionreceiptDescTenantID.Validators[0].(func(int) error)
+	// incidentruleactionreceiptDescExecutionID is the schema descriptor for execution_id field.
+	incidentruleactionreceiptDescExecutionID := incidentruleactionreceiptFields[1].Descriptor()
+	// incidentruleactionreceipt.ExecutionIDValidator is a validator for the "execution_id" field. It is called by the builders before save.
+	incidentruleactionreceipt.ExecutionIDValidator = incidentruleactionreceiptDescExecutionID.Validators[0].(func(int) error)
+	// incidentruleactionreceiptDescActionIndex is the schema descriptor for action_index field.
+	incidentruleactionreceiptDescActionIndex := incidentruleactionreceiptFields[2].Descriptor()
+	// incidentruleactionreceipt.ActionIndexValidator is a validator for the "action_index" field. It is called by the builders before save.
+	incidentruleactionreceipt.ActionIndexValidator = incidentruleactionreceiptDescActionIndex.Validators[0].(func(int) error)
+	// incidentruleactionreceiptDescCompletedAt is the schema descriptor for completed_at field.
+	incidentruleactionreceiptDescCompletedAt := incidentruleactionreceiptFields[3].Descriptor()
+	// incidentruleactionreceipt.DefaultCompletedAt holds the default value on creation for the completed_at field.
+	incidentruleactionreceipt.DefaultCompletedAt = incidentruleactionreceiptDescCompletedAt.Default.(func() time.Time)
 	incidentruleexecutionFields := schema.IncidentRuleExecution{}.Fields()
 	_ = incidentruleexecutionFields
 	// incidentruleexecutionDescRuleID is the schema descriptor for rule_id field.
 	incidentruleexecutionDescRuleID := incidentruleexecutionFields[0].Descriptor()
 	// incidentruleexecution.RuleIDValidator is a validator for the "rule_id" field. It is called by the builders before save.
 	incidentruleexecution.RuleIDValidator = incidentruleexecutionDescRuleID.Validators[0].(func(int) error)
+	// incidentruleexecutionDescExecutionKind is the schema descriptor for execution_kind field.
+	incidentruleexecutionDescExecutionKind := incidentruleexecutionFields[1].Descriptor()
+	// incidentruleexecution.DefaultExecutionKind holds the default value on creation for the execution_kind field.
+	incidentruleexecution.DefaultExecutionKind = incidentruleexecutionDescExecutionKind.Default.(string)
+	// incidentruleexecutionDescSourceEventID is the schema descriptor for source_event_id field.
+	incidentruleexecutionDescSourceEventID := incidentruleexecutionFields[3].Descriptor()
+	// incidentruleexecution.SourceEventIDValidator is a validator for the "source_event_id" field. It is called by the builders before save.
+	incidentruleexecution.SourceEventIDValidator = incidentruleexecutionDescSourceEventID.Validators[0].(func(int) error)
+	// incidentruleexecutionDescActorID is the schema descriptor for actor_id field.
+	incidentruleexecutionDescActorID := incidentruleexecutionFields[4].Descriptor()
+	// incidentruleexecution.ActorIDValidator is a validator for the "actor_id" field. It is called by the builders before save.
+	incidentruleexecution.ActorIDValidator = incidentruleexecutionDescActorID.Validators[0].(func(int) error)
 	// incidentruleexecutionDescStatus is the schema descriptor for status field.
-	incidentruleexecutionDescStatus := incidentruleexecutionFields[2].Descriptor()
+	incidentruleexecutionDescStatus := incidentruleexecutionFields[8].Descriptor()
 	// incidentruleexecution.DefaultStatus holds the default value on creation for the status field.
 	incidentruleexecution.DefaultStatus = incidentruleexecutionDescStatus.Default.(string)
 	// incidentruleexecutionDescStartedAt is the schema descriptor for started_at field.
-	incidentruleexecutionDescStartedAt := incidentruleexecutionFields[5].Descriptor()
+	incidentruleexecutionDescStartedAt := incidentruleexecutionFields[11].Descriptor()
 	// incidentruleexecution.DefaultStartedAt holds the default value on creation for the started_at field.
 	incidentruleexecution.DefaultStartedAt = incidentruleexecutionDescStartedAt.Default.(func() time.Time)
 	// incidentruleexecutionDescTenantID is the schema descriptor for tenant_id field.
-	incidentruleexecutionDescTenantID := incidentruleexecutionFields[10].Descriptor()
+	incidentruleexecutionDescTenantID := incidentruleexecutionFields[16].Descriptor()
 	// incidentruleexecution.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	incidentruleexecution.TenantIDValidator = incidentruleexecutionDescTenantID.Validators[0].(func(int) error)
 	// incidentruleexecutionDescCreatedAt is the schema descriptor for created_at field.
-	incidentruleexecutionDescCreatedAt := incidentruleexecutionFields[11].Descriptor()
+	incidentruleexecutionDescCreatedAt := incidentruleexecutionFields[17].Descriptor()
 	// incidentruleexecution.DefaultCreatedAt holds the default value on creation for the created_at field.
 	incidentruleexecution.DefaultCreatedAt = incidentruleexecutionDescCreatedAt.Default.(func() time.Time)
 	// incidentruleexecutionDescUpdatedAt is the schema descriptor for updated_at field.
-	incidentruleexecutionDescUpdatedAt := incidentruleexecutionFields[12].Descriptor()
+	incidentruleexecutionDescUpdatedAt := incidentruleexecutionFields[18].Descriptor()
 	// incidentruleexecution.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	incidentruleexecution.DefaultUpdatedAt = incidentruleexecutionDescUpdatedAt.Default.(func() time.Time)
 	// incidentruleexecution.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	incidentruleexecution.UpdateDefaultUpdatedAt = incidentruleexecutionDescUpdatedAt.UpdateDefault.(func() time.Time)
+	intakerequestFields := schema.IntakeRequest{}.Fields()
+	_ = intakerequestFields
+	// intakerequestDescTenantID is the schema descriptor for tenant_id field.
+	intakerequestDescTenantID := intakerequestFields[0].Descriptor()
+	// intakerequest.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	intakerequest.TenantIDValidator = intakerequestDescTenantID.Validators[0].(func(int) error)
+	// intakerequestDescActorID is the schema descriptor for actor_id field.
+	intakerequestDescActorID := intakerequestFields[1].Descriptor()
+	// intakerequest.ActorIDValidator is a validator for the "actor_id" field. It is called by the builders before save.
+	intakerequest.ActorIDValidator = intakerequestDescActorID.Validators[0].(func(int) error)
+	// intakerequestDescActorTenantID is the schema descriptor for actor_tenant_id field.
+	intakerequestDescActorTenantID := intakerequestFields[2].Descriptor()
+	// intakerequest.ActorTenantIDValidator is a validator for the "actor_tenant_id" field. It is called by the builders before save.
+	intakerequest.ActorTenantIDValidator = intakerequestDescActorTenantID.Validators[0].(func(int) error)
+	// intakerequestDescRequesterID is the schema descriptor for requester_id field.
+	intakerequestDescRequesterID := intakerequestFields[3].Descriptor()
+	// intakerequest.RequesterIDValidator is a validator for the "requester_id" field. It is called by the builders before save.
+	intakerequest.RequesterIDValidator = intakerequestDescRequesterID.Validators[0].(func(int) error)
+	// intakerequestDescChannel is the schema descriptor for channel field.
+	intakerequestDescChannel := intakerequestFields[4].Descriptor()
+	// intakerequest.ChannelValidator is a validator for the "channel" field. It is called by the builders before save.
+	intakerequest.ChannelValidator = intakerequestDescChannel.Validators[0].(func(string) error)
+	// intakerequestDescOperation is the schema descriptor for operation field.
+	intakerequestDescOperation := intakerequestFields[5].Descriptor()
+	// intakerequest.OperationValidator is a validator for the "operation" field. It is called by the builders before save.
+	intakerequest.OperationValidator = intakerequestDescOperation.Validators[0].(func(string) error)
+	// intakerequestDescIdempotencyKey is the schema descriptor for idempotency_key field.
+	intakerequestDescIdempotencyKey := intakerequestFields[6].Descriptor()
+	// intakerequest.IdempotencyKeyValidator is a validator for the "idempotency_key" field. It is called by the builders before save.
+	intakerequest.IdempotencyKeyValidator = intakerequestDescIdempotencyKey.Validators[0].(func(string) error)
+	// intakerequestDescRequestDigest is the schema descriptor for request_digest field.
+	intakerequestDescRequestDigest := intakerequestFields[7].Descriptor()
+	// intakerequest.RequestDigestValidator is a validator for the "request_digest" field. It is called by the builders before save.
+	intakerequest.RequestDigestValidator = intakerequestDescRequestDigest.Validators[0].(func(string) error)
+	// intakerequestDescDigestVersion is the schema descriptor for digest_version field.
+	intakerequestDescDigestVersion := intakerequestFields[8].Descriptor()
+	// intakerequest.DigestVersionValidator is a validator for the "digest_version" field. It is called by the builders before save.
+	intakerequest.DigestVersionValidator = intakerequestDescDigestVersion.Validators[0].(func(string) error)
+	// intakerequestDescStatus is the schema descriptor for status field.
+	intakerequestDescStatus := intakerequestFields[9].Descriptor()
+	// intakerequest.DefaultStatus holds the default value on creation for the status field.
+	intakerequest.DefaultStatus = intakerequestDescStatus.Default.(string)
+	// intakerequestDescWorkItemID is the schema descriptor for work_item_id field.
+	intakerequestDescWorkItemID := intakerequestFields[10].Descriptor()
+	// intakerequest.WorkItemIDValidator is a validator for the "work_item_id" field. It is called by the builders before save.
+	intakerequest.WorkItemIDValidator = intakerequestDescWorkItemID.Validators[0].(func(int) error)
+	// intakerequestDescCreatedAt is the schema descriptor for created_at field.
+	intakerequestDescCreatedAt := intakerequestFields[11].Descriptor()
+	// intakerequest.DefaultCreatedAt holds the default value on creation for the created_at field.
+	intakerequest.DefaultCreatedAt = intakerequestDescCreatedAt.Default.(func() time.Time)
+	intakeresolutionsnapshotFields := schema.IntakeResolutionSnapshot{}.Fields()
+	_ = intakeresolutionsnapshotFields
+	// intakeresolutionsnapshotDescTenantID is the schema descriptor for tenant_id field.
+	intakeresolutionsnapshotDescTenantID := intakeresolutionsnapshotFields[0].Descriptor()
+	// intakeresolutionsnapshot.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	intakeresolutionsnapshot.TenantIDValidator = intakeresolutionsnapshotDescTenantID.Validators[0].(func(int) error)
+	// intakeresolutionsnapshotDescIntakeRequestID is the schema descriptor for intake_request_id field.
+	intakeresolutionsnapshotDescIntakeRequestID := intakeresolutionsnapshotFields[1].Descriptor()
+	// intakeresolutionsnapshot.IntakeRequestIDValidator is a validator for the "intake_request_id" field. It is called by the builders before save.
+	intakeresolutionsnapshot.IntakeRequestIDValidator = intakeresolutionsnapshotDescIntakeRequestID.Validators[0].(func(int) error)
+	// intakeresolutionsnapshotDescWorkItemID is the schema descriptor for work_item_id field.
+	intakeresolutionsnapshotDescWorkItemID := intakeresolutionsnapshotFields[2].Descriptor()
+	// intakeresolutionsnapshot.WorkItemIDValidator is a validator for the "work_item_id" field. It is called by the builders before save.
+	intakeresolutionsnapshot.WorkItemIDValidator = intakeresolutionsnapshotDescWorkItemID.Validators[0].(func(int) error)
+	// intakeresolutionsnapshotDescChannel is the schema descriptor for channel field.
+	intakeresolutionsnapshotDescChannel := intakeresolutionsnapshotFields[3].Descriptor()
+	// intakeresolutionsnapshot.ChannelValidator is a validator for the "channel" field. It is called by the builders before save.
+	intakeresolutionsnapshot.ChannelValidator = intakeresolutionsnapshotDescChannel.Validators[0].(func(string) error)
+	// intakeresolutionsnapshotDescCatalogItemID is the schema descriptor for catalog_item_id field.
+	intakeresolutionsnapshotDescCatalogItemID := intakeresolutionsnapshotFields[7].Descriptor()
+	// intakeresolutionsnapshot.CatalogItemIDValidator is a validator for the "catalog_item_id" field. It is called by the builders before save.
+	intakeresolutionsnapshot.CatalogItemIDValidator = intakeresolutionsnapshotDescCatalogItemID.Validators[0].(func(int) error)
+	// intakeresolutionsnapshotDescRecordClass is the schema descriptor for record_class field.
+	intakeresolutionsnapshotDescRecordClass := intakeresolutionsnapshotFields[9].Descriptor()
+	// intakeresolutionsnapshot.RecordClassValidator is a validator for the "record_class" field. It is called by the builders before save.
+	intakeresolutionsnapshot.RecordClassValidator = intakeresolutionsnapshotDescRecordClass.Validators[0].(func(string) error)
+	// intakeresolutionsnapshotDescCiIds is the schema descriptor for ci_ids field.
+	intakeresolutionsnapshotDescCiIds := intakeresolutionsnapshotFields[11].Descriptor()
+	// intakeresolutionsnapshot.DefaultCiIds holds the default value on creation for the ci_ids field.
+	intakeresolutionsnapshot.DefaultCiIds = intakeresolutionsnapshotDescCiIds.Default.([]int)
+	// intakeresolutionsnapshotDescWorkflowDefinitionID is the schema descriptor for workflow_definition_id field.
+	intakeresolutionsnapshotDescWorkflowDefinitionID := intakeresolutionsnapshotFields[13].Descriptor()
+	// intakeresolutionsnapshot.WorkflowDefinitionIDValidator is a validator for the "workflow_definition_id" field. It is called by the builders before save.
+	intakeresolutionsnapshot.WorkflowDefinitionIDValidator = intakeresolutionsnapshotDescWorkflowDefinitionID.Validators[0].(func(int) error)
+	// intakeresolutionsnapshotDescNoProcess is the schema descriptor for no_process field.
+	intakeresolutionsnapshotDescNoProcess := intakeresolutionsnapshotFields[18].Descriptor()
+	// intakeresolutionsnapshot.DefaultNoProcess holds the default value on creation for the no_process field.
+	intakeresolutionsnapshot.DefaultNoProcess = intakeresolutionsnapshotDescNoProcess.Default.(bool)
+	// intakeresolutionsnapshotDescSLADefinitionID is the schema descriptor for sla_definition_id field.
+	intakeresolutionsnapshotDescSLADefinitionID := intakeresolutionsnapshotFields[19].Descriptor()
+	// intakeresolutionsnapshot.SLADefinitionIDValidator is a validator for the "sla_definition_id" field. It is called by the builders before save.
+	intakeresolutionsnapshot.SLADefinitionIDValidator = intakeresolutionsnapshotDescSLADefinitionID.Validators[0].(func(int) error)
+	// intakeresolutionsnapshotDescResolverVersion is the schema descriptor for resolver_version field.
+	intakeresolutionsnapshotDescResolverVersion := intakeresolutionsnapshotFields[20].Descriptor()
+	// intakeresolutionsnapshot.ResolverVersionValidator is a validator for the "resolver_version" field. It is called by the builders before save.
+	intakeresolutionsnapshot.ResolverVersionValidator = intakeresolutionsnapshotDescResolverVersion.Validators[0].(func(string) error)
+	// intakeresolutionsnapshotDescRequestDigest is the schema descriptor for request_digest field.
+	intakeresolutionsnapshotDescRequestDigest := intakeresolutionsnapshotFields[21].Descriptor()
+	// intakeresolutionsnapshot.RequestDigestValidator is a validator for the "request_digest" field. It is called by the builders before save.
+	intakeresolutionsnapshot.RequestDigestValidator = intakeresolutionsnapshotDescRequestDigest.Validators[0].(func(string) error)
+	// intakeresolutionsnapshotDescCreatedAt is the schema descriptor for created_at field.
+	intakeresolutionsnapshotDescCreatedAt := intakeresolutionsnapshotFields[22].Descriptor()
+	// intakeresolutionsnapshot.DefaultCreatedAt holds the default value on creation for the created_at field.
+	intakeresolutionsnapshot.DefaultCreatedAt = intakeresolutionsnapshotDescCreatedAt.Default.(func() time.Time)
 	itemversionFields := schema.ItemVersion{}.Fields()
 	_ = itemversionFields
 	// itemversionDescDownloadCount is the schema descriptor for download_count field.
@@ -1668,16 +1796,20 @@ func init() {
 	kaftaskactionledgerDescProcedureVersion := kaftaskactionledgerFields[8].Descriptor()
 	// kaftaskactionledger.ProcedureVersionValidator is a validator for the "procedure_version" field. It is called by the builders before save.
 	kaftaskactionledger.ProcedureVersionValidator = kaftaskactionledgerDescProcedureVersion.Validators[0].(func(string) error)
+	// kaftaskactionledgerDescRequestDigest is the schema descriptor for request_digest field.
+	kaftaskactionledgerDescRequestDigest := kaftaskactionledgerFields[9].Descriptor()
+	// kaftaskactionledger.DefaultRequestDigest holds the default value on creation for the request_digest field.
+	kaftaskactionledger.DefaultRequestDigest = kaftaskactionledgerDescRequestDigest.Default.(string)
 	// kaftaskactionledgerDescResultStatus is the schema descriptor for result_status field.
-	kaftaskactionledgerDescResultStatus := kaftaskactionledgerFields[9].Descriptor()
+	kaftaskactionledgerDescResultStatus := kaftaskactionledgerFields[10].Descriptor()
 	// kaftaskactionledger.DefaultResultStatus holds the default value on creation for the result_status field.
 	kaftaskactionledger.DefaultResultStatus = kaftaskactionledgerDescResultStatus.Default.(string)
 	// kaftaskactionledgerDescCreatedAt is the schema descriptor for created_at field.
-	kaftaskactionledgerDescCreatedAt := kaftaskactionledgerFields[14].Descriptor()
+	kaftaskactionledgerDescCreatedAt := kaftaskactionledgerFields[15].Descriptor()
 	// kaftaskactionledger.DefaultCreatedAt holds the default value on creation for the created_at field.
 	kaftaskactionledger.DefaultCreatedAt = kaftaskactionledgerDescCreatedAt.Default.(func() time.Time)
 	// kaftaskactionledgerDescUpdatedAt is the schema descriptor for updated_at field.
-	kaftaskactionledgerDescUpdatedAt := kaftaskactionledgerFields[15].Descriptor()
+	kaftaskactionledgerDescUpdatedAt := kaftaskactionledgerFields[16].Descriptor()
 	// kaftaskactionledger.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	kaftaskactionledger.DefaultUpdatedAt = kaftaskactionledgerDescUpdatedAt.Default.(func() time.Time)
 	// kaftaskactionledger.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -2066,44 +2198,48 @@ func init() {
 	notificationpreference.UpdateDefaultUpdatedAt = notificationpreferenceDescUpdatedAt.UpdateDefault.(func() time.Time)
 	outboxeventFields := schema.OutboxEvent{}.Fields()
 	_ = outboxeventFields
+	// outboxeventDescExecutionWorkItemID is the schema descriptor for execution_work_item_id field.
+	outboxeventDescExecutionWorkItemID := outboxeventFields[0].Descriptor()
+	// outboxevent.ExecutionWorkItemIDValidator is a validator for the "execution_work_item_id" field. It is called by the builders before save.
+	outboxevent.ExecutionWorkItemIDValidator = outboxeventDescExecutionWorkItemID.Validators[0].(func(int) error)
 	// outboxeventDescEventID is the schema descriptor for event_id field.
-	outboxeventDescEventID := outboxeventFields[0].Descriptor()
+	outboxeventDescEventID := outboxeventFields[1].Descriptor()
 	// outboxevent.EventIDValidator is a validator for the "event_id" field. It is called by the builders before save.
 	outboxevent.EventIDValidator = outboxeventDescEventID.Validators[0].(func(string) error)
 	// outboxeventDescEventType is the schema descriptor for event_type field.
-	outboxeventDescEventType := outboxeventFields[1].Descriptor()
+	outboxeventDescEventType := outboxeventFields[2].Descriptor()
 	// outboxevent.EventTypeValidator is a validator for the "event_type" field. It is called by the builders before save.
 	outboxevent.EventTypeValidator = outboxeventDescEventType.Validators[0].(func(string) error)
 	// outboxeventDescTenantID is the schema descriptor for tenant_id field.
-	outboxeventDescTenantID := outboxeventFields[2].Descriptor()
+	outboxeventDescTenantID := outboxeventFields[3].Descriptor()
 	// outboxevent.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	outboxevent.TenantIDValidator = outboxeventDescTenantID.Validators[0].(func(int) error)
 	// outboxeventDescAggregateType is the schema descriptor for aggregate_type field.
-	outboxeventDescAggregateType := outboxeventFields[3].Descriptor()
+	outboxeventDescAggregateType := outboxeventFields[4].Descriptor()
 	// outboxevent.AggregateTypeValidator is a validator for the "aggregate_type" field. It is called by the builders before save.
 	outboxevent.AggregateTypeValidator = outboxeventDescAggregateType.Validators[0].(func(string) error)
 	// outboxeventDescAggregateID is the schema descriptor for aggregate_id field.
-	outboxeventDescAggregateID := outboxeventFields[4].Descriptor()
+	outboxeventDescAggregateID := outboxeventFields[5].Descriptor()
 	// outboxevent.AggregateIDValidator is a validator for the "aggregate_id" field. It is called by the builders before save.
 	outboxevent.AggregateIDValidator = outboxeventDescAggregateID.Validators[0].(func(string) error)
 	// outboxeventDescStatus is the schema descriptor for status field.
-	outboxeventDescStatus := outboxeventFields[6].Descriptor()
+	outboxeventDescStatus := outboxeventFields[7].Descriptor()
 	// outboxevent.DefaultStatus holds the default value on creation for the status field.
 	outboxevent.DefaultStatus = outboxeventDescStatus.Default.(string)
 	// outboxeventDescAttemptCount is the schema descriptor for attempt_count field.
-	outboxeventDescAttemptCount := outboxeventFields[7].Descriptor()
+	outboxeventDescAttemptCount := outboxeventFields[8].Descriptor()
 	// outboxevent.DefaultAttemptCount holds the default value on creation for the attempt_count field.
 	outboxevent.DefaultAttemptCount = outboxeventDescAttemptCount.Default.(int)
 	// outboxeventDescNextAttemptAt is the schema descriptor for next_attempt_at field.
-	outboxeventDescNextAttemptAt := outboxeventFields[8].Descriptor()
+	outboxeventDescNextAttemptAt := outboxeventFields[9].Descriptor()
 	// outboxevent.DefaultNextAttemptAt holds the default value on creation for the next_attempt_at field.
 	outboxevent.DefaultNextAttemptAt = outboxeventDescNextAttemptAt.Default.(func() time.Time)
 	// outboxeventDescCreatedAt is the schema descriptor for created_at field.
-	outboxeventDescCreatedAt := outboxeventFields[13].Descriptor()
+	outboxeventDescCreatedAt := outboxeventFields[14].Descriptor()
 	// outboxevent.DefaultCreatedAt holds the default value on creation for the created_at field.
 	outboxevent.DefaultCreatedAt = outboxeventDescCreatedAt.Default.(func() time.Time)
 	// outboxeventDescUpdatedAt is the schema descriptor for updated_at field.
-	outboxeventDescUpdatedAt := outboxeventFields[14].Descriptor()
+	outboxeventDescUpdatedAt := outboxeventFields[15].Descriptor()
 	// outboxevent.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	outboxevent.DefaultUpdatedAt = outboxeventDescUpdatedAt.Default.(func() time.Time)
 	// outboxevent.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -2164,38 +2300,6 @@ func init() {
 	permissiondefinitionDescAction := permissiondefinitionFields[1].Descriptor()
 	// permissiondefinition.ActionValidator is a validator for the "action" field. It is called by the builders before save.
 	permissiondefinition.ActionValidator = permissiondefinitionDescAction.Validators[0].(func(string) error)
-	problemFields := schema.Problem{}.Fields()
-	_ = problemFields
-	// problemDescTitle is the schema descriptor for title field.
-	problemDescTitle := problemFields[0].Descriptor()
-	// problem.TitleValidator is a validator for the "title" field. It is called by the builders before save.
-	problem.TitleValidator = problemDescTitle.Validators[0].(func(string) error)
-	// problemDescStatus is the schema descriptor for status field.
-	problemDescStatus := problemFields[2].Descriptor()
-	// problem.DefaultStatus holds the default value on creation for the status field.
-	problem.DefaultStatus = problemDescStatus.Default.(string)
-	// problemDescPriority is the schema descriptor for priority field.
-	problemDescPriority := problemFields[3].Descriptor()
-	// problem.DefaultPriority holds the default value on creation for the priority field.
-	problem.DefaultPriority = problemDescPriority.Default.(string)
-	// problemDescCreatedBy is the schema descriptor for created_by field.
-	problemDescCreatedBy := problemFields[10].Descriptor()
-	// problem.CreatedByValidator is a validator for the "created_by" field. It is called by the builders before save.
-	problem.CreatedByValidator = problemDescCreatedBy.Validators[0].(func(int) error)
-	// problemDescTenantID is the schema descriptor for tenant_id field.
-	problemDescTenantID := problemFields[12].Descriptor()
-	// problem.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	problem.TenantIDValidator = problemDescTenantID.Validators[0].(func(int) error)
-	// problemDescCreatedAt is the schema descriptor for created_at field.
-	problemDescCreatedAt := problemFields[13].Descriptor()
-	// problem.DefaultCreatedAt holds the default value on creation for the created_at field.
-	problem.DefaultCreatedAt = problemDescCreatedAt.Default.(func() time.Time)
-	// problemDescUpdatedAt is the schema descriptor for updated_at field.
-	problemDescUpdatedAt := problemFields[14].Descriptor()
-	// problem.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	problem.DefaultUpdatedAt = problemDescUpdatedAt.Default.(func() time.Time)
-	// problem.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	problem.UpdateDefaultUpdatedAt = problemDescUpdatedAt.UpdateDefault.(func() time.Time)
 	processapprovaldecisionFields := schema.ProcessApprovalDecision{}.Fields()
 	_ = processapprovaldecisionFields
 	// processapprovaldecisionDescProcessInstanceID is the schema descriptor for process_instance_id field.
@@ -2317,7 +2421,7 @@ func init() {
 	// processbindingDescConditions is the schema descriptor for conditions field.
 	processbindingDescConditions := processbindingFields[12].Descriptor()
 	// processbinding.DefaultConditions holds the default value on creation for the conditions field.
-	processbinding.DefaultConditions = processbindingDescConditions.Default.(map[string]interface{})
+	processbinding.DefaultConditions = processbindingDescConditions.Default.(jsonvalue.NumberMap)
 	// processbindingDescApprovalChainID is the schema descriptor for approval_chain_id field.
 	processbindingDescApprovalChainID := processbindingFields[13].Descriptor()
 	// processbinding.DefaultApprovalChainID holds the default value on creation for the approval_chain_id field.
@@ -2329,7 +2433,7 @@ func init() {
 	// processbindingDescOverrides is the schema descriptor for overrides field.
 	processbindingDescOverrides := processbindingFields[15].Descriptor()
 	// processbinding.DefaultOverrides holds the default value on creation for the overrides field.
-	processbinding.DefaultOverrides = processbindingDescOverrides.Default.(map[string]interface{})
+	processbinding.DefaultOverrides = processbindingDescOverrides.Default.(jsonvalue.NumberMap)
 	// processbindingDescTenantID is the schema descriptor for tenant_id field.
 	processbindingDescTenantID := processbindingFields[16].Descriptor()
 	// processbinding.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
@@ -2346,62 +2450,70 @@ func init() {
 	processbinding.UpdateDefaultUpdatedAt = processbindingDescUpdatedAt.UpdateDefault.(func() time.Time)
 	processcallbackoutboxFields := schema.ProcessCallbackOutbox{}.Fields()
 	_ = processcallbackoutboxFields
+	// processcallbackoutboxDescActorID is the schema descriptor for actor_id field.
+	processcallbackoutboxDescActorID := processcallbackoutboxFields[0].Descriptor()
+	// processcallbackoutbox.ActorIDValidator is a validator for the "actor_id" field. It is called by the builders before save.
+	processcallbackoutbox.ActorIDValidator = processcallbackoutboxDescActorID.Validators[0].(func(int) error)
 	// processcallbackoutboxDescExecutionKey is the schema descriptor for execution_key field.
-	processcallbackoutboxDescExecutionKey := processcallbackoutboxFields[0].Descriptor()
+	processcallbackoutboxDescExecutionKey := processcallbackoutboxFields[2].Descriptor()
 	// processcallbackoutbox.ExecutionKeyValidator is a validator for the "execution_key" field. It is called by the builders before save.
 	processcallbackoutbox.ExecutionKeyValidator = processcallbackoutboxDescExecutionKey.Validators[0].(func(string) error)
 	// processcallbackoutboxDescTenantID is the schema descriptor for tenant_id field.
-	processcallbackoutboxDescTenantID := processcallbackoutboxFields[1].Descriptor()
+	processcallbackoutboxDescTenantID := processcallbackoutboxFields[3].Descriptor()
 	// processcallbackoutbox.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	processcallbackoutbox.TenantIDValidator = processcallbackoutboxDescTenantID.Validators[0].(func(int) error)
 	// processcallbackoutboxDescProcessInstanceID is the schema descriptor for process_instance_id field.
-	processcallbackoutboxDescProcessInstanceID := processcallbackoutboxFields[2].Descriptor()
+	processcallbackoutboxDescProcessInstanceID := processcallbackoutboxFields[4].Descriptor()
 	// processcallbackoutbox.ProcessInstanceIDValidator is a validator for the "process_instance_id" field. It is called by the builders before save.
 	processcallbackoutbox.ProcessInstanceIDValidator = processcallbackoutboxDescProcessInstanceID.Validators[0].(func(int) error)
 	// processcallbackoutboxDescProcessTaskID is the schema descriptor for process_task_id field.
-	processcallbackoutboxDescProcessTaskID := processcallbackoutboxFields[3].Descriptor()
+	processcallbackoutboxDescProcessTaskID := processcallbackoutboxFields[5].Descriptor()
 	// processcallbackoutbox.ProcessTaskIDValidator is a validator for the "process_task_id" field. It is called by the builders before save.
 	processcallbackoutbox.ProcessTaskIDValidator = processcallbackoutboxDescProcessTaskID.Validators[0].(func(int) error)
 	// processcallbackoutboxDescCallbackKind is the schema descriptor for callback_kind field.
-	processcallbackoutboxDescCallbackKind := processcallbackoutboxFields[5].Descriptor()
+	processcallbackoutboxDescCallbackKind := processcallbackoutboxFields[7].Descriptor()
 	// processcallbackoutbox.CallbackKindValidator is a validator for the "callback_kind" field. It is called by the builders before save.
 	processcallbackoutbox.CallbackKindValidator = processcallbackoutboxDescCallbackKind.Validators[0].(func(string) error)
 	// processcallbackoutboxDescHandlerID is the schema descriptor for handler_id field.
-	processcallbackoutboxDescHandlerID := processcallbackoutboxFields[6].Descriptor()
+	processcallbackoutboxDescHandlerID := processcallbackoutboxFields[8].Descriptor()
 	// processcallbackoutbox.HandlerIDValidator is a validator for the "handler_id" field. It is called by the builders before save.
 	processcallbackoutbox.HandlerIDValidator = processcallbackoutboxDescHandlerID.Validators[0].(func(string) error)
 	// processcallbackoutboxDescTaskType is the schema descriptor for task_type field.
-	processcallbackoutboxDescTaskType := processcallbackoutboxFields[7].Descriptor()
+	processcallbackoutboxDescTaskType := processcallbackoutboxFields[9].Descriptor()
 	// processcallbackoutbox.TaskTypeValidator is a validator for the "task_type" field. It is called by the builders before save.
 	processcallbackoutbox.TaskTypeValidator = processcallbackoutboxDescTaskType.Validators[0].(func(string) error)
 	// processcallbackoutboxDescElementID is the schema descriptor for element_id field.
-	processcallbackoutboxDescElementID := processcallbackoutboxFields[8].Descriptor()
+	processcallbackoutboxDescElementID := processcallbackoutboxFields[10].Descriptor()
 	// processcallbackoutbox.ElementIDValidator is a validator for the "element_id" field. It is called by the builders before save.
 	processcallbackoutbox.ElementIDValidator = processcallbackoutboxDescElementID.Validators[0].(func(string) error)
+	// processcallbackoutboxDescOptionalDeclared is the schema descriptor for optional_declared field.
+	processcallbackoutboxDescOptionalDeclared := processcallbackoutboxFields[14].Descriptor()
+	// processcallbackoutbox.DefaultOptionalDeclared holds the default value on creation for the optional_declared field.
+	processcallbackoutbox.DefaultOptionalDeclared = processcallbackoutboxDescOptionalDeclared.Default.(bool)
 	// processcallbackoutboxDescStatus is the schema descriptor for status field.
-	processcallbackoutboxDescStatus := processcallbackoutboxFields[12].Descriptor()
+	processcallbackoutboxDescStatus := processcallbackoutboxFields[15].Descriptor()
 	// processcallbackoutbox.DefaultStatus holds the default value on creation for the status field.
 	processcallbackoutbox.DefaultStatus = processcallbackoutboxDescStatus.Default.(string)
 	// processcallbackoutboxDescAttemptCount is the schema descriptor for attempt_count field.
-	processcallbackoutboxDescAttemptCount := processcallbackoutboxFields[13].Descriptor()
+	processcallbackoutboxDescAttemptCount := processcallbackoutboxFields[16].Descriptor()
 	// processcallbackoutbox.DefaultAttemptCount holds the default value on creation for the attempt_count field.
 	processcallbackoutbox.DefaultAttemptCount = processcallbackoutboxDescAttemptCount.Default.(int)
 	// processcallbackoutbox.AttemptCountValidator is a validator for the "attempt_count" field. It is called by the builders before save.
 	processcallbackoutbox.AttemptCountValidator = processcallbackoutboxDescAttemptCount.Validators[0].(func(int) error)
 	// processcallbackoutboxDescNextAttemptAt is the schema descriptor for next_attempt_at field.
-	processcallbackoutboxDescNextAttemptAt := processcallbackoutboxFields[14].Descriptor()
+	processcallbackoutboxDescNextAttemptAt := processcallbackoutboxFields[17].Descriptor()
 	// processcallbackoutbox.DefaultNextAttemptAt holds the default value on creation for the next_attempt_at field.
 	processcallbackoutbox.DefaultNextAttemptAt = processcallbackoutboxDescNextAttemptAt.Default.(func() time.Time)
 	// processcallbackoutboxDescLastErrorClass is the schema descriptor for last_error_class field.
-	processcallbackoutboxDescLastErrorClass := processcallbackoutboxFields[17].Descriptor()
+	processcallbackoutboxDescLastErrorClass := processcallbackoutboxFields[20].Descriptor()
 	// processcallbackoutbox.LastErrorClassValidator is a validator for the "last_error_class" field. It is called by the builders before save.
 	processcallbackoutbox.LastErrorClassValidator = processcallbackoutboxDescLastErrorClass.Validators[0].(func(string) error)
 	// processcallbackoutboxDescCreatedAt is the schema descriptor for created_at field.
-	processcallbackoutboxDescCreatedAt := processcallbackoutboxFields[19].Descriptor()
+	processcallbackoutboxDescCreatedAt := processcallbackoutboxFields[22].Descriptor()
 	// processcallbackoutbox.DefaultCreatedAt holds the default value on creation for the created_at field.
 	processcallbackoutbox.DefaultCreatedAt = processcallbackoutboxDescCreatedAt.Default.(func() time.Time)
 	// processcallbackoutboxDescUpdatedAt is the schema descriptor for updated_at field.
-	processcallbackoutboxDescUpdatedAt := processcallbackoutboxFields[20].Descriptor()
+	processcallbackoutboxDescUpdatedAt := processcallbackoutboxFields[23].Descriptor()
 	// processcallbackoutbox.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	processcallbackoutbox.DefaultUpdatedAt = processcallbackoutboxDescUpdatedAt.Default.(func() time.Time)
 	// processcallbackoutbox.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -2526,40 +2638,44 @@ func init() {
 	processexecutionhistory.DefaultCreatedAt = processexecutionhistoryDescCreatedAt.Default.(func() time.Time)
 	processinstanceFields := schema.ProcessInstance{}.Fields()
 	_ = processinstanceFields
+	// processinstanceDescExecutionWorkItemID is the schema descriptor for execution_work_item_id field.
+	processinstanceDescExecutionWorkItemID := processinstanceFields[0].Descriptor()
+	// processinstance.ExecutionWorkItemIDValidator is a validator for the "execution_work_item_id" field. It is called by the builders before save.
+	processinstance.ExecutionWorkItemIDValidator = processinstanceDescExecutionWorkItemID.Validators[0].(func(int) error)
 	// processinstanceDescProcessInstanceID is the schema descriptor for process_instance_id field.
-	processinstanceDescProcessInstanceID := processinstanceFields[0].Descriptor()
+	processinstanceDescProcessInstanceID := processinstanceFields[1].Descriptor()
 	// processinstance.ProcessInstanceIDValidator is a validator for the "process_instance_id" field. It is called by the builders before save.
 	processinstance.ProcessInstanceIDValidator = processinstanceDescProcessInstanceID.Validators[0].(func(string) error)
 	// processinstanceDescProcessDefinitionKey is the schema descriptor for process_definition_key field.
-	processinstanceDescProcessDefinitionKey := processinstanceFields[4].Descriptor()
+	processinstanceDescProcessDefinitionKey := processinstanceFields[6].Descriptor()
 	// processinstance.ProcessDefinitionKeyValidator is a validator for the "process_definition_key" field. It is called by the builders before save.
 	processinstance.ProcessDefinitionKeyValidator = processinstanceDescProcessDefinitionKey.Validators[0].(func(string) error)
 	// processinstanceDescProcessDefinitionID is the schema descriptor for process_definition_id field.
-	processinstanceDescProcessDefinitionID := processinstanceFields[5].Descriptor()
+	processinstanceDescProcessDefinitionID := processinstanceFields[7].Descriptor()
 	// processinstance.ProcessDefinitionIDValidator is a validator for the "process_definition_id" field. It is called by the builders before save.
 	processinstance.ProcessDefinitionIDValidator = processinstanceDescProcessDefinitionID.Validators[0].(func(int) error)
 	// processinstanceDescStatus is the schema descriptor for status field.
-	processinstanceDescStatus := processinstanceFields[6].Descriptor()
+	processinstanceDescStatus := processinstanceFields[8].Descriptor()
 	// processinstance.DefaultStatus holds the default value on creation for the status field.
 	processinstance.DefaultStatus = processinstanceDescStatus.Default.(string)
 	// processinstanceDescStartTime is the schema descriptor for start_time field.
-	processinstanceDescStartTime := processinstanceFields[10].Descriptor()
+	processinstanceDescStartTime := processinstanceFields[12].Descriptor()
 	// processinstance.DefaultStartTime holds the default value on creation for the start_time field.
 	processinstance.DefaultStartTime = processinstanceDescStartTime.Default.(func() time.Time)
 	// processinstanceDescTenantID is the schema descriptor for tenant_id field.
-	processinstanceDescTenantID := processinstanceFields[14].Descriptor()
+	processinstanceDescTenantID := processinstanceFields[16].Descriptor()
 	// processinstance.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	processinstance.TenantIDValidator = processinstanceDescTenantID.Validators[0].(func(int) error)
 	// processinstanceDescVersion is the schema descriptor for version field.
-	processinstanceDescVersion := processinstanceFields[15].Descriptor()
+	processinstanceDescVersion := processinstanceFields[17].Descriptor()
 	// processinstance.DefaultVersion holds the default value on creation for the version field.
 	processinstance.DefaultVersion = processinstanceDescVersion.Default.(int)
 	// processinstanceDescCreatedAt is the schema descriptor for created_at field.
-	processinstanceDescCreatedAt := processinstanceFields[20].Descriptor()
+	processinstanceDescCreatedAt := processinstanceFields[22].Descriptor()
 	// processinstance.DefaultCreatedAt holds the default value on creation for the created_at field.
 	processinstance.DefaultCreatedAt = processinstanceDescCreatedAt.Default.(func() time.Time)
 	// processinstanceDescUpdatedAt is the schema descriptor for updated_at field.
-	processinstanceDescUpdatedAt := processinstanceFields[21].Descriptor()
+	processinstanceDescUpdatedAt := processinstanceFields[23].Descriptor()
 	// processinstance.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	processinstance.DefaultUpdatedAt = processinstanceDescUpdatedAt.Default.(func() time.Time)
 	// processinstance.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -2590,34 +2706,38 @@ func init() {
 	processtaskDescTaskType := processtaskFields[5].Descriptor()
 	// processtask.DefaultTaskType holds the default value on creation for the task_type field.
 	processtask.DefaultTaskType = processtaskDescTaskType.Default.(string)
+	// processtaskDescAssigneeSource is the schema descriptor for assignee_source field.
+	processtaskDescAssigneeSource := processtaskFields[7].Descriptor()
+	// processtask.DefaultAssigneeSource holds the default value on creation for the assignee_source field.
+	processtask.DefaultAssigneeSource = processtaskDescAssigneeSource.Default.(string)
 	// processtaskDescStatus is the schema descriptor for status field.
-	processtaskDescStatus := processtaskFields[9].Descriptor()
+	processtaskDescStatus := processtaskFields[10].Descriptor()
 	// processtask.DefaultStatus holds the default value on creation for the status field.
 	processtask.DefaultStatus = processtaskDescStatus.Default.(string)
 	// processtaskDescPriority is the schema descriptor for priority field.
-	processtaskDescPriority := processtaskFields[10].Descriptor()
+	processtaskDescPriority := processtaskFields[11].Descriptor()
 	// processtask.DefaultPriority holds the default value on creation for the priority field.
 	processtask.DefaultPriority = processtaskDescPriority.Default.(string)
 	// processtaskDescCreatedTime is the schema descriptor for created_time field.
-	processtaskDescCreatedTime := processtaskFields[12].Descriptor()
+	processtaskDescCreatedTime := processtaskFields[13].Descriptor()
 	// processtask.DefaultCreatedTime holds the default value on creation for the created_time field.
 	processtask.DefaultCreatedTime = processtaskDescCreatedTime.Default.(func() time.Time)
 	// processtaskDescAggregationVersion is the schema descriptor for aggregation_version field.
-	processtaskDescAggregationVersion := processtaskFields[22].Descriptor()
+	processtaskDescAggregationVersion := processtaskFields[23].Descriptor()
 	// processtask.DefaultAggregationVersion holds the default value on creation for the aggregation_version field.
 	processtask.DefaultAggregationVersion = processtaskDescAggregationVersion.Default.(int)
 	// processtask.AggregationVersionValidator is a validator for the "aggregation_version" field. It is called by the builders before save.
 	processtask.AggregationVersionValidator = processtaskDescAggregationVersion.Validators[0].(func(int) error)
 	// processtaskDescTenantID is the schema descriptor for tenant_id field.
-	processtaskDescTenantID := processtaskFields[27].Descriptor()
+	processtaskDescTenantID := processtaskFields[28].Descriptor()
 	// processtask.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	processtask.TenantIDValidator = processtaskDescTenantID.Validators[0].(func(int) error)
 	// processtaskDescCreatedAt is the schema descriptor for created_at field.
-	processtaskDescCreatedAt := processtaskFields[28].Descriptor()
+	processtaskDescCreatedAt := processtaskFields[29].Descriptor()
 	// processtask.DefaultCreatedAt holds the default value on creation for the created_at field.
 	processtask.DefaultCreatedAt = processtaskDescCreatedAt.Default.(func() time.Time)
 	// processtaskDescUpdatedAt is the schema descriptor for updated_at field.
-	processtaskDescUpdatedAt := processtaskFields[29].Descriptor()
+	processtaskDescUpdatedAt := processtaskFields[30].Descriptor()
 	// processtask.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	processtask.DefaultUpdatedAt = processtaskDescUpdatedAt.Default.(func() time.Time)
 	// processtask.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -2838,16 +2958,12 @@ func init() {
 	releaseDescIsEmergency := releaseFields[22].Descriptor()
 	// release.DefaultIsEmergency holds the default value on creation for the is_emergency field.
 	release.DefaultIsEmergency = releaseDescIsEmergency.Default.(bool)
-	// releaseDescRequiresApproval is the schema descriptor for requires_approval field.
-	releaseDescRequiresApproval := releaseFields[23].Descriptor()
-	// release.DefaultRequiresApproval holds the default value on creation for the requires_approval field.
-	release.DefaultRequiresApproval = releaseDescRequiresApproval.Default.(bool)
 	// releaseDescCreatedAt is the schema descriptor for created_at field.
-	releaseDescCreatedAt := releaseFields[24].Descriptor()
+	releaseDescCreatedAt := releaseFields[23].Descriptor()
 	// release.DefaultCreatedAt holds the default value on creation for the created_at field.
 	release.DefaultCreatedAt = releaseDescCreatedAt.Default.(func() time.Time)
 	// releaseDescUpdatedAt is the schema descriptor for updated_at field.
-	releaseDescUpdatedAt := releaseFields[25].Descriptor()
+	releaseDescUpdatedAt := releaseFields[24].Descriptor()
 	// release.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	release.DefaultUpdatedAt = releaseDescUpdatedAt.Default.(func() time.Time)
 	// release.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -2946,52 +3062,56 @@ func init() {
 	rootcauseanalysis.UpdateDefaultUpdatedAt = rootcauseanalysisDescUpdatedAt.UpdateDefault.(func() time.Time)
 	slaalerthistoryFields := schema.SLAAlertHistory{}.Fields()
 	_ = slaalerthistoryFields
+	// slaalerthistoryDescNotificationTrackingVersion is the schema descriptor for notification_tracking_version field.
+	slaalerthistoryDescNotificationTrackingVersion := slaalerthistoryFields[0].Descriptor()
+	// slaalerthistory.NotificationTrackingVersionValidator is a validator for the "notification_tracking_version" field. It is called by the builders before save.
+	slaalerthistory.NotificationTrackingVersionValidator = slaalerthistoryDescNotificationTrackingVersion.Validators[0].(func(int) error)
 	// slaalerthistoryDescTicketID is the schema descriptor for ticket_id field.
-	slaalerthistoryDescTicketID := slaalerthistoryFields[0].Descriptor()
+	slaalerthistoryDescTicketID := slaalerthistoryFields[1].Descriptor()
 	// slaalerthistory.TicketIDValidator is a validator for the "ticket_id" field. It is called by the builders before save.
 	slaalerthistory.TicketIDValidator = slaalerthistoryDescTicketID.Validators[0].(func(int) error)
 	// slaalerthistoryDescTicketNumber is the schema descriptor for ticket_number field.
-	slaalerthistoryDescTicketNumber := slaalerthistoryFields[1].Descriptor()
+	slaalerthistoryDescTicketNumber := slaalerthistoryFields[2].Descriptor()
 	// slaalerthistory.TicketNumberValidator is a validator for the "ticket_number" field. It is called by the builders before save.
 	slaalerthistory.TicketNumberValidator = slaalerthistoryDescTicketNumber.Validators[0].(func(string) error)
 	// slaalerthistoryDescTicketTitle is the schema descriptor for ticket_title field.
-	slaalerthistoryDescTicketTitle := slaalerthistoryFields[2].Descriptor()
+	slaalerthistoryDescTicketTitle := slaalerthistoryFields[3].Descriptor()
 	// slaalerthistory.TicketTitleValidator is a validator for the "ticket_title" field. It is called by the builders before save.
 	slaalerthistory.TicketTitleValidator = slaalerthistoryDescTicketTitle.Validators[0].(func(string) error)
 	// slaalerthistoryDescAlertRuleID is the schema descriptor for alert_rule_id field.
-	slaalerthistoryDescAlertRuleID := slaalerthistoryFields[3].Descriptor()
+	slaalerthistoryDescAlertRuleID := slaalerthistoryFields[4].Descriptor()
 	// slaalerthistory.AlertRuleIDValidator is a validator for the "alert_rule_id" field. It is called by the builders before save.
 	slaalerthistory.AlertRuleIDValidator = slaalerthistoryDescAlertRuleID.Validators[0].(func(int) error)
 	// slaalerthistoryDescAlertRuleName is the schema descriptor for alert_rule_name field.
-	slaalerthistoryDescAlertRuleName := slaalerthistoryFields[4].Descriptor()
+	slaalerthistoryDescAlertRuleName := slaalerthistoryFields[5].Descriptor()
 	// slaalerthistory.AlertRuleNameValidator is a validator for the "alert_rule_name" field. It is called by the builders before save.
 	slaalerthistory.AlertRuleNameValidator = slaalerthistoryDescAlertRuleName.Validators[0].(func(string) error)
 	// slaalerthistoryDescAlertLevel is the schema descriptor for alert_level field.
-	slaalerthistoryDescAlertLevel := slaalerthistoryFields[5].Descriptor()
+	slaalerthistoryDescAlertLevel := slaalerthistoryFields[6].Descriptor()
 	// slaalerthistory.DefaultAlertLevel holds the default value on creation for the alert_level field.
 	slaalerthistory.DefaultAlertLevel = slaalerthistoryDescAlertLevel.Default.(string)
 	// slaalerthistoryDescThresholdPercentage is the schema descriptor for threshold_percentage field.
-	slaalerthistoryDescThresholdPercentage := slaalerthistoryFields[6].Descriptor()
+	slaalerthistoryDescThresholdPercentage := slaalerthistoryFields[7].Descriptor()
 	// slaalerthistory.DefaultThresholdPercentage holds the default value on creation for the threshold_percentage field.
 	slaalerthistory.DefaultThresholdPercentage = slaalerthistoryDescThresholdPercentage.Default.(int)
 	// slaalerthistoryDescActualPercentage is the schema descriptor for actual_percentage field.
-	slaalerthistoryDescActualPercentage := slaalerthistoryFields[7].Descriptor()
+	slaalerthistoryDescActualPercentage := slaalerthistoryFields[8].Descriptor()
 	// slaalerthistory.DefaultActualPercentage holds the default value on creation for the actual_percentage field.
 	slaalerthistory.DefaultActualPercentage = slaalerthistoryDescActualPercentage.Default.(float64)
 	// slaalerthistoryDescNotificationSent is the schema descriptor for notification_sent field.
-	slaalerthistoryDescNotificationSent := slaalerthistoryFields[8].Descriptor()
+	slaalerthistoryDescNotificationSent := slaalerthistoryFields[9].Descriptor()
 	// slaalerthistory.DefaultNotificationSent holds the default value on creation for the notification_sent field.
 	slaalerthistory.DefaultNotificationSent = slaalerthistoryDescNotificationSent.Default.(bool)
 	// slaalerthistoryDescEscalationLevel is the schema descriptor for escalation_level field.
-	slaalerthistoryDescEscalationLevel := slaalerthistoryFields[9].Descriptor()
+	slaalerthistoryDescEscalationLevel := slaalerthistoryFields[10].Descriptor()
 	// slaalerthistory.DefaultEscalationLevel holds the default value on creation for the escalation_level field.
 	slaalerthistory.DefaultEscalationLevel = slaalerthistoryDescEscalationLevel.Default.(int)
 	// slaalerthistoryDescTenantID is the schema descriptor for tenant_id field.
-	slaalerthistoryDescTenantID := slaalerthistoryFields[10].Descriptor()
+	slaalerthistoryDescTenantID := slaalerthistoryFields[11].Descriptor()
 	// slaalerthistory.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	slaalerthistory.TenantIDValidator = slaalerthistoryDescTenantID.Validators[0].(func(int) error)
 	// slaalerthistoryDescCreatedAt is the schema descriptor for created_at field.
-	slaalerthistoryDescCreatedAt := slaalerthistoryFields[11].Descriptor()
+	slaalerthistoryDescCreatedAt := slaalerthistoryFields[12].Descriptor()
 	// slaalerthistory.DefaultCreatedAt holds the default value on creation for the created_at field.
 	slaalerthistory.DefaultCreatedAt = slaalerthistoryDescCreatedAt.Default.(func() time.Time)
 	slaalertruleFields := schema.SLAAlertRule{}.Fields()
@@ -3204,96 +3324,124 @@ func init() {
 	servicecatalogDescServiceType := servicecatalogFields[4].Descriptor()
 	// servicecatalog.DefaultServiceType holds the default value on creation for the service_type field.
 	servicecatalog.DefaultServiceType = servicecatalogDescServiceType.Default.(string)
-	// servicecatalogDescItsmType is the schema descriptor for itsm_type field.
-	servicecatalogDescItsmType := servicecatalogFields[5].Descriptor()
-	// servicecatalog.DefaultItsmType holds the default value on creation for the itsm_type field.
-	servicecatalog.DefaultItsmType = servicecatalogDescItsmType.Default.(string)
 	// servicecatalogDescRequiresApproval is the schema descriptor for requires_approval field.
-	servicecatalogDescRequiresApproval := servicecatalogFields[10].Descriptor()
+	servicecatalogDescRequiresApproval := servicecatalogFields[9].Descriptor()
 	// servicecatalog.DefaultRequiresApproval holds the default value on creation for the requires_approval field.
 	servicecatalog.DefaultRequiresApproval = servicecatalogDescRequiresApproval.Default.(bool)
 	// servicecatalogDescApprovalLevel is the schema descriptor for approval_level field.
-	servicecatalogDescApprovalLevel := servicecatalogFields[11].Descriptor()
+	servicecatalogDescApprovalLevel := servicecatalogFields[10].Descriptor()
 	// servicecatalog.DefaultApprovalLevel holds the default value on creation for the approval_level field.
 	servicecatalog.DefaultApprovalLevel = servicecatalogDescApprovalLevel.Default.(int)
 	// servicecatalogDescStatus is the schema descriptor for status field.
-	servicecatalogDescStatus := servicecatalogFields[20].Descriptor()
+	servicecatalogDescStatus := servicecatalogFields[19].Descriptor()
 	// servicecatalog.DefaultStatus holds the default value on creation for the status field.
 	servicecatalog.DefaultStatus = servicecatalogDescStatus.Default.(string)
 	// servicecatalogDescTenantID is the schema descriptor for tenant_id field.
-	servicecatalogDescTenantID := servicecatalogFields[21].Descriptor()
+	servicecatalogDescTenantID := servicecatalogFields[20].Descriptor()
 	// servicecatalog.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	servicecatalog.TenantIDValidator = servicecatalogDescTenantID.Validators[0].(func(int) error)
 	// servicecatalogDescIsActive is the schema descriptor for is_active field.
-	servicecatalogDescIsActive := servicecatalogFields[22].Descriptor()
+	servicecatalogDescIsActive := servicecatalogFields[21].Descriptor()
 	// servicecatalog.DefaultIsActive holds the default value on creation for the is_active field.
 	servicecatalog.DefaultIsActive = servicecatalogDescIsActive.Default.(bool)
 	// servicecatalogDescSortOrder is the schema descriptor for sort_order field.
-	servicecatalogDescSortOrder := servicecatalogFields[23].Descriptor()
+	servicecatalogDescSortOrder := servicecatalogFields[22].Descriptor()
 	// servicecatalog.DefaultSortOrder holds the default value on creation for the sort_order field.
 	servicecatalog.DefaultSortOrder = servicecatalogDescSortOrder.Default.(int)
 	// servicecatalogDescCreatedAt is the schema descriptor for created_at field.
-	servicecatalogDescCreatedAt := servicecatalogFields[24].Descriptor()
+	servicecatalogDescCreatedAt := servicecatalogFields[23].Descriptor()
 	// servicecatalog.DefaultCreatedAt holds the default value on creation for the created_at field.
 	servicecatalog.DefaultCreatedAt = servicecatalogDescCreatedAt.Default.(func() time.Time)
 	// servicecatalogDescUpdatedAt is the schema descriptor for updated_at field.
-	servicecatalogDescUpdatedAt := servicecatalogFields[25].Descriptor()
+	servicecatalogDescUpdatedAt := servicecatalogFields[24].Descriptor()
 	// servicecatalog.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	servicecatalog.DefaultUpdatedAt = servicecatalogDescUpdatedAt.Default.(func() time.Time)
 	// servicecatalog.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	servicecatalog.UpdateDefaultUpdatedAt = servicecatalogDescUpdatedAt.UpdateDefault.(func() time.Time)
 	servicerequestFields := schema.ServiceRequest{}.Fields()
 	_ = servicerequestFields
-	// servicerequestDescTenantID is the schema descriptor for tenant_id field.
-	servicerequestDescTenantID := servicerequestFields[0].Descriptor()
-	// servicerequest.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	servicerequest.TenantIDValidator = servicerequestDescTenantID.Validators[0].(func(int) error)
 	// servicerequestDescTicketID is the schema descriptor for ticket_id field.
-	servicerequestDescTicketID := servicerequestFields[1].Descriptor()
+	servicerequestDescTicketID := servicerequestFields[0].Descriptor()
 	// servicerequest.TicketIDValidator is a validator for the "ticket_id" field. It is called by the builders before save.
 	servicerequest.TicketIDValidator = servicerequestDescTicketID.Validators[0].(func(int) error)
 	// servicerequestDescCatalogID is the schema descriptor for catalog_id field.
-	servicerequestDescCatalogID := servicerequestFields[2].Descriptor()
+	servicerequestDescCatalogID := servicerequestFields[1].Descriptor()
 	// servicerequest.CatalogIDValidator is a validator for the "catalog_id" field. It is called by the builders before save.
 	servicerequest.CatalogIDValidator = servicerequestDescCatalogID.Validators[0].(func(int) error)
-	// servicerequestDescRequesterID is the schema descriptor for requester_id field.
-	servicerequestDescRequesterID := servicerequestFields[4].Descriptor()
-	// servicerequest.RequesterIDValidator is a validator for the "requester_id" field. It is called by the builders before save.
-	servicerequest.RequesterIDValidator = servicerequestDescRequesterID.Validators[0].(func(int) error)
 	// servicerequestDescDataClassification is the schema descriptor for data_classification field.
-	servicerequestDescDataClassification := servicerequestFields[7].Descriptor()
+	servicerequestDescDataClassification := servicerequestFields[5].Descriptor()
 	// servicerequest.DefaultDataClassification holds the default value on creation for the data_classification field.
 	servicerequest.DefaultDataClassification = servicerequestDescDataClassification.Default.(string)
 	// servicerequestDescNeedsPublicIP is the schema descriptor for needs_public_ip field.
-	servicerequestDescNeedsPublicIP := servicerequestFields[8].Descriptor()
+	servicerequestDescNeedsPublicIP := servicerequestFields[6].Descriptor()
 	// servicerequest.DefaultNeedsPublicIP holds the default value on creation for the needs_public_ip field.
 	servicerequest.DefaultNeedsPublicIP = servicerequestDescNeedsPublicIP.Default.(bool)
 	// servicerequestDescComplianceAck is the schema descriptor for compliance_ack field.
-	servicerequestDescComplianceAck := servicerequestFields[11].Descriptor()
+	servicerequestDescComplianceAck := servicerequestFields[9].Descriptor()
 	// servicerequest.DefaultComplianceAck holds the default value on creation for the compliance_ack field.
 	servicerequest.DefaultComplianceAck = servicerequestDescComplianceAck.Default.(bool)
 	// servicerequestDescQuantity is the schema descriptor for quantity field.
-	servicerequestDescQuantity := servicerequestFields[14].Descriptor()
+	servicerequestDescQuantity := servicerequestFields[12].Descriptor()
 	// servicerequest.DefaultQuantity holds the default value on creation for the quantity field.
 	servicerequest.DefaultQuantity = servicerequestDescQuantity.Default.(int)
 	// servicerequest.QuantityValidator is a validator for the "quantity" field. It is called by the builders before save.
 	servicerequest.QuantityValidator = servicerequestDescQuantity.Validators[0].(func(int) error)
-	// servicerequestDescVersion is the schema descriptor for version field.
-	servicerequestDescVersion := servicerequestFields[21].Descriptor()
-	// servicerequest.DefaultVersion holds the default value on creation for the version field.
-	servicerequest.DefaultVersion = servicerequestDescVersion.Default.(int)
-	// servicerequest.VersionValidator is a validator for the "version" field. It is called by the builders before save.
-	servicerequest.VersionValidator = servicerequestDescVersion.Validators[0].(func(int) error)
-	// servicerequestDescCreatedAt is the schema descriptor for created_at field.
-	servicerequestDescCreatedAt := servicerequestFields[22].Descriptor()
-	// servicerequest.DefaultCreatedAt holds the default value on creation for the created_at field.
-	servicerequest.DefaultCreatedAt = servicerequestDescCreatedAt.Default.(func() time.Time)
-	// servicerequestDescUpdatedAt is the schema descriptor for updated_at field.
-	servicerequestDescUpdatedAt := servicerequestFields[23].Descriptor()
-	// servicerequest.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	servicerequest.DefaultUpdatedAt = servicerequestDescUpdatedAt.Default.(func() time.Time)
-	// servicerequest.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	servicerequest.UpdateDefaultUpdatedAt = servicerequestDescUpdatedAt.UpdateDefault.(func() time.Time)
+	servicerequestaccessresultFields := schema.ServiceRequestAccessResult{}.Fields()
+	_ = servicerequestaccessresultFields
+	// servicerequestaccessresultDescWorkItemID is the schema descriptor for work_item_id field.
+	servicerequestaccessresultDescWorkItemID := servicerequestaccessresultFields[0].Descriptor()
+	// servicerequestaccessresult.WorkItemIDValidator is a validator for the "work_item_id" field. It is called by the builders before save.
+	servicerequestaccessresult.WorkItemIDValidator = servicerequestaccessresultDescWorkItemID.Validators[0].(func(int) error)
+	// servicerequestaccessresultDescProcessTaskID is the schema descriptor for process_task_id field.
+	servicerequestaccessresultDescProcessTaskID := servicerequestaccessresultFields[1].Descriptor()
+	// servicerequestaccessresult.ProcessTaskIDValidator is a validator for the "process_task_id" field. It is called by the builders before save.
+	servicerequestaccessresult.ProcessTaskIDValidator = servicerequestaccessresultDescProcessTaskID.Validators[0].(func(int) error)
+	// servicerequestaccessresultDescSubjectID is the schema descriptor for subject_id field.
+	servicerequestaccessresultDescSubjectID := servicerequestaccessresultFields[4].Descriptor()
+	// servicerequestaccessresult.SubjectIDValidator is a validator for the "subject_id" field. It is called by the builders before save.
+	servicerequestaccessresult.SubjectIDValidator = servicerequestaccessresultDescSubjectID.Validators[0].(func(string) error)
+	// servicerequestaccessresultDescGroupID is the schema descriptor for group_id field.
+	servicerequestaccessresultDescGroupID := servicerequestaccessresultFields[5].Descriptor()
+	// servicerequestaccessresult.GroupIDValidator is a validator for the "group_id" field. It is called by the builders before save.
+	servicerequestaccessresult.GroupIDValidator = servicerequestaccessresultDescGroupID.Validators[0].(func(string) error)
+	// servicerequestaccessresultDescEvidenceRef is the schema descriptor for evidence_ref field.
+	servicerequestaccessresultDescEvidenceRef := servicerequestaccessresultFields[9].Descriptor()
+	// servicerequestaccessresult.EvidenceRefValidator is a validator for the "evidence_ref" field. It is called by the builders before save.
+	servicerequestaccessresult.EvidenceRefValidator = servicerequestaccessresultDescEvidenceRef.Validators[0].(func(string) error)
+	servicerequestaccesssnapshotFields := schema.ServiceRequestAccessSnapshot{}.Fields()
+	_ = servicerequestaccesssnapshotFields
+	// servicerequestaccesssnapshotDescWorkItemID is the schema descriptor for work_item_id field.
+	servicerequestaccesssnapshotDescWorkItemID := servicerequestaccesssnapshotFields[0].Descriptor()
+	// servicerequestaccesssnapshot.WorkItemIDValidator is a validator for the "work_item_id" field. It is called by the builders before save.
+	servicerequestaccesssnapshot.WorkItemIDValidator = servicerequestaccesssnapshotDescWorkItemID.Validators[0].(func(int) error)
+	// servicerequestaccesssnapshotDescPolicyID is the schema descriptor for policy_id field.
+	servicerequestaccesssnapshotDescPolicyID := servicerequestaccesssnapshotFields[1].Descriptor()
+	// servicerequestaccesssnapshot.PolicyIDValidator is a validator for the "policy_id" field. It is called by the builders before save.
+	servicerequestaccesssnapshot.PolicyIDValidator = servicerequestaccesssnapshotDescPolicyID.Validators[0].(func(int) error)
+	// servicerequestaccesssnapshotDescPolicyVersion is the schema descriptor for policy_version field.
+	servicerequestaccesssnapshotDescPolicyVersion := servicerequestaccesssnapshotFields[2].Descriptor()
+	// servicerequestaccesssnapshot.PolicyVersionValidator is a validator for the "policy_version" field. It is called by the builders before save.
+	servicerequestaccesssnapshot.PolicyVersionValidator = servicerequestaccesssnapshotDescPolicyVersion.Validators[0].(func(int) error)
+	// servicerequestaccesssnapshotDescExternalSystem is the schema descriptor for external_system field.
+	servicerequestaccesssnapshotDescExternalSystem := servicerequestaccesssnapshotFields[4].Descriptor()
+	// servicerequestaccesssnapshot.ExternalSystemValidator is a validator for the "external_system" field. It is called by the builders before save.
+	servicerequestaccesssnapshot.ExternalSystemValidator = servicerequestaccesssnapshotDescExternalSystem.Validators[0].(func(string) error)
+	// servicerequestaccesssnapshotDescSubjectID is the schema descriptor for subject_id field.
+	servicerequestaccesssnapshotDescSubjectID := servicerequestaccesssnapshotFields[5].Descriptor()
+	// servicerequestaccesssnapshot.SubjectIDValidator is a validator for the "subject_id" field. It is called by the builders before save.
+	servicerequestaccesssnapshot.SubjectIDValidator = servicerequestaccesssnapshotDescSubjectID.Validators[0].(func(string) error)
+	// servicerequestaccesssnapshotDescGroupID is the schema descriptor for group_id field.
+	servicerequestaccesssnapshotDescGroupID := servicerequestaccesssnapshotFields[6].Descriptor()
+	// servicerequestaccesssnapshot.GroupIDValidator is a validator for the "group_id" field. It is called by the builders before save.
+	servicerequestaccesssnapshot.GroupIDValidator = servicerequestaccesssnapshotDescGroupID.Validators[0].(func(string) error)
+	// servicerequestaccesssnapshotDescDurationKey is the schema descriptor for duration_key field.
+	servicerequestaccesssnapshotDescDurationKey := servicerequestaccesssnapshotFields[7].Descriptor()
+	// servicerequestaccesssnapshot.DurationKeyValidator is a validator for the "duration_key" field. It is called by the builders before save.
+	servicerequestaccesssnapshot.DurationKeyValidator = servicerequestaccesssnapshotDescDurationKey.Validators[0].(func(string) error)
+	// servicerequestaccesssnapshotDescDurationSeconds is the schema descriptor for duration_seconds field.
+	servicerequestaccesssnapshotDescDurationSeconds := servicerequestaccesssnapshotFields[8].Descriptor()
+	// servicerequestaccesssnapshot.DurationSecondsValidator is a validator for the "duration_seconds" field. It is called by the builders before save.
+	servicerequestaccesssnapshot.DurationSecondsValidator = servicerequestaccesssnapshotDescDurationSeconds.Validators[0].(func(int64) error)
 	standardchangeFields := schema.StandardChange{}.Fields()
 	_ = standardchangeFields
 	// standardchangeDescTitle is the schema descriptor for title field.
@@ -3530,10 +3678,6 @@ func init() {
 	ticketDescStatus := ticketFields[2].Descriptor()
 	// ticket.DefaultStatus holds the default value on creation for the status field.
 	ticket.DefaultStatus = ticketDescStatus.Default.(string)
-	// ticketDescType is the schema descriptor for type field.
-	ticketDescType := ticketFields[3].Descriptor()
-	// ticket.DefaultType holds the default value on creation for the type field.
-	ticket.DefaultType = ticketDescType.Default.(string)
 	// ticketDescSource is the schema descriptor for source field.
 	ticketDescSource := ticketFields[4].Descriptor()
 	// ticket.DefaultSource holds the default value on creation for the source field.
@@ -3558,46 +3702,42 @@ func init() {
 	ticketDescTenantID := ticketFields[15].Descriptor()
 	// ticket.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	ticket.TenantIDValidator = ticketDescTenantID.Validators[0].(func(int) error)
+	// ticketDescSLACycleNumber is the schema descriptor for sla_cycle_number field.
+	ticketDescSLACycleNumber := ticketFields[20].Descriptor()
+	// ticket.DefaultSLACycleNumber holds the default value on creation for the sla_cycle_number field.
+	ticket.DefaultSLACycleNumber = ticketDescSLACycleNumber.Default.(int)
+	// ticket.SLACycleNumberValidator is a validator for the "sla_cycle_number" field. It is called by the builders before save.
+	ticket.SLACycleNumberValidator = ticketDescSLACycleNumber.Validators[0].(func(int) error)
+	// ticketDescSLAPausedMinutes is the schema descriptor for sla_paused_minutes field.
+	ticketDescSLAPausedMinutes := ticketFields[22].Descriptor()
+	// ticket.DefaultSLAPausedMinutes holds the default value on creation for the sla_paused_minutes field.
+	ticket.DefaultSLAPausedMinutes = ticketDescSLAPausedMinutes.Default.(int)
+	// ticket.SLAPausedMinutesValidator is a validator for the "sla_paused_minutes" field. It is called by the builders before save.
+	ticket.SLAPausedMinutesValidator = ticketDescSLAPausedMinutes.Validators[0].(func(int) error)
 	// ticketDescRating is the schema descriptor for rating field.
-	ticketDescRating := ticketFields[28].Descriptor()
+	ticketDescRating := ticketFields[32].Descriptor()
 	// ticket.RatingValidator is a validator for the "rating" field. It is called by the builders before save.
 	ticket.RatingValidator = ticketDescRating.Validators[0].(func(int) error)
 	// ticketDescVersion is the schema descriptor for version field.
-	ticketDescVersion := ticketFields[32].Descriptor()
+	ticketDescVersion := ticketFields[36].Descriptor()
 	// ticket.DefaultVersion holds the default value on creation for the version field.
 	ticket.DefaultVersion = ticketDescVersion.Default.(int)
 	// ticket.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	ticket.VersionValidator = ticketDescVersion.Validators[0].(func(int) error)
 	// ticketDescCreatedAt is the schema descriptor for created_at field.
-	ticketDescCreatedAt := ticketFields[33].Descriptor()
+	ticketDescCreatedAt := ticketFields[37].Descriptor()
 	// ticket.DefaultCreatedAt holds the default value on creation for the created_at field.
 	ticket.DefaultCreatedAt = ticketDescCreatedAt.Default.(func() time.Time)
 	// ticketDescUpdatedAt is the schema descriptor for updated_at field.
-	ticketDescUpdatedAt := ticketFields[34].Descriptor()
+	ticketDescUpdatedAt := ticketFields[38].Descriptor()
 	// ticket.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	ticket.DefaultUpdatedAt = ticketDescUpdatedAt.Default.(func() time.Time)
 	// ticket.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	ticket.UpdateDefaultUpdatedAt = ticketDescUpdatedAt.UpdateDefault.(func() time.Time)
 	// ticketDescIsManagedByMsp is the schema descriptor for is_managed_by_msp field.
-	ticketDescIsManagedByMsp := ticketFields[35].Descriptor()
+	ticketDescIsManagedByMsp := ticketFields[39].Descriptor()
 	// ticket.DefaultIsManagedByMsp holds the default value on creation for the is_managed_by_msp field.
 	ticket.DefaultIsManagedByMsp = ticketDescIsManagedByMsp.Default.(bool)
-	ticketapprovalFields := schema.TicketApproval{}.Fields()
-	_ = ticketapprovalFields
-	// ticketapprovalDescStatus is the schema descriptor for status field.
-	ticketapprovalDescStatus := ticketapprovalFields[4].Descriptor()
-	// ticketapproval.DefaultStatus holds the default value on creation for the status field.
-	ticketapproval.DefaultStatus = ticketapprovalDescStatus.Default.(string)
-	// ticketapprovalDescCreatedAt is the schema descriptor for created_at field.
-	ticketapprovalDescCreatedAt := ticketapprovalFields[9].Descriptor()
-	// ticketapproval.DefaultCreatedAt holds the default value on creation for the created_at field.
-	ticketapproval.DefaultCreatedAt = ticketapprovalDescCreatedAt.Default.(func() time.Time)
-	// ticketapprovalDescUpdatedAt is the schema descriptor for updated_at field.
-	ticketapprovalDescUpdatedAt := ticketapprovalFields[10].Descriptor()
-	// ticketapproval.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	ticketapproval.DefaultUpdatedAt = ticketapprovalDescUpdatedAt.Default.(func() time.Time)
-	// ticketapproval.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	ticketapproval.UpdateDefaultUpdatedAt = ticketapprovalDescUpdatedAt.UpdateDefault.(func() time.Time)
 	ticketassignmentruleFields := schema.TicketAssignmentRule{}.Fields()
 	_ = ticketassignmentruleFields
 	// ticketassignmentruleDescName is the schema descriptor for name field.
@@ -3632,36 +3772,40 @@ func init() {
 	ticketassignmentrule.UpdateDefaultUpdatedAt = ticketassignmentruleDescUpdatedAt.UpdateDefault.(func() time.Time)
 	ticketattachmentFields := schema.TicketAttachment{}.Fields()
 	_ = ticketattachmentFields
+	// ticketattachmentDescSourceKey is the schema descriptor for source_key field.
+	ticketattachmentDescSourceKey := ticketattachmentFields[0].Descriptor()
+	// ticketattachment.SourceKeyValidator is a validator for the "source_key" field. It is called by the builders before save.
+	ticketattachment.SourceKeyValidator = ticketattachmentDescSourceKey.Validators[0].(func(string) error)
 	// ticketattachmentDescTicketID is the schema descriptor for ticket_id field.
-	ticketattachmentDescTicketID := ticketattachmentFields[0].Descriptor()
+	ticketattachmentDescTicketID := ticketattachmentFields[1].Descriptor()
 	// ticketattachment.TicketIDValidator is a validator for the "ticket_id" field. It is called by the builders before save.
 	ticketattachment.TicketIDValidator = ticketattachmentDescTicketID.Validators[0].(func(int) error)
 	// ticketattachmentDescFileName is the schema descriptor for file_name field.
-	ticketattachmentDescFileName := ticketattachmentFields[1].Descriptor()
+	ticketattachmentDescFileName := ticketattachmentFields[2].Descriptor()
 	// ticketattachment.FileNameValidator is a validator for the "file_name" field. It is called by the builders before save.
 	ticketattachment.FileNameValidator = ticketattachmentDescFileName.Validators[0].(func(string) error)
 	// ticketattachmentDescFilePath is the schema descriptor for file_path field.
-	ticketattachmentDescFilePath := ticketattachmentFields[2].Descriptor()
+	ticketattachmentDescFilePath := ticketattachmentFields[3].Descriptor()
 	// ticketattachment.FilePathValidator is a validator for the "file_path" field. It is called by the builders before save.
 	ticketattachment.FilePathValidator = ticketattachmentDescFilePath.Validators[0].(func(string) error)
 	// ticketattachmentDescFileSize is the schema descriptor for file_size field.
-	ticketattachmentDescFileSize := ticketattachmentFields[4].Descriptor()
+	ticketattachmentDescFileSize := ticketattachmentFields[5].Descriptor()
 	// ticketattachment.FileSizeValidator is a validator for the "file_size" field. It is called by the builders before save.
 	ticketattachment.FileSizeValidator = ticketattachmentDescFileSize.Validators[0].(func(int) error)
 	// ticketattachmentDescFileType is the schema descriptor for file_type field.
-	ticketattachmentDescFileType := ticketattachmentFields[5].Descriptor()
+	ticketattachmentDescFileType := ticketattachmentFields[6].Descriptor()
 	// ticketattachment.FileTypeValidator is a validator for the "file_type" field. It is called by the builders before save.
 	ticketattachment.FileTypeValidator = ticketattachmentDescFileType.Validators[0].(func(string) error)
 	// ticketattachmentDescUploadedBy is the schema descriptor for uploaded_by field.
-	ticketattachmentDescUploadedBy := ticketattachmentFields[7].Descriptor()
+	ticketattachmentDescUploadedBy := ticketattachmentFields[8].Descriptor()
 	// ticketattachment.UploadedByValidator is a validator for the "uploaded_by" field. It is called by the builders before save.
 	ticketattachment.UploadedByValidator = ticketattachmentDescUploadedBy.Validators[0].(func(int) error)
 	// ticketattachmentDescTenantID is the schema descriptor for tenant_id field.
-	ticketattachmentDescTenantID := ticketattachmentFields[8].Descriptor()
+	ticketattachmentDescTenantID := ticketattachmentFields[9].Descriptor()
 	// ticketattachment.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	ticketattachment.TenantIDValidator = ticketattachmentDescTenantID.Validators[0].(func(int) error)
 	// ticketattachmentDescCreatedAt is the schema descriptor for created_at field.
-	ticketattachmentDescCreatedAt := ticketattachmentFields[9].Descriptor()
+	ticketattachmentDescCreatedAt := ticketattachmentFields[10].Descriptor()
 	// ticketattachment.DefaultCreatedAt holds the default value on creation for the created_at field.
 	ticketattachment.DefaultCreatedAt = ticketattachmentDescCreatedAt.Default.(func() time.Time)
 	ticketautomationruleFields := schema.TicketAutomationRule{}.Fields()
@@ -3737,15 +3881,15 @@ func init() {
 	// ticketcategory.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	ticketcategory.TenantIDValidator = ticketcategoryDescTenantID.Validators[0].(func(int) error)
 	// ticketcategoryDescIsUserFacing is the schema descriptor for is_user_facing field.
-	ticketcategoryDescIsUserFacing := ticketcategoryFields[14].Descriptor()
+	ticketcategoryDescIsUserFacing := ticketcategoryFields[13].Descriptor()
 	// ticketcategory.DefaultIsUserFacing holds the default value on creation for the is_user_facing field.
 	ticketcategory.DefaultIsUserFacing = ticketcategoryDescIsUserFacing.Default.(bool)
 	// ticketcategoryDescCreatedAt is the schema descriptor for created_at field.
-	ticketcategoryDescCreatedAt := ticketcategoryFields[15].Descriptor()
+	ticketcategoryDescCreatedAt := ticketcategoryFields[14].Descriptor()
 	// ticketcategory.DefaultCreatedAt holds the default value on creation for the created_at field.
 	ticketcategory.DefaultCreatedAt = ticketcategoryDescCreatedAt.Default.(func() time.Time)
 	// ticketcategoryDescUpdatedAt is the schema descriptor for updated_at field.
-	ticketcategoryDescUpdatedAt := ticketcategoryFields[16].Descriptor()
+	ticketcategoryDescUpdatedAt := ticketcategoryFields[15].Descriptor()
 	// ticketcategory.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	ticketcategory.DefaultUpdatedAt = ticketcategoryDescUpdatedAt.Default.(func() time.Time)
 	// ticketcategory.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -3784,50 +3928,54 @@ func init() {
 	ticketcomment.UpdateDefaultUpdatedAt = ticketcommentDescUpdatedAt.UpdateDefault.(func() time.Time)
 	ticketnotificationFields := schema.TicketNotification{}.Fields()
 	_ = ticketnotificationFields
+	// ticketnotificationDescSLAAlertHistoryID is the schema descriptor for sla_alert_history_id field.
+	ticketnotificationDescSLAAlertHistoryID := ticketnotificationFields[5].Descriptor()
+	// ticketnotification.SLAAlertHistoryIDValidator is a validator for the "sla_alert_history_id" field. It is called by the builders before save.
+	ticketnotification.SLAAlertHistoryIDValidator = ticketnotificationDescSLAAlertHistoryID.Validators[0].(func(int) error)
 	// ticketnotificationDescTicketID is the schema descriptor for ticket_id field.
-	ticketnotificationDescTicketID := ticketnotificationFields[0].Descriptor()
+	ticketnotificationDescTicketID := ticketnotificationFields[6].Descriptor()
 	// ticketnotification.TicketIDValidator is a validator for the "ticket_id" field. It is called by the builders before save.
 	ticketnotification.TicketIDValidator = ticketnotificationDescTicketID.Validators[0].(func(int) error)
 	// ticketnotificationDescUserID is the schema descriptor for user_id field.
-	ticketnotificationDescUserID := ticketnotificationFields[1].Descriptor()
+	ticketnotificationDescUserID := ticketnotificationFields[7].Descriptor()
 	// ticketnotification.UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
 	ticketnotification.UserIDValidator = ticketnotificationDescUserID.Validators[0].(func(int) error)
 	// ticketnotificationDescType is the schema descriptor for type field.
-	ticketnotificationDescType := ticketnotificationFields[2].Descriptor()
+	ticketnotificationDescType := ticketnotificationFields[8].Descriptor()
 	// ticketnotification.TypeValidator is a validator for the "type" field. It is called by the builders before save.
 	ticketnotification.TypeValidator = ticketnotificationDescType.Validators[0].(func(string) error)
 	// ticketnotificationDescChannel is the schema descriptor for channel field.
-	ticketnotificationDescChannel := ticketnotificationFields[3].Descriptor()
+	ticketnotificationDescChannel := ticketnotificationFields[9].Descriptor()
 	// ticketnotification.DefaultChannel holds the default value on creation for the channel field.
 	ticketnotification.DefaultChannel = ticketnotificationDescChannel.Default.(string)
 	// ticketnotificationDescContent is the schema descriptor for content field.
-	ticketnotificationDescContent := ticketnotificationFields[4].Descriptor()
+	ticketnotificationDescContent := ticketnotificationFields[10].Descriptor()
 	// ticketnotification.ContentValidator is a validator for the "content" field. It is called by the builders before save.
 	ticketnotification.ContentValidator = ticketnotificationDescContent.Validators[0].(func(string) error)
 	// ticketnotificationDescStatus is the schema descriptor for status field.
-	ticketnotificationDescStatus := ticketnotificationFields[7].Descriptor()
+	ticketnotificationDescStatus := ticketnotificationFields[13].Descriptor()
 	// ticketnotification.DefaultStatus holds the default value on creation for the status field.
 	ticketnotification.DefaultStatus = ticketnotificationDescStatus.Default.(string)
 	// ticketnotificationDescAttemptCount is the schema descriptor for attempt_count field.
-	ticketnotificationDescAttemptCount := ticketnotificationFields[9].Descriptor()
+	ticketnotificationDescAttemptCount := ticketnotificationFields[15].Descriptor()
 	// ticketnotification.DefaultAttemptCount holds the default value on creation for the attempt_count field.
 	ticketnotification.DefaultAttemptCount = ticketnotificationDescAttemptCount.Default.(int)
 	// ticketnotification.AttemptCountValidator is a validator for the "attempt_count" field. It is called by the builders before save.
 	ticketnotification.AttemptCountValidator = ticketnotificationDescAttemptCount.Validators[0].(func(int) error)
 	// ticketnotificationDescNextAttemptAt is the schema descriptor for next_attempt_at field.
-	ticketnotificationDescNextAttemptAt := ticketnotificationFields[10].Descriptor()
+	ticketnotificationDescNextAttemptAt := ticketnotificationFields[16].Descriptor()
 	// ticketnotification.DefaultNextAttemptAt holds the default value on creation for the next_attempt_at field.
 	ticketnotification.DefaultNextAttemptAt = ticketnotificationDescNextAttemptAt.Default.(func() time.Time)
 	// ticketnotificationDescLastErrorClass is the schema descriptor for last_error_class field.
-	ticketnotificationDescLastErrorClass := ticketnotificationFields[13].Descriptor()
+	ticketnotificationDescLastErrorClass := ticketnotificationFields[19].Descriptor()
 	// ticketnotification.LastErrorClassValidator is a validator for the "last_error_class" field. It is called by the builders before save.
 	ticketnotification.LastErrorClassValidator = ticketnotificationDescLastErrorClass.Validators[0].(func(string) error)
 	// ticketnotificationDescTenantID is the schema descriptor for tenant_id field.
-	ticketnotificationDescTenantID := ticketnotificationFields[14].Descriptor()
+	ticketnotificationDescTenantID := ticketnotificationFields[20].Descriptor()
 	// ticketnotification.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	ticketnotification.TenantIDValidator = ticketnotificationDescTenantID.Validators[0].(func(int) error)
 	// ticketnotificationDescCreatedAt is the schema descriptor for created_at field.
-	ticketnotificationDescCreatedAt := ticketnotificationFields[15].Descriptor()
+	ticketnotificationDescCreatedAt := ticketnotificationFields[21].Descriptor()
 	// ticketnotification.DefaultCreatedAt holds the default value on creation for the created_at field.
 	ticketnotification.DefaultCreatedAt = ticketnotificationDescCreatedAt.Default.(func() time.Time)
 	tickettagFields := schema.TicketTag{}.Fields()
@@ -4108,6 +4256,46 @@ func init() {
 	vendorDescUpdatedAt := vendorFields[12].Descriptor()
 	// vendor.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	vendor.DefaultUpdatedAt = vendorDescUpdatedAt.Default.(func() time.Time)
+	workitemnumbersequenceFields := schema.WorkItemNumberSequence{}.Fields()
+	_ = workitemnumbersequenceFields
+	// workitemnumbersequenceDescTenantID is the schema descriptor for tenant_id field.
+	workitemnumbersequenceDescTenantID := workitemnumbersequenceFields[0].Descriptor()
+	// workitemnumbersequence.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	workitemnumbersequence.TenantIDValidator = workitemnumbersequenceDescTenantID.Validators[0].(func(int) error)
+	// workitemnumbersequenceDescPeriod is the schema descriptor for period field.
+	workitemnumbersequenceDescPeriod := workitemnumbersequenceFields[1].Descriptor()
+	// workitemnumbersequence.PeriodValidator is a validator for the "period" field. It is called by the builders before save.
+	workitemnumbersequence.PeriodValidator = func() func(string) error {
+		validators := workitemnumbersequenceDescPeriod.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(period string) error {
+			for _, fn := range fns {
+				if err := fn(period); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// workitemnumbersequenceDescLastValue is the schema descriptor for last_value field.
+	workitemnumbersequenceDescLastValue := workitemnumbersequenceFields[2].Descriptor()
+	// workitemnumbersequence.DefaultLastValue holds the default value on creation for the last_value field.
+	workitemnumbersequence.DefaultLastValue = workitemnumbersequenceDescLastValue.Default.(int64)
+	// workitemnumbersequence.LastValueValidator is a validator for the "last_value" field. It is called by the builders before save.
+	workitemnumbersequence.LastValueValidator = workitemnumbersequenceDescLastValue.Validators[0].(func(int64) error)
+	// workitemnumbersequenceDescCreatedAt is the schema descriptor for created_at field.
+	workitemnumbersequenceDescCreatedAt := workitemnumbersequenceFields[3].Descriptor()
+	// workitemnumbersequence.DefaultCreatedAt holds the default value on creation for the created_at field.
+	workitemnumbersequence.DefaultCreatedAt = workitemnumbersequenceDescCreatedAt.Default.(func() time.Time)
+	// workitemnumbersequenceDescUpdatedAt is the schema descriptor for updated_at field.
+	workitemnumbersequenceDescUpdatedAt := workitemnumbersequenceFields[4].Descriptor()
+	// workitemnumbersequence.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	workitemnumbersequence.DefaultUpdatedAt = workitemnumbersequenceDescUpdatedAt.Default.(func() time.Time)
+	// workitemnumbersequence.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	workitemnumbersequence.UpdateDefaultUpdatedAt = workitemnumbersequenceDescUpdatedAt.UpdateDefault.(func() time.Time)
 	workitemrelationFields := schema.WorkItemRelation{}.Fields()
 	_ = workitemrelationFields
 	// workitemrelationDescTenantID is the schema descriptor for tenant_id field.
@@ -4134,148 +4322,4 @@ func init() {
 	workitemrelationDescCreatedAt := workitemrelationFields[6].Descriptor()
 	// workitemrelation.DefaultCreatedAt holds the default value on creation for the created_at field.
 	workitemrelation.DefaultCreatedAt = workitemrelationDescCreatedAt.Default.(func() time.Time)
-	workflowFields := schema.Workflow{}.Fields()
-	_ = workflowFields
-	// workflowDescName is the schema descriptor for name field.
-	workflowDescName := workflowFields[0].Descriptor()
-	// workflow.NameValidator is a validator for the "name" field. It is called by the builders before save.
-	workflow.NameValidator = workflowDescName.Validators[0].(func(string) error)
-	// workflowDescType is the schema descriptor for type field.
-	workflowDescType := workflowFields[2].Descriptor()
-	// workflow.DefaultType holds the default value on creation for the type field.
-	workflow.DefaultType = workflowDescType.Default.(string)
-	// workflowDescVersion is the schema descriptor for version field.
-	workflowDescVersion := workflowFields[4].Descriptor()
-	// workflow.DefaultVersion holds the default value on creation for the version field.
-	workflow.DefaultVersion = workflowDescVersion.Default.(string)
-	// workflowDescIsActive is the schema descriptor for is_active field.
-	workflowDescIsActive := workflowFields[5].Descriptor()
-	// workflow.DefaultIsActive holds the default value on creation for the is_active field.
-	workflow.DefaultIsActive = workflowDescIsActive.Default.(bool)
-	// workflowDescTenantID is the schema descriptor for tenant_id field.
-	workflowDescTenantID := workflowFields[6].Descriptor()
-	// workflow.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	workflow.TenantIDValidator = workflowDescTenantID.Validators[0].(func(int) error)
-	// workflowDescCreatedAt is the schema descriptor for created_at field.
-	workflowDescCreatedAt := workflowFields[8].Descriptor()
-	// workflow.DefaultCreatedAt holds the default value on creation for the created_at field.
-	workflow.DefaultCreatedAt = workflowDescCreatedAt.Default.(func() time.Time)
-	// workflowDescUpdatedAt is the schema descriptor for updated_at field.
-	workflowDescUpdatedAt := workflowFields[9].Descriptor()
-	// workflow.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	workflow.DefaultUpdatedAt = workflowDescUpdatedAt.Default.(func() time.Time)
-	// workflow.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	workflow.UpdateDefaultUpdatedAt = workflowDescUpdatedAt.UpdateDefault.(func() time.Time)
-	workflowinstanceFields := schema.WorkflowInstance{}.Fields()
-	_ = workflowinstanceFields
-	// workflowinstanceDescStatus is the schema descriptor for status field.
-	workflowinstanceDescStatus := workflowinstanceFields[0].Descriptor()
-	// workflowinstance.DefaultStatus holds the default value on creation for the status field.
-	workflowinstance.DefaultStatus = workflowinstanceDescStatus.Default.(string)
-	// workflowinstanceDescWorkflowID is the schema descriptor for workflow_id field.
-	workflowinstanceDescWorkflowID := workflowinstanceFields[3].Descriptor()
-	// workflowinstance.WorkflowIDValidator is a validator for the "workflow_id" field. It is called by the builders before save.
-	workflowinstance.WorkflowIDValidator = workflowinstanceDescWorkflowID.Validators[0].(func(int) error)
-	// workflowinstanceDescEntityID is the schema descriptor for entity_id field.
-	workflowinstanceDescEntityID := workflowinstanceFields[4].Descriptor()
-	// workflowinstance.EntityIDValidator is a validator for the "entity_id" field. It is called by the builders before save.
-	workflowinstance.EntityIDValidator = workflowinstanceDescEntityID.Validators[0].(func(int) error)
-	// workflowinstanceDescEntityType is the schema descriptor for entity_type field.
-	workflowinstanceDescEntityType := workflowinstanceFields[5].Descriptor()
-	// workflowinstance.DefaultEntityType holds the default value on creation for the entity_type field.
-	workflowinstance.DefaultEntityType = workflowinstanceDescEntityType.Default.(string)
-	// workflowinstanceDescTenantID is the schema descriptor for tenant_id field.
-	workflowinstanceDescTenantID := workflowinstanceFields[6].Descriptor()
-	// workflowinstance.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	workflowinstance.TenantIDValidator = workflowinstanceDescTenantID.Validators[0].(func(int) error)
-	// workflowinstanceDescStartedAt is the schema descriptor for started_at field.
-	workflowinstanceDescStartedAt := workflowinstanceFields[7].Descriptor()
-	// workflowinstance.DefaultStartedAt holds the default value on creation for the started_at field.
-	workflowinstance.DefaultStartedAt = workflowinstanceDescStartedAt.Default.(func() time.Time)
-	// workflowinstanceDescCreatedAt is the schema descriptor for created_at field.
-	workflowinstanceDescCreatedAt := workflowinstanceFields[9].Descriptor()
-	// workflowinstance.DefaultCreatedAt holds the default value on creation for the created_at field.
-	workflowinstance.DefaultCreatedAt = workflowinstanceDescCreatedAt.Default.(func() time.Time)
-	// workflowinstanceDescUpdatedAt is the schema descriptor for updated_at field.
-	workflowinstanceDescUpdatedAt := workflowinstanceFields[10].Descriptor()
-	// workflowinstance.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	workflowinstance.DefaultUpdatedAt = workflowinstanceDescUpdatedAt.Default.(func() time.Time)
-	// workflowinstance.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	workflowinstance.UpdateDefaultUpdatedAt = workflowinstanceDescUpdatedAt.UpdateDefault.(func() time.Time)
-	workflowtaskFields := schema.WorkflowTask{}.Fields()
-	_ = workflowtaskFields
-	// workflowtaskDescTaskID is the schema descriptor for task_id field.
-	workflowtaskDescTaskID := workflowtaskFields[0].Descriptor()
-	// workflowtask.TaskIDValidator is a validator for the "task_id" field. It is called by the builders before save.
-	workflowtask.TaskIDValidator = workflowtaskDescTaskID.Validators[0].(func(string) error)
-	// workflowtaskDescInstanceID is the schema descriptor for instance_id field.
-	workflowtaskDescInstanceID := workflowtaskFields[1].Descriptor()
-	// workflowtask.InstanceIDValidator is a validator for the "instance_id" field. It is called by the builders before save.
-	workflowtask.InstanceIDValidator = workflowtaskDescInstanceID.Validators[0].(func(int) error)
-	// workflowtaskDescActivityID is the schema descriptor for activity_id field.
-	workflowtaskDescActivityID := workflowtaskFields[2].Descriptor()
-	// workflowtask.ActivityIDValidator is a validator for the "activity_id" field. It is called by the builders before save.
-	workflowtask.ActivityIDValidator = workflowtaskDescActivityID.Validators[0].(func(string) error)
-	// workflowtaskDescName is the schema descriptor for name field.
-	workflowtaskDescName := workflowtaskFields[3].Descriptor()
-	// workflowtask.NameValidator is a validator for the "name" field. It is called by the builders before save.
-	workflowtask.NameValidator = workflowtaskDescName.Validators[0].(func(string) error)
-	// workflowtaskDescType is the schema descriptor for type field.
-	workflowtaskDescType := workflowtaskFields[4].Descriptor()
-	// workflowtask.DefaultType holds the default value on creation for the type field.
-	workflowtask.DefaultType = workflowtaskDescType.Default.(string)
-	// workflowtaskDescStatus is the schema descriptor for status field.
-	workflowtaskDescStatus := workflowtaskFields[8].Descriptor()
-	// workflowtask.DefaultStatus holds the default value on creation for the status field.
-	workflowtask.DefaultStatus = workflowtaskDescStatus.Default.(string)
-	// workflowtaskDescPriority is the schema descriptor for priority field.
-	workflowtaskDescPriority := workflowtaskFields[9].Descriptor()
-	// workflowtask.DefaultPriority holds the default value on creation for the priority field.
-	workflowtask.DefaultPriority = workflowtaskDescPriority.Default.(string)
-	// workflowtaskDescTenantID is the schema descriptor for tenant_id field.
-	workflowtaskDescTenantID := workflowtaskFields[13].Descriptor()
-	// workflowtask.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	workflowtask.TenantIDValidator = workflowtaskDescTenantID.Validators[0].(func(int) error)
-	// workflowtaskDescCreatedAt is the schema descriptor for created_at field.
-	workflowtaskDescCreatedAt := workflowtaskFields[15].Descriptor()
-	// workflowtask.DefaultCreatedAt holds the default value on creation for the created_at field.
-	workflowtask.DefaultCreatedAt = workflowtaskDescCreatedAt.Default.(func() time.Time)
-	// workflowtaskDescUpdatedAt is the schema descriptor for updated_at field.
-	workflowtaskDescUpdatedAt := workflowtaskFields[16].Descriptor()
-	// workflowtask.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	workflowtask.DefaultUpdatedAt = workflowtaskDescUpdatedAt.Default.(func() time.Time)
-	// workflowtask.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	workflowtask.UpdateDefaultUpdatedAt = workflowtaskDescUpdatedAt.UpdateDefault.(func() time.Time)
-	workflowversionFields := schema.WorkflowVersion{}.Fields()
-	_ = workflowversionFields
-	// workflowversionDescWorkflowID is the schema descriptor for workflow_id field.
-	workflowversionDescWorkflowID := workflowversionFields[0].Descriptor()
-	// workflowversion.WorkflowIDValidator is a validator for the "workflow_id" field. It is called by the builders before save.
-	workflowversion.WorkflowIDValidator = workflowversionDescWorkflowID.Validators[0].(func(int) error)
-	// workflowversionDescVersion is the schema descriptor for version field.
-	workflowversionDescVersion := workflowversionFields[1].Descriptor()
-	// workflowversion.VersionValidator is a validator for the "version" field. It is called by the builders before save.
-	workflowversion.VersionValidator = workflowversionDescVersion.Validators[0].(func(string) error)
-	// workflowversionDescStatus is the schema descriptor for status field.
-	workflowversionDescStatus := workflowversionFields[4].Descriptor()
-	// workflowversion.DefaultStatus holds the default value on creation for the status field.
-	workflowversion.DefaultStatus = workflowversionDescStatus.Default.(string)
-	// workflowversionDescIsCurrent is the schema descriptor for is_current field.
-	workflowversionDescIsCurrent := workflowversionFields[7].Descriptor()
-	// workflowversion.DefaultIsCurrent holds the default value on creation for the is_current field.
-	workflowversion.DefaultIsCurrent = workflowversionDescIsCurrent.Default.(bool)
-	// workflowversionDescTenantID is the schema descriptor for tenant_id field.
-	workflowversionDescTenantID := workflowversionFields[8].Descriptor()
-	// workflowversion.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	workflowversion.TenantIDValidator = workflowversionDescTenantID.Validators[0].(func(int) error)
-	// workflowversionDescCreatedAt is the schema descriptor for created_at field.
-	workflowversionDescCreatedAt := workflowversionFields[9].Descriptor()
-	// workflowversion.DefaultCreatedAt holds the default value on creation for the created_at field.
-	workflowversion.DefaultCreatedAt = workflowversionDescCreatedAt.Default.(func() time.Time)
-	// workflowversionDescUpdatedAt is the schema descriptor for updated_at field.
-	workflowversionDescUpdatedAt := workflowversionFields[10].Descriptor()
-	// workflowversion.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	workflowversion.DefaultUpdatedAt = workflowversionDescUpdatedAt.Default.(func() time.Time)
-	// workflowversion.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	workflowversion.UpdateDefaultUpdatedAt = workflowversionDescUpdatedAt.UpdateDefault.(func() time.Time)
 }

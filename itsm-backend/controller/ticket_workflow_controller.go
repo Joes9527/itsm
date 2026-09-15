@@ -8,6 +8,7 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -61,45 +62,17 @@ func (tc *TicketWorkflowController) AcceptTicket(c *gin.Context) {
 		return
 	}
 
-	err := tc.workflowService.AcceptTicket(c.Request.Context(), &req, userID, tenantID)
+	err := tc.workflowService.AcceptTicket(c.Request.Context(), &req, userID, tenantID, creation.Identity{ActorID: userID, TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
 		tc.logger.Errorw("Failed to accept ticket", "error", err, "ticket_id", req.TicketID)
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
 	}
 
 	common.Success(c, gin.H{"message": "接单成功"})
-}
-
-// RejectTicket 驳回工单
-// @Summary 驳回工单
-// @Description 驳回工单并说明原因
-// @Tags 工单流转
-// @Accept json
-// @Produce json
-// @Param request body dto.RejectTicketRequest true "驳回请求"
-// @Success 200 {object} common.Response{data=map[string]string}
-// @Router /api/v1/tickets/workflow/reject [post]
-func (tc *TicketWorkflowController) RejectTicket(c *gin.Context) {
-	var req dto.RejectTicketRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Fail(c, common.ParamErrorCode, "请求参数错误: "+err.Error())
-		return
-	}
-
-	userID, tenantID, ok := getAuthContext(c)
-	if !ok {
-		return
-	}
-
-	err := tc.workflowService.RejectTicket(c.Request.Context(), &req, userID, tenantID)
-	if err != nil {
-		tc.logger.Errorw("Failed to reject ticket", "error", err, "ticket_id", req.TicketID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
-		return
-	}
-
-	common.Success(c, gin.H{"message": "驳回成功"})
 }
 
 // WithdrawTicket 撤回工单
@@ -154,8 +127,11 @@ func (tc *TicketWorkflowController) ForwardTicket(c *gin.Context) {
 		return
 	}
 
-	err := tc.workflowService.ForwardTicket(c.Request.Context(), &req, userID, tenantID)
+	err := tc.workflowService.ForwardTicket(c.Request.Context(), &req, userID, tenantID, creation.Identity{ActorID: userID, TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
 		tc.logger.Errorw("Failed to forward ticket", "error", err, "ticket_id", req.TicketID)
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
@@ -246,49 +222,6 @@ func (tc *TicketWorkflowController) ListTicketCCRecords(c *gin.Context) {
 	}
 
 	common.Success(c, resp)
-}
-
-// ApproveTicket 审批工单
-// @Summary 审批工单
-// @Description 审批工单（通过/拒绝/委派）
-// @Tags 工单流转
-// @Accept json
-// @Produce json
-// @Param request body dto.ApproveTicketRequest true "审批请求"
-// @Success 200 {object} common.Response{data=map[string]string}
-// @Router /api/v1/tickets/workflow/approve [post]
-func (tc *TicketWorkflowController) ApproveTicket(c *gin.Context) {
-	var req dto.ApproveTicketRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Fail(c, common.ParamErrorCode, "请求参数错误: "+err.Error())
-		return
-	}
-
-	userID, tenantID, ok := getAuthContext(c)
-	if !ok {
-		return
-	}
-
-	err := tc.workflowService.ApproveTicket(c.Request.Context(), &req, userID, tenantID)
-	if err != nil {
-		tc.logger.Errorw("Failed to approve ticket", "error", err, "ticket_id", req.TicketID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
-		return
-	}
-
-	var message string
-	switch req.Action {
-	case "approve":
-		message = "审批通过"
-	case "reject":
-		message = "审批拒绝"
-	case "delegate":
-		message = "已委派"
-	default:
-		message = "操作成功"
-	}
-
-	common.Success(c, gin.H{"message": message})
 }
 
 // ResolveTicket 解决工单
@@ -432,8 +365,29 @@ func (tc *TicketWorkflowController) GetApprovalDecisions(ctx *gin.Context) {
 		return
 	}
 	tenantID := ctx.GetInt("tenant_id")
-	decisions, err := tc.workflowService.GetApprovalDecisions(ctx.Request.Context(), ticketID, tenantID)
+	userID := ctx.GetInt("user_id")
+	role := ctx.GetString("role")
+	if tenantID <= 0 || userID <= 0 || role == "" {
+		common.AuthFailed(ctx, "认证信息缺失")
+		return
+	}
+	decisions, err := tc.workflowService.GetApprovalDecisions(ctx.Request.Context(), ticketID, service.ActionActor{
+		TenantID: tenantID,
+		UserID:   userID,
+		Role:     role,
+	})
 	if err != nil {
+		if appErr, ok := common.AsAppError(err); ok {
+			switch appErr.Code {
+			case common.ErrCodeNotFound:
+				common.NotFound(ctx, "工单不存在")
+			case common.ErrCodeForbidden:
+				common.Forbidden(ctx, "权限不足")
+			default:
+				common.InternalError(ctx, "获取审批记录失败")
+			}
+			return
+		}
 		common.InternalError(ctx, "获取审批记录失败: "+err.Error())
 		return
 	}

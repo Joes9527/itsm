@@ -11,16 +11,15 @@
  * npm run screenshot
  */
 
-import type { Browser, Page } from '@playwright/test';
+import type { Browser } from '@playwright/test';
 import { chromium } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
+import { DEFAULT_LOGIN, establishPageSession } from './auth-utils';
 
 // 配置
 const CONFIG = {
   baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000',
-  username: 'admin',
-  password: 'admin123',
   outputDir: path.join(__dirname, '..', '..', 'docs', 'images'),
 };
 
@@ -48,39 +47,6 @@ interface PageConfig {
   skipLogin?: boolean;
 }
 
-async function login(page: Page): Promise<boolean> {
-  try {
-    console.log('🔐 正在登录...');
-    await page.goto(`${CONFIG.baseURL}/login`, { waitUntil: 'networkidle', timeout: 15000 });
-
-    // 等待登录表单
-    await page.waitForSelector('input[type="text"], input[name="username"], input[id="username"]', { timeout: 5000 }).catch(() => null);
-
-    const usernameInput = await page.$('input[type="text"], input[name="username"], input[id="username"]');
-    const passwordInput = await page.$('input[type="password"]');
-
-    if (usernameInput && passwordInput) {
-      await usernameInput.fill(CONFIG.username);
-      await passwordInput.fill(CONFIG.password);
-
-      const loginButton = await page.$('button[type="submit"], button:has-text("登录"), button:has-text("Sign in")');
-      if (loginButton) {
-        await loginButton.click();
-        await page.waitForURL('**/dashboard', { timeout: 10000 }).catch(() => null);
-        await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => null);
-        console.log('✅ 登录成功');
-        return true;
-      }
-    }
-
-    console.log('ℹ️ 可能已登录或无需登录');
-    return true;
-  } catch (error) {
-    console.error('❌ 登录失败:', error);
-    return false;
-  }
-}
-
 async function capturePage(browser: Browser, pageConfig: PageConfig): Promise<void> {
   const page = await browser.newPage({
     viewport: { width: 1400, height: 900 },
@@ -94,12 +60,7 @@ async function capturePage(browser: Browser, pageConfig: PageConfig): Promise<vo
       // 登录页面不需要登录
       await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
     } else {
-      // 先访问登录页面登录
-      const loginSuccess = await login(page);
-      if (!loginSuccess) {
-        console.log(`⚠️ 跳过页面: ${pageConfig.path} (登录失败)`);
-        return;
-      }
+      await establishPageSession(page, DEFAULT_LOGIN, CONFIG.baseURL);
       // 登录后访问目标页面
       await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
     }
@@ -117,8 +78,6 @@ async function capturePage(browser: Browser, pageConfig: PageConfig): Promise<vo
     });
 
     console.log(`✅ 已保存: ${filePath}`);
-  } catch (error: any) {
-    console.error(`❌ 截取失败 [${pageConfig.path}]: ${error.message}`);
   } finally {
     await page.close();
   }
@@ -145,22 +104,7 @@ async function main() {
   });
 
   try {
-    let loginPerformed = false;
-
     for (const pageConfig of PAGES) {
-      // 对于非登录页面，只在第一次需要登录
-      if (!pageConfig.skipLogin && !loginPerformed) {
-        // 使用新上下文确保登录状态
-        const context = await browser.newContext();
-        const loginPage = await context.newPage();
-
-        const success = await login(loginPage);
-        if (success) {
-          loginPerformed = true;
-          await context.close();
-        }
-      }
-
       await capturePage(browser, pageConfig);
     }
 
@@ -175,11 +119,9 @@ async function main() {
     console.log('\n📋 生成的文件:');
     files.forEach(f => console.log(`  - ${f}`));
 
-  } catch (error: any) {
-    console.error('❌ 错误:', error.message);
   } finally {
     await browser.close();
   }
 }
 
-main();
+void main();

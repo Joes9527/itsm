@@ -11,8 +11,9 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/common"
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/enttest"
@@ -45,10 +46,11 @@ type failingKafCallbackHandler struct{ err error }
 
 func (h *failingKafCallbackHandler) GetTaskType() string  { return "failing_kaf_callback" }
 func (h *failingKafCallbackHandler) GetHandlerID() string { return "failing_kaf_callback_handler" }
-func (h *failingKafCallbackHandler) Validate(context.Context, map[string]interface{}) error {
-	return nil
+func (h *failingKafCallbackHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
+	return bpmn.CallbackActionContract{}, true
 }
-func (h *failingKafCallbackHandler) Execute(context.Context, *ent.ProcessTask, map[string]interface{}) (*dto.ServiceTaskResult, error) {
+
+func (h *failingKafCallbackHandler) Execute(context.Context, *ent.ProcessTask, map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	return nil, h.err
 }
 
@@ -118,11 +120,11 @@ func newKafDelegationHTTPFixture(t *testing.T, fixture kafHTTPFixture) (*gin.Eng
 		require.NoError(t, err)
 	}
 
-	engine := service.NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar()).(*service.CustomProcessEngine)
+	engine := service.NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard()).(*service.CustomProcessEngine)
 	if fixture.failingCompletionError != "" {
 		engine.CallbackRegistry().RegisterHandler(&failingKafCallbackHandler{err: errors.New(fixture.failingCompletionError)})
 	}
-	controller := NewKafDelegationController(client, engine)
+	controller := NewKafDelegationController(client, engine, executionfixture.Standard())
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		c.Set("tenant_id", requestTenantID)
@@ -270,6 +272,11 @@ func TestKafDelegatedList_PaginatesBeyondOneHundredTasks(t *testing.T) {
 	assert.Equal(t, common.SuccessCode, secondPage.Code)
 	assert.Len(t, secondPage.Data.Items, 2)
 	assert.Empty(t, secondPage.Data.NextCursor)
+	var terminalWire struct {
+		Data map[string]json.RawMessage `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(second.Body.Bytes(), &terminalWire))
+	assert.NotContains(t, terminalWire.Data, "nextCursor", "terminal page omits cursor as required by the strict KAF HTTP client")
 }
 
 func TestKafAction_RejectsResolveUntilIncidentTypedActionExists(t *testing.T) {
@@ -303,7 +310,7 @@ func TestKafAction_IdempotentReplayRejectsValidKafActorWithDifferentRequestTenan
 	require.NoError(t, err)
 	workflowCtx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, task.TenantID)
 	workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNUserIDContextKey, actor.ID)
-	_, err = service.NewKafDelegationService(client).ExecuteAction(workflowCtx, taskID, service.KafActionRequest{
+	_, err = service.NewKafDelegationService(client, executionfixture.Standard()).ExecuteAction(workflowCtx, taskID, service.KafActionRequest{
 		Action: "update_progress", ExpectedVersion: 3,
 		Execution: service.KafActionExecution{RunID: "run-1", StepID: "progress", IdempotencyKey: kafActionKey(t, client, taskID, "run-1", "progress"), CorrelationID: "corr-kaf-http", ProcedureRef: "vpn-grant", ProcedureVersion: "1"},
 		Payload:   service.KafActionPayload{ResultSummary: "queued"},
@@ -452,4 +459,16 @@ func attachKafWorkItem(t *testing.T, client *ent.Client, taskID string) int {
 	_, err = client.ProcessInstance.UpdateOneID(task.ProcessInstanceID).SetBusinessID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 	return workItem.ID
+}
+
+func TestKafDelegatedList_EmptyPageOmitsCursor(t *testing.T) {
+	router, _, _ := newKafDelegationHTTPFixture(t, kafHTTPFixture{actorTenantID: 1, taskTenantID: 1, taskType: "kaf_delegate", status: "completed"})
+	response := doKafRequest(t, router, http.MethodGet, "/api/v1/bpmn/process-tasks/kaf-delegated?status=delegated", "")
+	require.Equal(t, http.StatusOK, response.Code)
+	var wire struct {
+		Data map[string]json.RawMessage `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &wire))
+	assert.NotContains(t, wire.Data, "nextCursor")
+	assert.JSONEq(t, "[]", string(wire.Data["items"]))
 }

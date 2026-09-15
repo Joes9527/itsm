@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/processauditlog"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +19,7 @@ type ProcessAuditLogCreate struct {
 	config
 	mutation *ProcessAuditLogMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetProcessInstanceID sets the "process_instance_id" field.
@@ -362,6 +364,7 @@ func (_c *ProcessAuditLogCreate) createSpec() (*ProcessAuditLog, *sqlgraph.Creat
 		_node = &ProcessAuditLog{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(processauditlog.Table, sqlgraph.NewFieldSpec(processauditlog.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.ProcessInstanceID(); ok {
 		_spec.SetField(processauditlog.FieldProcessInstanceID, field.TypeInt, value)
 		_node.ProcessInstanceID = value
@@ -449,11 +452,914 @@ func (_c *ProcessAuditLogCreate) createSpec() (*ProcessAuditLog, *sqlgraph.Creat
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessAuditLog.Create().
+//		SetProcessInstanceID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessAuditLogUpsert) {
+//			SetProcessInstanceID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessAuditLogCreate) OnConflict(opts ...sql.ConflictOption) *ProcessAuditLogUpsertOne {
+	_c.conflict = opts
+	return &ProcessAuditLogUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessAuditLog.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessAuditLogCreate) OnConflictColumns(columns ...string) *ProcessAuditLogUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessAuditLogUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ProcessAuditLogUpsertOne is the builder for "upsert"-ing
+	//  one ProcessAuditLog node.
+	ProcessAuditLogUpsertOne struct {
+		create *ProcessAuditLogCreate
+	}
+
+	// ProcessAuditLogUpsert is the "OnConflict" setter.
+	ProcessAuditLogUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (u *ProcessAuditLogUpsert) SetProcessInstanceID(v int) *ProcessAuditLogUpsert {
+	u.Set(processauditlog.FieldProcessInstanceID, v)
+	return u
+}
+
+// UpdateProcessInstanceID sets the "process_instance_id" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsert) UpdateProcessInstanceID() *ProcessAuditLogUpsert {
+	u.SetExcluded(processauditlog.FieldProcessInstanceID)
+	return u
+}
+
+// AddProcessInstanceID adds v to the "process_instance_id" field.
+func (u *ProcessAuditLogUpsert) AddProcessInstanceID(v int) *ProcessAuditLogUpsert {
+	u.Add(processauditlog.FieldProcessInstanceID, v)
+	return u
+}
+
+// SetProcessInstanceKey sets the "process_instance_key" field.
+func (u *ProcessAuditLogUpsert) SetProcessInstanceKey(v string) *ProcessAuditLogUpsert {
+	u.Set(processauditlog.FieldProcessInstanceKey, v)
+	return u
+}
+
+// UpdateProcessInstanceKey sets the "process_instance_key" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsert) UpdateProcessInstanceKey() *ProcessAuditLogUpsert {
+	u.SetExcluded(processauditlog.FieldProcessInstanceKey)
+	return u
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (u *ProcessAuditLogUpsert) SetProcessDefinitionKey(v string) *ProcessAuditLogUpsert {
+	u.Set(processauditlog.FieldProcessDefinitionKey, v)
+	return u
+}
+
+// UpdateProcessDefinitionKey sets the "process_definition_key" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsert) UpdateProcessDefinitionKey() *ProcessAuditLogUpsert {
+	u.SetExcluded(processauditlog.FieldProcessDefinitionKey)
+	return u
+}
+
+// SetProcessDefinitionID sets the "process_definition_id" field.
+func (u *ProcessAuditLogUpsert) SetProcessDefinitionID(v int) *ProcessAuditLogUpsert {
+	u.Set(processauditlog.FieldProcessDefinitionID, v)
+	return u
+}
+
+// UpdateProcessDefinitionID sets the "process_definition_id" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsert) UpdateProcessDefinitionID() *ProcessAuditLogUpsert {
+	u.SetExcluded(processauditlog.FieldProcessDefinitionID)
+	return u
+}
+
+// AddProcessDefinitionID adds v to the "process_definition_id" field.
+func (u *ProcessAuditLogUpsert) AddProcessDefinitionID(v int) *ProcessAuditLogUpsert {
+	u.Add(processauditlog.FieldProcessDefinitionID, v)
+	return u
+}
+
+// SetActivityID sets the "activity_id" field.
+func (u *ProcessAuditLogUpsert) SetActivityID(v string) *ProcessAuditLogUpsert {
+	u.Set(processauditlog.FieldActivityID, v)
+	return u
+}
+
+// UpdateActivityID sets the "activity_id" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsert) UpdateActivityID() *ProcessAuditLogUpsert {
+	u.SetExcluded(processauditlog.FieldActivityID)
+	return u
+}
+
+// SetActivityName sets the "activity_name" field.
+func (u *ProcessAuditLogUpsert) SetActivityName(v string) *ProcessAuditLogUpsert {
+	u.Set(processauditlog.FieldActivityName, v)
+	return u
+}
+
+// UpdateActivityName sets the "activity_name" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsert) UpdateActivityName() *ProcessAuditLogUpsert {
+	u.SetExcluded(processauditlog.FieldActivityName)
+	return u
+}
+
+// ClearActivityName clears the value of the "activity_name" field.
+func (u *ProcessAuditLogUpsert) ClearActivityName() *ProcessAuditLogUpsert {
+	u.SetNull(processauditlog.FieldActivityName)
+	return u
+}
+
+// SetActivityType sets the "activity_type" field.
+func (u *ProcessAuditLogUpsert) SetActivityType(v string) *ProcessAuditLogUpsert {
+	u.Set(processauditlog.FieldActivityType, v)
+	return u
+}
+
+// UpdateActivityType sets the "activity_type" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsert) UpdateActivityType() *ProcessAuditLogUpsert {
+	u.SetExcluded(processauditlog.FieldActivityType)
+	return u
+}
+
+// SetAction sets the "action" field.
+func (u *ProcessAuditLogUpsert) SetAction(v string) *ProcessAuditLogUpsert {
+	u.Set(processauditlog.FieldAction, v)
+	return u
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsert) UpdateAction() *ProcessAuditLogUpsert {
+	u.SetExcluded(processauditlog.FieldAction)
+	return u
+}
+
+// SetUserID sets the "user_id" field.
+func (u *ProcessAuditLogUpsert) SetUserID(v int) *ProcessAuditLogUpsert {
+	u.Set(processauditlog.FieldUserID, v)
+	return u
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsert) UpdateUserID() *ProcessAuditLogUpsert {
+	u.SetExcluded(processauditlog.FieldUserID)
+	return u
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *ProcessAuditLogUpsert) AddUserID(v int) *ProcessAuditLogUpsert {
+	u.Add(processauditlog.FieldUserID, v)
+	return u
+}
+
+// ClearUserID clears the value of the "user_id" field.
+func (u *ProcessAuditLogUpsert) ClearUserID() *ProcessAuditLogUpsert {
+	u.SetNull(processauditlog.FieldUserID)
+	return u
+}
+
+// SetUserName sets the "user_name" field.
+func (u *ProcessAuditLogUpsert) SetUserName(v string) *ProcessAuditLogUpsert {
+	u.Set(processauditlog.FieldUserName, v)
+	return u
+}
+
+// UpdateUserName sets the "user_name" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsert) UpdateUserName() *ProcessAuditLogUpsert {
+	u.SetExcluded(processauditlog.FieldUserName)
+	return u
+}
+
+// ClearUserName clears the value of the "user_name" field.
+func (u *ProcessAuditLogUpsert) ClearUserName() *ProcessAuditLogUpsert {
+	u.SetNull(processauditlog.FieldUserName)
+	return u
+}
+
+// SetAssigneeID sets the "assignee_id" field.
+func (u *ProcessAuditLogUpsert) SetAssigneeID(v int) *ProcessAuditLogUpsert {
+	u.Set(processauditlog.FieldAssigneeID, v)
+	return u
+}
+
+// UpdateAssigneeID sets the "assignee_id" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsert) UpdateAssigneeID() *ProcessAuditLogUpsert {
+	u.SetExcluded(processauditlog.FieldAssigneeID)
+	return u
+}
+
+// AddAssigneeID adds v to the "assignee_id" field.
+func (u *ProcessAuditLogUpsert) AddAssigneeID(v int) *ProcessAuditLogUpsert {
+	u.Add(processauditlog.FieldAssigneeID, v)
+	return u
+}
+
+// ClearAssigneeID clears the value of the "assignee_id" field.
+func (u *ProcessAuditLogUpsert) ClearAssigneeID() *ProcessAuditLogUpsert {
+	u.SetNull(processauditlog.FieldAssigneeID)
+	return u
+}
+
+// SetAssigneeName sets the "assignee_name" field.
+func (u *ProcessAuditLogUpsert) SetAssigneeName(v string) *ProcessAuditLogUpsert {
+	u.Set(processauditlog.FieldAssigneeName, v)
+	return u
+}
+
+// UpdateAssigneeName sets the "assignee_name" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsert) UpdateAssigneeName() *ProcessAuditLogUpsert {
+	u.SetExcluded(processauditlog.FieldAssigneeName)
+	return u
+}
+
+// ClearAssigneeName clears the value of the "assignee_name" field.
+func (u *ProcessAuditLogUpsert) ClearAssigneeName() *ProcessAuditLogUpsert {
+	u.SetNull(processauditlog.FieldAssigneeName)
+	return u
+}
+
+// SetVariablesBefore sets the "variables_before" field.
+func (u *ProcessAuditLogUpsert) SetVariablesBefore(v map[string]interface{}) *ProcessAuditLogUpsert {
+	u.Set(processauditlog.FieldVariablesBefore, v)
+	return u
+}
+
+// UpdateVariablesBefore sets the "variables_before" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsert) UpdateVariablesBefore() *ProcessAuditLogUpsert {
+	u.SetExcluded(processauditlog.FieldVariablesBefore)
+	return u
+}
+
+// ClearVariablesBefore clears the value of the "variables_before" field.
+func (u *ProcessAuditLogUpsert) ClearVariablesBefore() *ProcessAuditLogUpsert {
+	u.SetNull(processauditlog.FieldVariablesBefore)
+	return u
+}
+
+// SetVariablesAfter sets the "variables_after" field.
+func (u *ProcessAuditLogUpsert) SetVariablesAfter(v map[string]interface{}) *ProcessAuditLogUpsert {
+	u.Set(processauditlog.FieldVariablesAfter, v)
+	return u
+}
+
+// UpdateVariablesAfter sets the "variables_after" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsert) UpdateVariablesAfter() *ProcessAuditLogUpsert {
+	u.SetExcluded(processauditlog.FieldVariablesAfter)
+	return u
+}
+
+// ClearVariablesAfter clears the value of the "variables_after" field.
+func (u *ProcessAuditLogUpsert) ClearVariablesAfter() *ProcessAuditLogUpsert {
+	u.SetNull(processauditlog.FieldVariablesAfter)
+	return u
+}
+
+// SetComment sets the "comment" field.
+func (u *ProcessAuditLogUpsert) SetComment(v string) *ProcessAuditLogUpsert {
+	u.Set(processauditlog.FieldComment, v)
+	return u
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsert) UpdateComment() *ProcessAuditLogUpsert {
+	u.SetExcluded(processauditlog.FieldComment)
+	return u
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *ProcessAuditLogUpsert) ClearComment() *ProcessAuditLogUpsert {
+	u.SetNull(processauditlog.FieldComment)
+	return u
+}
+
+// SetIPAddress sets the "ip_address" field.
+func (u *ProcessAuditLogUpsert) SetIPAddress(v string) *ProcessAuditLogUpsert {
+	u.Set(processauditlog.FieldIPAddress, v)
+	return u
+}
+
+// UpdateIPAddress sets the "ip_address" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsert) UpdateIPAddress() *ProcessAuditLogUpsert {
+	u.SetExcluded(processauditlog.FieldIPAddress)
+	return u
+}
+
+// ClearIPAddress clears the value of the "ip_address" field.
+func (u *ProcessAuditLogUpsert) ClearIPAddress() *ProcessAuditLogUpsert {
+	u.SetNull(processauditlog.FieldIPAddress)
+	return u
+}
+
+// SetUserAgent sets the "user_agent" field.
+func (u *ProcessAuditLogUpsert) SetUserAgent(v string) *ProcessAuditLogUpsert {
+	u.Set(processauditlog.FieldUserAgent, v)
+	return u
+}
+
+// UpdateUserAgent sets the "user_agent" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsert) UpdateUserAgent() *ProcessAuditLogUpsert {
+	u.SetExcluded(processauditlog.FieldUserAgent)
+	return u
+}
+
+// ClearUserAgent clears the value of the "user_agent" field.
+func (u *ProcessAuditLogUpsert) ClearUserAgent() *ProcessAuditLogUpsert {
+	u.SetNull(processauditlog.FieldUserAgent)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessAuditLogUpsert) SetTenantID(v int) *ProcessAuditLogUpsert {
+	u.Set(processauditlog.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsert) UpdateTenantID() *ProcessAuditLogUpsert {
+	u.SetExcluded(processauditlog.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessAuditLogUpsert) AddTenantID(v int) *ProcessAuditLogUpsert {
+	u.Add(processauditlog.FieldTenantID, v)
+	return u
+}
+
+// SetTimestamp sets the "timestamp" field.
+func (u *ProcessAuditLogUpsert) SetTimestamp(v time.Time) *ProcessAuditLogUpsert {
+	u.Set(processauditlog.FieldTimestamp, v)
+	return u
+}
+
+// UpdateTimestamp sets the "timestamp" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsert) UpdateTimestamp() *ProcessAuditLogUpsert {
+	u.SetExcluded(processauditlog.FieldTimestamp)
+	return u
+}
+
+// SetDurationMs sets the "duration_ms" field.
+func (u *ProcessAuditLogUpsert) SetDurationMs(v int) *ProcessAuditLogUpsert {
+	u.Set(processauditlog.FieldDurationMs, v)
+	return u
+}
+
+// UpdateDurationMs sets the "duration_ms" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsert) UpdateDurationMs() *ProcessAuditLogUpsert {
+	u.SetExcluded(processauditlog.FieldDurationMs)
+	return u
+}
+
+// AddDurationMs adds v to the "duration_ms" field.
+func (u *ProcessAuditLogUpsert) AddDurationMs(v int) *ProcessAuditLogUpsert {
+	u.Add(processauditlog.FieldDurationMs, v)
+	return u
+}
+
+// ClearDurationMs clears the value of the "duration_ms" field.
+func (u *ProcessAuditLogUpsert) ClearDurationMs() *ProcessAuditLogUpsert {
+	u.SetNull(processauditlog.FieldDurationMs)
+	return u
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *ProcessAuditLogUpsert) SetMetadata(v map[string]interface{}) *ProcessAuditLogUpsert {
+	u.Set(processauditlog.FieldMetadata, v)
+	return u
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsert) UpdateMetadata() *ProcessAuditLogUpsert {
+	u.SetExcluded(processauditlog.FieldMetadata)
+	return u
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *ProcessAuditLogUpsert) ClearMetadata() *ProcessAuditLogUpsert {
+	u.SetNull(processauditlog.FieldMetadata)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ProcessAuditLog.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessAuditLogUpsertOne) UpdateNewValues() *ProcessAuditLogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessAuditLog.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ProcessAuditLogUpsertOne) Ignore() *ProcessAuditLogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessAuditLogUpsertOne) DoNothing() *ProcessAuditLogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessAuditLogCreate.OnConflict
+// documentation for more info.
+func (u *ProcessAuditLogUpsertOne) Update(set func(*ProcessAuditLogUpsert)) *ProcessAuditLogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessAuditLogUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (u *ProcessAuditLogUpsertOne) SetProcessInstanceID(v int) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetProcessInstanceID(v)
+	})
+}
+
+// AddProcessInstanceID adds v to the "process_instance_id" field.
+func (u *ProcessAuditLogUpsertOne) AddProcessInstanceID(v int) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.AddProcessInstanceID(v)
+	})
+}
+
+// UpdateProcessInstanceID sets the "process_instance_id" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertOne) UpdateProcessInstanceID() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateProcessInstanceID()
+	})
+}
+
+// SetProcessInstanceKey sets the "process_instance_key" field.
+func (u *ProcessAuditLogUpsertOne) SetProcessInstanceKey(v string) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetProcessInstanceKey(v)
+	})
+}
+
+// UpdateProcessInstanceKey sets the "process_instance_key" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertOne) UpdateProcessInstanceKey() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateProcessInstanceKey()
+	})
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (u *ProcessAuditLogUpsertOne) SetProcessDefinitionKey(v string) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetProcessDefinitionKey(v)
+	})
+}
+
+// UpdateProcessDefinitionKey sets the "process_definition_key" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertOne) UpdateProcessDefinitionKey() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateProcessDefinitionKey()
+	})
+}
+
+// SetProcessDefinitionID sets the "process_definition_id" field.
+func (u *ProcessAuditLogUpsertOne) SetProcessDefinitionID(v int) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetProcessDefinitionID(v)
+	})
+}
+
+// AddProcessDefinitionID adds v to the "process_definition_id" field.
+func (u *ProcessAuditLogUpsertOne) AddProcessDefinitionID(v int) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.AddProcessDefinitionID(v)
+	})
+}
+
+// UpdateProcessDefinitionID sets the "process_definition_id" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertOne) UpdateProcessDefinitionID() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateProcessDefinitionID()
+	})
+}
+
+// SetActivityID sets the "activity_id" field.
+func (u *ProcessAuditLogUpsertOne) SetActivityID(v string) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetActivityID(v)
+	})
+}
+
+// UpdateActivityID sets the "activity_id" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertOne) UpdateActivityID() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateActivityID()
+	})
+}
+
+// SetActivityName sets the "activity_name" field.
+func (u *ProcessAuditLogUpsertOne) SetActivityName(v string) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetActivityName(v)
+	})
+}
+
+// UpdateActivityName sets the "activity_name" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertOne) UpdateActivityName() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateActivityName()
+	})
+}
+
+// ClearActivityName clears the value of the "activity_name" field.
+func (u *ProcessAuditLogUpsertOne) ClearActivityName() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearActivityName()
+	})
+}
+
+// SetActivityType sets the "activity_type" field.
+func (u *ProcessAuditLogUpsertOne) SetActivityType(v string) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetActivityType(v)
+	})
+}
+
+// UpdateActivityType sets the "activity_type" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertOne) UpdateActivityType() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateActivityType()
+	})
+}
+
+// SetAction sets the "action" field.
+func (u *ProcessAuditLogUpsertOne) SetAction(v string) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetAction(v)
+	})
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertOne) UpdateAction() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateAction()
+	})
+}
+
+// SetUserID sets the "user_id" field.
+func (u *ProcessAuditLogUpsertOne) SetUserID(v int) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *ProcessAuditLogUpsertOne) AddUserID(v int) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.AddUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertOne) UpdateUserID() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// ClearUserID clears the value of the "user_id" field.
+func (u *ProcessAuditLogUpsertOne) ClearUserID() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearUserID()
+	})
+}
+
+// SetUserName sets the "user_name" field.
+func (u *ProcessAuditLogUpsertOne) SetUserName(v string) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetUserName(v)
+	})
+}
+
+// UpdateUserName sets the "user_name" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertOne) UpdateUserName() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateUserName()
+	})
+}
+
+// ClearUserName clears the value of the "user_name" field.
+func (u *ProcessAuditLogUpsertOne) ClearUserName() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearUserName()
+	})
+}
+
+// SetAssigneeID sets the "assignee_id" field.
+func (u *ProcessAuditLogUpsertOne) SetAssigneeID(v int) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetAssigneeID(v)
+	})
+}
+
+// AddAssigneeID adds v to the "assignee_id" field.
+func (u *ProcessAuditLogUpsertOne) AddAssigneeID(v int) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.AddAssigneeID(v)
+	})
+}
+
+// UpdateAssigneeID sets the "assignee_id" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertOne) UpdateAssigneeID() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateAssigneeID()
+	})
+}
+
+// ClearAssigneeID clears the value of the "assignee_id" field.
+func (u *ProcessAuditLogUpsertOne) ClearAssigneeID() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearAssigneeID()
+	})
+}
+
+// SetAssigneeName sets the "assignee_name" field.
+func (u *ProcessAuditLogUpsertOne) SetAssigneeName(v string) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetAssigneeName(v)
+	})
+}
+
+// UpdateAssigneeName sets the "assignee_name" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertOne) UpdateAssigneeName() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateAssigneeName()
+	})
+}
+
+// ClearAssigneeName clears the value of the "assignee_name" field.
+func (u *ProcessAuditLogUpsertOne) ClearAssigneeName() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearAssigneeName()
+	})
+}
+
+// SetVariablesBefore sets the "variables_before" field.
+func (u *ProcessAuditLogUpsertOne) SetVariablesBefore(v map[string]interface{}) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetVariablesBefore(v)
+	})
+}
+
+// UpdateVariablesBefore sets the "variables_before" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertOne) UpdateVariablesBefore() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateVariablesBefore()
+	})
+}
+
+// ClearVariablesBefore clears the value of the "variables_before" field.
+func (u *ProcessAuditLogUpsertOne) ClearVariablesBefore() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearVariablesBefore()
+	})
+}
+
+// SetVariablesAfter sets the "variables_after" field.
+func (u *ProcessAuditLogUpsertOne) SetVariablesAfter(v map[string]interface{}) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetVariablesAfter(v)
+	})
+}
+
+// UpdateVariablesAfter sets the "variables_after" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertOne) UpdateVariablesAfter() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateVariablesAfter()
+	})
+}
+
+// ClearVariablesAfter clears the value of the "variables_after" field.
+func (u *ProcessAuditLogUpsertOne) ClearVariablesAfter() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearVariablesAfter()
+	})
+}
+
+// SetComment sets the "comment" field.
+func (u *ProcessAuditLogUpsertOne) SetComment(v string) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetComment(v)
+	})
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertOne) UpdateComment() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateComment()
+	})
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *ProcessAuditLogUpsertOne) ClearComment() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearComment()
+	})
+}
+
+// SetIPAddress sets the "ip_address" field.
+func (u *ProcessAuditLogUpsertOne) SetIPAddress(v string) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetIPAddress(v)
+	})
+}
+
+// UpdateIPAddress sets the "ip_address" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertOne) UpdateIPAddress() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateIPAddress()
+	})
+}
+
+// ClearIPAddress clears the value of the "ip_address" field.
+func (u *ProcessAuditLogUpsertOne) ClearIPAddress() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearIPAddress()
+	})
+}
+
+// SetUserAgent sets the "user_agent" field.
+func (u *ProcessAuditLogUpsertOne) SetUserAgent(v string) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetUserAgent(v)
+	})
+}
+
+// UpdateUserAgent sets the "user_agent" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertOne) UpdateUserAgent() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateUserAgent()
+	})
+}
+
+// ClearUserAgent clears the value of the "user_agent" field.
+func (u *ProcessAuditLogUpsertOne) ClearUserAgent() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearUserAgent()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessAuditLogUpsertOne) SetTenantID(v int) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessAuditLogUpsertOne) AddTenantID(v int) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertOne) UpdateTenantID() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetTimestamp sets the "timestamp" field.
+func (u *ProcessAuditLogUpsertOne) SetTimestamp(v time.Time) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetTimestamp(v)
+	})
+}
+
+// UpdateTimestamp sets the "timestamp" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertOne) UpdateTimestamp() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateTimestamp()
+	})
+}
+
+// SetDurationMs sets the "duration_ms" field.
+func (u *ProcessAuditLogUpsertOne) SetDurationMs(v int) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetDurationMs(v)
+	})
+}
+
+// AddDurationMs adds v to the "duration_ms" field.
+func (u *ProcessAuditLogUpsertOne) AddDurationMs(v int) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.AddDurationMs(v)
+	})
+}
+
+// UpdateDurationMs sets the "duration_ms" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertOne) UpdateDurationMs() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateDurationMs()
+	})
+}
+
+// ClearDurationMs clears the value of the "duration_ms" field.
+func (u *ProcessAuditLogUpsertOne) ClearDurationMs() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearDurationMs()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *ProcessAuditLogUpsertOne) SetMetadata(v map[string]interface{}) *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertOne) UpdateMetadata() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *ProcessAuditLogUpsertOne) ClearMetadata() *ProcessAuditLogUpsertOne {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessAuditLogUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessAuditLogCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessAuditLogUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ProcessAuditLogUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ProcessAuditLogUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ProcessAuditLogCreateBulk is the builder for creating many ProcessAuditLog entities in bulk.
 type ProcessAuditLogCreateBulk struct {
 	config
 	err      error
 	builders []*ProcessAuditLogCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ProcessAuditLog entities in the database.
@@ -483,6 +1389,7 @@ func (_c *ProcessAuditLogCreateBulk) Save(ctx context.Context) ([]*ProcessAuditL
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -533,6 +1440,530 @@ func (_c *ProcessAuditLogCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ProcessAuditLogCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessAuditLog.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessAuditLogUpsert) {
+//			SetProcessInstanceID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessAuditLogCreateBulk) OnConflict(opts ...sql.ConflictOption) *ProcessAuditLogUpsertBulk {
+	_c.conflict = opts
+	return &ProcessAuditLogUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessAuditLog.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessAuditLogCreateBulk) OnConflictColumns(columns ...string) *ProcessAuditLogUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessAuditLogUpsertBulk{
+		create: _c,
+	}
+}
+
+// ProcessAuditLogUpsertBulk is the builder for "upsert"-ing
+// a bulk of ProcessAuditLog nodes.
+type ProcessAuditLogUpsertBulk struct {
+	create *ProcessAuditLogCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ProcessAuditLog.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessAuditLogUpsertBulk) UpdateNewValues() *ProcessAuditLogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessAuditLog.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ProcessAuditLogUpsertBulk) Ignore() *ProcessAuditLogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessAuditLogUpsertBulk) DoNothing() *ProcessAuditLogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessAuditLogCreateBulk.OnConflict
+// documentation for more info.
+func (u *ProcessAuditLogUpsertBulk) Update(set func(*ProcessAuditLogUpsert)) *ProcessAuditLogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessAuditLogUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (u *ProcessAuditLogUpsertBulk) SetProcessInstanceID(v int) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetProcessInstanceID(v)
+	})
+}
+
+// AddProcessInstanceID adds v to the "process_instance_id" field.
+func (u *ProcessAuditLogUpsertBulk) AddProcessInstanceID(v int) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.AddProcessInstanceID(v)
+	})
+}
+
+// UpdateProcessInstanceID sets the "process_instance_id" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertBulk) UpdateProcessInstanceID() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateProcessInstanceID()
+	})
+}
+
+// SetProcessInstanceKey sets the "process_instance_key" field.
+func (u *ProcessAuditLogUpsertBulk) SetProcessInstanceKey(v string) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetProcessInstanceKey(v)
+	})
+}
+
+// UpdateProcessInstanceKey sets the "process_instance_key" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertBulk) UpdateProcessInstanceKey() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateProcessInstanceKey()
+	})
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (u *ProcessAuditLogUpsertBulk) SetProcessDefinitionKey(v string) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetProcessDefinitionKey(v)
+	})
+}
+
+// UpdateProcessDefinitionKey sets the "process_definition_key" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertBulk) UpdateProcessDefinitionKey() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateProcessDefinitionKey()
+	})
+}
+
+// SetProcessDefinitionID sets the "process_definition_id" field.
+func (u *ProcessAuditLogUpsertBulk) SetProcessDefinitionID(v int) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetProcessDefinitionID(v)
+	})
+}
+
+// AddProcessDefinitionID adds v to the "process_definition_id" field.
+func (u *ProcessAuditLogUpsertBulk) AddProcessDefinitionID(v int) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.AddProcessDefinitionID(v)
+	})
+}
+
+// UpdateProcessDefinitionID sets the "process_definition_id" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertBulk) UpdateProcessDefinitionID() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateProcessDefinitionID()
+	})
+}
+
+// SetActivityID sets the "activity_id" field.
+func (u *ProcessAuditLogUpsertBulk) SetActivityID(v string) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetActivityID(v)
+	})
+}
+
+// UpdateActivityID sets the "activity_id" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertBulk) UpdateActivityID() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateActivityID()
+	})
+}
+
+// SetActivityName sets the "activity_name" field.
+func (u *ProcessAuditLogUpsertBulk) SetActivityName(v string) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetActivityName(v)
+	})
+}
+
+// UpdateActivityName sets the "activity_name" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertBulk) UpdateActivityName() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateActivityName()
+	})
+}
+
+// ClearActivityName clears the value of the "activity_name" field.
+func (u *ProcessAuditLogUpsertBulk) ClearActivityName() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearActivityName()
+	})
+}
+
+// SetActivityType sets the "activity_type" field.
+func (u *ProcessAuditLogUpsertBulk) SetActivityType(v string) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetActivityType(v)
+	})
+}
+
+// UpdateActivityType sets the "activity_type" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertBulk) UpdateActivityType() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateActivityType()
+	})
+}
+
+// SetAction sets the "action" field.
+func (u *ProcessAuditLogUpsertBulk) SetAction(v string) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetAction(v)
+	})
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertBulk) UpdateAction() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateAction()
+	})
+}
+
+// SetUserID sets the "user_id" field.
+func (u *ProcessAuditLogUpsertBulk) SetUserID(v int) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *ProcessAuditLogUpsertBulk) AddUserID(v int) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.AddUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertBulk) UpdateUserID() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// ClearUserID clears the value of the "user_id" field.
+func (u *ProcessAuditLogUpsertBulk) ClearUserID() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearUserID()
+	})
+}
+
+// SetUserName sets the "user_name" field.
+func (u *ProcessAuditLogUpsertBulk) SetUserName(v string) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetUserName(v)
+	})
+}
+
+// UpdateUserName sets the "user_name" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertBulk) UpdateUserName() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateUserName()
+	})
+}
+
+// ClearUserName clears the value of the "user_name" field.
+func (u *ProcessAuditLogUpsertBulk) ClearUserName() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearUserName()
+	})
+}
+
+// SetAssigneeID sets the "assignee_id" field.
+func (u *ProcessAuditLogUpsertBulk) SetAssigneeID(v int) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetAssigneeID(v)
+	})
+}
+
+// AddAssigneeID adds v to the "assignee_id" field.
+func (u *ProcessAuditLogUpsertBulk) AddAssigneeID(v int) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.AddAssigneeID(v)
+	})
+}
+
+// UpdateAssigneeID sets the "assignee_id" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertBulk) UpdateAssigneeID() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateAssigneeID()
+	})
+}
+
+// ClearAssigneeID clears the value of the "assignee_id" field.
+func (u *ProcessAuditLogUpsertBulk) ClearAssigneeID() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearAssigneeID()
+	})
+}
+
+// SetAssigneeName sets the "assignee_name" field.
+func (u *ProcessAuditLogUpsertBulk) SetAssigneeName(v string) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetAssigneeName(v)
+	})
+}
+
+// UpdateAssigneeName sets the "assignee_name" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertBulk) UpdateAssigneeName() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateAssigneeName()
+	})
+}
+
+// ClearAssigneeName clears the value of the "assignee_name" field.
+func (u *ProcessAuditLogUpsertBulk) ClearAssigneeName() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearAssigneeName()
+	})
+}
+
+// SetVariablesBefore sets the "variables_before" field.
+func (u *ProcessAuditLogUpsertBulk) SetVariablesBefore(v map[string]interface{}) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetVariablesBefore(v)
+	})
+}
+
+// UpdateVariablesBefore sets the "variables_before" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertBulk) UpdateVariablesBefore() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateVariablesBefore()
+	})
+}
+
+// ClearVariablesBefore clears the value of the "variables_before" field.
+func (u *ProcessAuditLogUpsertBulk) ClearVariablesBefore() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearVariablesBefore()
+	})
+}
+
+// SetVariablesAfter sets the "variables_after" field.
+func (u *ProcessAuditLogUpsertBulk) SetVariablesAfter(v map[string]interface{}) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetVariablesAfter(v)
+	})
+}
+
+// UpdateVariablesAfter sets the "variables_after" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertBulk) UpdateVariablesAfter() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateVariablesAfter()
+	})
+}
+
+// ClearVariablesAfter clears the value of the "variables_after" field.
+func (u *ProcessAuditLogUpsertBulk) ClearVariablesAfter() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearVariablesAfter()
+	})
+}
+
+// SetComment sets the "comment" field.
+func (u *ProcessAuditLogUpsertBulk) SetComment(v string) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetComment(v)
+	})
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertBulk) UpdateComment() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateComment()
+	})
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *ProcessAuditLogUpsertBulk) ClearComment() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearComment()
+	})
+}
+
+// SetIPAddress sets the "ip_address" field.
+func (u *ProcessAuditLogUpsertBulk) SetIPAddress(v string) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetIPAddress(v)
+	})
+}
+
+// UpdateIPAddress sets the "ip_address" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertBulk) UpdateIPAddress() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateIPAddress()
+	})
+}
+
+// ClearIPAddress clears the value of the "ip_address" field.
+func (u *ProcessAuditLogUpsertBulk) ClearIPAddress() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearIPAddress()
+	})
+}
+
+// SetUserAgent sets the "user_agent" field.
+func (u *ProcessAuditLogUpsertBulk) SetUserAgent(v string) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetUserAgent(v)
+	})
+}
+
+// UpdateUserAgent sets the "user_agent" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertBulk) UpdateUserAgent() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateUserAgent()
+	})
+}
+
+// ClearUserAgent clears the value of the "user_agent" field.
+func (u *ProcessAuditLogUpsertBulk) ClearUserAgent() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearUserAgent()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessAuditLogUpsertBulk) SetTenantID(v int) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessAuditLogUpsertBulk) AddTenantID(v int) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertBulk) UpdateTenantID() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetTimestamp sets the "timestamp" field.
+func (u *ProcessAuditLogUpsertBulk) SetTimestamp(v time.Time) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetTimestamp(v)
+	})
+}
+
+// UpdateTimestamp sets the "timestamp" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertBulk) UpdateTimestamp() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateTimestamp()
+	})
+}
+
+// SetDurationMs sets the "duration_ms" field.
+func (u *ProcessAuditLogUpsertBulk) SetDurationMs(v int) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetDurationMs(v)
+	})
+}
+
+// AddDurationMs adds v to the "duration_ms" field.
+func (u *ProcessAuditLogUpsertBulk) AddDurationMs(v int) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.AddDurationMs(v)
+	})
+}
+
+// UpdateDurationMs sets the "duration_ms" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertBulk) UpdateDurationMs() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateDurationMs()
+	})
+}
+
+// ClearDurationMs clears the value of the "duration_ms" field.
+func (u *ProcessAuditLogUpsertBulk) ClearDurationMs() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearDurationMs()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *ProcessAuditLogUpsertBulk) SetMetadata(v map[string]interface{}) *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *ProcessAuditLogUpsertBulk) UpdateMetadata() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *ProcessAuditLogUpsertBulk) ClearMetadata() *ProcessAuditLogUpsertBulk {
+	return u.Update(func(s *ProcessAuditLogUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessAuditLogUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ProcessAuditLogCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessAuditLogCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessAuditLogUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

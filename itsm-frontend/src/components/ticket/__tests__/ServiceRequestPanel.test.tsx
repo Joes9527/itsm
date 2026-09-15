@@ -2,14 +2,14 @@
  * ServiceRequestPanel Component Tests
  *
  * 覆盖：
- * - ticket 非 service_catalog 来源（by-ticket 查询 404/无数据）时不渲染
+ * - ticket 非 service_catalog 来源（by-ticket 成功查询无数据）时不渲染
  * - service_catalog 来源且已有交付任务时渲染任务表格，含关联CI的点击跳转
  * - service_catalog 来源但尚无交付任务时渲染"开始交付"按钮，点击调用 startProvisioning
  * - 没有关联CI时不渲染CI跳转按钮
  */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ServiceRequestPanel from '../ServiceRequestPanel';
 
@@ -45,21 +45,24 @@ describe('ServiceRequestPanel', () => {
     jest.clearAllMocks();
   });
 
-  it('renders nothing when the ticket has no linked service request (404 / lookup failure)', async () => {
-    mockGetByTicket.mockRejectedValueOnce(new Error('No service request linked to this ticket'));
-
-    const { container } = render(<ServiceRequestPanel ticketId={101} />);
-
-    await waitFor(() => {
-      expect(mockGetByTicket).toHaveBeenCalledWith(101);
-    });
-
-    // 加载结束后应该静默不渲染，不出现任何卡片/错误提示
-    expect(container).toBeEmptyDOMElement();
-    expect(screen.queryByText('服务申请与规格参数')).not.toBeInTheDocument();
+  it('renders nothing after a successful lookup confirms no linked service request', async () => {
+    mockGetByTicket.mockResolvedValueOnce(null);
+    let view: ReturnType<typeof render>;
+    await act(async () => { view = render(<ServiceRequestPanel ticketId={101} />); });
+    expect(mockGetByTicket).toHaveBeenCalledWith(101);
+    expect(view!.container).toBeEmptyDOMElement();
     expect(mockListTasks).not.toHaveBeenCalled();
   });
 
+  it('shows a lookup failure and retries instead of claiming no linked request', async () => {
+    mockGetByTicket.mockRejectedValueOnce(new Error('Service request lookup failed')).mockResolvedValueOnce(null);
+    const { container } = render(<ServiceRequestPanel ticketId={101} />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Service request lookup failed');
+    await userEvent.setup().click(screen.getByRole('button', { name: '重试' }));
+    await waitFor(() => expect(container).toBeEmptyDOMElement());
+    expect(mockGetByTicket).toHaveBeenCalledTimes(2);
+    expect(mockListTasks).not.toHaveBeenCalled();
+  });
   it('renders the provisioning task table when tasks already exist, plus a clickable linked-CI reference', async () => {
     mockGetByTicket.mockResolvedValueOnce({
       id: 55,
@@ -157,5 +160,17 @@ describe('ServiceRequestPanel', () => {
     expect(buttonElement).toBeDisabled();
     expect(buttonElement).toHaveAttribute('title', '申请人不能交付自己提交的服务请求');
     expect(mockStartProvisioning).not.toHaveBeenCalled();
+  });
+  it.each([
+    ['awaiting_approval', '待审批'], ['fulfilling', '履约中'], ['unknown', '结果未知'],
+    ['completed', '已完成'], ['rejected', '已拒绝'], ['cancelled', '已取消'],
+  ])('renders authoritative access state %s without manual delivery', async (state, label) => {
+    mockGetByTicket.mockResolvedValueOnce({ id: 80, fulfillmentState: state,
+      actions: { provision: { allowed: false, reason: 'managed_access_requires_verified_delegation' } } });
+    mockListTasks.mockResolvedValueOnce([]);
+    render(<ServiceRequestPanel ticketId={80} />);
+    expect(await screen.findByText(label)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '开始交付' })).not.toBeInTheDocument();
+    expect(screen.queryByText('尚未开始交付')).not.toBeInTheDocument();
   });
 });

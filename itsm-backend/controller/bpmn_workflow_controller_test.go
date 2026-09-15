@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"testing"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -62,6 +64,10 @@ type fakeTaskService struct {
 	historyErr         error
 	listCtx            context.Context
 	statsCtx           context.Context
+}
+
+func (f *fakeTaskService) ProjectTaskView(ctx context.Context, task *ent.ProcessTask) (*dto.BPMNTaskResponse, error) {
+	return dto.ToBPMNTaskResponse(task, nil), nil
 }
 
 func (f *fakeTaskService) GetTask(ctx context.Context, taskID string) (*ent.ProcessTask, error) {
@@ -176,6 +182,18 @@ func (e *fakeProcessEngine) StartProcess(ctx context.Context, key, biz string, b
 	return nil, nil
 }
 
+func (e *fakeProcessEngine) StartProcessTx(context.Context, *ent.Tx, string, string, string, int, map[string]interface{}) (*ent.ProcessInstance, error) {
+	return nil, errors.New("transactional start is not implemented by this controller fixture")
+}
+
+func (e *fakeProcessEngine) TerminateProcessTx(context.Context, *ent.Tx, string, string) error {
+	return errors.New("transactional termination is not implemented by this controller fixture")
+}
+
+func (e *fakeProcessEngine) CompleteTaskTx(context.Context, *ent.Tx, string, map[string]interface{}) error {
+	return errors.New("transactional completion is not implemented by this controller fixture")
+}
+
 func (e *fakeProcessEngine) CompleteTask(ctx context.Context, taskID string, vars map[string]interface{}) error {
 	return e.taskSvc.CompleteTask(ctx, taskID, vars)
 }
@@ -194,7 +212,7 @@ func newBPMNWorkflowTestRouter(t *testing.T) (*gin.Engine, *fakeTaskService) {
 	t.Cleanup(func() { _ = client.Close() })
 	fakeTask := &fakeTaskService{}
 	engine := &fakeProcessEngine{taskSvc: fakeTask}
-	ctrl := NewBPMNWorkflowController(engine, nil)
+	ctrl := NewBPMNWorkflowController(engine, nil, executionfixture.Standard())
 
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -448,4 +466,18 @@ func TestBPMNWorkflowController_SuperAdminPassesRoleGate(t *testing.T) {
 	// Passes the role gate; will fail past it (nil processEngine) but must
 	// not be rejected by RequireRole specifically.
 	assert.NotEqual(t, http.StatusForbidden, w.Code)
+}
+
+func (f *fakeTaskService) GetTaskView(ctx context.Context, reference string) (*dto.BPMNTaskResponse, error) {
+	var task *ent.ProcessTask
+	var err error
+	if id, parseErr := strconv.Atoi(reference); parseErr == nil {
+		task, err = f.GetTaskByID(ctx, id)
+	} else {
+		task, err = f.GetTask(ctx, reference)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return f.ProjectTaskView(ctx, task)
 }

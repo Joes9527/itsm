@@ -3,6 +3,8 @@ package schema
 import (
 	"time"
 
+	"itsm-backend/handlers/shared/slacontract"
+
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
@@ -26,16 +28,16 @@ func (Ticket) Fields() []ent.Field {
 		field.String("status").
 			Comment("状态").
 			Default("open"),
-		field.String("type").
-			Comment("工单类型").
-			Default("incident"),
+		field.String("generic_subtype").
+			Comment("Generic-only business subtype; professional subtypes belong to their extensions").Optional(),
 		field.String("source").
 			Comment("工单来源：manual=手动创建，service_catalog=服务目录申请").
 			Default("manual").
 			Optional(),
 		field.String("record_class").
-			Comment("WorkItem 记录类型：generic/service_request_item/incident/problem/change_request/catalog_task；创建后不可变，由领域服务在事务内校验，不在 schema 层强制").
-			Default("generic"),
+			Comment("WorkItem 记录类型：generic/service_request_item/incident/problem/change_request/catalog_task；创建后不可变，由领域服务在事务内校验").
+			Default("generic").
+			Immutable(),
 		field.Int("opened_by_id").
 			Comment("实际录入/触发者ID（区别于 requester_id 服务接受者）").
 			Optional(),
@@ -47,7 +49,7 @@ func (Ticket) Fields() []ent.Field {
 			Default("medium"),
 		field.String("ticket_number").
 			Comment("工单编号").
-			Unique().
+			Immutable().
 			NotEmpty(),
 		field.Int("requester_id").
 			Comment("申请人ID").
@@ -79,6 +81,10 @@ func (Ticket) Fields() []ent.Field {
 		field.Int("parent_ticket_id").
 			Comment("父工单ID").
 			Optional(),
+		field.Int("sla_cycle_number").Default(0).NonNegative(),
+		field.Time("sla_cycle_started_at").Optional(),
+		field.Int("sla_paused_minutes").Default(0).NonNegative(),
+		field.JSON("applied_sla_policy", &slacontract.Policy{}).Optional(),
 		field.Int("sla_definition_id").
 			Comment("SLA定义ID").
 			Optional(),
@@ -158,7 +164,6 @@ func (Ticket) Edges() []ent.Edge {
 		edge.To("tags", TicketTag.Type),
 		edge.To("related_tickets", Ticket.Type).
 			Comment("双向关联工单"),
-		edge.To("approvals", TicketApproval.Type),
 		edge.To("workflow_records", TicketWorkflowRecord.Type),
 		edge.To("notifications", TicketNotification.Type),
 		edge.To("cc_users", TicketCC.Type),
@@ -176,17 +181,18 @@ func (Ticket) Edges() []ent.Edge {
 			Field("assignee_id").
 			Unique(),
 		edge.From("category", TicketCategory.Type).
-			Ref("tickets"),
+			Ref("tickets").
+			Field("category_id").
+			Unique(),
 	}
 }
 
 // Indexes of the Ticket.
 func (Ticket) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("ticket_number").Unique(),
+		index.Fields("tenant_id", "ticket_number").Unique(),
 		index.Fields("status"),
 		index.Fields("priority"),
-		index.Fields("type"), // Added index for type
 		index.Fields("requester_id"),
 		index.Fields("assignee_id"),
 		index.Fields("created_at"),

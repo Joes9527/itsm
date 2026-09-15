@@ -1,5 +1,6 @@
 'use client';
 
+import styles from './BPMNDesigner.module.css';
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { MenuProps } from 'antd';
 import { Button, Tooltip, App, Input, Space, Dropdown } from 'antd';
@@ -1078,13 +1079,13 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
   ];
 
   return (
-    <div style={{ display: 'flex', height, border: '1px solid #d9d9d9', borderRadius: '6px', position: 'relative' }}>
+    <div className={styles.host} style={{ display: 'flex', height, border: '1px solid var(--color-border)', borderRadius: '6px', position: 'relative' }}>
       {/* 工具栏 */}
       <div
         style={{
           width: 48,
-          borderRight: '1px solid #d9d9d9',
-          background: '#f5f5f5',
+          borderRight: '1px solid var(--color-border)',
+          background: 'var(--color-bg-tertiary)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -1120,7 +1121,7 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
           />
         </Tooltip>
 
-        <div style={{ height: 1, width: '80%', background: '#e8e8e8', margin: '8px 0' }} />
+        <div style={{ height: 1, width: '80%', background: 'var(--color-border)', margin: '8px 0' }} />
 
         <Tooltip title="复制 (Ctrl+C)" placement="right">
           <Button
@@ -1156,7 +1157,7 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
           />
         </Tooltip>
 
-        <div style={{ height: 1, width: '80%', background: '#e8e8e8', margin: '8px 0' }} />
+        <div style={{ height: 1, width: '80%', background: 'var(--color-border)', margin: '8px 0' }} />
 
         <Dropdown menu={{ items: alignMenuItems }} placement="bottomRight" trigger={['click']}>
           <Tooltip title="对齐" placement="right">
@@ -1198,7 +1199,7 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
       </div>
 
       {/* BPMN 图 */}
-      <div ref={containerRef} style={{ flex: 1, position: 'relative' }} />
+      <div className={styles.sheet} ref={containerRef} style={{ flex: 1, position: 'relative' }} />
 
       {/* 顶部搜索栏 */}
       <div style={{
@@ -1207,8 +1208,9 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
         left: '50%',
         transform: 'translateX(-50%)',
         width: 300,
+        maxWidth: 'calc(100% - 120px)',
         zIndex: 10,
-        background: 'white',
+        background: 'var(--color-bg-secondary)',
         borderRadius: '6px',
         boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
       }}>
@@ -1231,7 +1233,7 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
           right: 16,
           display: 'flex',
           gap: 4,
-          background: 'white',
+          background: 'var(--color-bg-secondary)',
           padding: 4,
           borderRadius: 6,
           boxShadow: '0 2px 8px rgba(0,0,0,0.15)',

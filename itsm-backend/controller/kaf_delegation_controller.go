@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"itsm-backend/database"
+
 	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/service"
@@ -22,9 +24,9 @@ type KafDelegationController struct {
 	processEngine service.ProcessEngine
 }
 
-func NewKafDelegationController(client *ent.Client, processEngine service.ProcessEngine) *KafDelegationController {
+func NewKafDelegationController(client *ent.Client, processEngine service.ProcessEngine, execution *database.ExecutionPolicy) *KafDelegationController {
 	return &KafDelegationController{
-		service:       service.NewKafDelegationService(client),
+		service:       service.NewKafDelegationService(client, execution),
 		processEngine: processEngine,
 	}
 }
@@ -72,7 +74,7 @@ func (c *KafDelegationController) ListDelegated(ctx *gin.Context) {
 		writeKafDelegationError(ctx, err)
 		return
 	}
-	common.Success(ctx, gin.H{"items": page.Items, "limit": page.Limit, "nextCursor": page.NextCursor})
+	common.Success(ctx, page)
 }
 
 func (c *KafDelegationController) ExecuteAction(ctx *gin.Context) {

@@ -1,14 +1,24 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	"itsm-backend/authorization"
+	"itsm-backend/config"
+	"itsm-backend/database"
+	creation "itsm-backend/handlers/common/workitemcreation"
+
 	"itsm-backend/common"
+	"itsm-backend/common/executionscope"
+	"itsm-backend/common/workitemidentity"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/permission"
@@ -24,10 +34,13 @@ import (
 	"itsm-backend/ent/rolepermission"
 	"itsm-backend/ent/ticketassignmentrule"
 	"itsm-backend/ent/user"
-	"itsm-backend/ent/workflowtask"
+	"itsm-backend/handlers/shared/workflowcallback"
+	"itsm-backend/metrics"
 	"itsm-backend/service/approver"
 	"itsm-backend/service/bpmn"
 
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"go.uber.org/zap"
@@ -43,10 +56,13 @@ type ProcessEngine interface {
 	TaskService() TaskService
 	// 流程执行
 	StartProcess(ctx context.Context, processDefinitionKey string, businessKey string, businessType string, businessID int, variables map[string]interface{}) (*ent.ProcessInstance, error)
+	StartProcessTx(ctx context.Context, tx *ent.Tx, processDefinitionKey string, businessKey string, businessType string, businessID int, variables map[string]interface{}) (*ent.ProcessInstance, error)
 	CompleteTask(ctx context.Context, taskID string, variables map[string]interface{}) error
+	CompleteTaskTx(ctx context.Context, tx *ent.Tx, taskID string, variables map[string]interface{}) error
 	SuspendProcess(ctx context.Context, processInstanceID string, reason string) error
 	ResumeProcess(ctx context.Context, processInstanceID string) error
 	TerminateProcess(ctx context.Context, processInstanceID string, reason string) error
+	TerminateProcessTx(ctx context.Context, tx *ent.Tx, processInstanceID string, reason string) error
 }
 
 // ProcessDefinitionService 流程定义服务接口
@@ -73,6 +89,8 @@ type ProcessInstanceService interface {
 
 // TaskService 任务管理服务接口
 type TaskService interface {
+	GetTaskView(ctx context.Context, reference string) (*dto.BPMNTaskResponse, error)
+	ProjectTaskView(ctx context.Context, task *ent.ProcessTask) (*dto.BPMNTaskResponse, error)
 	GetTask(ctx context.Context, taskID string) (*ent.ProcessTask, error)
 	GetTaskByID(ctx context.Context, id int) (*ent.ProcessTask, error)
 	CompleteTaskByID(ctx context.Context, id int, variables map[string]interface{}) error
@@ -97,17 +115,23 @@ type TaskService interface {
 // CustomProcessEngine 是ProcessEngine接口的实现
 // 充当领域服务(Domain Service)，协调流程定义、实例和任务实体的生命周期
 type CustomProcessEngine struct {
-	client                *ent.Client
-	logger                *zap.SugaredLogger
-	parser                *BPMNParser            // 使用自定义的BPMN解析器
-	exprEngine            *ExpressionEngine      // 表达式引擎
-	expressionVars        map[string]interface{} // 表达式变量
-	callbackRegistry      *bpmn.CallbackRegistry // 服务任务回调注册中心
-	groupResolver         *bpmn.GroupResolver    // 审批组解析器：candidateGroups → 候选用户
-	participationResolver *bpmnParticipationResolver
-	callbackOutbox        *bpmnCallbackOutbox
-	callbackExecutionKeys *[]string
-	transactionBound      bool
+	execution                   *database.ExecutionPolicy
+	accessCompletionContributor AccessCompletionContributor
+	client                      *ent.Client
+	logger                      *zap.SugaredLogger
+	parser                      *BPMNParser            // 使用自定义的BPMN解析器
+	exprEngine                  *ExpressionEngine      // 表达式引擎
+	expressionVars              map[string]interface{} // 表达式变量
+	publicationKAFConfig        *config.Config
+	callbackRegistry            *bpmn.CallbackRegistry // 服务任务回调注册中心
+	groupResolver               *bpmn.GroupResolver    // 审批组解析器：candidateGroups → 候选用户
+	participationResolver       *bpmnParticipationResolver
+	instanceAccessPolicy        *bpmnInstanceAccessPolicy
+	callbackOutbox              *bpmnCallbackOutbox
+	callbackExecutionKeys       *[]string
+	transactionBound            bool
+	owningTx                    *ent.Tx
+	directory                   database.DirectorySnapshot
 	// 内部服务
 	processDefinitionService *bpmnProcessDefinitionService
 	processInstanceService   *bpmnProcessInstanceService
@@ -126,10 +150,12 @@ type kafCompletionFence struct {
 }
 
 // NewCustomProcessEngine 创建自定义流程引擎实例
-func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger) ProcessEngine {
+func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) ProcessEngine {
 	groupResolver := bpmn.NewGroupResolver(client)
 	participationResolver := newBPMNParticipationResolver(client, groupResolver)
+	instanceAccessPolicy := newBPMNInstanceAccessPolicy(client, participationResolver)
 	engine := &CustomProcessEngine{
+		execution:             execution,
 		client:                client,
 		logger:                logger,
 		parser:                NewBPMNParser(),
@@ -138,17 +164,19 @@ func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger) Proce
 		callbackRegistry:      bpmn.NewCallbackRegistry(client, logger),
 		groupResolver:         groupResolver,
 		participationResolver: participationResolver,
+		instanceAccessPolicy:  instanceAccessPolicy,
 	}
 	engine.auditService = NewBPMNAuditService(client, logger)
-	engine.callbackOutbox = &bpmnCallbackOutbox{client: client, executor: engine}
+	engine.auditService.instanceAccessPolicy = instanceAccessPolicy
+	engine.callbackOutbox = &bpmnCallbackOutbox{client: client, executor: engine, execution: execution}
 	engine.processDefinitionService = &bpmnProcessDefinitionService{client: client, logger: logger}
-	engine.processInstanceService = &bpmnProcessInstanceService{client: client, logger: logger, participationResolver: participationResolver, auditService: engine.auditService}
+	engine.processInstanceService = &bpmnProcessInstanceService{execution: execution, client: client, logger: logger, instanceAccessPolicy: instanceAccessPolicy, auditService: engine.auditService}
 	// taskService 持有 engine 自身的引用（而不是每次调用再 NewCustomProcessEngine 造一个新的）：
 	// callbackRegistry 是 engine 级别的状态，bootstrap 在各领域 service 构造完成后往
 	// 这一个 engine 的 registry 里注入 TicketService/IncidentService。任务完成路径若临时
 	// 新建 engine，持久化执行和 worker 恢复都会拿到未注入的空 registry。
-	engine.taskService = &bpmnTaskService{client: client, logger: logger, groupResolver: engine.groupResolver, participationResolver: participationResolver, engine: engine}
-	engine.kafDelegationService = NewKafDelegationService(client)
+	engine.taskService = &bpmnTaskService{client: client, logger: logger, groupResolver: engine.groupResolver, participationResolver: participationResolver, instanceAccessPolicy: instanceAccessPolicy, engine: engine}
+	engine.kafDelegationService = NewKafDelegationService(client, execution)
 	// 注册流程相关的内置函数
 	engine.registerProcessFunctions()
 
@@ -159,10 +187,15 @@ func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger) Proce
 func (e *CustomProcessEngine) registerProcessFunctions() {
 	// 获取任务列表
 	e.exprEngine.RegisterFunction("getTasks", func(ctx context.Context, assignee string) []interface{} {
-		// 从数据库查询任务
-		tasks, err := e.client.WorkflowTask.Query().
-			Where(workflowtask.Assignee(assignee)).
-			Where(workflowtask.CompletedAtIsNil()).
+		tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+		if tenantID <= 0 {
+			e.logger.Warnw("Failed to query tasks: tenant context is required")
+			return []interface{}{}
+		}
+		tasks, err := e.client.ProcessTask.Query().
+			Where(processtask.Assignee(assignee)).
+			Where(processtask.TenantID(tenantID)).
+			Where(processtask.StatusNotIn(common.ProcessTaskStatusCompleted, common.ProcessTaskStatusCancelled)).
 			All(ctx)
 		if err != nil {
 			e.logger.Warnw("Failed to query tasks", "error", err)
@@ -172,8 +205,8 @@ func (e *CustomProcessEngine) registerProcessFunctions() {
 		for i, task := range tasks {
 			result[i] = map[string]interface{}{
 				"id":          task.TaskID,
-				"name":        task.Name,
-				"instance_id": task.InstanceID,
+				"name":        task.TaskName,
+				"instance_id": task.ProcessInstanceID,
 			}
 		}
 		return result
@@ -216,10 +249,11 @@ func (e *CustomProcessEngine) ProcessDefinitionService() ProcessDefinitionServic
 // ProcessInstanceService 返回流程实例服务
 func (e *CustomProcessEngine) ProcessInstanceService() ProcessInstanceService {
 	return &bpmnProcessInstanceService{
-		client:                e.client,
-		logger:                e.logger,
-		participationResolver: e.participationResolver,
-		auditService:          e.auditService,
+		execution:            e.execution,
+		client:               e.client,
+		logger:               e.logger,
+		instanceAccessPolicy: e.instanceAccessPolicy,
+		auditService:         e.auditService,
 	}
 }
 
@@ -239,19 +273,101 @@ func (e *CustomProcessEngine) CallbackRegistry() *bpmn.CallbackRegistry {
 }
 
 func resolveProcessInitiator(ctx context.Context, variables map[string]interface{}) string {
+	if _, present := bpmnAccessScopeValue(ctx); present {
+		if scope, err := BPMNAccessScopeFromContext(ctx); err == nil {
+			return strconv.Itoa(scope.UserID)
+		}
+		return "system"
+	}
 	if userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int); userID > 0 {
 		return strconv.Itoa(userID)
 	}
-	for _, key := range []string{"requester_id", "requesterId"} {
-		if requesterID := bpmn.GetIntFromVars(variables, key); requesterID > 0 {
-			return strconv.Itoa(requesterID)
-		}
+	triggeredBy := strings.TrimSpace(bpmn.GetStringFromVars(variables, "triggered_by"))
+	if triggeredBy == "system" {
+		return "system"
+	}
+	if actorID, err := strconv.Atoi(triggeredBy); err == nil && actorID > 0 {
+		return strconv.Itoa(actorID)
 	}
 	return "system"
 }
 
+// trustedBPMNProcessStartActorID extracts the authoritative actor from the
+// request context. Callers that cross an asynchronous boundary snapshot this
+// identity before detaching from the request context.
+func trustedBPMNProcessStartActorID(ctx context.Context, tenantID int) (int, bool, error) {
+	if _, present := bpmnAccessScopeValue(ctx); present {
+		scope, err := BPMNAccessScopeFromContext(ctx)
+		if err != nil || scope.TenantID != tenantID {
+			return 0, false, common.NewForbiddenError("流程启动用户租户不一致")
+		}
+		return scope.UserID, true, nil
+	}
+	if userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int); userID > 0 {
+		return userID, true, nil
+	}
+	return 0, false, nil
+}
+
+// resolveBPMNProcessStartActor resolves the durable audit actor from trusted
+// workflow context. Process-start request variables are not an HTTP identity
+// source: triggered_by is consumed only for trusted application-service starts.
+func (e *CustomProcessEngine) resolveBPMNProcessStartActor(ctx context.Context, client *ent.Client, tenantID int, variables map[string]interface{}) (*ent.User, string, error) {
+	actorID, hasTrustedActor, err := trustedBPMNProcessStartActorID(ctx, tenantID)
+	if err != nil {
+		return nil, "", err
+	}
+	if !hasTrustedActor {
+		triggeredBy := strings.TrimSpace(bpmn.GetStringFromVars(variables, "triggered_by"))
+		if triggeredBy == "system" {
+			return nil, "system", nil
+		}
+		if triggeredBy != "" {
+			parsed, err := strconv.Atoi(triggeredBy)
+			if err != nil || parsed <= 0 {
+				return nil, "", fmt.Errorf("流程启动用户无效")
+			}
+			actorID = parsed
+		} else {
+			return nil, "", fmt.Errorf("流程启动缺少权威操作用户")
+		}
+	}
+
+	if authorized, ok := ctx.Value(intakeStartActorKey{}).(intakeStartActor); ok {
+		if !hasTrustedActor || authorized.actor.ID != actorID || authorized.targetTenantID != tenantID || authorized.workItemID <= 0 || authorized.receiptID <= 0 || !authorized.actor.Active {
+			return nil, "", fmt.Errorf("intake process actor scope mismatch")
+		}
+		return &authorized.actor, authorized.actor.Name, nil
+	}
+
+	actor, err := e.loadTaskMutationActor(ctx, client, BPMNAccessScope{UserID: actorID, TenantID: tenantID})
+	if err != nil {
+		return nil, "", fmt.Errorf("获取流程启动用户失败: %w", err)
+	}
+	return actor, actor.Name, nil
+}
+
 // StartProcess 启动流程实例
 func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitionKey string, businessKey string, businessType string, businessID int, variables map[string]interface{}) (*ent.ProcessInstance, error) {
+	if e.transactionBound {
+		return e.startProcessWithClient(ctx, processDefinitionKey, businessKey, businessType, businessID, variables)
+	}
+	tx, err := e.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	if err != nil {
+		return nil, fmt.Errorf("开启流程启动事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	instance, err := e.StartProcessTx(ctx, tx, processDefinitionKey, businessKey, businessType, businessID, variables)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("提交流程启动事务失败: %w", err)
+	}
+	return instance, nil
+}
+
+func (e *CustomProcessEngine) startProcessWithClient(ctx context.Context, processDefinitionKey string, businessKey string, businessType string, businessID int, variables map[string]interface{}) (*ent.ProcessInstance, error) {
 	tenantID, err := bpmnAuthorizedTenantFromContext(ctx)
 	if err != nil {
 		return nil, err
@@ -259,24 +375,33 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 	if legacyTenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); legacyTenantID > 0 && legacyTenantID != tenantID {
 		return nil, common.NewForbiddenError("BPMN 启动租户上下文不一致")
 	}
-	tx, err := e.client.Tx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("开启流程启动事务失败: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	executionKeys := make([]string, 0)
-	txEngine := e.forClient(tx.Client(), &executionKeys)
-
-	query := tx.Client().ProcessDefinition.Query().
-		Where(processdefinition.Key(processDefinitionKey)).
-		Where(processdefinition.IsActive(true)).
-		Where(processdefinition.IsLatest(true))
-	query = query.Where(processdefinition.TenantID(tenantID))
-	definition, err := query.First(ctx)
+	definition, err := selectExecutableProcessDefinition(ctx, e.client, tenantID, processDefinitionKey, 0)
 	if err != nil {
 		return nil, fmt.Errorf("获取流程定义失败: %w", err)
 	}
+	if definition == nil {
+		return nil, common.NewNotFoundError("executable process definition")
+	}
 
+	return e.startResolvedProcess(ctx, definition, businessKey, businessType, businessID, variables, fmt.Sprintf("PI-%s-%d", processDefinitionKey, time.Now().UnixNano()), "")
+}
+
+// startResolvedProcess shares the atomic engine path for resolved and key-based starts.
+func (e *CustomProcessEngine) startResolvedProcess(ctx context.Context, definition *ent.ProcessDefinition, businessKey, businessType string, businessID int, variables map[string]interface{}, instanceIdentity, startDigest string) (*ent.ProcessInstance, error) {
+	// The immutable execution reference must be admitted in the owning start
+	// transaction, before creating an instance, initial tasks, or audit records.
+	if e.execution.IsCandidate() {
+		var workItemID *int
+		if workitemidentity.IsRecordClass(businessType) {
+			workItemID = &businessID
+		}
+		if err := requireBPMNExecution(ctx, e.owningTx, e.execution, definition.TenantID, workItemID); err != nil {
+			return nil, err
+		}
+	}
+	if err := validateWorkItemStartTiming(ctx, e.client, businessKey, businessType, definition.TenantID, businessID, variables); err != nil {
+		return nil, err
+	}
 	bpmnDefinitions, err := e.parser.ParseXML(definition.BpmnXML)
 	if err != nil {
 		return nil, fmt.Errorf("解析BPMN失败: %w", err)
@@ -291,11 +416,24 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 		return nil, fmt.Errorf("流程缺少开始事件")
 	}
 	startEvent := process.StartEvents[0]
+	if err := lockBPMNBusinessItem(ctx, e.client, definition.TenantID, businessID, businessType); err != nil {
+		return nil, err
+	}
+	boundProcess := false
+	for _, node := range process.UserTasks {
+		if node.AssigneeSource != "" {
+			boundProcess = true
+			if err := fenceBPMNBoundCreation(ctx, e.client, definition.TenantID, businessID); err != nil {
+				return nil, err
+			}
+			break
+		}
+	}
 
-	createInstance := tx.Client().ProcessInstance.Create().
-		SetProcessInstanceID(fmt.Sprintf("PI-%s-%d", processDefinitionKey, time.Now().UnixNano())).
+	createInstance := e.client.ProcessInstance.Create().
+		SetProcessInstanceID(instanceIdentity).
 		SetBusinessKey(businessKey).
-		SetProcessDefinitionKey(processDefinitionKey).
+		SetProcessDefinitionKey(definition.Key).
 		SetProcessDefinitionID(definition.ID).
 		SetStatus("running").
 		SetVariables(variables).
@@ -304,11 +442,19 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 		SetTenantID(definition.TenantID).
 		SetCurrentActivityID(startEvent.ID).
 		SetCurrentActivityName(startEvent.Name)
+	if startDigest != "" {
+		createInstance.SetStartRequestDigest(startDigest)
+	}
 	if businessType != "" {
 		createInstance = createInstance.SetBusinessType(businessType)
 	}
 	if businessID > 0 {
 		createInstance = createInstance.SetBusinessID(businessID)
+	}
+	// validateWorkItemStartTiming has resolved this canonical class and ID in
+	// the current tenant transaction. Release/independent identities stay NULL.
+	if workitemidentity.IsRecordClass(businessType) {
+		createInstance.SetExecutionWorkItemID(businessID)
 	}
 	instance, err := createInstance.Save(ctx)
 	if err != nil {
@@ -325,25 +471,37 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 	}
 
 	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, definition.TenantID)
-	if err := txEngine.executeStep(ctx, instance, process, startEvent.ID, variables); err != nil {
+	actor, userName, err := e.resolveLifecycleStartActor(ctx, definition.TenantID, variables, boundProcess)
+	if err != nil {
 		return nil, err
 	}
-
 	userID := 0
-	userName := ""
-	if u, ok := ctx.Value("user").(*ent.User); ok {
-		userID = u.ID
-		userName = u.Name
+	if actor != nil {
+		userID = actor.ID
 	}
-	if err := txEngine.auditService.RecordProcessStarted(ctx, instance, userID, userName, variables); err != nil {
+	if _, trusted, err := trustedBPMNProcessStartActorID(ctx, definition.TenantID); err != nil {
+		return nil, err
+	} else if trusted && actor != nil {
+		ctx = context.WithValue(ctx, callbackActorKey{}, callbackActor{actor.ID, actor.TenantID, definition.TenantID, "bpmn_start"})
+	}
+	if err := e.executeStep(ctx, instance, process, startEvent.ID, variables); err != nil {
 		return nil, err
 	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("提交流程启动事务失败: %w", err)
-	}
 
-	instance.Unwrap()
-	e.processCommittedCallbackKeys(ctx, definition.TenantID, executionKeys)
+	auditVariables := variables
+	if provenance, ok := ctx.Value(intakeStartActorKey{}).(intakeStartActor); ok {
+		// Identity evidence belongs to the audit. The frozen workflow input also
+		// determines the start digest and must remain unchanged across upgrades.
+		auditVariables = make(map[string]interface{}, len(variables)+2)
+		for key, value := range variables {
+			auditVariables[key] = value
+		}
+		auditVariables["actor_tenant_id"] = provenance.actor.TenantID
+		auditVariables["intake_request_id"] = provenance.receiptID
+	}
+	if err := e.auditService.RecordProcessStarted(ctx, instance, userID, userName, auditVariables); err != nil {
+		return nil, err
+	}
 	return instance, nil
 }
 
@@ -357,29 +515,26 @@ type completedTaskEffect struct {
 // post-commit attempt is only a latency optimization; durable recovery owns any
 // callback failure after the task transaction commits.
 func (e *CustomProcessEngine) CompleteTask(ctx context.Context, taskID string, variables map[string]interface{}) error {
-	participantVariables, err := validateAndCloneBPMNParticipantVariables(variables, false)
-	if err != nil {
-		return err
-	}
-	tx, err := e.client.Tx(ctx)
+	tx, err := e.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return fmt.Errorf("开启任务完成事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	executionKeys := make([]string, 0)
-	effect, err := e.completeTaskWithClient(ctx, tx.Client(), taskID, participantVariables, &executionKeys)
+	err = e.CompleteTaskTx(ctx, tx, taskID, variables)
 	if err != nil {
+		var conflict *bpmnTaskMutationConflict
+		if errors.As(err, &conflict) {
+			if !conflict.dirty {
+				return e.commitTaskMutationRejected(ctx, tx, conflict.task, conflict.command)
+			}
+			_ = tx.Rollback()
+			return e.recordTaskMutationRejected(ctx, conflict.taskID, conflict.tenantID, conflict.command, conflict.actor)
+		}
 		return err
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("提交任务完成事务失败: %w", err)
 	}
-	effect.task.Unwrap()
-	if tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); tenantID <= 0 {
-		ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, effect.task.TenantID)
-	}
-	e.processCommittedCallbackKeys(ctx, effect.task.TenantID, executionKeys)
-	e.executeAsyncUserTaskCompletion(ctx, effect)
 	return nil
 }
 
@@ -393,6 +548,10 @@ func (e *CustomProcessEngine) completeTaskWithClient(ctx context.Context, client
 	if err != nil {
 		return nil, fmt.Errorf("获取任务失败: %w", err)
 	}
+	task, err = lockBPMNTaskLifecycle(ctx, client, task)
+	if err != nil {
+		return nil, err
+	}
 	if err := e.authorizeTaskActorWithClient(ctx, client, task); err != nil {
 		return nil, err
 	}
@@ -403,8 +562,23 @@ func (e *CustomProcessEngine) completeTaskWithClient(ctx context.Context, client
 // authorized that exact task. Vote uses it for the synthetic parent after it
 // authorizes the child and locks/validates the parent in the same transaction.
 func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Context, client *ent.Client, task *ent.ProcessTask, variables map[string]interface{}, executionKeys *[]string) (*completedTaskEffect, error) {
-	if task.Status == common.ProcessTaskStatusCompleted || task.Status == common.ProcessTaskStatusCancelled {
-		return nil, common.NewConflictError("process task completion", "task is no longer active")
+	responsibleID, err := boundTaskResponsibleID(ctx, client, task)
+	if err != nil {
+		return nil, err
+	}
+	mutationActor, err := e.captureTaskMutationActor(ctx, client, task)
+	if err != nil {
+		return nil, err
+	}
+	if mutationActor.userID > 0 && !mutationActor.internal {
+		actor, err := e.loadLifecycleActor(ctx, client, task, BPMNAccessScope{UserID: mutationActor.userID, TenantID: task.TenantID})
+		if err != nil {
+			return nil, err
+		}
+		ctx = context.WithValue(ctx, callbackActorKey{}, callbackActor{actor.ID, actor.TenantID, task.TenantID, "bpmn_task_complete"})
+	}
+	if err := ValidateBPMNTaskLifecycle(BPMNTaskCommandComplete, task.Status); err != nil {
+		return nil, newBPMNTaskMutationConflict(task, BPMNTaskCommandComplete, false, mutationActor)
 	}
 	instance, err := client.ProcessInstance.Query().Where(
 		processinstance.ID(task.ProcessInstanceID), processinstance.TenantID(task.TenantID),
@@ -430,7 +604,7 @@ func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Conte
 		return nil, fmt.Errorf("解析BPMN失败: 流程定义不包含可执行流程")
 	}
 	process := definitions.Processes[0]
-	if err := e.validateTicketRecordClassInputWithClient(ctx, client, instance, variables); err != nil {
+	if err := e.validateWorkItemRecordClassInputWithClient(ctx, client, instance, variables); err != nil {
 		return nil, err
 	}
 	descriptor, err := e.descriptorForProcessTask(ctx, client, task, process)
@@ -443,14 +617,44 @@ func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Conte
 
 	var handler bpmn.ServiceTaskHandlerInterface
 	callbackVariables := map[string]interface{}{}
+	callbackPlan := CallbackEnqueuePlan{}
+	synchronousCallback := false
 	if descriptor.HandlerID != bpmnNoUserTaskCallbackHandlerID {
 		handler = e.resolveCallbackDescriptorHandler(descriptor)
 		if handler == nil {
 			return nil, fmt.Errorf("回调处理器不可用: %s", task.TaskDefinitionKey)
 		}
-		callbackVariables, err = filterBPMNCallbackPayload(handler, descriptor.Action, variables)
-		if err != nil {
-			return nil, err
+		if !isAsyncHandler(handler) {
+			optionalDeclared := false
+			// KAF creates a synthetic ProcessTask for a service-task node. It is
+			// fenced by its own ledger and has no UserTask definition to inspect.
+			_, kafScoped := bpmn.KafActionScopeFromContext(ctx)
+			if descriptor.TaskType != bpmn.KafDelegateTaskType && !kafScoped {
+				userTask := e.findUserTask(process, task.TaskDefinitionKey)
+				if userTask == nil {
+					return nil, fmt.Errorf("用户任务不存在于流程定义: %s", task.TaskDefinitionKey)
+				}
+				var optionalErr error
+				optionalDeclared, optionalErr = userTask.CallbackOptionalDeclared()
+				if optionalErr != nil {
+					return nil, optionalErr
+				}
+			}
+			action := descriptor.Action
+			if handler.GetTaskType() == "cc_task" {
+				action = ""
+			}
+			callbackPlan, err = BuildCallbackEnqueuePlan(CallbackDescriptor{
+				HandlerID: descriptor.HandlerID, TaskType: descriptor.TaskType, Action: action, ConfigRef: descriptor.ConfigRef,
+			}, variables, optionalDeclared, e.callbackRegistry)
+			if err != nil {
+				return nil, err
+			}
+			callbackVariables = callbackPlan.Payload
+			// KAF's completion ledger already owns its pause/resume boundary. Its
+			// callback remains durable, but it must not turn a delegated service
+			// task into the ordinary UserTask effect gate.
+			synchronousCallback = !kafScoped && task.TaskType != bpmn.KafDelegateTaskType
 		}
 	}
 
@@ -474,36 +678,46 @@ func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Conte
 	}
 	taskVariablesBefore := task.TaskVariables
 	mergedTaskVariables := mergeBPMNTaskCompletionVariables(taskVariablesBefore, variables)
+	lifecyclePredicate, err := bpmnTaskLifecyclePredicate(BPMNTaskCommandComplete, task.AggregationVersion)
+	if err != nil {
+		return nil, err
+	}
 	updatedTask, err := client.ProcessTask.Update().Where(
 		processtask.ID(task.ID),
 		processtask.TenantID(instance.TenantID),
-		processtask.StatusNEQ(common.ProcessTaskStatusCompleted),
-		processtask.StatusNEQ(common.ProcessTaskStatusCancelled),
+		lifecyclePredicate,
 	).SetStatus(common.ProcessTaskStatusCompleted).
-		SetCompletedTime(time.Now()).SetTaskVariables(mergedTaskVariables).Save(ctx)
+		SetCompletedTime(time.Now()).SetTaskVariables(mergedTaskVariables).
+		AddAggregationVersion(1).Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("更新任务状态失败: %w", err)
 	}
 	if updatedTask != 1 {
-		return nil, common.NewConflictError("process task completion", "task was concurrently completed")
+		return nil, newBPMNTaskMutationConflict(task, BPMNTaskCommandComplete, true, mutationActor)
 	}
 	instance.Variables = merged
 	instance.Version++
 	task.Status = common.ProcessTaskStatusCompleted
 	task.TaskVariables = mergedTaskVariables
+	task.AggregationVersion++
 	txEngine := e.forClient(client, executionKeys)
-	if err := txEngine.executeStep(ctx, instance, process, task.TaskDefinitionKey, merged); err != nil {
-		return nil, err
+	// A synchronous callback is an effect gate: the task completion is durable,
+	// but the token remains on this user task until the outbox observes an
+	// applied/idempotent (or definition-declared optional) effect.
+	if !synchronousCallback {
+		if err := txEngine.executeStep(ctx, instance, process, task.TaskDefinitionKey, merged); err != nil {
+			return nil, err
+		}
 	}
 	if err := txEngine.recordApprovalDecisionWithClient(ctx, client, instance, task, variables); err != nil {
 		return nil, err
 	}
-	actorID, actorName, metadata, err := e.completionAuditActor(ctx, client, task)
-	if err != nil {
-		return nil, err
-	}
-	if err := e.auditService.ForClient(client).RecordTaskCompletedWithMetadata(
-		ctx, task, actorID, actorName, taskVariablesBefore, mergedTaskVariables, metadata,
+	if task.AssigneeSource != "" {
+		if err := e.auditService.ForClient(client).recordBoundTaskTerminal(ctx, task, responsibleID, mutationActor.userID, mutationActor.userName, "bpmn_task_complete", "", taskVariablesBefore, mergedTaskVariables, mutationActor.metadata); err != nil {
+			return nil, err
+		}
+	} else if err := e.auditService.ForClient(client).RecordTaskCompletedWithMetadata(
+		ctx, task, mutationActor.userID, mutationActor.userName, taskVariablesBefore, mergedTaskVariables, mutationActor.metadata,
 	); err != nil {
 		return nil, err
 	}
@@ -517,25 +731,40 @@ func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Conte
 		effect.asyncHandler = handler
 		return effect, nil
 	}
-	if err := txEngine.enqueueUserTaskCallback(ctx, task, descriptor, callbackVariables); err != nil {
+	if err := txEngine.enqueueUserTaskCallback(ctx, task, descriptor, callbackPlan); err != nil {
 		return nil, err
 	}
 	return effect, nil
 }
 
-func (e *CustomProcessEngine) forClient(client *ent.Client, executionKeys *[]string) *CustomProcessEngine {
+func (e *CustomProcessEngine) forClient(client *ent.Client, executionKeys *[]string, owner ...*ent.Tx) *CustomProcessEngine {
 	clone := *e
+	if len(owner) > 0 {
+		clone.owningTx = owner[0]
+	}
 	clone.client = client
 	clone.groupResolver = bpmn.NewGroupResolver(client)
-	clone.participationResolver = newBPMNParticipationResolver(client, clone.groupResolver)
+	clone.instanceAccessPolicy = e.instanceAccessPolicy.forClient(client)
+	clone.participationResolver = clone.instanceAccessPolicy.participationResolver
+	clone.participationResolver.owningTx = clone.owningTx
+	clone.participationResolver.directory = clone.directory
 	clone.auditService = e.auditService.ForClient(client)
+	clone.auditService.instanceAccessPolicy = clone.instanceAccessPolicy
 	clone.callbackExecutionKeys = executionKeys
 	clone.transactionBound = true
+	clone.processInstanceService = &bpmnProcessInstanceService{
+		execution:            clone.execution,
+		client:               client,
+		logger:               clone.logger,
+		instanceAccessPolicy: clone.instanceAccessPolicy,
+		auditService:         clone.auditService,
+	}
 	clone.taskService = &bpmnTaskService{
 		client:                client,
 		logger:                clone.logger,
 		groupResolver:         clone.groupResolver,
 		participationResolver: clone.participationResolver,
+		instanceAccessPolicy:  clone.instanceAccessPolicy,
 		engine:                &clone,
 	}
 	return &clone
@@ -550,17 +779,14 @@ func (e *CustomProcessEngine) completionAuditActor(ctx context.Context, client *
 		if err != nil {
 			return 0, "", nil, err
 		}
-		actor, err := loadTaskMutationActor(ctx, client, scope)
+		actor, err := e.loadLifecycleActor(ctx, client, task, scope)
 		if err != nil {
 			return 0, "", nil, err
 		}
 		return actor.ID, actor.Name, nil, nil
 	}
-	if actor, ok := ctx.Value("user").(*ent.User); ok && actor.ID > 0 {
-		return actor.ID, actor.Name, nil, nil
-	}
 	if userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int); userID > 0 {
-		actor, err := client.User.Query().Where(user.ID(userID), user.TenantID(task.TenantID)).Only(ctx)
+		actor, err := e.loadTaskMutationActor(ctx, client, BPMNAccessScope{UserID: userID, TenantID: task.TenantID})
 		if err != nil {
 			return 0, "", nil, fmt.Errorf("获取任务完成用户失败: %w", err)
 		}
@@ -569,18 +795,43 @@ func (e *CustomProcessEngine) completionAuditActor(ctx context.Context, client *
 	return 0, "", nil, nil
 }
 
-func (e *CustomProcessEngine) enqueueUserTaskCallback(ctx context.Context, task *ent.ProcessTask, descriptor bpmnCallbackDescriptor, variables map[string]interface{}) error {
-	row, err := e.callbackOutbox.enqueue(ctx, e.client, bpmnCallbackEnqueueRequest{
+func (e *CustomProcessEngine) enqueueUserTaskCallback(ctx context.Context, task *ent.ProcessTask, descriptor bpmnCallbackDescriptor, plan CallbackEnqueuePlan) error {
+	actorID, _, _, actorErr := e.completionAuditActor(ctx, e.client, task)
+	if actorErr != nil {
+		return actorErr
+	}
+	if descriptor.HandlerID == "incident_service_handler" {
+		decisions, err := e.client.ProcessApprovalDecision.Query().Where(processapprovaldecision.TenantID(task.TenantID), processapprovaldecision.ProcessTaskID(task.ID), processapprovaldecision.ActionIn("approve", "reject")).All(ctx)
+		if err != nil {
+			return err
+		}
+		for _, decision := range decisions {
+			if decision.ActorID != actorID {
+				return common.NewForbiddenError("callback actor disagrees with task completion decision")
+			}
+		}
+	}
+	request := bpmnCallbackEnqueueRequest{
+		ActorID: actorID, ActorSource: "workflow",
 		TenantID: task.TenantID, ProcessInstanceID: task.ProcessInstanceID,
 		ProcessTaskID: task.ID, TaskID: task.TaskID,
 		CallbackKind: "user_task_callback", HandlerID: descriptor.HandlerID,
 		TaskType: descriptor.TaskType, ElementID: task.TaskDefinitionKey,
-		Action: descriptor.Action, ConfigRef: descriptor.ConfigRef, Variables: variables,
-	})
-	if err != nil {
-		return fmt.Errorf("enqueue user task callback failed")
+		Action: plan.Action, ConfigRef: plan.ConfigRef, Variables: plan.Payload, OptionalDeclared: plan.OptionalDeclared,
 	}
-	e.collectCallbackExecutionKey(row.ExecutionKey)
+	var row *ent.ProcessCallbackOutbox
+	var err error
+	if plan.BlockCode != "" {
+		row, err = e.callbackOutbox.enqueueBlocked(ctx, e.client, request, plan.BlockCode, e.owningTx)
+	} else {
+		row, err = e.callbackOutbox.enqueue(ctx, e.client, request, e.owningTx)
+	}
+	if err != nil {
+		return fmt.Errorf("enqueue user task callback failed: %w", err)
+	}
+	if plan.BlockCode == "" {
+		e.collectCallbackExecutionKey(row.ExecutionKey)
+	}
 	return nil
 }
 
@@ -661,16 +912,17 @@ func (e *CustomProcessEngine) recordApprovalDecisionWithClient(ctx context.Conte
 	if actorID <= 0 {
 		return fmt.Errorf("审批决策缺少认证操作人")
 	}
-	actorName := ""
-	if actor, err := client.User.Query().Where(user.ID(actorID), user.TenantID(instance.TenantID)).Only(ctx); err == nil {
-		actorName = actor.Name
+	actor, err := e.loadTaskMutationActor(ctx, client, BPMNAccessScope{UserID: actorID, TenantID: instance.TenantID})
+	if err != nil {
+		return err
 	}
+	actorName := actor.Name
 	businessType := instance.BusinessType
 	businessID := ""
 	if instance.BusinessID > 0 {
 		businessID = strconv.Itoa(instance.BusinessID)
 	}
-	_, err := client.ProcessApprovalDecision.Create().
+	_, err = client.ProcessApprovalDecision.Create().
 		SetProcessInstanceID(instance.ID).SetProcessTaskID(task.ID).
 		SetProcessInstanceKey(instance.ProcessInstanceID).SetTaskID(task.TaskID).
 		SetProcessDefinitionKey(instance.ProcessDefinitionKey).SetNodeKey(task.TaskDefinitionKey).
@@ -688,16 +940,47 @@ func (e *CustomProcessEngine) recordApprovalDecisionWithClient(ctx context.Conte
 // ITSM 用户身份（绑定这个角色）调用 API，走跟其他调用方相同的认证中间件。
 const kafAutomationRole = "kaf_automation"
 
-// authorizeTaskActor ensures ordinary task mutations always carry a validated,
-// tenant-bound actor scope. The narrow typed CAB cascade is the only actorless
-// exception.
+// authorizeTaskActor authorizes the dedicated completion path. Asynchronous
+// tasks intentionally expose no other mutation command to their KAF identity.
 func (e *CustomProcessEngine) authorizeTaskActor(ctx context.Context, task *ent.ProcessTask) error {
 	return e.authorizeTaskActorWithClient(ctx, e.client, task)
 }
 
 func (e *CustomProcessEngine) authorizeTaskActorWithClient(ctx context.Context, client *ent.Client, task *ent.ProcessTask) error {
-	if internal, err := authorizeInternalCascadeTask(ctx, client, task); internal {
-		return err
+	return e.authorizeTaskCommandActorWithClient(ctx, client, task, BPMNTaskCommandComplete)
+}
+
+func (e *CustomProcessEngine) authorizeTaskCommandActorWithClient(ctx context.Context, client *ent.Client, task *ent.ProcessTask, command BPMNTaskCommand) error {
+	if e.execution.IsCandidate() {
+		if task == nil || e.owningTx == nil {
+			return executionscope.ErrDenied
+		}
+		instance, err := e.owningTx.ProcessInstance.Query().Where(
+			processinstance.ID(task.ProcessInstanceID), processinstance.TenantID(task.TenantID),
+		).Only(ctx)
+		if err != nil {
+			return err
+		}
+		if err := requireBPMNExecution(ctx, e.owningTx, e.execution, instance.TenantID, instance.ExecutionWorkItemID); err != nil {
+			return err
+		}
+	}
+	if task == nil {
+		return common.NewForbiddenError("task unavailable")
+	}
+	// Bound human tasks never enter the actorless CAB cascade boundary.
+	if task.AssigneeSource != "" {
+		scope, err := BPMNAccessScopeFromContext(ctx)
+		if err != nil {
+			return err
+		}
+		return e.authorizeBoundTask(ctx, client, task, scope, command)
+	}
+
+	if command == BPMNTaskCommandComplete {
+		if internal, err := authorizeInternalCascadeTask(ctx, client, task); internal {
+			return err
+		}
 	}
 	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
@@ -706,20 +989,35 @@ func (e *CustomProcessEngine) authorizeTaskActorWithClient(ctx context.Context, 
 	if scope.TenantID != task.TenantID {
 		return common.NewForbiddenError("任务不属于当前租户")
 	}
-	if task.TaskType == bpmn.KafDelegateTaskType {
+	if e.isAsyncProcessTask(task) {
+		if command != BPMNTaskCommandComplete {
+			return common.NewForbiddenError("异步任务仅允许通过专用完成命令变更")
+		}
 		return e.authorizeKafAutomationActorWithClient(ctx, client, task, scope)
+	}
+	if scope.CanUpdateAllTasks {
+		if e.directory != nil {
+			actor, err := e.loadTaskMutationActor(ctx, client, scope)
+			if err != nil {
+				return err
+			}
+			return authorization.RequireCurrentPermission(ctx, e.owningTx, creation.Identity{TenantID: scope.TenantID, ActorID: actor.ID, Role: authorization.EffectiveSessionRole(actor)}, "task", "update")
+		}
+		return nil
+	}
+	return e.authorizeTaskParticipantWithClient(ctx, client, task, scope)
+}
+
+func (e *CustomProcessEngine) isAsyncProcessTask(task *ent.ProcessTask) bool {
+	if task.TaskType == bpmn.KafDelegateTaskType {
+		return true
 	}
 	callbackTaskType := task.CallbackTaskType
 	if callbackTaskType == "" {
 		callbackTaskType = task.TaskType
 	}
-	if handler := e.findHandlerByTaskType(callbackTaskType); handler != nil && isAsyncHandler(handler) {
-		return e.authorizeKafAutomationActorWithClient(ctx, client, task, scope)
-	}
-	if scope.CanUpdateAllTasks {
-		return nil
-	}
-	return e.authorizeTaskParticipantWithClient(ctx, client, task, scope)
+	handler := e.findHandlerByTaskType(callbackTaskType)
+	return handler != nil && isAsyncHandler(handler)
 }
 
 func bpmnTaskMutationTenant(ctx context.Context) (int, error) {
@@ -759,25 +1057,22 @@ func (e *CustomProcessEngine) authorizeTaskParticipantWithClient(ctx context.Con
 	return common.NewForbiddenError("当前用户不是该任务的审批人或候选人")
 }
 
-// authorizeKafAutomationActor 校验异步委派任务（如 kaf_delegate）只能被 kaf_automation
-// 角色的账号完成，任务必须处于 delegated 状态，且账号所属租户必须与任务所属租户一致。
-// assignee/candidateUsers 对机器完成的任务没有意义——同一租户下所有委派任务都由
-// 同一个账号处理，不存在"候选人"概念。无用户上下文时直接拒绝，不复用人工任务分支
-// "无上下文即放行"的口子：委派任务必须始终有明确的认证主体。
-func (e *CustomProcessEngine) authorizeKafAutomationActor(ctx context.Context, task *ent.ProcessTask) error {
-	scope, err := BPMNAccessScopeFromContext(ctx)
-	if err != nil {
-		return err
-	}
-	return e.authorizeKafAutomationActorWithClient(ctx, e.client, task, scope)
-}
-
 func (e *CustomProcessEngine) authorizeKafAutomationActorWithClient(ctx context.Context, client *ent.Client, task *ent.ProcessTask, scope BPMNAccessScope) error {
 	return e.authorizeKafAutomationActorForStatusWithClient(ctx, client, task, scope, common.ProcessTaskStatusDelegated)
 }
 
 func (e *CustomProcessEngine) authorizeKafAutomationActorForStatusWithClient(ctx context.Context, client *ent.Client, task *ent.ProcessTask, scope BPMNAccessScope, allowedStatus string) error {
-	actor, err := client.User.Query().Where(user.ID(scope.UserID), user.TenantID(scope.TenantID)).Only(ctx)
+	if err := e.authorizeKafAutomationIdentityWithClient(ctx, client, task, scope); err != nil {
+		return err
+	}
+	if task.Status != allowedStatus {
+		return fmt.Errorf("委派任务当前状态不允许完成: %s", task.Status)
+	}
+	return nil
+}
+
+func (e *CustomProcessEngine) authorizeKafAutomationIdentityWithClient(ctx context.Context, client *ent.Client, task *ent.ProcessTask, scope BPMNAccessScope) error {
+	actor, err := client.User.Query().Where(user.ID(scope.UserID), user.TenantID(scope.TenantID), user.Active(true)).Only(ctx)
 	if err != nil {
 		return fmt.Errorf("KAF 自动化账号不存在: %w", err)
 	}
@@ -788,9 +1083,6 @@ func (e *CustomProcessEngine) authorizeKafAutomationActorForStatusWithClient(ctx
 	}
 	if actor.TenantID != task.TenantID {
 		return fmt.Errorf("KAF 自动化账号与委派任务所属租户不一致，拒绝跨租户完成任务")
-	}
-	if task.Status != allowedStatus {
-		return fmt.Errorf("委派任务当前状态不允许完成: %s", task.Status)
 	}
 	return nil
 }
@@ -873,12 +1165,16 @@ func (e *CustomProcessEngine) executeStep(ctx context.Context, instance *ent.Pro
 		return fmt.Errorf("流程节点 %s 没有出向顺序流且不是结束事件", currentElementID)
 	}
 
-	var targetRef string
+	var selectedFlow *BPMNSequenceFlow
 	unconditionalCount := 0
 	for _, flow := range outgoingFlows {
-		if e.evaluateCondition(flow, variables) {
-			if targetRef == "" {
-				targetRef = flow.TargetRef
+		matched, err := e.evaluateCondition(flow, variables)
+		if err != nil {
+			return fmt.Errorf("流程条件评估失败 [%s]: %w", flow.ID, err)
+		}
+		if matched {
+			if selectedFlow == nil {
+				selectedFlow = flow
 			}
 			if flow.ConditionExpression == nil || flow.ConditionExpression.Expression == "" {
 				unconditionalCount++
@@ -886,7 +1182,7 @@ func (e *CustomProcessEngine) executeStep(ctx context.Context, instance *ent.Pro
 		}
 	}
 
-	if targetRef == "" {
+	if selectedFlow == nil {
 		return fmt.Errorf("没有符合条件的路径")
 	}
 
@@ -895,12 +1191,12 @@ func (e *CustomProcessEngine) executeStep(ctx context.Context, instance *ent.Pro
 		e.logger.Warnw("多个无条件分支同时匹配，已取第一条（请检查BPMN流程：应为排他网关添加条件表达式）",
 			"element_id", currentElementID,
 			"unconditional_count", unconditionalCount,
-			"selected_target", targetRef,
+			"selected_target", selectedFlow.TargetRef,
 			"instance_id", instance.ProcessInstanceID,
 		)
 	}
 
-	return e.handleElement(ctx, instance, process, targetRef)
+	return e.handleElement(ctx, instance, process, selectedFlow.TargetRef)
 }
 
 func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.ProcessInstance, process *BPMNProcess, elementID string) error {
@@ -945,9 +1241,13 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 					return e.createDelegatedTask(ctx, instance, serviceTask, serviceTaskType)
 				}
 				callbackVars := mergeServiceTaskVariables(instance.Variables, serviceTask)
+				optionalDeclared, optionalErr := serviceTask.CallbackOptionalDeclared()
+				if optionalErr != nil {
+					return optionalErr
+				}
 				return e.enqueueServiceTaskCallback(
 					ctx, instance, handler, handler.GetTaskType(), elementID,
-					serviceTask.ServiceTaskAction(), serviceTask.CallbackConfigRef(), callbackVars,
+					serviceTask.ServiceTaskAction(), serviceTask.CallbackConfigRef(), callbackVars, optionalDeclared,
 				)
 			}
 			return fmt.Errorf("ServiceTask %s 声明的处理器未注册", elementID)
@@ -988,9 +1288,13 @@ func (e *CustomProcessEngine) handleElement(ctx context.Context, instance *ent.P
 					return e.createDelegatedTask(ctx, instance, serviceTask, resolvedTaskType)
 				}
 				taskVariables := mergeServiceTaskVariables(instance.Variables, serviceTask)
+				optionalDeclared, optionalErr := serviceTask.CallbackOptionalDeclared()
+				if optionalErr != nil {
+					return optionalErr
+				}
 				return e.enqueueServiceTaskCallback(
 					ctx, instance, handler, handler.GetTaskType(), elementID,
-					serviceTask.ServiceTaskAction(), serviceTask.CallbackConfigRef(), taskVariables,
+					serviceTask.ServiceTaskAction(), serviceTask.CallbackConfigRef(), taskVariables, optionalDeclared,
 				)
 			}
 		}
@@ -1009,19 +1313,34 @@ func (e *CustomProcessEngine) enqueueServiceTaskCallback(
 	action string,
 	configRef string,
 	variables map[string]interface{},
+	optionalDeclared bool,
 ) error {
-	payload, err := filterBPMNCallbackPayload(handler, action, variables)
+	if handler != nil && handler.GetTaskType() == "cc_task" {
+		action = ""
+	}
+	plan, err := BuildCallbackEnqueuePlan(CallbackDescriptor{
+		HandlerID: handler.GetHandlerID(), TaskType: taskType, Action: action, ConfigRef: configRef,
+	}, variables, optionalDeclared, e.callbackRegistry)
 	if err != nil {
 		return err
 	}
-	row, err := e.callbackOutbox.enqueue(ctx, e.client, bpmnCallbackEnqueueRequest{
+	request := bpmnCallbackEnqueueRequest{
 		TenantID: instance.TenantID, ProcessInstanceID: instance.ID,
 		CallbackKind: "service_task", HandlerID: handler.GetHandlerID(),
-		TaskType: taskType, ElementID: elementID, Action: action, ConfigRef: configRef,
-		Variables: payload,
-	})
+		TaskType: taskType, ElementID: elementID, Action: plan.Action, ConfigRef: plan.ConfigRef,
+		Variables: plan.Payload, OptionalDeclared: plan.OptionalDeclared,
+	}
+	var row *ent.ProcessCallbackOutbox
+	if plan.BlockCode != "" {
+		row, err = e.callbackOutbox.enqueueBlocked(ctx, e.client, request, plan.BlockCode, e.owningTx)
+	} else {
+		row, err = e.callbackOutbox.enqueue(ctx, e.client, request, e.owningTx)
+	}
 	if err != nil {
-		return fmt.Errorf("enqueue service task callback failed")
+		return fmt.Errorf("enqueue service task callback failed: %w", err)
+	}
+	if plan.BlockCode != "" {
+		return nil
 	}
 	if e.callbackExecutionKeys != nil {
 		*e.callbackExecutionKeys = append(*e.callbackExecutionKeys, row.ExecutionKey)
@@ -1074,6 +1393,12 @@ func (e *CustomProcessEngine) processCommittedCallbackKeys(ctx context.Context, 
 	}
 }
 
+// SetCallbackCandidateClient supplies the existing restricted System read pool.
+// Only cross-tenant candidate selection uses it; claims and execution keep Tenant.
+func (e *CustomProcessEngine) SetCallbackCandidateClient(client *ent.Client) {
+	e.callbackOutbox.candidateClient = client
+}
+
 // ProcessPendingCallbacks performs one deterministic durable callback sweep.
 func (e *CustomProcessEngine) ProcessPendingCallbacks(ctx context.Context, workerID string, limit int) (int, error) {
 	if e.callbackOutbox == nil {
@@ -1124,6 +1449,13 @@ func (e *CustomProcessEngine) executeClaimedCallback(ctx context.Context, worker
 	}
 	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, claimedRow.TenantID)
 	ctx = bpmn.WithBPMNCallbackExecutionKey(ctx, claimedRow.ExecutionKey)
+	ctx = workflowcallback.WithClaim(ctx, workflowcallback.Claim{ID: row.ID, TenantID: row.TenantID, ExecutionKey: row.ExecutionKey, LeaseOwner: workerID, AttemptCount: row.AttemptCount})
+	if actor, provenanceErr := loadCallbackProvenance(ctx, e.client, claimedRow); provenanceErr == nil {
+		ctx = context.WithValue(ctx, callbackActorKey{}, actor)
+	} else if claimedRow.Action == "assign" || claimedRow.Action == "assign_ticket" || claimedRow.Action == "assign_incident" || claimedRow.Action == "assign_request" {
+		return bpmnCallbackExecutionResult{Effect: bpmn.BlockedEffect(bpmn.CallbackBlockHandlerContract, "callback actor provenance missing or ambiguous")}, nil
+	}
+
 	claimedRow.Variables, err = filterPersistedBPMNCallbackPayload(handler, claimedRow.Action, claimedRow.Variables)
 	if err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackHandlerError(err)
@@ -1174,7 +1506,16 @@ func (e *CustomProcessEngine) loadClaimedCallback(ctx context.Context, workerID 
 	if row == nil || row.ID <= 0 || row.TenantID <= 0 {
 		return nil, errors.New("callback identity is incomplete")
 	}
-	return e.client.ProcessCallbackOutbox.Query().Where(
+	tx, err := e.client.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	scope, err := e.execution.CallbackPredicate(ctx, tx, row.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	return tx.ProcessCallbackOutbox.Query().Where(scope).Where(
 		processcallbackoutbox.ID(row.ID),
 		processcallbackoutbox.TenantID(row.TenantID),
 		processcallbackoutbox.StatusEQ(bpmnCallbackStatusProcessing),
@@ -1188,16 +1529,24 @@ func (e *CustomProcessEngine) executeClaimedServiceTaskCallback(
 	row *ent.ProcessCallbackOutbox,
 	handler bpmn.ServiceTaskHandlerInterface,
 ) (bpmnCallbackExecutionResult, error) {
-	if _, err := handler.Execute(ctx, nil, row.Variables); err != nil {
+	effect, err := handler.Execute(ctx, nil, row.Variables)
+	if err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackHandlerError(err)
 	}
-
-	tx, err := e.client.Tx(ctx)
+	outcome := bpmn.ResolveCallbackOutcome(effect, row.OptionalDeclared)
+	if !outcome.Advance {
+		return bpmnCallbackExecutionResult{Effect: effect}, nil
+	}
+	tx, err := e.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	txRow, err := tx.Client().ProcessCallbackOutbox.Query().Where(
+	scope, scopeErr := e.execution.CallbackPredicate(ctx, tx, row.TenantID)
+	if scopeErr != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(scopeErr)
+	}
+	txRow, err := tx.Client().ProcessCallbackOutbox.Query().Where(scope).Where(
 		processcallbackoutbox.ID(row.ID),
 		processcallbackoutbox.TenantID(row.TenantID),
 		processcallbackoutbox.StatusEQ(bpmnCallbackStatusProcessing),
@@ -1210,8 +1559,21 @@ func (e *CustomProcessEngine) executeClaimedServiceTaskCallback(
 		processinstance.ID(txRow.ProcessInstanceID),
 		processinstance.TenantID(txRow.TenantID),
 	).Only(ctx)
-	if err != nil || instance.CurrentActivityID != txRow.ElementID {
+	if err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	instance, err = lockBPMNInstanceLifecycle(ctx, tx.Client(), instance)
+	if err != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	if instance.Status != "running" {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(errors.New("callback instance is not running"))
+	}
+	if instance.CurrentActivityID != txRow.ElementID {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(errors.New("callback no longer owns current activity"))
+	}
+	if err := persistCallbackOutputs(ctx, tx, handler, txRow, instance, effect); err != nil {
+		return bpmnCallbackExecutionResult{}, err
 	}
 	definition, err := tx.Client().ProcessDefinition.Query().Where(
 		processdefinition.ID(instance.ProcessDefinitionID),
@@ -1225,18 +1587,24 @@ func (e *CustomProcessEngine) executeClaimedServiceTaskCallback(
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
 	downstreamExecutionKeys := make([]string, 0)
-	txEngine := e.forClient(tx.Client(), &downstreamExecutionKeys)
+	txEngine := e.forClient(tx.Client(), &downstreamExecutionKeys, tx)
 	if err := txEngine.executeStep(ctx, instance, definitions.Processes[0], txRow.ElementID, instance.Variables); err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
-	completed, err := e.callbackOutbox.completeWithClient(ctx, tx.Client(), workerID, txRow)
+	completed, err := e.callbackOutbox.completeTx(ctx, tx, workerID, txRow)
 	if err != nil || !completed {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	if outcome.AuditAction == bpmn.CallbackAuditActionSkippedOptional {
+		if err := NewBPMNAuditService(tx.Client(), zap.NewNop().Sugar()).RecordCallbackSkippedOptional(ctx, txRow, outcome.BlockCode); err != nil {
+			return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
-	return bpmnCallbackExecutionResult{CompletionCommitted: true}, nil
+	metrics.RecordBPMNCallbackEffect(row.HandlerID, row.Action, string(outcome.MetricEffect))
+	return bpmnCallbackExecutionResult{CompletionCommitted: true, Effect: effect}, nil
 }
 
 func (e *CustomProcessEngine) executeClaimedUserTaskCallback(
@@ -1256,23 +1624,97 @@ func (e *CustomProcessEngine) executeClaimedUserTaskCallback(
 	if err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
-	if _, err := handler.Execute(ctx, task, row.Variables); err != nil {
+	effect, err := handler.Execute(ctx, task, row.Variables)
+	if err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackHandlerError(err)
 	}
+	outcome := bpmn.ResolveCallbackOutcome(effect, row.OptionalDeclared)
+	if !outcome.Advance {
+		return bpmnCallbackExecutionResult{Effect: effect}, nil
+	}
+	if task.TaskType == bpmn.KafDelegateTaskType {
+		tx, err := e.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+		if err != nil {
+			return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+		}
+		defer func() { _ = tx.Rollback() }()
+		completed, err := e.callbackOutbox.completeTx(ctx, tx, workerID, row)
+		if err != nil || !completed {
+			return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+		}
+		if err := tx.Commit(); err != nil {
+			return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+		}
+		metrics.RecordBPMNCallbackEffect(row.HandlerID, row.Action, string(outcome.MetricEffect))
+		return bpmnCallbackExecutionResult{CompletionCommitted: true, Effect: effect}, nil
+	}
 
-	tx, err := e.client.Tx(ctx)
+	tx, err := e.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	completed, err := e.callbackOutbox.completeWithClient(ctx, tx.Client(), workerID, row)
+	scope, scopeErr := e.execution.CallbackPredicate(ctx, tx, row.TenantID)
+	if scopeErr != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(scopeErr)
+	}
+	txRow, err := tx.Client().ProcessCallbackOutbox.Query().Where(scope).Where(
+		processcallbackoutbox.ID(row.ID),
+		processcallbackoutbox.TenantID(row.TenantID),
+		processcallbackoutbox.StatusEQ(bpmnCallbackStatusProcessing),
+		processcallbackoutbox.LeaseOwner(workerID),
+	).Only(ctx)
+	if err != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	instance, err := tx.Client().ProcessInstance.Query().Where(
+		processinstance.ID(txRow.ProcessInstanceID), processinstance.TenantID(txRow.TenantID),
+	).Only(ctx)
+	if err != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	instance, err = lockBPMNInstanceLifecycle(ctx, tx.Client(), instance)
+	if err != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	if instance.Status != "running" {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(errors.New("callback instance is not running"))
+	}
+	if instance.CurrentActivityID != txRow.ElementID {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(errors.New("callback no longer owns current activity"))
+	}
+	if err := persistCallbackOutputs(ctx, tx, handler, txRow, instance, effect); err != nil {
+		return bpmnCallbackExecutionResult{}, err
+	}
+	definition, err := tx.Client().ProcessDefinition.Query().Where(
+		processdefinition.ID(instance.ProcessDefinitionID), processdefinition.TenantID(instance.TenantID),
+	).Only(ctx)
+	if err != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	definitions, err := e.parser.ParseXML(definition.BpmnXML)
+	if err != nil || len(definitions.Processes) == 0 {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	downstreamExecutionKeys := make([]string, 0)
+	txEngine := e.forClient(tx.Client(), &downstreamExecutionKeys, tx)
+	if err := txEngine.executeStep(ctx, instance, definitions.Processes[0], txRow.ElementID, instance.Variables); err != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	completed, err := e.callbackOutbox.completeTx(ctx, tx, workerID, txRow)
 	if err != nil || !completed {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+	}
+	if outcome.AuditAction == bpmn.CallbackAuditActionSkippedOptional {
+		if err := NewBPMNAuditService(tx.Client(), zap.NewNop().Sugar()).RecordCallbackSkippedOptional(ctx, txRow, outcome.BlockCode); err != nil {
+			return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
-	return bpmnCallbackExecutionResult{CompletionCommitted: true}, nil
+	metrics.RecordBPMNCallbackEffect(row.HandlerID, row.Action, string(outcome.MetricEffect))
+	return bpmnCallbackExecutionResult{CompletionCommitted: true, Effect: effect}, nil
 }
 
 func (e *CustomProcessEngine) isKafDelegationServiceTask(serviceTask *BPMNServiceTask) bool {
@@ -1327,6 +1769,29 @@ func mergeServiceTaskVariables(instanceVariables map[string]interface{}, task *B
 const approvalFallbackCandidateGroup = "ticket-approvers"
 
 func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.ProcessInstance, task *BPMNUserTask) error {
+	if err := validateBPMNAssigneeSource(task); err != nil {
+		return err
+	}
+	if task.AssigneeSource != "" {
+		if !e.transactionBound {
+			tx, err := e.client.Tx(ctx)
+			if err != nil {
+				return err
+			}
+			defer tx.Rollback()
+			locked, err := lockBPMNInstanceLifecycle(ctx, tx.Client(), instance)
+			if err != nil {
+				return err
+			}
+			if err := e.forClient(tx.Client(), nil, tx).createUserTask(ctx, locked, task); err != nil {
+				return err
+			}
+			return tx.Commit()
+		}
+		if err := validateBoundProcessBusiness(ctx, e.client, instance); err != nil {
+			return err
+		}
+	}
 	// 自动分配逻辑：优先级 BPMN定义 > 流程变量(request/assignee) > 默认分配
 	assignee := task.Assignee
 
@@ -1338,6 +1803,10 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 				// JSON numbers are float64
 				if val > 0 {
 					return strconv.FormatFloat(val, 'f', 0, 64)
+				}
+			case json.Number:
+				if parsed, err := strconv.Atoi(string(val)); err == nil && parsed > 0 {
+					return strconv.Itoa(parsed)
 				}
 			case int:
 				if val > 0 {
@@ -1422,7 +1891,9 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 				// 都没声明：解析申请人自己所在部门的负责人（这次会话早前已经做的部分）
 				assignee = e.resolveApprovalAssignee(ctx, instance, approvalRequester)
 			}
-		} else {
+		} else if task.AssigneeSource == "" && strings.TrimSpace(task.CandidateUsers) == "" && strings.TrimSpace(task.CandidateGroups) == "" {
+			// Explicit candidate routing stays unassigned until claimed. Unresolved
+			// configured candidates must not silently route fulfillment back to the requester.
 			// 优先使用 requester_id（工单申请人）
 			assignee = getUserID("requester_id")
 			// 其次使用 triggered_by（触发者）
@@ -1512,6 +1983,7 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 		SetTaskType("user_task").
 		SetStatus("created").
 		SetAssignee(assignee).
+		SetAssigneeSource(task.AssigneeSource).
 		SetCandidateUsers(expandedCandidateUsers).
 		SetCandidateGroups(candidateGroupsToExpand).
 		SetFormKey(task.FormKey).
@@ -1568,7 +2040,7 @@ func (e *CustomProcessEngine) createDelegatedTask(ctx context.Context, instance 
 		}
 		var err error
 		if e.transactionBound {
-			_, err = e.kafDelegationService.CreateDelegatedTaskWithClient(ctx, e.client, instance.ID, serviceTask)
+			_, err = e.kafDelegationService.CreateDelegatedTaskTx(ctx, e.owningTx, instance.ID, serviceTask)
 		} else {
 			_, err = e.kafDelegationService.CreateDelegatedTask(ctx, instance.ID, serviceTask)
 		}
@@ -1765,6 +2237,30 @@ func (e *CustomProcessEngine) resolveRolesByPermission(ctx context.Context, tena
 	return codes
 }
 
+type fixedScopeApproverSource struct {
+	resolver approver.ApproverResolver
+	context  approver.ApproverContext
+}
+
+// The BPMN declaration-to-resolver mapping is shared by runtime and publication.
+// Resolver owners retain all tenant, hierarchy and active-candidate rules.
+func fixedScopeApproverSources(task *BPMNUserTask, tenantID int) []fixedScopeApproverSource {
+	sources := []fixedScopeApproverSource{}
+	if task.AssigneeDeptId != 0 {
+		sources = append(sources, fixedScopeApproverSource{approver.NewDeptManagerResolver(), approver.ApproverContext{TenantID: tenantID, DepartmentID: task.AssigneeDeptId}})
+	}
+	if task.AssigneeTeamId != 0 {
+		sources = append(sources, fixedScopeApproverSource{approver.NewTeamLeaderResolver(), approver.ApproverContext{TenantID: tenantID, TeamID: task.AssigneeTeamId}})
+	}
+	if task.AssigneeProjectId != 0 {
+		sources = append(sources, fixedScopeApproverSource{approver.NewProjectMgrResolver(), approver.ApproverContext{TenantID: tenantID, ProjectID: task.AssigneeProjectId}})
+	}
+	if task.AssigneeTempTeamId != 0 {
+		sources = append(sources, fixedScopeApproverSource{approver.NewTempTeamResolver(), approver.ApproverContext{TenantID: tenantID, TeamID: task.AssigneeTempTeamId}})
+	}
+	return sources
+}
+
 // resolveFixedScopeAssignee 处理固定范围组织路由（BPMN 声明 assigneeDeptId/assigneeTeamId/
 // assigneeProjectId/assigneeTempTeamId 中的一个，按这个顺序取第一个非零的）。四个 resolver
 // （service/approver/*.go，已有、已测试）都是"至多解析出一个人"的形状，返回值/自我审批
@@ -1773,24 +2269,11 @@ func (e *CustomProcessEngine) resolveRolesByPermission(ctx context.Context, tena
 // 不是 authorizeTaskActor 用来比对的 User.Username（登录名），用 UserName 会导致候选人
 // 字符串永远匹配不上真实登录用户。
 func (e *CustomProcessEngine) resolveFixedScopeAssignee(ctx context.Context, instance *ent.ProcessInstance, requester *ent.User, task *BPMNUserTask) string {
-	var resolver approver.ApproverResolver
-	appCtx := &approver.ApproverContext{TenantID: instance.TenantID}
-	switch {
-	case task.AssigneeDeptId != 0:
-		resolver = approver.NewDeptManagerResolver()
-		appCtx.DepartmentID = task.AssigneeDeptId
-	case task.AssigneeTeamId != 0:
-		resolver = approver.NewTeamLeaderResolver()
-		appCtx.TeamID = task.AssigneeTeamId
-	case task.AssigneeProjectId != 0:
-		resolver = approver.NewProjectMgrResolver()
-		appCtx.ProjectID = task.AssigneeProjectId
-	case task.AssigneeTempTeamId != 0:
-		resolver = approver.NewTempTeamResolver()
-		appCtx.TeamID = task.AssigneeTempTeamId
-	default:
+	sources := fixedScopeApproverSources(task, instance.TenantID)
+	if len(sources) == 0 {
 		return ""
 	}
+	resolver, appCtx := sources[0].resolver, &sources[0].context
 	approvers, err := resolver.Resolve(ctx, e.client, appCtx)
 	if err != nil || len(approvers) == 0 {
 		e.logger.Infow(
@@ -1851,20 +2334,9 @@ func (e *CustomProcessEngine) getDefaultAssigntee(ctx context.Context, instance 
 
 	// 第一优先：流程变量中显式指定 assignee
 	if instance.Variables != nil {
-		if assignee, ok := instance.Variables["assignee"]; ok {
-			switch val := assignee.(type) {
-			case float64:
-				if val > 0 {
-					return strconv.FormatFloat(val, 'f', 0, 64)
-				}
-			case int:
-				if val > 0 {
-					return strconv.Itoa(val)
-				}
-			case string:
-				if val != "" && val != "0" {
-					return val
-				}
+		if value, ok := instance.Variables["assignee"]; ok {
+			if id, err := bpmn.CallbackInteger(value); err == nil && id > 0 {
+				return strconv.Itoa(id)
 			}
 		}
 	}
@@ -2019,9 +2491,9 @@ func (e *CustomProcessEngine) findOutgoingFlows(process *BPMNProcess, sourceRef 
 
 // evaluateCondition 评估流转条件 (Domain Logic)
 // 使用表达式引擎评估条件
-func (e *CustomProcessEngine) evaluateCondition(flow *BPMNSequenceFlow, variables map[string]interface{}) bool {
+func (e *CustomProcessEngine) evaluateCondition(flow *BPMNSequenceFlow, variables map[string]interface{}) (bool, error) {
 	if flow.ConditionExpression == nil || flow.ConditionExpression.Expression == "" {
-		return true // 无条件则默认通过
+		return true, nil // 无条件则默认通过
 	}
 
 	// 合并变量
@@ -2036,19 +2508,9 @@ func (e *CustomProcessEngine) evaluateCondition(flow *BPMNSequenceFlow, variable
 	// 将 variables 包装在 "variables" 键中，以便 BPMN 表达式可以使用 variables['key'] 语法
 	evalVars["variables"] = variables
 
-	// 使用表达式引擎评估条件
-	result, err := e.exprEngine.EvaluateCondition(flow.ConditionExpression.Expression, evalVars)
-	if err != nil {
-		// SEC-002 修复：评估失败时默认拒绝（return false），而非放行
-		e.logger.Errorw(
-			"条件评估失败，默认拒绝流转",
-			"expression", flow.ConditionExpression.Expression,
-			"error", err,
-		)
-		return false
-	}
-
-	return result
+	// Errors are not false conditions: choosing a fallback would hide a broken
+	// required expression and could execute the wrong branch.
+	return e.exprEngine.EvaluateCondition(flow.ConditionExpression.Expression, evalVars)
 }
 
 func (e *CustomProcessEngine) isEndEvent(process *BPMNProcess, id string) bool {
@@ -2096,17 +2558,6 @@ func (e *CustomProcessEngine) findServiceTask(process *BPMNProcess, id string) *
 	return nil
 }
 
-func requireProcessInstanceUpdateScope(ctx context.Context) (BPMNAccessScope, error) {
-	scope, err := BPMNAccessScopeFromContext(ctx)
-	if err != nil {
-		return BPMNAccessScope{}, err
-	}
-	if !scope.CanUpdateAllInstances {
-		return BPMNAccessScope{}, common.NewForbiddenError("无权修改流程实例")
-	}
-	return scope, nil
-}
-
 func loadProcessInstanceMutationActor(ctx context.Context, client *ent.Client, scope BPMNAccessScope) (*ent.User, error) {
 	actor, err := client.User.Query().
 		Where(
@@ -2121,31 +2572,48 @@ func loadProcessInstanceMutationActor(ctx context.Context, client *ent.Client, s
 }
 
 func (e *CustomProcessEngine) SuspendProcess(ctx context.Context, processInstanceID string, reason string) error {
-	scope, err := requireProcessInstanceUpdateScope(ctx)
+	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	instance, err := e.processInstanceService.loadProcessInstance(ctx, processInstanceID, scope.TenantID)
-	if err != nil {
-		return err
-	}
-	tx, err := e.client.Tx(ctx)
+	tx, err := e.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return fmt.Errorf("开启暂停流程事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	txEngine := e.forClient(tx.Client(), nil, tx)
+	instance, err := txEngine.instanceAccessPolicy.loadForUpdate(ctx, processInstanceID)
+	if err != nil {
+		return err
+	}
+	if err := requireBPMNExecution(ctx, tx, e.execution, instance.TenantID, instance.ExecutionWorkItemID); err != nil {
+		return err
+	}
+	if err := ValidateBPMNProcessLifecycle(BPMNProcessCommandSuspend, instance.Status); err != nil {
+		return err
+	}
 	actor, err := loadProcessInstanceMutationActor(ctx, tx.Client(), scope)
 	if err != nil {
 		return err
 	}
 
-	_, err = tx.Client().ProcessInstance.UpdateOne(instance).
+	predicate, err := bpmnProcessLifecyclePredicate(BPMNProcessCommandSuspend, instance.Version)
+	if err != nil {
+		return err
+	}
+	affected, err := tx.Client().ProcessInstance.Update().Where(
+		processinstance.ID(instance.ID), processinstance.TenantID(scope.TenantID), predicate,
+	).
 		SetStatus("suspended").
 		SetSuspendedTime(time.Now()).
 		SetSuspendedReason(reason).
+		AddVersion(1).
 		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("暂停流程实例失败: %w", err)
+	}
+	if affected != 1 {
+		return bpmnProcessLifecycleConflict(BPMNProcessCommandSuspend)
 	}
 	if err := e.auditService.ForClient(tx.Client()).RecordAudit(ctx, &AuditContext{
 		ProcessInstanceID:    instance.ID,
@@ -2172,29 +2640,46 @@ func (e *CustomProcessEngine) SuspendProcess(ctx context.Context, processInstanc
 }
 
 func (e *CustomProcessEngine) ResumeProcess(ctx context.Context, processInstanceID string) error {
-	scope, err := requireProcessInstanceUpdateScope(ctx)
+	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	instance, err := e.processInstanceService.loadProcessInstance(ctx, processInstanceID, scope.TenantID)
-	if err != nil {
-		return err
-	}
-	tx, err := e.client.Tx(ctx)
+	tx, err := e.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return fmt.Errorf("开启恢复流程事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	txEngine := e.forClient(tx.Client(), nil, tx)
+	instance, err := txEngine.instanceAccessPolicy.loadForUpdate(ctx, processInstanceID)
+	if err != nil {
+		return err
+	}
+	if err := requireBPMNExecution(ctx, tx, e.execution, instance.TenantID, instance.ExecutionWorkItemID); err != nil {
+		return err
+	}
+	if err := ValidateBPMNProcessLifecycle(BPMNProcessCommandResume, instance.Status); err != nil {
+		return err
+	}
 	actor, err := loadProcessInstanceMutationActor(ctx, tx.Client(), scope)
 	if err != nil {
 		return err
 	}
 
-	_, err = tx.Client().ProcessInstance.UpdateOne(instance).
+	predicate, err := bpmnProcessLifecyclePredicate(BPMNProcessCommandResume, instance.Version)
+	if err != nil {
+		return err
+	}
+	affected, err := tx.Client().ProcessInstance.Update().Where(
+		processinstance.ID(instance.ID), processinstance.TenantID(scope.TenantID), predicate,
+	).
 		SetStatus("running").
+		AddVersion(1).
 		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("恢复流程实例失败: %w", err)
+	}
+	if affected != 1 {
+		return bpmnProcessLifecycleConflict(BPMNProcessCommandResume)
 	}
 	if err := e.auditService.ForClient(tx.Client()).RecordAudit(ctx, &AuditContext{
 		ProcessInstanceID:    instance.ID,
@@ -2215,70 +2700,6 @@ func (e *CustomProcessEngine) ResumeProcess(ctx context.Context, processInstance
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("提交恢复流程事务失败: %w", err)
-	}
-	return nil
-}
-
-func (e *CustomProcessEngine) TerminateProcess(ctx context.Context, processInstanceID string, reason string) error {
-	scope, err := requireProcessInstanceUpdateScope(ctx)
-	if err != nil {
-		return err
-	}
-	instance, err := e.processInstanceService.loadProcessInstance(ctx, processInstanceID, scope.TenantID)
-	if err != nil {
-		return err
-	}
-	tx, err := e.client.Tx(ctx)
-	if err != nil {
-		return fmt.Errorf("开启终止流程事务失败: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	actor, err := loadProcessInstanceMutationActor(ctx, tx.Client(), scope)
-	if err != nil {
-		return err
-	}
-	terminatedAt := time.Now()
-
-	_, err = tx.Client().ProcessInstance.UpdateOne(instance).
-		SetStatus("terminated").
-		SetEndTime(terminatedAt).
-		Save(ctx)
-	if err != nil {
-		return fmt.Errorf("终止流程实例失败: %w", err)
-	}
-	_, err = tx.Client().ProcessTask.Update().
-		Where(
-			processtask.ProcessInstanceID(instance.ID),
-			processtask.TenantID(scope.TenantID),
-		).
-		Where(processtask.StatusNEQ("completed")).
-		Where(processtask.StatusNEQ("cancelled")).
-		SetStatus("cancelled").
-		SetCompletedTime(terminatedAt).
-		Save(ctx)
-	if err != nil {
-		return fmt.Errorf("取消流程任务失败: %w", err)
-	}
-	if err := e.auditService.ForClient(tx.Client()).RecordAudit(ctx, &AuditContext{
-		ProcessInstanceID:    instance.ID,
-		ProcessInstanceKey:   instance.ProcessInstanceID,
-		ProcessDefinitionKey: instance.ProcessDefinitionKey,
-		ProcessDefinitionID:  instance.ProcessDefinitionID,
-		ActivityID:           instance.CurrentActivityID,
-		ActivityName:         instance.CurrentActivityName,
-		ActivityType:         ActivityTypeEndEvent,
-		Action:               AuditActionProcessTerminated,
-		UserID:               actor.ID,
-		UserName:             actor.Name,
-		VariablesBefore:      map[string]interface{}{"status": instance.Status},
-		VariablesAfter:       map[string]interface{}{"status": "terminated"},
-		Comment:              reason,
-		TenantID:             instance.TenantID,
-	}); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("提交终止流程事务失败: %w", err)
 	}
 	return nil
 }
@@ -2322,6 +2743,9 @@ type ListProcessInstancesRequest struct {
 }
 
 type ListUserTasksRequest struct {
+	startDate, endDate *time.Time
+	visit              func(*ent.ProcessTask)
+
 	Assignee        string `json:"assignee" form:"assignee"`
 	CandidateUsers  string `json:"candidateUsers" form:"candidateUsers"`
 	CandidateGroups string `json:"candidateGroups" form:"candidateGroups"`
@@ -2331,6 +2755,8 @@ type ListUserTasksRequest struct {
 	Status               string `json:"status" form:"status"`
 	ProcessDefinitionKey string `json:"processDefinitionKey" form:"processDefinitionKey"`
 	ProcessInstanceID    int    `json:"processInstanceId" form:"processInstanceId"`
+	BusinessType         string `json:"businessType" form:"businessType"`
+	BusinessID           int    `json:"businessId" form:"businessId"`
 	TenantID             int    `json:"tenantId" form:"tenantId"`
 	Page                 int    `json:"page" form:"page"`
 	PageSize             int    `json:"pageSize" form:"pageSize"`
@@ -2582,6 +3008,25 @@ func (s *bpmnProcessDefinitionService) UpdateProcessDefinition(ctx context.Conte
 		return nil, err
 	}
 
+	// Deployed definitions are immutable execution versions. Waiting instances
+	// and frozen intake resolutions retain this row; edits must create a version.
+	if req.BPMNXML != "" && !bytes.Equal([]byte(req.BPMNXML), definition.BpmnXML) {
+		return nil, common.NewValidationError("execution content is immutable; create a new process version", nil)
+	}
+	if req.ProcessVariables != nil {
+		before, err := json.Marshal(definition.ProcessVariables)
+		if err != nil {
+			return nil, err
+		}
+		after, err := json.Marshal(req.ProcessVariables)
+		if err != nil {
+			return nil, common.NewValidationError("invalid process variables", err)
+		}
+		if !bytes.Equal(before, after) {
+			return nil, common.NewValidationError("execution content is immutable; create a new process version", nil)
+		}
+	}
+
 	update := s.client.ProcessDefinition.UpdateOne(definition)
 
 	if req.Name != "" {
@@ -2593,21 +3038,18 @@ func (s *bpmnProcessDefinitionService) UpdateProcessDefinition(ctx context.Conte
 	if req.Category != "" {
 		update.SetCategory(req.Category)
 	}
-	if req.BPMNXML != "" {
-		update.SetBpmnXML([]byte(req.BPMNXML))
-	}
-	if req.ProcessVariables != nil {
-		update.SetProcessVariables(req.ProcessVariables)
-	}
-	if req.IsActive != nil {
-		update.SetIsActive(*req.IsActive)
-	}
 
 	updated, err := update.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("更新流程定义失败: %w", err)
 	}
 
+	if req.IsActive != nil {
+		if err := s.SetProcessDefinitionActive(ctx, key, version, *req.IsActive); err != nil {
+			return nil, err
+		}
+		return s.GetProcessDefinition(ctx, key, version)
+	}
 	return updated, nil
 }
 
@@ -2669,87 +3111,35 @@ func (s *bpmnProcessDefinitionService) ListProcessDefinitions(ctx context.Contex
 	return definitions, total, nil
 }
 
-func (s *bpmnProcessDefinitionService) SetProcessDefinitionActive(ctx context.Context, key string, version string, active bool) error {
+func (s *bpmnProcessDefinitionService) SetProcessDefinitionActive(ctx context.Context, key, version string, active bool) error {
 	definition, err := s.GetProcessDefinition(ctx, key, version)
 	if err != nil {
 		return err
 	}
-
-	_, err = s.client.ProcessDefinition.UpdateOne(definition).
-		SetIsActive(active).
-		Save(ctx)
-
-	return err
+	if active {
+		return NewBPMNVersionService(s.client, zap.NewNop().Sugar()).ActivateVersion(ctx, key, version, definition.TenantID)
+	}
+	return s.client.ProcessDefinition.UpdateOne(definition).SetIsActive(false).Exec(ctx)
 }
 
 type bpmnProcessInstanceService struct {
-	client                *ent.Client
-	logger                *zap.SugaredLogger
-	participationResolver *bpmnParticipationResolver
-	auditService          *BPMNAuditService
+	execution            *database.ExecutionPolicy
+	client               *ent.Client
+	logger               *zap.SugaredLogger
+	instanceAccessPolicy *bpmnInstanceAccessPolicy
+	auditService         *BPMNAuditService
 }
 
-func (s *bpmnProcessInstanceService) loadProcessInstance(ctx context.Context, instanceKey string, tenantID int) (*ent.ProcessInstance, error) {
-	if tenantID <= 0 {
-		return nil, common.NewForbiddenError("缺少 BPMN 实例租户上下文")
+func (s *bpmnProcessInstanceService) accessPolicy() *bpmnInstanceAccessPolicy {
+	if s.instanceAccessPolicy != nil {
+		return s.instanceAccessPolicy
 	}
-	var instancePredicate predicate.ProcessInstance
-	if id, err := strconv.Atoi(instanceKey); err == nil {
-		instancePredicate = processinstance.ID(id)
-	} else {
-		instancePredicate = processinstance.ProcessInstanceID(instanceKey)
-	}
-	instance, err := s.client.ProcessInstance.Query().
-		Where(
-			processinstance.TenantID(tenantID),
-			instancePredicate,
-		).
-		First(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("获取流程实例失败: %w", err)
-	}
-	return instance, nil
-}
-
-func (s *bpmnProcessInstanceService) authorizeProcessInstanceRead(ctx context.Context, instance *ent.ProcessInstance, scope BPMNAccessScope) error {
-	if instance == nil || instance.TenantID != scope.TenantID {
-		return common.NewForbiddenError("无权读取流程实例")
-	}
-	if scope.CanReadAllInstances || instance.Initiator == strconv.Itoa(scope.UserID) {
-		return nil
-	}
-	if s.participationResolver == nil {
-		return common.NewForbiddenError("无权读取流程实例")
-	}
-	actor, err := s.participationResolver.resolveActor(ctx, scope)
-	if err != nil {
-		return common.NewForbiddenError("无权读取流程实例")
-	}
-	instanceIDs, err := s.participationResolver.participatingInstanceIDs(ctx, actor)
-	if err != nil {
-		return fmt.Errorf("解析流程实例参与范围失败: %w", err)
-	}
-	for _, instanceID := range instanceIDs {
-		if instanceID == instance.ID {
-			return nil
-		}
-	}
-	return common.NewForbiddenError("无权读取流程实例")
+	resolver := newBPMNParticipationResolver(s.client, bpmn.NewGroupResolver(s.client))
+	return newBPMNInstanceAccessPolicy(s.client, resolver)
 }
 
 func (s *bpmnProcessInstanceService) GetProcessInstance(ctx context.Context, processInstanceID string) (*ent.ProcessInstance, error) {
-	scope, err := BPMNAccessScopeFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	instance, err := s.loadProcessInstance(ctx, processInstanceID, scope.TenantID)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.authorizeProcessInstanceRead(ctx, instance, scope); err != nil {
-		return nil, err
-	}
-	return instance, nil
+	return s.accessPolicy().loadForRead(ctx, processInstanceID)
 }
 
 func (s *bpmnProcessInstanceService) ListProcessInstances(ctx context.Context, req *ListProcessInstancesRequest) ([]*ent.ProcessInstance, int, error) {
@@ -2772,26 +3162,14 @@ func (s *bpmnProcessInstanceService) ListProcessInstances(ctx context.Context, r
 		query = query.Where(processinstance.BusinessKey(req.BusinessKey))
 	}
 	if !scope.CanReadAllInstances {
-		if s.participationResolver == nil {
-			return nil, 0, common.NewForbiddenError("无权读取流程实例")
+		authorizedIDs, authorizationErr := s.accessPolicy().authorizedInstanceIDs(ctx)
+		if authorizationErr != nil {
+			return nil, 0, authorizationErr
 		}
-		actor, resolveErr := s.participationResolver.resolveActor(ctx, scope)
-		if resolveErr != nil {
-			return nil, 0, common.NewForbiddenError("无权读取流程实例")
+		if len(authorizedIDs) == 0 {
+			return []*ent.ProcessInstance{}, 0, nil
 		}
-		participatingIDs, participationErr := s.participationResolver.participatingInstanceIDs(ctx, actor)
-		if participationErr != nil {
-			return nil, 0, fmt.Errorf("解析流程实例参与范围失败: %w", participationErr)
-		}
-		initiatorPredicate := processinstance.Initiator(strconv.Itoa(scope.UserID))
-		if len(participatingIDs) == 0 {
-			query = query.Where(initiatorPredicate)
-		} else {
-			query = query.Where(processinstance.Or(
-				initiatorPredicate,
-				processinstance.IDIn(participatingIDs...),
-			))
-		}
+		query = query.Where(processinstance.IDIn(authorizedIDs...))
 	}
 
 	total, err := query.Count(ctx)
@@ -2830,11 +3208,7 @@ func (s *bpmnProcessInstanceService) GetProcessInstanceVariables(ctx context.Con
 var reservedInstanceVariableKeys = []string{"business_id", "business_type", "business_key", "tenant_id"}
 
 func (s *bpmnProcessInstanceService) SetProcessInstanceVariables(ctx context.Context, processInstanceID string, variables map[string]interface{}) error {
-	scope, err := requireProcessInstanceUpdateScope(ctx)
-	if err != nil {
-		return err
-	}
-	instance, err := s.loadProcessInstance(ctx, processInstanceID, scope.TenantID)
+	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
 		return err
 	}
@@ -2845,20 +3219,40 @@ func (s *bpmnProcessInstanceService) SetProcessInstanceVariables(ctx context.Con
 		}
 	}
 
-	tx, err := s.client.Tx(ctx)
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return fmt.Errorf("开启流程变量事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	instance, err := s.accessPolicy().forClient(tx.Client()).loadForUpdate(ctx, processInstanceID)
+	if err != nil {
+		return err
+	}
+	if err := requireBPMNExecution(ctx, tx, s.execution, instance.TenantID, instance.ExecutionWorkItemID); err != nil {
+		return err
+	}
+	if err := ValidateBPMNProcessLifecycle(BPMNProcessCommandSetVariables, instance.Status); err != nil {
+		return err
+	}
 	actor, err := loadProcessInstanceMutationActor(ctx, tx.Client(), scope)
 	if err != nil {
 		return err
 	}
-	_, err = tx.Client().ProcessInstance.UpdateOne(instance).
+	lifecyclePredicate, err := bpmnProcessLifecyclePredicate(BPMNProcessCommandSetVariables, instance.Version)
+	if err != nil {
+		return err
+	}
+	affected, err := tx.Client().ProcessInstance.Update().Where(
+		processinstance.ID(instance.ID), processinstance.TenantID(scope.TenantID), lifecyclePredicate,
+	).
 		SetVariables(variables).
+		AddVersion(1).
 		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("设置流程实例变量失败: %w", err)
+	}
+	if affected != 1 {
+		return bpmnProcessLifecycleConflict(BPMNProcessCommandSetVariables)
 	}
 	if err := s.auditService.ForClient(tx.Client()).RecordAudit(ctx, &AuditContext{
 		ProcessInstanceID:    instance.ID,
@@ -2974,6 +3368,7 @@ type bpmnTaskService struct {
 	logger                *zap.SugaredLogger
 	groupResolver         *bpmn.GroupResolver
 	participationResolver *bpmnParticipationResolver
+	instanceAccessPolicy  *bpmnInstanceAccessPolicy
 	// engine 是创建本任务服务的那个引擎实例。任何需要推进流程（CompleteTask）或复用引擎
 	// 内部鉴权/审批记录逻辑（authorizeTaskActor / recordApprovalDecision）的方法都必须用它，
 	// 不能 NewCustomProcessEngine 现造——见 NewCustomProcessEngine 里的说明。
@@ -3010,6 +3405,10 @@ func (s *bpmnTaskService) authorizeTaskRead(ctx context.Context, task *ent.Proce
 	if task == nil || task.TenantID != scope.TenantID {
 		return common.NewForbiddenError("无权读取任务")
 	}
+	if task.AssigneeSource != "" {
+		return s.engine.authorizeBoundTask(ctx, s.client, task, scope, "")
+	}
+
 	if scope.CanReadAllTasks {
 		return nil
 	}
@@ -3023,28 +3422,13 @@ func (s *bpmnTaskService) authorizeTaskRead(ctx context.Context, task *ent.Proce
 	return nil
 }
 
-func (s *bpmnTaskService) authorizeTaskUpdate(ctx context.Context, task *ent.ProcessTask) (BPMNAccessScope, error) {
-	scope, err := BPMNAccessScopeFromContext(ctx)
-	if err != nil {
-		return BPMNAccessScope{}, err
+func (e *CustomProcessEngine) loadTaskMutationActor(ctx context.Context, client *ent.Client, scope BPMNAccessScope) (*ent.User, error) {
+	if e.directory != nil {
+		if err := e.requireActorSnapshot(ctx, e.owningTx); err != nil {
+			return nil, err
+		}
+		return authorization.ResolveLifecycleActor(ctx, e.owningTx, e.directory, scope.UserID, scope.TenantID)
 	}
-	if task == nil || task.TenantID != scope.TenantID {
-		return BPMNAccessScope{}, common.NewNotFoundError("process task")
-	}
-	if scope.CanUpdateAllTasks {
-		return scope, nil
-	}
-	if s.participationResolver == nil {
-		return BPMNAccessScope{}, common.NewForbiddenError("无权操作该流程任务")
-	}
-	actor, err := s.participationResolver.resolveActor(ctx, scope)
-	if err != nil || !s.participationResolver.matchesTask(task, actor) {
-		return BPMNAccessScope{}, common.NewForbiddenError("无权操作该流程任务")
-	}
-	return scope, nil
-}
-
-func loadTaskMutationActor(ctx context.Context, client *ent.Client, scope BPMNAccessScope) (*ent.User, error) {
 	actor, err := client.User.Query().
 		Where(user.ID(scope.UserID), user.TenantID(scope.TenantID), user.Active(true)).
 		Only(ctx)
@@ -3052,6 +3436,124 @@ func loadTaskMutationActor(ctx context.Context, client *ent.Client, scope BPMNAc
 		return nil, fmt.Errorf("获取任务操作用户失败: %w", err)
 	}
 	return actor, nil
+}
+
+type bpmnTaskMutationConflict struct {
+	taskID   string
+	tenantID int
+	command  BPMNTaskCommand
+	task     *ent.ProcessTask
+	dirty    bool
+	actor    bpmnTaskMutationActor
+}
+
+type bpmnTaskMutationActor struct {
+	userID   int
+	userName string
+	metadata map[string]interface{}
+	internal bool
+	kaf      bool
+}
+
+func (e *CustomProcessEngine) captureTaskMutationActor(ctx context.Context, client *ent.Client, task *ent.ProcessTask) (bpmnTaskMutationActor, error) {
+	actorID, actorName, metadata, err := e.completionAuditActor(ctx, client, task)
+	if err != nil {
+		return bpmnTaskMutationActor{}, err
+	}
+	_, internal := internalCascadeAuditMetadata(ctx)
+	if actorID <= 0 && !internal {
+		return bpmnTaskMutationActor{}, common.NewForbiddenError("任务操作缺少有效认证用户")
+	}
+	return bpmnTaskMutationActor{
+		userID: actorID, userName: actorName, metadata: metadata,
+		internal: internal, kaf: e.isAsyncProcessTask(task),
+	}, nil
+}
+
+func (e *CustomProcessEngine) validateTaskMutationActorForAudit(ctx context.Context, client *ent.Client, task *ent.ProcessTask, actor bpmnTaskMutationActor) error {
+	if actor.internal {
+		internal, err := authorizeInternalCascadeTask(ctx, client, task)
+		if !internal || err != nil {
+			return common.NewForbiddenError("内部流程级联审计主体无效")
+		}
+		return nil
+	}
+	if actor.userID <= 0 || task == nil || task.TenantID <= 0 {
+		return common.NewForbiddenError("任务拒绝审计主体无效")
+	}
+	if actor.kaf {
+		return e.authorizeKafAutomationIdentityWithClient(ctx, client, task, BPMNAccessScope{
+			UserID: actor.userID, TenantID: task.TenantID,
+		})
+	}
+	_, err := e.loadLifecycleActor(ctx, client, task, BPMNAccessScope{UserID: actor.userID, TenantID: task.TenantID})
+	return err
+}
+
+func taskMutationActorForUser(actor *ent.User) bpmnTaskMutationActor {
+	if actor == nil {
+		return bpmnTaskMutationActor{}
+	}
+	return bpmnTaskMutationActor{userID: actor.ID, userName: actor.Name}
+}
+
+func newBPMNTaskMutationConflict(task *ent.ProcessTask, command BPMNTaskCommand, dirty bool, actor bpmnTaskMutationActor) error {
+	return &bpmnTaskMutationConflict{
+		taskID: task.TaskID, tenantID: task.TenantID, command: command,
+		task: task, dirty: dirty, actor: actor,
+	}
+}
+
+func (e *CustomProcessEngine) commitTaskMutationRejected(ctx context.Context, tx *ent.Tx, task *ent.ProcessTask, command BPMNTaskCommand) error {
+	txEngine := e.forClient(tx.Client(), nil, tx)
+	actorID, actorName, _, err := txEngine.completionAuditActor(ctx, tx.Client(), task)
+	if err != nil {
+		return err
+	}
+	if err := txEngine.auditService.RecordTaskMutationRejected(ctx, task, actorID, actorName, command, task.Status); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交任务拒绝审计事务失败: %w", err)
+	}
+	return bpmnTaskLifecycleConflict(command)
+}
+
+func (e *bpmnTaskMutationConflict) Error() string {
+	return bpmnTaskLifecycleConflict(e.command).Error()
+}
+
+func (e *bpmnTaskMutationConflict) Unwrap() error {
+	return bpmnTaskLifecycleConflict(e.command)
+}
+
+// recordTaskMutationRejected runs after the failed mutation transaction has
+// rolled back. It reloads the exact tenant row, validates that the originally
+// authorized actor is still active in that tenant (without re-checking mutable
+// participation), then writes the sole rejection audit in a fresh transaction.
+func (e *CustomProcessEngine) recordTaskMutationRejected(ctx context.Context, taskID string, tenantID int, command BPMNTaskCommand, actor bpmnTaskMutationActor) error {
+	tx, err := e.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	if err != nil {
+		return fmt.Errorf("开启任务拒绝审计事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	task, err := tx.Client().ProcessTask.Query().Where(
+		processtask.TaskID(taskID), processtask.TenantID(tenantID),
+	).Only(ctx)
+	if err != nil {
+		return fmt.Errorf("重新加载被拒绝任务失败: %w", err)
+	}
+	txEngine := e.forClient(tx.Client(), nil, tx)
+	if err := txEngine.validateTaskMutationActorForAudit(ctx, tx.Client(), task, actor); err != nil {
+		return err
+	}
+	if err := txEngine.auditService.RecordTaskMutationRejected(ctx, task, actor.userID, actor.userName, command, task.Status); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("提交任务拒绝审计事务失败: %w", err)
+	}
+	return bpmnTaskLifecycleConflict(command)
 }
 
 func resolveTaskAssignee(ctx context.Context, client *ent.Client, tenantID int, identifier string) (*ent.User, error) {
@@ -3074,6 +3576,18 @@ func resolveTaskAssignee(ctx context.Context, client *ent.Client, tenantID int, 
 
 // GetTask 根据任务ID (BPMN标准task_id字符串)获取任务
 func (s *bpmnTaskService) GetTask(ctx context.Context, taskID string) (*ent.ProcessTask, error) {
+	if taskReadSnapshot(ctx, s.client) == nil {
+		var result *ent.ProcessTask
+		err := s.engine.withTaskReadSnapshot(ctx, func(ctx context.Context, e *CustomProcessEngine) error {
+			var err error
+			result, err = e.taskService.GetTask(ctx, taskID)
+			return err
+		})
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
+	}
 	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
 		return nil, err
@@ -3085,11 +3599,23 @@ func (s *bpmnTaskService) GetTask(ctx context.Context, taskID string) (*ent.Proc
 	if err := s.authorizeTaskRead(ctx, task, scope); err != nil {
 		return nil, err
 	}
-	return task, nil
+	return s.engine.projectTaskAssignment(ctx, task)
 }
 
 // GetTaskByID 根据数据库自增ID获取任务
 func (s *bpmnTaskService) GetTaskByID(ctx context.Context, id int) (*ent.ProcessTask, error) {
+	if taskReadSnapshot(ctx, s.client) == nil {
+		var result *ent.ProcessTask
+		err := s.engine.withTaskReadSnapshot(ctx, func(ctx context.Context, e *CustomProcessEngine) error {
+			var err error
+			result, err = e.taskService.GetTaskByID(ctx, id)
+			return err
+		})
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
+	}
 	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
 		return nil, err
@@ -3101,7 +3627,7 @@ func (s *bpmnTaskService) GetTaskByID(ctx context.Context, id int) (*ent.Process
 	if err := s.authorizeTaskRead(ctx, task, scope); err != nil {
 		return nil, err
 	}
-	return task, nil
+	return s.engine.projectTaskAssignment(ctx, task)
 }
 
 // CompleteTaskByID 根据数据库自增ID完成任务
@@ -3118,6 +3644,20 @@ func (s *bpmnTaskService) CompleteTaskByID(ctx context.Context, id int, variable
 }
 
 func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksRequest) ([]*ent.ProcessTask, int, error) {
+	if taskReadSnapshot(ctx, s.client) == nil {
+		var tasks []*ent.ProcessTask
+		var total int
+		err := s.engine.withTaskReadSnapshot(ctx, func(ctx context.Context, e *CustomProcessEngine) error {
+			var err error
+			tasks, total, err = e.taskService.ListUserTasks(ctx, req)
+			return err
+		})
+		if err != nil {
+			return nil, 0, err
+		}
+		return tasks, total, nil
+	}
+
 	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
 		return nil, 0, err
@@ -3131,20 +3671,23 @@ func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksR
 		if s.participationResolver == nil {
 			return nil, 0, common.NewForbiddenError("无权读取任务")
 		}
-		actor, err = s.participationResolver.resolveActor(ctx, scope)
-		if err != nil {
+		actor, err = s.engine.participationResolver.resolveActor(ctx, scope)
+		if ent.IsNotFound(err) {
 			return nil, 0, common.NewForbiddenError("无权读取任务")
+		}
+		if err != nil {
+			return nil, 0, err
 		}
 	} else if req.UserID > 0 {
 		requestedScope := scope
 		requestedScope.UserID = req.UserID
-		actor, err = s.participationResolver.resolveActor(ctx, requestedScope)
+		actor, err = s.engine.participationResolver.resolveActor(ctx, requestedScope)
 		if err != nil {
 			return nil, 0, fmt.Errorf("解析任务用户范围失败: %w", err)
 		}
 	} else {
 		if req.Assignee != "" {
-			query = query.Where(processtask.Assignee(req.Assignee))
+			query = query.Where(processtask.Or(processtask.Assignee(req.Assignee), processtask.AssigneeSourceNEQ("")))
 		}
 		if req.CandidateUsers != "" {
 			query = query.Where(processtask.CandidateUsersContains(req.CandidateUsers))
@@ -3164,6 +3707,7 @@ func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksR
 		for token := range actor.GroupTokens {
 			prefilter = append(prefilter, processtask.CandidateGroupsContainsFold(token))
 		}
+		prefilter = append(prefilter, processtask.AssigneeSourceNEQ(""))
 		query = query.Where(processtask.Or(prefilter...))
 	}
 	if req.Status != "" {
@@ -3175,54 +3719,136 @@ func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksR
 	if req.ProcessInstanceID > 0 {
 		query = query.Where(processtask.ProcessInstanceID(req.ProcessInstanceID))
 	}
-	if actor == nil {
-		total, err := query.Count(ctx)
-		if err != nil {
-			return nil, 0, fmt.Errorf("获取任务总数失败: %w", err)
-		}
-		if req.Page > 0 && req.PageSize > 0 {
-			query = query.Offset((req.Page - 1) * req.PageSize).Limit(req.PageSize)
-		}
-		tasks, err := query.Order(ent.Desc(processtask.FieldCreatedTime)).All(ctx)
-		if err != nil {
-			return nil, 0, fmt.Errorf("获取任务列表失败: %w", err)
-		}
-		return tasks, total, nil
+	if (req.BusinessType == "") != (req.BusinessID == 0) {
+		return nil, 0, common.NewBadRequestError("businessType and businessId must be provided together", nil)
+	}
+	if req.BusinessType != "" {
+		query = query.Where(processtask.HasProcessInstanceWith(
+			processinstance.BusinessType(req.BusinessType),
+			processinstance.BusinessID(req.BusinessID),
+			processinstance.TenantID(scope.TenantID),
+		))
 	}
 
-	tasks, err := query.Order(ent.Desc(processtask.FieldCreatedTime)).All(ctx)
-	if err != nil {
-		return nil, 0, fmt.Errorf("获取任务列表失败: %w", err)
+	if req.startDate != nil {
+		query = query.Where(processtask.CreatedTimeGTE(*req.startDate))
 	}
-	if actor != nil {
-		filtered := make([]*ent.ProcessTask, 0, len(tasks))
+	if req.endDate != nil {
+		query = query.Where(processtask.CreatedTimeLTE(*req.endDate))
+	}
+	// The absence proof and count/page query use this same RR snapshot. Unknown
+	// nonempty sources block the fast path and are validated by the normal resolver.
+	if actor == nil && req.visit == nil {
+		nonIndependent, err := query.Clone().Where(processtask.AssigneeSourceNEQ("")).Exist(ctx)
+		if err != nil {
+			return nil, 0, err
+		}
+		if !nonIndependent {
+			total, err := query.Clone().Count(ctx)
+			if err != nil {
+				return nil, 0, err
+			}
+			page := query.Clone().Order(ent.Desc(processtask.FieldCreatedTime), ent.Desc(processtask.FieldID))
+			if req.Page > 0 && req.PageSize > 0 {
+				page = page.Offset((req.Page - 1) * req.PageSize).Limit(req.PageSize)
+			}
+			rows, err := page.All(ctx)
+			if err != nil {
+				return nil, 0, err
+			}
+			return rows, total, nil
+		}
+	}
+	var result []*ent.ProcessTask
+	view := taskReadSnapshot(ctx, s.client)
+	view.pageAssignments = make(map[int]BPMNTaskAssignment)
+	total := 0
+	accept := func(task *ent.ProcessTask, assignment *BPMNTaskAssignment) {
+		index := total
+		total++
+		if req.visit != nil {
+			req.visit(task)
+			return
+		}
+		if req.Page > 0 && req.PageSize > 0 && (index < (req.Page-1)*req.PageSize || index >= req.Page*req.PageSize) {
+			return
+		}
+		result = append(result, task)
+		if assignment != nil {
+			view.pageAssignments[task.ID] = *assignment
+		}
+	}
+	var last *ent.ProcessTask
+	for {
+		page := query.Clone().Order(ent.Desc(processtask.FieldCreatedTime), ent.Desc(processtask.FieldID)).Limit(bpmnTaskReadBatchSize)
+		if last != nil {
+			page = page.Where(processtask.Or(processtask.CreatedTimeLT(last.CreatedTime), processtask.And(processtask.CreatedTimeEQ(last.CreatedTime), processtask.IDLT(last.ID))))
+		}
+		tasks, err := page.All(ctx)
+		if err != nil {
+			return nil, 0, err
+		}
+		if len(tasks) == 0 {
+			break
+		}
+		taskReadSnapshot(ctx, s.client).resetChunk()
+		if err := taskReadSnapshot(ctx, s.client).loadTerminalAssignments(ctx, tasks); err != nil {
+			return nil, 0, err
+		}
 		for _, task := range tasks {
-			if s.participationResolver.matchesTask(task, actor) {
-				filtered = append(filtered, task)
+			if task.AssigneeSource != "" {
+				assignment, err := s.engine.authorizeBoundTaskAssignment(ctx, s.client, task, scope, "")
+				if err != nil {
+					if isBPMNTaskAccessDenial(err) {
+						continue
+					}
+					return nil, 0, err
+				}
+				projectedTask := *task
+				projectedTask.Assignee = assignment.Assignee
+				projected := &projectedTask
+				if actor != nil && !s.participationResolver.matchesTask(projected, actor) {
+					continue
+				}
+				if actor == nil && req.Assignee != "" {
+					matches, err := s.engine.boundAssignmentMatchesIdentity(ctx, projected, req.Assignee)
+					if err != nil {
+						return nil, 0, err
+					}
+					if !matches {
+						continue
+					}
+				}
+				accept(projected, &assignment)
+			} else if actor == nil || s.participationResolver.matchesTask(task, actor) {
+				accept(task, nil)
 			}
 		}
-		tasks = filtered
-	}
-	total := len(tasks)
-	if req.Page > 0 && req.PageSize > 0 {
-		start := (req.Page - 1) * req.PageSize
-		if start >= total {
-			tasks = nil
-		} else {
-			end := start + req.PageSize
-			if end > total {
-				end = total
-			}
-			tasks = tasks[start:end]
+		last = tasks[len(tasks)-1]
+		if len(tasks) < bpmnTaskReadBatchSize {
+			break
 		}
 	}
-
-	return tasks, total, nil
+	return result, total, nil
 }
 
 // ListUserTaskViews 「我的待办」视图：任务列表附带所属实例的 businessKey 等业务上下文，
 // 供审批中心跳转业务单据使用。返回 DTO 而非 Ent 模型。
 func (s *bpmnTaskService) ListUserTaskViews(ctx context.Context, req *ListUserTasksRequest) ([]*dto.BPMNTaskResponse, int, error) {
+	if taskReadSnapshot(ctx, s.client) == nil {
+		var tasks []*dto.BPMNTaskResponse
+		var total int
+		err := s.engine.withTaskReadSnapshot(ctx, func(ctx context.Context, e *CustomProcessEngine) error {
+			var err error
+			tasks, total, err = e.taskService.ListUserTaskViews(ctx, req)
+			return err
+		})
+		if err != nil {
+			return nil, 0, err
+		}
+		return tasks, total, nil
+	}
+
 	tasks, total, err := s.ListUserTasks(ctx, req)
 	if err != nil {
 		return nil, 0, err
@@ -3250,23 +3876,41 @@ func (s *bpmnTaskService) ListUserTaskViews(ctx context.Context, req *ListUserTa
 		}
 	}
 
-	return dto.ToBPMNTaskResponseList(tasks, instanceMap), total, nil
+	views := dto.ToBPMNTaskResponseList(tasks, instanceMap)
+	projection, err := s.engine.taskUIReadProjection(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	for i, task := range tasks {
+		assignment, err := projection.resolveTaskAssignment(ctx, s.client, task)
+		if err != nil {
+			return nil, 0, err
+		}
+		views[i].Assignee = assignment.Assignee
+		views[i].AssigneeSource = assignment.Source
+		views[i].AssignmentState = assignment.State
+		views[i].ResponsibleUserID = assignment.ResponsibleUserID
+		views[i].ActorID = assignment.ActorID
+		views[i].UIActions = projection.taskUIActions(ctx, task)
+	}
+	return views, total, nil
 }
 
 func (s *bpmnTaskService) ListApprovalDecisions(ctx context.Context, processInstanceKey string) ([]*ent.ProcessApprovalDecision, error) {
+	policy := s.instanceAccessPolicy
+	if policy == nil {
+		resolver := s.participationResolver
+		if resolver == nil {
+			resolver = newBPMNParticipationResolver(s.client, bpmn.NewGroupResolver(s.client))
+		}
+		policy = newBPMNInstanceAccessPolicy(s.client, resolver)
+	}
+	instance, err := policy.loadForRead(ctx, processInstanceKey)
+	if err != nil {
+		return nil, err
+	}
 	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
-		return nil, err
-	}
-	instanceService := &bpmnProcessInstanceService{
-		client:                s.client,
-		participationResolver: s.participationResolver,
-	}
-	instance, err := instanceService.loadProcessInstance(ctx, processInstanceKey, scope.TenantID)
-	if err != nil {
-		return nil, err
-	}
-	if err := instanceService.authorizeProcessInstanceRead(ctx, instance, scope); err != nil {
 		return nil, err
 	}
 	return s.client.ProcessApprovalDecision.Query().
@@ -3278,38 +3922,64 @@ func (s *bpmnTaskService) ListApprovalDecisions(ctx context.Context, processInst
 		All(ctx)
 }
 
+// Numeric route references use the database ID; textual references use task_id,
+// matching the established detail and claim route semantics.
+func bpmnTaskReferencePredicate(reference string) predicate.ProcessTask {
+	if id, err := strconv.Atoi(reference); err == nil {
+		return processtask.ID(id)
+	}
+	return processtask.TaskID(reference)
+}
+
 func (s *bpmnTaskService) AssignTask(ctx context.Context, taskID string, assignee string) error {
 	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	task, err := s.loadTaskByKey(ctx, taskID, scope.TenantID)
-	if err != nil {
-		return err
-	}
-	if _, err := s.authorizeTaskUpdate(ctx, task); err != nil {
-		return err
-	}
-	assigneeUser, err := resolveTaskAssignee(ctx, s.client, scope.TenantID, assignee)
-	if err != nil {
-		return err
-	}
-	tx, err := s.client.Tx(ctx)
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return fmt.Errorf("开启任务分配事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	actor, err := loadTaskMutationActor(ctx, tx.Client(), scope)
+	task, err := tx.Client().ProcessTask.Query().Where(
+		bpmnTaskReferencePredicate(taskID), processtask.TenantID(scope.TenantID),
+	).Only(ctx)
+	if err != nil {
+		return fmt.Errorf("获取分配任务失败: %w", err)
+	}
+	txEngine := s.engine.forClient(tx.Client(), nil, tx)
+	if err := txEngine.authorizeTaskCommandActorWithClient(ctx, tx.Client(), task, BPMNTaskCommandAssign); err != nil {
+		return err
+	}
+	if err := ValidateBPMNTaskLifecycle(BPMNTaskCommandAssign, task.Status); err != nil {
+		return s.engine.commitTaskMutationRejected(ctx, tx, task, BPMNTaskCommandAssign)
+	}
+	assigneeUser, err := resolveTaskAssignee(ctx, tx.Client(), scope.TenantID, assignee)
 	if err != nil {
 		return err
 	}
-	_, err = tx.Client().ProcessTask.UpdateOne(task).
+	actor, err := txEngine.loadLifecycleActor(ctx, tx.Client(), task, scope)
+	if err != nil {
+		return err
+	}
+	lifecyclePredicate, err := bpmnTaskLifecyclePredicate(BPMNTaskCommandAssign, task.AggregationVersion)
+	if err != nil {
+		return err
+	}
+	affected, err := tx.Client().ProcessTask.Update().Where(
+		processtask.ID(task.ID), processtask.TenantID(scope.TenantID), lifecyclePredicate,
+	).
 		SetAssignee(strconv.Itoa(assigneeUser.ID)).
 		SetStatus(common.ProcessTaskStatusAssigned).
 		SetAssignedTime(time.Now()).
+		AddAggregationVersion(1).
 		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("分配任务失败: %w", err)
+	}
+	if affected != 1 {
+		_ = tx.Rollback()
+		return s.engine.recordTaskMutationRejected(ctx, task.TaskID, task.TenantID, BPMNTaskCommandAssign, taskMutationActorForUser(actor))
 	}
 	if err := s.engine.auditService.ForClient(tx.Client()).RecordTaskAssigned(ctx, task, assigneeUser, actor.ID, actor.Name); err != nil {
 		return err
@@ -3349,7 +4019,7 @@ func (s *bpmnTaskService) ClaimTaskByID(ctx context.Context, id int, userID int)
 }
 
 func (s *bpmnTaskService) claimTask(ctx context.Context, tenantID, userID int, load func(*ent.Client) (*ent.ProcessTask, error)) error {
-	tx, err := s.client.Tx(ctx)
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return fmt.Errorf("开启任务认领事务失败: %w", err)
 	}
@@ -3359,35 +4029,37 @@ func (s *bpmnTaskService) claimTask(ctx context.Context, tenantID, userID int, l
 	if err != nil {
 		return fmt.Errorf("获取待认领任务失败: %w", err)
 	}
-	if handler := s.engine.findHandlerByTaskType(task.TaskType); handler != nil && isAsyncHandler(handler) {
-		return common.NewForbiddenError("异步委派任务不能通过人工认领")
-	}
-	if err := s.engine.authorizeTaskActorWithClient(ctx, tx.Client(), task); err != nil {
+	txEngine := s.engine.forClient(tx.Client(), nil, tx)
+	if err := txEngine.authorizeTaskCommandActorWithClient(ctx, tx.Client(), task, BPMNTaskCommandClaim); err != nil {
 		return err
 	}
-	if task.Assignee != "" && task.Assignee != "0" {
-		return taskClaimConflict()
+	if err := ValidateBPMNTaskLifecycle(BPMNTaskCommandClaim, task.Status); err != nil || (task.Assignee != "" && task.Assignee != "0") {
+		return s.engine.commitTaskMutationRejected(ctx, tx, task, BPMNTaskCommandClaim)
 	}
-	actor, err := tx.Client().User.Query().Where(
-		user.ID(userID), user.TenantID(task.TenantID), user.Active(true),
-	).Only(ctx)
+	actor, err := txEngine.loadTaskMutationActor(ctx, tx.Client(), BPMNAccessScope{UserID: userID, TenantID: task.TenantID})
 	if err != nil {
 		return fmt.Errorf("获取任务认领用户失败: %w", err)
+	}
+	lifecyclePredicate, err := bpmnTaskLifecyclePredicate(BPMNTaskCommandClaim, task.AggregationVersion)
+	if err != nil {
+		return err
 	}
 	affected, err := tx.Client().ProcessTask.Update().Where(
 		processtask.ID(task.ID),
 		processtask.TenantID(task.TenantID),
-		processtask.Status(common.ProcessTaskStatusCreated),
+		lifecyclePredicate,
 		processtask.Or(processtask.AssigneeIsNil(), processtask.Assignee(""), processtask.Assignee("0")),
 	).SetAssignee(strconv.Itoa(userID)).
 		SetStatus(common.ProcessTaskStatusAssigned).
 		SetAssignedTime(time.Now()).
+		AddAggregationVersion(1).
 		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("认领任务失败: %w", err)
 	}
 	if affected != 1 {
-		return taskClaimConflict()
+		_ = tx.Rollback()
+		return s.engine.recordTaskMutationRejected(ctx, task.TaskID, task.TenantID, BPMNTaskCommandClaim, taskMutationActorForUser(actor))
 	}
 	if err := s.engine.auditService.ForClient(tx.Client()).RecordTaskClaimed(ctx, task, actor.ID, actor.Name); err != nil {
 		return err
@@ -3396,10 +4068,6 @@ func (s *bpmnTaskService) claimTask(ctx context.Context, tenantID, userID int, l
 		return fmt.Errorf("提交任务认领事务失败: %w", err)
 	}
 	return nil
-}
-
-func taskClaimConflict() error {
-	return common.NewConflictError("process task claim", "task is no longer eligible or was already claimed")
 }
 
 func taskClaimContext(ctx context.Context, requestedUserID int) (context.Context, int, error) {
@@ -3425,29 +4093,61 @@ func (s *bpmnTaskService) CancelTask(ctx context.Context, taskID string, reason 
 	if err != nil {
 		return err
 	}
-	task, err := s.loadTaskByKey(ctx, taskID, scope.TenantID)
-	if err != nil {
-		return err
-	}
-	if _, err := s.authorizeTaskUpdate(ctx, task); err != nil {
-		return err
-	}
-	tx, err := s.client.Tx(ctx)
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return fmt.Errorf("开启任务取消事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	actor, err := loadTaskMutationActor(ctx, tx.Client(), scope)
+	task, err := tx.Client().ProcessTask.Query().Where(
+		processtask.TaskID(taskID), processtask.TenantID(scope.TenantID),
+	).Only(ctx)
+	if err != nil {
+		return fmt.Errorf("获取取消任务失败: %w", err)
+	}
+	task, err = lockBPMNTaskLifecycle(ctx, tx.Client(), task)
 	if err != nil {
 		return err
 	}
-	_, err = tx.Client().ProcessTask.UpdateOne(task).
-		SetStatus("cancelled").
+	txEngine := s.engine.forClient(tx.Client(), nil, tx)
+	if err := txEngine.authorizeTaskCommandActorWithClient(ctx, tx.Client(), task, BPMNTaskCommandCancel); err != nil {
+		return err
+	}
+	if err := ValidateBPMNTaskLifecycle(BPMNTaskCommandCancel, task.Status); err != nil {
+		return s.engine.commitTaskMutationRejected(ctx, tx, task, BPMNTaskCommandCancel)
+	}
+	actor, err := txEngine.loadLifecycleActor(ctx, tx.Client(), task, scope)
+	if err != nil {
+		return err
+	}
+	responsibleID, err := boundTaskResponsibleID(ctx, tx.Client(), task)
+	if err != nil {
+		return err
+	}
+	lifecyclePredicate, err := bpmnTaskLifecyclePredicate(BPMNTaskCommandCancel, task.AggregationVersion)
+	if err != nil {
+		return err
+	}
+	affected, err := tx.Client().ProcessTask.Update().Where(
+		processtask.ID(task.ID), processtask.TenantID(scope.TenantID), lifecyclePredicate,
+	).
+		SetStatus(common.ProcessTaskStatusCancelled).
+		SetCompletedTime(time.Now()).
+		AddAggregationVersion(1).
 		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("取消任务失败: %w", err)
 	}
-	if err := s.engine.auditService.ForClient(tx.Client()).RecordTaskCancelled(ctx, task, actor.ID, actor.Name, reason); err != nil {
+	if affected != 1 {
+		_ = tx.Rollback()
+		return s.engine.recordTaskMutationRejected(ctx, task.TaskID, task.TenantID, BPMNTaskCommandCancel, taskMutationActorForUser(actor))
+	}
+	task.Status = common.ProcessTaskStatusCancelled
+	task.AggregationVersion++
+	if task.AssigneeSource != "" {
+		if err := txEngine.auditService.recordBoundTaskTerminal(ctx, task, responsibleID, actor.ID, actor.Name, "bpmn_task_cancel", reason, nil, nil, nil); err != nil {
+			return err
+		}
+	} else if err := s.engine.auditService.ForClient(tx.Client()).RecordTaskCancelled(ctx, task, actor.ID, actor.Name, reason); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -3470,32 +4170,53 @@ func (s *bpmnTaskService) SetTaskVariables(ctx context.Context, taskID string, v
 	if err != nil {
 		return err
 	}
-	task, err := s.loadTaskByKey(ctx, taskID, scope.TenantID)
-	if err != nil {
-		return err
-	}
-	if _, err := s.authorizeTaskUpdate(ctx, task); err != nil {
-		return err
-	}
 	participantVariables, err := validateAndCloneBPMNParticipantVariables(variables, true)
 	if err != nil {
 		return err
 	}
-	mergedVariables := mergeBPMNTaskVariables(task.TaskVariables, participantVariables)
-	tx, err := s.client.Tx(ctx)
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return fmt.Errorf("开启任务变量事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	actor, err := loadTaskMutationActor(ctx, tx.Client(), scope)
+	task, err := tx.Client().ProcessTask.Query().Where(
+		processtask.TaskID(taskID), processtask.TenantID(scope.TenantID),
+	).Only(ctx)
+	if err != nil {
+		return fmt.Errorf("获取变量任务失败: %w", err)
+	}
+	task, err = lockBPMNTaskLifecycle(ctx, tx.Client(), task)
 	if err != nil {
 		return err
 	}
-	_, err = tx.Client().ProcessTask.UpdateOne(task).
+	txEngine := s.engine.forClient(tx.Client(), nil, tx)
+	if err := txEngine.authorizeTaskCommandActorWithClient(ctx, tx.Client(), task, BPMNTaskCommandSetVariables); err != nil {
+		return err
+	}
+	if err := ValidateBPMNTaskLifecycle(BPMNTaskCommandSetVariables, task.Status); err != nil {
+		return s.engine.commitTaskMutationRejected(ctx, tx, task, BPMNTaskCommandSetVariables)
+	}
+	mergedVariables := mergeBPMNTaskVariables(task.TaskVariables, participantVariables)
+	actor, err := txEngine.loadLifecycleActor(ctx, tx.Client(), task, scope)
+	if err != nil {
+		return err
+	}
+	lifecyclePredicate, err := bpmnTaskLifecyclePredicate(BPMNTaskCommandSetVariables, task.AggregationVersion)
+	if err != nil {
+		return err
+	}
+	affected, err := tx.Client().ProcessTask.Update().Where(
+		processtask.ID(task.ID), processtask.TenantID(scope.TenantID), lifecyclePredicate,
+	).
 		SetTaskVariables(mergedVariables).
+		AddAggregationVersion(1).
 		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("设置任务变量失败: %w", err)
+	}
+	if affected != 1 {
+		_ = tx.Rollback()
+		return s.engine.recordTaskMutationRejected(ctx, task.TaskID, task.TenantID, BPMNTaskCommandSetVariables, taskMutationActorForUser(actor))
 	}
 	if err := s.engine.auditService.ForClient(tx.Client()).RecordTaskVariablesChanged(ctx, task, actor.ID, actor.Name, task.TaskVariables, mergedVariables); err != nil {
 		return err
@@ -3511,43 +4232,51 @@ func (s *bpmnTaskService) DelegateTask(ctx context.Context, taskID string, newAs
 	if err != nil {
 		return err
 	}
-	tx, err := s.client.Tx(ctx)
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return fmt.Errorf("开启任务委派事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 	task, err := tx.Client().ProcessTask.Query().Where(
-		processtask.TaskID(taskID), processtask.TenantID(scope.TenantID),
+		bpmnTaskReferencePredicate(taskID), processtask.TenantID(scope.TenantID),
 	).Only(ctx)
 	if err != nil {
 		return fmt.Errorf("获取委派任务失败: %w", err)
 	}
-	txEngine := s.engine.forClient(tx.Client(), nil)
-	if err := txEngine.authorizeTaskActorWithClient(ctx, tx.Client(), task); err != nil {
+	txEngine := s.engine.forClient(tx.Client(), nil, tx)
+	if err := txEngine.authorizeTaskCommandActorWithClient(ctx, tx.Client(), task, BPMNTaskCommandDelegate); err != nil {
 		return err
+	}
+	if err := ValidateBPMNTaskLifecycle(BPMNTaskCommandDelegate, task.Status); err != nil {
+		return s.engine.commitTaskMutationRejected(ctx, tx, task, BPMNTaskCommandDelegate)
 	}
 	assignee, err := resolveTaskAssignee(ctx, tx.Client(), scope.TenantID, newAssignee)
 	if err != nil {
 		return err
 	}
-	actor, err := loadTaskMutationActor(ctx, tx.Client(), scope)
+	actor, err := txEngine.loadTaskMutationActor(ctx, tx.Client(), scope)
+	if err != nil {
+		return err
+	}
+	lifecyclePredicate, err := bpmnTaskLifecyclePredicate(BPMNTaskCommandDelegate, task.AggregationVersion)
 	if err != nil {
 		return err
 	}
 	affected, err := tx.Client().ProcessTask.Update().Where(
 		processtask.ID(task.ID),
 		processtask.TenantID(scope.TenantID),
-		processtask.StatusNEQ(common.ProcessTaskStatusCompleted),
-		processtask.StatusNEQ(common.ProcessTaskStatusCancelled),
+		lifecyclePredicate,
 	).
 		SetAssignee(strconv.Itoa(assignee.ID)).
 		SetStatus(common.ProcessTaskStatusDelegated).
+		AddAggregationVersion(1).
 		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("委派任务失败: %w", err)
 	}
 	if affected != 1 {
-		return common.NewConflictError("process task delegation", "task is no longer active")
+		_ = tx.Rollback()
+		return s.engine.recordTaskMutationRejected(ctx, task.TaskID, task.TenantID, BPMNTaskCommandDelegate, taskMutationActorForUser(actor))
 	}
 	if err := s.engine.auditService.ForClient(tx.Client()).RecordTaskDelegated(ctx, task, actor.ID, actor.Name, assignee); err != nil {
 		return err
@@ -3567,31 +4296,8 @@ func (s *bpmnTaskService) GetTaskStatistics(ctx context.Context, req *TaskStatis
 		return nil, common.NewForbiddenError("无权读取任务统计")
 	}
 	req.TenantID = scope.TenantID
-	query := s.client.ProcessTask.Query().Where(processtask.TenantID(scope.TenantID))
-
-	if req.ProcessDefinitionKey != "" {
-		query = query.Where(processtask.ProcessDefinitionKey(req.ProcessDefinitionKey))
-	}
-	if req.Assignee != "" {
-		query = query.Where(processtask.Assignee(req.Assignee))
-	}
-	if req.Status != "" {
-		query = query.Where(processtask.Status(req.Status))
-	}
-	if req.StartDate != nil {
-		query = query.Where(processtask.CreatedTimeGTE(*req.StartDate))
-	}
-	if req.EndDate != nil {
-		query = query.Where(processtask.CreatedTimeLTE(*req.EndDate))
-	}
-
-	tasks, err := query.All(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("获取任务统计信息失败: %w", err)
-	}
-
 	stats := &TaskStatistics{
-		TotalTasks:        len(tasks),
+		TotalTasks:        0,
 		StatusBreakdown:   make(map[string]int),
 		AssigneeBreakdown: make(map[string]int),
 		TimeDistribution:  make(map[string]interface{}),
@@ -3600,7 +4306,8 @@ func (s *bpmnTaskService) GetTaskStatistics(ctx context.Context, req *TaskStatis
 	var totalCompletionTime time.Duration
 	completedCount := 0
 
-	for _, task := range tasks {
+	visit := func(task *ent.ProcessTask) {
+		stats.TotalTasks++
 		stats.StatusBreakdown[task.Status]++
 
 		if task.Assignee != "" {
@@ -3616,6 +4323,11 @@ func (s *bpmnTaskService) GetTaskStatistics(ctx context.Context, req *TaskStatis
 		if !task.DueDate.IsZero() && time.Now().After(task.DueDate) && task.Status != "completed" {
 			stats.OverdueTasks++
 		}
+	}
+
+	_, _, err = s.ListUserTasks(ctx, &ListUserTasksRequest{ProcessDefinitionKey: req.ProcessDefinitionKey, Assignee: req.Assignee, Status: req.Status, startDate: req.StartDate, endDate: req.EndDate, visit: visit})
+	if err != nil {
+		return nil, err
 	}
 
 	if completedCount > 0 {
@@ -3634,22 +4346,30 @@ func (s *bpmnTaskService) CreateCounterSignTasks(ctx context.Context, parentTask
 	if err != nil {
 		return nil, err
 	}
-	tx, err := s.client.Tx(ctx)
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return nil, fmt.Errorf("开启会签任务事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	txTaskService := s.engine.forClient(tx.Client(), nil).taskService
+	txTaskService := s.engine.forClient(tx.Client(), nil, tx).taskService
 	parentTask, err := txTaskService.loadTaskByKey(ctx, parentTaskID, scope.TenantID)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := txTaskService.authorizeTaskUpdate(ctx, parentTask); err != nil {
+	if err := txTaskService.engine.authorizeTaskCommandActorWithClient(ctx, tx.Client(), parentTask, BPMNTaskCommandCreateCounterSign); err != nil {
 		return nil, err
+	}
+	if err := ValidateBPMNTaskLifecycle(BPMNTaskCommandCreateCounterSign, parentTask.Status); err != nil {
+		return nil, s.engine.commitTaskMutationRejected(ctx, tx, parentTask, BPMNTaskCommandCreateCounterSign)
 	}
 	tasks, err := txTaskService.createCounterSignTasksWithClient(ctx, tx.Client(), parentTask, req, scope.UserID)
 	if err != nil {
+		var conflict *bpmnTaskMutationConflict
+		if errors.As(err, &conflict) {
+			_ = tx.Rollback()
+			return nil, s.engine.recordTaskMutationRejected(ctx, conflict.taskID, conflict.tenantID, conflict.command, conflict.actor)
+		}
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -3668,9 +4388,7 @@ func (s *bpmnTaskService) createCounterSignTasksWithClient(ctx context.Context, 
 
 	actorName := ""
 	if actorID > 0 {
-		actor, actorErr := client.User.Query().
-			Where(user.ID(actorID), user.TenantID(parentTask.TenantID), user.Active(true)).
-			Only(ctx)
+		actor, actorErr := s.engine.loadTaskMutationActor(ctx, client, BPMNAccessScope{UserID: actorID, TenantID: parentTask.TenantID})
 		if actorErr != nil {
 			return nil, fmt.Errorf("获取会签操作用户失败: %w", actorErr)
 		}
@@ -3691,6 +4409,30 @@ func (s *bpmnTaskService) createCounterSignTasksWithClient(ctx context.Context, 
 	threshold := req.Threshold
 	if threshold == 0 {
 		threshold = len(req.Approvers)
+	}
+	parentVariables := map[string]interface{}{
+		"approval_type": req.ApprovalType,
+		"threshold":     threshold,
+		"total":         len(req.Approvers),
+		"completed":     0,
+		"approved":      0,
+		"rejected":      0,
+	}
+	lifecyclePredicate, err := bpmnTaskLifecyclePredicate(BPMNTaskCommandCreateCounterSign, parentTask.AggregationVersion)
+	if err != nil {
+		return nil, err
+	}
+	affected, err := client.ProcessTask.Update().Where(
+		processtask.ID(parentTask.ID), processtask.TenantID(parentTask.TenantID), lifecyclePredicate,
+	).SetTaskVariables(parentVariables).AddAggregationVersion(1).Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("更新会签父任务失败: %w", err)
+	}
+	if affected != 1 {
+		return nil, newBPMNTaskMutationConflict(
+			parentTask, BPMNTaskCommandCreateCounterSign, true,
+			bpmnTaskMutationActor{userID: actorID, userName: actorName},
+		)
 	}
 
 	var tasks []*ent.ProcessTask
@@ -3721,21 +4463,6 @@ func (s *bpmnTaskService) createCounterSignTasksWithClient(ctx context.Context, 
 		tasks = append(tasks, task)
 	}
 
-	// 更新父任务状态为会签中
-	_, err := client.ProcessTask.UpdateOneID(parentTask.ID).
-		Where(processtask.TenantID(parentTask.TenantID)).
-		SetTaskVariables(map[string]interface{}{
-			"approval_type": req.ApprovalType,
-			"threshold":     threshold,
-			"total":         len(req.Approvers),
-			"completed":     0,
-			"approved":      0,
-			"rejected":      0,
-		}).
-		Save(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("更新会签父任务失败: %w", err)
-	}
 	if err := s.engine.auditService.ForClient(client).RecordCounterSignCreated(ctx, parentTask, actorID, actorName, len(req.Approvers)); err != nil {
 		return nil, err
 	}
@@ -3804,27 +4531,39 @@ func getCounterSignStatus(ctx context.Context, client *ent.Client, parent *ent.P
 }
 
 func numericInt(value interface{}) (int, bool) {
-	switch v := value.(type) {
-	case int:
-		return v, true
-	case float64:
-		return int(v), true
-	default:
-		return 0, false
+	integer, err := bpmn.CallbackInteger(value)
+	return integer, err == nil
+}
+
+func bpmnProcessTaskWriteLock() predicate.ProcessTask {
+	return func(selector *entsql.Selector) {
+		if selector.Dialect() != dialect.SQLite {
+			selector.ForUpdate()
+		}
 	}
 }
 
 // Vote 投票（完成会签任务）
-func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequest) error {
+func (s *bpmnTaskService) voteOnce(ctx context.Context, taskID string, req *VoteRequest) (resultErr error) {
 	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	tx, err := s.client.Tx(ctx)
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return fmt.Errorf("开启会签投票事务失败: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	commitAttempted := false
+	defer func() {
+		rollbackErr := tx.Rollback()
+		if resultErr != nil && !commitAttempted && rollbackErr == nil {
+			resultErr = &bpmnVoteRolledBack{resultErr}
+		}
+		if rollbackErr != nil && !errors.Is(rollbackErr, sql.ErrTxDone) {
+			resultErr = errors.Join(resultErr, rollbackErr)
+		}
+	}()
+	txEngine := s.engine.forClient(tx.Client(), nil, tx)
 	executionKeys := make([]string, 0)
 	var parentEffect *completedTaskEffect
 	task, err := tx.Client().ProcessTask.Query().
@@ -3833,60 +4572,70 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 	if err != nil {
 		return fmt.Errorf("获取会签任务失败: %w", err)
 	}
-	if err := s.engine.authorizeTaskActorWithClient(ctx, tx.Client(), task); err != nil {
+	lifecycleInstance, err := tx.ProcessInstance.Query().Where(processinstance.ID(task.ProcessInstanceID), processinstance.TenantID(task.TenantID)).Only(ctx)
+	if err != nil {
 		return err
 	}
-	if task.Status != common.ProcessTaskStatusAssigned {
-		return taskVoteConflict()
+	if _, err = lockBPMNInstanceLifecycle(ctx, tx.Client(), lifecycleInstance); err != nil {
+		return err
 	}
-	actor, err := loadTaskMutationActor(ctx, tx.Client(), scope)
+	if err := txEngine.authorizeTaskCommandActorWithClient(ctx, tx.Client(), task, BPMNTaskCommandVote); err != nil {
+		return err
+	}
+	if err := ValidateBPMNTaskLifecycle(BPMNTaskCommandVote, task.Status); err != nil {
+		return s.engine.commitTaskMutationRejected(ctx, tx, task, BPMNTaskCommandVote)
+	}
+	actor, err := txEngine.loadTaskMutationActor(ctx, tx.Client(), scope)
 	if err != nil {
 		return err
 	}
 	var parentTask *ent.ProcessTask
 	if task.ParentTaskID != "" {
-		// Acquire the parent write lock before mutating this child. PostgreSQL
-		// concurrent voters then observe prior sibling commits after waiting on
-		// the same row, and finalization cannot deadlock while cancelling a child
-		// whose transaction is waiting for the parent.
-		affected, err := tx.Client().ProcessTask.Update().Where(
-			processtask.TaskID(task.ParentTaskID),
-			processtask.TenantID(scope.TenantID),
-			processtask.StatusNEQ(common.ProcessTaskStatusCompleted),
-		).AddAggregationVersion(1).Save(ctx)
-		if err != nil {
-			return fmt.Errorf("锁定会签父任务失败: %w", err)
-		}
-		if affected != 1 {
-			return taskVoteConflict()
-		}
+		// Parent locking orders all sibling writes. A stable-snapshot contender
+		// restarts its entire rolled-back owner on serialization conflict.
 		parentTask, err = tx.Client().ProcessTask.Query().Where(
 			processtask.TaskID(task.ParentTaskID),
 			processtask.TenantID(scope.TenantID),
+			bpmnProcessTaskWriteLock(),
 		).Only(ctx)
 		if err != nil {
 			return fmt.Errorf("获取会签父任务失败: %w", err)
 		}
+		if err := ValidateBPMNTaskLifecycle(BPMNTaskCommandComplete, parentTask.Status); err != nil {
+			return bpmnTaskLifecycleConflict(BPMNTaskCommandVote)
+		}
+		// Every accepted sibling advances this existing fence. An RR contender
+		// must refresh its entire snapshot even when the prior vote was nonfinal.
+		if err := tx.ProcessTask.UpdateOneID(parentTask.ID).AddAggregationVersion(1).Exec(ctx); err != nil {
+			return err
+		}
+		parentTask.AggregationVersion++
 	}
 	voteVariables := map[string]interface{}{
 		"approved": req.Approved,
 		"comment":  req.Comment,
 	}
+	lifecyclePredicate, err := bpmnTaskLifecyclePredicate(BPMNTaskCommandVote, task.AggregationVersion)
+	if err != nil {
+		return err
+	}
 	affected, err := tx.Client().ProcessTask.Update().
 		Where(
 			processtask.ID(task.ID),
 			processtask.TenantID(scope.TenantID),
-			processtask.Status(common.ProcessTaskStatusAssigned),
+			lifecyclePredicate,
 		).
-		SetStatus("completed").
+		SetStatus(common.ProcessTaskStatusCompleted).
 		SetCompletedTime(time.Now()).
 		SetTaskVariables(voteVariables).
+		AddAggregationVersion(1).
 		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("完成任务失败: %w", err)
 	}
 	if affected != 1 {
-		return taskVoteConflict()
+		_ = tx.Rollback()
+		return s.engine.recordTaskMutationRejected(ctx, task.TaskID, task.TenantID, BPMNTaskCommandVote, taskMutationActorForUser(actor))
 	}
 	instance, err := tx.Client().ProcessInstance.Query().
 		Where(processinstance.ID(task.ProcessInstanceID), processinstance.TenantID(scope.TenantID)).
@@ -3899,7 +4648,7 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 		action, decision = "approve", "approved"
 	}
 	decisionVariables := map[string]interface{}{"approvalAction": action, "approvalResult": decision, "approvalComment": req.Comment}
-	if err := s.engine.recordApprovalDecisionWithClient(ctx, tx.Client(), instance, task, decisionVariables); err != nil {
+	if err := txEngine.recordApprovalDecisionWithClient(ctx, tx.Client(), instance, task, decisionVariables); err != nil {
 		return err
 	}
 	if err := s.engine.auditService.ForClient(tx.Client()).RecordTaskCompleted(ctx, task, actor.ID, actor.Name, task.TaskVariables, voteVariables); err != nil {
@@ -3908,6 +4657,7 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 
 	parentTaskID := task.ParentTaskID
 	if parentTask == nil {
+		commitAttempted = true
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("提交会签投票事务失败: %w", err)
 		}
@@ -3937,8 +4687,18 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 			Order(ent.Asc(processtask.FieldID)).
 			First(ctx)
 		if err == nil {
-			if err := tx.Client().ProcessTask.UpdateOneID(next.ID).Where(processtask.TenantID(scope.TenantID)).SetStatus(common.ProcessTaskStatusAssigned).Exec(ctx); err != nil {
-				return fmt.Errorf("激活下一会签任务失败: %w", err)
+			nextPredicate, predicateErr := bpmnTaskLifecyclePredicate(BPMNTaskCommandAssign, next.AggregationVersion)
+			if predicateErr != nil {
+				return predicateErr
+			}
+			activated, updateErr := tx.Client().ProcessTask.Update().Where(
+				processtask.ID(next.ID), processtask.TenantID(scope.TenantID), nextPredicate,
+			).SetStatus(common.ProcessTaskStatusAssigned).AddAggregationVersion(1).Save(ctx)
+			if updateErr != nil {
+				return fmt.Errorf("激活下一会签任务失败: %w", updateErr)
+			}
+			if activated != 1 {
+				return bpmnTaskLifecycleConflict(BPMNTaskCommandAssign)
 			}
 		} else if !ent.IsNotFound(err) {
 			return fmt.Errorf("获取下一会签任务失败: %w", err)
@@ -3947,10 +4707,31 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 
 	final := status.Status == "approved" || status.Status == "rejected"
 	if final {
-		if _, err := tx.Client().ProcessTask.Update().
-			Where(processtask.ParentTaskID(parentTaskID), processtask.TenantID(scope.TenantID), processtask.StatusNEQ("completed"), processtask.StatusNEQ("cancelled")).
-			SetStatus("cancelled").SetCompletedTime(time.Now()).Save(ctx); err != nil {
-			return fmt.Errorf("取消剩余会签任务失败: %w", err)
+		activeStatuses, statusesErr := bpmnTaskSourceStatuses(BPMNTaskCommandCancel)
+		if statusesErr != nil {
+			return statusesErr
+		}
+		remaining, queryErr := tx.Client().ProcessTask.Query().Where(
+			processtask.ParentTaskID(parentTaskID), processtask.TenantID(scope.TenantID),
+			processtask.StatusIn(activeStatuses...),
+		).All(ctx)
+		if queryErr != nil {
+			return fmt.Errorf("加载剩余会签任务失败: %w", queryErr)
+		}
+		for _, remainingTask := range remaining {
+			cancelPredicate, predicateErr := bpmnTaskLifecyclePredicate(BPMNTaskCommandCancel, remainingTask.AggregationVersion)
+			if predicateErr != nil {
+				return predicateErr
+			}
+			cancelled, updateErr := tx.Client().ProcessTask.Update().Where(
+				processtask.ID(remainingTask.ID), processtask.TenantID(scope.TenantID), cancelPredicate,
+			).SetStatus(common.ProcessTaskStatusCancelled).SetCompletedTime(time.Now()).AddAggregationVersion(1).Save(ctx)
+			if updateErr != nil {
+				return fmt.Errorf("取消剩余会签任务失败: %w", updateErr)
+			}
+			if cancelled != 1 {
+				return bpmnTaskLifecycleConflict(BPMNTaskCommandCancel)
+			}
 		}
 		summaryVariables := mergeBPMNTaskVariables(parentTask.TaskVariables, map[string]interface{}{
 			"approval_type": approvalType,
@@ -3961,14 +4742,8 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 			"rejected":      status.Rejected,
 			"final_status":  status.Status,
 		})
-		if err := tx.Client().ProcessTask.UpdateOneID(parentTask.ID).
-			Where(processtask.TenantID(scope.TenantID)).
-			SetTaskVariables(summaryVariables).
-			Exec(ctx); err != nil {
-			return fmt.Errorf("更新会签父任务失败: %w", err)
-		}
 		parentTask.TaskVariables = summaryVariables
-		parentEffect, err = s.engine.completeAuthorizedTaskWithClient(
+		parentEffect, err = txEngine.completeAuthorizedTaskWithClient(
 			ctx, tx.Client(), parentTask,
 			map[string]interface{}{"approvalResult": status.Status, "approved": status.Status == "approved"},
 			&executionKeys,
@@ -3977,6 +4752,7 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 			return fmt.Errorf("推进会签父任务失败: %w", err)
 		}
 	}
+	commitAttempted = true
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("提交会签投票事务失败: %w", err)
 	}
@@ -3989,8 +4765,4 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 		s.engine.executeAsyncUserTaskCompletion(ctx, parentEffect)
 	}
 	return nil
-}
-
-func taskVoteConflict() error {
-	return common.NewConflictError("process task vote", "task is no longer assigned or was already voted")
 }

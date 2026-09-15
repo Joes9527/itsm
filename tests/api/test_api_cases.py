@@ -6,6 +6,7 @@ API Test Cases - Complete and Robust Implementation
 
 import pytest
 import time
+from uuid import uuid4
 import requests
 from tests.api import ITSMAPIClient
 from tests.database import ITSMDBClient
@@ -43,7 +44,7 @@ class TestAuthentication:
         """创建API客户端"""
         client = ITSMAPIClient()
         yield client
-        if client.token:
+        if client.session.cookies.get('access_token'):
             try:
                 client.logout()
             except:
@@ -55,15 +56,16 @@ class TestAuthentication:
 
         # 验证返回结构
         assert result is not None
-        assert 'access_token' in result or 'user' in result
+        assert 'user' in result
 
         # 验证用户信息
         if 'user' in result:
             user = result['user']
             assert user.get('username') == 'user1'
 
-        # 验证token存在
-        assert api_client.token is not None
+        assert api_client.session.cookies.get('access_token') is not None
+        assert 'access_token' not in result
+        assert 'refresh_token' not in result
 
     def test_login_failure_invalid_credentials(self, api_client):
         """测试登录失败-无效凭据"""
@@ -90,13 +92,13 @@ class TestAuthentication:
         """测试登出"""
         # 先登录
         api_client.login('user1', 'user123')
-        assert api_client.token is not None
+        assert api_client.session.cookies.get('access_token') is not None
 
         # 登出
         result = api_client.logout()
         # 登出可能成功也可能失败(取决于后端实现)
         assert result is True or result is False
-        assert api_client.token is None
+        assert api_client.session.cookies.get('access_token') is None
 
 
 class TestTickets:
@@ -141,10 +143,14 @@ class TestTickets:
     def test_create_ticket(self, api_client):
         """测试创建工单"""
         ticket_data = TicketFixture.create()
-        result = api_client.create_ticket(ticket_data)
+        result = api_client.create_ticket(ticket_data, idempotency_key=str(uuid4()))
 
-        # 创建可能成功或因数据问题失败
-        assert result is not None
+        assert result["code"] == 0, result
+        receipt = result["data"]
+        assert receipt["workItemId"] > 0
+        assert receipt["number"]
+        assert "professionalReference" in receipt
+        assert "id" not in receipt and "ticketId" not in receipt
 
     def test_get_ticket_detail(self, api_client):
         """测试获取工单详情"""

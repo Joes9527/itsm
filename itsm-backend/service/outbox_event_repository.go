@@ -9,9 +9,13 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/database"
 	"itsm-backend/ent"
 	"itsm-backend/ent/outboxevent"
+	"itsm-backend/ent/predicate"
 
+	entsql "entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/google/uuid"
 )
 
@@ -19,11 +23,16 @@ const (
 	outboxEventStatusPending    = "pending"
 	outboxEventStatusPublishing = "publishing"
 	outboxEventStatusPublished  = "published"
+	outboxEventStatusBlocked    = "blocked"
+	outboxEventStatusDeadLetter = "dead_letter"
 
 	outboxEventClaimLeaseDuration = 5 * time.Minute
 	outboxEventLastErrorMaxLength = 512
-	outboxEventClaimRetryAttempts = 5
-	outboxEventClaimRetryDelay    = 5 * time.Millisecond
+	outboxEventClaimRetryAttempts = 50
+	outboxEventClaimRetryDelay    = 10 * time.Millisecond
+	outboxEventClaimRetryMaxDelay = 100 * time.Millisecond
+	outboxDeliveryAttemptPrefix   = "delivery_attempt_started:"
+	outboxDeliveryUnknownError    = "delivery_unknown: external side effect may have completed; manual reconciliation required"
 )
 
 var (
@@ -43,13 +52,15 @@ var (
 // NewOutboxEvent contains the immutable delivery data captured with the
 // owning domain transaction.
 type NewOutboxEvent struct {
-	EventID       string
-	EventType     string
-	TenantID      int
-	AggregateType string
-	AggregateID   string
-	Payload       json.RawMessage
-	NextAttemptAt time.Time
+	// ExecutionWorkItemID is supplied by the owning domain transaction, never inferred from payload or aggregate ID. Zero preserves an unresolved historical/independent reference.
+	ExecutionWorkItemID int
+	EventID             string
+	EventType           string
+	TenantID            int
+	AggregateType       string
+	AggregateID         string
+	Payload             json.RawMessage
+	NextAttemptAt       time.Time
 }
 
 // OutboxRetryAudit is the payload-free audit evidence recorded with a failed
@@ -66,22 +77,35 @@ type OutboxRetryAudit struct {
 
 // OutboxEventRepository persists and atomically claims reliable events.
 type OutboxEventRepository struct {
-	client *ent.Client
-	clock  func() time.Time
+	client    *ent.Client
+	execution *database.ExecutionPolicy
+	clock     func() time.Time
 }
 
-func NewOutboxEventRepository(client *ent.Client) *OutboxEventRepository {
-	return &OutboxEventRepository{client: client, clock: time.Now}
+func NewOutboxEventRepository(client *ent.Client, execution *database.ExecutionPolicy) *OutboxEventRepository {
+	return &OutboxEventRepository{client: client, execution: execution, clock: time.Now}
 }
 
 // Enqueue writes an event through the caller's transaction when supplied, so
 // a domain change cannot commit without its matching delivery record.
 func (r *OutboxEventRepository) Enqueue(ctx context.Context, tx *ent.Tx, event NewOutboxEvent) (*ent.OutboxEvent, error) {
-	creator := r.client.OutboxEvent.Create()
+	return enqueueOutboxEvent(ctx, r.client, tx, event)
+}
+
+// enqueueOutboxEvent is the single producer implementation; worker policy does not
+// own the caller's domain transaction or grant permission to create its records.
+func enqueueOutboxEvent(ctx context.Context, client *ent.Client, tx *ent.Tx, event NewOutboxEvent) (*ent.OutboxEvent, error) {
+	creator := client.OutboxEvent.Create()
 	if tx != nil {
 		creator = tx.OutboxEvent.Create()
 	}
 
+	if event.ExecutionWorkItemID < 0 {
+		return nil, fmt.Errorf("invalid execution WorkItem reference")
+	}
+	if event.ExecutionWorkItemID > 0 {
+		creator.SetExecutionWorkItemID(event.ExecutionWorkItemID)
+	}
 	creator.SetEventID(event.EventID).
 		SetEventType(event.EventType).
 		SetTenantID(event.TenantID).
@@ -94,8 +118,8 @@ func (r *OutboxEventRepository) Enqueue(ctx context.Context, tx *ent.Tx, event N
 
 	persisted, err := creator.Save(ctx)
 	if err != nil {
-		if ent.IsConstraintError(err) {
-			return nil, fmt.Errorf("%w: %v", ErrDuplicateOutboxEvent, err)
+		if sqlgraph.IsUniqueConstraintError(err) {
+			return nil, fmt.Errorf("%w: %w", ErrDuplicateOutboxEvent, err)
 		}
 		return nil, err
 	}
@@ -107,19 +131,26 @@ func (r *OutboxEventRepository) Enqueue(ctx context.Context, tx *ent.Tx, event N
 // is conditionally updated again, so a competing dispatcher that claimed it
 // first is never returned to this caller.
 func (r *OutboxEventRepository) ClaimDue(ctx context.Context, now time.Time, limit int) ([]*ent.OutboxEvent, error) {
-	return r.ClaimDueByEventType(ctx, now, limit, "")
+	return r.ClaimDueByEventType(ctx, now, limit, "", false)
 }
 
 // ClaimDueByEventType applies the same lease protocol as ClaimDue while
 // preventing one delivery integration from claiming another event type.
-func (r *OutboxEventRepository) ClaimDueByEventType(ctx context.Context, now time.Time, limit int, eventType string) ([]*ent.OutboxEvent, error) {
+func (r *OutboxEventRepository) ClaimDueByEventType(ctx context.Context, now time.Time, limit int, eventType string, serialByAggregate bool) ([]*ent.OutboxEvent, error) {
+	if serialByAggregate && strings.TrimSpace(eventType) == "" {
+		return nil, fmt.Errorf("ordered claims require a registered event type")
+	}
 	for attempt := 0; attempt < outboxEventClaimRetryAttempts; attempt++ {
-		claimed, err := r.claimDue(ctx, now, limit, eventType)
+		claimed, err := r.claimDue(ctx, now, limit, eventType, serialByAggregate)
 		if err == nil || !isRetryableOutboxClaimError(err) || attempt == outboxEventClaimRetryAttempts-1 {
 			return claimed, err
 		}
 
-		timer := time.NewTimer(time.Duration(attempt+1) * outboxEventClaimRetryDelay)
+		delay := time.Duration(attempt+1) * outboxEventClaimRetryDelay
+		if delay > outboxEventClaimRetryMaxDelay {
+			delay = outboxEventClaimRetryMaxDelay
+		}
+		timer := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -130,7 +161,7 @@ func (r *OutboxEventRepository) ClaimDueByEventType(ctx context.Context, now tim
 	return nil, nil
 }
 
-func (r *OutboxEventRepository) claimDue(ctx context.Context, now time.Time, limit int, eventType string) ([]*ent.OutboxEvent, error) {
+func (r *OutboxEventRepository) claimDue(ctx context.Context, now time.Time, limit int, eventType string, serialByAggregate bool) ([]*ent.OutboxEvent, error) {
 	if limit <= 0 {
 		return nil, nil
 	}
@@ -142,10 +173,48 @@ func (r *OutboxEventRepository) claimDue(ctx context.Context, now time.Time, lim
 		return nil, fmt.Errorf("start outbox claim transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	scope, err := r.execution.WorkerPredicate(ctx, tx, outboxevent.FieldTenantID, outboxevent.FieldExecutionWorkItemID)
+	if err != nil {
+		return nil, err
+	}
 
-	expiredClaims := tx.OutboxEvent.Update().
+	ambiguousQuery := tx.OutboxEvent.Query().Where(scope).Where(
+		outboxevent.StatusEQ(outboxEventStatusPublishing),
+		outboxevent.LastErrorHasPrefix(outboxDeliveryAttemptPrefix),
+		outboxevent.Or(outboxevent.ClaimExpiresAtLTE(now), outboxevent.ClaimExpiresAtIsNil()),
+	)
+	if eventType != "" {
+		ambiguousQuery = ambiguousQuery.Where(outboxevent.EventTypeEQ(eventType))
+	}
+	ambiguous, err := ambiguousQuery.All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("query ambiguous expired outbox claims: %w", err)
+	}
+	for _, event := range ambiguous {
+		updated, err := tx.OutboxEvent.Update().Where(scope).Where(
+			outboxevent.IDEQ(event.ID), outboxevent.StatusEQ(outboxEventStatusPublishing),
+			outboxevent.LastErrorHasPrefix(outboxDeliveryAttemptPrefix),
+		).SetStatus(outboxEventStatusBlocked).AddAttemptCount(1).SetLastError(outboxDeliveryUnknownError).
+			ClearClaimToken().ClearClaimExpiresAt().Save(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("block ambiguous outbox claim: %w", err)
+		}
+		if updated == 1 {
+			if err := tx.AuditLog.Create().SetTenantID(event.TenantID).SetRequestID(event.EventID).
+				SetResource("outbox_event").SetAction("outbox.delivery_unknown").SetPath("outbox/events").
+				SetMethod("WORKER").SetStatusCode(409).Exec(ctx); err != nil {
+				return nil, fmt.Errorf("audit ambiguous outbox claim: %w", err)
+			}
+		}
+	}
+
+	expiredClaims := tx.OutboxEvent.Update().Where(scope).
 		Where(
 			outboxevent.StatusEQ(outboxEventStatusPublishing),
+			outboxevent.Or(
+				outboxevent.LastErrorIsNil(),
+				outboxevent.Not(outboxevent.LastErrorHasPrefix(outboxDeliveryAttemptPrefix)),
+			),
 			outboxevent.Or(
 				outboxevent.ClaimExpiresAtLTE(now),
 				outboxevent.ClaimExpiresAtIsNil(),
@@ -163,13 +232,16 @@ func (r *OutboxEventRepository) claimDue(ctx context.Context, now time.Time, lim
 		return nil, fmt.Errorf("recover expired outbox claims: %w", err)
 	}
 
-	candidateQuery := tx.OutboxEvent.Query().
+	candidateQuery := tx.OutboxEvent.Query().Where(scope).
 		Where(
 			outboxevent.StatusEQ(outboxEventStatusPending),
 			outboxevent.NextAttemptAtLTE(now),
 		)
 	if eventType != "" {
 		candidateQuery = candidateQuery.Where(outboxevent.EventTypeEQ(eventType))
+	}
+	if serialByAggregate {
+		candidateQuery.Where(orderedOutboxHead)
 	}
 	candidates, err := candidateQuery.
 		Order(ent.Asc(outboxevent.FieldNextAttemptAt)).
@@ -182,7 +254,7 @@ func (r *OutboxEventRepository) claimDue(ctx context.Context, now time.Time, lim
 	claimed := make([]*ent.OutboxEvent, 0, len(candidates))
 	for _, candidate := range candidates {
 		claimToken := uuid.NewString()
-		claim := tx.OutboxEvent.Update().
+		claim := tx.OutboxEvent.Update().Where(scope).
 			Where(
 				outboxevent.IDEQ(candidate.ID),
 				outboxevent.StatusEQ(outboxEventStatusPending),
@@ -190,6 +262,9 @@ func (r *OutboxEventRepository) claimDue(ctx context.Context, now time.Time, lim
 			)
 		if eventType != "" {
 			claim = claim.Where(outboxevent.EventTypeEQ(eventType))
+		}
+		if serialByAggregate {
+			claim.Where(orderedOutboxHead)
 		}
 		updated, err := claim.
 			SetStatus(outboxEventStatusPublishing).
@@ -219,9 +294,96 @@ func (r *OutboxEventRepository) claimDue(ctx context.Context, now time.Time, lim
 	return claimed, nil
 }
 
+// MarkDeliveryAttemptStarted durably records the boundary immediately before
+// an external side effect. Expiry after this marker is delivery-ambiguous.
+func (r *OutboxEventRepository) MarkDeliveryAttemptStarted(ctx context.Context, eventID int, claimToken, deliveryID string) error {
+	return r.markDeliveryAttemptStarted(ctx, eventID, claimToken, deliveryID, false)
+}
+
+func (r *OutboxEventRepository) markDeliveryAttemptStarted(ctx context.Context, eventID int, claimToken, deliveryID string, replaySafe bool) error {
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("start outbox transition transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	scope, err := r.execution.WorkerPredicate(ctx, tx, outboxevent.FieldTenantID, outboxevent.FieldExecutionWorkItemID)
+	if err != nil {
+		return err
+	}
+	prefix := outboxDeliveryAttemptPrefix
+	if replaySafe {
+		prefix = "replayable_attempt_started:"
+	}
+	updated, err := tx.OutboxEvent.Update().Where(scope).Where(
+		outboxevent.IDEQ(eventID), outboxevent.StatusEQ(outboxEventStatusPublishing),
+		outboxevent.ClaimTokenEQ(claimToken), outboxevent.ClaimExpiresAtGT(r.currentTime()),
+	).SetLastError(prefix + summarizeOutboxError(deliveryID)).Save(ctx)
+	if err != nil {
+		return fmt.Errorf("mark delivery attempt started: %w", err)
+	}
+	if updated == 0 {
+		return ErrOutboxEventClaimLost
+	}
+	return tx.Commit()
+}
+
+// BlockUnknownPendingEventTypes prevents unregistered events from remaining
+// pending forever. Status and audit evidence commit atomically.
+func (r *OutboxEventRepository) BlockUnknownPendingEventTypes(ctx context.Context, now time.Time, limit int, knownTypes []string) (int, error) {
+	if limit <= 0 || len(knownTypes) == 0 {
+		return 0, nil
+	}
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("start unknown outbox transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	scope, err := r.execution.WorkerPredicate(ctx, tx, outboxevent.FieldTenantID, outboxevent.FieldExecutionWorkItemID)
+	if err != nil {
+		return 0, err
+	}
+	events, err := tx.OutboxEvent.Query().Where(scope).Where(
+		outboxevent.StatusEQ(outboxEventStatusPending), outboxevent.NextAttemptAtLTE(now.UTC()),
+		outboxevent.EventTypeNotIn(knownTypes...),
+	).Order(ent.Asc(outboxevent.FieldNextAttemptAt)).Limit(limit).All(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("query unknown outbox events: %w", err)
+	}
+	blocked := 0
+	for _, event := range events {
+		updated, err := tx.OutboxEvent.Update().Where(scope).Where(outboxevent.IDEQ(event.ID), outboxevent.StatusEQ(outboxEventStatusPending)).
+			SetStatus(outboxEventStatusBlocked).AddAttemptCount(1).SetLastError("unknown outbox event type: " + event.EventType).Save(ctx)
+		if err != nil {
+			return 0, fmt.Errorf("block unknown outbox event: %w", err)
+		}
+		if updated == 0 {
+			continue
+		}
+		if err := tx.AuditLog.Create().SetTenantID(event.TenantID).SetRequestID(event.EventID).
+			SetResource("outbox_event").SetAction("outbox.unknown_event_type").SetPath("outbox/events").
+			SetMethod("WORKER").SetStatusCode(422).Exec(ctx); err != nil {
+			return 0, fmt.Errorf("audit unknown outbox event: %w", err)
+		}
+		blocked++
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit unknown outbox transaction: %w", err)
+	}
+	return blocked, nil
+}
+
 // MarkRetry makes an active failed claim eligible for a later delivery attempt.
 func (r *OutboxEventRepository) MarkRetry(ctx context.Context, eventID int, claimToken, lastError string, nextAttemptAt time.Time) error {
-	updated, err := r.client.OutboxEvent.Update().
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("start outbox transition transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	scope, err := r.execution.WorkerPredicate(ctx, tx, outboxevent.FieldTenantID, outboxevent.FieldExecutionWorkItemID)
+	if err != nil {
+		return err
+	}
+	updated, err := tx.OutboxEvent.Update().Where(scope).
 		Where(
 			outboxevent.IDEQ(eventID),
 			outboxevent.StatusEQ(outboxEventStatusPublishing),
@@ -241,7 +403,7 @@ func (r *OutboxEventRepository) MarkRetry(ctx context.Context, eventID int, clai
 	if updated == 0 {
 		return ErrOutboxEventClaimLost
 	}
-	return nil
+	return tx.Commit()
 }
 
 // MarkRetryWithAudit atomically returns an active claim to pending and records
@@ -253,8 +415,12 @@ func (r *OutboxEventRepository) MarkRetryWithAudit(ctx context.Context, eventID 
 		return fmt.Errorf("start outbox retry audit transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	scope, err := r.execution.WorkerPredicate(ctx, tx, outboxevent.FieldTenantID, outboxevent.FieldExecutionWorkItemID)
+	if err != nil {
+		return err
+	}
 
-	updated, err := tx.OutboxEvent.Update().
+	updated, err := tx.OutboxEvent.Update().Where(scope).
 		Where(
 			outboxevent.IDEQ(eventID),
 			outboxevent.StatusEQ(outboxEventStatusPublishing),
@@ -292,9 +458,77 @@ func (r *OutboxEventRepository) MarkRetryWithAudit(ctx context.Context, eventID 
 	return nil
 }
 
-// MarkPublished finalizes an active, successfully delivered publishing lease.
+// DeliveryCompleted reads the existing delivery-completion timestamp. A durable
+// handler may commit this receipt before the worker acknowledges its lease;
+// pending/publishing plus published_at is therefore a completed delivery waiting
+// for acknowledgement, not permission to repeat its materialization.
+func (r *OutboxEventRepository) DeliveryCompleted(ctx context.Context, event *ent.OutboxEvent) (bool, error) {
+	if event == nil {
+		return false, fmt.Errorf("outbox event is required")
+	}
+	row, err := r.client.OutboxEvent.Query().Where(outboxDeliveryIdentity(event)...).Only(ctx)
+	if err != nil {
+		return false, err
+	}
+	return !row.PublishedAt.IsZero(), nil
+}
+
+// RecordDeliveryCompleted must use the handler's transaction-backed repository
+// so successful delivery (including suppressed channels) and its receipt commit
+// together. It never acknowledges or clears the worker lease. External transport
+// handlers cannot use this to claim transactional/replay-safe delivery.
+func (r *OutboxEventRepository) RecordDeliveryCompleted(ctx context.Context, event *ent.OutboxEvent) error {
+	if event == nil {
+		return fmt.Errorf("outbox event is required")
+	}
+	scope := outboxDeliveryIdentity(event)
+	if event.ClaimToken != "" {
+		scope = append(scope, outboxevent.StatusEQ(outboxEventStatusPublishing), outboxevent.ClaimTokenEQ(event.ClaimToken), outboxevent.ClaimExpiresAtGT(r.currentTime()))
+	} else {
+		// Direct synchronous delivery may materialize an unclaimed pending event;
+		// it cannot steal a publishing lease or reopen a terminal outcome.
+		scope = append(scope, outboxevent.StatusEQ(outboxEventStatusPending), outboxevent.ClaimTokenIsNil())
+	}
+	return r.recordDeliveryCompleted(ctx, scope, r.currentTime())
+}
+
+func outboxDeliveryIdentity(event *ent.OutboxEvent) []predicate.OutboxEvent {
+	return []predicate.OutboxEvent{outboxevent.IDEQ(event.ID), outboxevent.EventIDEQ(event.EventID), outboxevent.EventTypeEQ(event.EventType), outboxevent.TenantIDEQ(event.TenantID), outboxevent.AggregateTypeEQ(event.AggregateType), outboxevent.AggregateIDEQ(event.AggregateID)}
+}
+
+// One authoritative timestamp write for both transactional delivery receipts and
+// ordinary worker acknowledgement. A receipt already committed is immutable.
+func (r *OutboxEventRepository) recordDeliveryCompleted(ctx context.Context, scope []predicate.OutboxEvent, at time.Time) error {
+	updated, err := r.client.OutboxEvent.Update().Where(scope...).Where(outboxevent.PublishedAtIsNil()).SetPublishedAt(at).Save(ctx)
+	if err != nil {
+		return err
+	}
+	if updated == 1 {
+		return nil
+	}
+	exists, err := r.client.OutboxEvent.Query().Where(scope...).Exist(ctx)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return ErrOutboxEventClaimLost
+	}
+	return nil
+}
+
+// MarkPublished atomically acknowledges an active successfully delivered lease,
+// preserving a completion timestamp already committed by a durable handler.
 func (r *OutboxEventRepository) MarkPublished(ctx context.Context, eventID int, claimToken string, publishedAt time.Time) error {
-	updated, err := r.client.OutboxEvent.Update().
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("start outbox transition transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	scope, err := r.execution.WorkerPredicate(ctx, tx, outboxevent.FieldTenantID, outboxevent.FieldExecutionWorkItemID)
+	if err != nil {
+		return err
+	}
+	updated, err := tx.OutboxEvent.Update().Where(scope).
 		Where(
 			outboxevent.IDEQ(eventID),
 			outboxevent.StatusEQ(outboxEventStatusPublishing),
@@ -302,7 +536,6 @@ func (r *OutboxEventRepository) MarkPublished(ctx context.Context, eventID int, 
 			outboxevent.ClaimExpiresAtGT(r.currentTime()),
 		).
 		SetStatus(outboxEventStatusPublished).
-		SetPublishedAt(publishedAt).
 		ClearLastError().
 		ClearClaimToken().
 		ClearClaimExpiresAt().
@@ -313,7 +546,94 @@ func (r *OutboxEventRepository) MarkPublished(ctx context.Context, eventID int, 
 	if updated == 0 {
 		return ErrOutboxEventClaimLost
 	}
+	// A consumer may already have recorded durable delivery time. Preserve it;
+	// transport-only handlers still receive the acknowledgement timestamp.
+	if _, err := tx.OutboxEvent.Update().Where(outboxevent.IDEQ(eventID), outboxevent.PublishedAtIsNil()).SetPublishedAt(publishedAt).Save(ctx); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// MarkBlocked records a non-retryable configuration or payload failure while
+// retaining the delivery for operator inspection.
+func (r *OutboxEventRepository) MarkBlocked(ctx context.Context, eventID int, claimToken, lastError string) error {
+	return r.markTerminal(ctx, eventID, claimToken, outboxEventStatusBlocked, lastError)
+}
+
+// MarkDeliveryUnknown atomically records the ambiguous terminal state and the
+// audit evidence required for manual reconciliation.
+func (r *OutboxEventRepository) MarkDeliveryUnknown(ctx context.Context, event *ent.OutboxEvent, claimToken, lastError string) error {
+	if event == nil {
+		return fmt.Errorf("outbox event is required")
+	}
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("start delivery unknown transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	scope, err := r.execution.WorkerPredicate(ctx, tx, outboxevent.FieldTenantID, outboxevent.FieldExecutionWorkItemID)
+	if err != nil {
+		return err
+	}
+	updated, err := tx.OutboxEvent.Update().Where(scope).Where(
+		outboxevent.IDEQ(event.ID), outboxevent.StatusEQ(outboxEventStatusPublishing),
+		outboxevent.ClaimTokenEQ(claimToken), outboxevent.ClaimExpiresAtGT(r.currentTime()),
+	).SetStatus(outboxEventStatusBlocked).AddAttemptCount(1).SetLastError(summarizeOutboxError(lastError)).
+		ClearClaimToken().ClearClaimExpiresAt().Save(ctx)
+	if err != nil {
+		return fmt.Errorf("mark delivery unknown: %w", err)
+	}
+	if updated == 0 {
+		return ErrOutboxEventClaimLost
+	}
+	if err := tx.AuditLog.Create().SetTenantID(event.TenantID).SetRequestID(event.EventID).
+		SetResource("outbox_event").SetAction("outbox.delivery_unknown").SetPath("outbox/events").
+		SetMethod("WORKER").SetStatusCode(409).Exec(ctx); err != nil {
+		return fmt.Errorf("audit delivery unknown: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit delivery unknown transaction: %w", err)
+	}
 	return nil
+}
+
+// MarkDeadLetter records a transient delivery that exhausted its configured
+// retry budget. It remains observable and can be replayed by an explicit
+// operator action in the unified outbox boundary.
+func (r *OutboxEventRepository) MarkDeadLetter(ctx context.Context, eventID int, claimToken, lastError string) error {
+	return r.markTerminal(ctx, eventID, claimToken, outboxEventStatusDeadLetter, lastError)
+}
+
+func (r *OutboxEventRepository) markTerminal(ctx context.Context, eventID int, claimToken, status, lastError string) error {
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("start outbox transition transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	scope, err := r.execution.WorkerPredicate(ctx, tx, outboxevent.FieldTenantID, outboxevent.FieldExecutionWorkItemID)
+	if err != nil {
+		return err
+	}
+	updated, err := tx.OutboxEvent.Update().Where(scope).
+		Where(
+			outboxevent.IDEQ(eventID),
+			outboxevent.StatusEQ(outboxEventStatusPublishing),
+			outboxevent.ClaimTokenEQ(claimToken),
+			outboxevent.ClaimExpiresAtGT(r.currentTime()),
+		).
+		SetStatus(status).
+		AddAttemptCount(1).
+		SetLastError(summarizeOutboxError(lastError)).
+		ClearClaimToken().
+		ClearClaimExpiresAt().
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("mark outbox event %s: %w", status, err)
+	}
+	if updated == 0 {
+		return ErrOutboxEventClaimLost
+	}
+	return tx.Commit()
 }
 
 func (r *OutboxEventRepository) currentTime() time.Time {
@@ -340,4 +660,21 @@ func isRetryableOutboxClaimError(err error) bool {
 		strings.Contains(message, "database table is locked") ||
 		strings.Contains(message, "could not serialize access") ||
 		strings.Contains(message, "deadlock detected")
+}
+
+// A preceding event remains a barrier even when historical, blocked, or outside
+// the current execution scope. Scope protects the outer mutation, never erases a
+// predecessor. Producers must serialize before INSERT; a sequence alone does not
+// establish transaction commit order. Published is the only terminal success.
+func orderedOutboxHead(s *entsql.Selector) {
+	previous := entsql.Table(outboxevent.Table).As("outbox_predecessor")
+	earlier := entsql.Select(previous.C(outboxevent.FieldID)).From(previous).Where(entsql.And(
+		entsql.ColumnsLT(previous.C(outboxevent.FieldID), s.C(outboxevent.FieldID)),
+		entsql.ColumnsEQ(previous.C(outboxevent.FieldTenantID), s.C(outboxevent.FieldTenantID)),
+		entsql.ColumnsEQ(previous.C(outboxevent.FieldEventType), s.C(outboxevent.FieldEventType)),
+		entsql.ColumnsEQ(previous.C(outboxevent.FieldAggregateType), s.C(outboxevent.FieldAggregateType)),
+		entsql.ColumnsEQ(previous.C(outboxevent.FieldAggregateID), s.C(outboxevent.FieldAggregateID)),
+		entsql.Or(entsql.IsNull(previous.C(outboxevent.FieldStatus)), entsql.NEQ(previous.C(outboxevent.FieldStatus), outboxEventStatusPublished)),
+	))
+	s.Where(entsql.Not(entsql.Exists(earlier)))
 }

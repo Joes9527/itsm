@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/outboxevent"
@@ -224,8 +226,12 @@ func TestOutboxEventRepository_RejectsStaleLeaseCompletion(t *testing.T) {
 	repo.clock = func() time.Time { return recoveredAt }
 	retryErr := repo.MarkRetry(ctx, first[0].ID, first[0].ClaimToken, "stale retry", recoveredAt.Add(time.Minute))
 	publishErr := repo.MarkPublished(ctx, first[0].ID, first[0].ClaimToken, recoveredAt)
+	blockedErr := repo.MarkBlocked(ctx, first[0].ID, first[0].ClaimToken, "stale blocked")
+	deadLetterErr := repo.MarkDeadLetter(ctx, first[0].ID, first[0].ClaimToken, "stale dead letter")
 	require.ErrorIs(t, retryErr, ErrOutboxEventClaimLost)
 	require.ErrorIs(t, publishErr, ErrOutboxEventClaimLost)
+	require.ErrorIs(t, blockedErr, ErrOutboxEventClaimLost)
+	require.ErrorIs(t, deadLetterErr, ErrOutboxEventClaimLost)
 
 	event, err := client.OutboxEvent.Get(ctx, second[0].ID)
 	require.NoError(t, err)
@@ -251,6 +257,49 @@ func TestOutboxEventRepository_MarkPublishedFinalizesClaimedEvent(t *testing.T) 
 	assert.Equal(t, outboxEventStatusPublished, event.Status)
 	assert.False(t, event.PublishedAt.IsZero())
 	assert.WithinDuration(t, publishedAt, event.PublishedAt, time.Millisecond)
+}
+
+func TestOutboxEventRepository_MarkPublishedPreservesCompletedDeliveryTime(t *testing.T) {
+	repo, client := newOutboxRepository(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	seedPendingEvent(t, repo, "completed-before-ack", now.Add(-time.Second))
+	claimed, err := repo.ClaimDue(ctx, now, 1)
+	require.NoError(t, err)
+	require.Len(t, claimed, 1)
+	client.OutboxEvent.UpdateOneID(claimed[0].ID).SetPublishedAt(now).SaveX(ctx)
+	require.NoError(t, repo.MarkPublished(ctx, claimed[0].ID, claimed[0].ClaimToken, now.Add(time.Minute)))
+	require.WithinDuration(t, now, client.OutboxEvent.GetX(ctx, claimed[0].ID).PublishedAt, time.Millisecond)
+}
+
+func TestOutboxEventRepository_DeliveryReceiptRejectsStaleClaimAndForeignIdentity(t *testing.T) {
+	repo, client := newOutboxRepository(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	seedPendingEvent(t, repo, "receipt-scope", now.Add(-time.Second))
+	first, err := repo.ClaimDue(ctx, now, 1)
+	require.NoError(t, err)
+	require.Len(t, first, 1)
+	recoveredAt := now.Add(outboxEventClaimLeaseDuration + time.Second)
+	repo.clock = func() time.Time { return recoveredAt }
+	second, err := repo.ClaimDue(ctx, recoveredAt, 1)
+	require.NoError(t, err)
+	require.Len(t, second, 1)
+	require.ErrorIs(t, repo.RecordDeliveryCompleted(ctx, first[0]), ErrOutboxEventClaimLost)
+	for _, change := range []func(*ent.OutboxEvent){
+		func(e *ent.OutboxEvent) { e.TenantID++ }, func(e *ent.OutboxEvent) { e.EventID = "other" }, func(e *ent.OutboxEvent) { e.AggregateID = "other" }, func(e *ent.OutboxEvent) { e.EventType = "other" },
+	} {
+		foreign := *second[0]
+		change(&foreign)
+		require.ErrorIs(t, repo.RecordDeliveryCompleted(ctx, &foreign), ErrOutboxEventClaimLost)
+		_, err := repo.DeliveryCompleted(ctx, &foreign)
+		require.Error(t, err)
+	}
+	require.True(t, client.OutboxEvent.GetX(ctx, first[0].ID).PublishedAt.IsZero())
+	require.NoError(t, repo.RecordDeliveryCompleted(ctx, second[0]))
+	completed, err := repo.DeliveryCompleted(ctx, second[0])
+	require.NoError(t, err)
+	require.True(t, completed)
 }
 
 func TestOutboxEventRepository_RedactsSensitiveEntityFieldsAndSanitizesRetryError(t *testing.T) {
@@ -408,7 +457,7 @@ func newOutboxRepositoryWithDriver(t *testing.T, driverName string) (*OutboxEven
 	db.SetMaxIdleConns(4)
 	client := enttest.NewClient(t, enttest.WithOptions(ent.Driver(entsql.OpenDB(dialect.SQLite, db))))
 	t.Cleanup(func() { _ = client.Close() })
-	return NewOutboxEventRepository(client), client, db
+	return NewOutboxEventRepository(client, executionfixture.Standard("outbox")), client, db
 }
 
 type sqliteOutboxUpdateTracker struct {
@@ -468,4 +517,12 @@ func assertEventState(t *testing.T, client *ent.Client, eventID, wantStatus stri
 	assert.Equal(t, wantStatus, event.Status)
 	assert.Equal(t, wantAttempts, event.AttemptCount)
 	assert.WithinDuration(t, wantNextAttemptAt, event.NextAttemptAt, time.Millisecond)
+}
+
+func TestOutboxEventRepository_PreservesStructuredExecutionReference(t *testing.T) {
+	repo, _ := newOutboxRepository(t)
+	event, err := repo.Enqueue(context.Background(), nil, NewOutboxEvent{EventID: "reference", EventType: "test", TenantID: 1, AggregateType: "alert", AggregateID: "900", ExecutionWorkItemID: 77, Payload: json.RawMessage(`{}`)})
+	require.NoError(t, err)
+	require.NotNil(t, event.ExecutionWorkItemID)
+	require.Equal(t, 77, *event.ExecutionWorkItemID)
 }

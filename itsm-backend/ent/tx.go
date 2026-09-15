@@ -4,6 +4,8 @@ package ent
 
 import (
 	"context"
+	stdsql "database/sql"
+	"fmt"
 	"sync"
 
 	"entgo.io/ent/dialect"
@@ -42,6 +44,8 @@ type Tx struct {
 	CMDBImportTask *CMDBImportTaskClient
 	// CMDBSavedView is the client for interacting with the CMDBSavedView builders.
 	CMDBSavedView *CMDBSavedViewClient
+	// CatalogAccessPolicy is the client for interacting with the CatalogAccessPolicy builders.
+	CatalogAccessPolicy *CatalogAccessPolicyClient
 	// Change is the client for interacting with the Change builders.
 	Change *ChangeClient
 	// ChangePIR is the client for interacting with the ChangePIR builders.
@@ -76,6 +80,8 @@ type Tx struct {
 	EndpointACL *EndpointACLClient
 	// EngineerSkill is the client for interacting with the EngineerSkill builders.
 	EngineerSkill *EngineerSkillClient
+	// ExternalIdentity is the client for interacting with the ExternalIdentity builders.
+	ExternalIdentity *ExternalIdentityClient
 	// FeishuTicketSync is the client for interacting with the FeishuTicketSync builders.
 	FeishuTicketSync *FeishuTicketSyncClient
 	// FieldDefinition is the client for interacting with the FieldDefinition builders.
@@ -96,8 +102,14 @@ type Tx struct {
 	IncidentMetric *IncidentMetricClient
 	// IncidentRule is the client for interacting with the IncidentRule builders.
 	IncidentRule *IncidentRuleClient
+	// IncidentRuleActionReceipt is the client for interacting with the IncidentRuleActionReceipt builders.
+	IncidentRuleActionReceipt *IncidentRuleActionReceiptClient
 	// IncidentRuleExecution is the client for interacting with the IncidentRuleExecution builders.
 	IncidentRuleExecution *IncidentRuleExecutionClient
+	// IntakeRequest is the client for interacting with the IntakeRequest builders.
+	IntakeRequest *IntakeRequestClient
+	// IntakeResolutionSnapshot is the client for interacting with the IntakeResolutionSnapshot builders.
+	IntakeResolutionSnapshot *IntakeResolutionSnapshotClient
 	// ItemVersion is the client for interacting with the ItemVersion builders.
 	ItemVersion *ItemVersionClient
 	// KafTaskActionLedger is the client for interacting with the KafTaskActionLedger builders.
@@ -192,6 +204,10 @@ type Tx struct {
 	ServiceCatalog *ServiceCatalogClient
 	// ServiceRequest is the client for interacting with the ServiceRequest builders.
 	ServiceRequest *ServiceRequestClient
+	// ServiceRequestAccessResult is the client for interacting with the ServiceRequestAccessResult builders.
+	ServiceRequestAccessResult *ServiceRequestAccessResultClient
+	// ServiceRequestAccessSnapshot is the client for interacting with the ServiceRequestAccessSnapshot builders.
+	ServiceRequestAccessSnapshot *ServiceRequestAccessSnapshotClient
 	// StandardChange is the client for interacting with the StandardChange builders.
 	StandardChange *StandardChangeClient
 	// Survey is the client for interacting with the Survey builders.
@@ -210,8 +226,6 @@ type Tx struct {
 	TenantInstallation *TenantInstallationClient
 	// Ticket is the client for interacting with the Ticket builders.
 	Ticket *TicketClient
-	// TicketApproval is the client for interacting with the TicketApproval builders.
-	TicketApproval *TicketApprovalClient
 	// TicketAssignmentRule is the client for interacting with the TicketAssignmentRule builders.
 	TicketAssignmentRule *TicketAssignmentRuleClient
 	// TicketAttachment is the client for interacting with the TicketAttachment builders.
@@ -242,16 +256,10 @@ type Tx struct {
 	User *UserClient
 	// Vendor is the client for interacting with the Vendor builders.
 	Vendor *VendorClient
+	// WorkItemNumberSequence is the client for interacting with the WorkItemNumberSequence builders.
+	WorkItemNumberSequence *WorkItemNumberSequenceClient
 	// WorkItemRelation is the client for interacting with the WorkItemRelation builders.
 	WorkItemRelation *WorkItemRelationClient
-	// Workflow is the client for interacting with the Workflow builders.
-	Workflow *WorkflowClient
-	// WorkflowInstance is the client for interacting with the WorkflowInstance builders.
-	WorkflowInstance *WorkflowInstanceClient
-	// WorkflowTask is the client for interacting with the WorkflowTask builders.
-	WorkflowTask *WorkflowTaskClient
-	// WorkflowVersion is the client for interacting with the WorkflowVersion builders.
-	WorkflowVersion *WorkflowVersionClient
 
 	// lazily loaded.
 	client     *Client
@@ -398,6 +406,7 @@ func (tx *Tx) init() {
 	tx.CMDBExportTask = NewCMDBExportTaskClient(tx.config)
 	tx.CMDBImportTask = NewCMDBImportTaskClient(tx.config)
 	tx.CMDBSavedView = NewCMDBSavedViewClient(tx.config)
+	tx.CatalogAccessPolicy = NewCatalogAccessPolicyClient(tx.config)
 	tx.Change = NewChangeClient(tx.config)
 	tx.ChangePIR = NewChangePIRClient(tx.config)
 	tx.CloudAccount = NewCloudAccountClient(tx.config)
@@ -415,6 +424,7 @@ func (tx *Tx) init() {
 	tx.DomainConfig = NewDomainConfigClient(tx.config)
 	tx.EndpointACL = NewEndpointACLClient(tx.config)
 	tx.EngineerSkill = NewEngineerSkillClient(tx.config)
+	tx.ExternalIdentity = NewExternalIdentityClient(tx.config)
 	tx.FeishuTicketSync = NewFeishuTicketSyncClient(tx.config)
 	tx.FieldDefinition = NewFieldDefinitionClient(tx.config)
 	tx.FieldValue = NewFieldValueClient(tx.config)
@@ -425,7 +435,10 @@ func (tx *Tx) init() {
 	tx.IncidentEvent = NewIncidentEventClient(tx.config)
 	tx.IncidentMetric = NewIncidentMetricClient(tx.config)
 	tx.IncidentRule = NewIncidentRuleClient(tx.config)
+	tx.IncidentRuleActionReceipt = NewIncidentRuleActionReceiptClient(tx.config)
 	tx.IncidentRuleExecution = NewIncidentRuleExecutionClient(tx.config)
+	tx.IntakeRequest = NewIntakeRequestClient(tx.config)
+	tx.IntakeResolutionSnapshot = NewIntakeResolutionSnapshotClient(tx.config)
 	tx.ItemVersion = NewItemVersionClient(tx.config)
 	tx.KafTaskActionLedger = NewKafTaskActionLedgerClient(tx.config)
 	tx.KafTaskCompletionReceipt = NewKafTaskCompletionReceiptClient(tx.config)
@@ -473,6 +486,8 @@ func (tx *Tx) init() {
 	tx.SLAViolation = NewSLAViolationClient(tx.config)
 	tx.ServiceCatalog = NewServiceCatalogClient(tx.config)
 	tx.ServiceRequest = NewServiceRequestClient(tx.config)
+	tx.ServiceRequestAccessResult = NewServiceRequestAccessResultClient(tx.config)
+	tx.ServiceRequestAccessSnapshot = NewServiceRequestAccessSnapshotClient(tx.config)
 	tx.StandardChange = NewStandardChangeClient(tx.config)
 	tx.Survey = NewSurveyClient(tx.config)
 	tx.SurveyResponse = NewSurveyResponseClient(tx.config)
@@ -482,7 +497,6 @@ func (tx *Tx) init() {
 	tx.Tenant = NewTenantClient(tx.config)
 	tx.TenantInstallation = NewTenantInstallationClient(tx.config)
 	tx.Ticket = NewTicketClient(tx.config)
-	tx.TicketApproval = NewTicketApprovalClient(tx.config)
 	tx.TicketAssignmentRule = NewTicketAssignmentRuleClient(tx.config)
 	tx.TicketAttachment = NewTicketAttachmentClient(tx.config)
 	tx.TicketAutomationRule = NewTicketAutomationRuleClient(tx.config)
@@ -498,11 +512,8 @@ func (tx *Tx) init() {
 	tx.ToolInvocation = NewToolInvocationClient(tx.config)
 	tx.User = NewUserClient(tx.config)
 	tx.Vendor = NewVendorClient(tx.config)
+	tx.WorkItemNumberSequence = NewWorkItemNumberSequenceClient(tx.config)
 	tx.WorkItemRelation = NewWorkItemRelationClient(tx.config)
-	tx.Workflow = NewWorkflowClient(tx.config)
-	tx.WorkflowInstance = NewWorkflowInstanceClient(tx.config)
-	tx.WorkflowTask = NewWorkflowTaskClient(tx.config)
-	tx.WorkflowVersion = NewWorkflowVersionClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.
@@ -565,3 +576,27 @@ func (tx *txDriver) Query(ctx context.Context, query string, args, v any) error 
 }
 
 var _ dialect.Driver = (*txDriver)(nil)
+
+// ExecContext allows calling the underlying ExecContext method of the transaction if it is supported by it.
+// See, database/sql#Tx.ExecContext for more information.
+func (tx *txDriver) ExecContext(ctx context.Context, query string, args ...any) (stdsql.Result, error) {
+	ex, ok := tx.tx.(interface {
+		ExecContext(context.Context, string, ...any) (stdsql.Result, error)
+	})
+	if !ok {
+		return nil, fmt.Errorf("Tx.ExecContext is not supported")
+	}
+	return ex.ExecContext(ctx, query, args...)
+}
+
+// QueryContext allows calling the underlying QueryContext method of the transaction if it is supported by it.
+// See, database/sql#Tx.QueryContext for more information.
+func (tx *txDriver) QueryContext(ctx context.Context, query string, args ...any) (*stdsql.Rows, error) {
+	q, ok := tx.tx.(interface {
+		QueryContext(context.Context, string, ...any) (*stdsql.Rows, error)
+	})
+	if !ok {
+		return nil, fmt.Errorf("Tx.QueryContext is not supported")
+	}
+	return q.QueryContext(ctx, query, args...)
+}

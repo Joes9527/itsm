@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/assetlicense"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +19,7 @@ type AssetLicenseCreate struct {
 	config
 	mutation *AssetLicenseMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetLicenseKey sets the "license_key" field.
@@ -405,6 +407,7 @@ func (_c *AssetLicenseCreate) createSpec() (*AssetLicense, *sqlgraph.CreateSpec)
 		_node = &AssetLicense{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(assetlicense.Table, sqlgraph.NewFieldSpec(assetlicense.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.LicenseKey(); ok {
 		_spec.SetField(assetlicense.FieldLicenseKey, field.TypeString, value)
 		_node.LicenseKey = value
@@ -492,11 +495,914 @@ func (_c *AssetLicenseCreate) createSpec() (*AssetLicense, *sqlgraph.CreateSpec)
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.AssetLicense.Create().
+//		SetLicenseKey(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.AssetLicenseUpsert) {
+//			SetLicenseKey(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *AssetLicenseCreate) OnConflict(opts ...sql.ConflictOption) *AssetLicenseUpsertOne {
+	_c.conflict = opts
+	return &AssetLicenseUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.AssetLicense.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *AssetLicenseCreate) OnConflictColumns(columns ...string) *AssetLicenseUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &AssetLicenseUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// AssetLicenseUpsertOne is the builder for "upsert"-ing
+	//  one AssetLicense node.
+	AssetLicenseUpsertOne struct {
+		create *AssetLicenseCreate
+	}
+
+	// AssetLicenseUpsert is the "OnConflict" setter.
+	AssetLicenseUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetLicenseKey sets the "license_key" field.
+func (u *AssetLicenseUpsert) SetLicenseKey(v string) *AssetLicenseUpsert {
+	u.Set(assetlicense.FieldLicenseKey, v)
+	return u
+}
+
+// UpdateLicenseKey sets the "license_key" field to the value that was provided on create.
+func (u *AssetLicenseUpsert) UpdateLicenseKey() *AssetLicenseUpsert {
+	u.SetExcluded(assetlicense.FieldLicenseKey)
+	return u
+}
+
+// ClearLicenseKey clears the value of the "license_key" field.
+func (u *AssetLicenseUpsert) ClearLicenseKey() *AssetLicenseUpsert {
+	u.SetNull(assetlicense.FieldLicenseKey)
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *AssetLicenseUpsert) SetName(v string) *AssetLicenseUpsert {
+	u.Set(assetlicense.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *AssetLicenseUpsert) UpdateName() *AssetLicenseUpsert {
+	u.SetExcluded(assetlicense.FieldName)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *AssetLicenseUpsert) SetDescription(v string) *AssetLicenseUpsert {
+	u.Set(assetlicense.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *AssetLicenseUpsert) UpdateDescription() *AssetLicenseUpsert {
+	u.SetExcluded(assetlicense.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *AssetLicenseUpsert) ClearDescription() *AssetLicenseUpsert {
+	u.SetNull(assetlicense.FieldDescription)
+	return u
+}
+
+// SetVendor sets the "vendor" field.
+func (u *AssetLicenseUpsert) SetVendor(v string) *AssetLicenseUpsert {
+	u.Set(assetlicense.FieldVendor, v)
+	return u
+}
+
+// UpdateVendor sets the "vendor" field to the value that was provided on create.
+func (u *AssetLicenseUpsert) UpdateVendor() *AssetLicenseUpsert {
+	u.SetExcluded(assetlicense.FieldVendor)
+	return u
+}
+
+// ClearVendor clears the value of the "vendor" field.
+func (u *AssetLicenseUpsert) ClearVendor() *AssetLicenseUpsert {
+	u.SetNull(assetlicense.FieldVendor)
+	return u
+}
+
+// SetLicenseType sets the "license_type" field.
+func (u *AssetLicenseUpsert) SetLicenseType(v string) *AssetLicenseUpsert {
+	u.Set(assetlicense.FieldLicenseType, v)
+	return u
+}
+
+// UpdateLicenseType sets the "license_type" field to the value that was provided on create.
+func (u *AssetLicenseUpsert) UpdateLicenseType() *AssetLicenseUpsert {
+	u.SetExcluded(assetlicense.FieldLicenseType)
+	return u
+}
+
+// SetTotalQuantity sets the "total_quantity" field.
+func (u *AssetLicenseUpsert) SetTotalQuantity(v int) *AssetLicenseUpsert {
+	u.Set(assetlicense.FieldTotalQuantity, v)
+	return u
+}
+
+// UpdateTotalQuantity sets the "total_quantity" field to the value that was provided on create.
+func (u *AssetLicenseUpsert) UpdateTotalQuantity() *AssetLicenseUpsert {
+	u.SetExcluded(assetlicense.FieldTotalQuantity)
+	return u
+}
+
+// AddTotalQuantity adds v to the "total_quantity" field.
+func (u *AssetLicenseUpsert) AddTotalQuantity(v int) *AssetLicenseUpsert {
+	u.Add(assetlicense.FieldTotalQuantity, v)
+	return u
+}
+
+// SetUsedQuantity sets the "used_quantity" field.
+func (u *AssetLicenseUpsert) SetUsedQuantity(v int) *AssetLicenseUpsert {
+	u.Set(assetlicense.FieldUsedQuantity, v)
+	return u
+}
+
+// UpdateUsedQuantity sets the "used_quantity" field to the value that was provided on create.
+func (u *AssetLicenseUpsert) UpdateUsedQuantity() *AssetLicenseUpsert {
+	u.SetExcluded(assetlicense.FieldUsedQuantity)
+	return u
+}
+
+// AddUsedQuantity adds v to the "used_quantity" field.
+func (u *AssetLicenseUpsert) AddUsedQuantity(v int) *AssetLicenseUpsert {
+	u.Add(assetlicense.FieldUsedQuantity, v)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *AssetLicenseUpsert) SetTenantID(v int) *AssetLicenseUpsert {
+	u.Set(assetlicense.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *AssetLicenseUpsert) UpdateTenantID() *AssetLicenseUpsert {
+	u.SetExcluded(assetlicense.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *AssetLicenseUpsert) AddTenantID(v int) *AssetLicenseUpsert {
+	u.Add(assetlicense.FieldTenantID, v)
+	return u
+}
+
+// SetAssetID sets the "asset_id" field.
+func (u *AssetLicenseUpsert) SetAssetID(v int) *AssetLicenseUpsert {
+	u.Set(assetlicense.FieldAssetID, v)
+	return u
+}
+
+// UpdateAssetID sets the "asset_id" field to the value that was provided on create.
+func (u *AssetLicenseUpsert) UpdateAssetID() *AssetLicenseUpsert {
+	u.SetExcluded(assetlicense.FieldAssetID)
+	return u
+}
+
+// AddAssetID adds v to the "asset_id" field.
+func (u *AssetLicenseUpsert) AddAssetID(v int) *AssetLicenseUpsert {
+	u.Add(assetlicense.FieldAssetID, v)
+	return u
+}
+
+// ClearAssetID clears the value of the "asset_id" field.
+func (u *AssetLicenseUpsert) ClearAssetID() *AssetLicenseUpsert {
+	u.SetNull(assetlicense.FieldAssetID)
+	return u
+}
+
+// SetPurchaseDate sets the "purchase_date" field.
+func (u *AssetLicenseUpsert) SetPurchaseDate(v string) *AssetLicenseUpsert {
+	u.Set(assetlicense.FieldPurchaseDate, v)
+	return u
+}
+
+// UpdatePurchaseDate sets the "purchase_date" field to the value that was provided on create.
+func (u *AssetLicenseUpsert) UpdatePurchaseDate() *AssetLicenseUpsert {
+	u.SetExcluded(assetlicense.FieldPurchaseDate)
+	return u
+}
+
+// ClearPurchaseDate clears the value of the "purchase_date" field.
+func (u *AssetLicenseUpsert) ClearPurchaseDate() *AssetLicenseUpsert {
+	u.SetNull(assetlicense.FieldPurchaseDate)
+	return u
+}
+
+// SetPurchasePrice sets the "purchase_price" field.
+func (u *AssetLicenseUpsert) SetPurchasePrice(v float64) *AssetLicenseUpsert {
+	u.Set(assetlicense.FieldPurchasePrice, v)
+	return u
+}
+
+// UpdatePurchasePrice sets the "purchase_price" field to the value that was provided on create.
+func (u *AssetLicenseUpsert) UpdatePurchasePrice() *AssetLicenseUpsert {
+	u.SetExcluded(assetlicense.FieldPurchasePrice)
+	return u
+}
+
+// AddPurchasePrice adds v to the "purchase_price" field.
+func (u *AssetLicenseUpsert) AddPurchasePrice(v float64) *AssetLicenseUpsert {
+	u.Add(assetlicense.FieldPurchasePrice, v)
+	return u
+}
+
+// ClearPurchasePrice clears the value of the "purchase_price" field.
+func (u *AssetLicenseUpsert) ClearPurchasePrice() *AssetLicenseUpsert {
+	u.SetNull(assetlicense.FieldPurchasePrice)
+	return u
+}
+
+// SetExpiryDate sets the "expiry_date" field.
+func (u *AssetLicenseUpsert) SetExpiryDate(v string) *AssetLicenseUpsert {
+	u.Set(assetlicense.FieldExpiryDate, v)
+	return u
+}
+
+// UpdateExpiryDate sets the "expiry_date" field to the value that was provided on create.
+func (u *AssetLicenseUpsert) UpdateExpiryDate() *AssetLicenseUpsert {
+	u.SetExcluded(assetlicense.FieldExpiryDate)
+	return u
+}
+
+// ClearExpiryDate clears the value of the "expiry_date" field.
+func (u *AssetLicenseUpsert) ClearExpiryDate() *AssetLicenseUpsert {
+	u.SetNull(assetlicense.FieldExpiryDate)
+	return u
+}
+
+// SetSupportVendor sets the "support_vendor" field.
+func (u *AssetLicenseUpsert) SetSupportVendor(v string) *AssetLicenseUpsert {
+	u.Set(assetlicense.FieldSupportVendor, v)
+	return u
+}
+
+// UpdateSupportVendor sets the "support_vendor" field to the value that was provided on create.
+func (u *AssetLicenseUpsert) UpdateSupportVendor() *AssetLicenseUpsert {
+	u.SetExcluded(assetlicense.FieldSupportVendor)
+	return u
+}
+
+// ClearSupportVendor clears the value of the "support_vendor" field.
+func (u *AssetLicenseUpsert) ClearSupportVendor() *AssetLicenseUpsert {
+	u.SetNull(assetlicense.FieldSupportVendor)
+	return u
+}
+
+// SetSupportContact sets the "support_contact" field.
+func (u *AssetLicenseUpsert) SetSupportContact(v string) *AssetLicenseUpsert {
+	u.Set(assetlicense.FieldSupportContact, v)
+	return u
+}
+
+// UpdateSupportContact sets the "support_contact" field to the value that was provided on create.
+func (u *AssetLicenseUpsert) UpdateSupportContact() *AssetLicenseUpsert {
+	u.SetExcluded(assetlicense.FieldSupportContact)
+	return u
+}
+
+// ClearSupportContact clears the value of the "support_contact" field.
+func (u *AssetLicenseUpsert) ClearSupportContact() *AssetLicenseUpsert {
+	u.SetNull(assetlicense.FieldSupportContact)
+	return u
+}
+
+// SetRenewalCost sets the "renewal_cost" field.
+func (u *AssetLicenseUpsert) SetRenewalCost(v string) *AssetLicenseUpsert {
+	u.Set(assetlicense.FieldRenewalCost, v)
+	return u
+}
+
+// UpdateRenewalCost sets the "renewal_cost" field to the value that was provided on create.
+func (u *AssetLicenseUpsert) UpdateRenewalCost() *AssetLicenseUpsert {
+	u.SetExcluded(assetlicense.FieldRenewalCost)
+	return u
+}
+
+// ClearRenewalCost clears the value of the "renewal_cost" field.
+func (u *AssetLicenseUpsert) ClearRenewalCost() *AssetLicenseUpsert {
+	u.SetNull(assetlicense.FieldRenewalCost)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *AssetLicenseUpsert) SetStatus(v string) *AssetLicenseUpsert {
+	u.Set(assetlicense.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *AssetLicenseUpsert) UpdateStatus() *AssetLicenseUpsert {
+	u.SetExcluded(assetlicense.FieldStatus)
+	return u
+}
+
+// SetNotes sets the "notes" field.
+func (u *AssetLicenseUpsert) SetNotes(v string) *AssetLicenseUpsert {
+	u.Set(assetlicense.FieldNotes, v)
+	return u
+}
+
+// UpdateNotes sets the "notes" field to the value that was provided on create.
+func (u *AssetLicenseUpsert) UpdateNotes() *AssetLicenseUpsert {
+	u.SetExcluded(assetlicense.FieldNotes)
+	return u
+}
+
+// ClearNotes clears the value of the "notes" field.
+func (u *AssetLicenseUpsert) ClearNotes() *AssetLicenseUpsert {
+	u.SetNull(assetlicense.FieldNotes)
+	return u
+}
+
+// SetUsers sets the "users" field.
+func (u *AssetLicenseUpsert) SetUsers(v []int) *AssetLicenseUpsert {
+	u.Set(assetlicense.FieldUsers, v)
+	return u
+}
+
+// UpdateUsers sets the "users" field to the value that was provided on create.
+func (u *AssetLicenseUpsert) UpdateUsers() *AssetLicenseUpsert {
+	u.SetExcluded(assetlicense.FieldUsers)
+	return u
+}
+
+// ClearUsers clears the value of the "users" field.
+func (u *AssetLicenseUpsert) ClearUsers() *AssetLicenseUpsert {
+	u.SetNull(assetlicense.FieldUsers)
+	return u
+}
+
+// SetTags sets the "tags" field.
+func (u *AssetLicenseUpsert) SetTags(v []string) *AssetLicenseUpsert {
+	u.Set(assetlicense.FieldTags, v)
+	return u
+}
+
+// UpdateTags sets the "tags" field to the value that was provided on create.
+func (u *AssetLicenseUpsert) UpdateTags() *AssetLicenseUpsert {
+	u.SetExcluded(assetlicense.FieldTags)
+	return u
+}
+
+// ClearTags clears the value of the "tags" field.
+func (u *AssetLicenseUpsert) ClearTags() *AssetLicenseUpsert {
+	u.SetNull(assetlicense.FieldTags)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *AssetLicenseUpsert) SetCreatedAt(v time.Time) *AssetLicenseUpsert {
+	u.Set(assetlicense.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *AssetLicenseUpsert) UpdateCreatedAt() *AssetLicenseUpsert {
+	u.SetExcluded(assetlicense.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *AssetLicenseUpsert) SetUpdatedAt(v time.Time) *AssetLicenseUpsert {
+	u.Set(assetlicense.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *AssetLicenseUpsert) UpdateUpdatedAt() *AssetLicenseUpsert {
+	u.SetExcluded(assetlicense.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.AssetLicense.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *AssetLicenseUpsertOne) UpdateNewValues() *AssetLicenseUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.AssetLicense.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *AssetLicenseUpsertOne) Ignore() *AssetLicenseUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *AssetLicenseUpsertOne) DoNothing() *AssetLicenseUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the AssetLicenseCreate.OnConflict
+// documentation for more info.
+func (u *AssetLicenseUpsertOne) Update(set func(*AssetLicenseUpsert)) *AssetLicenseUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&AssetLicenseUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetLicenseKey sets the "license_key" field.
+func (u *AssetLicenseUpsertOne) SetLicenseKey(v string) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetLicenseKey(v)
+	})
+}
+
+// UpdateLicenseKey sets the "license_key" field to the value that was provided on create.
+func (u *AssetLicenseUpsertOne) UpdateLicenseKey() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateLicenseKey()
+	})
+}
+
+// ClearLicenseKey clears the value of the "license_key" field.
+func (u *AssetLicenseUpsertOne) ClearLicenseKey() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearLicenseKey()
+	})
+}
+
+// SetName sets the "name" field.
+func (u *AssetLicenseUpsertOne) SetName(v string) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *AssetLicenseUpsertOne) UpdateName() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *AssetLicenseUpsertOne) SetDescription(v string) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *AssetLicenseUpsertOne) UpdateDescription() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *AssetLicenseUpsertOne) ClearDescription() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetVendor sets the "vendor" field.
+func (u *AssetLicenseUpsertOne) SetVendor(v string) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetVendor(v)
+	})
+}
+
+// UpdateVendor sets the "vendor" field to the value that was provided on create.
+func (u *AssetLicenseUpsertOne) UpdateVendor() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateVendor()
+	})
+}
+
+// ClearVendor clears the value of the "vendor" field.
+func (u *AssetLicenseUpsertOne) ClearVendor() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearVendor()
+	})
+}
+
+// SetLicenseType sets the "license_type" field.
+func (u *AssetLicenseUpsertOne) SetLicenseType(v string) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetLicenseType(v)
+	})
+}
+
+// UpdateLicenseType sets the "license_type" field to the value that was provided on create.
+func (u *AssetLicenseUpsertOne) UpdateLicenseType() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateLicenseType()
+	})
+}
+
+// SetTotalQuantity sets the "total_quantity" field.
+func (u *AssetLicenseUpsertOne) SetTotalQuantity(v int) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetTotalQuantity(v)
+	})
+}
+
+// AddTotalQuantity adds v to the "total_quantity" field.
+func (u *AssetLicenseUpsertOne) AddTotalQuantity(v int) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.AddTotalQuantity(v)
+	})
+}
+
+// UpdateTotalQuantity sets the "total_quantity" field to the value that was provided on create.
+func (u *AssetLicenseUpsertOne) UpdateTotalQuantity() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateTotalQuantity()
+	})
+}
+
+// SetUsedQuantity sets the "used_quantity" field.
+func (u *AssetLicenseUpsertOne) SetUsedQuantity(v int) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetUsedQuantity(v)
+	})
+}
+
+// AddUsedQuantity adds v to the "used_quantity" field.
+func (u *AssetLicenseUpsertOne) AddUsedQuantity(v int) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.AddUsedQuantity(v)
+	})
+}
+
+// UpdateUsedQuantity sets the "used_quantity" field to the value that was provided on create.
+func (u *AssetLicenseUpsertOne) UpdateUsedQuantity() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateUsedQuantity()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *AssetLicenseUpsertOne) SetTenantID(v int) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *AssetLicenseUpsertOne) AddTenantID(v int) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *AssetLicenseUpsertOne) UpdateTenantID() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetAssetID sets the "asset_id" field.
+func (u *AssetLicenseUpsertOne) SetAssetID(v int) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetAssetID(v)
+	})
+}
+
+// AddAssetID adds v to the "asset_id" field.
+func (u *AssetLicenseUpsertOne) AddAssetID(v int) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.AddAssetID(v)
+	})
+}
+
+// UpdateAssetID sets the "asset_id" field to the value that was provided on create.
+func (u *AssetLicenseUpsertOne) UpdateAssetID() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateAssetID()
+	})
+}
+
+// ClearAssetID clears the value of the "asset_id" field.
+func (u *AssetLicenseUpsertOne) ClearAssetID() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearAssetID()
+	})
+}
+
+// SetPurchaseDate sets the "purchase_date" field.
+func (u *AssetLicenseUpsertOne) SetPurchaseDate(v string) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetPurchaseDate(v)
+	})
+}
+
+// UpdatePurchaseDate sets the "purchase_date" field to the value that was provided on create.
+func (u *AssetLicenseUpsertOne) UpdatePurchaseDate() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdatePurchaseDate()
+	})
+}
+
+// ClearPurchaseDate clears the value of the "purchase_date" field.
+func (u *AssetLicenseUpsertOne) ClearPurchaseDate() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearPurchaseDate()
+	})
+}
+
+// SetPurchasePrice sets the "purchase_price" field.
+func (u *AssetLicenseUpsertOne) SetPurchasePrice(v float64) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetPurchasePrice(v)
+	})
+}
+
+// AddPurchasePrice adds v to the "purchase_price" field.
+func (u *AssetLicenseUpsertOne) AddPurchasePrice(v float64) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.AddPurchasePrice(v)
+	})
+}
+
+// UpdatePurchasePrice sets the "purchase_price" field to the value that was provided on create.
+func (u *AssetLicenseUpsertOne) UpdatePurchasePrice() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdatePurchasePrice()
+	})
+}
+
+// ClearPurchasePrice clears the value of the "purchase_price" field.
+func (u *AssetLicenseUpsertOne) ClearPurchasePrice() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearPurchasePrice()
+	})
+}
+
+// SetExpiryDate sets the "expiry_date" field.
+func (u *AssetLicenseUpsertOne) SetExpiryDate(v string) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetExpiryDate(v)
+	})
+}
+
+// UpdateExpiryDate sets the "expiry_date" field to the value that was provided on create.
+func (u *AssetLicenseUpsertOne) UpdateExpiryDate() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateExpiryDate()
+	})
+}
+
+// ClearExpiryDate clears the value of the "expiry_date" field.
+func (u *AssetLicenseUpsertOne) ClearExpiryDate() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearExpiryDate()
+	})
+}
+
+// SetSupportVendor sets the "support_vendor" field.
+func (u *AssetLicenseUpsertOne) SetSupportVendor(v string) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetSupportVendor(v)
+	})
+}
+
+// UpdateSupportVendor sets the "support_vendor" field to the value that was provided on create.
+func (u *AssetLicenseUpsertOne) UpdateSupportVendor() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateSupportVendor()
+	})
+}
+
+// ClearSupportVendor clears the value of the "support_vendor" field.
+func (u *AssetLicenseUpsertOne) ClearSupportVendor() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearSupportVendor()
+	})
+}
+
+// SetSupportContact sets the "support_contact" field.
+func (u *AssetLicenseUpsertOne) SetSupportContact(v string) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetSupportContact(v)
+	})
+}
+
+// UpdateSupportContact sets the "support_contact" field to the value that was provided on create.
+func (u *AssetLicenseUpsertOne) UpdateSupportContact() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateSupportContact()
+	})
+}
+
+// ClearSupportContact clears the value of the "support_contact" field.
+func (u *AssetLicenseUpsertOne) ClearSupportContact() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearSupportContact()
+	})
+}
+
+// SetRenewalCost sets the "renewal_cost" field.
+func (u *AssetLicenseUpsertOne) SetRenewalCost(v string) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetRenewalCost(v)
+	})
+}
+
+// UpdateRenewalCost sets the "renewal_cost" field to the value that was provided on create.
+func (u *AssetLicenseUpsertOne) UpdateRenewalCost() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateRenewalCost()
+	})
+}
+
+// ClearRenewalCost clears the value of the "renewal_cost" field.
+func (u *AssetLicenseUpsertOne) ClearRenewalCost() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearRenewalCost()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *AssetLicenseUpsertOne) SetStatus(v string) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *AssetLicenseUpsertOne) UpdateStatus() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetNotes sets the "notes" field.
+func (u *AssetLicenseUpsertOne) SetNotes(v string) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetNotes(v)
+	})
+}
+
+// UpdateNotes sets the "notes" field to the value that was provided on create.
+func (u *AssetLicenseUpsertOne) UpdateNotes() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateNotes()
+	})
+}
+
+// ClearNotes clears the value of the "notes" field.
+func (u *AssetLicenseUpsertOne) ClearNotes() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearNotes()
+	})
+}
+
+// SetUsers sets the "users" field.
+func (u *AssetLicenseUpsertOne) SetUsers(v []int) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetUsers(v)
+	})
+}
+
+// UpdateUsers sets the "users" field to the value that was provided on create.
+func (u *AssetLicenseUpsertOne) UpdateUsers() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateUsers()
+	})
+}
+
+// ClearUsers clears the value of the "users" field.
+func (u *AssetLicenseUpsertOne) ClearUsers() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearUsers()
+	})
+}
+
+// SetTags sets the "tags" field.
+func (u *AssetLicenseUpsertOne) SetTags(v []string) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetTags(v)
+	})
+}
+
+// UpdateTags sets the "tags" field to the value that was provided on create.
+func (u *AssetLicenseUpsertOne) UpdateTags() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateTags()
+	})
+}
+
+// ClearTags clears the value of the "tags" field.
+func (u *AssetLicenseUpsertOne) ClearTags() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearTags()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *AssetLicenseUpsertOne) SetCreatedAt(v time.Time) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *AssetLicenseUpsertOne) UpdateCreatedAt() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *AssetLicenseUpsertOne) SetUpdatedAt(v time.Time) *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *AssetLicenseUpsertOne) UpdateUpdatedAt() *AssetLicenseUpsertOne {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *AssetLicenseUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for AssetLicenseCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *AssetLicenseUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *AssetLicenseUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *AssetLicenseUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // AssetLicenseCreateBulk is the builder for creating many AssetLicense entities in bulk.
 type AssetLicenseCreateBulk struct {
 	config
 	err      error
 	builders []*AssetLicenseCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the AssetLicense entities in the database.
@@ -526,6 +1432,7 @@ func (_c *AssetLicenseCreateBulk) Save(ctx context.Context) ([]*AssetLicense, er
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -576,6 +1483,530 @@ func (_c *AssetLicenseCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *AssetLicenseCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.AssetLicense.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.AssetLicenseUpsert) {
+//			SetLicenseKey(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *AssetLicenseCreateBulk) OnConflict(opts ...sql.ConflictOption) *AssetLicenseUpsertBulk {
+	_c.conflict = opts
+	return &AssetLicenseUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.AssetLicense.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *AssetLicenseCreateBulk) OnConflictColumns(columns ...string) *AssetLicenseUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &AssetLicenseUpsertBulk{
+		create: _c,
+	}
+}
+
+// AssetLicenseUpsertBulk is the builder for "upsert"-ing
+// a bulk of AssetLicense nodes.
+type AssetLicenseUpsertBulk struct {
+	create *AssetLicenseCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.AssetLicense.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *AssetLicenseUpsertBulk) UpdateNewValues() *AssetLicenseUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.AssetLicense.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *AssetLicenseUpsertBulk) Ignore() *AssetLicenseUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *AssetLicenseUpsertBulk) DoNothing() *AssetLicenseUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the AssetLicenseCreateBulk.OnConflict
+// documentation for more info.
+func (u *AssetLicenseUpsertBulk) Update(set func(*AssetLicenseUpsert)) *AssetLicenseUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&AssetLicenseUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetLicenseKey sets the "license_key" field.
+func (u *AssetLicenseUpsertBulk) SetLicenseKey(v string) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetLicenseKey(v)
+	})
+}
+
+// UpdateLicenseKey sets the "license_key" field to the value that was provided on create.
+func (u *AssetLicenseUpsertBulk) UpdateLicenseKey() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateLicenseKey()
+	})
+}
+
+// ClearLicenseKey clears the value of the "license_key" field.
+func (u *AssetLicenseUpsertBulk) ClearLicenseKey() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearLicenseKey()
+	})
+}
+
+// SetName sets the "name" field.
+func (u *AssetLicenseUpsertBulk) SetName(v string) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *AssetLicenseUpsertBulk) UpdateName() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *AssetLicenseUpsertBulk) SetDescription(v string) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *AssetLicenseUpsertBulk) UpdateDescription() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *AssetLicenseUpsertBulk) ClearDescription() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetVendor sets the "vendor" field.
+func (u *AssetLicenseUpsertBulk) SetVendor(v string) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetVendor(v)
+	})
+}
+
+// UpdateVendor sets the "vendor" field to the value that was provided on create.
+func (u *AssetLicenseUpsertBulk) UpdateVendor() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateVendor()
+	})
+}
+
+// ClearVendor clears the value of the "vendor" field.
+func (u *AssetLicenseUpsertBulk) ClearVendor() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearVendor()
+	})
+}
+
+// SetLicenseType sets the "license_type" field.
+func (u *AssetLicenseUpsertBulk) SetLicenseType(v string) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetLicenseType(v)
+	})
+}
+
+// UpdateLicenseType sets the "license_type" field to the value that was provided on create.
+func (u *AssetLicenseUpsertBulk) UpdateLicenseType() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateLicenseType()
+	})
+}
+
+// SetTotalQuantity sets the "total_quantity" field.
+func (u *AssetLicenseUpsertBulk) SetTotalQuantity(v int) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetTotalQuantity(v)
+	})
+}
+
+// AddTotalQuantity adds v to the "total_quantity" field.
+func (u *AssetLicenseUpsertBulk) AddTotalQuantity(v int) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.AddTotalQuantity(v)
+	})
+}
+
+// UpdateTotalQuantity sets the "total_quantity" field to the value that was provided on create.
+func (u *AssetLicenseUpsertBulk) UpdateTotalQuantity() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateTotalQuantity()
+	})
+}
+
+// SetUsedQuantity sets the "used_quantity" field.
+func (u *AssetLicenseUpsertBulk) SetUsedQuantity(v int) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetUsedQuantity(v)
+	})
+}
+
+// AddUsedQuantity adds v to the "used_quantity" field.
+func (u *AssetLicenseUpsertBulk) AddUsedQuantity(v int) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.AddUsedQuantity(v)
+	})
+}
+
+// UpdateUsedQuantity sets the "used_quantity" field to the value that was provided on create.
+func (u *AssetLicenseUpsertBulk) UpdateUsedQuantity() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateUsedQuantity()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *AssetLicenseUpsertBulk) SetTenantID(v int) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *AssetLicenseUpsertBulk) AddTenantID(v int) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *AssetLicenseUpsertBulk) UpdateTenantID() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetAssetID sets the "asset_id" field.
+func (u *AssetLicenseUpsertBulk) SetAssetID(v int) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetAssetID(v)
+	})
+}
+
+// AddAssetID adds v to the "asset_id" field.
+func (u *AssetLicenseUpsertBulk) AddAssetID(v int) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.AddAssetID(v)
+	})
+}
+
+// UpdateAssetID sets the "asset_id" field to the value that was provided on create.
+func (u *AssetLicenseUpsertBulk) UpdateAssetID() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateAssetID()
+	})
+}
+
+// ClearAssetID clears the value of the "asset_id" field.
+func (u *AssetLicenseUpsertBulk) ClearAssetID() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearAssetID()
+	})
+}
+
+// SetPurchaseDate sets the "purchase_date" field.
+func (u *AssetLicenseUpsertBulk) SetPurchaseDate(v string) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetPurchaseDate(v)
+	})
+}
+
+// UpdatePurchaseDate sets the "purchase_date" field to the value that was provided on create.
+func (u *AssetLicenseUpsertBulk) UpdatePurchaseDate() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdatePurchaseDate()
+	})
+}
+
+// ClearPurchaseDate clears the value of the "purchase_date" field.
+func (u *AssetLicenseUpsertBulk) ClearPurchaseDate() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearPurchaseDate()
+	})
+}
+
+// SetPurchasePrice sets the "purchase_price" field.
+func (u *AssetLicenseUpsertBulk) SetPurchasePrice(v float64) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetPurchasePrice(v)
+	})
+}
+
+// AddPurchasePrice adds v to the "purchase_price" field.
+func (u *AssetLicenseUpsertBulk) AddPurchasePrice(v float64) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.AddPurchasePrice(v)
+	})
+}
+
+// UpdatePurchasePrice sets the "purchase_price" field to the value that was provided on create.
+func (u *AssetLicenseUpsertBulk) UpdatePurchasePrice() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdatePurchasePrice()
+	})
+}
+
+// ClearPurchasePrice clears the value of the "purchase_price" field.
+func (u *AssetLicenseUpsertBulk) ClearPurchasePrice() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearPurchasePrice()
+	})
+}
+
+// SetExpiryDate sets the "expiry_date" field.
+func (u *AssetLicenseUpsertBulk) SetExpiryDate(v string) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetExpiryDate(v)
+	})
+}
+
+// UpdateExpiryDate sets the "expiry_date" field to the value that was provided on create.
+func (u *AssetLicenseUpsertBulk) UpdateExpiryDate() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateExpiryDate()
+	})
+}
+
+// ClearExpiryDate clears the value of the "expiry_date" field.
+func (u *AssetLicenseUpsertBulk) ClearExpiryDate() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearExpiryDate()
+	})
+}
+
+// SetSupportVendor sets the "support_vendor" field.
+func (u *AssetLicenseUpsertBulk) SetSupportVendor(v string) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetSupportVendor(v)
+	})
+}
+
+// UpdateSupportVendor sets the "support_vendor" field to the value that was provided on create.
+func (u *AssetLicenseUpsertBulk) UpdateSupportVendor() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateSupportVendor()
+	})
+}
+
+// ClearSupportVendor clears the value of the "support_vendor" field.
+func (u *AssetLicenseUpsertBulk) ClearSupportVendor() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearSupportVendor()
+	})
+}
+
+// SetSupportContact sets the "support_contact" field.
+func (u *AssetLicenseUpsertBulk) SetSupportContact(v string) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetSupportContact(v)
+	})
+}
+
+// UpdateSupportContact sets the "support_contact" field to the value that was provided on create.
+func (u *AssetLicenseUpsertBulk) UpdateSupportContact() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateSupportContact()
+	})
+}
+
+// ClearSupportContact clears the value of the "support_contact" field.
+func (u *AssetLicenseUpsertBulk) ClearSupportContact() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearSupportContact()
+	})
+}
+
+// SetRenewalCost sets the "renewal_cost" field.
+func (u *AssetLicenseUpsertBulk) SetRenewalCost(v string) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetRenewalCost(v)
+	})
+}
+
+// UpdateRenewalCost sets the "renewal_cost" field to the value that was provided on create.
+func (u *AssetLicenseUpsertBulk) UpdateRenewalCost() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateRenewalCost()
+	})
+}
+
+// ClearRenewalCost clears the value of the "renewal_cost" field.
+func (u *AssetLicenseUpsertBulk) ClearRenewalCost() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearRenewalCost()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *AssetLicenseUpsertBulk) SetStatus(v string) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *AssetLicenseUpsertBulk) UpdateStatus() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetNotes sets the "notes" field.
+func (u *AssetLicenseUpsertBulk) SetNotes(v string) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetNotes(v)
+	})
+}
+
+// UpdateNotes sets the "notes" field to the value that was provided on create.
+func (u *AssetLicenseUpsertBulk) UpdateNotes() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateNotes()
+	})
+}
+
+// ClearNotes clears the value of the "notes" field.
+func (u *AssetLicenseUpsertBulk) ClearNotes() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearNotes()
+	})
+}
+
+// SetUsers sets the "users" field.
+func (u *AssetLicenseUpsertBulk) SetUsers(v []int) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetUsers(v)
+	})
+}
+
+// UpdateUsers sets the "users" field to the value that was provided on create.
+func (u *AssetLicenseUpsertBulk) UpdateUsers() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateUsers()
+	})
+}
+
+// ClearUsers clears the value of the "users" field.
+func (u *AssetLicenseUpsertBulk) ClearUsers() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearUsers()
+	})
+}
+
+// SetTags sets the "tags" field.
+func (u *AssetLicenseUpsertBulk) SetTags(v []string) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetTags(v)
+	})
+}
+
+// UpdateTags sets the "tags" field to the value that was provided on create.
+func (u *AssetLicenseUpsertBulk) UpdateTags() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateTags()
+	})
+}
+
+// ClearTags clears the value of the "tags" field.
+func (u *AssetLicenseUpsertBulk) ClearTags() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.ClearTags()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *AssetLicenseUpsertBulk) SetCreatedAt(v time.Time) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *AssetLicenseUpsertBulk) UpdateCreatedAt() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *AssetLicenseUpsertBulk) SetUpdatedAt(v time.Time) *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *AssetLicenseUpsertBulk) UpdateUpdatedAt() *AssetLicenseUpsertBulk {
+	return u.Update(func(s *AssetLicenseUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *AssetLicenseUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the AssetLicenseCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for AssetLicenseCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *AssetLicenseUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

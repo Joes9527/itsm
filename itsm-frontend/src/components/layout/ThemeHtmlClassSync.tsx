@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useLayoutEffect } from 'react';
 import { useTheme } from '@/lib/design-system/theme';
 
 /**
@@ -12,9 +12,10 @@ import { useTheme } from '@/lib/design-system/theme';
 export const ThemeHtmlClassSync: React.FC = () => {
   const { isDark } = useTheme();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (typeof document === 'undefined') return;
     const root = document.documentElement;
+    root.classList.toggle('light', !isDark);
     if (isDark) {
       root.classList.add('dark');
       root.style.colorScheme = 'dark';

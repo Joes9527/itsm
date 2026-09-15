@@ -800,7 +800,7 @@ git commit -m "feat(vpn): make grant procedure graph only"
 
 **Interfaces:**
 
-- Consumes: operator-owned `KAF_DEV_ENV_FILE`, `ITSM_DEV_ENV_FILE`, `ITSM_REQUESTER_TOKEN`, `ITSM_L1_TOKEN`, `ITSM_L2_TOKEN`, `ITSM_KAF_AUTOMATION_TOKEN`, and `ITSM_FOREIGN_KAF_TOKEN` environment variables.
+- Consumes: operator-owned `KAF_DEV_ENV_FILE` and `ITSM_DEV_ENV_FILE`; each ITSM actor supplies a username/password only long enough to establish a mode-0600 cookie jar. Browser-style ITSM calls never extract or send JWT values.
 - Produces: current-source ITSM on `127.0.0.1:8090`, current-source KAF on `127.0.0.1:8001`, KAF Alembic revision `036_kaf_completion_replay`, and a Dev Procedure registry whose retrieved step/hash matches PostgreSQL `ProcedureManifest`.
 - Secret handling: tests check only presence and equality of non-secret endpoints/group ID; no command echoes token or secret values.
 
@@ -832,10 +832,32 @@ set +a
 for name in DATABASE_URL ITSM_DATABASE_URL REDIS_URL QDRANT_URL ITSM_KAF_URL \
   ITSM_KAF_AUTOMATION_TOKEN ITSM_KAF_WEBHOOK_SECRET \
   AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET \
-  IT_BACKEND VPN_USERS_GROUP_ID ITSM_REQUESTER_TOKEN ITSM_L1_TOKEN \
-  ITSM_L2_TOKEN ITSM_FOREIGN_KAF_TOKEN RLS_TEST_DSN; do
+  IT_BACKEND VPN_USERS_GROUP_ID ITSM_REQUESTER_USERNAME ITSM_REQUESTER_PASSWORD \
+  ITSM_L1_USERNAME ITSM_L1_PASSWORD ITSM_L2_USERNAME ITSM_L2_PASSWORD \
+  ITSM_KAF_USERNAME ITSM_KAF_PASSWORD ITSM_FOREIGN_KAF_USERNAME \
+  ITSM_FOREIGN_KAF_PASSWORD RLS_TEST_DSN; do
   test -n "${!name:-}" || { echo "missing required variable: $name" >&2; exit 1; }
 done
+
+export ITSM_BASE_URL=http://127.0.0.1:8090
+itsm_login_session() {
+  local actor="$1" username_var="ITSM_${1}_USERNAME" password_var="ITSM_${1}_PASSWORD"
+  local jar="$CLOSEOUT_EVIDENCE_DIR/itsm-${actor,,}.cookies"
+  curl -fsS -c "$jar" -H 'Content-Type: application/json' \
+    "$ITSM_BASE_URL/api/v1/auth/login" \
+    --data "$(jq -nc --arg username "${!username_var}" --arg password "${!password_var}" \
+      '{username:$username,password:$password}')" \
+    | jq -e '.code == 0 and (.data.access_token | not) and (.data.refresh_token | not)' >/dev/null
+  chmod 600 "$jar"
+  printf -v "ITSM_${actor}_COOKIE_JAR" '%s' "$jar"
+  export "ITSM_${actor}_COOKIE_JAR"
+}
+for actor in REQUESTER L1 L2 KAF FOREIGN_KAF; do itsm_login_session "$actor"; done
+
+itsm_csrf() {
+  local jar="$1"
+  curl -fsS -b "$jar" -c "$jar" "$ITSM_BASE_URL/api/v1/csrf-token" | jq -er '.data.csrf_token'
+}
 test "$IT_BACKEND" = graph
 test "$VPN_USERS_GROUP_ID" = b7c7f066-3042-4a11-9e36-2ea80b979ae3
 test "$ITSM_KAF_URL" = http://127.0.0.1:8090
@@ -1019,15 +1041,15 @@ Then record only non-secret facts:
 ```bash
 curl -fsS http://127.0.0.1:8090/api/v1/health
 curl -fsS http://127.0.0.1:8001/health
-curl -fsS -H "Authorization: Bearer $ITSM_REQUESTER_TOKEN" \
+curl -fsS -b "$ITSM_REQUESTER_COOKIE_JAR" \
   'http://127.0.0.1:8090/api/v1/service-catalogs?page=1&size=1' >/dev/null
-curl -fsS -H "Authorization: Bearer $ITSM_L1_TOKEN" \
+curl -fsS -b "$ITSM_L1_COOKIE_JAR" \
   'http://127.0.0.1:8090/api/v1/bpmn/tasks?status=assigned&page=1&pageSize=1' >/dev/null
-curl -fsS -H "Authorization: Bearer $ITSM_L2_TOKEN" \
+curl -fsS -b "$ITSM_L2_COOKIE_JAR" \
   'http://127.0.0.1:8090/api/v1/bpmn/tasks?status=assigned&page=1&pageSize=1' >/dev/null
-curl -fsS -H "Authorization: Bearer $ITSM_KAF_AUTOMATION_TOKEN" \
+curl -fsS -b "$ITSM_KAF_COOKIE_JAR" \
   'http://127.0.0.1:8090/api/v1/bpmn/process-tasks/kaf-delegated?status=delegated&limit=1' >/dev/null
-curl -fsS -H "Authorization: Bearer $ITSM_FOREIGN_KAF_TOKEN" \
+curl -fsS -b "$ITSM_FOREIGN_KAF_COOKIE_JAR" \
   'http://127.0.0.1:8090/api/v1/bpmn/process-tasks/kaf-delegated?status=delegated&limit=1' >/dev/null
 git -C /home/administrator/project/itsm rev-parse HEAD
 git -C /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery rev-parse HEAD
@@ -1133,13 +1155,14 @@ Expected: the final baseline file says `member=false`. Failure to remove/confirm
 
 ```bash
 export ITSM_BASE_URL=http://127.0.0.1:8090
-CATALOG_RESPONSE="$(curl -fsS -H "Authorization: Bearer $ITSM_REQUESTER_TOKEN" \
+CATALOG_RESPONSE="$(curl -fsS -b "$ITSM_REQUESTER_COOKIE_JAR" \
   "$ITSM_BASE_URL/api/v1/service-catalogs?page=1&size=100")"
 export SSLVPN_CATALOG_ID="$(jq -er '.. | objects | select(.name? == "SSL-VPN 远程办公访问权限申请") | .id' \
   <<<"$CATALOG_RESPONSE" | head -1)"
 
 SR_RESPONSE="$(curl -fsS -X POST \
-  -H "Authorization: Bearer $ITSM_REQUESTER_TOKEN" \
+  -b "$ITSM_REQUESTER_COOKIE_JAR" \
+  -H "X-CSRF-Token: $(itsm_csrf "$ITSM_REQUESTER_COOKIE_JAR")" \
   -H 'Content-Type: application/json' \
   "$ITSM_BASE_URL/api/v1/service-requests" \
   --data "$(jq -nc --argjson catalogId "$SSLVPN_CATALOG_ID" --arg upn "$TARGET_UPN" '{
@@ -1162,7 +1185,7 @@ Expected: one catalog, positive Service Request ID, and positive WorkItem ID. Do
 ```bash
 for attempt in $(seq 1 30); do
   PROCESS_RESPONSE="$(curl -fsS -G \
-    -H "Authorization: Bearer $ITSM_REQUESTER_TOKEN" \
+    -b "$ITSM_REQUESTER_COOKIE_JAR" \
     --data-urlencode "businessKey=ticket:$WORK_ITEM_ID" \
     --data-urlencode 'page=1' --data-urlencode 'pageSize=20' \
     "$ITSM_BASE_URL/api/v1/bpmn/process-instances")"
@@ -1176,7 +1199,8 @@ export PROCESS_INSTANCE_ID="$(jq -er '.data.data[0].id' <<<"$PROCESS_RESPONSE")"
 export PROCESS_INSTANCE_KEY="$(jq -er '.data.data[0].processInstanceId' <<<"$PROCESS_RESPONSE")"
 
 curl -fsS -X PUT \
-  -H "Authorization: Bearer $ITSM_REQUESTER_TOKEN" \
+  -b "$ITSM_REQUESTER_COOKIE_JAR" \
+  -H "X-CSRF-Token: $(itsm_csrf "$ITSM_REQUESTER_COOKIE_JAR")" \
   -H 'Content-Type: application/json' \
   "$ITSM_BASE_URL/api/v1/bpmn/process-instances/$PROCESS_INSTANCE_KEY/variables" \
   --data "$(jq -nc --arg upn "$TARGET_UPN" '{variables:{intake_snapshot:{
@@ -1196,18 +1220,20 @@ Expected: the numeric ID and string key are both nonempty and the update returns
 ATTACHMENT_FILE="$(mktemp)"
 printf 'KAF closeout attachment disclosure probe\n' >"$ATTACHMENT_FILE"
 ATTACHMENT_RESPONSE="$(curl -fsS -X POST \
-  -H "Authorization: Bearer $ITSM_REQUESTER_TOKEN" \
+  -b "$ITSM_REQUESTER_COOKIE_JAR" \
+  -H "X-CSRF-Token: $(itsm_csrf "$ITSM_REQUESTER_COOKIE_JAR")" \
   -F "file=@$ATTACHMENT_FILE;filename=closeout-probe.txt;type=text/plain" \
   "$ITSM_BASE_URL/api/v1/tickets/$WORK_ITEM_ID/attachments")"
 rm -f "$ATTACHMENT_FILE"
 export ATTACHMENT_ID="$(jq -er '.. | objects | select(has("id")) | .id' <<<"$ATTACHMENT_RESPONSE" | tail -1)"
 
-L1_TASKS="$(curl -fsS -G -H "Authorization: Bearer $ITSM_L1_TOKEN" \
+L1_TASKS="$(curl -fsS -G -b "$ITSM_L1_COOKIE_JAR" \
   --data-urlencode "processInstanceId=$PROCESS_INSTANCE_ID" --data-urlencode 'status=assigned' \
   "$ITSM_BASE_URL/api/v1/bpmn/tasks")"
 export L1_TASK_ID="$(jq -er '.. | objects | select(.taskDefinitionKey? == "UserTask_DeptManagerApproval") | .id' \
   <<<"$L1_TASKS" | head -1)"
-curl -fsS -X POST -H "Authorization: Bearer $ITSM_L1_TOKEN" -H 'Content-Type: application/json' \
+curl -fsS -X POST -b "$ITSM_L1_COOKIE_JAR" \
+  -H "X-CSRF-Token: $(itsm_csrf "$ITSM_L1_COOKIE_JAR")" -H 'Content-Type: application/json' \
   "$ITSM_BASE_URL/api/v1/bpmn/tasks/$L1_TASK_ID/decisions" \
   --data '{"action":"approve","comment":"KAF closeout L1 approval"}' | jq -e '.code == 0'
 ```
@@ -1228,17 +1254,18 @@ for attempt in $(seq 1 30); do
 done
 ! curl -fsS http://127.0.0.1:8001/health >/dev/null 2>&1
 
-L2_TASKS="$(curl -fsS -G -H "Authorization: Bearer $ITSM_L2_TOKEN" \
+L2_TASKS="$(curl -fsS -G -b "$ITSM_L2_COOKIE_JAR" \
   --data-urlencode "processInstanceId=$PROCESS_INSTANCE_ID" --data-urlencode 'status=assigned' \
   "$ITSM_BASE_URL/api/v1/bpmn/tasks")"
 export L2_TASK_ID="$(jq -er '.. | objects | select(.taskDefinitionKey? == "UserTask_L2NetworkOpsApproval") | .id' \
   <<<"$L2_TASKS" | head -1)"
-curl -fsS -X POST -H "Authorization: Bearer $ITSM_L2_TOKEN" -H 'Content-Type: application/json' \
+curl -fsS -X POST -b "$ITSM_L2_COOKIE_JAR" \
+  -H "X-CSRF-Token: $(itsm_csrf "$ITSM_L2_COOKIE_JAR")" -H 'Content-Type: application/json' \
   "$ITSM_BASE_URL/api/v1/bpmn/tasks/$L2_TASK_ID/decisions" \
   --data '{"action":"approve","comment":"KAF closeout L2 approval"}' | jq -e '.code == 0'
 
 for attempt in $(seq 1 30); do
-  DELEGATED="$(curl -fsS -H "Authorization: Bearer $ITSM_KAF_AUTOMATION_TOKEN" \
+  DELEGATED="$(curl -fsS -b "$ITSM_KAF_COOKIE_JAR" \
     "$ITSM_BASE_URL/api/v1/bpmn/process-tasks/kaf-delegated?status=delegated&limit=100")"
   KAF_TASK_ID="$(jq -r --arg pi "$PROCESS_INSTANCE_KEY" \
     '.data.items[]? | select(.waitingPoint.processInstanceId == $pi) | .taskId' <<<"$DELEGATED")"
@@ -1255,19 +1282,19 @@ Expected: KAF is down, Graph still says `member=false`, and exactly one delegate
 
 ```bash
 curl -sS -o "$CLOSEOUT_EVIDENCE_DIR/wrong-subject.json" -w '%{http_code}\n' \
-  -H "Authorization: Bearer $ITSM_REQUESTER_TOKEN" \
+  -b "$ITSM_REQUESTER_COOKIE_JAR" \
   "$ITSM_BASE_URL/api/v1/bpmn/process-tasks/$KAF_TASK_ID/kaf-context" \
   >"$CLOSEOUT_EVIDENCE_DIR/wrong-subject.status"
 grep -Eq '^(403|404)$' "$CLOSEOUT_EVIDENCE_DIR/wrong-subject.status"
 
 curl -sS -o "$CLOSEOUT_EVIDENCE_DIR/cross-tenant.json" -w '%{http_code}\n' \
-  -H "Authorization: Bearer $ITSM_FOREIGN_KAF_TOKEN" \
+  -b "$ITSM_FOREIGN_KAF_COOKIE_JAR" \
   "$ITSM_BASE_URL/api/v1/bpmn/process-tasks/$KAF_TASK_ID/kaf-context" \
   >"$CLOSEOUT_EVIDENCE_DIR/cross-tenant.status"
 grep -q '^404$' "$CLOSEOUT_EVIDENCE_DIR/cross-tenant.status"
 
 CONTEXT_RESPONSE="$(curl -fsS \
-  -H "Authorization: Bearer $ITSM_KAF_AUTOMATION_TOKEN" \
+  -b "$ITSM_KAF_COOKIE_JAR" \
   "$ITSM_BASE_URL/api/v1/bpmn/process-tasks/$KAF_TASK_ID/kaf-context")"
 jq -e --argjson attachmentId "$ATTACHMENT_ID" '
   .data.intakeSnapshot == {
@@ -1371,7 +1398,8 @@ jq -e '.action == "complete_bpmn_task" and .execution.idempotencyKey != ""' \
   "$CLOSEOUT_EVIDENCE_DIR/completion-payload.json" >/dev/null
 
 curl -fsS -X POST \
-  -H "Authorization: Bearer $ITSM_KAF_AUTOMATION_TOKEN" \
+  -b "$ITSM_KAF_COOKIE_JAR" \
+  -H "X-CSRF-Token: $(itsm_csrf "$ITSM_KAF_COOKIE_JAR")" \
   -H 'Content-Type: application/json' \
   "$ITSM_BASE_URL/api/v1/bpmn/process-tasks/$KAF_TASK_ID/actions" \
   --data-binary @"$CLOSEOUT_EVIDENCE_DIR/completion-payload.json" \

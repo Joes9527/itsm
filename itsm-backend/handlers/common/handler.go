@@ -1,11 +1,14 @@
 package common
 
 import (
+	"errors"
 	"strconv"
-	"strings"
 
+	"itsm-backend/authentication"
+	"itsm-backend/authorization"
 	"itsm-backend/common"
-	"itsm-backend/middleware"
+	creation "itsm-backend/handlers/common/workitemcreation"
+	sessionhttp "itsm-backend/handlers/shared/sessionhttp"
 
 	"github.com/gin-gonic/gin"
 )
@@ -14,118 +17,128 @@ type Handler struct {
 	svc *Service
 }
 
+type LoginRequest struct {
+	Username   string `json:"username" binding:"required"`
+	Password   string `json:"password" binding:"required"`
+	TenantID   int    `json:"tenantId"`
+	TenantCode string `json:"tenantCode"`
+}
+
 func NewHandler(svc *Service) *Handler {
 	return &Handler{svc: svc}
 }
 
-func shouldUseSecureCookies(c *gin.Context) bool {
-	if c.Request.TLS != nil {
-		return true
-	}
-
-	return strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https")
-}
-
-func cookieDomain(_ *gin.Context) string {
-	// Frontend now calls the backend through same-origin /api proxy, so host-only
-	// cookies are the safest default for both localhost and production domains.
-	return ""
-}
-
 // Auth
 
+// Login authenticates a user through the canonical common-domain path.
+// @Summary 用户登录
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param request body LoginRequest true "登录请求"
+// @Success 200 {object} common.Response{data=AuthResult}
+// @Failure 400 {object} common.Response
+// @Failure 401 {object} common.Response
+// @Router /api/v1/auth/login [post]
 func (h *Handler) Login(c *gin.Context) {
-	var req struct {
-		Username   string `json:"username" binding:"required"`
-		Password   string `json:"password" binding:"required"`
-		TenantID   int    `json:"tenantId"`
-		TenantCode string `json:"tenantCode"`
-	}
+	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		common.ParamError(c, "参数错误: "+err.Error())
 		return
 	}
 
-	auditCtx := middleware.WithLoginAuditRequest(c.Request.Context(), c.ClientIP(), c.Request.UserAgent())
+	auditCtx := authentication.WithLoginAuditRequest(c.Request.Context(), c.ClientIP(), c.Request.UserAgent())
 	res, err := h.svc.Login(auditCtx, req.Username, req.Password, req.TenantID, req.TenantCode)
 	if err != nil {
 		common.AuthFailed(c, err.Error())
 		return
 	}
 
-	secure := shouldUseSecureCookies(c)
-	domain := cookieDomain(c)
-	httpOnly := true
-
 	// Browsers reject Secure cookies over plain HTTP. We keep host-only cookies
 	// without Secure in local development so the same-origin frontend proxy can
 	// persist login state. Production HTTPS requests still get Secure cookies.
-
-	// Access token: 15分钟
-	c.SetCookie("access_token", res.AccessToken, 900, "/", domain, secure, httpOnly)
-	// Refresh token: 7天
-	c.SetCookie("refresh_token", res.RefreshToken, 604800, "/", domain, secure, httpOnly)
+	authentication.WriteSessionCookies(c.Writer, c.Request, &authentication.SessionTokens{
+		AccessToken: res.AccessToken, RefreshToken: res.RefreshToken,
+	})
 
 	common.Success(c, res)
 }
 
+// RefreshToken rotates a refresh token after authoritative one-time consumption.
+// @Summary 刷新访问令牌
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Success 200 {object} common.Response{data=AuthResult}
+// @Failure 400 {object} common.Response
+// @Failure 401 {object} common.Response
+// @Failure 503 {object} common.Response
+// @Router /api/v1/auth/refresh [post]
 func (h *Handler) RefreshToken(c *gin.Context) {
-	var req struct {
-		RefreshToken string `json:"refreshToken" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.ParamError(c, "参数错误: "+err.Error())
+	refreshToken, _ := c.Cookie("refresh_token")
+	if refreshToken == "" {
+		common.ParamError(c, "缺少刷新令牌")
 		return
 	}
 
-	res, err := h.svc.RefreshToken(c.Request.Context(), req.RefreshToken)
+	res, err := h.svc.RefreshToken(c.Request.Context(), refreshToken)
 	if err != nil {
+		var unavailable *authentication.RefreshTokenStoreUnavailableError
+		if errors.As(err, &unavailable) || errors.Is(err, authorization.ErrTenantAuthorizationUnavailable) {
+			h.svc.logger.Errorw("authoritative refresh token store unavailable", "error", err)
+			common.ServiceUnavailable(c, "刷新服务暂不可用")
+			return
+		}
 		common.AuthFailed(c, err.Error())
 		return
 	}
 
-	secure := shouldUseSecureCookies(c)
-	domain := cookieDomain(c)
-
-	// 设置 httpOnly cookies (Secure only on HTTPS requests)
-	c.SetCookie("access_token", res.AccessToken, 900, "/", domain, secure, true)
-	if res.RefreshToken != "" {
-		c.SetCookie("refresh_token", res.RefreshToken, 604800, "/", domain, secure, true)
-	}
+	authentication.WriteSessionCookies(c.Writer, c.Request, &authentication.SessionTokens{
+		AccessToken: res.AccessToken, RefreshToken: res.RefreshToken,
+	})
 
 	common.Success(c, res)
 }
 
 // Users
 
-// Logout clears httpOnly auth cookies and returns success.
+// Logout revokes the current access token and clears httpOnly auth cookies.
+// @Summary 用户登出
+// @Tags 认证
+// @Produce json
+// @Success 200 {object} common.Response
+// @Failure 401 {object} common.Response
+// @Failure 503 {object} common.Response
+// @Router /api/v1/auth/logout [post]
+// @Security BearerAuth
 func (h *Handler) Logout(c *gin.Context) {
 	token := c.GetString("token")
-	claims, err := middleware.ValidateAccessToken(token, h.svc.jwtSecret)
+	claims, err := authentication.ValidateAccessToken(c.Request.Context(), token, h.svc.jwtSecret)
+	if errors.Is(err, authentication.ErrAccessTokenRevocationCheck) {
+		h.svc.logger.Errorw("authoritative access token store unavailable during logout", "error", err)
+		common.ServiceUnavailable(c, "登出服务暂不可用")
+		return
+	}
 	if err != nil || claims.ExpiresAt == nil {
 		common.AuthFailed(c, "token无效")
 		return
 	}
-	if err := middleware.RevokeAccessToken(c.Request.Context(), token, claims.ExpiresAt.Time); err != nil {
+	if err := authentication.RevokeAccessToken(c.Request.Context(), token, claims.ExpiresAt.Time); err != nil {
 		h.svc.logger.Errorw("failed to revoke access token on logout", "error", err)
-		common.InternalError(c, "登出失败")
+		common.ServiceUnavailable(c, "登出服务暂不可用")
 		return
 	}
 
-	secure := shouldUseSecureCookies(c)
-	domain := cookieDomain(c)
-
-	c.SetCookie("access_token", "", -1, "/", domain, secure, true)
-	c.SetCookie("refresh_token", "", -1, "/", domain, secure, true)
+	authentication.ClearSessionCookies(c.Writer, c.Request)
 
 	common.Success(c, nil)
 }
 
 func (h *Handler) GetMe(c *gin.Context) {
-	userID := c.GetInt("user_id")
-	u, err := h.svc.GetUser(c.Request.Context(), userID)
+	identity := creation.Identity{ActorID: c.GetInt("user_id"), TenantID: c.GetInt("tenant_id"), Role: c.GetString("role")}
+	u, err := h.svc.GetSession(c.Request.Context(), identity)
 	if err != nil {
-		common.NotFound(c, "User not found")
+		sessionhttp.Fail(c, err)
 		return
 	}
 	common.Success(c, u)
@@ -133,10 +146,10 @@ func (h *Handler) GetMe(c *gin.Context) {
 
 // GetUserTenants 获取用户所属的租户列表（前端登录后需要）
 func (h *Handler) GetUserTenants(c *gin.Context) {
-	userID := c.GetInt("user_id")
-	tenants, err := h.svc.GetUserTenants(c.Request.Context(), userID)
+	identity := creation.Identity{ActorID: c.GetInt("user_id"), TenantID: c.GetInt("tenant_id"), Role: c.GetString("role")}
+	tenants, err := h.svc.GetUserTenants(c.Request.Context(), identity)
 	if err != nil {
-		common.InternalError(c, "获取用户租户列表失败: "+err.Error())
+		sessionhttp.Fail(c, err)
 		return
 	}
 	common.Success(c, gin.H{"tenants": tenants})

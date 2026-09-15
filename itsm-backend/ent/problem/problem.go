@@ -3,8 +3,6 @@
 package problem
 
 import (
-	"time"
-
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 )
@@ -14,16 +12,16 @@ const (
 	Label = "problem"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldTitle holds the string denoting the title field in the database.
-	FieldTitle = "title"
-	// FieldDescription holds the string denoting the description field in the database.
-	FieldDescription = "description"
-	// FieldStatus holds the string denoting the status field in the database.
-	FieldStatus = "status"
-	// FieldPriority holds the string denoting the priority field in the database.
-	FieldPriority = "priority"
-	// FieldCategory holds the string denoting the category field in the database.
-	FieldCategory = "category"
+	// FieldVerifiedVersion holds the string denoting the verified_version field in the database.
+	FieldVerifiedVersion = "verified_version"
+	// FieldVerificationDigest holds the string denoting the verification_digest field in the database.
+	FieldVerificationDigest = "verification_digest"
+	// FieldVerifiedBy holds the string denoting the verified_by field in the database.
+	FieldVerifiedBy = "verified_by"
+	// FieldVerifiedAt holds the string denoting the verified_at field in the database.
+	FieldVerifiedAt = "verified_at"
+	// FieldVerificationNote holds the string denoting the verification_note field in the database.
+	FieldVerificationNote = "verification_note"
 	// FieldRootCause holds the string denoting the root_cause field in the database.
 	FieldRootCause = "root_cause"
 	// FieldWorkaround holds the string denoting the workaround field in the database.
@@ -32,72 +30,34 @@ const (
 	FieldResolution = "resolution"
 	// FieldImpact holds the string denoting the impact field in the database.
 	FieldImpact = "impact"
-	// FieldAssigneeID holds the string denoting the assignee_id field in the database.
-	FieldAssigneeID = "assignee_id"
-	// FieldCreatedBy holds the string denoting the created_by field in the database.
-	FieldCreatedBy = "created_by"
 	// FieldWorkItemID holds the string denoting the work_item_id field in the database.
 	FieldWorkItemID = "work_item_id"
-	// FieldTenantID holds the string denoting the tenant_id field in the database.
-	FieldTenantID = "tenant_id"
-	// FieldCreatedAt holds the string denoting the created_at field in the database.
-	FieldCreatedAt = "created_at"
-	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
-	FieldUpdatedAt = "updated_at"
-	// FieldResolvedAt holds the string denoting the resolved_at field in the database.
-	FieldResolvedAt = "resolved_at"
-	// FieldClosedAt holds the string denoting the closed_at field in the database.
-	FieldClosedAt = "closed_at"
-	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
-	FieldDeletedAt = "deleted_at"
-	// EdgeTickets holds the string denoting the tickets edge name in mutations.
-	EdgeTickets = "tickets"
-	// EdgeIncidents holds the string denoting the incidents edge name in mutations.
-	EdgeIncidents = "incidents"
-	// EdgeChanges holds the string denoting the changes edge name in mutations.
-	EdgeChanges = "changes"
+	// EdgeWorkItem holds the string denoting the work_item edge name in mutations.
+	EdgeWorkItem = "work_item"
 	// Table holds the table name of the problem in the database.
 	Table = "problems"
-	// TicketsTable is the table that holds the tickets relation/edge.
-	TicketsTable = "tickets"
-	// TicketsInverseTable is the table name for the Ticket entity.
+	// WorkItemTable is the table that holds the work_item relation/edge.
+	WorkItemTable = "problems"
+	// WorkItemInverseTable is the table name for the Ticket entity.
 	// It exists in this package in order to avoid circular dependency with the "ticket" package.
-	TicketsInverseTable = "tickets"
-	// TicketsColumn is the table column denoting the tickets relation/edge.
-	TicketsColumn = "problem_tickets"
-	// IncidentsTable is the table that holds the incidents relation/edge. The primary key declared below.
-	IncidentsTable = "problem_incidents"
-	// IncidentsInverseTable is the table name for the Incident entity.
-	// It exists in this package in order to avoid circular dependency with the "incident" package.
-	IncidentsInverseTable = "incidents"
-	// ChangesTable is the table that holds the changes relation/edge. The primary key declared below.
-	ChangesTable = "problem_changes"
-	// ChangesInverseTable is the table name for the Change entity.
-	// It exists in this package in order to avoid circular dependency with the "change" package.
-	ChangesInverseTable = "changes"
+	WorkItemInverseTable = "tickets"
+	// WorkItemColumn is the table column denoting the work_item relation/edge.
+	WorkItemColumn = "work_item_id"
 )
 
 // Columns holds all SQL columns for problem fields.
 var Columns = []string{
 	FieldID,
-	FieldTitle,
-	FieldDescription,
-	FieldStatus,
-	FieldPriority,
-	FieldCategory,
+	FieldVerifiedVersion,
+	FieldVerificationDigest,
+	FieldVerifiedBy,
+	FieldVerifiedAt,
+	FieldVerificationNote,
 	FieldRootCause,
 	FieldWorkaround,
 	FieldResolution,
 	FieldImpact,
-	FieldAssigneeID,
-	FieldCreatedBy,
 	FieldWorkItemID,
-	FieldTenantID,
-	FieldCreatedAt,
-	FieldUpdatedAt,
-	FieldResolvedAt,
-	FieldClosedAt,
-	FieldDeletedAt,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "problems"
@@ -105,15 +65,6 @@ var Columns = []string{
 var ForeignKeys = []string{
 	"known_error_problem",
 }
-
-var (
-	// IncidentsPrimaryKey and IncidentsColumn2 are the table columns denoting the
-	// primary key for the incidents relation (M2M).
-	IncidentsPrimaryKey = []string{"problem_id", "incident_id"}
-	// ChangesPrimaryKey and ChangesColumn2 are the table columns denoting the
-	// primary key for the changes relation (M2M).
-	ChangesPrimaryKey = []string{"problem_id", "change_id"}
-)
 
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
@@ -130,25 +81,6 @@ func ValidColumn(column string) bool {
 	return false
 }
 
-var (
-	// TitleValidator is a validator for the "title" field. It is called by the builders before save.
-	TitleValidator func(string) error
-	// DefaultStatus holds the default value on creation for the "status" field.
-	DefaultStatus string
-	// DefaultPriority holds the default value on creation for the "priority" field.
-	DefaultPriority string
-	// CreatedByValidator is a validator for the "created_by" field. It is called by the builders before save.
-	CreatedByValidator func(int) error
-	// TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	TenantIDValidator func(int) error
-	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
-	DefaultCreatedAt func() time.Time
-	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
-	DefaultUpdatedAt func() time.Time
-	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
-	UpdateDefaultUpdatedAt func() time.Time
-)
-
 // OrderOption defines the ordering options for the Problem queries.
 type OrderOption func(*sql.Selector)
 
@@ -157,29 +89,29 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
 }
 
-// ByTitle orders the results by the title field.
-func ByTitle(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTitle, opts...).ToFunc()
+// ByVerifiedVersion orders the results by the verified_version field.
+func ByVerifiedVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVerifiedVersion, opts...).ToFunc()
 }
 
-// ByDescription orders the results by the description field.
-func ByDescription(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldDescription, opts...).ToFunc()
+// ByVerificationDigest orders the results by the verification_digest field.
+func ByVerificationDigest(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVerificationDigest, opts...).ToFunc()
 }
 
-// ByStatus orders the results by the status field.
-func ByStatus(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+// ByVerifiedBy orders the results by the verified_by field.
+func ByVerifiedBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVerifiedBy, opts...).ToFunc()
 }
 
-// ByPriority orders the results by the priority field.
-func ByPriority(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPriority, opts...).ToFunc()
+// ByVerifiedAt orders the results by the verified_at field.
+func ByVerifiedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVerifiedAt, opts...).ToFunc()
 }
 
-// ByCategory orders the results by the category field.
-func ByCategory(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCategory, opts...).ToFunc()
+// ByVerificationNote orders the results by the verification_note field.
+func ByVerificationNote(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVerificationNote, opts...).ToFunc()
 }
 
 // ByRootCause orders the results by the root_cause field.
@@ -202,110 +134,21 @@ func ByImpact(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldImpact, opts...).ToFunc()
 }
 
-// ByAssigneeID orders the results by the assignee_id field.
-func ByAssigneeID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAssigneeID, opts...).ToFunc()
-}
-
-// ByCreatedBy orders the results by the created_by field.
-func ByCreatedBy(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCreatedBy, opts...).ToFunc()
-}
-
 // ByWorkItemID orders the results by the work_item_id field.
 func ByWorkItemID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWorkItemID, opts...).ToFunc()
 }
 
-// ByTenantID orders the results by the tenant_id field.
-func ByTenantID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTenantID, opts...).ToFunc()
-}
-
-// ByCreatedAt orders the results by the created_at field.
-func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
-}
-
-// ByUpdatedAt orders the results by the updated_at field.
-func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
-}
-
-// ByResolvedAt orders the results by the resolved_at field.
-func ByResolvedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldResolvedAt, opts...).ToFunc()
-}
-
-// ByClosedAt orders the results by the closed_at field.
-func ByClosedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldClosedAt, opts...).ToFunc()
-}
-
-// ByDeletedAt orders the results by the deleted_at field.
-func ByDeletedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldDeletedAt, opts...).ToFunc()
-}
-
-// ByTicketsCount orders the results by tickets count.
-func ByTicketsCount(opts ...sql.OrderTermOption) OrderOption {
+// ByWorkItemField orders the results by work_item field.
+func ByWorkItemField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newTicketsStep(), opts...)
+		sqlgraph.OrderByNeighborTerms(s, newWorkItemStep(), sql.OrderByField(field, opts...))
 	}
 }
-
-// ByTickets orders the results by tickets terms.
-func ByTickets(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newTicketsStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
-// ByIncidentsCount orders the results by incidents count.
-func ByIncidentsCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newIncidentsStep(), opts...)
-	}
-}
-
-// ByIncidents orders the results by incidents terms.
-func ByIncidents(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newIncidentsStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
-// ByChangesCount orders the results by changes count.
-func ByChangesCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newChangesStep(), opts...)
-	}
-}
-
-// ByChanges orders the results by changes terms.
-func ByChanges(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newChangesStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-func newTicketsStep() *sqlgraph.Step {
+func newWorkItemStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(TicketsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, TicketsTable, TicketsColumn),
-	)
-}
-func newIncidentsStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(IncidentsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2M, false, IncidentsTable, IncidentsPrimaryKey...),
-	)
-}
-func newChangesStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ChangesInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2M, false, ChangesTable, ChangesPrimaryKey...),
+		sqlgraph.To(WorkItemInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, false, WorkItemTable, WorkItemColumn),
 	)
 }

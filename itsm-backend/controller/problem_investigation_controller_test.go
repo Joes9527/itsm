@@ -135,7 +135,7 @@ func TestProblemInvestigationController_GetProblemInvestigation(t *testing.T) {
 		{
 			name:            "获取不存在的问题调查",
 			investigationID: "99999",
-			expectedStatus:  http.StatusInternalServerError, // 服务层返回错误
+			expectedStatus:  http.StatusInternalServerError, // service read error
 		},
 		{
 			name:            "无效的调查ID",
@@ -172,12 +172,12 @@ func TestProblemInvestigationController_UpdateProblemInvestigation(t *testing.T)
 		expectedStatus  int
 	}{
 		{
-			name:            "更新不存在的问题调查",
+			name:            "缺少权威版本和操作标识",
 			investigationID: "99999",
 			requestBody: map[string]interface{}{
 				"findings": "Updated findings",
 			},
-			expectedStatus: http.StatusInternalServerError, // 服务层返回错误
+			expectedStatus: http.StatusBadRequest, // mutation metadata is required
 		},
 		{
 			name:            "无效的调查ID",

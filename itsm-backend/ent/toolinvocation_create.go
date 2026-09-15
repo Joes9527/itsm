@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/user"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -20,6 +21,7 @@ type ToolInvocationCreate struct {
 	config
 	mutation *ToolInvocationMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetCreatedAt sets the "created_at" field.
@@ -423,6 +425,7 @@ func (_c *ToolInvocationCreate) createSpec() (*ToolInvocation, *sqlgraph.CreateS
 		_node = &ToolInvocation{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(toolinvocation.Table, sqlgraph.NewFieldSpec(toolinvocation.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(toolinvocation.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
@@ -528,11 +531,745 @@ func (_c *ToolInvocationCreate) createSpec() (*ToolInvocation, *sqlgraph.CreateS
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ToolInvocation.Create().
+//		SetCreatedAt(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ToolInvocationUpsert) {
+//			SetCreatedAt(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ToolInvocationCreate) OnConflict(opts ...sql.ConflictOption) *ToolInvocationUpsertOne {
+	_c.conflict = opts
+	return &ToolInvocationUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ToolInvocation.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ToolInvocationCreate) OnConflictColumns(columns ...string) *ToolInvocationUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ToolInvocationUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ToolInvocationUpsertOne is the builder for "upsert"-ing
+	//  one ToolInvocation node.
+	ToolInvocationUpsertOne struct {
+		create *ToolInvocationCreate
+	}
+
+	// ToolInvocationUpsert is the "OnConflict" setter.
+	ToolInvocationUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ToolInvocationUpsert) SetCreatedAt(v time.Time) *ToolInvocationUpsert {
+	u.Set(toolinvocation.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ToolInvocationUpsert) UpdateCreatedAt() *ToolInvocationUpsert {
+	u.SetExcluded(toolinvocation.FieldCreatedAt)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ToolInvocationUpsert) SetTenantID(v int) *ToolInvocationUpsert {
+	u.Set(toolinvocation.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ToolInvocationUpsert) UpdateTenantID() *ToolInvocationUpsert {
+	u.SetExcluded(toolinvocation.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ToolInvocationUpsert) AddTenantID(v int) *ToolInvocationUpsert {
+	u.Add(toolinvocation.FieldTenantID, v)
+	return u
+}
+
+// SetConversationID sets the "conversation_id" field.
+func (u *ToolInvocationUpsert) SetConversationID(v int) *ToolInvocationUpsert {
+	u.Set(toolinvocation.FieldConversationID, v)
+	return u
+}
+
+// UpdateConversationID sets the "conversation_id" field to the value that was provided on create.
+func (u *ToolInvocationUpsert) UpdateConversationID() *ToolInvocationUpsert {
+	u.SetExcluded(toolinvocation.FieldConversationID)
+	return u
+}
+
+// ClearConversationID clears the value of the "conversation_id" field.
+func (u *ToolInvocationUpsert) ClearConversationID() *ToolInvocationUpsert {
+	u.SetNull(toolinvocation.FieldConversationID)
+	return u
+}
+
+// SetToolName sets the "tool_name" field.
+func (u *ToolInvocationUpsert) SetToolName(v string) *ToolInvocationUpsert {
+	u.Set(toolinvocation.FieldToolName, v)
+	return u
+}
+
+// UpdateToolName sets the "tool_name" field to the value that was provided on create.
+func (u *ToolInvocationUpsert) UpdateToolName() *ToolInvocationUpsert {
+	u.SetExcluded(toolinvocation.FieldToolName)
+	return u
+}
+
+// SetArguments sets the "arguments" field.
+func (u *ToolInvocationUpsert) SetArguments(v string) *ToolInvocationUpsert {
+	u.Set(toolinvocation.FieldArguments, v)
+	return u
+}
+
+// UpdateArguments sets the "arguments" field to the value that was provided on create.
+func (u *ToolInvocationUpsert) UpdateArguments() *ToolInvocationUpsert {
+	u.SetExcluded(toolinvocation.FieldArguments)
+	return u
+}
+
+// SetResult sets the "result" field.
+func (u *ToolInvocationUpsert) SetResult(v string) *ToolInvocationUpsert {
+	u.Set(toolinvocation.FieldResult, v)
+	return u
+}
+
+// UpdateResult sets the "result" field to the value that was provided on create.
+func (u *ToolInvocationUpsert) UpdateResult() *ToolInvocationUpsert {
+	u.SetExcluded(toolinvocation.FieldResult)
+	return u
+}
+
+// ClearResult clears the value of the "result" field.
+func (u *ToolInvocationUpsert) ClearResult() *ToolInvocationUpsert {
+	u.SetNull(toolinvocation.FieldResult)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *ToolInvocationUpsert) SetStatus(v string) *ToolInvocationUpsert {
+	u.Set(toolinvocation.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ToolInvocationUpsert) UpdateStatus() *ToolInvocationUpsert {
+	u.SetExcluded(toolinvocation.FieldStatus)
+	return u
+}
+
+// SetRequestID sets the "request_id" field.
+func (u *ToolInvocationUpsert) SetRequestID(v string) *ToolInvocationUpsert {
+	u.Set(toolinvocation.FieldRequestID, v)
+	return u
+}
+
+// UpdateRequestID sets the "request_id" field to the value that was provided on create.
+func (u *ToolInvocationUpsert) UpdateRequestID() *ToolInvocationUpsert {
+	u.SetExcluded(toolinvocation.FieldRequestID)
+	return u
+}
+
+// ClearRequestID clears the value of the "request_id" field.
+func (u *ToolInvocationUpsert) ClearRequestID() *ToolInvocationUpsert {
+	u.SetNull(toolinvocation.FieldRequestID)
+	return u
+}
+
+// SetNeedsApproval sets the "needs_approval" field.
+func (u *ToolInvocationUpsert) SetNeedsApproval(v bool) *ToolInvocationUpsert {
+	u.Set(toolinvocation.FieldNeedsApproval, v)
+	return u
+}
+
+// UpdateNeedsApproval sets the "needs_approval" field to the value that was provided on create.
+func (u *ToolInvocationUpsert) UpdateNeedsApproval() *ToolInvocationUpsert {
+	u.SetExcluded(toolinvocation.FieldNeedsApproval)
+	return u
+}
+
+// SetApprovalState sets the "approval_state" field.
+func (u *ToolInvocationUpsert) SetApprovalState(v string) *ToolInvocationUpsert {
+	u.Set(toolinvocation.FieldApprovalState, v)
+	return u
+}
+
+// UpdateApprovalState sets the "approval_state" field to the value that was provided on create.
+func (u *ToolInvocationUpsert) UpdateApprovalState() *ToolInvocationUpsert {
+	u.SetExcluded(toolinvocation.FieldApprovalState)
+	return u
+}
+
+// SetApprovalReason sets the "approval_reason" field.
+func (u *ToolInvocationUpsert) SetApprovalReason(v string) *ToolInvocationUpsert {
+	u.Set(toolinvocation.FieldApprovalReason, v)
+	return u
+}
+
+// UpdateApprovalReason sets the "approval_reason" field to the value that was provided on create.
+func (u *ToolInvocationUpsert) UpdateApprovalReason() *ToolInvocationUpsert {
+	u.SetExcluded(toolinvocation.FieldApprovalReason)
+	return u
+}
+
+// SetApprovedBy sets the "approved_by" field.
+func (u *ToolInvocationUpsert) SetApprovedBy(v int) *ToolInvocationUpsert {
+	u.Set(toolinvocation.FieldApprovedBy, v)
+	return u
+}
+
+// UpdateApprovedBy sets the "approved_by" field to the value that was provided on create.
+func (u *ToolInvocationUpsert) UpdateApprovedBy() *ToolInvocationUpsert {
+	u.SetExcluded(toolinvocation.FieldApprovedBy)
+	return u
+}
+
+// AddApprovedBy adds v to the "approved_by" field.
+func (u *ToolInvocationUpsert) AddApprovedBy(v int) *ToolInvocationUpsert {
+	u.Add(toolinvocation.FieldApprovedBy, v)
+	return u
+}
+
+// ClearApprovedBy clears the value of the "approved_by" field.
+func (u *ToolInvocationUpsert) ClearApprovedBy() *ToolInvocationUpsert {
+	u.SetNull(toolinvocation.FieldApprovedBy)
+	return u
+}
+
+// SetApprovedAt sets the "approved_at" field.
+func (u *ToolInvocationUpsert) SetApprovedAt(v time.Time) *ToolInvocationUpsert {
+	u.Set(toolinvocation.FieldApprovedAt, v)
+	return u
+}
+
+// UpdateApprovedAt sets the "approved_at" field to the value that was provided on create.
+func (u *ToolInvocationUpsert) UpdateApprovedAt() *ToolInvocationUpsert {
+	u.SetExcluded(toolinvocation.FieldApprovedAt)
+	return u
+}
+
+// ClearApprovedAt clears the value of the "approved_at" field.
+func (u *ToolInvocationUpsert) ClearApprovedAt() *ToolInvocationUpsert {
+	u.SetNull(toolinvocation.FieldApprovedAt)
+	return u
+}
+
+// SetDryRun sets the "dry_run" field.
+func (u *ToolInvocationUpsert) SetDryRun(v bool) *ToolInvocationUpsert {
+	u.Set(toolinvocation.FieldDryRun, v)
+	return u
+}
+
+// UpdateDryRun sets the "dry_run" field to the value that was provided on create.
+func (u *ToolInvocationUpsert) UpdateDryRun() *ToolInvocationUpsert {
+	u.SetExcluded(toolinvocation.FieldDryRun)
+	return u
+}
+
+// SetError sets the "error" field.
+func (u *ToolInvocationUpsert) SetError(v string) *ToolInvocationUpsert {
+	u.Set(toolinvocation.FieldError, v)
+	return u
+}
+
+// UpdateError sets the "error" field to the value that was provided on create.
+func (u *ToolInvocationUpsert) UpdateError() *ToolInvocationUpsert {
+	u.SetExcluded(toolinvocation.FieldError)
+	return u
+}
+
+// ClearError clears the value of the "error" field.
+func (u *ToolInvocationUpsert) ClearError() *ToolInvocationUpsert {
+	u.SetNull(toolinvocation.FieldError)
+	return u
+}
+
+// SetUserID sets the "user_id" field.
+func (u *ToolInvocationUpsert) SetUserID(v int) *ToolInvocationUpsert {
+	u.Set(toolinvocation.FieldUserID, v)
+	return u
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *ToolInvocationUpsert) UpdateUserID() *ToolInvocationUpsert {
+	u.SetExcluded(toolinvocation.FieldUserID)
+	return u
+}
+
+// ClearUserID clears the value of the "user_id" field.
+func (u *ToolInvocationUpsert) ClearUserID() *ToolInvocationUpsert {
+	u.SetNull(toolinvocation.FieldUserID)
+	return u
+}
+
+// SetPermissionCheck sets the "permission_check" field.
+func (u *ToolInvocationUpsert) SetPermissionCheck(v string) *ToolInvocationUpsert {
+	u.Set(toolinvocation.FieldPermissionCheck, v)
+	return u
+}
+
+// UpdatePermissionCheck sets the "permission_check" field to the value that was provided on create.
+func (u *ToolInvocationUpsert) UpdatePermissionCheck() *ToolInvocationUpsert {
+	u.SetExcluded(toolinvocation.FieldPermissionCheck)
+	return u
+}
+
+// SetPermissionReason sets the "permission_reason" field.
+func (u *ToolInvocationUpsert) SetPermissionReason(v string) *ToolInvocationUpsert {
+	u.Set(toolinvocation.FieldPermissionReason, v)
+	return u
+}
+
+// UpdatePermissionReason sets the "permission_reason" field to the value that was provided on create.
+func (u *ToolInvocationUpsert) UpdatePermissionReason() *ToolInvocationUpsert {
+	u.SetExcluded(toolinvocation.FieldPermissionReason)
+	return u
+}
+
+// SetRoleSnapshot sets the "role_snapshot" field.
+func (u *ToolInvocationUpsert) SetRoleSnapshot(v string) *ToolInvocationUpsert {
+	u.Set(toolinvocation.FieldRoleSnapshot, v)
+	return u
+}
+
+// UpdateRoleSnapshot sets the "role_snapshot" field to the value that was provided on create.
+func (u *ToolInvocationUpsert) UpdateRoleSnapshot() *ToolInvocationUpsert {
+	u.SetExcluded(toolinvocation.FieldRoleSnapshot)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ToolInvocation.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ToolInvocationUpsertOne) UpdateNewValues() *ToolInvocationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ToolInvocation.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ToolInvocationUpsertOne) Ignore() *ToolInvocationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ToolInvocationUpsertOne) DoNothing() *ToolInvocationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ToolInvocationCreate.OnConflict
+// documentation for more info.
+func (u *ToolInvocationUpsertOne) Update(set func(*ToolInvocationUpsert)) *ToolInvocationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ToolInvocationUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ToolInvocationUpsertOne) SetCreatedAt(v time.Time) *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ToolInvocationUpsertOne) UpdateCreatedAt() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ToolInvocationUpsertOne) SetTenantID(v int) *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ToolInvocationUpsertOne) AddTenantID(v int) *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ToolInvocationUpsertOne) UpdateTenantID() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetConversationID sets the "conversation_id" field.
+func (u *ToolInvocationUpsertOne) SetConversationID(v int) *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetConversationID(v)
+	})
+}
+
+// UpdateConversationID sets the "conversation_id" field to the value that was provided on create.
+func (u *ToolInvocationUpsertOne) UpdateConversationID() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateConversationID()
+	})
+}
+
+// ClearConversationID clears the value of the "conversation_id" field.
+func (u *ToolInvocationUpsertOne) ClearConversationID() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.ClearConversationID()
+	})
+}
+
+// SetToolName sets the "tool_name" field.
+func (u *ToolInvocationUpsertOne) SetToolName(v string) *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetToolName(v)
+	})
+}
+
+// UpdateToolName sets the "tool_name" field to the value that was provided on create.
+func (u *ToolInvocationUpsertOne) UpdateToolName() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateToolName()
+	})
+}
+
+// SetArguments sets the "arguments" field.
+func (u *ToolInvocationUpsertOne) SetArguments(v string) *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetArguments(v)
+	})
+}
+
+// UpdateArguments sets the "arguments" field to the value that was provided on create.
+func (u *ToolInvocationUpsertOne) UpdateArguments() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateArguments()
+	})
+}
+
+// SetResult sets the "result" field.
+func (u *ToolInvocationUpsertOne) SetResult(v string) *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetResult(v)
+	})
+}
+
+// UpdateResult sets the "result" field to the value that was provided on create.
+func (u *ToolInvocationUpsertOne) UpdateResult() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateResult()
+	})
+}
+
+// ClearResult clears the value of the "result" field.
+func (u *ToolInvocationUpsertOne) ClearResult() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.ClearResult()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ToolInvocationUpsertOne) SetStatus(v string) *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ToolInvocationUpsertOne) UpdateStatus() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetRequestID sets the "request_id" field.
+func (u *ToolInvocationUpsertOne) SetRequestID(v string) *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetRequestID(v)
+	})
+}
+
+// UpdateRequestID sets the "request_id" field to the value that was provided on create.
+func (u *ToolInvocationUpsertOne) UpdateRequestID() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateRequestID()
+	})
+}
+
+// ClearRequestID clears the value of the "request_id" field.
+func (u *ToolInvocationUpsertOne) ClearRequestID() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.ClearRequestID()
+	})
+}
+
+// SetNeedsApproval sets the "needs_approval" field.
+func (u *ToolInvocationUpsertOne) SetNeedsApproval(v bool) *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetNeedsApproval(v)
+	})
+}
+
+// UpdateNeedsApproval sets the "needs_approval" field to the value that was provided on create.
+func (u *ToolInvocationUpsertOne) UpdateNeedsApproval() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateNeedsApproval()
+	})
+}
+
+// SetApprovalState sets the "approval_state" field.
+func (u *ToolInvocationUpsertOne) SetApprovalState(v string) *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetApprovalState(v)
+	})
+}
+
+// UpdateApprovalState sets the "approval_state" field to the value that was provided on create.
+func (u *ToolInvocationUpsertOne) UpdateApprovalState() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateApprovalState()
+	})
+}
+
+// SetApprovalReason sets the "approval_reason" field.
+func (u *ToolInvocationUpsertOne) SetApprovalReason(v string) *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetApprovalReason(v)
+	})
+}
+
+// UpdateApprovalReason sets the "approval_reason" field to the value that was provided on create.
+func (u *ToolInvocationUpsertOne) UpdateApprovalReason() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateApprovalReason()
+	})
+}
+
+// SetApprovedBy sets the "approved_by" field.
+func (u *ToolInvocationUpsertOne) SetApprovedBy(v int) *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetApprovedBy(v)
+	})
+}
+
+// AddApprovedBy adds v to the "approved_by" field.
+func (u *ToolInvocationUpsertOne) AddApprovedBy(v int) *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.AddApprovedBy(v)
+	})
+}
+
+// UpdateApprovedBy sets the "approved_by" field to the value that was provided on create.
+func (u *ToolInvocationUpsertOne) UpdateApprovedBy() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateApprovedBy()
+	})
+}
+
+// ClearApprovedBy clears the value of the "approved_by" field.
+func (u *ToolInvocationUpsertOne) ClearApprovedBy() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.ClearApprovedBy()
+	})
+}
+
+// SetApprovedAt sets the "approved_at" field.
+func (u *ToolInvocationUpsertOne) SetApprovedAt(v time.Time) *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetApprovedAt(v)
+	})
+}
+
+// UpdateApprovedAt sets the "approved_at" field to the value that was provided on create.
+func (u *ToolInvocationUpsertOne) UpdateApprovedAt() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateApprovedAt()
+	})
+}
+
+// ClearApprovedAt clears the value of the "approved_at" field.
+func (u *ToolInvocationUpsertOne) ClearApprovedAt() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.ClearApprovedAt()
+	})
+}
+
+// SetDryRun sets the "dry_run" field.
+func (u *ToolInvocationUpsertOne) SetDryRun(v bool) *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetDryRun(v)
+	})
+}
+
+// UpdateDryRun sets the "dry_run" field to the value that was provided on create.
+func (u *ToolInvocationUpsertOne) UpdateDryRun() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateDryRun()
+	})
+}
+
+// SetError sets the "error" field.
+func (u *ToolInvocationUpsertOne) SetError(v string) *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetError(v)
+	})
+}
+
+// UpdateError sets the "error" field to the value that was provided on create.
+func (u *ToolInvocationUpsertOne) UpdateError() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateError()
+	})
+}
+
+// ClearError clears the value of the "error" field.
+func (u *ToolInvocationUpsertOne) ClearError() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.ClearError()
+	})
+}
+
+// SetUserID sets the "user_id" field.
+func (u *ToolInvocationUpsertOne) SetUserID(v int) *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *ToolInvocationUpsertOne) UpdateUserID() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// ClearUserID clears the value of the "user_id" field.
+func (u *ToolInvocationUpsertOne) ClearUserID() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.ClearUserID()
+	})
+}
+
+// SetPermissionCheck sets the "permission_check" field.
+func (u *ToolInvocationUpsertOne) SetPermissionCheck(v string) *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetPermissionCheck(v)
+	})
+}
+
+// UpdatePermissionCheck sets the "permission_check" field to the value that was provided on create.
+func (u *ToolInvocationUpsertOne) UpdatePermissionCheck() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdatePermissionCheck()
+	})
+}
+
+// SetPermissionReason sets the "permission_reason" field.
+func (u *ToolInvocationUpsertOne) SetPermissionReason(v string) *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetPermissionReason(v)
+	})
+}
+
+// UpdatePermissionReason sets the "permission_reason" field to the value that was provided on create.
+func (u *ToolInvocationUpsertOne) UpdatePermissionReason() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdatePermissionReason()
+	})
+}
+
+// SetRoleSnapshot sets the "role_snapshot" field.
+func (u *ToolInvocationUpsertOne) SetRoleSnapshot(v string) *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetRoleSnapshot(v)
+	})
+}
+
+// UpdateRoleSnapshot sets the "role_snapshot" field to the value that was provided on create.
+func (u *ToolInvocationUpsertOne) UpdateRoleSnapshot() *ToolInvocationUpsertOne {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateRoleSnapshot()
+	})
+}
+
+// Exec executes the query.
+func (u *ToolInvocationUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ToolInvocationCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ToolInvocationUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ToolInvocationUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ToolInvocationUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ToolInvocationCreateBulk is the builder for creating many ToolInvocation entities in bulk.
 type ToolInvocationCreateBulk struct {
 	config
 	err      error
 	builders []*ToolInvocationCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ToolInvocation entities in the database.
@@ -562,6 +1299,7 @@ func (_c *ToolInvocationCreateBulk) Save(ctx context.Context) ([]*ToolInvocation
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -612,6 +1350,439 @@ func (_c *ToolInvocationCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ToolInvocationCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ToolInvocation.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ToolInvocationUpsert) {
+//			SetCreatedAt(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ToolInvocationCreateBulk) OnConflict(opts ...sql.ConflictOption) *ToolInvocationUpsertBulk {
+	_c.conflict = opts
+	return &ToolInvocationUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ToolInvocation.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ToolInvocationCreateBulk) OnConflictColumns(columns ...string) *ToolInvocationUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ToolInvocationUpsertBulk{
+		create: _c,
+	}
+}
+
+// ToolInvocationUpsertBulk is the builder for "upsert"-ing
+// a bulk of ToolInvocation nodes.
+type ToolInvocationUpsertBulk struct {
+	create *ToolInvocationCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ToolInvocation.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ToolInvocationUpsertBulk) UpdateNewValues() *ToolInvocationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ToolInvocation.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ToolInvocationUpsertBulk) Ignore() *ToolInvocationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ToolInvocationUpsertBulk) DoNothing() *ToolInvocationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ToolInvocationCreateBulk.OnConflict
+// documentation for more info.
+func (u *ToolInvocationUpsertBulk) Update(set func(*ToolInvocationUpsert)) *ToolInvocationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ToolInvocationUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ToolInvocationUpsertBulk) SetCreatedAt(v time.Time) *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ToolInvocationUpsertBulk) UpdateCreatedAt() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ToolInvocationUpsertBulk) SetTenantID(v int) *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ToolInvocationUpsertBulk) AddTenantID(v int) *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ToolInvocationUpsertBulk) UpdateTenantID() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetConversationID sets the "conversation_id" field.
+func (u *ToolInvocationUpsertBulk) SetConversationID(v int) *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetConversationID(v)
+	})
+}
+
+// UpdateConversationID sets the "conversation_id" field to the value that was provided on create.
+func (u *ToolInvocationUpsertBulk) UpdateConversationID() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateConversationID()
+	})
+}
+
+// ClearConversationID clears the value of the "conversation_id" field.
+func (u *ToolInvocationUpsertBulk) ClearConversationID() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.ClearConversationID()
+	})
+}
+
+// SetToolName sets the "tool_name" field.
+func (u *ToolInvocationUpsertBulk) SetToolName(v string) *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetToolName(v)
+	})
+}
+
+// UpdateToolName sets the "tool_name" field to the value that was provided on create.
+func (u *ToolInvocationUpsertBulk) UpdateToolName() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateToolName()
+	})
+}
+
+// SetArguments sets the "arguments" field.
+func (u *ToolInvocationUpsertBulk) SetArguments(v string) *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetArguments(v)
+	})
+}
+
+// UpdateArguments sets the "arguments" field to the value that was provided on create.
+func (u *ToolInvocationUpsertBulk) UpdateArguments() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateArguments()
+	})
+}
+
+// SetResult sets the "result" field.
+func (u *ToolInvocationUpsertBulk) SetResult(v string) *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetResult(v)
+	})
+}
+
+// UpdateResult sets the "result" field to the value that was provided on create.
+func (u *ToolInvocationUpsertBulk) UpdateResult() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateResult()
+	})
+}
+
+// ClearResult clears the value of the "result" field.
+func (u *ToolInvocationUpsertBulk) ClearResult() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.ClearResult()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ToolInvocationUpsertBulk) SetStatus(v string) *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ToolInvocationUpsertBulk) UpdateStatus() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetRequestID sets the "request_id" field.
+func (u *ToolInvocationUpsertBulk) SetRequestID(v string) *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetRequestID(v)
+	})
+}
+
+// UpdateRequestID sets the "request_id" field to the value that was provided on create.
+func (u *ToolInvocationUpsertBulk) UpdateRequestID() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateRequestID()
+	})
+}
+
+// ClearRequestID clears the value of the "request_id" field.
+func (u *ToolInvocationUpsertBulk) ClearRequestID() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.ClearRequestID()
+	})
+}
+
+// SetNeedsApproval sets the "needs_approval" field.
+func (u *ToolInvocationUpsertBulk) SetNeedsApproval(v bool) *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetNeedsApproval(v)
+	})
+}
+
+// UpdateNeedsApproval sets the "needs_approval" field to the value that was provided on create.
+func (u *ToolInvocationUpsertBulk) UpdateNeedsApproval() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateNeedsApproval()
+	})
+}
+
+// SetApprovalState sets the "approval_state" field.
+func (u *ToolInvocationUpsertBulk) SetApprovalState(v string) *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetApprovalState(v)
+	})
+}
+
+// UpdateApprovalState sets the "approval_state" field to the value that was provided on create.
+func (u *ToolInvocationUpsertBulk) UpdateApprovalState() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateApprovalState()
+	})
+}
+
+// SetApprovalReason sets the "approval_reason" field.
+func (u *ToolInvocationUpsertBulk) SetApprovalReason(v string) *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetApprovalReason(v)
+	})
+}
+
+// UpdateApprovalReason sets the "approval_reason" field to the value that was provided on create.
+func (u *ToolInvocationUpsertBulk) UpdateApprovalReason() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateApprovalReason()
+	})
+}
+
+// SetApprovedBy sets the "approved_by" field.
+func (u *ToolInvocationUpsertBulk) SetApprovedBy(v int) *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetApprovedBy(v)
+	})
+}
+
+// AddApprovedBy adds v to the "approved_by" field.
+func (u *ToolInvocationUpsertBulk) AddApprovedBy(v int) *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.AddApprovedBy(v)
+	})
+}
+
+// UpdateApprovedBy sets the "approved_by" field to the value that was provided on create.
+func (u *ToolInvocationUpsertBulk) UpdateApprovedBy() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateApprovedBy()
+	})
+}
+
+// ClearApprovedBy clears the value of the "approved_by" field.
+func (u *ToolInvocationUpsertBulk) ClearApprovedBy() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.ClearApprovedBy()
+	})
+}
+
+// SetApprovedAt sets the "approved_at" field.
+func (u *ToolInvocationUpsertBulk) SetApprovedAt(v time.Time) *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetApprovedAt(v)
+	})
+}
+
+// UpdateApprovedAt sets the "approved_at" field to the value that was provided on create.
+func (u *ToolInvocationUpsertBulk) UpdateApprovedAt() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateApprovedAt()
+	})
+}
+
+// ClearApprovedAt clears the value of the "approved_at" field.
+func (u *ToolInvocationUpsertBulk) ClearApprovedAt() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.ClearApprovedAt()
+	})
+}
+
+// SetDryRun sets the "dry_run" field.
+func (u *ToolInvocationUpsertBulk) SetDryRun(v bool) *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetDryRun(v)
+	})
+}
+
+// UpdateDryRun sets the "dry_run" field to the value that was provided on create.
+func (u *ToolInvocationUpsertBulk) UpdateDryRun() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateDryRun()
+	})
+}
+
+// SetError sets the "error" field.
+func (u *ToolInvocationUpsertBulk) SetError(v string) *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetError(v)
+	})
+}
+
+// UpdateError sets the "error" field to the value that was provided on create.
+func (u *ToolInvocationUpsertBulk) UpdateError() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateError()
+	})
+}
+
+// ClearError clears the value of the "error" field.
+func (u *ToolInvocationUpsertBulk) ClearError() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.ClearError()
+	})
+}
+
+// SetUserID sets the "user_id" field.
+func (u *ToolInvocationUpsertBulk) SetUserID(v int) *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *ToolInvocationUpsertBulk) UpdateUserID() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// ClearUserID clears the value of the "user_id" field.
+func (u *ToolInvocationUpsertBulk) ClearUserID() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.ClearUserID()
+	})
+}
+
+// SetPermissionCheck sets the "permission_check" field.
+func (u *ToolInvocationUpsertBulk) SetPermissionCheck(v string) *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetPermissionCheck(v)
+	})
+}
+
+// UpdatePermissionCheck sets the "permission_check" field to the value that was provided on create.
+func (u *ToolInvocationUpsertBulk) UpdatePermissionCheck() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdatePermissionCheck()
+	})
+}
+
+// SetPermissionReason sets the "permission_reason" field.
+func (u *ToolInvocationUpsertBulk) SetPermissionReason(v string) *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetPermissionReason(v)
+	})
+}
+
+// UpdatePermissionReason sets the "permission_reason" field to the value that was provided on create.
+func (u *ToolInvocationUpsertBulk) UpdatePermissionReason() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdatePermissionReason()
+	})
+}
+
+// SetRoleSnapshot sets the "role_snapshot" field.
+func (u *ToolInvocationUpsertBulk) SetRoleSnapshot(v string) *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.SetRoleSnapshot(v)
+	})
+}
+
+// UpdateRoleSnapshot sets the "role_snapshot" field to the value that was provided on create.
+func (u *ToolInvocationUpsertBulk) UpdateRoleSnapshot() *ToolInvocationUpsertBulk {
+	return u.Update(func(s *ToolInvocationUpsert) {
+		s.UpdateRoleSnapshot()
+	})
+}
+
+// Exec executes the query.
+func (u *ToolInvocationUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ToolInvocationCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ToolInvocationCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ToolInvocationUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -1,6 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
+import { CreationAttempts } from '@/components/work-item/CreationAttempts';
+import { CreationRequester } from '@/components/work-item/CreationRequester';
+
+import { CreationSourceRelations, type CreationSourceRelationsHandle } from '@/components/work-item/CreationSourceRelations';
+import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   App,
@@ -25,6 +30,8 @@ const { TextArea } = Input;
 
 // 表单值类型：DatePicker 用 Dayjs，affectedCis 用字符串
 interface ChangeFormValues {
+  sourceRelations?: ChangeRequest["sourceRelations"];
+  requesterId?: number;
   title: string;
   description: string;
   justification: string;
@@ -65,6 +72,8 @@ const RISK_OPTIONS: Array<{ value: ChangeRequest['riskLevel']; label: string }> 
 
 const CreateChangePage: React.FC = () => {
   const router = useRouter();
+  const creation = useWorkItemCreation();
+  const sourceRelationsRef = useRef<CreationSourceRelationsHandle>(null);
   const { t } = useI18n();
   const { message } = App.useApp();
   const [form] = Form.useForm<ChangeFormValues>();
@@ -73,6 +82,7 @@ const CreateChangePage: React.FC = () => {
   const handleSubmit = async (values: ChangeFormValues) => {
     setLoading(true);
     try {
+      sourceRelationsRef.current?.validate();
       const [start, end] = values.plannedRange ?? [];
       const affectedCis =
         values.affectedCisText
@@ -81,6 +91,7 @@ const CreateChangePage: React.FC = () => {
           .filter(Boolean) ?? [];
 
       const payload: ChangeRequest = {
+        requesterId: values.requesterId,
         title: values.title.trim(),
         description: values.description.trim(),
         justification: values.justification.trim(),
@@ -93,15 +104,13 @@ const CreateChangePage: React.FC = () => {
         implementationPlan: values.implementationPlan.trim(),
         rollbackPlan: values.rollbackPlan.trim(),
         affectedCis,
-        relatedTickets: [],
+        sourceRelations: values.sourceRelations,
       };
 
-      await ChangeApi.createChange(payload);
-      message.success(t('changes.createSuccess'));
-      router.push('/changes');
+      await creation.submit(payload, ChangeApi.createChange, () => router.push('/changes'));
     } catch (err) {
       console.error('提交变更失败:', err);
-      message.error(t('changes.createFailed'));
+      message.error(err instanceof Error ? err.message : t('changes.createFailed'));
     } finally {
       setLoading(false);
     }
@@ -116,7 +125,7 @@ const CreateChangePage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 md:p-10 bg-gray-50 min-h-full">
+    <div className="min-h-full bg-page p-[16px] text-[13px] text-foreground md:p-[24px]">
       <div className="mb-6">
         <Button
           type="link"
@@ -132,6 +141,7 @@ const CreateChangePage: React.FC = () => {
         <Text type="secondary">提交新的 IT 基础设施或服务变更请求</Text>
       </div>
 
+      <CreationAttempts creation={creation} beforeNewConfirmation={() => sourceRelationsRef.current?.refresh() ?? Promise.resolve(true)} />
       <Card className="shadow-sm rounded-lg">
         <Form<ChangeFormValues>
           form={form}
@@ -147,6 +157,8 @@ const CreateChangePage: React.FC = () => {
           disabled={loading}
           scrollToFirstError
         >
+          <CreationRequester resource="change" />
+          <Form.Item name="sourceRelations" label="创建关联变更（可选）"><CreationSourceRelations ref={sourceRelationsRef} /></Form.Item>
           <Form.Item
             label="变更标题"
             name="title"

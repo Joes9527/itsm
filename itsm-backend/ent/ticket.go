@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/ent/ticketcategory"
 	"itsm-backend/ent/user"
+	"itsm-backend/handlers/shared/slacontract"
 	"strings"
 	"time"
 
@@ -25,11 +27,11 @@ type Ticket struct {
 	Description string `json:"description,omitempty"`
 	// 状态
 	Status string `json:"status,omitempty"`
-	// 工单类型
-	Type string `json:"type,omitempty"`
+	// Generic-only business subtype; professional subtypes belong to their extensions
+	GenericSubtype string `json:"generic_subtype,omitempty"`
 	// 工单来源：manual=手动创建，service_catalog=服务目录申请
 	Source string `json:"source,omitempty"`
-	// WorkItem 记录类型：generic/service_request_item/incident/problem/change_request/catalog_task；创建后不可变，由领域服务在事务内校验，不在 schema 层强制
+	// WorkItem 记录类型：generic/service_request_item/incident/problem/change_request/catalog_task；创建后不可变，由领域服务在事务内校验
 	RecordClass string `json:"record_class,omitempty"`
 	// 实际录入/触发者ID（区别于 requester_id 服务接受者）
 	OpenedByID int `json:"opened_by_id,omitempty"`
@@ -59,6 +61,14 @@ type Ticket struct {
 	DepartmentID int `json:"department_id,omitempty"`
 	// 父工单ID
 	ParentTicketID int `json:"parent_ticket_id,omitempty"`
+	// SLACycleNumber holds the value of the "sla_cycle_number" field.
+	SLACycleNumber int `json:"sla_cycle_number,omitempty"`
+	// SLACycleStartedAt holds the value of the "sla_cycle_started_at" field.
+	SLACycleStartedAt time.Time `json:"sla_cycle_started_at,omitempty"`
+	// SLAPausedMinutes holds the value of the "sla_paused_minutes" field.
+	SLAPausedMinutes int `json:"sla_paused_minutes,omitempty"`
+	// AppliedSLAPolicy holds the value of the "applied_sla_policy" field.
+	AppliedSLAPolicy *slacontract.Policy `json:"applied_sla_policy,omitempty"`
 	// SLA定义ID
 	SLADefinitionID int `json:"sla_definition_id,omitempty"`
 	// SLA响应截止时间
@@ -106,7 +116,6 @@ type Ticket struct {
 	Edges                      TicketEdges `json:"edges"`
 	configuration_item_tickets *int
 	department_tickets         *int
-	problem_tickets            *int
 	sla_definition_tickets     *int
 	ticket_tag_tickets         *int
 	ticket_template_tickets    *int
@@ -123,8 +132,6 @@ type TicketEdges struct {
 	Tags []*TicketTag `json:"tags,omitempty"`
 	// 双向关联工单
 	RelatedTickets []*Ticket `json:"related_tickets,omitempty"`
-	// Approvals holds the value of the approvals edge.
-	Approvals []*TicketApproval `json:"approvals,omitempty"`
 	// WorkflowRecords holds the value of the workflow_records edge.
 	WorkflowRecords []*TicketWorkflowRecord `json:"workflow_records,omitempty"`
 	// Notifications holds the value of the notifications edge.
@@ -144,10 +151,10 @@ type TicketEdges struct {
 	// Assignee holds the value of the assignee edge.
 	Assignee *User `json:"assignee,omitempty"`
 	// Category holds the value of the category edge.
-	Category []*TicketCategory `json:"category,omitempty"`
+	Category *TicketCategory `json:"category,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [15]bool
+	loadedTypes [14]bool
 }
 
 // CommentsOrErr returns the Comments value or an error if the edge
@@ -186,19 +193,10 @@ func (e TicketEdges) RelatedTicketsOrErr() ([]*Ticket, error) {
 	return nil, &NotLoadedError{edge: "related_tickets"}
 }
 
-// ApprovalsOrErr returns the Approvals value or an error if the edge
-// was not loaded in eager-loading.
-func (e TicketEdges) ApprovalsOrErr() ([]*TicketApproval, error) {
-	if e.loadedTypes[4] {
-		return e.Approvals, nil
-	}
-	return nil, &NotLoadedError{edge: "approvals"}
-}
-
 // WorkflowRecordsOrErr returns the WorkflowRecords value or an error if the edge
 // was not loaded in eager-loading.
 func (e TicketEdges) WorkflowRecordsOrErr() ([]*TicketWorkflowRecord, error) {
-	if e.loadedTypes[5] {
+	if e.loadedTypes[4] {
 		return e.WorkflowRecords, nil
 	}
 	return nil, &NotLoadedError{edge: "workflow_records"}
@@ -207,7 +205,7 @@ func (e TicketEdges) WorkflowRecordsOrErr() ([]*TicketWorkflowRecord, error) {
 // NotificationsOrErr returns the Notifications value or an error if the edge
 // was not loaded in eager-loading.
 func (e TicketEdges) NotificationsOrErr() ([]*TicketNotification, error) {
-	if e.loadedTypes[6] {
+	if e.loadedTypes[5] {
 		return e.Notifications, nil
 	}
 	return nil, &NotLoadedError{edge: "notifications"}
@@ -216,7 +214,7 @@ func (e TicketEdges) NotificationsOrErr() ([]*TicketNotification, error) {
 // CcUsersOrErr returns the CcUsers value or an error if the edge
 // was not loaded in eager-loading.
 func (e TicketEdges) CcUsersOrErr() ([]*TicketCC, error) {
-	if e.loadedTypes[7] {
+	if e.loadedTypes[6] {
 		return e.CcUsers, nil
 	}
 	return nil, &NotLoadedError{edge: "cc_users"}
@@ -225,7 +223,7 @@ func (e TicketEdges) CcUsersOrErr() ([]*TicketCC, error) {
 // SLAViolationsOrErr returns the SLAViolations value or an error if the edge
 // was not loaded in eager-loading.
 func (e TicketEdges) SLAViolationsOrErr() ([]*SLAViolation, error) {
-	if e.loadedTypes[8] {
+	if e.loadedTypes[7] {
 		return e.SLAViolations, nil
 	}
 	return nil, &NotLoadedError{edge: "sla_violations"}
@@ -234,7 +232,7 @@ func (e TicketEdges) SLAViolationsOrErr() ([]*SLAViolation, error) {
 // SLAAlertHistoryOrErr returns the SLAAlertHistory value or an error if the edge
 // was not loaded in eager-loading.
 func (e TicketEdges) SLAAlertHistoryOrErr() ([]*SLAAlertHistory, error) {
-	if e.loadedTypes[9] {
+	if e.loadedTypes[8] {
 		return e.SLAAlertHistory, nil
 	}
 	return nil, &NotLoadedError{edge: "sla_alert_history"}
@@ -243,7 +241,7 @@ func (e TicketEdges) SLAAlertHistoryOrErr() ([]*SLAAlertHistory, error) {
 // RootCauseAnalysesOrErr returns the RootCauseAnalyses value or an error if the edge
 // was not loaded in eager-loading.
 func (e TicketEdges) RootCauseAnalysesOrErr() ([]*RootCauseAnalysis, error) {
-	if e.loadedTypes[10] {
+	if e.loadedTypes[9] {
 		return e.RootCauseAnalyses, nil
 	}
 	return nil, &NotLoadedError{edge: "root_cause_analyses"}
@@ -252,7 +250,7 @@ func (e TicketEdges) RootCauseAnalysesOrErr() ([]*RootCauseAnalysis, error) {
 // FeishuSyncsOrErr returns the FeishuSyncs value or an error if the edge
 // was not loaded in eager-loading.
 func (e TicketEdges) FeishuSyncsOrErr() ([]*FeishuTicketSync, error) {
-	if e.loadedTypes[11] {
+	if e.loadedTypes[10] {
 		return e.FeishuSyncs, nil
 	}
 	return nil, &NotLoadedError{edge: "feishu_syncs"}
@@ -263,7 +261,7 @@ func (e TicketEdges) FeishuSyncsOrErr() ([]*FeishuTicketSync, error) {
 func (e TicketEdges) RequesterOrErr() (*User, error) {
 	if e.Requester != nil {
 		return e.Requester, nil
-	} else if e.loadedTypes[12] {
+	} else if e.loadedTypes[11] {
 		return nil, &NotFoundError{label: user.Label}
 	}
 	return nil, &NotLoadedError{edge: "requester"}
@@ -274,17 +272,19 @@ func (e TicketEdges) RequesterOrErr() (*User, error) {
 func (e TicketEdges) AssigneeOrErr() (*User, error) {
 	if e.Assignee != nil {
 		return e.Assignee, nil
-	} else if e.loadedTypes[13] {
+	} else if e.loadedTypes[12] {
 		return nil, &NotFoundError{label: user.Label}
 	}
 	return nil, &NotLoadedError{edge: "assignee"}
 }
 
 // CategoryOrErr returns the Category value or an error if the edge
-// was not loaded in eager-loading.
-func (e TicketEdges) CategoryOrErr() ([]*TicketCategory, error) {
-	if e.loadedTypes[14] {
+// was not loaded in eager-loading, or loaded but was not found.
+func (e TicketEdges) CategoryOrErr() (*TicketCategory, error) {
+	if e.Category != nil {
 		return e.Category, nil
+	} else if e.loadedTypes[13] {
+		return nil, &NotFoundError{label: ticketcategory.Label}
 	}
 	return nil, &NotLoadedError{edge: "category"}
 }
@@ -294,27 +294,25 @@ func (*Ticket) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case ticket.FieldCustomFieldValues:
+		case ticket.FieldAppliedSLAPolicy, ticket.FieldCustomFieldValues:
 			values[i] = new([]byte)
 		case ticket.FieldIsManagedByMsp:
 			values[i] = new(sql.NullBool)
-		case ticket.FieldID, ticket.FieldOpenedByID, ticket.FieldAssignmentGroupID, ticket.FieldRequesterID, ticket.FieldAssigneeID, ticket.FieldTenantID, ticket.FieldTemplateID, ticket.FieldCategoryID, ticket.FieldDepartmentID, ticket.FieldParentTicketID, ticket.FieldSLADefinitionID, ticket.FieldRating, ticket.FieldRatedBy, ticket.FieldVersion, ticket.FieldMspProviderID, ticket.FieldManagedByUserID:
+		case ticket.FieldID, ticket.FieldOpenedByID, ticket.FieldAssignmentGroupID, ticket.FieldRequesterID, ticket.FieldAssigneeID, ticket.FieldTenantID, ticket.FieldTemplateID, ticket.FieldCategoryID, ticket.FieldDepartmentID, ticket.FieldParentTicketID, ticket.FieldSLACycleNumber, ticket.FieldSLAPausedMinutes, ticket.FieldSLADefinitionID, ticket.FieldRating, ticket.FieldRatedBy, ticket.FieldVersion, ticket.FieldMspProviderID, ticket.FieldManagedByUserID:
 			values[i] = new(sql.NullInt64)
-		case ticket.FieldTitle, ticket.FieldDescription, ticket.FieldStatus, ticket.FieldType, ticket.FieldSource, ticket.FieldRecordClass, ticket.FieldPriority, ticket.FieldTicketNumber, ticket.FieldCreatorEmail, ticket.FieldExternalMessageID, ticket.FieldConversationID, ticket.FieldResolution, ticket.FieldResolutionCategory, ticket.FieldRatingComment, ticket.FieldMspTicketID:
+		case ticket.FieldTitle, ticket.FieldDescription, ticket.FieldStatus, ticket.FieldGenericSubtype, ticket.FieldSource, ticket.FieldRecordClass, ticket.FieldPriority, ticket.FieldTicketNumber, ticket.FieldCreatorEmail, ticket.FieldExternalMessageID, ticket.FieldConversationID, ticket.FieldResolution, ticket.FieldResolutionCategory, ticket.FieldRatingComment, ticket.FieldMspTicketID:
 			values[i] = new(sql.NullString)
-		case ticket.FieldSLAResponseDeadline, ticket.FieldSLAResolutionDeadline, ticket.FieldFirstResponseAt, ticket.FieldResolvedAt, ticket.FieldClosedAt, ticket.FieldRatedAt, ticket.FieldCreatedAt, ticket.FieldUpdatedAt, ticket.FieldDeletedAt:
+		case ticket.FieldSLACycleStartedAt, ticket.FieldSLAResponseDeadline, ticket.FieldSLAResolutionDeadline, ticket.FieldFirstResponseAt, ticket.FieldResolvedAt, ticket.FieldClosedAt, ticket.FieldRatedAt, ticket.FieldCreatedAt, ticket.FieldUpdatedAt, ticket.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
 		case ticket.ForeignKeys[0]: // configuration_item_tickets
 			values[i] = new(sql.NullInt64)
 		case ticket.ForeignKeys[1]: // department_tickets
 			values[i] = new(sql.NullInt64)
-		case ticket.ForeignKeys[2]: // problem_tickets
+		case ticket.ForeignKeys[2]: // sla_definition_tickets
 			values[i] = new(sql.NullInt64)
-		case ticket.ForeignKeys[3]: // sla_definition_tickets
+		case ticket.ForeignKeys[3]: // ticket_tag_tickets
 			values[i] = new(sql.NullInt64)
-		case ticket.ForeignKeys[4]: // ticket_tag_tickets
-			values[i] = new(sql.NullInt64)
-		case ticket.ForeignKeys[5]: // ticket_template_tickets
+		case ticket.ForeignKeys[4]: // ticket_template_tickets
 			values[i] = new(sql.NullInt64)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -355,11 +353,11 @@ func (_m *Ticket) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Status = value.String
 			}
-		case ticket.FieldType:
+		case ticket.FieldGenericSubtype:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field type", values[i])
+				return fmt.Errorf("unexpected type %T for field generic_subtype", values[i])
 			} else if value.Valid {
-				_m.Type = value.String
+				_m.GenericSubtype = value.String
 			}
 		case ticket.FieldSource:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -456,6 +454,32 @@ func (_m *Ticket) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field parent_ticket_id", values[i])
 			} else if value.Valid {
 				_m.ParentTicketID = int(value.Int64)
+			}
+		case ticket.FieldSLACycleNumber:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field sla_cycle_number", values[i])
+			} else if value.Valid {
+				_m.SLACycleNumber = int(value.Int64)
+			}
+		case ticket.FieldSLACycleStartedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field sla_cycle_started_at", values[i])
+			} else if value.Valid {
+				_m.SLACycleStartedAt = value.Time
+			}
+		case ticket.FieldSLAPausedMinutes:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field sla_paused_minutes", values[i])
+			} else if value.Valid {
+				_m.SLAPausedMinutes = int(value.Int64)
+			}
+		case ticket.FieldAppliedSLAPolicy:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field applied_sla_policy", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.AppliedSLAPolicy); err != nil {
+					return fmt.Errorf("unmarshal field applied_sla_policy: %w", err)
+				}
 			}
 		case ticket.FieldSLADefinitionID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -603,26 +627,19 @@ func (_m *Ticket) assignValues(columns []string, values []any) error {
 			}
 		case ticket.ForeignKeys[2]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for edge-field problem_tickets", value)
-			} else if value.Valid {
-				_m.problem_tickets = new(int)
-				*_m.problem_tickets = int(value.Int64)
-			}
-		case ticket.ForeignKeys[3]:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for edge-field sla_definition_tickets", value)
 			} else if value.Valid {
 				_m.sla_definition_tickets = new(int)
 				*_m.sla_definition_tickets = int(value.Int64)
 			}
-		case ticket.ForeignKeys[4]:
+		case ticket.ForeignKeys[3]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for edge-field ticket_tag_tickets", value)
 			} else if value.Valid {
 				_m.ticket_tag_tickets = new(int)
 				*_m.ticket_tag_tickets = int(value.Int64)
 			}
-		case ticket.ForeignKeys[5]:
+		case ticket.ForeignKeys[4]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for edge-field ticket_template_tickets", value)
 			} else if value.Valid {
@@ -660,11 +677,6 @@ func (_m *Ticket) QueryTags() *TicketTagQuery {
 // QueryRelatedTickets queries the "related_tickets" edge of the Ticket entity.
 func (_m *Ticket) QueryRelatedTickets() *TicketQuery {
 	return NewTicketClient(_m.config).QueryRelatedTickets(_m)
-}
-
-// QueryApprovals queries the "approvals" edge of the Ticket entity.
-func (_m *Ticket) QueryApprovals() *TicketApprovalQuery {
-	return NewTicketClient(_m.config).QueryApprovals(_m)
 }
 
 // QueryWorkflowRecords queries the "workflow_records" edge of the Ticket entity.
@@ -749,8 +761,8 @@ func (_m *Ticket) String() string {
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
-	builder.WriteString("type=")
-	builder.WriteString(_m.Type)
+	builder.WriteString("generic_subtype=")
+	builder.WriteString(_m.GenericSubtype)
 	builder.WriteString(", ")
 	builder.WriteString("source=")
 	builder.WriteString(_m.Source)
@@ -799,6 +811,18 @@ func (_m *Ticket) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("parent_ticket_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ParentTicketID))
+	builder.WriteString(", ")
+	builder.WriteString("sla_cycle_number=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SLACycleNumber))
+	builder.WriteString(", ")
+	builder.WriteString("sla_cycle_started_at=")
+	builder.WriteString(_m.SLACycleStartedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("sla_paused_minutes=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SLAPausedMinutes))
+	builder.WriteString(", ")
+	builder.WriteString("applied_sla_policy=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AppliedSLAPolicy))
 	builder.WriteString(", ")
 	builder.WriteString("sla_definition_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.SLADefinitionID))

@@ -16,16 +16,13 @@
  *   - `getPaginated` flattens nested filters into `filters[key]`
  *   - `batchOperation` wraps data in `{ operation, data }`
  *   - CSRF token is added to mutating requests but not GET
- *   - Auth (Bearer) header is included when a cookie token is present
- *   - Tenant headers (X-Tenant-ID, X-Tenant-Code) are added when the
- *     TenantContext is populated
- *   - `setTenantId/setTenantCode` are no-ops (deprecated)
+ *   - Browser credentials are included and no Authorization header is synthesized
+ *   - Browser state never synthesizes tenant authority headers
  *   - Missing code field is tolerated (BPMN controller quirk)
  */
 
 import { httpClient } from '../http-client';
 import { security } from '@/lib/security';
-import { setTenantId, setTenantCode, clearTenant } from '@/lib/auth/tenant-context';
 
 jest.mock('@/lib/security', () => ({
   security: {
@@ -70,34 +67,18 @@ function jsonResponse(body: unknown, init: { status?: number; ok?: boolean } = {
 describe('httpClient', () => {
   beforeEach(() => {
     fetchMock.mockReset();
-    clearTenant();
     // jsdom has no auth cookie by default — clear it explicitly.
     document.cookie = 'access_token=; path=/; max-age=-1;';
     document.cookie = 'refresh_token=; path=/; max-age=-1;';
   });
 
   afterAll(() => {
-    Object.values(consoleSpy).forEach((spy) => spy.mockRestore());
+    Object.values(consoleSpy).forEach(spy => spy.mockRestore());
   });
 
   describe('base configuration', () => {
     it('defaults to same-origin when no public API URL is configured', () => {
       expect(httpClient.getBaseURL()).toBe(process.env.NEXT_PUBLIC_API_URL || '');
-    });
-
-    it('returns null token when no cookie is set', () => {
-      expect(httpClient.getAuthToken()).toBeNull();
-      expect(httpClient.getToken()).toBeNull();
-    });
-
-    it('setToken populates the in-memory token; clearToken clears it', () => {
-      // Cookie is the source of truth for cross-request auth, but
-      // setToken is kept for backward compatibility and DOES set the
-      // in-memory field. clearToken resets it back to null.
-      httpClient.setToken('whatever');
-      expect(httpClient.getAuthToken()).toBe('whatever');
-      httpClient.clearToken();
-      expect(httpClient.getAuthToken()).toBeNull();
     });
   });
 
@@ -142,9 +123,11 @@ describe('httpClient', () => {
         })
       );
 
-      const result = await httpClient.get<{ ticketNumber: string; assigneeId: number; createdAt: string }>(
-        '/api/v1/tickets/1'
-      );
+      const result = await httpClient.get<{
+        ticketNumber: string;
+        assigneeId: number;
+        createdAt: string;
+      }>('/api/v1/tickets/1');
 
       expect(result).toEqual({
         ticketNumber: 'TKT-001',
@@ -174,7 +157,9 @@ describe('httpClient', () => {
         jsonResponse({ code: 1001, message: '标题不能为空', data: null })
       );
 
-      await expect(httpClient.post('/api/v1/tickets', { title: '' })).rejects.toThrow('标题不能为空');
+      await expect(httpClient.post('/api/v1/tickets', { title: '' })).rejects.toThrow(
+        '标题不能为空'
+      );
     });
 
     it('throws with HTTP status when response.ok is false', async () => {
@@ -293,12 +278,12 @@ describe('httpClient', () => {
 
     it('surfaces the backend message for any non-2xx JSON error response, not just 403s', async () => {
       fetchMock.mockResolvedValueOnce(
-        jsonResponse({ code: 2003, message: '旧审批工作流系统已下线，请使用 BPMN 流程设计器' }, { status: 403, ok: false })
+        jsonResponse({ code: 2003, message: '流程定义不可修改' }, { status: 403, ok: false })
       );
 
-      await expect(httpClient.put('/api/v1/approval-workflows/1', { name: 'x' })).rejects.toThrow(
-        '旧审批工作流系统已下线，请使用 BPMN 流程设计器'
-      );
+      await expect(
+        httpClient.put('/api/v1/bpmn/process-definitions/locked?version=1.0.0', { name: 'x' })
+      ).rejects.toThrow('流程定义不可修改');
     });
 
     it('falls back to the generic status message when the error body has no message field', async () => {
@@ -318,16 +303,14 @@ describe('httpClient', () => {
       expect(init.headers['Authorization']).toBeUndefined();
     });
 
-    it('adds tenant headers when TenantContext is populated', async () => {
-      setTenantId(42);
-      setTenantCode('acme');
+    it('does not synthesize tenant authority headers', async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({ code: 0, message: 'ok', data: {} }));
 
       await httpClient.get('/api/v1/tickets');
 
       const [, init] = fetchMock.mock.calls[0];
-      expect(init.headers['X-Tenant-ID']).toBe('42');
-      expect(init.headers['X-Tenant-Code']).toBe('acme');
+      expect(init.headers['X-Tenant-ID']).toBeUndefined();
+      expect(init.headers['X-Tenant-Code']).toBeUndefined();
     });
 
     it('does not add tenant headers when TenantContext is empty', async () => {
@@ -344,7 +327,11 @@ describe('httpClient', () => {
   describe('getPaginated', () => {
     it('flattens nested filters into filters[key]=value', async () => {
       fetchMock.mockResolvedValueOnce(
-        jsonResponse({ code: 0, message: 'ok', data: { data: [], total: 0, page: 1, pageSize: 20, totalPages: 0 } })
+        jsonResponse({
+          code: 0,
+          message: 'ok',
+          data: { data: [], total: 0, page: 1, pageSize: 20, totalPages: 0 },
+        })
       );
 
       await httpClient.getPaginated('/api/v1/tickets', {

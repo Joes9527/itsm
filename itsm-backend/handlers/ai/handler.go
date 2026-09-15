@@ -8,9 +8,12 @@ import (
 	"strconv"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/common"
+	"itsm-backend/common/executionscope"
 	"itsm-backend/dto"
-	"itsm-backend/middleware"
+	"itsm-backend/ent"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -40,7 +43,7 @@ func (h *Handler) ListTools(c *gin.Context) {
 
 	visible := make([]service.ToolDefinition, 0, len(allTools))
 	for _, t := range allTools {
-		if middleware.HasResourcePermission(h.svc.entClient, role, t.Resource, t.Action, tenantID) {
+		if authorization.HasResourcePermission(h.svc.entClient, role, t.Resource, t.Action, tenantID) {
 			visible = append(visible, t)
 		}
 	}
@@ -66,11 +69,7 @@ func (h *Handler) ExecuteTool(c *gin.Context) {
 
 	// P2-6: 写工具（!ReadOnly）目前仍走审批流，agent v1 直接拒绝执行
 	toolDef := h.svc.tools.GetTool(req.Name)
-	if toolDef == nil {
-		common.Fail(c, common.UnknownToolCode, "unknown tool: "+req.Name)
-		return
-	}
-	if !toolDef.ReadOnly {
+	if toolDef != nil && !toolDef.ReadOnly {
 		common.Fail(c, common.ForbiddenCode, "tool requires approval; write tools are not enabled in agent v1")
 		return
 	}
@@ -84,16 +83,20 @@ func (h *Handler) ExecuteTool(c *gin.Context) {
 
 	res, _, err := h.svc.ExecuteTool(c.Request.Context(), userID, tenantID, role, req.Name, req.Args)
 	if err != nil {
+		if errors.Is(err, ErrToolAuditUnavailable) {
+			common.Fail(c, common.ServiceUnavailableCode, "工具审计暂不可用")
+			return
+		}
 		// P2-6: 区分权限拒绝与未知工具的错误码
 		if errors.Is(err, ErrToolPermissionDenied) {
-			common.Fail(c, common.ToolPermissionDeniedCode, err.Error())
+			common.Fail(c, common.ToolPermissionDeniedCode, "tool permission denied")
 			return
 		}
 		if errors.Is(err, ErrUnknownTool) {
-			common.Fail(c, common.UnknownToolCode, err.Error())
+			common.Fail(c, common.UnknownToolCode, "unknown tool")
 			return
 		}
-		common.Fail(c, common.InternalErrorCode, err.Error())
+		common.Fail(c, common.InternalErrorCode, "tool execution failed")
 		return
 	}
 
@@ -564,10 +567,10 @@ func (h *Handler) ApproveTool(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Approve bool   `json:"approve"`
+		Approve *bool  `json:"approve"`
 		Reason  string `json:"reason"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBindJSON(&req); err != nil || req.Approve == nil {
 		common.Fail(c, common.ParamErrorCode, "请求参数错误")
 		return
 	}
@@ -577,10 +580,25 @@ func (h *Handler) ApproveTool(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("user_id")
+	if userID <= 0 {
+		common.Fail(c, common.AuthFailedCode, "用户信息缺失")
+		return
+	}
 
-	state, err := h.svc.ApproveTool(c.Request.Context(), id, tenantID, userID, req.Approve, req.Reason)
+	state, err := h.svc.ApproveTool(c.Request.Context(), id, tenantID, userID, *req.Approve, req.Reason)
 	if err != nil {
-		common.Fail(c, common.NotFoundCode, "invocation not found or operation failed")
+		switch {
+		case errors.Is(err, ErrToolExecutionPending):
+			common.Fail(c, common.ServiceUnavailableCode, "审批已记录，执行仍待入队")
+		case errors.Is(err, ErrToolApprovalConflict):
+			common.Fail(c, common.ConflictCode, "审批决定与当前状态冲突")
+		case errors.Is(err, executionscope.ErrDenied), errors.Is(err, creation.ErrPermissionDenied):
+			common.Fail(c, common.ForbiddenCode, "审批权限或执行范围不允许")
+		case ent.IsNotFound(err):
+			common.Fail(c, common.NotFoundCode, "调用记录不存在")
+		default:
+			common.Fail(c, common.InternalErrorCode, "审批处理失败")
+		}
 		return
 	}
 	common.Success(c, gin.H{"invocationId": id, "approvalState": state})

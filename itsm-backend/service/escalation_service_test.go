@@ -5,6 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/dto"
+	"itsm-backend/handlers/shared/workitemmutation"
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	_ "github.com/mattn/go-sqlite3"
 
 	"itsm-backend/ent"
@@ -19,7 +24,8 @@ import (
 func setupEscalationTest(t *testing.T) (*ent.Client, *EscalationService, context.Context) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	logger := zaptest.NewLogger(t).Sugar()
-	service := NewEscalationService(client, logger)
+	service := NewEscalationService(client, logger, executionfixture.Standard())
+	service.SetNotificationService(newQueuedNotificationTestService(client, logger, executionfixture.Standard()))
 	ctx := context.Background()
 	return client, service, ctx
 }
@@ -74,7 +80,6 @@ func TestEscalationService_ProcessEscalations_WithTickets(t *testing.T) {
 		SetTitle("Test Ticket").
 		SetDescription("Test description").
 		SetPriority("medium").
-		SetType("incident").
 		SetStatus("open").
 		SetTicketNumber("TKT-ESC-001").
 		SetTenantID(testTenant.ID).
@@ -95,6 +100,7 @@ func TestEscalationService_ProcessLongPendingTickets(t *testing.T) {
 
 	testTenant, err := createEscalationTestTenant(ctx, client, "pending")
 	require.NoError(t, err)
+	ctx = tenantctx.WithTenantID(ctx, testTenant.ID)
 
 	testUser, err := createEscalationTestUser(ctx, client, testTenant.ID, "pending")
 	require.NoError(t, err)
@@ -105,7 +111,6 @@ func TestEscalationService_ProcessLongPendingTickets(t *testing.T) {
 		SetTitle("Old Pending Ticket").
 		SetDescription("This ticket has been pending for a long time").
 		SetPriority("high").
-		SetType("incident").
 		SetStatus("open").
 		SetTicketNumber("TKT-PEND-001").
 		SetTenantID(testTenant.ID).
@@ -136,7 +141,6 @@ func TestEscalationService_ProcessUnassignedTickets(t *testing.T) {
 		SetTitle("Unassigned Ticket").
 		SetDescription("This ticket has no assignee").
 		SetPriority("medium").
-		SetType("incident").
 		SetStatus("open").
 		SetTicketNumber("TKT-UNASSIGN-001").
 		SetTenantID(testTenant.ID).
@@ -152,16 +156,14 @@ func TestEscalationService_ProcessUnassignedTickets(t *testing.T) {
 // ==================== 工单升级测试 ====================
 
 func TestEscalationService_EscalateTicket(t *testing.T) {
-	client, service, ctx := setupEscalationTest(t)
+	client, _, ctx := setupEscalationTest(t)
 	defer client.Close()
 
 	testTenant, err := createEscalationTestTenant(ctx, client, "escalate")
 	require.NoError(t, err)
+	ctx = tenantctx.WithTenantID(ctx, testTenant.ID)
 
 	testUser, err := createEscalationTestUser(ctx, client, testTenant.ID, "escalate")
-	require.NoError(t, err)
-
-	notifyUser, err := createEscalationTestUser(ctx, client, testTenant.ID, "notify")
 	require.NoError(t, err)
 
 	// 创建工单
@@ -169,7 +171,6 @@ func TestEscalationService_EscalateTicket(t *testing.T) {
 		SetTitle("Ticket to Escalate").
 		SetDescription("This ticket needs to be escalated").
 		SetPriority("high").
-		SetType("incident").
 		SetStatus("open").
 		SetTicketNumber("TKT-ESCALATE-001").
 		SetTenantID(testTenant.ID).
@@ -177,9 +178,14 @@ func TestEscalationService_EscalateTicket(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	// 执行升级 - 这个方法可能在内部需要额外的数据，仅验证不会panic
-	// 由于方法内部可能需要创建 SLAAlertHistory，跳过详细验证
-	_ = service.EscalateTicket(ctx, ticket.ID, "SLA违规需要升级", []int{notifyUser.ID}, testTenant.ID)
+	client.User.UpdateOneID(testUser.ID).SetRole("super_admin").SaveX(ctx)
+	owner := newManualEscalationTestOwner(client, zaptest.NewLogger(t).Sugar())
+	result, err := owner.EscalateTicket(ctx, dto.TicketEscalationCommand{WorkItemID: ticket.ID, Reason: "SLA违规需要升级", Meta: workitemmutation.Meta{TenantID: testTenant.ID, ActorID: testUser.ID, ExpectedVersion: ticket.Version, OperationID: "manual-sla", Source: "test"}})
+	require.NoError(t, err)
+	require.Equal(t, ticket.Version+1, result.Version)
+	require.Equal(t, "critical", client.Ticket.GetX(ctx, ticket.ID).Priority)
+	require.Zero(t, client.SLAAlertHistory.Query().CountX(ctx), "manual commands must not fabricate SLA rule histories")
+	require.Equal(t, 1, client.AuditLog.Query().CountX(ctx))
 }
 
 // ==================== SLA升级处理测试 ====================
@@ -239,30 +245,11 @@ func TestEscalationService_GetEscalationNotifyUsers(t *testing.T) {
 	testTenant, err := createEscalationTestTenant(ctx, client, "notify")
 	require.NoError(t, err)
 
-	// 创建SLA定义
-	slaDef, err := client.SLADefinition.Create().
-		SetName("Test SLA for Notify").
-		SetPriority("medium").
-		SetResponseTime(60).
-		SetResolutionTime(240).
-		SetTenantID(testTenant.ID).
-		Save(ctx)
+	tx, err := client.Tx(ctx)
 	require.NoError(t, err)
-
-	// 创建SLA预警规则
-	rule, err := client.SLAAlertRule.Create().
-		SetName("Test Notify Rule").
-		SetSLADefinitionID(slaDef.ID).
-		SetAlertLevel("warning").
-		SetThresholdPercentage(70).
-		SetIsActive(true).
-		SetEscalationEnabled(true).
-		SetTenantID(testTenant.ID).
-		Save(ctx)
-	require.NoError(t, err)
-
-	// 获取升级通知用户 - 可能返回空列表
-	users := service.getEscalationNotifyUsers(ctx, 1, rule)
-	// 验证方法执行不报错，返回值可以是 nil 或空列表
-	_ = users
+	defer tx.Rollback()
+	_, err = service.resolveNotifyUsersTx(ctx, tx, &EscalationLevel{NotifyRoles: []string{"unregistered-role"}}, testTenant.ID)
+	require.ErrorContains(t, err, "no active recipient")
+	_, err = service.resolveNotifyUsersTx(ctx, tx, &EscalationLevel{NotifyUserIDs: []int{999999}}, testTenant.ID)
+	require.ErrorContains(t, err, "escalation recipient")
 }

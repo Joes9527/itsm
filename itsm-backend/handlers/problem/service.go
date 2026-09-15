@@ -2,165 +2,39 @@ package problem
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
-	"time"
+
+	"itsm-backend/common"
+	"itsm-backend/common/executionscope"
+	"itsm-backend/database"
+
+	"itsm-backend/ent"
 
 	"go.uber.org/zap"
 )
 
 type Service struct {
-	repo   Repository
-	logger *zap.SugaredLogger
+	execution      *database.ExecutionPolicy
+	directory      database.DirectorySnapshot
+	client         *ent.Client
+	investigations investigationTransactions
+	repo           Repository
+	logger         *zap.SugaredLogger
 }
 
-func NewService(repo Repository, logger *zap.SugaredLogger) *Service {
-	return &Service{
-		repo:   repo,
-		logger: logger,
+func NewService(repo Repository, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) *Service {
+	s := &Service{
+		execution: execution,
+		repo:      repo,
+		logger:    logger,
 	}
-}
-
-func (s *Service) Create(ctx context.Context, tenantID int, p *Problem) (*Problem, error) {
-	if strings.TrimSpace(p.Title) == "" {
-		return nil, fmt.Errorf("problem title is required")
+	if transactions, ok := repo.(investigationTransactions); ok {
+		s.investigations = transactions
+		s.client = transactions.transactionClient()
 	}
-	if !isValidProblemPriority(p.Priority) {
-		return nil, fmt.Errorf("invalid problem priority: %s", p.Priority)
-	}
-	if p.CreatedBy <= 0 {
-		return nil, fmt.Errorf("problem creator is required")
-	}
-	p.Title = strings.TrimSpace(p.Title)
-	p.Status = "open"
-	p.TenantID = tenantID
-	// 统一 WorkItem 领域模型宪章 §3.2：WorkItem 创建与专业扩展记录创建必须在同一数据库
-	// 事务中完成。repo.Create 在事务内先建 tickets 行（record_class="problem"，创建后
-	// 不可变），再建 problems 行并回填 work_item_id，任一边失败整体回滚（见
-	// EntRepository.Create）。
-	return s.repo.Create(ctx, p)
-}
-
-func (s *Service) Get(ctx context.Context, id int, tenantID int) (*Problem, error) {
-	return s.repo.Get(ctx, id, tenantID)
-}
-
-func (s *Service) GetWithAssociations(ctx context.Context, id int, tenantID int) (*Problem, error) {
-	return s.repo.GetWithAssociations(ctx, id, tenantID)
-}
-
-func (s *Service) AddAssociations(ctx context.Context, tenantID, problemID, actorUserID int, relatedType string, relatedIDs []int) error {
-	relatedIDs = uniquePositiveIDs(relatedIDs)
-	if len(relatedIDs) == 0 {
-		return fmt.Errorf("at least one related id is required")
-	}
-	if actorUserID <= 0 {
-		return fmt.Errorf("invalid actor user id")
-	}
-	return s.repo.AddAssociations(ctx, tenantID, problemID, actorUserID, relatedType, relatedIDs)
-}
-
-func (s *Service) RemoveAssociation(ctx context.Context, tenantID, problemID int, relatedType string, relatedID int) error {
-	if relatedID <= 0 {
-		return fmt.Errorf("invalid related id")
-	}
-	return s.repo.RemoveAssociation(ctx, tenantID, problemID, relatedType, relatedID)
-}
-
-func (s *Service) List(ctx context.Context, tenantID int, page, size int, filters map[string]interface{}) ([]*Problem, int, error) {
-	return s.repo.List(ctx, tenantID, page, size, filters)
-}
-
-func (s *Service) Update(ctx context.Context, tenantID int, id int, p *Problem) (*Problem, error) {
-	existing, err := s.repo.Get(ctx, id, tenantID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Update fields if they are set (non-zero/non-empty check in Handler or here)
-	// Here assuming 'p' contains only fields to update usually, but domain entity isn't partial.
-	// We merge changes here.
-	if p.Title != "" {
-		existing.Title = p.Title
-	}
-	if p.Description != "" {
-		existing.Description = p.Description
-	}
-	if p.Status != "" {
-		if !isValidProblemStatusTransition(existing.Status, p.Status) {
-			return nil, fmt.Errorf("invalid problem status transition: %s -> %s", existing.Status, p.Status)
-		}
-		existing.Status = p.Status
-		now := time.Now()
-		switch p.Status {
-		case "resolved":
-			existing.ResolvedAt = &now
-			existing.ClosedAt = nil
-		case "closed":
-			existing.ClosedAt = &now
-		case "investigating":
-			existing.ResolvedAt = nil
-			existing.ClosedAt = nil
-		}
-	}
-	if p.Priority != "" {
-		if !isValidProblemPriority(p.Priority) {
-			return nil, fmt.Errorf("invalid problem priority: %s", p.Priority)
-		}
-		existing.Priority = p.Priority
-	}
-	if p.Category != "" {
-		existing.Category = p.Category
-	}
-	if p.RootCause != "" {
-		existing.RootCause = p.RootCause
-	}
-	if p.Workaround != "" {
-		existing.Workaround = p.Workaround
-	}
-	if p.Resolution != "" {
-		existing.Resolution = p.Resolution
-	}
-	if p.Impact != "" {
-		existing.Impact = p.Impact
-	}
-	if p.AssigneeID != nil {
-		existing.AssigneeID = p.AssigneeID
-	}
-
-	return s.repo.Update(ctx, existing)
-}
-
-// InvestigateProblem starts the investigation lifecycle for a problem.
-func (s *Service) InvestigateProblem(ctx context.Context, tenantID, id int) (*Problem, error) {
-	return s.Update(ctx, tenantID, id, &Problem{Status: "investigating"})
-}
-
-// UpdateRootCause records the confirmed root cause.
-func (s *Service) UpdateRootCause(ctx context.Context, tenantID, id int, rootCause string) (*Problem, error) {
-	rootCause = strings.TrimSpace(rootCause)
-	if rootCause == "" {
-		return nil, fmt.Errorf("rootCause is required")
-	}
-	return s.Update(ctx, tenantID, id, &Problem{RootCause: rootCause})
-}
-
-// UpdateSolution records a workaround and/or final resolution.
-func (s *Service) UpdateSolution(ctx context.Context, tenantID, id int, workaround, resolution string) (*Problem, error) {
-	workaround = strings.TrimSpace(workaround)
-	resolution = strings.TrimSpace(resolution)
-	if workaround == "" && resolution == "" {
-		return nil, fmt.Errorf("solution, workaround or resolution is required")
-	}
-	return s.Update(ctx, tenantID, id, &Problem{Workaround: workaround, Resolution: resolution})
-}
-
-// CloseProblem closes a problem and optionally records its final resolution.
-func (s *Service) CloseProblem(ctx context.Context, tenantID, id int, resolution string) (*Problem, error) {
-	return s.Update(ctx, tenantID, id, &Problem{
-		Status:     "closed",
-		Resolution: strings.TrimSpace(resolution),
-	})
+	return s
 }
 
 func isValidProblemPriority(priority string) bool {
@@ -200,26 +74,42 @@ func canCloseProblemStatus(status string) bool {
 	return strings.TrimSpace(status) == "resolved"
 }
 
-func uniquePositiveIDs(ids []int) []int {
-	seen := make(map[int]struct{}, len(ids))
-	result := make([]int, 0, len(ids))
-	for _, id := range ids {
-		if id <= 0 {
-			continue
-		}
-		if _, exists := seen[id]; exists {
-			continue
-		}
-		seen[id] = struct{}{}
-		result = append(result, id)
+// IsUnfinished projects this owner's canonical lifecycle, including its supported
+// legacy in_progress state. A Problem has no cancelled state.
+func (s *Service) IsUnfinished(_ context.Context, _ *ent.Client, item *ent.Ticket) (bool, error) {
+	if item == nil || item.RecordClass != "problem" {
+		return false, fmt.Errorf("Problem WorkItem is required")
 	}
-	return result
-}
-
-func (s *Service) Delete(ctx context.Context, id int, tenantID int) error {
-	return s.repo.Delete(ctx, id, tenantID)
+	switch item.Status {
+	case "open", "investigating", "identified", "in_progress":
+		return true, nil
+	case "resolved", "closed":
+		return false, nil
+	default:
+		return false, fmt.Errorf("unsupported Problem status %q", item.Status)
+	}
 }
 
 func (s *Service) GetStats(ctx context.Context, tenantID int) (*ProblemStats, error) {
 	return s.repo.GetStats(ctx, tenantID)
+}
+
+func (s *Service) SetDirectorySnapshot(directory database.DirectorySnapshot) { s.directory = directory }
+
+// requireExecutionTx is an additional write boundary, not business authorization.
+func (s *Service) requireExecutionTx(ctx context.Context, tx *ent.Tx, tenantID, workItemID int) error {
+	if err := s.execution.BindEnt(ctx, tx, tenantID); err != nil {
+		return executionFailure(err)
+	}
+	return executionFailure(s.execution.RequireEntMembers(ctx, tx, tenantID, workItemID))
+}
+
+func executionFailure(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, executionscope.ErrDenied) {
+		return common.NewForbiddenError("problem execution scope denied")
+	}
+	return fmt.Errorf("problem execution scope: %w", err)
 }

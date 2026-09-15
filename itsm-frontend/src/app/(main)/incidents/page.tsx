@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button, Space, message, Pagination, Badge, Modal, Select, Input, Form } from 'antd';
 import {
   Plus,
@@ -46,6 +46,7 @@ const KANBAN_COLUMNS: KanbanColumnConfig<Incident>[] = [
 export default function IncidentsPage() {
   const router = useRouter();
   const { t } = useI18n();
+  const batchAttempts = useRef(new Map<string, string>());
 
   // ====== 状态管理 ======
   const [loading, setLoading] = useState(false);
@@ -197,7 +198,7 @@ export default function IncidentsPage() {
   const [assignUserOptions, setAssignUserOptions] = useState<
     { label: string; value: number }[]
   >([]);
-  const [assignForm] = Form.useForm<{ assigneeId: number }>();
+  const [assignForm] = Form.useForm<{ assigneeId: number; reason?: string }>();
 
   // 逐条循环兜底：后端目前尚未提供 incident 批量端点，此处封装 Promise.allSettled，失败逐条汇总
   const runIncidentBatch = useCallback(
@@ -246,26 +247,48 @@ export default function IncidentsPage() {
     setAssignModalOpen(false);
     await runIncidentBatch(
       selectedRowKeys,
-      (id) => IncidentAPI.assignIncident(id, values.assigneeId),
+      (id) => {
+        const version = incidents.find(item => item.id === id)?.version;
+        if (!version) throw new Error('请刷新列表以获取事件版本');
+        const reason = values.reason?.trim() ?? '';
+        const key = JSON.stringify([id, version, 'assign', values.assigneeId, reason]);
+        let operationId = batchAttempts.current.get(key);
+        if (!operationId) { operationId = crypto.randomUUID(); batchAttempts.current.set(key, operationId); }
+        return IncidentAPI.assignIncident(id, { version, operationId, assigneeId: values.assigneeId, reason });
+      },
       '批量分派成功',
     );
-  }, [assignForm, selectedRowKeys, runIncidentBatch]);
+  }, [assignForm, selectedRowKeys, runIncidentBatch, incidents]);
 
   const handleBatchResolve = useCallback(async () => {
-    await runIncidentBatch(
-      selectedRowKeys,
-      (id) => IncidentAPI.resolveIncident(id, { resolution: '批量解决' }),
-      '批量解决成功',
-    );
-  }, [selectedRowKeys, runIncidentBatch]);
+    let resolution = '';
+    Modal.confirm({ title: '批量解决事件', content: <Input.TextArea aria-label='恢复验证说明' onChange={event => { resolution = event.target.value; }} />, onOk: async () => {
+      if (!resolution.trim()) throw new Error('请填写恢复验证说明');
+      await runIncidentBatch(selectedRowKeys, id => {
+        const version = incidents.find(item => item.id === id)?.version;
+        if (!version) throw new Error('请刷新列表以获取事件版本');
+        const key = JSON.stringify([id, version, 'resolve', resolution.trim()]);
+        let operationId = batchAttempts.current.get(key);
+        if (!operationId) { operationId = crypto.randomUUID(); batchAttempts.current.set(key, operationId); }
+        return IncidentAPI.resolveIncident(id, { version, operationId, resolution: resolution.trim() });
+      }, '批量解决成功');
+    } });
+  }, [selectedRowKeys, runIncidentBatch, incidents]);
 
   const handleBatchClose = useCallback(async () => {
-    await runIncidentBatch(
-      selectedRowKeys,
-      (id) => IncidentAPI.closeIncident(id, { closeNotes: '批量关闭' }),
-      '批量关闭成功',
-    );
-  }, [selectedRowKeys, runIncidentBatch]);
+    let reason = '';
+    Modal.confirm({ title: '批量关闭事件', content: <Input.TextArea aria-label='关闭说明' onChange={event => { reason = event.target.value; }} />, onOk: async () => {
+      if (!reason.trim()) throw new Error('请填写关闭说明');
+      await runIncidentBatch(selectedRowKeys, id => {
+        const version = incidents.find(item => item.id === id)?.version;
+        if (!version) throw new Error('请刷新列表以获取事件版本');
+        const key = JSON.stringify([id, version, 'close', reason.trim()]);
+        let operationId = batchAttempts.current.get(key);
+        if (!operationId) { operationId = crypto.randomUUID(); batchAttempts.current.set(key, operationId); }
+        return IncidentAPI.closeIncident(id, { version, operationId, reason: reason.trim() });
+      }, '批量关闭成功');
+    } });
+  }, [selectedRowKeys, runIncidentBatch, incidents]);
 
   const handleBatchDelete = useCallback(async () => {
     await runIncidentBatch(
@@ -342,7 +365,7 @@ export default function IncidentsPage() {
     if (incidents.length === 0 && !loading) {
       return (
         <div className="py-12 text-center">
-          <div className="text-gray-400 mb-4">暂无事件记录</div>
+          <div className="text-muted mb-4">暂无事件记录</div>
           <Button type="primary" onClick={handleCreate}>
             创建第一个事件
           </Button>
@@ -503,7 +526,7 @@ export default function IncidentsPage() {
         cancelText="取消"
         confirmLoading={batchLoading}
       >
-        <div className="mb-3 text-sm text-gray-500">
+        <div className="mb-3 text-sm text-muted">
           将为已选择的 <span className="text-blue-600 font-semibold">{selectedRowKeys.length}</span> 个事件分派处理人
         </div>
         <Form form={assignForm} layout="vertical">
@@ -518,6 +541,9 @@ export default function IncidentsPage() {
               optionFilterProp="label"
               options={assignUserOptions}
             />
+          </Form.Item>
+          <Form.Item name="reason" label="转派原因" rules={[{ required: selectedRowKeys.some(id => !!incidents.find(item => item.id === id)?.assigneeId), whitespace: true, message: '请填写转派原因' }]}>
+            <Input.TextArea rows={3} />
           </Form.Item>
         </Form>
       </Modal>

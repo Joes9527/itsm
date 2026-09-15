@@ -455,20 +455,6 @@ func (_u *ReleaseUpdate) SetNillableIsEmergency(v *bool) *ReleaseUpdate {
 	return _u
 }
 
-// SetRequiresApproval sets the "requires_approval" field.
-func (_u *ReleaseUpdate) SetRequiresApproval(v bool) *ReleaseUpdate {
-	_u.mutation.SetRequiresApproval(v)
-	return _u
-}
-
-// SetNillableRequiresApproval sets the "requires_approval" field if the given value is not nil.
-func (_u *ReleaseUpdate) SetNillableRequiresApproval(v *bool) *ReleaseUpdate {
-	if v != nil {
-		_u.SetRequiresApproval(*v)
-	}
-	return _u
-}
-
 // SetCreatedAt sets the "created_at" field.
 func (_u *ReleaseUpdate) SetCreatedAt(v time.Time) *ReleaseUpdate {
 	_u.mutation.SetCreatedAt(v)
@@ -709,9 +695,6 @@ func (_u *ReleaseUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.IsEmergency(); ok {
 		_spec.SetField(release.FieldIsEmergency, field.TypeBool, value)
-	}
-	if value, ok := _u.mutation.RequiresApproval(); ok {
-		_spec.SetField(release.FieldRequiresApproval, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(release.FieldCreatedAt, field.TypeTime, value)
@@ -1165,20 +1148,6 @@ func (_u *ReleaseUpdateOne) SetNillableIsEmergency(v *bool) *ReleaseUpdateOne {
 	return _u
 }
 
-// SetRequiresApproval sets the "requires_approval" field.
-func (_u *ReleaseUpdateOne) SetRequiresApproval(v bool) *ReleaseUpdateOne {
-	_u.mutation.SetRequiresApproval(v)
-	return _u
-}
-
-// SetNillableRequiresApproval sets the "requires_approval" field if the given value is not nil.
-func (_u *ReleaseUpdateOne) SetNillableRequiresApproval(v *bool) *ReleaseUpdateOne {
-	if v != nil {
-		_u.SetRequiresApproval(*v)
-	}
-	return _u
-}
-
 // SetCreatedAt sets the "created_at" field.
 func (_u *ReleaseUpdateOne) SetCreatedAt(v time.Time) *ReleaseUpdateOne {
 	_u.mutation.SetCreatedAt(v)
@@ -1449,9 +1418,6 @@ func (_u *ReleaseUpdateOne) sqlSave(ctx context.Context) (_node *Release, err er
 	}
 	if value, ok := _u.mutation.IsEmergency(); ok {
 		_spec.SetField(release.FieldIsEmergency, field.TypeBool, value)
-	}
-	if value, ok := _u.mutation.RequiresApproval(); ok {
-		_spec.SetField(release.FieldRequiresApproval, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(release.FieldCreatedAt, field.TypeTime, value)

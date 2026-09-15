@@ -1,6 +1,9 @@
 'use client';
+import { WorkItemClassificationSelect } from '@/components/work-item/WorkItemClassificationSelect';
+import { classificationInput, classificationUpdate } from '@/components/work-item/classification';
 
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Button, Card, Form, Input, Select, App, Row, Col, Space, Divider } from 'antd';
 import { ArrowLeft, Save } from 'lucide-react';
@@ -17,36 +20,41 @@ export default function ProblemEditPage() {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const pendingOperation = useRef<{intent:string;key:string}|null>(null);
   const [problemData, setProblemData] = useState<any>(null);
 
   // Fetch problem data
   useEffect(() => {
     if (!id) return;
 
+    let cancelled = false;
     const fetchProblem = async () => {
       setFetching(true);
       try {
         const resp = await ProblemApi.getProblem(Number(id));
+        if (cancelled) return;
         const data = resp as any;
         setProblemData(data);
+        form.resetFields();
         form.setFieldsValue({
           title: data.title,
           description: data.description,
           priority: data.priority,
-          category: data.category,
-          status: data.status,
+
           rootCause: data.rootCause,
           impact: data.impact,
         });
       } catch (error) {
+        if (cancelled) return;
         message.error(t('problems.getFailed'));
         router.push('/problems');
       } finally {
-        setFetching(false);
+        if (!cancelled) setFetching(false);
       }
     };
 
     fetchProblem();
+    return () => { cancelled = true; };
   }, [id, form, router]);
 
   const handleSubmit = async (values: any) => {
@@ -54,7 +62,12 @@ export default function ProblemEditPage() {
 
     setLoading(true);
     try {
-      await ProblemApi.updateProblem(Number(id), values);
+      const { classification, status: _status, ...payload } = values;
+      const request = { ...payload, version: problemData.version, ...classificationUpdate(classification, form.isFieldTouched('classification')) };
+      const intent = JSON.stringify(request);
+      if (pendingOperation.current?.intent !== intent) pendingOperation.current = { intent, key: crypto.randomUUID() };
+      await ProblemApi.updateProblem(Number(id), { ...request, operationId: pendingOperation.current.key });
+      pendingOperation.current = null;
       message.success(t('problems.updateSuccess'));
       router.push(`/problems/${id}`);
     } catch (error) {
@@ -69,13 +82,13 @@ export default function ProblemEditPage() {
   };
 
   return (
-    <div className="p-6 min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-page p-[16px] text-[13px] text-foreground md:p-[24px]">
       <div className="mb-6">
         <Button
           type="link"
           icon={<ArrowLeft />}
           onClick={() => router.back()}
-          style={{ paddingLeft: 0, color: '#666' }}
+          style={{ paddingLeft: 0, color: 'var(--color-text-secondary)' }}
         >
           返回
         </Button>
@@ -93,7 +106,7 @@ export default function ProblemEditPage() {
           onFinish={handleSubmit}
           initialValues={{
             priority: 'medium',
-            status: 'open',
+
           }}
         >
           <Row gutter={24}>
@@ -109,15 +122,7 @@ export default function ProblemEditPage() {
           </Row>
 
           <Row gutter={24}>
-            <Col span={12}>
-              <Form.Item
-                name="status"
-                label="状态"
-                rules={[{ required: true, message: '请选择状态' }]}
-              >
-                <Select placeholder="请选择状态" options={[{ value: "open", label: "待处理" }, { value: "investigating", label: "调查中" }, { value: "resolved", label: "已解决" }, { value: "closed", label: "已关闭" }]} />
-              </Form.Item>
-            </Col>
+
             <Col span={12}>
               <Form.Item
                 name="priority"
@@ -131,8 +136,8 @@ export default function ProblemEditPage() {
 
           <Row gutter={24}>
             <Col span={24}>
-              <Form.Item name="category" label="分类">
-                <Select placeholder="请选择分类" allowClear options={[{ value: "系统问题", label: "系统问题" }, { value: "网络问题", label: "网络问题" }, { value: "数据库问题", label: "数据库问题" }, { value: "应用问题", label: "应用问题" }, { value: "安全问题", label: "安全问题" }, { value: "硬件问题", label: "硬件问题" }, { value: "其他", label: "其他" }]} />
+              <Form.Item name="classification" label="分类">
+                <WorkItemClassificationSelect initialCategoryId={problemData?.categoryId} />
               </Form.Item>
             </Col>
           </Row>

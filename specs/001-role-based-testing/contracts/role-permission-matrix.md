@@ -45,7 +45,7 @@
 | ALLOW-07 | super_admin | GET | `/api/v1/auth/menus` | `length >= 20` |
 | ALLOW-08 | super_admin | GET | `/api/v1/readiness/ga` | `12/12 ready` |
 | ALLOW-09 | sd_manager | POST | `/api/v1/sla/monitoring` | `code=0` |
-| ALLOW-10 | approver | POST | `/api/v1/approval-workflows/instances/{id}/approve` | `code=0` |
+| ALLOW-10 | approver | POST | `/api/v1/bpmn/tasks/{id}/decisions` `{action:"approve"}` | `code=0` |
 | ALLOW-11 | security | GET | `/api/v1/audit-logs` | `code=0` |
 | ALLOW-12 | tenant_admin | GET | `/api/v1/users` | 仅本租户用户 |
 

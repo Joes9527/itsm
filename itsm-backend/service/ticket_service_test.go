@@ -1,4 +1,4 @@
-package service
+package service_test
 
 import (
 	"context"
@@ -6,12 +6,18 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/handlers/shared/workitemmutation"
+	domain "itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	entTicket "itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcomment"
 	"itsm-backend/ent/user"
+	"itsm-backend/ent/workitemnumbersequence"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -63,8 +69,8 @@ func TestTicketService_CreateTicket(t *testing.T) {
 				Category:    "incident",
 				RequesterID: testUser.ID,
 				FormFields: map[string]interface{}{
-					"category": "hardware",
-					"urgency":  "normal",
+					"values":    map[string]any{"category": "hardware", "urgency": "normal"},
+					"fieldDefs": []any{map[string]any{"name": "category", "label": "Category"}, map[string]any{"name": "urgency", "label": "Urgency"}},
 				},
 			},
 			tenantID:      testTenant.ID,
@@ -83,7 +89,7 @@ func TestTicketService_CreateTicket(t *testing.T) {
 			expectedError: true,
 		},
 		{
-			name: "描述为空（V2 不做必填校验，会创建成功）",
+			name: "描述为空（真实创建入口要求必填，应被拒绝）",
 			request: &dto.CreateTicketRequest{
 				Title:       "标题",
 				Description: "",
@@ -92,7 +98,7 @@ func TestTicketService_CreateTicket(t *testing.T) {
 				RequesterID: testUser.ID,
 			},
 			tenantID:      testTenant.ID,
-			expectedError: false,
+			expectedError: true,
 		},
 		{
 			name: "无效的优先级",
@@ -130,20 +136,25 @@ func TestTicketService_CreateTicket(t *testing.T) {
 				}
 			}
 
-			response, err := ticketService.CreateTicket(ctx, tt.request, tt.tenantID)
+			response, err := ticketService.SubmitCreation(ctx, tt.request, tt.tenantID)
 
 			if tt.expectedError {
 				assert.Error(t, err)
 				assert.Nil(t, response)
 			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, response)
+				require.NoError(t, err)
+				require.NotNil(t, response)
 				assert.Equal(t, tt.request.Title, response.Title)
 				assert.Equal(t, tt.request.Description, response.Description)
 				assert.Equal(t, tt.request.Priority, string(response.Priority))
 				assert.Equal(t, "new", string(response.Status)) // V2 默认状态为 new
 				assert.NotEmpty(t, response.TicketNumber)
 				assert.Equal(t, tt.tenantID, response.TenantID)
+				sequence, err := client.WorkItemNumberSequence.Query().
+					Where(workitemnumbersequence.TenantID(tt.tenantID)).
+					Only(ctx)
+				require.NoError(t, err)
+				assert.Positive(t, sequence.LastValue)
 			}
 		})
 	}
@@ -176,18 +187,17 @@ func TestTicketService_CreateTicketTypeMapping(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	serviceRequest, err := ticketService.CreateTicket(ctx, &dto.CreateTicketRequest{
+	serviceRequest, err := ticketService.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title:       "服务请求工单",
 		Description: "申请开通服务请求类型",
 		Priority:    "medium",
 		Type:        "service_request",
 		RequesterID: testUser.ID,
 	}, testTenant.ID)
-	require.NoError(t, err)
-	require.NotNil(t, serviceRequest)
-	assert.Equal(t, "service_request", string(serviceRequest.Type))
+	require.ErrorContains(t, err, "catalog creation contract")
+	require.Nil(t, serviceRequest)
 
-	defaulted, err := ticketService.CreateTicket(ctx, &dto.CreateTicketRequest{
+	defaulted, err := ticketService.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title:       "默认类型工单",
 		Description: "未传类型时不应写入空字符串",
 		Priority:    "medium",
@@ -195,7 +205,7 @@ func TestTicketService_CreateTicketTypeMapping(t *testing.T) {
 	}, testTenant.ID)
 	require.NoError(t, err)
 	require.NotNil(t, defaulted)
-	assert.Equal(t, "incident", string(defaulted.Type))
+	assert.Equal(t, "generic", defaulted.RecordClass)
 }
 
 func TestTicketService_CreateTicketPersistsAssociations(t *testing.T) {
@@ -215,12 +225,12 @@ func TestTicketService_CreateTicketPersistsAssociations(t *testing.T) {
 		SetName("urgent-device").SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	parent, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
+	parent, err := service.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title: "Parent ticket", Description: "parent", Priority: "medium", RequesterID: requester.ID,
 	}, tenant.ID)
 	require.NoError(t, err)
 
-	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
+	created, err := service.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title:          "Child ticket",
 		Description:    "child",
 		Priority:       "high",
@@ -258,7 +268,7 @@ func TestTicketService_CreateTicketPersistsCustomFieldValues(t *testing.T) {
 	require.NoError(t, err)
 
 	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
+	created, err := service.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title: "网络接入申请", Description: "测试", Priority: "medium",
 		RequesterID: requester.ID, TemplateID: &template.ID,
 		FormFields: map[string]interface{}{
@@ -282,7 +292,7 @@ func TestTicketService_CreateTicketWithoutFormFieldsLeavesCustomFieldValuesEmpty
 	requester := createNamedTestUser(t, ctx, client, tenant.ID, "create-no-custom-fields-requester")
 	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
 
-	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
+	created, err := service.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title:       "无自定义字段工单",
 		Description: "普通工单",
 		Priority:    "medium",
@@ -301,7 +311,7 @@ func TestTicketService_CreateTicket_AdHocFieldValuesWithoutTemplate(t *testing.T
 	requester := createNamedTestUser(t, ctx, client, tenant.ID, "create-adhoc-fields-requester")
 	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
 
-	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
+	created, err := service.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title: "K8S扩容", Description: "测试", Priority: "medium", RequesterID: requester.ID,
 		// 没有 TemplateID——模拟静态预设
 		FormFields: map[string]interface{}{
@@ -337,8 +347,8 @@ func TestToTicketResponse_IncludesCustomFieldValuesOrdered(t *testing.T) {
 	require.NoError(t, err)
 
 	svc := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	created, err := svc.CreateTicket(ctx, &dto.CreateTicketRequest{
-		Title: "t", Description: "d", Priority: "medium", RequesterID: requester.ID, TemplateID: &template.ID,
+	created, err := svc.SubmitCreation(ctx, &dto.CreateTicketRequest{
+		Title: "标题", Description: "d", Priority: "medium", RequesterID: requester.ID, TemplateID: &template.ID,
 		FormFields: map[string]interface{}{"values": map[string]interface{}{
 			"office_location": "北京", "device_count": float64(2),
 		}},
@@ -373,33 +383,33 @@ func TestTicketService_CreateTicket_SourceSurvivesToTicketResponse(t *testing.T)
 
 	svc := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
 
-	created, err := svc.CreateTicket(ctx, &dto.CreateTicketRequest{
+	created, err := svc.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title:       "服务目录申请工单",
 		Description: "d",
 		Priority:    "medium",
 		RequesterID: requester.ID,
-		Source:      "service_catalog",
+		Source:      "manual",
 	}, tenant.ID)
 	require.NoError(t, err)
 	require.NotNil(t, created)
 
 	// 1) 创建路径直接返回的领域模型：toDomainModel 必须把 ent.Ticket.Source 带过来。
-	assert.Equal(t, "service_catalog", created.Source)
+	assert.Equal(t, "manual", created.Source)
 
 	// 2) 创建路径的响应 DTO：ToTicketResponse 必须把 t.Source 写进 dto.TicketResponse.Source。
 	createdResp := ToTicketResponse(ctx, created)
 	require.NotNil(t, createdResp)
-	assert.Equal(t, "service_catalog", createdResp.Source)
+	assert.Equal(t, "manual", createdResp.Source)
 
 	// 3) 独立的读路径：GetTicket -> repo.GetByID -> toDomainModel，走真实 DB round-trip
 	// （而不是复用内存里创建时的同一个指针），确认持久化的 source 列本身也读得回来。
 	fetched, err := svc.GetTicket(ctx, created.ID, tenant.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "service_catalog", fetched.Source)
+	assert.Equal(t, "manual", fetched.Source)
 
 	fetchedResp := ToTicketResponse(ctx, fetched)
 	require.NotNil(t, fetchedResp)
-	assert.Equal(t, "service_catalog", fetchedResp.Source)
+	assert.Equal(t, "manual", fetchedResp.Source)
 }
 
 func TestTicketService_CreateTicketRejectsCrossTenantReferences(t *testing.T) {
@@ -411,20 +421,20 @@ func TestTicketService_CreateTicketRejectsCrossTenantReferences(t *testing.T) {
 	userA := createNamedTestUser(t, ctx, client, tenantA.ID, "create-user-a")
 	userB := createNamedTestUser(t, ctx, client, tenantB.ID, "create-user-b")
 	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	foreignParent, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
+	foreignParent, err := service.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title: "Foreign parent", Description: "foreign", Priority: "medium", RequesterID: userB.ID,
 	}, tenantB.ID)
 	require.NoError(t, err)
 
-	_, err = service.CreateTicket(ctx, &dto.CreateTicketRequest{
+	_, err = service.SubmitCreationAsActor(ctx, &dto.CreateTicketRequest{
 		Title: "Invalid requester", Description: "invalid", Priority: "medium", RequesterID: userB.ID,
-	}, tenantA.ID)
-	require.ErrorContains(t, err, "申请人不存在")
+	}, tenantA.ID, userA.ID)
+	require.ErrorContains(t, err, "current requester is unavailable")
 
-	_, err = service.CreateTicket(ctx, &dto.CreateTicketRequest{
+	_, err = service.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title: "Invalid parent", Description: "invalid", Priority: "medium", RequesterID: userA.ID, ParentTicketID: &foreignParent.ID,
 	}, tenantA.ID)
-	require.ErrorContains(t, err, "父工单不存在")
+	require.ErrorContains(t, err, "parent work item is unavailable")
 }
 
 func TestTicketService_GetTicketStatsCountsNewAsPending(t *testing.T) {
@@ -455,7 +465,7 @@ func TestTicketService_GetTicketStatsCountsNewAsPending(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := 0; i < 3; i++ {
-		_, err := ticketService.CreateTicket(ctx, &dto.CreateTicketRequest{
+		_, err := ticketService.SubmitCreation(ctx, &dto.CreateTicketRequest{
 			Title:       fmt.Sprintf("新工单 %d", i),
 			Description: "新建状态应计入待处理统计",
 			Priority:    "medium",
@@ -579,8 +589,8 @@ func TestTicketService_GetTickets(t *testing.T) {
 				assert.Error(t, err)
 				assert.Nil(t, response)
 			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, response)
+				require.NoError(t, err)
+				require.NotNil(t, response)
 				assert.Len(t, response.Tickets, tt.expectedCount)
 				assert.Equal(t, 3, response.Total) // 总数始终为3
 				assert.Equal(t, tt.request.Page, response.Page)
@@ -652,7 +662,6 @@ func TestTicketService_ListTickets_DataScope(t *testing.T) {
 		SetDescription("desc").
 		SetPriority("medium").
 		SetStatus("open").
-		SetType("incident").
 		SetRequesterID(alice.ID).
 		SetTenantID(testTenant.ID).
 		Save(ctx)
@@ -664,7 +673,6 @@ func TestTicketService_ListTickets_DataScope(t *testing.T) {
 		SetDescription("desc").
 		SetPriority("medium").
 		SetStatus("open").
-		SetType("incident").
 		SetRequesterID(alice.ID).
 		SetTenantID(testTenant.ID).
 		Save(ctx)
@@ -676,7 +684,6 @@ func TestTicketService_ListTickets_DataScope(t *testing.T) {
 		SetDescription("salary info").
 		SetPriority("high").
 		SetStatus("open").
-		SetType("incident").
 		SetRequesterID(bob.ID).
 		SetTenantID(testTenant.ID).
 		Save(ctx)
@@ -689,7 +696,6 @@ func TestTicketService_ListTickets_DataScope(t *testing.T) {
 		SetDescription("assigned to alice").
 		SetPriority("medium").
 		SetStatus("open").
-		SetType("incident").
 		SetRequesterID(bob.ID).
 		SetAssigneeID(alice.ID).
 		SetTenantID(testTenant.ID).
@@ -835,6 +841,13 @@ func TestTicketService_UpdateTicket(t *testing.T) {
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketService := NewTicketServiceForTest(client, logger)
 
+	policy := executionfixture.Standard()
+	notifications := domain.NewTicketNotificationService(client, logger, policy)
+	mail := domain.NewEmailService(domain.EmailConfig{DeliveryTransport: "smtp", Host: "smtp.example.invalid", Port: 2525, Username: "fixture", From: "fixture@example.invalid"}, logger)
+	mail.SetDeliveryTargetDependencies(nil, policy)
+	notifications.SetEmailService(mail)
+	ticketService.SetNotificationService(notifications)
+
 	ctx := context.Background()
 
 	// 创建测试数据
@@ -845,6 +858,7 @@ func TestTicketService_UpdateTicket(t *testing.T) {
 		SetStatus("active").
 		Save(ctx)
 	require.NoError(t, err)
+	ctx = tenantctx.WithTenantID(ctx, testTenant.ID)
 
 	testUser, err := client.User.Create().
 		SetUsername("testuser").
@@ -856,6 +870,8 @@ func TestTicketService_UpdateTicket(t *testing.T) {
 		SetTenantID(testTenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
+
+	require.NoError(t, configureEntryTicketEdit(ctx, client, testTenant.ID, testUser.ID))
 
 	testTicket, err := client.Ticket.Create().
 		SetTitle("原始标题").
@@ -871,67 +887,57 @@ func TestTicketService_UpdateTicket(t *testing.T) {
 	tests := []struct {
 		name          string
 		ticketID      int
-		request       *dto.UpdateTicketRequest
+		request       *dto.TicketEditCommand
 		tenantID      int
 		expectedError bool
 	}{
 		{
-			name:     "成功更新工单",
-			ticketID: testTicket.ID,
-			request: &dto.UpdateTicketRequest{
-				Title:       "更新后的标题",
-				Description: "更新后的描述",
-				Priority:    "high",
-				Status:      "in_progress",
-				UserID:      testUser.ID,
-			},
+			name:          "成功更新工单",
+			ticketID:      testTicket.ID,
+			request:       &dto.TicketEditCommand{Fields: dto.TicketEditFields{Title: "更新后的标题", Description: "更新后的描述", Priority: "high", Status: "in_progress"}, Meta: workitemmutation.Meta{ActorID: testUser.ID}},
 			tenantID:      testTenant.ID,
 			expectedError: false,
 		},
 		{
-			name:     "部分更新",
-			ticketID: testTicket.ID,
-			request: &dto.UpdateTicketRequest{
-				Priority: "critical",
-				UserID:   testUser.ID,
-			},
+			name:          "部分更新",
+			ticketID:      testTicket.ID,
+			request:       &dto.TicketEditCommand{Fields: dto.TicketEditFields{Priority: "critical"}, Meta: workitemmutation.Meta{ActorID: testUser.ID}},
 			tenantID:      testTenant.ID,
 			expectedError: false,
 		},
 		{
-			name:     "工单不存在",
-			ticketID: 99999,
-			request: &dto.UpdateTicketRequest{
-				Title:  "新标题",
-				UserID: testUser.ID,
-			},
+			name:          "工单不存在",
+			ticketID:      99999,
+			request:       &dto.TicketEditCommand{Fields: dto.TicketEditFields{Title: "新标题"}, Meta: workitemmutation.Meta{ActorID: testUser.ID}},
 			tenantID:      testTenant.ID,
 			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
+	for index, tt := range tests {
+		tt.request.Meta.ExpectedVersion = testTicket.Version + index
 		t.Run(tt.name, func(t *testing.T) {
-			updatedTicket, err := ticketService.UpdateTicket(ctx, tt.ticketID, tt.request, tt.tenantID)
+			updatedTicket, err := ticketService.UpdateTicket(ctx, editCommandForTest(tt.ticketID, tt.request, tt.tenantID))
 
 			if tt.expectedError {
 				assert.Error(t, err)
-				assert.Nil(t, updatedTicket)
+				assert.Equal(t, workitemmutation.Result{}, updatedTicket)
 			} else {
 				assert.NoError(t, err)
-				assert.NotNil(t, updatedTicket)
+				assert.Equal(t, tt.ticketID, updatedTicket.WorkItemID)
+				persisted := client.Ticket.GetX(ctx, tt.ticketID)
 
-				if tt.request.Title != "" {
-					assert.Equal(t, tt.request.Title, updatedTicket.Title)
+				if tt.request.Fields.Title != "" {
+					assert.Equal(t, tt.request.Fields.Title, persisted.Title)
 				}
-				if tt.request.Description != "" {
-					assert.Equal(t, tt.request.Description, updatedTicket.Description)
+				if tt.request.Fields.Description != "" {
+					assert.Equal(t, tt.request.Fields.Description, persisted.Description)
 				}
-				if tt.request.Priority != "" {
-					assert.Equal(t, tt.request.Priority, string(updatedTicket.Priority))
+				if tt.request.Fields.Priority != "" {
+					assert.Equal(t, tt.request.Fields.Priority, string(persisted.Priority))
 				}
-				if tt.request.Status != "" {
-					assert.Equal(t, tt.request.Status, string(updatedTicket.Status))
+				if tt.request.Fields.Status != "" {
+					assert.Equal(t, tt.request.Fields.Status, string(updatedTicket.Status))
 				}
 			}
 		})
@@ -950,34 +956,33 @@ func TestTicketService_UpdateTicketPersistsTypeCategoryAndTags(t *testing.T) {
 	foreignCategory, err := client.TicketCategory.Create().SetName("Foreign").SetCode("update-foreign").SetTenantID(otherTenant.ID).Save(ctx)
 	require.NoError(t, err)
 	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
-		Title: "Update contract", Description: "before", Priority: "medium", RequesterID: user.ID,
+	created, err := service.SubmitCreation(ctx, &dto.CreateTicketRequest{
+		Title: "Update contract", Description: "before", Type: "ticket", Priority: "medium", RequesterID: user.ID,
 	}, tenant.ID)
 	require.NoError(t, err)
 
-	updated, err := service.UpdateTicket(ctx, created.ID, &dto.UpdateTicketRequest{
-		Type: "problem", CategoryID: &category.ID, Tags: []string{"backend", "backend", "customer"}, Version: created.Version,
-	}, tenant.ID)
+	require.NoError(t, configureEntryTicketEdit(ctx, client, tenant.ID, user.ID))
+
+	updated, err := service.UpdateTicket(ctx, editCommandForTest(created.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{Type: "improvement", CategoryID: &category.ID, Tags: []string{"backend", "backend", "customer"}}, Meta: workitemmutation.Meta{ActorID: user.ID, ExpectedVersion: created.Version}}, tenant.ID))
 	require.NoError(t, err)
-	assert.Equal(t, "problem", string(updated.Type))
+	assert.Equal(t, "improvement", client.Ticket.GetX(ctx, updated.WorkItemID).GenericSubtype)
+	require.Equal(t, "generic", client.Ticket.GetX(ctx, updated.WorkItemID).RecordClass)
+	_, mutationErr := service.UpdateTicket(ctx, editCommandForTest(created.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{Type: "incident"}, Meta: workitemmutation.Meta{ActorID: user.ID, ExpectedVersion: updated.Version}}, tenant.ID))
+	require.ErrorContains(t, mutationErr, "cannot change professional class")
 	entity, err := client.Ticket.Query().Where(entTicket.IDEQ(created.ID)).WithTags().Only(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, category.ID, entity.CategoryID)
 	require.Len(t, entity.Edges.Tags, 2)
 
 	zero := 0
-	cleared, err := service.UpdateTicket(ctx, created.ID, &dto.UpdateTicketRequest{
-		CategoryID: &zero, Tags: []string{}, Version: updated.Version,
-	}, tenant.ID)
+	cleared, err := service.UpdateTicket(ctx, editCommandForTest(created.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{CategoryID: &zero, Tags: []string{}}, Meta: workitemmutation.Meta{ActorID: user.ID, ExpectedVersion: updated.Version}}, tenant.ID))
 	require.NoError(t, err)
-	assert.Nil(t, cleared.CategoryID)
+	assert.Zero(t, client.Ticket.GetX(ctx, cleared.WorkItemID).CategoryID)
 	entity, err = client.Ticket.Query().Where(entTicket.IDEQ(created.ID)).WithTags().Only(ctx)
 	require.NoError(t, err)
 	assert.Empty(t, entity.Edges.Tags)
 
-	_, err = service.UpdateTicket(ctx, created.ID, &dto.UpdateTicketRequest{
-		CategoryID: &foreignCategory.ID, Version: cleared.Version,
-	}, tenant.ID)
+	_, err = service.UpdateTicket(ctx, editCommandForTest(created.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{CategoryID: &foreignCategory.ID}, Meta: workitemmutation.Meta{ActorID: user.ID, ExpectedVersion: cleared.Version}}, tenant.ID))
 	require.ErrorContains(t, err, "工单分类不存在")
 }
 
@@ -1021,6 +1026,12 @@ func TestTicketService_DeleteTicket(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
+	deletionRole := client.Role.Create().SetTenantID(testTenant.ID).SetCode("end_user").SetName("delete fixture").SetIsActive(true).SaveX(ctx)
+	for _, verb := range []string{"read", "delete"} {
+		perm := client.Permission.Create().SetTenantID(testTenant.ID).SetCode("deletion_" + verb).SetName(verb).SetResource("ticket").SetAction(verb).SaveX(ctx)
+		client.RolePermission.Create().SetTenantID(testTenant.ID).SetRoleID(deletionRole.ID).SetPermissionID(perm.ID).ExecX(ctx)
+	}
+
 	tests := []struct {
 		name          string
 		ticketID      int
@@ -1043,7 +1054,7 @@ func TestTicketService_DeleteTicket(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ticketService.DeleteTicket(ctx, tt.ticketID, tt.tenantID)
+			err := ticketService.DeleteTicket(ctx, tt.ticketID, workitemmutation.Meta{TenantID: tt.tenantID, ActorID: testUser.ID})
 
 			if tt.expectedError {
 				assert.Error(t, err)
@@ -1136,7 +1147,7 @@ func TestTicketService_DeleteTicket_CascadeTenantIsolation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Tenant 2 tries to delete tenant 1's ticket.
-	err = ticketService.DeleteTicket(ctx, ticket1.ID, tenant2.ID)
+	err = ticketService.DeleteTicket(ctx, ticket1.ID, workitemmutation.Meta{TenantID: tenant2.ID, ActorID: user1.ID})
 	assert.Error(t, err)
 
 	// Verify ticket still exists (未被删除，跨租户隔离仍然有效)
@@ -1354,7 +1365,7 @@ func BenchmarkTicketService_CreateTicket(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := ticketService.CreateTicket(ctx, request, testTenant.ID)
+		_, err := ticketService.SubmitCreation(ctx, request, testTenant.ID)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -1376,7 +1387,7 @@ func TestTicketService_CreateTicket_ValuesArrayFormatSurvivesUnderscoreNames(t *
 	require.NoError(t, err)
 
 	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
+	created, err := service.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title: "扩容申请", Description: "测试", Priority: "medium",
 		RequesterID: requester.ID, TemplateID: &template.ID,
 		FormFields: map[string]interface{}{
@@ -1413,8 +1424,8 @@ func TestTicketService_CreateTicket_ValuesMapFormatStillWorks(t *testing.T) {
 	require.NoError(t, err)
 
 	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
-		Title: "t", Description: "d", Priority: "medium",
+	created, err := service.SubmitCreation(ctx, &dto.CreateTicketRequest{
+		Title: "标题", Description: "d", Priority: "medium",
 		RequesterID: requester.ID, TemplateID: &template.ID,
 		FormFields: map[string]interface{}{
 			"values": map[string]interface{}{"office_location": "北京"},
@@ -1466,15 +1477,16 @@ func TestCreateTicket_RequiredFieldValidationFailure_DoesNotLeaveOrphanTicketRow
 
 	svc := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
 	templateID := template.ID
-	_, err = svc.CreateTicket(ctx, &dto.CreateTicketRequest{
+	_, err = svc.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title:       "缺必填字段的工单",
+		Description: "描述",
 		Priority:    "medium",
 		RequesterID: requester.ID,
 		TemplateID:  &templateID,
 		FormFields:  map[string]interface{}{"values": map[string]interface{}{}},
 	}, tenant.ID)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "缺少必填字段")
+	assert.Contains(t, err.Error(), "required dynamic field is missing")
 
 	afterCount, err := client.Ticket.Query().Count(ctx)
 	require.NoError(t, err)
@@ -1510,8 +1522,9 @@ func TestCreateTicket_RequiredFieldValidationPasses_CreatesTicket(t *testing.T) 
 
 	svc := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
 	templateID := template.ID
-	created, err := svc.CreateTicket(ctx, &dto.CreateTicketRequest{
+	created, err := svc.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title:       "字段齐全的工单",
+		Description: "描述",
 		Priority:    "medium",
 		RequesterID: requester.ID,
 		TemplateID:  &templateID,
@@ -1591,4 +1604,16 @@ func createNamedTestUser(t *testing.T, ctx context.Context, client *ent.Client, 
 		Save(ctx)
 	require.NoError(t, err)
 	return user
+}
+
+// editCommandForTest assembles a trusted fixture boundary without replacing the observed version.
+func editCommandForTest(id int, input *dto.TicketEditCommand, tenantID int) dto.TicketEditCommand {
+	cmd := *input
+	cmd.WorkItemID = id
+	cmd.Meta.TenantID = tenantID
+	cmd.Meta.Source = "test"
+	if cmd.Meta.OperationID == "" {
+		cmd.Meta.OperationID = fmt.Sprintf("test-edit:%d:%d", id, cmd.Meta.ExpectedVersion)
+	}
+	return cmd
 }

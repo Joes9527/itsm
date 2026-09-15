@@ -2,8 +2,12 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"math/big"
 	"sort"
+	"strconv"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/approvalchain"
@@ -12,10 +16,19 @@ import (
 	"go.uber.org/zap"
 )
 
+// ApprovalConfigurationError identifies deterministic policy errors separately
+// from database availability failures, including decoding stored chain JSON.
+type ApprovalConfigurationError struct{ Cause error }
+
+func (e *ApprovalConfigurationError) Error() string {
+	return "invalid approval configuration: " + e.Cause.Error()
+}
+func (e *ApprovalConfigurationError) Unwrap() error { return e.Cause }
+
 // ResolvedApprovalChain 解析后的审批链，包含实际生效的步骤列表。
 type ResolvedApprovalChain struct {
-	ChainID int                       `json:"chain_id"`
-	Name    string                    `json:"name,omitempty"`
+	ChainID int                        `json:"chain_id"`
+	Name    string                     `json:"name,omitempty"`
 	Steps   []schema.ApprovalChainStep `json:"steps"`
 }
 
@@ -39,14 +52,35 @@ func NewApprovalChainResolver(client *ent.Client, logger *zap.SugaredLogger) *Ap
 // riskLevel: 预留参数，当前不参与计算。
 // orgUnitID: 预留参数，阶段四启用。
 func (r *ApprovalChainResolver) ResolveForServiceRequest(ctx context.Context, tenantID int,
-	amount float64, riskLevel string, orgUnitID int) (*ResolvedApprovalChain, error) {
-	if r.client == nil {
+	amount float64, riskLevel string, orgUnitID int,
+) (*ResolvedApprovalChain, error) {
+	return r.resolveServiceRequestCreation(ctx, r.client, tenantID, json.Number(strconv.FormatFloat(amount, 'g', -1, 64)))
+}
+
+// ResolveServiceRequestCreation uses the caller transaction and compares the
+// submitted decimal directly, without a binary-float request round trip.
+func (r *ApprovalChainResolver) ResolveServiceRequestCreation(ctx context.Context, tx *ent.Tx, tenantID int, amount json.Number) (*ResolvedApprovalChain, error) {
+	if tx == nil {
+		return nil, fmt.Errorf("approval transaction is required")
+	}
+	return r.resolveServiceRequestCreation(ctx, tx.Client(), tenantID, amount)
+}
+
+func (r *ApprovalChainResolver) resolveServiceRequestCreation(ctx context.Context, client *ent.Client, tenantID int, amount json.Number) (*ResolvedApprovalChain, error) {
+	if amount == "" {
+		amount = "0"
+	}
+	exact, ok := new(big.Rat).SetString(string(amount))
+	if !ok || exact.Sign() < 0 {
+		return nil, &ApprovalConfigurationError{Cause: fmt.Errorf("approval amount must be a nonnegative decimal")}
+	}
+	if client == nil {
 		return nil, fmt.Errorf("ent client is nil")
 	}
 
 	// 查租户下 entity_type=service_request 的审批链。同一 tenant 下预期只有一条
 	// （或按 catalog 分组有多条——当前按 tenant 匹配，多链场景后续扩展）。
-	chain, err := r.client.ApprovalChain.Query().
+	chain, err := client.ApprovalChain.Query().
 		Where(
 			approvalchain.EntityType("service_request"),
 			approvalchain.TenantID(tenantID),
@@ -59,16 +93,28 @@ func (r *ApprovalChainResolver) ResolveForServiceRequest(ctx context.Context, te
 			r.logger.Infow("No active approval chain for service_request", "tenant_id", tenantID)
 			return nil, nil
 		}
+		var invalidType *json.UnmarshalTypeError
+		var invalidJSON *json.SyntaxError
+		if errors.As(err, &invalidType) || errors.As(err, &invalidJSON) {
+			return nil, &ApprovalConfigurationError{Cause: err}
+		}
 		return nil, fmt.Errorf("query approval chain: %w", err)
 	}
 
 	// Parse and filter steps
 	allSteps, err := parseChainSteps(chain.Chain)
 	if err != nil {
-		return nil, fmt.Errorf("parse chain steps: %w", err)
+		return nil, &ApprovalConfigurationError{Cause: fmt.Errorf("parse chain steps: %w", err)}
 	}
 
-	filtered := r.filterSteps(allSteps, amount)
+	filtered := make([]schema.ApprovalChainStep, 0, len(allSteps))
+	for _, step := range allSteps {
+		threshold, _ := new(big.Rat).SetString(strconv.FormatFloat(step.AmountThreshold, 'g', -1, 64))
+		if !step.GroupControlled && threshold != nil && threshold.Sign() > 0 && exact.Cmp(threshold) < 0 {
+			continue
+		}
+		filtered = append(filtered, step)
+	}
 	// Sort by level ascending
 	sort.Slice(filtered, func(i, j int) bool { return filtered[i].Level < filtered[j].Level })
 
@@ -77,26 +123,6 @@ func (r *ApprovalChainResolver) ResolveForServiceRequest(ctx context.Context, te
 		Name:    chain.Name,
 		Steps:   filtered,
 	}, nil
-}
-
-// filterSteps 根据金额阈值和集团管控标记过滤审批步骤。
-// 规则：
-//  1. GroupControlled=true 的步骤始终保留，不管金额是否覆盖。
-//  2. AmountThreshold>0 的步骤仅在 amount>=threshold 时保留。
-//  3. 无特殊标记的普通步骤始终保留。
-func (r *ApprovalChainResolver) filterSteps(steps []schema.ApprovalChainStep, amount float64) []schema.ApprovalChainStep {
-	var result []schema.ApprovalChainStep
-	for _, s := range steps {
-		if s.GroupControlled {
-			result = append(result, s)
-			continue
-		}
-		if s.AmountThreshold > 0 && amount < s.AmountThreshold {
-			continue
-		}
-		result = append(result, s)
-	}
-	return result
 }
 
 // parseChainSteps 将 ApprovalChain.Chain (any) 转换为 []ApprovalChainStep。

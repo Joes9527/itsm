@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -8,6 +10,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"itsm-backend/ent"
+	"itsm-backend/ent/enttest"
+	"itsm-backend/service"
 )
 
 func newTestTriggerController() *BPMNProcessTriggerController {
@@ -29,7 +35,7 @@ func TestBPMNProcessTriggerController_InvalidBindingBodyDoesNotEchoInput(t *test
 	assert.NotContains(t, recorder.Body.String(), "binding-body-secret")
 }
 
-func TestBPMNProcessTriggerController_Trigger_UsesBPMNRoleGate(t *testing.T) {
+func TestBPMNProcessTriggerController_InstanceStatusDoesNotUseLegacyRoleGate(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	c := newTestTriggerController()
 	r := gin.New()
@@ -41,7 +47,10 @@ func TestBPMNProcessTriggerController_Trigger_UsesBPMNRoleGate(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/api/v1/process-trigger/status/123", nil)
 	r.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusForbidden, w.Code)
+	// Status now reaches the authoritative instance-scope handler. This fixture
+	// deliberately omits authenticated tenant/actor context, so it fails there
+	// (401) rather than at the obsolete coarse role gate (403).
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestBPMNProcessTriggerController_BindingsRead_UsesBPMNRoleGate(t *testing.T) {
@@ -79,24 +88,28 @@ func TestBPMNProcessTriggerController_BindingsUpdate_RequiresSuperAdminEvenForBP
 
 func TestBPMNProcessTriggerController_BindingsDelete_SuperAdminPasses(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	c := newTestTriggerController()
+	ctx := context.Background()
+	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:%s?mode=memory&cache=shared&_fk=1", t.Name()))
+	t.Cleanup(func() { require.NoError(t, client.Close()) })
+	tenant := client.Tenant.Create().SetName("Binding tenant").SetCode("binding-tenant").SaveX(ctx)
+	binding := client.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType("incident").SetProcessDefinitionKey("incident-flow").SetIsActive(true).SaveX(ctx)
+	c := NewBPMNProcessTriggerController(nil, service.NewProcessBindingService(client), nil)
 	r := gin.New()
-	// DeleteBinding reaches into a nil bindingService/tenantID once past the
-	// role gate (this test wires no real services), so recover the resulting
-	// panic into a 500 rather than letting it crash the test binary — the
-	// assertion below only cares that the role gate itself let the request
-	// through, matching the precedent in bpmn_workflow_controller_test.go's
-	// equivalent "passes role gate, fails past it" case.
-	r.Use(gin.Recovery())
 	group := r.Group("/api/v1")
-	group.Use(func(ctx *gin.Context) { ctx.Set("role", "super_admin") })
+	group.Use(func(ctx *gin.Context) {
+		ctx.Set("user_id", 1)
+		ctx.Set("role", "super_admin")
+		ctx.Set("tenant_id", tenant.ID)
+	})
 	c.RegisterRoutes(group)
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("DELETE", "/api/v1/process-bindings/123", nil)
+	req, _ := http.NewRequest("DELETE", fmt.Sprintf("/api/v1/process-bindings/%d", binding.ID), nil)
 	r.ServeHTTP(w, req)
 
-	assert.NotEqual(t, http.StatusForbidden, w.Code)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	_, err := client.ProcessBinding.Get(ctx, binding.ID)
+	require.True(t, ent.IsNotFound(err), "configured binding must be deleted")
 }
 
 func TestBPMNProcessTriggerController_Departments_RequiresSuperAdminOnly(t *testing.T) {

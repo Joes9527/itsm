@@ -11,14 +11,15 @@ export const ORG_TREE_ROOT_KEY = '__org_root__';
 
 function buildTreeNodes(depts: Department[]): DataNode[] {
   return depts.map(dept => {
-    const children = dept.children && dept.children.length > 0 ? buildTreeNodes(dept.children) : undefined;
+    const children =
+      dept.children && dept.children.length > 0 ? buildTreeNodes(dept.children) : undefined;
     return {
       key: dept.id,
       title: dept.name,
       icon: children ? (
         <Folder size={14} className="text-amber-500" />
       ) : (
-        <FileText size={14} className="text-gray-400" />
+        <FileText size={14} className="text-muted" />
       ),
       children,
     };
@@ -37,7 +38,10 @@ export function buildDeptTreeSelectData(depts: Department[]): DeptTreeSelectNode
   return depts.map(dept => ({
     value: dept.id,
     title: dept.name,
-    children: dept.children && dept.children.length > 0 ? buildDeptTreeSelectData(dept.children) : undefined,
+    children:
+      dept.children && dept.children.length > 0
+        ? buildDeptTreeSelectData(dept.children)
+        : undefined,
   }));
 }
 

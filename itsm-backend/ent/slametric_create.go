@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/slametric"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type SLAMetricCreate struct {
 	config
 	mutation *SLAMetricMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetSLADefinitionID sets the "sla_definition_id" field.
@@ -242,6 +244,7 @@ func (_c *SLAMetricCreate) createSpec() (*SLAMetric, *sqlgraph.CreateSpec) {
 		_node = &SLAMetric{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(slametric.Table, sqlgraph.NewFieldSpec(slametric.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.MetricType(); ok {
 		_spec.SetField(slametric.FieldMetricType, field.TypeString, value)
 		_node.MetricType = value
@@ -298,11 +301,446 @@ func (_c *SLAMetricCreate) createSpec() (*SLAMetric, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.SLAMetric.Create().
+//		SetSLADefinitionID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SLAMetricUpsert) {
+//			SetSLADefinitionID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SLAMetricCreate) OnConflict(opts ...sql.ConflictOption) *SLAMetricUpsertOne {
+	_c.conflict = opts
+	return &SLAMetricUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.SLAMetric.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SLAMetricCreate) OnConflictColumns(columns ...string) *SLAMetricUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SLAMetricUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// SLAMetricUpsertOne is the builder for "upsert"-ing
+	//  one SLAMetric node.
+	SLAMetricUpsertOne struct {
+		create *SLAMetricCreate
+	}
+
+	// SLAMetricUpsert is the "OnConflict" setter.
+	SLAMetricUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetSLADefinitionID sets the "sla_definition_id" field.
+func (u *SLAMetricUpsert) SetSLADefinitionID(v int) *SLAMetricUpsert {
+	u.Set(slametric.FieldSLADefinitionID, v)
+	return u
+}
+
+// UpdateSLADefinitionID sets the "sla_definition_id" field to the value that was provided on create.
+func (u *SLAMetricUpsert) UpdateSLADefinitionID() *SLAMetricUpsert {
+	u.SetExcluded(slametric.FieldSLADefinitionID)
+	return u
+}
+
+// SetMetricType sets the "metric_type" field.
+func (u *SLAMetricUpsert) SetMetricType(v string) *SLAMetricUpsert {
+	u.Set(slametric.FieldMetricType, v)
+	return u
+}
+
+// UpdateMetricType sets the "metric_type" field to the value that was provided on create.
+func (u *SLAMetricUpsert) UpdateMetricType() *SLAMetricUpsert {
+	u.SetExcluded(slametric.FieldMetricType)
+	return u
+}
+
+// SetMetricName sets the "metric_name" field.
+func (u *SLAMetricUpsert) SetMetricName(v string) *SLAMetricUpsert {
+	u.Set(slametric.FieldMetricName, v)
+	return u
+}
+
+// UpdateMetricName sets the "metric_name" field to the value that was provided on create.
+func (u *SLAMetricUpsert) UpdateMetricName() *SLAMetricUpsert {
+	u.SetExcluded(slametric.FieldMetricName)
+	return u
+}
+
+// SetMetricValue sets the "metric_value" field.
+func (u *SLAMetricUpsert) SetMetricValue(v float64) *SLAMetricUpsert {
+	u.Set(slametric.FieldMetricValue, v)
+	return u
+}
+
+// UpdateMetricValue sets the "metric_value" field to the value that was provided on create.
+func (u *SLAMetricUpsert) UpdateMetricValue() *SLAMetricUpsert {
+	u.SetExcluded(slametric.FieldMetricValue)
+	return u
+}
+
+// AddMetricValue adds v to the "metric_value" field.
+func (u *SLAMetricUpsert) AddMetricValue(v float64) *SLAMetricUpsert {
+	u.Add(slametric.FieldMetricValue, v)
+	return u
+}
+
+// SetUnit sets the "unit" field.
+func (u *SLAMetricUpsert) SetUnit(v string) *SLAMetricUpsert {
+	u.Set(slametric.FieldUnit, v)
+	return u
+}
+
+// UpdateUnit sets the "unit" field to the value that was provided on create.
+func (u *SLAMetricUpsert) UpdateUnit() *SLAMetricUpsert {
+	u.SetExcluded(slametric.FieldUnit)
+	return u
+}
+
+// ClearUnit clears the value of the "unit" field.
+func (u *SLAMetricUpsert) ClearUnit() *SLAMetricUpsert {
+	u.SetNull(slametric.FieldUnit)
+	return u
+}
+
+// SetMeasurementTime sets the "measurement_time" field.
+func (u *SLAMetricUpsert) SetMeasurementTime(v time.Time) *SLAMetricUpsert {
+	u.Set(slametric.FieldMeasurementTime, v)
+	return u
+}
+
+// UpdateMeasurementTime sets the "measurement_time" field to the value that was provided on create.
+func (u *SLAMetricUpsert) UpdateMeasurementTime() *SLAMetricUpsert {
+	u.SetExcluded(slametric.FieldMeasurementTime)
+	return u
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *SLAMetricUpsert) SetMetadata(v map[string]interface{}) *SLAMetricUpsert {
+	u.Set(slametric.FieldMetadata, v)
+	return u
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *SLAMetricUpsert) UpdateMetadata() *SLAMetricUpsert {
+	u.SetExcluded(slametric.FieldMetadata)
+	return u
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *SLAMetricUpsert) ClearMetadata() *SLAMetricUpsert {
+	u.SetNull(slametric.FieldMetadata)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *SLAMetricUpsert) SetTenantID(v int) *SLAMetricUpsert {
+	u.Set(slametric.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *SLAMetricUpsert) UpdateTenantID() *SLAMetricUpsert {
+	u.SetExcluded(slametric.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *SLAMetricUpsert) AddTenantID(v int) *SLAMetricUpsert {
+	u.Add(slametric.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SLAMetricUpsert) SetCreatedAt(v time.Time) *SLAMetricUpsert {
+	u.Set(slametric.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SLAMetricUpsert) UpdateCreatedAt() *SLAMetricUpsert {
+	u.SetExcluded(slametric.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SLAMetricUpsert) SetUpdatedAt(v time.Time) *SLAMetricUpsert {
+	u.Set(slametric.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SLAMetricUpsert) UpdateUpdatedAt() *SLAMetricUpsert {
+	u.SetExcluded(slametric.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.SLAMetric.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SLAMetricUpsertOne) UpdateNewValues() *SLAMetricUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.SLAMetric.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *SLAMetricUpsertOne) Ignore() *SLAMetricUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SLAMetricUpsertOne) DoNothing() *SLAMetricUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SLAMetricCreate.OnConflict
+// documentation for more info.
+func (u *SLAMetricUpsertOne) Update(set func(*SLAMetricUpsert)) *SLAMetricUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SLAMetricUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetSLADefinitionID sets the "sla_definition_id" field.
+func (u *SLAMetricUpsertOne) SetSLADefinitionID(v int) *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.SetSLADefinitionID(v)
+	})
+}
+
+// UpdateSLADefinitionID sets the "sla_definition_id" field to the value that was provided on create.
+func (u *SLAMetricUpsertOne) UpdateSLADefinitionID() *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.UpdateSLADefinitionID()
+	})
+}
+
+// SetMetricType sets the "metric_type" field.
+func (u *SLAMetricUpsertOne) SetMetricType(v string) *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.SetMetricType(v)
+	})
+}
+
+// UpdateMetricType sets the "metric_type" field to the value that was provided on create.
+func (u *SLAMetricUpsertOne) UpdateMetricType() *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.UpdateMetricType()
+	})
+}
+
+// SetMetricName sets the "metric_name" field.
+func (u *SLAMetricUpsertOne) SetMetricName(v string) *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.SetMetricName(v)
+	})
+}
+
+// UpdateMetricName sets the "metric_name" field to the value that was provided on create.
+func (u *SLAMetricUpsertOne) UpdateMetricName() *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.UpdateMetricName()
+	})
+}
+
+// SetMetricValue sets the "metric_value" field.
+func (u *SLAMetricUpsertOne) SetMetricValue(v float64) *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.SetMetricValue(v)
+	})
+}
+
+// AddMetricValue adds v to the "metric_value" field.
+func (u *SLAMetricUpsertOne) AddMetricValue(v float64) *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.AddMetricValue(v)
+	})
+}
+
+// UpdateMetricValue sets the "metric_value" field to the value that was provided on create.
+func (u *SLAMetricUpsertOne) UpdateMetricValue() *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.UpdateMetricValue()
+	})
+}
+
+// SetUnit sets the "unit" field.
+func (u *SLAMetricUpsertOne) SetUnit(v string) *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.SetUnit(v)
+	})
+}
+
+// UpdateUnit sets the "unit" field to the value that was provided on create.
+func (u *SLAMetricUpsertOne) UpdateUnit() *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.UpdateUnit()
+	})
+}
+
+// ClearUnit clears the value of the "unit" field.
+func (u *SLAMetricUpsertOne) ClearUnit() *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.ClearUnit()
+	})
+}
+
+// SetMeasurementTime sets the "measurement_time" field.
+func (u *SLAMetricUpsertOne) SetMeasurementTime(v time.Time) *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.SetMeasurementTime(v)
+	})
+}
+
+// UpdateMeasurementTime sets the "measurement_time" field to the value that was provided on create.
+func (u *SLAMetricUpsertOne) UpdateMeasurementTime() *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.UpdateMeasurementTime()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *SLAMetricUpsertOne) SetMetadata(v map[string]interface{}) *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *SLAMetricUpsertOne) UpdateMetadata() *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *SLAMetricUpsertOne) ClearMetadata() *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *SLAMetricUpsertOne) SetTenantID(v int) *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *SLAMetricUpsertOne) AddTenantID(v int) *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *SLAMetricUpsertOne) UpdateTenantID() *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SLAMetricUpsertOne) SetCreatedAt(v time.Time) *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SLAMetricUpsertOne) UpdateCreatedAt() *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SLAMetricUpsertOne) SetUpdatedAt(v time.Time) *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SLAMetricUpsertOne) UpdateUpdatedAt() *SLAMetricUpsertOne {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *SLAMetricUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SLAMetricCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SLAMetricUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *SLAMetricUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *SLAMetricUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // SLAMetricCreateBulk is the builder for creating many SLAMetric entities in bulk.
 type SLAMetricCreateBulk struct {
 	config
 	err      error
 	builders []*SLAMetricCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the SLAMetric entities in the database.
@@ -332,6 +770,7 @@ func (_c *SLAMetricCreateBulk) Save(ctx context.Context) ([]*SLAMetric, error) {
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -382,6 +821,278 @@ func (_c *SLAMetricCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *SLAMetricCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.SLAMetric.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SLAMetricUpsert) {
+//			SetSLADefinitionID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SLAMetricCreateBulk) OnConflict(opts ...sql.ConflictOption) *SLAMetricUpsertBulk {
+	_c.conflict = opts
+	return &SLAMetricUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.SLAMetric.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SLAMetricCreateBulk) OnConflictColumns(columns ...string) *SLAMetricUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SLAMetricUpsertBulk{
+		create: _c,
+	}
+}
+
+// SLAMetricUpsertBulk is the builder for "upsert"-ing
+// a bulk of SLAMetric nodes.
+type SLAMetricUpsertBulk struct {
+	create *SLAMetricCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.SLAMetric.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SLAMetricUpsertBulk) UpdateNewValues() *SLAMetricUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.SLAMetric.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *SLAMetricUpsertBulk) Ignore() *SLAMetricUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SLAMetricUpsertBulk) DoNothing() *SLAMetricUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SLAMetricCreateBulk.OnConflict
+// documentation for more info.
+func (u *SLAMetricUpsertBulk) Update(set func(*SLAMetricUpsert)) *SLAMetricUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SLAMetricUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetSLADefinitionID sets the "sla_definition_id" field.
+func (u *SLAMetricUpsertBulk) SetSLADefinitionID(v int) *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.SetSLADefinitionID(v)
+	})
+}
+
+// UpdateSLADefinitionID sets the "sla_definition_id" field to the value that was provided on create.
+func (u *SLAMetricUpsertBulk) UpdateSLADefinitionID() *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.UpdateSLADefinitionID()
+	})
+}
+
+// SetMetricType sets the "metric_type" field.
+func (u *SLAMetricUpsertBulk) SetMetricType(v string) *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.SetMetricType(v)
+	})
+}
+
+// UpdateMetricType sets the "metric_type" field to the value that was provided on create.
+func (u *SLAMetricUpsertBulk) UpdateMetricType() *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.UpdateMetricType()
+	})
+}
+
+// SetMetricName sets the "metric_name" field.
+func (u *SLAMetricUpsertBulk) SetMetricName(v string) *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.SetMetricName(v)
+	})
+}
+
+// UpdateMetricName sets the "metric_name" field to the value that was provided on create.
+func (u *SLAMetricUpsertBulk) UpdateMetricName() *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.UpdateMetricName()
+	})
+}
+
+// SetMetricValue sets the "metric_value" field.
+func (u *SLAMetricUpsertBulk) SetMetricValue(v float64) *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.SetMetricValue(v)
+	})
+}
+
+// AddMetricValue adds v to the "metric_value" field.
+func (u *SLAMetricUpsertBulk) AddMetricValue(v float64) *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.AddMetricValue(v)
+	})
+}
+
+// UpdateMetricValue sets the "metric_value" field to the value that was provided on create.
+func (u *SLAMetricUpsertBulk) UpdateMetricValue() *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.UpdateMetricValue()
+	})
+}
+
+// SetUnit sets the "unit" field.
+func (u *SLAMetricUpsertBulk) SetUnit(v string) *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.SetUnit(v)
+	})
+}
+
+// UpdateUnit sets the "unit" field to the value that was provided on create.
+func (u *SLAMetricUpsertBulk) UpdateUnit() *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.UpdateUnit()
+	})
+}
+
+// ClearUnit clears the value of the "unit" field.
+func (u *SLAMetricUpsertBulk) ClearUnit() *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.ClearUnit()
+	})
+}
+
+// SetMeasurementTime sets the "measurement_time" field.
+func (u *SLAMetricUpsertBulk) SetMeasurementTime(v time.Time) *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.SetMeasurementTime(v)
+	})
+}
+
+// UpdateMeasurementTime sets the "measurement_time" field to the value that was provided on create.
+func (u *SLAMetricUpsertBulk) UpdateMeasurementTime() *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.UpdateMeasurementTime()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *SLAMetricUpsertBulk) SetMetadata(v map[string]interface{}) *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *SLAMetricUpsertBulk) UpdateMetadata() *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *SLAMetricUpsertBulk) ClearMetadata() *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *SLAMetricUpsertBulk) SetTenantID(v int) *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *SLAMetricUpsertBulk) AddTenantID(v int) *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *SLAMetricUpsertBulk) UpdateTenantID() *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SLAMetricUpsertBulk) SetCreatedAt(v time.Time) *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SLAMetricUpsertBulk) UpdateCreatedAt() *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SLAMetricUpsertBulk) SetUpdatedAt(v time.Time) *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SLAMetricUpsertBulk) UpdateUpdatedAt() *SLAMetricUpsertBulk {
+	return u.Update(func(s *SLAMetricUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *SLAMetricUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the SLAMetricCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SLAMetricCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SLAMetricUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

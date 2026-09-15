@@ -1,5 +1,7 @@
-import type { NextRequest} from 'next/server';
+import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { hasBrowserSession } from '@/lib/auth/browser-session';
+import { isPublicProxyPath, sessionCookieExpirations } from './proxy-policy';
 
 const BACKEND_BASE_URL = process.env.ITSM_BACKEND_URL || 'http://localhost:8090';
 
@@ -9,63 +11,6 @@ const BLOCKED_PATHS = [
   '/api/v1/admin/config', // 配置敏感操作
   '/api/v1/system', // 系统敏感操作
 ];
-
-// 公开路径（无需认证即可访问，用于登录、注册、刷新token等）
-const PUBLIC_PATHS = [
-  '/api/v1/auth/login',
-  '/api/v1/auth/register',
-  '/api/v1/auth/refresh',
-  // 旧版刷新端点（http-client.ts 使用）。必须放行，否则 access_token 过期时
-  // 刷新请求会被代理以 401 拦截，导致用户被错误地登出。
-  '/api/v1/refresh-token',
-  '/api/v1/auth/forgot-password',
-  '/api/v1/auth/reset-password',
-  '/api/v1/auth/sso',
-  // The browser must be able to bootstrap a CSRF token before any mutating request.
-  '/api/v1/csrf-token',
-  '/api/v1/health',
-  '/api/v1/connectors', // 连接器市场列表（公开）
-  '/api/v1/connectors/health', // 连接器健康（公开）
-];
-
-function getAuthToken(request: NextRequest): string | null {
-  // 优先检查 httpOnly access_token cookie（由后端 Set-Cookie 设置）
-  // 在同源代理模式下，Next.js 服务端可以读取 httpOnly cookie
-  const accessToken = request.cookies.get('access_token')?.value;
-  if (accessToken) return accessToken;
-
-  const authHeader = request.headers.get('Authorization');
-  if (authHeader) {
-    if (authHeader.startsWith('Bearer ')) return authHeader.substring(7);
-    return authHeader;
-  }
-
-  const customToken = request.headers.get('X-Auth-Token');
-  if (customToken) return customToken;
-
-  // auth-token 是前端设置的标记位（值为 "1"），不是 JWT
-  // 仅在 access_token cookie 不存在时作为最后手段，但 isValidToken 会拒绝它
-  const authToken = request.cookies.get('auth-token')?.value;
-  if (authToken && authToken !== '1') return authToken;
-
-  return null;
-}
-
-function isValidToken(token: string | null): boolean {
-  if (!token) return false;
-  const parts = token.split('.');
-  if (parts.length !== 3) return false;
-  try {
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'));
-    if (payload.exp) {
-      const currentTime = Math.floor(Date.now() / 1000);
-      if (payload.exp < currentTime) return false;
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 function isPathBlocked(path: string[]): boolean {
   const fullPath = '/' + path.join('/');
@@ -79,17 +24,16 @@ async function proxyRequest(request: NextRequest, params: Promise<{ path: string
   // path 数组来自 [...path] 捕获，不含 /api 前缀
   // 例如请求 /api/v1/auth/login 时 path = ['v1', 'auth', 'login']
   const fullPath = '/api/' + path.join('/');
-  if (PUBLIC_PATHS.some(p => fullPath === p || fullPath.startsWith(p + '/'))) {
+  if (isPublicProxyPath(fullPath)) {
     // 跳过认证检查，继续代理
   } else {
-  // 认证检查
-  const token = getAuthToken(request);
-  if (!isValidToken(token)) {
-    return NextResponse.json(
-      { code: 2001, message: 'Unauthorized: authentication required' },
-      { status: 401 }
-    );
-  }
+    // 认证检查
+    if (!hasBrowserSession(request.cookies.get('access_token')?.value)) {
+      return NextResponse.json(
+        { code: 2001, message: 'Unauthorized: authentication required' },
+        { status: 401 }
+      );
+    }
   }
 
   // 敏感路径检查
@@ -106,6 +50,9 @@ async function proxyRequest(request: NextRequest, params: Promise<{ path: string
   const headers = new Headers(request.headers);
   headers.delete('host');
   headers.delete('content-length');
+  // 浏览器代理不接受第二套 token header 真值；后端只收到 HttpOnly cookie。
+  headers.delete('authorization');
+  headers.delete('x-auth-token');
 
   const init: RequestInit = {
     method: request.method,
@@ -128,11 +75,21 @@ async function proxyRequest(request: NextRequest, params: Promise<{ path: string
     // 但 NextResponse 直接构造时可以重新写入。Node.js 18+ 提供 getSetCookie() 获取原始数组。
     // 必须转发后端 Set-Cookie（如 access_token/refresh_token httpOnly cookie），
     // 否则登录后浏览器无法收到 cookie，导致后续请求 401。
-    const setCookies = (response.headers as unknown as { getSetCookie?: () => string[] }).getSetCookie?.() ?? [];
+    const setCookies =
+      (response.headers as unknown as { getSetCookie?: () => string[] }).getSetCookie?.() ?? [];
     if (setCookies.length > 0) {
       // 先删除可能从 Headers 复制过来的单个 Set-Cookie（值为合并字符串，浏览器无法解析）
       responseHeaders.delete('set-cookie');
       for (const cookie of setCookies) {
+        responseHeaders.append('set-cookie', cookie);
+      }
+    }
+
+    if (response.status === 401) {
+      responseHeaders.delete('set-cookie');
+      const secure = request.nextUrl.protocol === 'https:'
+        || request.headers.get('x-forwarded-proto')?.toLowerCase() === 'https';
+      for (const cookie of sessionCookieExpirations(fullPath, response.status, secure)) {
         responseHeaders.append('set-cookie', cookie);
       }
     }

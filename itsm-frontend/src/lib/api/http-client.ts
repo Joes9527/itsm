@@ -1,7 +1,6 @@
 import { API_BASE_URL } from '@/lib/api/api-config';
 import { security } from '@/lib/security';
 import { logger } from '@/lib/env';
-import { getTenantId, getTenantCode, subscribe } from '@/lib/auth/tenant-context';
 
 // 递归将对象的 key 从 snake_case 转换为 camelCase
 const toCamelCase = (obj: unknown): unknown => {
@@ -36,6 +35,21 @@ export interface RequestConfig {
   // 改名成后端 handler 读不到的 key（GetIntFromVars(variables, "request_id") 拿到
   // "requestId" 的值就是 0，报"无效的请求ID"）。设为 true 跳过这次请求的 body 转换。
   skipCamelCaseBody?: boolean;
+  preserveResponseKeys?: boolean;
+  validateResponse?: (data: unknown, status: number) => void;
+  assertSubmissionContext?: () => void;
+  onUploadProgress?: (progress: number) => void;
+  responseType?: 'json' | 'blob';
+}
+
+interface HttpResponse {
+  ok: boolean;
+  status: number;
+  statusText: string;
+  headers: Headers;
+  json(): Promise<unknown>;
+  blob(): Promise<Blob>;
+  clone(): HttpResponse;
 }
 
 // Axios-like request config used by some legacy API modules
@@ -55,55 +69,30 @@ interface ApiResponse<T> {
   data: T;
 }
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly code?: number,
+    public readonly errorCode?: string,
+    public readonly retryable?: boolean,
+    public readonly fieldErrors?: unknown,
+    public readonly requestId?: string,
+    public readonly data?: unknown
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 class HttpClient {
   private baseURL: string;
-  private token: string | null = null;
   private readonly timeout: number;
 
   constructor(baseURL: string = API_BASE_URL) {
     this.baseURL =
       typeof window === 'undefined' ? process.env.ITSM_BACKEND_URL || baseURL : baseURL;
     this.timeout = parseInt(process.env.NEXT_PUBLIC_API_TIMEOUT || '30000');
-	// Browser authentication uses HttpOnly cookies. JavaScript deliberately never
-	// reads the token value; non-browser callers may still set this field.
-  }
-
-  setToken(token: string) {
-    this.token = token;
-    // Token is stored in httpOnly cookie by backend, no need to set here
-    // This method kept for backward compatibility
-  }
-
-  clearToken() {
-    this.token = null;
-  }
-
-  setTenantId(tenantId: number | null) {
-    // Tenant state is now managed by TenantContext — kept for backward compat
-    // New code should use tenant-context.ts directly
-    logger.debug('HttpClient.setTenantId called (deprecated — use tenant-context.ts)');
-  }
-
-  setTenantCode(code: string | null) {
-    logger.debug('HttpClient.setTenantCode called (deprecated — use tenant-context.ts)');
-  }
-
-  // Get tenant code — now reads from TenantContext (single source of truth)
-  getTenantCode(): string | null {
-    return getTenantCode();
-  }
-
-  getTenantId(): number | null {
-    return getTenantId();
-  }
-
-  getAuthToken(): string | null {
-    return this.token;
-  }
-
-  // Backward-compat helpers (some legacy code expects these)
-  getToken(): string | null {
-    return this.getAuthToken();
   }
 
   getBaseURL(): string {
@@ -115,24 +104,6 @@ class HttpClient {
     const headers: Record<string, string> = {
       ...security.network.getSecureHeaders(),
     };
-
-    // Browser requests authenticate with HttpOnly cookies. Only non-browser
-    // callers that explicitly set a token use the Authorization header.
-    const currentToken = typeof window === 'undefined' ? this.token : null;
-    // Tenant state — read from TenantContext (single source of truth)
-    const currentTenantId = getTenantId();
-    const currentTenantCode = getTenantCode();
-
-    if (currentToken) {
-      headers['Authorization'] = `Bearer ${currentToken}`;
-    }
-
-    if (currentTenantId) {
-      headers['X-Tenant-ID'] = currentTenantId.toString();
-    }
-    if (currentTenantCode) {
-      headers['X-Tenant-Code'] = currentTenantCode;
-    }
 
     return headers;
   }
@@ -168,33 +139,105 @@ class HttpClient {
     return ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method || 'GET');
   }
 
-  private async isCSRFRejection(response: Response): Promise<boolean> {
+  private async isCSRFRejection(response: HttpResponse): Promise<boolean> {
     if (response.status !== 403) return false;
     try {
       const payload = (await response.clone().json()) as { message?: string };
-      return payload.message?.startsWith('CSRF token') === true;
+      return payload.message === 'CSRF token missing' || payload.message === 'CSRF token mismatch';
     } catch {
       return false;
     }
   }
 
+  // Only the browser transport differs for progress uploads; policy and decoding
+  // remain in requestInternal so an upload cannot bypass auth/CSRF handling.
+  private uploadWithProgress(
+    url: string,
+    init: RequestInit,
+    config: RequestConfig
+  ): Promise<HttpResponse> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const progress = (event: ProgressEvent) => {
+        if (event.lengthComputable)
+          config.onUploadProgress?.(Math.round((event.loaded * 100) / event.total));
+      };
+      const cleanup = () => {
+        xhr.upload.removeEventListener('progress', progress);
+        xhr.removeEventListener('load', loaded);
+        xhr.removeEventListener('error', failed);
+        xhr.removeEventListener('timeout', timedOut);
+        xhr.removeEventListener('abort', aborted);
+      };
+      const loaded = () => {
+        cleanup();
+        const text = xhr.responseText;
+        const headers = new Headers();
+        xhr
+          .getAllResponseHeaders()
+          .trim()
+          .split(/[\r\n]+/)
+          .forEach(line => {
+            const colon = line.indexOf(':');
+            if (colon > 0) headers.append(line.slice(0, colon), line.slice(colon + 1).trim());
+          });
+        const response: HttpResponse = {
+          ok: xhr.status >= 200 && xhr.status < 300,
+          status: xhr.status,
+          statusText: xhr.statusText,
+          headers,
+          json: async () => JSON.parse(text),
+          blob: async () => new Blob([text], { type: headers.get('content-type') || '' }),
+          clone: () => response,
+        };
+        resolve(response);
+      };
+      const failed = () => {
+        cleanup();
+        reject(new Error('上传连接中断，结果未知，请刷新附件列表后确认'));
+      };
+      const timedOut = () => {
+        cleanup();
+        reject(new Error('上传超时，结果未知，请刷新附件列表后确认'));
+      };
+      const aborted = () => {
+        cleanup();
+        reject(new DOMException('上传已取消，请刷新附件列表后确认', 'AbortError'));
+      };
+      xhr.upload.addEventListener('progress', progress);
+      xhr.addEventListener('load', loaded);
+      xhr.addEventListener('error', failed);
+      xhr.addEventListener('timeout', timedOut);
+      xhr.addEventListener('abort', aborted);
+      xhr.open(init.method || 'POST', url);
+      xhr.timeout = config.timeout ?? this.timeout;
+      xhr.withCredentials = true;
+      new Headers(init.headers).forEach((value, key) => xhr.setRequestHeader(key, value));
+      try {
+        xhr.send(init.body as XMLHttpRequestBodyInit);
+      } catch (error) {
+        cleanup();
+        reject(error);
+      }
+    });
+  }
+
   // Independent token refresh method to avoid circular dependencies
   private async refreshTokenInternal(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseURL}/api/v1/refresh-token`, {
+      const response = await fetch(`${this.baseURL}/api/v1/auth/refresh`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include', // Include httpOnly cookies
-		body: '{}',
+        body: '{}',
       });
 
       if (response?.ok) {
         const data = await response.json();
         if (data.code === 0) {
-          // Token is stored in httpOnly cookie by backend
-          // Nothing to update in localStorage
+          // The backend rotated the HttpOnly session cookies.
           return true;
         }
       }
@@ -236,7 +279,7 @@ class HttpClient {
       url,
       method: config.method,
       headers: sanitizedHeaders,
-      body: config.body,
+      body: config.assertSubmissionContext ? '[confirmed creation]' : config.body,
     });
 
     // 在开发模式下，如果后端服务不可用，使用模拟数据
@@ -244,138 +287,103 @@ class HttpClient {
       logger.warn('开发模式：正在连接到后端服务，如果后端服务未运行，将显示错误');
     }
 
-    try {
+    const fetchWithContext = async (init: RequestInit): Promise<HttpResponse> => {
+      config.assertSubmissionContext?.();
+      if (init.body instanceof FormData) {
+        const multipartHeaders = new Headers(init.headers);
+        multipartHeaders.delete('Content-Type');
+        init = { ...init, headers: Object.fromEntries(multipartHeaders.entries()) };
+        if (config.onUploadProgress && config.responseType !== 'blob')
+          return this.uploadWithProgress(url, init, config);
+      }
       const controller = new AbortController();
-      const timeoutMs = config.timeout ?? this.timeout;
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-      let response = await fetch(url, {
-        ...requestConfig,
-        credentials: 'include', // Include httpOnly cookies for authenticated requests
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      // The backend rotates the token after every successful mutation. A cached token
-      // can therefore race with the CSRF cookie; refresh it once and retry the request.
-      if (
-        this.isMutatingMethod(config.method) &&
-        (await this.isCSRFRejection(response))
-      ) {
-        security.csrf.clearToken();
-        const retryHeaders = await this.addCSRFHeader(this.getHeaders(), config.method || 'GET');
-        response = await fetch(url, {
-          ...requestConfig,
-          credentials: 'include',
-          headers: {
-            ...retryHeaders,
-            ...config.headers,
-          },
-        });
+      const timeoutId = setTimeout(() => controller.abort(), config.timeout ?? this.timeout);
+      try {
+        return await fetch(url, { ...init, credentials: 'include', signal: controller.signal });
+      } catch (error) {
+        if (error instanceof TypeError && /fetch|network/i.test(error.message)) {
+          throw new Error('无法连接到服务器，请检查网络连接和后端服务是否运行');
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeoutId);
       }
+    };
+    try {
+      let response = await fetchWithContext(requestConfig);
 
-      if (response.ok && this.isMutatingMethod(config.method)) {
-        security.csrf.clearToken();
-      }
-
-      logger.debug('HTTP Client Response:', {
-        status: response?.status,
-        statusText: response?.statusText,
-        headers: response?.headers ? Object.fromEntries(response.headers.entries()) : {},
-      });
-
-      // If 401 error, try to refresh token
-      if (response?.status === 401) {
-        const refreshSuccess = await this.refreshTokenInternal();
-        if (refreshSuccess) {
-          // Retry original request with credentials: 'include' to send cookies
-          const retryHeaders = await this.addCSRFHeader(this.getHeaders(), config.method || 'GET');
-          const retryConfig: RequestInit = {
-            ...requestConfig,
-            credentials: 'include',
-            headers: {
-              ...retryHeaders,
-              ...config.headers,
-            },
-          };
-          const retryResponse = await fetch(url, retryConfig);
-          if (!retryResponse.ok) {
-            const rid = retryResponse.headers.get('X-Request-Id') || '';
-            const suffix = rid ? ` [RID: ${rid}]` : '';
-            throw new Error(`HTTP error! status: ${retryResponse?.status}${suffix}`);
-          }
-          const retryData = (await retryResponse.json()) as ApiResponse<T>;
-          logger.debug('HTTP Client Retry Response Data:', retryData);
-
-          // Check response code - 容忍后端没有返回 code 字段的情况
-          if (retryData.code !== undefined && retryData.code !== null && retryData.code !== 0) {
-            const rid = retryResponse.headers.get('X-Request-Id') || '';
-            const suffix = rid ? ` [RID: ${rid}]` : '';
-            throw new Error((retryData.message || 'Request failed') + suffix);
-          }
-
-          return retryData.data;
-        } else {
-          // Refresh failed, clear token and redirect to login
-          this.clearToken();
-          if (typeof window !== 'undefined') {
-            // Only redirect if not already on login page to avoid loops
-            if (!window.location.pathname.startsWith('/login')) {
+      // Each explicit recovery is allowed once, in either order. A network error
+      // never reaches this loop, so an uncertain mutation is not replayed.
+      let csrfRecovered = false;
+      let authRecovered = false;
+      while (true) {
+        if (
+          !csrfRecovered &&
+          this.isMutatingMethod(config.method) &&
+          (await this.isCSRFRejection(response))
+        ) {
+          csrfRecovered = true;
+        } else if (!authRecovered && response.status === 401) {
+          authRecovered = true;
+          if (!(await this.refreshTokenInternal())) {
+            if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
               window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
             }
+            break;
           }
-          throw new Error('Authentication failed');
+        } else {
+          break;
         }
+        security.csrf.clearToken();
+        const retryHeaders = await this.addCSRFHeader(this.getHeaders(), config.method || 'GET');
+        response = await fetchWithContext({
+          ...requestConfig,
+          headers: { ...config.headers, ...retryHeaders },
+        });
       }
+      if (response.ok && this.isMutatingMethod(config.method)) security.csrf.clearToken();
 
-      if (!response?.ok) {
-        const rid = response?.headers?.get('X-Request-Id') || '';
-        const suffix = rid ? ` [RID: ${rid}]` : '';
-        // 尝试从响应中获取更详细的错误信息——注意 throw 不能写在这个 try 块里：
-        // 写在里面会被下面紧跟着的 catch 立刻吞掉（catch 只是为了忽略 JSON 解析失败，
-        // 不是用来吞掉我们自己抛出的、带后端消息的错误），实际效果是不管后端返回什么
-        // message，最终永远走到下面的兜底 "HTTP error! status: N"。
-        let backendMessage: string | undefined;
-        try {
-          const errorData = await response.json();
-          if (errorData && errorData.message) {
-            backendMessage = errorData.message;
-          }
-        } catch {
-          // Ignore JSON parse errors, use default message
-        }
-        throw new Error((backendMessage ?? `HTTP error! status: ${response?.status}`) + suffix);
+      if (response.ok && config.responseType === 'blob') return (await response.blob()) as T;
+      let responseData: ApiResponse<T> | undefined;
+      try {
+        responseData = (await response.json()) as ApiResponse<T>;
+      } catch (error) {
+        if (response.ok)
+          throw config.assertSubmissionContext
+            ? new Error('服务器响应无法解析，提交结果未知')
+            : error;
       }
-
-      const responseData = (await response.json()) as ApiResponse<T>;
-      logger.debug('HTTP Client Raw Response Data:', responseData);
-
-      // Check response code - 容忍后端没有返回 code 字段的情况（如 BPMN workflow controller）
-      // 允许 code 为 0、undefined、null 或不存在
-      if (
-        responseData.code !== undefined &&
-        responseData.code !== null &&
-        responseData.code !== 0
-      ) {
-        const rid = (response.headers && response.headers.get('X-Request-Id')) || '';
-        const suffix = rid ? ` [RID: ${rid}]` : '';
-        throw new Error((responseData.message || 'Request failed') + suffix);
+      if (!response.ok || (responseData?.code != null && responseData.code !== 0)) {
+        const rid = response.headers?.get('X-Request-Id') || '';
+        const details = responseData?.data as
+          | { errorCode?: string; retryable?: boolean; fieldErrors?: unknown }
+          | undefined;
+        throw new ApiError(
+          (responseData?.message || `HTTP error! status: ${response.status}`) +
+            (rid ? ` [RID: ${rid}]` : ''),
+          response.status,
+          responseData?.code,
+          details?.errorCode,
+          details?.retryable,
+          details?.fieldErrors,
+          rid,
+          responseData?.data
+        );
       }
-
       // 自动转换响应数据 key 为 camelCase
-      return toCamelCase(responseData.data) as T;
+      config.validateResponse?.(responseData?.data, response.status);
+      return (
+        config.preserveResponseKeys ? responseData?.data : toCamelCase(responseData?.data)
+      ) as T;
     } catch (error: unknown) {
       // AbortError 是正常的中止请求，不记录错误日志
       if (error instanceof Error && error.name === 'AbortError') {
         logger.debug('Request aborted (page navigation)');
-        return null as T;
+        throw error;
       }
       logger.error('Request failed:', error);
+      if (error instanceof ApiError) throw error;
       if (error instanceof Error) {
-        if (error.message.includes('fetch')) {
-          throw new Error('无法连接到服务器，请检查网络连接和后端服务是否运行');
-        }
         throw error;
       }
       throw new Error('未知错误发生');
@@ -419,7 +427,10 @@ class HttpClient {
           ? // blob passthrough
             await (async () => {
               const url = `${this.baseURL}${endpoint}`;
-              const headers: Record<string, string> = { ...this.getHeaders(), ...(cfg.headers || {}) };
+              const headers: Record<string, string> = {
+                ...this.getHeaders(),
+                ...(cfg.headers || {}),
+              };
               if (body instanceof FormData) delete headers['Content-Type'];
               else headers['Content-Type'] = headers['Content-Type'] || 'application/json';
               const res = await fetch(url, { method, headers, body: body ?? null });
@@ -443,10 +454,18 @@ class HttpClient {
       headers: cfg.headers,
       body: cfg.body,
       timeout: cfg.timeout,
+      skipCamelCaseBody: cfg.skipCamelCaseBody,
+      assertSubmissionContext: cfg.assertSubmissionContext,
+      preserveResponseKeys: cfg.preserveResponseKeys,
+      validateResponse: cfg.validateResponse,
     });
   }
 
-  async get<T>(endpoint: string, params?: object): Promise<T> {
+  async get<T>(
+    endpoint: string,
+    params?: object,
+    config?: Pick<RequestConfig, 'responseType' | 'assertSubmissionContext'>
+  ): Promise<T> {
     let url = endpoint;
     if (params) {
       const searchParams = new URLSearchParams();
@@ -460,6 +479,8 @@ class HttpClient {
 
     return this.requestInternal<T>(url, {
       method: 'GET',
+      responseType: config?.responseType,
+      assertSubmissionContext: config?.assertSubmissionContext,
     });
   }
 
@@ -471,104 +492,28 @@ class HttpClient {
       headers?: Record<string, string>;
       responseType?: 'json' | 'blob';
       skipCamelCaseBody?: boolean;
+      assertSubmissionContext?: () => void;
     }
   ): Promise<T> {
-    // 如果是 FormData，直接传递，不进行 JSON.stringify
-    if (data instanceof FormData) {
-      const url = `${this.baseURL}${endpoint}`;
-      const headers = this.getHeaders();
-      // FormData 上传时，不要设置 Content-Type，让浏览器自动设置（包含 boundary）
-      delete headers['Content-Type'];
-
-      // 如果支持上传进度，使用 XMLHttpRequest
-      if (config?.onUploadProgress) {
-        return new Promise<T>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-
-          xhr.upload.addEventListener('progress', event => {
-            if (event.lengthComputable && config.onUploadProgress) {
-              const progress = Math.round((event.loaded * 100) / event.total);
-              config.onUploadProgress(progress);
-            }
-          });
-
-          xhr.addEventListener('load', () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              try {
-                const response = JSON.parse(xhr.responseText) as ApiResponse<T>;
-                if (response.code === 0) {
-                  resolve(response.data);
-                } else {
-                  reject(new Error(response.message || 'Request failed'));
-                }
-              } catch (error) {
-                reject(new Error('Failed to parse response'));
-              }
-            } else {
-              reject(new Error(`HTTP error! status: ${xhr.status}`));
-            }
-          });
-
-          xhr.addEventListener('error', () => {
-            reject(new Error('Network error'));
-          });
-
-          xhr.open('POST', url);
-          Object.entries(headers).forEach(([key, value]) => {
-            if (key !== 'Content-Type') {
-              xhr.setRequestHeader(key, value);
-            }
-          });
-          xhr.send(data);
-        });
-      }
-
-      // 不支持进度时，使用 fetch
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          ...headers,
-          ...(config?.headers || {}),
-        },
-        body: data,
-      });
-
-      if (!response?.ok) {
-        throw new Error(`HTTP error! status: ${response?.status}`);
-      }
-
-      if (config?.responseType === 'blob') {
-        return (await response.blob()) as unknown as T;
-      }
-
-      const responseData = (await response.json()) as ApiResponse<T>;
-      // 容忍后端没有返回 code 字段的情况
-      if (
-        responseData.code !== undefined &&
-        responseData.code !== null &&
-        responseData.code !== 0
-      ) {
-        throw new Error(responseData.message || 'Request failed');
-      }
-
-      return responseData.data;
-    }
-
     return this.requestInternal<T>(endpoint, {
       method: 'POST',
-      body: data ? JSON.stringify(data) : undefined,
+      body: data instanceof FormData ? data : data ? JSON.stringify(data) : undefined,
+      onUploadProgress: config?.onUploadProgress,
+      responseType: config?.responseType,
       headers: config?.headers,
       skipCamelCaseBody: config?.skipCamelCaseBody,
+      assertSubmissionContext: config?.assertSubmissionContext,
     });
   }
 
   async put<T>(
     endpoint: string,
     data?: unknown,
-    config?: { skipCamelCaseBody?: boolean }
+    config?: { skipCamelCaseBody?: boolean; assertSubmissionContext?: () => void }
   ): Promise<T> {
     return this.requestInternal<T>(endpoint, {
       method: 'PUT',
+      assertSubmissionContext: config?.assertSubmissionContext,
       body: data ? JSON.stringify(data) : undefined,
       skipCamelCaseBody: config?.skipCamelCaseBody,
     });
@@ -581,9 +526,14 @@ class HttpClient {
     });
   }
 
-  async delete<T>(endpoint: string, data?: unknown): Promise<T> {
+  async delete<T>(
+    endpoint: string,
+    data?: unknown,
+    config?: { assertSubmissionContext?: () => void }
+  ): Promise<T> {
     return this.requestInternal<T>(endpoint, {
       method: 'DELETE',
+      assertSubmissionContext: config?.assertSubmissionContext,
       body: data ? JSON.stringify(data) : undefined,
     });
   }
@@ -678,11 +628,7 @@ class HttpClient {
       const uploadUrl = endpoint.startsWith('http') ? endpoint : `${this.baseURL}${endpoint}`;
       xhr.open('POST', uploadUrl);
 
-      // 添加认证头
-      const token = this.getAuthToken();
-      if (token) {
-        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-      }
+      xhr.withCredentials = true;
 
       xhr.send(formData);
     });

@@ -34,43 +34,39 @@ async function loginViaApi(page) {
     throw new Error(`Login failed: ${response.status()} ${await response.text()}`);
   }
   const body = await response.json();
-  const token = body.data?.access_token;
-  if (!token) {
-    throw new Error('No access_token in response');
+  const data = body.data || {};
+  if (data.accessToken || data.access_token || data.refreshToken || data.refresh_token) {
+    throw new Error('Login response exposed session tokens in JSON');
   }
-  await page.goto(BASE_URL);
-  await page.evaluate((t) => {
-    localStorage.setItem('access_token', t);
-    localStorage.setItem('auth_token', t);
-    document.cookie = `auth-token=${t}; path=/; max-age=900`;
-  }, token);
-  log('✅ Login successful, token stored');
-  return token;
+  const cookies = await page.context().cookies(API_URL);
+  if (!cookies.some((cookie) => cookie.name === 'access_token' && cookie.httpOnly)) {
+    throw new Error('Login did not issue an HttpOnly session cookie');
+  }
+  log('✅ Login successful, cookie session established');
 }
 
-async function createTicketViaApi(token, ticketData) {
-  const response = await fetch(`${API_URL}/api/v1/tickets`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(ticketData),
+async function createTicketViaApi(page, ticketData) {
+  const csrfResponse = await page.request.get(`${API_URL}/api/v1/csrf-token`);
+  if (!csrfResponse.ok()) {
+    throw new Error(`CSRF bootstrap failed: ${csrfResponse.status()}`);
+  }
+  const csrfBody = await csrfResponse.json();
+  const response = await page.request.post(`${API_URL}/api/v1/tickets`, {
+    headers: { 'X-CSRF-Token': String(csrfBody.data.csrf_token) },
+    data: ticketData,
   });
   const body = await response.json();
-  if (!response.ok) {
-    throw new Error(`Create ticket failed: ${response.status} ${JSON.stringify(body)}`);
+  if (!response.ok()) {
+    throw new Error(`Create ticket failed: ${response.status()} ${JSON.stringify(body)}`);
   }
   return body.data;
 }
 
-async function getTicketProcess(token, ticketId) {
-  const response = await fetch(`${API_URL}/api/v1/tickets/${ticketId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+async function getTicketProcess(page, ticketId) {
+  const response = await page.request.get(`${API_URL}/api/v1/tickets/${ticketId}`);
   const body = await response.json();
-  if (!response.ok) {
-    throw new Error(`Get ticket failed: ${response.status} ${JSON.stringify(body)}`);
+  if (!response.ok()) {
+    throw new Error(`Get ticket failed: ${response.status()} ${JSON.stringify(body)}`);
   }
   return body.data;
 }
@@ -107,7 +103,7 @@ async function run() {
     await page.screenshot({ path: `${SCREENSHOT_DIR}/01-login-page.png`, fullPage: true });
 
     // Step 2: Login via API
-    const token = await loginViaApi(page);
+    await loginViaApi(page);
 
     // Step 3: Navigate to dashboard
     log('📸 Step 2: Navigate to dashboard after login');
@@ -161,7 +157,7 @@ async function run() {
       log(`\n📋 Test ${index + 1}/4: Creating ${ticket.type} ticket`);
 
       // Create ticket via API (more reliable than UI for assertions)
-      const created = await createTicketViaApi(token, {
+      const created = await createTicketViaApi(page, {
         title: ticket.title,
         description: ticket.description,
         priority: ticket.priority,
@@ -172,7 +168,7 @@ async function run() {
 
       // Fetch ticket details to verify BPMN process was started
       await new Promise((r) => setTimeout(r, 1500));
-      const detail = await getTicketProcess(token, created.id);
+      const detail = await getTicketProcess(page, created.id);
       const processKey =
         detail.processDefinitionKey ||
         detail.process_instance_id ||
@@ -203,19 +199,12 @@ async function run() {
       });
     }
 
-    // Step 6: Navigate to admin/approvals to verify the migration notice
-    log('\n📋 Step 6: Navigate to admin/approvals page (verify migration notice)');
-    await page.goto(`${BASE_URL}/admin/approvals`);
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(2000);
-    await page.screenshot({ path: `${SCREENSHOT_DIR}/05-admin-approvals.png`, fullPage: true });
-
-    log('\n📋 Step 7: Navigate to admin/approval-chains page');
+    log('\n📋 Step 6: Navigate to admin/approval-chains page');
     await page.goto(`${BASE_URL}/admin/approval-chains`);
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(2000);
     await page.screenshot({
-      path: `${SCREENSHOT_DIR}/06-admin-approval-chains.png`,
+      path: `${SCREENSHOT_DIR}/05-admin-approval-chains.png`,
       fullPage: true,
     });
 

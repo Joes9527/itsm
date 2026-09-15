@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"itsm-backend/ent/change"
+	"itsm-backend/ent/standardchange"
+	"itsm-backend/ent/ticket"
 	"strings"
 	"time"
 
@@ -18,30 +20,40 @@ type Change struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
-	// 变更标题
-	Title string `json:"title,omitempty"`
-	// 变更描述
-	Description string `json:"description,omitempty"`
+	// Outcome holds the value of the "outcome" field.
+	Outcome string `json:"outcome,omitempty"`
+	// OutcomeEvidence holds the value of the "outcome_evidence" field.
+	OutcomeEvidence string `json:"outcome_evidence,omitempty"`
+	// AssessmentEvidence holds the value of the "assessment_evidence" field.
+	AssessmentEvidence string `json:"assessment_evidence,omitempty"`
+	// AssessmentDigest holds the value of the "assessment_digest" field.
+	AssessmentDigest string `json:"assessment_digest,omitempty"`
+	// AssessedBy holds the value of the "assessed_by" field.
+	AssessedBy int `json:"assessed_by,omitempty"`
+	// AssessedAt holds the value of the "assessed_at" field.
+	AssessedAt time.Time `json:"assessed_at,omitempty"`
+	// ReviewedBy holds the value of the "reviewed_by" field.
+	ReviewedBy int `json:"reviewed_by,omitempty"`
+	// ReviewedAt holds the value of the "reviewed_at" field.
+	ReviewedAt time.Time `json:"reviewed_at,omitempty"`
+	// ReviewEvidence holds the value of the "review_evidence" field.
+	ReviewEvidence string `json:"review_evidence,omitempty"`
+	// ReviewDigest holds the value of the "review_digest" field.
+	ReviewDigest string `json:"review_digest,omitempty"`
+	// StandardTemplateID holds the value of the "standard_template_id" field.
+	StandardTemplateID int `json:"standard_template_id,omitempty"`
+	// StandardPolicy holds the value of the "standard_policy" field.
+	StandardPolicy map[string]interface{} `json:"standard_policy,omitempty"`
 	// 变更理由
 	Justification string `json:"justification,omitempty"`
 	// 变更类型
 	Type string `json:"type,omitempty"`
-	// 状态
-	Status string `json:"status,omitempty"`
-	// 优先级
-	Priority string `json:"priority,omitempty"`
 	// 影响范围
 	ImpactScope string `json:"impact_scope,omitempty"`
 	// 风险等级
 	RiskLevel string `json:"risk_level,omitempty"`
-	// 处理人ID
-	AssigneeID int `json:"assignee_id,omitempty"`
-	// 创建人ID
-	CreatedBy int `json:"created_by,omitempty"`
-	// 关联的 WorkItem（tickets.id），唯一，必填——迁移完成前允许为空
+	// 关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入
 	WorkItemID int `json:"work_item_id,omitempty"`
-	// 租户ID
-	TenantID int `json:"tenant_id,omitempty"`
 	// 计划开始时间
 	PlannedStartDate time.Time `json:"planned_start_date,omitempty"`
 	// 计划结束时间
@@ -56,43 +68,51 @@ type Change struct {
 	RollbackPlan string `json:"rollback_plan,omitempty"`
 	// 受影响的配置项
 	AffectedCis []string `json:"affected_cis,omitempty"`
-	// 相关工单
-	RelatedTickets []string `json:"related_tickets,omitempty"`
-	// 创建时间
-	CreatedAt time.Time `json:"created_at,omitempty"`
-	// 更新时间
-	UpdatedAt time.Time `json:"updated_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ChangeQuery when eager-loading is set.
-	Edges                   ChangeEdges `json:"edges"`
-	standard_change_changes *int
-	selectValues            sql.SelectValues
+	Edges        ChangeEdges `json:"edges"`
+	selectValues sql.SelectValues
 }
 
 // ChangeEdges holds the relations/edges for other nodes in the graph.
 type ChangeEdges struct {
-	// 关联的问题
-	Problems []*Problem `json:"problems,omitempty"`
+	// StandardTemplate holds the value of the standard_template edge.
+	StandardTemplate *StandardChange `json:"standard_template,omitempty"`
+	// 共享字段的唯一权威 WorkItem
+	WorkItem *Ticket `json:"work_item,omitempty"`
 	// 实施后审查
 	Pir []*ChangePIR `json:"pir,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
 }
 
-// ProblemsOrErr returns the Problems value or an error if the edge
-// was not loaded in eager-loading.
-func (e ChangeEdges) ProblemsOrErr() ([]*Problem, error) {
-	if e.loadedTypes[0] {
-		return e.Problems, nil
+// StandardTemplateOrErr returns the StandardTemplate value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e ChangeEdges) StandardTemplateOrErr() (*StandardChange, error) {
+	if e.StandardTemplate != nil {
+		return e.StandardTemplate, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: standardchange.Label}
 	}
-	return nil, &NotLoadedError{edge: "problems"}
+	return nil, &NotLoadedError{edge: "standard_template"}
+}
+
+// WorkItemOrErr returns the WorkItem value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e ChangeEdges) WorkItemOrErr() (*Ticket, error) {
+	if e.WorkItem != nil {
+		return e.WorkItem, nil
+	} else if e.loadedTypes[1] {
+		return nil, &NotFoundError{label: ticket.Label}
+	}
+	return nil, &NotLoadedError{edge: "work_item"}
 }
 
 // PirOrErr returns the Pir value or an error if the edge
 // was not loaded in eager-loading.
 func (e ChangeEdges) PirOrErr() ([]*ChangePIR, error) {
-	if e.loadedTypes[1] {
+	if e.loadedTypes[2] {
 		return e.Pir, nil
 	}
 	return nil, &NotLoadedError{edge: "pir"}
@@ -103,16 +123,14 @@ func (*Change) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case change.FieldAffectedCis, change.FieldRelatedTickets:
+		case change.FieldStandardPolicy, change.FieldAffectedCis:
 			values[i] = new([]byte)
-		case change.FieldID, change.FieldAssigneeID, change.FieldCreatedBy, change.FieldWorkItemID, change.FieldTenantID:
+		case change.FieldID, change.FieldAssessedBy, change.FieldReviewedBy, change.FieldStandardTemplateID, change.FieldWorkItemID:
 			values[i] = new(sql.NullInt64)
-		case change.FieldTitle, change.FieldDescription, change.FieldJustification, change.FieldType, change.FieldStatus, change.FieldPriority, change.FieldImpactScope, change.FieldRiskLevel, change.FieldImplementationPlan, change.FieldRollbackPlan:
+		case change.FieldOutcome, change.FieldOutcomeEvidence, change.FieldAssessmentEvidence, change.FieldAssessmentDigest, change.FieldReviewEvidence, change.FieldReviewDigest, change.FieldJustification, change.FieldType, change.FieldImpactScope, change.FieldRiskLevel, change.FieldImplementationPlan, change.FieldRollbackPlan:
 			values[i] = new(sql.NullString)
-		case change.FieldPlannedStartDate, change.FieldPlannedEndDate, change.FieldActualStartDate, change.FieldActualEndDate, change.FieldCreatedAt, change.FieldUpdatedAt:
+		case change.FieldAssessedAt, change.FieldReviewedAt, change.FieldPlannedStartDate, change.FieldPlannedEndDate, change.FieldActualStartDate, change.FieldActualEndDate:
 			values[i] = new(sql.NullTime)
-		case change.ForeignKeys[0]: // standard_change_changes
-			values[i] = new(sql.NullInt64)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -134,17 +152,79 @@ func (_m *Change) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
-		case change.FieldTitle:
+		case change.FieldOutcome:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field title", values[i])
+				return fmt.Errorf("unexpected type %T for field outcome", values[i])
 			} else if value.Valid {
-				_m.Title = value.String
+				_m.Outcome = value.String
 			}
-		case change.FieldDescription:
+		case change.FieldOutcomeEvidence:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field description", values[i])
+				return fmt.Errorf("unexpected type %T for field outcome_evidence", values[i])
 			} else if value.Valid {
-				_m.Description = value.String
+				_m.OutcomeEvidence = value.String
+			}
+		case change.FieldAssessmentEvidence:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field assessment_evidence", values[i])
+			} else if value.Valid {
+				_m.AssessmentEvidence = value.String
+			}
+		case change.FieldAssessmentDigest:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field assessment_digest", values[i])
+			} else if value.Valid {
+				_m.AssessmentDigest = value.String
+			}
+		case change.FieldAssessedBy:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field assessed_by", values[i])
+			} else if value.Valid {
+				_m.AssessedBy = int(value.Int64)
+			}
+		case change.FieldAssessedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field assessed_at", values[i])
+			} else if value.Valid {
+				_m.AssessedAt = value.Time
+			}
+		case change.FieldReviewedBy:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field reviewed_by", values[i])
+			} else if value.Valid {
+				_m.ReviewedBy = int(value.Int64)
+			}
+		case change.FieldReviewedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field reviewed_at", values[i])
+			} else if value.Valid {
+				_m.ReviewedAt = value.Time
+			}
+		case change.FieldReviewEvidence:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field review_evidence", values[i])
+			} else if value.Valid {
+				_m.ReviewEvidence = value.String
+			}
+		case change.FieldReviewDigest:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field review_digest", values[i])
+			} else if value.Valid {
+				_m.ReviewDigest = value.String
+			}
+		case change.FieldStandardTemplateID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field standard_template_id", values[i])
+			} else if value.Valid {
+				_m.StandardTemplateID = int(value.Int64)
+			}
+		case change.FieldStandardPolicy:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field standard_policy", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.StandardPolicy); err != nil {
+					return fmt.Errorf("unmarshal field standard_policy: %w", err)
+				}
 			}
 		case change.FieldJustification:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -158,18 +238,6 @@ func (_m *Change) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Type = value.String
 			}
-		case change.FieldStatus:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field status", values[i])
-			} else if value.Valid {
-				_m.Status = value.String
-			}
-		case change.FieldPriority:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field priority", values[i])
-			} else if value.Valid {
-				_m.Priority = value.String
-			}
 		case change.FieldImpactScope:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field impact_scope", values[i])
@@ -182,29 +250,11 @@ func (_m *Change) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.RiskLevel = value.String
 			}
-		case change.FieldAssigneeID:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field assignee_id", values[i])
-			} else if value.Valid {
-				_m.AssigneeID = int(value.Int64)
-			}
-		case change.FieldCreatedBy:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field created_by", values[i])
-			} else if value.Valid {
-				_m.CreatedBy = int(value.Int64)
-			}
 		case change.FieldWorkItemID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field work_item_id", values[i])
 			} else if value.Valid {
 				_m.WorkItemID = int(value.Int64)
-			}
-		case change.FieldTenantID:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
-			} else if value.Valid {
-				_m.TenantID = int(value.Int64)
 			}
 		case change.FieldPlannedStartDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -250,33 +300,6 @@ func (_m *Change) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field affected_cis: %w", err)
 				}
 			}
-		case change.FieldRelatedTickets:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field related_tickets", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.RelatedTickets); err != nil {
-					return fmt.Errorf("unmarshal field related_tickets: %w", err)
-				}
-			}
-		case change.FieldCreatedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field created_at", values[i])
-			} else if value.Valid {
-				_m.CreatedAt = value.Time
-			}
-		case change.FieldUpdatedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
-			} else if value.Valid {
-				_m.UpdatedAt = value.Time
-			}
-		case change.ForeignKeys[0]:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for edge-field standard_change_changes", value)
-			} else if value.Valid {
-				_m.standard_change_changes = new(int)
-				*_m.standard_change_changes = int(value.Int64)
-			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -290,9 +313,14 @@ func (_m *Change) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
 }
 
-// QueryProblems queries the "problems" edge of the Change entity.
-func (_m *Change) QueryProblems() *ProblemQuery {
-	return NewChangeClient(_m.config).QueryProblems(_m)
+// QueryStandardTemplate queries the "standard_template" edge of the Change entity.
+func (_m *Change) QueryStandardTemplate() *StandardChangeQuery {
+	return NewChangeClient(_m.config).QueryStandardTemplate(_m)
+}
+
+// QueryWorkItem queries the "work_item" edge of the Change entity.
+func (_m *Change) QueryWorkItem() *TicketQuery {
+	return NewChangeClient(_m.config).QueryWorkItem(_m)
 }
 
 // QueryPir queries the "pir" edge of the Change entity.
@@ -323,11 +351,41 @@ func (_m *Change) String() string {
 	var builder strings.Builder
 	builder.WriteString("Change(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
-	builder.WriteString("title=")
-	builder.WriteString(_m.Title)
+	builder.WriteString("outcome=")
+	builder.WriteString(_m.Outcome)
 	builder.WriteString(", ")
-	builder.WriteString("description=")
-	builder.WriteString(_m.Description)
+	builder.WriteString("outcome_evidence=")
+	builder.WriteString(_m.OutcomeEvidence)
+	builder.WriteString(", ")
+	builder.WriteString("assessment_evidence=")
+	builder.WriteString(_m.AssessmentEvidence)
+	builder.WriteString(", ")
+	builder.WriteString("assessment_digest=")
+	builder.WriteString(_m.AssessmentDigest)
+	builder.WriteString(", ")
+	builder.WriteString("assessed_by=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AssessedBy))
+	builder.WriteString(", ")
+	builder.WriteString("assessed_at=")
+	builder.WriteString(_m.AssessedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("reviewed_by=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ReviewedBy))
+	builder.WriteString(", ")
+	builder.WriteString("reviewed_at=")
+	builder.WriteString(_m.ReviewedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("review_evidence=")
+	builder.WriteString(_m.ReviewEvidence)
+	builder.WriteString(", ")
+	builder.WriteString("review_digest=")
+	builder.WriteString(_m.ReviewDigest)
+	builder.WriteString(", ")
+	builder.WriteString("standard_template_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.StandardTemplateID))
+	builder.WriteString(", ")
+	builder.WriteString("standard_policy=")
+	builder.WriteString(fmt.Sprintf("%v", _m.StandardPolicy))
 	builder.WriteString(", ")
 	builder.WriteString("justification=")
 	builder.WriteString(_m.Justification)
@@ -335,29 +393,14 @@ func (_m *Change) String() string {
 	builder.WriteString("type=")
 	builder.WriteString(_m.Type)
 	builder.WriteString(", ")
-	builder.WriteString("status=")
-	builder.WriteString(_m.Status)
-	builder.WriteString(", ")
-	builder.WriteString("priority=")
-	builder.WriteString(_m.Priority)
-	builder.WriteString(", ")
 	builder.WriteString("impact_scope=")
 	builder.WriteString(_m.ImpactScope)
 	builder.WriteString(", ")
 	builder.WriteString("risk_level=")
 	builder.WriteString(_m.RiskLevel)
 	builder.WriteString(", ")
-	builder.WriteString("assignee_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.AssigneeID))
-	builder.WriteString(", ")
-	builder.WriteString("created_by=")
-	builder.WriteString(fmt.Sprintf("%v", _m.CreatedBy))
-	builder.WriteString(", ")
 	builder.WriteString("work_item_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.WorkItemID))
-	builder.WriteString(", ")
-	builder.WriteString("tenant_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.TenantID))
 	builder.WriteString(", ")
 	builder.WriteString("planned_start_date=")
 	builder.WriteString(_m.PlannedStartDate.Format(time.ANSIC))
@@ -379,15 +422,6 @@ func (_m *Change) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("affected_cis=")
 	builder.WriteString(fmt.Sprintf("%v", _m.AffectedCis))
-	builder.WriteString(", ")
-	builder.WriteString("related_tickets=")
-	builder.WriteString(fmt.Sprintf("%v", _m.RelatedTickets))
-	builder.WriteString(", ")
-	builder.WriteString("created_at=")
-	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("updated_at=")
-	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteByte(')')
 	return builder.String()
 }

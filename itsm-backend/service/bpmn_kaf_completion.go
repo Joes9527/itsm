@@ -2,11 +2,16 @@ package service
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"itsm-backend/handlers/common/accessgrant"
+
+	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/kaftaskactionledger"
@@ -16,11 +21,21 @@ import (
 	"itsm-backend/ent/processdefinition"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
-	"itsm-backend/ent/ticket"
 	"itsm-backend/service/bpmn"
 
 	entsql "entgo.io/ent/dialect/sql"
 )
+
+// AccessCompletionContributor is implemented by the Requested Item domain.
+// Contributions use the existing BPMN completion transaction; replay is read-only.
+type AccessCompletionContributor interface {
+	ContributeAccessCompletion(context.Context, *ent.Tx, *ent.ProcessTask, *ent.KafTaskActionLedger, json.RawMessage) error
+	ValidateAccessCompletionReplay(context.Context, *ent.Client, *ent.ProcessTask, *ent.KafTaskActionLedger) error
+}
+
+func (e *CustomProcessEngine) SetAccessCompletionContributor(owner AccessCompletionContributor) {
+	e.accessCompletionContributor = owner
+}
 
 // CompleteKafDelegatedTask joins BPMN completion, callback scheduling and the
 // KAF lease fence in one transaction, then reconciles the durable callback.
@@ -76,11 +91,19 @@ func (e *CustomProcessEngine) CompleteKafDelegatedTask(ctx context.Context, ledg
 		return err
 	}
 	ctx = WithBPMNAccessScope(ctx, scope)
-	receipt, err := e.ensureKafCompletionReceipt(ctx, ledger.ID, ledger.TenantID, taskID)
-	if err != nil {
-		return err
-	}
 	if task.Status == common.ProcessTaskStatusCompleted {
+		if task.CallbackAction == accessgrant.Capability {
+			if e.accessCompletionContributor == nil {
+				return fmt.Errorf("verified access completion owner unavailable")
+			}
+			if err := e.accessCompletionContributor.ValidateAccessCompletionReplay(ctx, e.client, task, ledger); err != nil {
+				return err
+			}
+		}
+		receipt, err := e.ensureKafCompletionReceipt(ctx, ledger.ID, ledger.TenantID, taskID)
+		if err != nil {
+			return err
+		}
 		return e.recoverKafCompletionCallback(ctx, ledger.ID, leaseOwner, receipt, task)
 	}
 
@@ -92,13 +115,40 @@ func (e *CustomProcessEngine) CompleteKafDelegatedTask(ctx context.Context, ledg
 	if err != nil {
 		return err
 	}
-	tx, err := e.client.Tx(ctx)
+	tx, err := e.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return fmt.Errorf("start KAF BPMN completion transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := requireKafExecutionTx(ctx, tx, e.execution, task.TenantID, task.TaskID); err != nil {
+		return err
+	}
+	task, err = lockBPMNTaskLifecycle(ctx, tx.Client(), task)
+	if err != nil {
+		return err
+	}
+
+	if task.CallbackAction == accessgrant.Capability {
+		if e.accessCompletionContributor == nil {
+			return fmt.Errorf("verified access completion owner unavailable")
+		}
+		raw, err := json.Marshal(variables["kaf_access_result"])
+		if err != nil {
+			return err
+		}
+		if err := e.accessCompletionContributor.ContributeAccessCompletion(ctx, tx, task, ledger, raw); err != nil {
+			return err
+		}
+	} else if variables["kaf_access_result"] != nil {
+		return fmt.Errorf("access result supplied for a different delegated capability")
+	}
+	txEngine := e.forClient(tx.Client(), nil, tx)
+	receipt, err := txEngine.ensureKafCompletionReceipt(ctx, ledger.ID, ledger.TenantID, taskID)
+	if err != nil {
+		return err
+	}
 	executionKeys := make([]string, 0)
-	effect, err := e.completeTaskWithClient(ctx, tx.Client(), taskID, completionVariables, &executionKeys)
+	effect, err := txEngine.completeTaskWithClient(ctx, tx.Client(), taskID, completionVariables, &executionKeys)
 	if err != nil {
 		return err
 	}
@@ -174,6 +224,9 @@ func (e *CustomProcessEngine) makeKafCallbacksDue(ctx context.Context, ledgerID 
 		return fmt.Errorf("start KAF callback retry transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := requireKafExecutionTx(ctx, tx, e.execution, task.TenantID, task.TaskID); err != nil {
+		return err
+	}
 	if _, err := tx.Client().ProcessCallbackOutbox.Update().Where(
 		processcallbackoutbox.TenantIDEQ(task.TenantID),
 		processcallbackoutbox.ProcessTaskIDEQ(task.ID),
@@ -192,11 +245,14 @@ func (e *CustomProcessEngine) makeKafCallbacksDue(ctx context.Context, ledgerID 
 }
 
 func (e *CustomProcessEngine) enqueueRecoveredKafCallback(ctx context.Context, ledgerID int, leaseOwner string, receipt *ent.KafTaskCompletionReceipt, task *ent.ProcessTask) error {
-	tx, err := e.client.Tx(ctx)
+	tx, err := e.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return fmt.Errorf("start KAF callback recovery transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := requireKafExecutionTx(ctx, tx, e.execution, task.TenantID, task.TaskID); err != nil {
+		return err
+	}
 	var process *BPMNProcess
 	legacyTaskType, _ := task.TaskVariables[bpmnMetaDataServiceTaskType].(string)
 	if strings.TrimSpace(task.CallbackHandlerID) == "" && strings.TrimSpace(legacyTaskType) == "" {
@@ -235,11 +291,13 @@ func (e *CustomProcessEngine) enqueueRecoveredKafCallback(ctx context.Context, l
 	if handler == nil {
 		return errors.New("KAF completion callback handler is unavailable")
 	}
-	payload, err := filterBPMNCallbackPayload(handler, descriptor.Action, task.TaskVariables)
-	if err != nil {
-		return err
-	}
 	if isAsyncHandler(handler) {
+		// Async recovery uses the same variable boundary as initial completion.
+		// Async handlers intentionally do not implement synchronous callback contracts.
+		payload, err := validateAndCloneBPMNParticipantVariables(task.TaskVariables, false)
+		if err != nil {
+			return err
+		}
 		if err := assertKafCompletionFence(ctx, tx.Client(), kafCompletionFence{ledgerID: ledgerID, leaseOwner: leaseOwner}); err != nil {
 			return err
 		}
@@ -249,9 +307,19 @@ func (e *CustomProcessEngine) enqueueRecoveredKafCallback(ctx context.Context, l
 		payload[bpmnMetaDataAction] = descriptor.Action
 		return e.finishKafCompletionCallback(ctx, ledgerID, leaseOwner, receipt, &completedTaskEffect{task: task, variables: payload, asyncHandler: handler}, nil)
 	}
+	action := descriptor.Action
+	if handler.GetTaskType() == "cc_task" {
+		action = ""
+	}
+	plan, err := BuildCallbackEnqueuePlan(CallbackDescriptor{
+		HandlerID: descriptor.HandlerID, TaskType: descriptor.TaskType, Action: action, ConfigRef: descriptor.ConfigRef,
+	}, task.TaskVariables, false, e.callbackRegistry)
+	if err != nil {
+		return err
+	}
 	keys := make([]string, 0, 1)
-	txEngine := e.forClient(tx.Client(), &keys)
-	if err := txEngine.enqueueUserTaskCallback(ctx, task, descriptor, payload); err != nil {
+	txEngine := e.forClient(tx.Client(), &keys, tx)
+	if err := txEngine.enqueueUserTaskCallback(ctx, task, descriptor, plan); err != nil {
 		return err
 	}
 	if err := assertKafCompletionFence(ctx, tx.Client(), kafCompletionFence{ledgerID: ledgerID, leaseOwner: leaseOwner}); err != nil {
@@ -341,7 +409,15 @@ func (e *CustomProcessEngine) ensureKafCompletionReceipt(ctx context.Context, le
 }
 
 func (e *CustomProcessEngine) updateKafCompletionReceipt(ctx context.Context, ledgerID int, leaseOwner string, receiptID int, status, errorCode string, callbackErr error) error {
-	update := e.client.KafTaskCompletionReceipt.Update().Where(
+	tx, err := e.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := requireKafLedgerExecutionTx(ctx, tx, e.execution, ledgerID); err != nil {
+		return err
+	}
+	update := tx.KafTaskCompletionReceipt.Update().Where(
 		kaftaskcompletionreceipt.IDEQ(receiptID),
 		kaftaskcompletionreceipt.LedgerIDEQ(ledgerID),
 		kaftaskcompletionreceipt.StatusIn("callback_pending", "callback_failed"),
@@ -357,11 +433,14 @@ func (e *CustomProcessEngine) updateKafCompletionReceipt(ctx context.Context, le
 		return fmt.Errorf("update KAF completion receipt: %w", err)
 	}
 	if updated != 1 {
-		receipt, loadErr := e.client.KafTaskCompletionReceipt.Get(ctx, receiptID)
+		receipt, loadErr := tx.KafTaskCompletionReceipt.Get(ctx, receiptID)
 		if loadErr == nil && receipt.Status == "callback_succeeded" && status == "callback_succeeded" {
 			return nil
 		}
 		return errors.New("KAF completion receipt transition is stale or non-monotonic")
+	}
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 	return callbackErr
 }
@@ -382,6 +461,12 @@ func kafReceiptOwnedByExecutingLease(ledgerID int, leaseOwner string, now time.T
 func (e *CustomProcessEngine) runKafFencedWrite(ctx context.Context, write func(*ent.Client) error) error {
 	fence, fenced := ctx.Value(kafCompletionFenceContextKey{}).(kafCompletionFence)
 	if !fenced {
+		return fmt.Errorf("KAF write requires its owning lease fence")
+	}
+	if e.transactionBound {
+		if err := requireKafLedgerExecutionTx(ctx, e.owningTx, e.execution, fence.ledgerID); err != nil {
+			return err
+		}
 		return write(e.client)
 	}
 	tx, err := e.client.Tx(ctx)
@@ -389,6 +474,9 @@ func (e *CustomProcessEngine) runKafFencedWrite(ctx context.Context, write func(
 		return fmt.Errorf("start KAF owner-fenced write: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := requireKafLedgerExecutionTx(ctx, tx, e.execution, fence.ledgerID); err != nil {
+		return err
+	}
 	if err := write(tx.Client()); err != nil {
 		return err
 	}
@@ -418,22 +506,20 @@ func assertKafCompletionFence(ctx context.Context, client *ent.Client, fence kaf
 	return nil
 }
 
-func (e *CustomProcessEngine) validateTicketRecordClassInputWithClient(ctx context.Context, client *ent.Client, instance *ent.ProcessInstance, variables map[string]interface{}) error {
-	if instance.BusinessType != "ticket" {
-		return nil
-	}
+func (e *CustomProcessEngine) validateWorkItemRecordClassInputWithClient(ctx context.Context, client *ent.Client, instance *ent.ProcessInstance, variables map[string]interface{}) error {
 	provided, present := variables["record_class"]
 	if !present {
 		return nil
 	}
 	if instance.BusinessID <= 0 {
-		return fmt.Errorf("ticket process instance %d has no work item ID", instance.ID)
+		return fmt.Errorf("WorkItem process instance %d has no work item ID", instance.ID)
 	}
-	workItem, err := client.Ticket.Query().Where(
-		ticket.IDEQ(instance.BusinessID), ticket.TenantIDEQ(instance.TenantID), ticket.DeletedAtIsNil(),
-	).Only(ctx)
+	workItem, policy, err := authorization.ResolveWorkItemIdentity(ctx, client, instance.BusinessID, instance.TenantID)
 	if err != nil {
-		return fmt.Errorf("load ticket-backed work item record class: %w", err)
+		return fmt.Errorf("load WorkItem record class: %w", err)
+	}
+	if string(policy.BusinessType) != instance.BusinessType {
+		return errors.New("process business type conflicts with persisted work item record class")
 	}
 	recordClass, ok := provided.(string)
 	if !ok || recordClass != workItem.RecordClass {

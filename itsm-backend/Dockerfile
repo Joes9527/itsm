@@ -3,7 +3,7 @@
 # ITSM Backend — development image (multi-stage)
 #
 # Optimizations vs. the previous version:
-#   - Pinned base image (golang:1.25.12-alpine) instead of floating "golang:alpine"
+#   - Pinned base image (golang:1.25.14-alpine) instead of floating "golang:alpine"
 #   - BuildKit cache mounts for go modules + build cache (repeat builds are fast)
 #   - trimpath + "-s -w" linker flags to shrink the binary
 #   - Static, non-root runtime on a pinned alpine:3.20
@@ -15,7 +15,7 @@
 # ============================================================
 # Stage 1: Build
 # ============================================================
-FROM --platform=$BUILDPLATFORM golang:1.25.12-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.25.14-alpine AS builder
 
 WORKDIR /src
 
@@ -49,6 +49,9 @@ COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go build -trimpath -ldflags="-s -w" -o /out/main ./main.go
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go build -trimpath -ldflags="-s -w" -o /out/kaf-worker ./cmd/kaf_worker
 
 # ============================================================
 # Stage 2: Runtime
@@ -64,6 +67,7 @@ RUN addgroup -S app && adduser -S -G app app \
 
 # ca-certificates already ship with alpine; copy only what runtime needs.
 COPY --from=builder --chown=app:app /out/main ./main
+COPY --from=builder --chown=app:app /out/kaf-worker ./kaf-worker
 COPY --chown=app:app config.yaml ./
 COPY --chown=app:app migrations ./migrations
 COPY --chown=app:app config/seed ./config/seed

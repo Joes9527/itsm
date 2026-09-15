@@ -2,11 +2,14 @@ package standard_change
 
 import (
 	"strconv"
+	"time"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	entstandardchange "itsm-backend/ent/standardchange"
+	"itsm-backend/handlers/common/intakehttp"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -14,15 +17,13 @@ import (
 )
 
 type Handler struct {
-	client *ent.Client
-	logger *zap.SugaredLogger
+	creationApplication creation.Application
+	client              *ent.Client
+	logger              *zap.SugaredLogger
 }
 
 func NewHandler(client *ent.Client, logger *zap.SugaredLogger) *Handler {
-	return &Handler{
-		client: client,
-		logger: logger,
-	}
+	return &Handler{client: client, logger: logger}
 }
 
 // toResponse converts ent StandardChange to DTO response
@@ -386,85 +387,44 @@ func (h *Handler) GetCategories(c *gin.Context) {
 
 // InstantiateStandardChange handles POST /api/v1/standard-changes/:id/instantiate
 // Creates a new Change from a standard change template
+func (h *Handler) SetCreationApplication(app creation.Application) { h.creationApplication = app }
+
+// InstantiateStandardChange API contract.
+// @Summary InstantiateStandardChange
+// @Description Uses frozen approved template and observed sourceRelations; Idempotency-Key required; replay HTTP 200 returns original receipt.
+// @Tags changes
+// @Accept json
+// @Produce json
+// @Param id path int true "Professional extension ID"
+// @Param body body dto.InstantiateStandardChangeRequest true "Request"
+// @Success 201 {object} common.Response{data=creation.CreateWorkItemResult}
+// @Success 200 {object} common.Response{data=creation.CreateWorkItemResult} "Replay"
+// @Router /api/v1/standard-changes/{id}/instantiate [post]
 func (h *Handler) InstantiateStandardChange(c *gin.Context) {
 	id, ok := common.ParsePositiveID(c, "id")
 	if !ok {
 		return
 	}
-
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID := tenantIDVal.(int)
-
-	userIDVal, _ := c.Get("user_id")
-	userID := userIDVal.(int)
-
 	var req dto.InstantiateStandardChangeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		// Body is optional
-		req = dto.InstantiateStandardChangeRequest{}
-	}
-
-	ctx := c.Request.Context()
-
-	// Get the template
-	template, err := h.client.StandardChange.Query().
-		Where(
-			entstandardchange.ID(id),
-			entstandardchange.TenantID(tenantID),
-			entstandardchange.IsActive(true),
-		).
-		Only(ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			common.NotFound(c, "Standard change template not found")
-			return
-		}
-		h.logger.Warnw("Failed to get standard change template", "error", err, "id", id)
-		common.InternalError(c, "Failed to get standard change template")
+	if !intakehttp.Bind(c, &req) {
 		return
 	}
-
-	// Determine title
-	title := template.Title
-	if req.Title != "" {
-		title = req.Title
-	}
-
-	// Determine affected CIs
-	affectedCIs := template.AffectedCis
-	if len(req.AffectedCis) > 0 {
-		affectedCIs = req.AffectedCis
-	}
-
-	// Create change from template
-	change, err := h.client.Change.Create().
-		SetTitle(title).
-		SetDescription(template.Description).
-		SetJustification(template.Justification).
-		SetType("standard").
-		SetStatus("draft").
-		SetPriority("medium").
-		SetImpactScope(template.ImpactScope).
-		SetRiskLevel(template.RiskLevel).
-		SetImplementationPlan(template.ImplementationPlan).
-		SetRollbackPlan(template.RollbackPlan).
-		SetAffectedCis(affectedCIs).
-		SetCreatedBy(userID).
-		SetTenantID(tenantID).
-		Save(ctx)
-	if err != nil {
-		h.logger.Warnw("Failed to create change from template", "error", err)
-		common.InternalError(c, "Failed to create change from template")
+	tenantID, err := middleware.ResolveRequestTenantID(c)
+	if middleware.AbortIfTenantError(c, err) {
 		return
 	}
-
-	h.logger.Infow("Created change from standard change template",
-		"template_id", id, "change_id", change.ID, "title", change.Title)
-
-	common.Success(c, gin.H{
-		"change_id": change.ID,
-		"change":    change,
-	})
+	start, end := "", ""
+	if req.PlannedStartDate != nil {
+		start = req.PlannedStartDate.UTC().Format(time.RFC3339Nano)
+	}
+	if req.PlannedEndDate != nil {
+		end = req.PlannedEndDate.UTC().Format(time.RFC3339Nano)
+	}
+	requesterID := 0
+	if req.RequesterID != nil {
+		requesterID = *req.RequesterID
+	}
+	intakehttp.Execute(c, h.creationApplication, tenantID, requesterID, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassChangeRequest, IntakeKind: creation.IntakeKindChangeRequest, Title: req.Title, SourceRelations: req.SourceRelations, Change: &creation.ChangeInput{StandardTemplateID: &id, AffectedCIs: req.AffectedCis, PlannedStartDate: start, PlannedEndDate: end}})
 }
 
 // RegisterRoutes registers the standard change routes

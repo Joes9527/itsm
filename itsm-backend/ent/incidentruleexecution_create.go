@@ -6,10 +6,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"itsm-backend/ent/incident"
 	"itsm-backend/ent/incidentrule"
+	"itsm-backend/ent/incidentruleactionreceipt"
 	"itsm-backend/ent/incidentruleexecution"
+	"itsm-backend/ent/outboxevent"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,11 +23,96 @@ type IncidentRuleExecutionCreate struct {
 	config
 	mutation *IncidentRuleExecutionMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetRuleID sets the "rule_id" field.
 func (_c *IncidentRuleExecutionCreate) SetRuleID(v int) *IncidentRuleExecutionCreate {
 	_c.mutation.SetRuleID(v)
+	return _c
+}
+
+// SetNillableRuleID sets the "rule_id" field if the given value is not nil.
+func (_c *IncidentRuleExecutionCreate) SetNillableRuleID(v *int) *IncidentRuleExecutionCreate {
+	if v != nil {
+		_c.SetRuleID(*v)
+	}
+	return _c
+}
+
+// SetExecutionKind sets the "execution_kind" field.
+func (_c *IncidentRuleExecutionCreate) SetExecutionKind(v string) *IncidentRuleExecutionCreate {
+	_c.mutation.SetExecutionKind(v)
+	return _c
+}
+
+// SetNillableExecutionKind sets the "execution_kind" field if the given value is not nil.
+func (_c *IncidentRuleExecutionCreate) SetNillableExecutionKind(v *string) *IncidentRuleExecutionCreate {
+	if v != nil {
+		_c.SetExecutionKind(*v)
+	}
+	return _c
+}
+
+// SetExecutionKey sets the "execution_key" field.
+func (_c *IncidentRuleExecutionCreate) SetExecutionKey(v string) *IncidentRuleExecutionCreate {
+	_c.mutation.SetExecutionKey(v)
+	return _c
+}
+
+// SetNillableExecutionKey sets the "execution_key" field if the given value is not nil.
+func (_c *IncidentRuleExecutionCreate) SetNillableExecutionKey(v *string) *IncidentRuleExecutionCreate {
+	if v != nil {
+		_c.SetExecutionKey(*v)
+	}
+	return _c
+}
+
+// SetSourceEventID sets the "source_event_id" field.
+func (_c *IncidentRuleExecutionCreate) SetSourceEventID(v int) *IncidentRuleExecutionCreate {
+	_c.mutation.SetSourceEventID(v)
+	return _c
+}
+
+// SetNillableSourceEventID sets the "source_event_id" field if the given value is not nil.
+func (_c *IncidentRuleExecutionCreate) SetNillableSourceEventID(v *int) *IncidentRuleExecutionCreate {
+	if v != nil {
+		_c.SetSourceEventID(*v)
+	}
+	return _c
+}
+
+// SetActorID sets the "actor_id" field.
+func (_c *IncidentRuleExecutionCreate) SetActorID(v int) *IncidentRuleExecutionCreate {
+	_c.mutation.SetActorID(v)
+	return _c
+}
+
+// SetNillableActorID sets the "actor_id" field if the given value is not nil.
+func (_c *IncidentRuleExecutionCreate) SetNillableActorID(v *int) *IncidentRuleExecutionCreate {
+	if v != nil {
+		_c.SetActorID(*v)
+	}
+	return _c
+}
+
+// SetSource sets the "source" field.
+func (_c *IncidentRuleExecutionCreate) SetSource(v string) *IncidentRuleExecutionCreate {
+	_c.mutation.SetSource(v)
+	return _c
+}
+
+// SetNillableSource sets the "source" field if the given value is not nil.
+func (_c *IncidentRuleExecutionCreate) SetNillableSource(v *string) *IncidentRuleExecutionCreate {
+	if v != nil {
+		_c.SetSource(*v)
+	}
+	return _c
+}
+
+// SetFrozenActions sets the "frozen_actions" field.
+func (_c *IncidentRuleExecutionCreate) SetFrozenActions(v []map[string]interface{}) *IncidentRuleExecutionCreate {
+	_c.mutation.SetFrozenActions(v)
 	return _c
 }
 
@@ -171,6 +260,31 @@ func (_c *IncidentRuleExecutionCreate) SetNillableUpdatedAt(v *time.Time) *Incid
 	return _c
 }
 
+// SetIncident sets the "incident" edge to the Incident entity.
+func (_c *IncidentRuleExecutionCreate) SetIncident(v *Incident) *IncidentRuleExecutionCreate {
+	return _c.SetIncidentID(v.ID)
+}
+
+// SetSourceEvent sets the "source_event" edge to the OutboxEvent entity.
+func (_c *IncidentRuleExecutionCreate) SetSourceEvent(v *OutboxEvent) *IncidentRuleExecutionCreate {
+	return _c.SetSourceEventID(v.ID)
+}
+
+// AddActionReceiptIDs adds the "action_receipts" edge to the IncidentRuleActionReceipt entity by IDs.
+func (_c *IncidentRuleExecutionCreate) AddActionReceiptIDs(ids ...int) *IncidentRuleExecutionCreate {
+	_c.mutation.AddActionReceiptIDs(ids...)
+	return _c
+}
+
+// AddActionReceipts adds the "action_receipts" edges to the IncidentRuleActionReceipt entity.
+func (_c *IncidentRuleExecutionCreate) AddActionReceipts(v ...*IncidentRuleActionReceipt) *IncidentRuleExecutionCreate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddActionReceiptIDs(ids...)
+}
+
 // SetRule sets the "rule" edge to the IncidentRule entity.
 func (_c *IncidentRuleExecutionCreate) SetRule(v *IncidentRule) *IncidentRuleExecutionCreate {
 	return _c.SetRuleID(v.ID)
@@ -211,6 +325,10 @@ func (_c *IncidentRuleExecutionCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *IncidentRuleExecutionCreate) defaults() {
+	if _, ok := _c.mutation.ExecutionKind(); !ok {
+		v := incidentruleexecution.DefaultExecutionKind
+		_c.mutation.SetExecutionKind(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := incidentruleexecution.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -231,12 +349,22 @@ func (_c *IncidentRuleExecutionCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *IncidentRuleExecutionCreate) check() error {
-	if _, ok := _c.mutation.RuleID(); !ok {
-		return &ValidationError{Name: "rule_id", err: errors.New(`ent: missing required field "IncidentRuleExecution.rule_id"`)}
-	}
 	if v, ok := _c.mutation.RuleID(); ok {
 		if err := incidentruleexecution.RuleIDValidator(v); err != nil {
 			return &ValidationError{Name: "rule_id", err: fmt.Errorf(`ent: validator failed for field "IncidentRuleExecution.rule_id": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.ExecutionKind(); !ok {
+		return &ValidationError{Name: "execution_kind", err: errors.New(`ent: missing required field "IncidentRuleExecution.execution_kind"`)}
+	}
+	if v, ok := _c.mutation.SourceEventID(); ok {
+		if err := incidentruleexecution.SourceEventIDValidator(v); err != nil {
+			return &ValidationError{Name: "source_event_id", err: fmt.Errorf(`ent: validator failed for field "IncidentRuleExecution.source_event_id": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.ActorID(); ok {
+		if err := incidentruleexecution.ActorIDValidator(v); err != nil {
+			return &ValidationError{Name: "actor_id", err: fmt.Errorf(`ent: validator failed for field "IncidentRuleExecution.actor_id": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
@@ -258,9 +386,6 @@ func (_c *IncidentRuleExecutionCreate) check() error {
 	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "IncidentRuleExecution.updated_at"`)}
-	}
-	if len(_c.mutation.RuleIDs()) == 0 {
-		return &ValidationError{Name: "rule", err: errors.New(`ent: missing required edge "IncidentRuleExecution.rule"`)}
 	}
 	return nil
 }
@@ -288,9 +413,26 @@ func (_c *IncidentRuleExecutionCreate) createSpec() (*IncidentRuleExecution, *sq
 		_node = &IncidentRuleExecution{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(incidentruleexecution.Table, sqlgraph.NewFieldSpec(incidentruleexecution.FieldID, field.TypeInt))
 	)
-	if value, ok := _c.mutation.IncidentID(); ok {
-		_spec.SetField(incidentruleexecution.FieldIncidentID, field.TypeInt, value)
-		_node.IncidentID = value
+	_spec.OnConflict = _c.conflict
+	if value, ok := _c.mutation.ExecutionKind(); ok {
+		_spec.SetField(incidentruleexecution.FieldExecutionKind, field.TypeString, value)
+		_node.ExecutionKind = value
+	}
+	if value, ok := _c.mutation.ExecutionKey(); ok {
+		_spec.SetField(incidentruleexecution.FieldExecutionKey, field.TypeString, value)
+		_node.ExecutionKey = value
+	}
+	if value, ok := _c.mutation.ActorID(); ok {
+		_spec.SetField(incidentruleexecution.FieldActorID, field.TypeInt, value)
+		_node.ActorID = value
+	}
+	if value, ok := _c.mutation.Source(); ok {
+		_spec.SetField(incidentruleexecution.FieldSource, field.TypeString, value)
+		_node.Source = value
+	}
+	if value, ok := _c.mutation.FrozenActions(); ok {
+		_spec.SetField(incidentruleexecution.FieldFrozenActions, field.TypeJSON, value)
+		_node.FrozenActions = value
 	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(incidentruleexecution.FieldStatus, field.TypeString, value)
@@ -336,6 +478,56 @@ func (_c *IncidentRuleExecutionCreate) createSpec() (*IncidentRuleExecution, *sq
 		_spec.SetField(incidentruleexecution.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
+	if nodes := _c.mutation.IncidentIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   incidentruleexecution.IncidentTable,
+			Columns: []string{incidentruleexecution.IncidentColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(incident.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.IncidentID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.SourceEventIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   incidentruleexecution.SourceEventTable,
+			Columns: []string{incidentruleexecution.SourceEventColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(outboxevent.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.SourceEventID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.ActionReceiptsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   incidentruleexecution.ActionReceiptsTable,
+			Columns: []string{incidentruleexecution.ActionReceiptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(incidentruleactionreceipt.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
 	if nodes := _c.mutation.RuleIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -356,11 +548,622 @@ func (_c *IncidentRuleExecutionCreate) createSpec() (*IncidentRuleExecution, *sq
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.IncidentRuleExecution.Create().
+//		SetRuleID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.IncidentRuleExecutionUpsert) {
+//			SetRuleID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *IncidentRuleExecutionCreate) OnConflict(opts ...sql.ConflictOption) *IncidentRuleExecutionUpsertOne {
+	_c.conflict = opts
+	return &IncidentRuleExecutionUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.IncidentRuleExecution.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *IncidentRuleExecutionCreate) OnConflictColumns(columns ...string) *IncidentRuleExecutionUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &IncidentRuleExecutionUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// IncidentRuleExecutionUpsertOne is the builder for "upsert"-ing
+	//  one IncidentRuleExecution node.
+	IncidentRuleExecutionUpsertOne struct {
+		create *IncidentRuleExecutionCreate
+	}
+
+	// IncidentRuleExecutionUpsert is the "OnConflict" setter.
+	IncidentRuleExecutionUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetRuleID sets the "rule_id" field.
+func (u *IncidentRuleExecutionUpsert) SetRuleID(v int) *IncidentRuleExecutionUpsert {
+	u.Set(incidentruleexecution.FieldRuleID, v)
+	return u
+}
+
+// UpdateRuleID sets the "rule_id" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsert) UpdateRuleID() *IncidentRuleExecutionUpsert {
+	u.SetExcluded(incidentruleexecution.FieldRuleID)
+	return u
+}
+
+// ClearRuleID clears the value of the "rule_id" field.
+func (u *IncidentRuleExecutionUpsert) ClearRuleID() *IncidentRuleExecutionUpsert {
+	u.SetNull(incidentruleexecution.FieldRuleID)
+	return u
+}
+
+// SetIncidentID sets the "incident_id" field.
+func (u *IncidentRuleExecutionUpsert) SetIncidentID(v int) *IncidentRuleExecutionUpsert {
+	u.Set(incidentruleexecution.FieldIncidentID, v)
+	return u
+}
+
+// UpdateIncidentID sets the "incident_id" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsert) UpdateIncidentID() *IncidentRuleExecutionUpsert {
+	u.SetExcluded(incidentruleexecution.FieldIncidentID)
+	return u
+}
+
+// ClearIncidentID clears the value of the "incident_id" field.
+func (u *IncidentRuleExecutionUpsert) ClearIncidentID() *IncidentRuleExecutionUpsert {
+	u.SetNull(incidentruleexecution.FieldIncidentID)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *IncidentRuleExecutionUpsert) SetStatus(v string) *IncidentRuleExecutionUpsert {
+	u.Set(incidentruleexecution.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsert) UpdateStatus() *IncidentRuleExecutionUpsert {
+	u.SetExcluded(incidentruleexecution.FieldStatus)
+	return u
+}
+
+// SetResult sets the "result" field.
+func (u *IncidentRuleExecutionUpsert) SetResult(v string) *IncidentRuleExecutionUpsert {
+	u.Set(incidentruleexecution.FieldResult, v)
+	return u
+}
+
+// UpdateResult sets the "result" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsert) UpdateResult() *IncidentRuleExecutionUpsert {
+	u.SetExcluded(incidentruleexecution.FieldResult)
+	return u
+}
+
+// ClearResult clears the value of the "result" field.
+func (u *IncidentRuleExecutionUpsert) ClearResult() *IncidentRuleExecutionUpsert {
+	u.SetNull(incidentruleexecution.FieldResult)
+	return u
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (u *IncidentRuleExecutionUpsert) SetErrorMessage(v string) *IncidentRuleExecutionUpsert {
+	u.Set(incidentruleexecution.FieldErrorMessage, v)
+	return u
+}
+
+// UpdateErrorMessage sets the "error_message" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsert) UpdateErrorMessage() *IncidentRuleExecutionUpsert {
+	u.SetExcluded(incidentruleexecution.FieldErrorMessage)
+	return u
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (u *IncidentRuleExecutionUpsert) ClearErrorMessage() *IncidentRuleExecutionUpsert {
+	u.SetNull(incidentruleexecution.FieldErrorMessage)
+	return u
+}
+
+// SetStartedAt sets the "started_at" field.
+func (u *IncidentRuleExecutionUpsert) SetStartedAt(v time.Time) *IncidentRuleExecutionUpsert {
+	u.Set(incidentruleexecution.FieldStartedAt, v)
+	return u
+}
+
+// UpdateStartedAt sets the "started_at" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsert) UpdateStartedAt() *IncidentRuleExecutionUpsert {
+	u.SetExcluded(incidentruleexecution.FieldStartedAt)
+	return u
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (u *IncidentRuleExecutionUpsert) SetCompletedAt(v time.Time) *IncidentRuleExecutionUpsert {
+	u.Set(incidentruleexecution.FieldCompletedAt, v)
+	return u
+}
+
+// UpdateCompletedAt sets the "completed_at" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsert) UpdateCompletedAt() *IncidentRuleExecutionUpsert {
+	u.SetExcluded(incidentruleexecution.FieldCompletedAt)
+	return u
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (u *IncidentRuleExecutionUpsert) ClearCompletedAt() *IncidentRuleExecutionUpsert {
+	u.SetNull(incidentruleexecution.FieldCompletedAt)
+	return u
+}
+
+// SetExecutionTimeMs sets the "execution_time_ms" field.
+func (u *IncidentRuleExecutionUpsert) SetExecutionTimeMs(v int) *IncidentRuleExecutionUpsert {
+	u.Set(incidentruleexecution.FieldExecutionTimeMs, v)
+	return u
+}
+
+// UpdateExecutionTimeMs sets the "execution_time_ms" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsert) UpdateExecutionTimeMs() *IncidentRuleExecutionUpsert {
+	u.SetExcluded(incidentruleexecution.FieldExecutionTimeMs)
+	return u
+}
+
+// AddExecutionTimeMs adds v to the "execution_time_ms" field.
+func (u *IncidentRuleExecutionUpsert) AddExecutionTimeMs(v int) *IncidentRuleExecutionUpsert {
+	u.Add(incidentruleexecution.FieldExecutionTimeMs, v)
+	return u
+}
+
+// ClearExecutionTimeMs clears the value of the "execution_time_ms" field.
+func (u *IncidentRuleExecutionUpsert) ClearExecutionTimeMs() *IncidentRuleExecutionUpsert {
+	u.SetNull(incidentruleexecution.FieldExecutionTimeMs)
+	return u
+}
+
+// SetInputData sets the "input_data" field.
+func (u *IncidentRuleExecutionUpsert) SetInputData(v map[string]interface{}) *IncidentRuleExecutionUpsert {
+	u.Set(incidentruleexecution.FieldInputData, v)
+	return u
+}
+
+// UpdateInputData sets the "input_data" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsert) UpdateInputData() *IncidentRuleExecutionUpsert {
+	u.SetExcluded(incidentruleexecution.FieldInputData)
+	return u
+}
+
+// ClearInputData clears the value of the "input_data" field.
+func (u *IncidentRuleExecutionUpsert) ClearInputData() *IncidentRuleExecutionUpsert {
+	u.SetNull(incidentruleexecution.FieldInputData)
+	return u
+}
+
+// SetOutputData sets the "output_data" field.
+func (u *IncidentRuleExecutionUpsert) SetOutputData(v map[string]interface{}) *IncidentRuleExecutionUpsert {
+	u.Set(incidentruleexecution.FieldOutputData, v)
+	return u
+}
+
+// UpdateOutputData sets the "output_data" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsert) UpdateOutputData() *IncidentRuleExecutionUpsert {
+	u.SetExcluded(incidentruleexecution.FieldOutputData)
+	return u
+}
+
+// ClearOutputData clears the value of the "output_data" field.
+func (u *IncidentRuleExecutionUpsert) ClearOutputData() *IncidentRuleExecutionUpsert {
+	u.SetNull(incidentruleexecution.FieldOutputData)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *IncidentRuleExecutionUpsert) SetTenantID(v int) *IncidentRuleExecutionUpsert {
+	u.Set(incidentruleexecution.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsert) UpdateTenantID() *IncidentRuleExecutionUpsert {
+	u.SetExcluded(incidentruleexecution.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *IncidentRuleExecutionUpsert) AddTenantID(v int) *IncidentRuleExecutionUpsert {
+	u.Add(incidentruleexecution.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *IncidentRuleExecutionUpsert) SetCreatedAt(v time.Time) *IncidentRuleExecutionUpsert {
+	u.Set(incidentruleexecution.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsert) UpdateCreatedAt() *IncidentRuleExecutionUpsert {
+	u.SetExcluded(incidentruleexecution.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *IncidentRuleExecutionUpsert) SetUpdatedAt(v time.Time) *IncidentRuleExecutionUpsert {
+	u.Set(incidentruleexecution.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsert) UpdateUpdatedAt() *IncidentRuleExecutionUpsert {
+	u.SetExcluded(incidentruleexecution.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.IncidentRuleExecution.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *IncidentRuleExecutionUpsertOne) UpdateNewValues() *IncidentRuleExecutionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.ExecutionKind(); exists {
+			s.SetIgnore(incidentruleexecution.FieldExecutionKind)
+		}
+		if _, exists := u.create.mutation.ExecutionKey(); exists {
+			s.SetIgnore(incidentruleexecution.FieldExecutionKey)
+		}
+		if _, exists := u.create.mutation.SourceEventID(); exists {
+			s.SetIgnore(incidentruleexecution.FieldSourceEventID)
+		}
+		if _, exists := u.create.mutation.ActorID(); exists {
+			s.SetIgnore(incidentruleexecution.FieldActorID)
+		}
+		if _, exists := u.create.mutation.Source(); exists {
+			s.SetIgnore(incidentruleexecution.FieldSource)
+		}
+		if _, exists := u.create.mutation.FrozenActions(); exists {
+			s.SetIgnore(incidentruleexecution.FieldFrozenActions)
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.IncidentRuleExecution.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *IncidentRuleExecutionUpsertOne) Ignore() *IncidentRuleExecutionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *IncidentRuleExecutionUpsertOne) DoNothing() *IncidentRuleExecutionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the IncidentRuleExecutionCreate.OnConflict
+// documentation for more info.
+func (u *IncidentRuleExecutionUpsertOne) Update(set func(*IncidentRuleExecutionUpsert)) *IncidentRuleExecutionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&IncidentRuleExecutionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetRuleID sets the "rule_id" field.
+func (u *IncidentRuleExecutionUpsertOne) SetRuleID(v int) *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetRuleID(v)
+	})
+}
+
+// UpdateRuleID sets the "rule_id" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertOne) UpdateRuleID() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateRuleID()
+	})
+}
+
+// ClearRuleID clears the value of the "rule_id" field.
+func (u *IncidentRuleExecutionUpsertOne) ClearRuleID() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.ClearRuleID()
+	})
+}
+
+// SetIncidentID sets the "incident_id" field.
+func (u *IncidentRuleExecutionUpsertOne) SetIncidentID(v int) *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetIncidentID(v)
+	})
+}
+
+// UpdateIncidentID sets the "incident_id" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertOne) UpdateIncidentID() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateIncidentID()
+	})
+}
+
+// ClearIncidentID clears the value of the "incident_id" field.
+func (u *IncidentRuleExecutionUpsertOne) ClearIncidentID() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.ClearIncidentID()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *IncidentRuleExecutionUpsertOne) SetStatus(v string) *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertOne) UpdateStatus() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetResult sets the "result" field.
+func (u *IncidentRuleExecutionUpsertOne) SetResult(v string) *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetResult(v)
+	})
+}
+
+// UpdateResult sets the "result" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertOne) UpdateResult() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateResult()
+	})
+}
+
+// ClearResult clears the value of the "result" field.
+func (u *IncidentRuleExecutionUpsertOne) ClearResult() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.ClearResult()
+	})
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (u *IncidentRuleExecutionUpsertOne) SetErrorMessage(v string) *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetErrorMessage(v)
+	})
+}
+
+// UpdateErrorMessage sets the "error_message" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertOne) UpdateErrorMessage() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateErrorMessage()
+	})
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (u *IncidentRuleExecutionUpsertOne) ClearErrorMessage() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.ClearErrorMessage()
+	})
+}
+
+// SetStartedAt sets the "started_at" field.
+func (u *IncidentRuleExecutionUpsertOne) SetStartedAt(v time.Time) *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetStartedAt(v)
+	})
+}
+
+// UpdateStartedAt sets the "started_at" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertOne) UpdateStartedAt() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateStartedAt()
+	})
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (u *IncidentRuleExecutionUpsertOne) SetCompletedAt(v time.Time) *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetCompletedAt(v)
+	})
+}
+
+// UpdateCompletedAt sets the "completed_at" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertOne) UpdateCompletedAt() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateCompletedAt()
+	})
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (u *IncidentRuleExecutionUpsertOne) ClearCompletedAt() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.ClearCompletedAt()
+	})
+}
+
+// SetExecutionTimeMs sets the "execution_time_ms" field.
+func (u *IncidentRuleExecutionUpsertOne) SetExecutionTimeMs(v int) *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetExecutionTimeMs(v)
+	})
+}
+
+// AddExecutionTimeMs adds v to the "execution_time_ms" field.
+func (u *IncidentRuleExecutionUpsertOne) AddExecutionTimeMs(v int) *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.AddExecutionTimeMs(v)
+	})
+}
+
+// UpdateExecutionTimeMs sets the "execution_time_ms" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertOne) UpdateExecutionTimeMs() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateExecutionTimeMs()
+	})
+}
+
+// ClearExecutionTimeMs clears the value of the "execution_time_ms" field.
+func (u *IncidentRuleExecutionUpsertOne) ClearExecutionTimeMs() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.ClearExecutionTimeMs()
+	})
+}
+
+// SetInputData sets the "input_data" field.
+func (u *IncidentRuleExecutionUpsertOne) SetInputData(v map[string]interface{}) *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetInputData(v)
+	})
+}
+
+// UpdateInputData sets the "input_data" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertOne) UpdateInputData() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateInputData()
+	})
+}
+
+// ClearInputData clears the value of the "input_data" field.
+func (u *IncidentRuleExecutionUpsertOne) ClearInputData() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.ClearInputData()
+	})
+}
+
+// SetOutputData sets the "output_data" field.
+func (u *IncidentRuleExecutionUpsertOne) SetOutputData(v map[string]interface{}) *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetOutputData(v)
+	})
+}
+
+// UpdateOutputData sets the "output_data" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertOne) UpdateOutputData() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateOutputData()
+	})
+}
+
+// ClearOutputData clears the value of the "output_data" field.
+func (u *IncidentRuleExecutionUpsertOne) ClearOutputData() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.ClearOutputData()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *IncidentRuleExecutionUpsertOne) SetTenantID(v int) *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *IncidentRuleExecutionUpsertOne) AddTenantID(v int) *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertOne) UpdateTenantID() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *IncidentRuleExecutionUpsertOne) SetCreatedAt(v time.Time) *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertOne) UpdateCreatedAt() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *IncidentRuleExecutionUpsertOne) SetUpdatedAt(v time.Time) *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertOne) UpdateUpdatedAt() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *IncidentRuleExecutionUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for IncidentRuleExecutionCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *IncidentRuleExecutionUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *IncidentRuleExecutionUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *IncidentRuleExecutionUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // IncidentRuleExecutionCreateBulk is the builder for creating many IncidentRuleExecution entities in bulk.
 type IncidentRuleExecutionCreateBulk struct {
 	config
 	err      error
 	builders []*IncidentRuleExecutionCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the IncidentRuleExecution entities in the database.
@@ -390,6 +1193,7 @@ func (_c *IncidentRuleExecutionCreateBulk) Save(ctx context.Context) ([]*Inciden
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -440,6 +1244,384 @@ func (_c *IncidentRuleExecutionCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *IncidentRuleExecutionCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.IncidentRuleExecution.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.IncidentRuleExecutionUpsert) {
+//			SetRuleID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *IncidentRuleExecutionCreateBulk) OnConflict(opts ...sql.ConflictOption) *IncidentRuleExecutionUpsertBulk {
+	_c.conflict = opts
+	return &IncidentRuleExecutionUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.IncidentRuleExecution.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *IncidentRuleExecutionCreateBulk) OnConflictColumns(columns ...string) *IncidentRuleExecutionUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &IncidentRuleExecutionUpsertBulk{
+		create: _c,
+	}
+}
+
+// IncidentRuleExecutionUpsertBulk is the builder for "upsert"-ing
+// a bulk of IncidentRuleExecution nodes.
+type IncidentRuleExecutionUpsertBulk struct {
+	create *IncidentRuleExecutionCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.IncidentRuleExecution.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *IncidentRuleExecutionUpsertBulk) UpdateNewValues() *IncidentRuleExecutionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		for _, b := range u.create.builders {
+			if _, exists := b.mutation.ExecutionKind(); exists {
+				s.SetIgnore(incidentruleexecution.FieldExecutionKind)
+			}
+			if _, exists := b.mutation.ExecutionKey(); exists {
+				s.SetIgnore(incidentruleexecution.FieldExecutionKey)
+			}
+			if _, exists := b.mutation.SourceEventID(); exists {
+				s.SetIgnore(incidentruleexecution.FieldSourceEventID)
+			}
+			if _, exists := b.mutation.ActorID(); exists {
+				s.SetIgnore(incidentruleexecution.FieldActorID)
+			}
+			if _, exists := b.mutation.Source(); exists {
+				s.SetIgnore(incidentruleexecution.FieldSource)
+			}
+			if _, exists := b.mutation.FrozenActions(); exists {
+				s.SetIgnore(incidentruleexecution.FieldFrozenActions)
+			}
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.IncidentRuleExecution.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *IncidentRuleExecutionUpsertBulk) Ignore() *IncidentRuleExecutionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *IncidentRuleExecutionUpsertBulk) DoNothing() *IncidentRuleExecutionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the IncidentRuleExecutionCreateBulk.OnConflict
+// documentation for more info.
+func (u *IncidentRuleExecutionUpsertBulk) Update(set func(*IncidentRuleExecutionUpsert)) *IncidentRuleExecutionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&IncidentRuleExecutionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetRuleID sets the "rule_id" field.
+func (u *IncidentRuleExecutionUpsertBulk) SetRuleID(v int) *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetRuleID(v)
+	})
+}
+
+// UpdateRuleID sets the "rule_id" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertBulk) UpdateRuleID() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateRuleID()
+	})
+}
+
+// ClearRuleID clears the value of the "rule_id" field.
+func (u *IncidentRuleExecutionUpsertBulk) ClearRuleID() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.ClearRuleID()
+	})
+}
+
+// SetIncidentID sets the "incident_id" field.
+func (u *IncidentRuleExecutionUpsertBulk) SetIncidentID(v int) *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetIncidentID(v)
+	})
+}
+
+// UpdateIncidentID sets the "incident_id" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertBulk) UpdateIncidentID() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateIncidentID()
+	})
+}
+
+// ClearIncidentID clears the value of the "incident_id" field.
+func (u *IncidentRuleExecutionUpsertBulk) ClearIncidentID() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.ClearIncidentID()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *IncidentRuleExecutionUpsertBulk) SetStatus(v string) *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertBulk) UpdateStatus() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetResult sets the "result" field.
+func (u *IncidentRuleExecutionUpsertBulk) SetResult(v string) *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetResult(v)
+	})
+}
+
+// UpdateResult sets the "result" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertBulk) UpdateResult() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateResult()
+	})
+}
+
+// ClearResult clears the value of the "result" field.
+func (u *IncidentRuleExecutionUpsertBulk) ClearResult() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.ClearResult()
+	})
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (u *IncidentRuleExecutionUpsertBulk) SetErrorMessage(v string) *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetErrorMessage(v)
+	})
+}
+
+// UpdateErrorMessage sets the "error_message" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertBulk) UpdateErrorMessage() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateErrorMessage()
+	})
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (u *IncidentRuleExecutionUpsertBulk) ClearErrorMessage() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.ClearErrorMessage()
+	})
+}
+
+// SetStartedAt sets the "started_at" field.
+func (u *IncidentRuleExecutionUpsertBulk) SetStartedAt(v time.Time) *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetStartedAt(v)
+	})
+}
+
+// UpdateStartedAt sets the "started_at" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertBulk) UpdateStartedAt() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateStartedAt()
+	})
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (u *IncidentRuleExecutionUpsertBulk) SetCompletedAt(v time.Time) *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetCompletedAt(v)
+	})
+}
+
+// UpdateCompletedAt sets the "completed_at" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertBulk) UpdateCompletedAt() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateCompletedAt()
+	})
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (u *IncidentRuleExecutionUpsertBulk) ClearCompletedAt() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.ClearCompletedAt()
+	})
+}
+
+// SetExecutionTimeMs sets the "execution_time_ms" field.
+func (u *IncidentRuleExecutionUpsertBulk) SetExecutionTimeMs(v int) *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetExecutionTimeMs(v)
+	})
+}
+
+// AddExecutionTimeMs adds v to the "execution_time_ms" field.
+func (u *IncidentRuleExecutionUpsertBulk) AddExecutionTimeMs(v int) *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.AddExecutionTimeMs(v)
+	})
+}
+
+// UpdateExecutionTimeMs sets the "execution_time_ms" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertBulk) UpdateExecutionTimeMs() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateExecutionTimeMs()
+	})
+}
+
+// ClearExecutionTimeMs clears the value of the "execution_time_ms" field.
+func (u *IncidentRuleExecutionUpsertBulk) ClearExecutionTimeMs() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.ClearExecutionTimeMs()
+	})
+}
+
+// SetInputData sets the "input_data" field.
+func (u *IncidentRuleExecutionUpsertBulk) SetInputData(v map[string]interface{}) *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetInputData(v)
+	})
+}
+
+// UpdateInputData sets the "input_data" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertBulk) UpdateInputData() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateInputData()
+	})
+}
+
+// ClearInputData clears the value of the "input_data" field.
+func (u *IncidentRuleExecutionUpsertBulk) ClearInputData() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.ClearInputData()
+	})
+}
+
+// SetOutputData sets the "output_data" field.
+func (u *IncidentRuleExecutionUpsertBulk) SetOutputData(v map[string]interface{}) *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetOutputData(v)
+	})
+}
+
+// UpdateOutputData sets the "output_data" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertBulk) UpdateOutputData() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateOutputData()
+	})
+}
+
+// ClearOutputData clears the value of the "output_data" field.
+func (u *IncidentRuleExecutionUpsertBulk) ClearOutputData() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.ClearOutputData()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *IncidentRuleExecutionUpsertBulk) SetTenantID(v int) *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *IncidentRuleExecutionUpsertBulk) AddTenantID(v int) *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertBulk) UpdateTenantID() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *IncidentRuleExecutionUpsertBulk) SetCreatedAt(v time.Time) *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertBulk) UpdateCreatedAt() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *IncidentRuleExecutionUpsertBulk) SetUpdatedAt(v time.Time) *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *IncidentRuleExecutionUpsertBulk) UpdateUpdatedAt() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *IncidentRuleExecutionUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the IncidentRuleExecutionCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for IncidentRuleExecutionCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *IncidentRuleExecutionUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

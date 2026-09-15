@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/common"
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/enttest"
@@ -42,6 +43,70 @@ func TestBPMNProcessEngine_NewCustomProcessEngine(t *testing.T) {
 	require.NotNil(t, engine)
 	require.NotNil(t, engine.parser)
 	require.NotNil(t, engine.exprEngine)
+}
+
+func TestBPMNProcessEngine_GetTasksUsesTenantScopedProcessTasks(t *testing.T) {
+	ctx := context.Background()
+	client := enttest.Open(t, "sqlite3", "file:get_tasks_process_task?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	logger := zaptest.NewLogger(t).Sugar()
+
+	deployment, err := client.ProcessDeployment.Create().
+		SetDeploymentID("get-tasks-deployment").
+		SetDeploymentName("Get Tasks").
+		SetTenantID(101).
+		Save(ctx)
+	require.NoError(t, err)
+	definition, err := client.ProcessDefinition.Create().
+		SetKey("get-tasks").
+		SetName("Get Tasks").
+		SetBpmnXML([]byte("<definitions/>")).
+		SetDeploymentID(deployment.ID).
+		SetTenantID(101).
+		Save(ctx)
+	require.NoError(t, err)
+	instance, err := client.ProcessInstance.Create().
+		SetProcessInstanceID("get-tasks-instance").
+		SetProcessDefinitionKey(definition.Key).
+		SetProcessDefinitionID(definition.ID).
+		SetTenantID(101).
+		Save(ctx)
+	require.NoError(t, err)
+
+	_, err = client.ProcessTask.Create().
+		SetTaskID("canonical-task").
+		SetProcessInstanceID(instance.ID).
+		SetProcessDefinitionKey(definition.Key).
+		SetTaskDefinitionKey("approve").
+		SetTaskName("Canonical approval").
+		SetAssignee("alice").
+		SetTenantID(101).
+		Save(ctx)
+	require.NoError(t, err)
+	_, err = client.ProcessTask.Create().
+		SetTaskID("completed-task").
+		SetProcessInstanceID(instance.ID).
+		SetProcessDefinitionKey(definition.Key).
+		SetTaskDefinitionKey("completed").
+		SetTaskName("Completed approval").
+		SetAssignee("alice").
+		SetStatus("completed").
+		SetCompletedTime(time.Now()).
+		SetTenantID(101).
+		Save(ctx)
+	require.NoError(t, err)
+
+	engine := NewCustomProcessEngine(client, logger, executionfixture.Standard()).(*CustomProcessEngine)
+	getTasks := engine.exprEngine.Functions["getTasks"].(func(context.Context, string) []interface{})
+	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, 101)
+	tasks := getTasks(tenantCtx, "alice")
+	require.Len(t, tasks, 1)
+	assert.Equal(t, map[string]interface{}{
+		"id":          "canonical-task",
+		"name":        "Canonical approval",
+		"instance_id": instance.ID,
+	}, tasks[0])
+	assert.Empty(t, getTasks(context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, 202), "alice"))
 }
 
 // ==================== 流程查找方法测试 ====================
@@ -229,11 +294,12 @@ func TestBPMNProcessEngine_EvaluateCondition_ComplexExpressions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := engine.evaluateCondition(&BPMNSequenceFlow{
+			result, err := engine.evaluateCondition(&BPMNSequenceFlow{
 				ConditionExpression: &BPMNConditionExpression{
 					Expression: tt.expression,
 				},
 			}, tt.variables)
+			assert.NoError(t, err)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -255,11 +321,12 @@ func TestBPMNProcessEngine_EvaluateCondition_InvalidExpressions(t *testing.T) {
 	}
 
 	for _, expr := range invalidExpressions {
-		result := engine.evaluateCondition(&BPMNSequenceFlow{
+		result, err := engine.evaluateCondition(&BPMNSequenceFlow{
 			ConditionExpression: &BPMNConditionExpression{
 				Expression: expr,
 			},
 		}, map[string]interface{}{"status": "test"})
+		assert.Error(t, err)
 		assert.False(t, result, "Invalid expression '%s' should return false", expr)
 	}
 }
@@ -712,7 +779,7 @@ func newApprovalDecisionTestEngine(t *testing.T) (*CustomProcessEngine, context.
 	client := enttest.Open(t, "sqlite3", "file:approval_decisions_engine?mode=memory&cache=shared&_fk=1")
 	t.Cleanup(func() { client.Close() })
 	logger := zaptest.NewLogger(t).Sugar()
-	engineIface := NewCustomProcessEngine(client, logger)
+	engineIface := NewCustomProcessEngine(client, logger, executionfixture.Standard())
 	engine, ok := engineIface.(*CustomProcessEngine)
 	require.True(t, ok, "expected ProcessEngine to be *CustomProcessEngine")
 	return engine, context.Background()
@@ -772,7 +839,7 @@ func createProcessFixture(t *testing.T, engine *CustomProcessEngine, tenantID in
 		SetProcessDefinitionKey(def.Key).
 		SetProcessDefinitionID(def.ID).
 		SetStatus("running").
-		SetBusinessType("change").
+		SetBusinessType("change_request").
 		SetBusinessID(1).
 		SetTenantID(tenantID).
 		Save(ctx)
@@ -817,7 +884,7 @@ func TestRecordApprovalDecision_PersistsApproveReject(t *testing.T) {
 	assert.Equal(t, "approve", stored[0].Action)
 	assert.Equal(t, "approved", stored[0].Decision)
 	assert.Equal(t, "lgtm", stored[0].Comment)
-	assert.Equal(t, "change", stored[0].BusinessType)
+	assert.Equal(t, "change_request", stored[0].BusinessType)
 	assert.Equal(t, "1", stored[0].BusinessID)
 	assert.Equal(t, actorID, stored[0].ActorID)
 }
@@ -954,8 +1021,8 @@ func TestHandleElement_ServiceTask_DispatchesByMetaDataOverAttributeGuessing(t *
 		SetProcessInstanceID("PI-svc-dispatch-test").
 		SetProcessDefinitionKey(def.Key).
 		SetProcessDefinitionID(def.ID).
-		SetBusinessKey(fmt.Sprintf("ticket:%d", tkt.ID)).
-		SetBusinessType("ticket").
+		SetBusinessKey(fmt.Sprintf("generic:%d", tkt.ID)).
+		SetBusinessType("generic").
 		SetBusinessID(tkt.ID).
 		SetStatus("running").SetTenantID(tenantID).
 		SetVariables(map[string]interface{}{}).
@@ -997,14 +1064,11 @@ func TestHandleElement_ServiceTask_DispatchesByMetaDataOverAttributeGuessing(t *
 	assert.Equal(t, "in_progress", updated.Status, "ticket_task 的 update_status（默认目标状态）应该真实生效")
 }
 
-// TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_ContinuesFlow 是 Finding 1
-// 在"bug 真正显形的那一层"的回归：incident_emergency_flow 的 Activity_AutoAssign 是起始
-// 事件后的第一个 serviceTask（service_task_type=incident_task, action=assign_incident），
-// 而新建事件的 assignee_id 天生是 0（Optional 字段）。handler 一旦对空处理人返回 error，
-// handleElement 会把错误往上抛、StartProcess 整体失败，而调用方
-// （incident_service.go 的 fire-and-forget goroutine）只 Warnw 一句——流程实例就永久卡在
-// 起始事件上，对任何用户都不可见。这里断言的是：handleElement 成功返回，且流程能推进到下一步。
-func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_ContinuesFlow(t *testing.T) {
+// TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_BlocksNonOptionalFlow
+// locks the callback effect gate: no assignee is a typed blocked effect, and this
+// diagram does not declare callback_optional. The engine must therefore retain the
+// running instance instead of claiming the service task completed.
+func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_BlocksNonOptionalFlow(t *testing.T) {
 	engine, baseCtx := newApprovalDecisionTestEngine(t)
 	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
 	ctx := context.WithValue(baseCtx, bpmn.BPMNTenantIDContextKey, tenantID)
@@ -1013,22 +1077,16 @@ func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_ContinuesFlow(t
 	workItem := engine.client.Ticket.Create().
 		SetTitle("自动分配空态回归").
 		SetTicketNumber("T-INC-AUTOASSIGN-1").
-		SetType("incident").
 		SetRecordClass("incident").
 		SetStatus("new").
 		SetRequesterID(actorID).
 		SetTenantID(tenantID).
 		SaveX(ctx)
 	inc, err := engine.client.Incident.Create().
-		SetTitle("自动分配空态回归").
-		SetIncidentNumber("INC-AUTOASSIGN-1").
-		SetStatus("new").
-		SetReporterID(actorID).
 		SetWorkItemID(workItem.ID).
-		SetTenantID(tenantID).
 		Save(ctx)
 	require.NoError(t, err)
-	require.Zero(t, inc.AssigneeID, "新建事件默认没有处理人，这正是生产里的常态")
+	require.Zero(t, workItem.AssigneeID, "新建事件默认没有处理人，这正是生产里的常态")
 	processXML := `<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="http://bpmn.io/schema/bpmn">
   <bpmn:process id="incident_autoassign_test_flow" isExecutable="true">
@@ -1075,7 +1133,7 @@ func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_ContinuesFlow(t
 		SetBusinessID(workItem.ID).
 		SetStatus("running").SetTenantID(tenantID).
 		SetVariables(map[string]interface{}{
-			"assignee_id": inc.AssigneeID, // 0：没有可用处理人
+			"assignee_id": workItem.AssigneeID, // 0：没有可用处理人
 		}).
 		Save(ctx)
 	require.NoError(t, err)
@@ -1101,17 +1159,17 @@ func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_ContinuesFlow(t
 	}
 
 	err = engine.handleElement(ctx, instance, process, "Activity_AutoAssign")
-	require.NoError(t, err, "无处理人是正常空态，不应该让 handleElement 失败、把流程卡死在起始节点")
+	require.NoError(t, err, "typed blocked effect is persisted by the engine, not returned as an execution error")
 
-	// 流程确实推进到了下一步（End_1 -> completeProcess）
+	// Non-optional blocked callbacks never advance to End_1.
 	updatedInstance, err := engine.client.ProcessInstance.Get(ctx, instance.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "completed", updatedInstance.Status, "空态跳过后流程应该继续走到结束事件")
+	assert.Equal(t, "running", updatedInstance.Status, "non-optional blocked callback must not advance the token")
 
 	updatedIncident, err := engine.client.Incident.Get(ctx, inc.ID)
 	require.NoError(t, err)
-	assert.Zero(t, updatedIncident.AssigneeID, "空态跳过时不得写入处理人")
-	assert.Equal(t, "new", updatedIncident.Status, "空态跳过时不得改状态")
+	assert.Zero(t, requireIncidentWorkItem(t, engine.client, updatedIncident).AssigneeID, "空态跳过时不得写入处理人")
+	assert.Equal(t, "new", requireIncidentWorkItem(t, engine.client, updatedIncident).Status, "空态跳过时不得改状态")
 }
 
 func TestProcessTask_CorrelationIDRoundTrip(t *testing.T) {
@@ -1144,16 +1202,15 @@ type fakeAsyncServiceTaskHandler struct {
 func (h *fakeAsyncServiceTaskHandler) GetTaskType() string  { return h.taskType }
 func (h *fakeAsyncServiceTaskHandler) GetHandlerID() string { return h.handlerID }
 func (h *fakeAsyncServiceTaskHandler) IsAsync() bool        { return true }
-func (h *fakeAsyncServiceTaskHandler) Validate(ctx context.Context, config map[string]interface{}) error {
-	return nil
-}
-func (h *fakeAsyncServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *fakeAsyncServiceTaskHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	h.executed++
-	return &dto.ServiceTaskResult{Success: true}, nil
+	return bpmn.AppliedEffect("", nil), nil
 }
 
-var _ bpmn.ServiceTaskHandlerInterface = (*fakeAsyncServiceTaskHandler)(nil)
-var _ bpmn.AsyncServiceTaskHandler = (*fakeAsyncServiceTaskHandler)(nil)
+var (
+	_ bpmn.ServiceTaskHandlerInterface = (*fakeAsyncServiceTaskHandler)(nil)
+	_ bpmn.AsyncServiceTaskHandler     = (*fakeAsyncServiceTaskHandler)(nil)
+)
 
 type failingUserTaskCallbackHandler struct {
 	taskType  string
@@ -1164,10 +1221,11 @@ type failingUserTaskCallbackHandler struct {
 
 func (h *failingUserTaskCallbackHandler) GetTaskType() string  { return h.taskType }
 func (h *failingUserTaskCallbackHandler) GetHandlerID() string { return h.handlerID }
-func (h *failingUserTaskCallbackHandler) Validate(context.Context, map[string]interface{}) error {
-	return nil
+func (h *failingUserTaskCallbackHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
+	return bpmn.CallbackActionContract{}, true
 }
-func (h *failingUserTaskCallbackHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*dto.ServiceTaskResult, error) {
+
+func (h *failingUserTaskCallbackHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	h.scope, h.scopeOK = bpmn.KafActionScopeFromContext(ctx)
 	return nil, errors.New("callback rejected Bearer secret-token")
 }

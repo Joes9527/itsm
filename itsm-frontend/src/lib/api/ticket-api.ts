@@ -1,3 +1,5 @@
+import { ticketEditVersion, ticketEditOperation, type TicketEditResult } from './ticket-edit';
+import { createWorkItem, type CreationRequestOptions, type CreateWorkItemResult } from './work-item-creation';
 import { httpClient } from './http-client';
 import { handleApiRequest } from './base-api-handler';
 import type { Ticket, TicketListResponse, CreateTicketRequest, GetTicketsParams } from './api-config';
@@ -19,11 +21,8 @@ export class TicketApi {
   }
 
   // Create ticket
-  static async createTicket(data: CreateTicketRequest): Promise<Ticket> {
-    return handleApiRequest(httpClient.post<Ticket>('/api/v1/tickets', data), {
-      errorMessage: 'Failed to create ticket',
-      showSuccess: true,
-    });
+  static async createTicket(data: CreateTicketRequest, options: CreationRequestOptions): Promise<CreateWorkItemResult> {
+    return createWorkItem('/api/v1/tickets', data, options);
   }
 
   // Get ticket details
@@ -44,9 +43,11 @@ export class TicketApi {
   // Update ticket information
   static async updateTicket(
     id: number,
-    data: Partial<Ticket> & { version?: number; force?: boolean }
-  ): Promise<Ticket> {
-    return handleApiRequest(httpClient.put<Ticket>(`/api/v1/tickets/${id}`, data), {
+    data: Partial<Ticket> & { version: number; operationId: string }
+  ): Promise<TicketEditResult> {
+    ticketEditVersion(data.version);
+    ticketEditOperation(data.operationId);
+    return handleApiRequest(httpClient.put<TicketEditResult>(`/api/v1/tickets/${id}`, data), {
       errorMessage: 'Failed to update ticket',
       showSuccess: true,
     });
@@ -58,22 +59,6 @@ export class TicketApi {
       errorMessage: 'Failed to delete ticket',
       showSuccess: true,
     });
-  }
-
-  // Approve ticket - 使用后端实际的 workflow/approve 端点
-  static async approveTicket(
-    id: number,
-    data: {
-      action: 'approve' | 'reject' | 'delegate';
-      comment?: string;
-      ticketId: number;
-      delegateToUserId?: number;
-    }
-  ): Promise<{
-    success: boolean;
-    message: string;
-  }> {
-    return httpClient.post(`/api/v1/tickets/workflow/approve`, data);
   }
 
   // Add comment
@@ -105,13 +90,12 @@ export class TicketApi {
     return httpClient.post<Ticket>(`/api/v1/tickets/${id}/assign`, payload);
   }
 
-  // Escalate ticket
+  // A retry reuses the original operationId and version.
   static async escalateTicket(
     id: number,
-    reasonOrData: string | { level: string; reason: string; assigneeId?: number }
-  ): Promise<Ticket> {
-    const payload = typeof reasonOrData === 'string' ? { reason: reasonOrData } : reasonOrData;
-    return httpClient.post<Ticket>(`/api/v1/tickets/${id}/escalate`, payload);
+    data: { reason: string; version: number; operationId: string }
+  ): Promise<{ workItemId: number; version: number; status: string; replayed: boolean }> {
+    return httpClient.post(`/api/v1/tickets/${id}/escalate`, data);
   }
 
   // Resolve ticket
@@ -160,14 +144,6 @@ export class TicketApi {
     );
      
     return (response as any).tickets || (response as any).data || response || [];
-  }
-
-  // Create subtask
-  static async createSubtask(parentTicketId: number, data: Partial<Ticket>): Promise<Ticket> {
-    return httpClient.post<Ticket>(`/api/v1/tickets/${parentTicketId}/subtasks`, {
-      ...data,
-      parentTicketId: parentTicketId,
-    });
   }
 
   // Update subtask
@@ -398,11 +374,6 @@ export class TicketApi {
   // Accept ticket (接单)
   static async acceptTicket(ticketId: number): Promise<{ message: string }> {
     return httpClient.post(`/api/v1/tickets/workflow/accept`, { ticketId: ticketId });
-  }
-
-  // Reject ticket (驳回)
-  static async rejectTicket(ticketId: number, reason: string): Promise<{ message: string }> {
-    return httpClient.post(`/api/v1/tickets/workflow/reject`, { ticketId: ticketId, reason });
   }
 
   // Withdraw ticket (撤回)
@@ -684,7 +655,45 @@ export class TicketApi {
   }
 
   // Get ticket SLA info
-  static async getTicketSLA(id: number): Promise<{
+  static async getTicketSLA(id: number): Promise<TicketSLAInfo> {
+    return httpClient.get(`/api/v1/tickets/${id}/sla`);
+  }
+}
+
+// 统一导出别名
+export const TicketAPI = TicketApi;
+export default TicketAPI;
+
+export interface SLACycleResult {
+  actorId: number;
+  source: string;
+  correlationId: string;
+  number: number;
+  startedAt: string | null;
+  endedAt: string;
+  responseAt: string | null;
+  resolvedAt: string | null;
+  responseDeadline: string | null;
+  resolutionDeadline: string | null;
+  pausedMinutes: number;
+  responseBreached: boolean;
+  resolutionBreached: boolean;
+  policy: AppliedSLAPolicy | null;
+}
+export interface AppliedSLAPolicy {
+  schemaVersion: number;
+  definitionId: number;
+  definitionVersion: string;
+  name: string;
+  serviceType: string;
+  responseMinutes: number;
+  resolutionMinutes: number;
+  businessHours: Record<string, unknown> | null;
+}
+export interface TicketSLAInfo {
+  slaStatus: "ok" | "warning" | "breached" | "not_required" | "configuration_missing";
+  closedAt: string | null;
+
     ticketId: number;
     slaDefinitionId: number;
     slaName: string;
@@ -699,11 +708,9 @@ export class TicketApi {
     isBreached: boolean;
     responseTimeRemaining: number | null;
     resolutionTimeRemaining: number | null;
-  }> {
-    return httpClient.get(`/api/v1/tickets/${id}/sla`);
-  }
+  cycleNumber: number;
+  cycleStartedAt: string | null;
+  pausedMinutes: number;
+  appliedPolicy: AppliedSLAPolicy | null;
+  history: SLACycleResult[];
 }
-
-// 统一导出别名
-export const TicketAPI = TicketApi;
-export default TicketAPI;

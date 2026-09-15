@@ -75,7 +75,7 @@ func TestFilterMenusByPermissionRestrictsLowPrivilegeAdminMenus(t *testing.T) {
 	svc := &MenuService{}
 	menus := []*ent.Menu{
 		{Name: "事件管理", Path: "/incidents", PermissionCode: "incident:read"},
-		{Name: "工作流", Path: "/workflow", PermissionCode: "workflow:read"},
+		{Name: "工作流", Path: "/admin/workflows", PermissionCode: "workflow:read"},
 		{Name: "用户管理", Path: "/admin/users", PermissionCode: "user:read"},
 	}
 
@@ -95,5 +95,30 @@ func TestFilterMenusByPermissionRestrictsLowPrivilegeAdminMenus(t *testing.T) {
 
 	if filtered[0].Path != "/incidents" {
 		t.Fatalf("expected incidents menu to remain visible, got %s", filtered[0].Path)
+	}
+}
+
+func TestCatalogConfigurationMenusRequireTheirOwnReadPermissions(t *testing.T) {
+	svc := &MenuService{}
+	menus := []*ent.Menu{
+		{Path: "/admin/ticket-categories", PermissionCode: "ticket_category:read"},
+		{Path: "/admin/service-catalogs", PermissionCode: "service_catalog:read"},
+	}
+	for _, tc := range []struct {
+		name, role  string
+		permissions map[string]bool
+		count       int
+	}{
+		{"ticket write does not grant category configuration", "admin", map[string]bool{"ticket:write": true}, 0},
+		{"catalog read does not grant category configuration", "admin", map[string]bool{"service_catalog:read": true}, 1},
+		{"admin with both reads can see both", "admin", map[string]bool{"ticket_category:read": true, "service_catalog:read": true}, 2},
+		{"end user remains excluded from administration", "end_user", map[string]bool{"ticket_category:read": true, "service_catalog:read": true}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := svc.filterMenusByPermission(menus, tc.permissions, map[string]bool{tc.role: true})
+			if len(got) != tc.count {
+				t.Fatalf("expected %d menus, got %d", tc.count, len(got))
+			}
+		})
 	}
 }

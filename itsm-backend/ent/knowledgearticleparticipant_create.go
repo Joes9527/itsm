@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/user"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -20,6 +21,7 @@ type KnowledgeArticleParticipantCreate struct {
 	config
 	mutation *KnowledgeArticleParticipantMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetSessionID sets the "session_id" field.
@@ -222,6 +224,7 @@ func (_c *KnowledgeArticleParticipantCreate) createSpec() (*KnowledgeArticlePart
 		_node = &KnowledgeArticleParticipant{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(knowledgearticleparticipant.Table, sqlgraph.NewFieldSpec(knowledgearticleparticipant.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.SessionID(); ok {
 		_spec.SetField(knowledgearticleparticipant.FieldSessionID, field.TypeInt, value)
 		_node.SessionID = value
@@ -281,11 +284,342 @@ func (_c *KnowledgeArticleParticipantCreate) createSpec() (*KnowledgeArticlePart
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.KnowledgeArticleParticipant.Create().
+//		SetSessionID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.KnowledgeArticleParticipantUpsert) {
+//			SetSessionID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *KnowledgeArticleParticipantCreate) OnConflict(opts ...sql.ConflictOption) *KnowledgeArticleParticipantUpsertOne {
+	_c.conflict = opts
+	return &KnowledgeArticleParticipantUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.KnowledgeArticleParticipant.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *KnowledgeArticleParticipantCreate) OnConflictColumns(columns ...string) *KnowledgeArticleParticipantUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &KnowledgeArticleParticipantUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// KnowledgeArticleParticipantUpsertOne is the builder for "upsert"-ing
+	//  one KnowledgeArticleParticipant node.
+	KnowledgeArticleParticipantUpsertOne struct {
+		create *KnowledgeArticleParticipantCreate
+	}
+
+	// KnowledgeArticleParticipantUpsert is the "OnConflict" setter.
+	KnowledgeArticleParticipantUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetSessionID sets the "session_id" field.
+func (u *KnowledgeArticleParticipantUpsert) SetSessionID(v int) *KnowledgeArticleParticipantUpsert {
+	u.Set(knowledgearticleparticipant.FieldSessionID, v)
+	return u
+}
+
+// UpdateSessionID sets the "session_id" field to the value that was provided on create.
+func (u *KnowledgeArticleParticipantUpsert) UpdateSessionID() *KnowledgeArticleParticipantUpsert {
+	u.SetExcluded(knowledgearticleparticipant.FieldSessionID)
+	return u
+}
+
+// AddSessionID adds v to the "session_id" field.
+func (u *KnowledgeArticleParticipantUpsert) AddSessionID(v int) *KnowledgeArticleParticipantUpsert {
+	u.Add(knowledgearticleparticipant.FieldSessionID, v)
+	return u
+}
+
+// SetUserID sets the "user_id" field.
+func (u *KnowledgeArticleParticipantUpsert) SetUserID(v int) *KnowledgeArticleParticipantUpsert {
+	u.Set(knowledgearticleparticipant.FieldUserID, v)
+	return u
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *KnowledgeArticleParticipantUpsert) UpdateUserID() *KnowledgeArticleParticipantUpsert {
+	u.SetExcluded(knowledgearticleparticipant.FieldUserID)
+	return u
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *KnowledgeArticleParticipantUpsert) AddUserID(v int) *KnowledgeArticleParticipantUpsert {
+	u.Add(knowledgearticleparticipant.FieldUserID, v)
+	return u
+}
+
+// SetCursorPosition sets the "cursor_position" field.
+func (u *KnowledgeArticleParticipantUpsert) SetCursorPosition(v int) *KnowledgeArticleParticipantUpsert {
+	u.Set(knowledgearticleparticipant.FieldCursorPosition, v)
+	return u
+}
+
+// UpdateCursorPosition sets the "cursor_position" field to the value that was provided on create.
+func (u *KnowledgeArticleParticipantUpsert) UpdateCursorPosition() *KnowledgeArticleParticipantUpsert {
+	u.SetExcluded(knowledgearticleparticipant.FieldCursorPosition)
+	return u
+}
+
+// AddCursorPosition adds v to the "cursor_position" field.
+func (u *KnowledgeArticleParticipantUpsert) AddCursorPosition(v int) *KnowledgeArticleParticipantUpsert {
+	u.Add(knowledgearticleparticipant.FieldCursorPosition, v)
+	return u
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *KnowledgeArticleParticipantUpsert) SetIsActive(v bool) *KnowledgeArticleParticipantUpsert {
+	u.Set(knowledgearticleparticipant.FieldIsActive, v)
+	return u
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *KnowledgeArticleParticipantUpsert) UpdateIsActive() *KnowledgeArticleParticipantUpsert {
+	u.SetExcluded(knowledgearticleparticipant.FieldIsActive)
+	return u
+}
+
+// SetJoinedAt sets the "joined_at" field.
+func (u *KnowledgeArticleParticipantUpsert) SetJoinedAt(v time.Time) *KnowledgeArticleParticipantUpsert {
+	u.Set(knowledgearticleparticipant.FieldJoinedAt, v)
+	return u
+}
+
+// UpdateJoinedAt sets the "joined_at" field to the value that was provided on create.
+func (u *KnowledgeArticleParticipantUpsert) UpdateJoinedAt() *KnowledgeArticleParticipantUpsert {
+	u.SetExcluded(knowledgearticleparticipant.FieldJoinedAt)
+	return u
+}
+
+// SetLastActivity sets the "last_activity" field.
+func (u *KnowledgeArticleParticipantUpsert) SetLastActivity(v time.Time) *KnowledgeArticleParticipantUpsert {
+	u.Set(knowledgearticleparticipant.FieldLastActivity, v)
+	return u
+}
+
+// UpdateLastActivity sets the "last_activity" field to the value that was provided on create.
+func (u *KnowledgeArticleParticipantUpsert) UpdateLastActivity() *KnowledgeArticleParticipantUpsert {
+	u.SetExcluded(knowledgearticleparticipant.FieldLastActivity)
+	return u
+}
+
+// ClearLastActivity clears the value of the "last_activity" field.
+func (u *KnowledgeArticleParticipantUpsert) ClearLastActivity() *KnowledgeArticleParticipantUpsert {
+	u.SetNull(knowledgearticleparticipant.FieldLastActivity)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.KnowledgeArticleParticipant.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *KnowledgeArticleParticipantUpsertOne) UpdateNewValues() *KnowledgeArticleParticipantUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.KnowledgeArticleParticipant.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *KnowledgeArticleParticipantUpsertOne) Ignore() *KnowledgeArticleParticipantUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *KnowledgeArticleParticipantUpsertOne) DoNothing() *KnowledgeArticleParticipantUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the KnowledgeArticleParticipantCreate.OnConflict
+// documentation for more info.
+func (u *KnowledgeArticleParticipantUpsertOne) Update(set func(*KnowledgeArticleParticipantUpsert)) *KnowledgeArticleParticipantUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&KnowledgeArticleParticipantUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetSessionID sets the "session_id" field.
+func (u *KnowledgeArticleParticipantUpsertOne) SetSessionID(v int) *KnowledgeArticleParticipantUpsertOne {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.SetSessionID(v)
+	})
+}
+
+// AddSessionID adds v to the "session_id" field.
+func (u *KnowledgeArticleParticipantUpsertOne) AddSessionID(v int) *KnowledgeArticleParticipantUpsertOne {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.AddSessionID(v)
+	})
+}
+
+// UpdateSessionID sets the "session_id" field to the value that was provided on create.
+func (u *KnowledgeArticleParticipantUpsertOne) UpdateSessionID() *KnowledgeArticleParticipantUpsertOne {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.UpdateSessionID()
+	})
+}
+
+// SetUserID sets the "user_id" field.
+func (u *KnowledgeArticleParticipantUpsertOne) SetUserID(v int) *KnowledgeArticleParticipantUpsertOne {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *KnowledgeArticleParticipantUpsertOne) AddUserID(v int) *KnowledgeArticleParticipantUpsertOne {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.AddUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *KnowledgeArticleParticipantUpsertOne) UpdateUserID() *KnowledgeArticleParticipantUpsertOne {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// SetCursorPosition sets the "cursor_position" field.
+func (u *KnowledgeArticleParticipantUpsertOne) SetCursorPosition(v int) *KnowledgeArticleParticipantUpsertOne {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.SetCursorPosition(v)
+	})
+}
+
+// AddCursorPosition adds v to the "cursor_position" field.
+func (u *KnowledgeArticleParticipantUpsertOne) AddCursorPosition(v int) *KnowledgeArticleParticipantUpsertOne {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.AddCursorPosition(v)
+	})
+}
+
+// UpdateCursorPosition sets the "cursor_position" field to the value that was provided on create.
+func (u *KnowledgeArticleParticipantUpsertOne) UpdateCursorPosition() *KnowledgeArticleParticipantUpsertOne {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.UpdateCursorPosition()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *KnowledgeArticleParticipantUpsertOne) SetIsActive(v bool) *KnowledgeArticleParticipantUpsertOne {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *KnowledgeArticleParticipantUpsertOne) UpdateIsActive() *KnowledgeArticleParticipantUpsertOne {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetJoinedAt sets the "joined_at" field.
+func (u *KnowledgeArticleParticipantUpsertOne) SetJoinedAt(v time.Time) *KnowledgeArticleParticipantUpsertOne {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.SetJoinedAt(v)
+	})
+}
+
+// UpdateJoinedAt sets the "joined_at" field to the value that was provided on create.
+func (u *KnowledgeArticleParticipantUpsertOne) UpdateJoinedAt() *KnowledgeArticleParticipantUpsertOne {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.UpdateJoinedAt()
+	})
+}
+
+// SetLastActivity sets the "last_activity" field.
+func (u *KnowledgeArticleParticipantUpsertOne) SetLastActivity(v time.Time) *KnowledgeArticleParticipantUpsertOne {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.SetLastActivity(v)
+	})
+}
+
+// UpdateLastActivity sets the "last_activity" field to the value that was provided on create.
+func (u *KnowledgeArticleParticipantUpsertOne) UpdateLastActivity() *KnowledgeArticleParticipantUpsertOne {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.UpdateLastActivity()
+	})
+}
+
+// ClearLastActivity clears the value of the "last_activity" field.
+func (u *KnowledgeArticleParticipantUpsertOne) ClearLastActivity() *KnowledgeArticleParticipantUpsertOne {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.ClearLastActivity()
+	})
+}
+
+// Exec executes the query.
+func (u *KnowledgeArticleParticipantUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for KnowledgeArticleParticipantCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *KnowledgeArticleParticipantUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *KnowledgeArticleParticipantUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *KnowledgeArticleParticipantUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // KnowledgeArticleParticipantCreateBulk is the builder for creating many KnowledgeArticleParticipant entities in bulk.
 type KnowledgeArticleParticipantCreateBulk struct {
 	config
 	err      error
 	builders []*KnowledgeArticleParticipantCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the KnowledgeArticleParticipant entities in the database.
@@ -315,6 +649,7 @@ func (_c *KnowledgeArticleParticipantCreateBulk) Save(ctx context.Context) ([]*K
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -365,6 +700,222 @@ func (_c *KnowledgeArticleParticipantCreateBulk) Exec(ctx context.Context) error
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *KnowledgeArticleParticipantCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.KnowledgeArticleParticipant.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.KnowledgeArticleParticipantUpsert) {
+//			SetSessionID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *KnowledgeArticleParticipantCreateBulk) OnConflict(opts ...sql.ConflictOption) *KnowledgeArticleParticipantUpsertBulk {
+	_c.conflict = opts
+	return &KnowledgeArticleParticipantUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.KnowledgeArticleParticipant.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *KnowledgeArticleParticipantCreateBulk) OnConflictColumns(columns ...string) *KnowledgeArticleParticipantUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &KnowledgeArticleParticipantUpsertBulk{
+		create: _c,
+	}
+}
+
+// KnowledgeArticleParticipantUpsertBulk is the builder for "upsert"-ing
+// a bulk of KnowledgeArticleParticipant nodes.
+type KnowledgeArticleParticipantUpsertBulk struct {
+	create *KnowledgeArticleParticipantCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.KnowledgeArticleParticipant.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *KnowledgeArticleParticipantUpsertBulk) UpdateNewValues() *KnowledgeArticleParticipantUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.KnowledgeArticleParticipant.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *KnowledgeArticleParticipantUpsertBulk) Ignore() *KnowledgeArticleParticipantUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *KnowledgeArticleParticipantUpsertBulk) DoNothing() *KnowledgeArticleParticipantUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the KnowledgeArticleParticipantCreateBulk.OnConflict
+// documentation for more info.
+func (u *KnowledgeArticleParticipantUpsertBulk) Update(set func(*KnowledgeArticleParticipantUpsert)) *KnowledgeArticleParticipantUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&KnowledgeArticleParticipantUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetSessionID sets the "session_id" field.
+func (u *KnowledgeArticleParticipantUpsertBulk) SetSessionID(v int) *KnowledgeArticleParticipantUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.SetSessionID(v)
+	})
+}
+
+// AddSessionID adds v to the "session_id" field.
+func (u *KnowledgeArticleParticipantUpsertBulk) AddSessionID(v int) *KnowledgeArticleParticipantUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.AddSessionID(v)
+	})
+}
+
+// UpdateSessionID sets the "session_id" field to the value that was provided on create.
+func (u *KnowledgeArticleParticipantUpsertBulk) UpdateSessionID() *KnowledgeArticleParticipantUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.UpdateSessionID()
+	})
+}
+
+// SetUserID sets the "user_id" field.
+func (u *KnowledgeArticleParticipantUpsertBulk) SetUserID(v int) *KnowledgeArticleParticipantUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *KnowledgeArticleParticipantUpsertBulk) AddUserID(v int) *KnowledgeArticleParticipantUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.AddUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *KnowledgeArticleParticipantUpsertBulk) UpdateUserID() *KnowledgeArticleParticipantUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// SetCursorPosition sets the "cursor_position" field.
+func (u *KnowledgeArticleParticipantUpsertBulk) SetCursorPosition(v int) *KnowledgeArticleParticipantUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.SetCursorPosition(v)
+	})
+}
+
+// AddCursorPosition adds v to the "cursor_position" field.
+func (u *KnowledgeArticleParticipantUpsertBulk) AddCursorPosition(v int) *KnowledgeArticleParticipantUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.AddCursorPosition(v)
+	})
+}
+
+// UpdateCursorPosition sets the "cursor_position" field to the value that was provided on create.
+func (u *KnowledgeArticleParticipantUpsertBulk) UpdateCursorPosition() *KnowledgeArticleParticipantUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.UpdateCursorPosition()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *KnowledgeArticleParticipantUpsertBulk) SetIsActive(v bool) *KnowledgeArticleParticipantUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *KnowledgeArticleParticipantUpsertBulk) UpdateIsActive() *KnowledgeArticleParticipantUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetJoinedAt sets the "joined_at" field.
+func (u *KnowledgeArticleParticipantUpsertBulk) SetJoinedAt(v time.Time) *KnowledgeArticleParticipantUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.SetJoinedAt(v)
+	})
+}
+
+// UpdateJoinedAt sets the "joined_at" field to the value that was provided on create.
+func (u *KnowledgeArticleParticipantUpsertBulk) UpdateJoinedAt() *KnowledgeArticleParticipantUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.UpdateJoinedAt()
+	})
+}
+
+// SetLastActivity sets the "last_activity" field.
+func (u *KnowledgeArticleParticipantUpsertBulk) SetLastActivity(v time.Time) *KnowledgeArticleParticipantUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.SetLastActivity(v)
+	})
+}
+
+// UpdateLastActivity sets the "last_activity" field to the value that was provided on create.
+func (u *KnowledgeArticleParticipantUpsertBulk) UpdateLastActivity() *KnowledgeArticleParticipantUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.UpdateLastActivity()
+	})
+}
+
+// ClearLastActivity clears the value of the "last_activity" field.
+func (u *KnowledgeArticleParticipantUpsertBulk) ClearLastActivity() *KnowledgeArticleParticipantUpsertBulk {
+	return u.Update(func(s *KnowledgeArticleParticipantUpsert) {
+		s.ClearLastActivity()
+	})
+}
+
+// Exec executes the query.
+func (u *KnowledgeArticleParticipantUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the KnowledgeArticleParticipantCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for KnowledgeArticleParticipantCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *KnowledgeArticleParticipantUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

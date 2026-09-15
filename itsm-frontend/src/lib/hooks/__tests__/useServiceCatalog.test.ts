@@ -6,7 +6,7 @@ import {
   useServiceAnalyticsQuery, useServiceRequestsQuery, useServiceRequestQuery,
   useFavoritesQuery, usePortalConfigQuery, useCatalogStatsQuery,
   useCreateServiceMutation, useUpdateServiceMutation, usePublishServiceMutation,
-  useCreateServiceRequestMutation, useAddFavoriteMutation,
+  useAddFavoriteMutation,
   useRemoveFavoriteMutation, useRateServiceMutation,
   SERVICE_CATALOG_KEYS,
 } from '../useServiceCatalog';
@@ -166,17 +166,7 @@ describe('useServiceCatalog hooks', () => {
     it('publishes service', async () => {
       mockApi.publishService.mockResolvedValue(undefined as any);
       const { result } = renderHook(() => usePublishServiceMutation(), { wrapper: createWrapper() });
-      act(() => { result.current.mutate('s1'); });
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(message.success).toHaveBeenCalled();
-    });
-  });
-
-  describe('useCreateServiceRequestMutation', () => {
-    it('creates service request', async () => {
-      mockApi.createServiceRequest.mockResolvedValue({ id: 1 } as any);
-      const { result } = renderHook(() => useCreateServiceRequestMutation(), { wrapper: createWrapper() });
-      act(() => { result.current.mutate({ serviceId: 's1' } as any); });
+      act(() => { result.current.mutate({id: 's1', expectedCatalogVersion: 'v1'}); });
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(message.success).toHaveBeenCalled();
     });

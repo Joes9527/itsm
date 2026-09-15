@@ -560,8 +560,8 @@ chown -R 999:999 /data/postgres
 # 查看后端日志
 docker logs itsm-backend
 
-# 常见问题：数据库迁移
-docker exec -it itsm-backend sh -c "go run -tags migrate main.go"
+# 常见问题：已创建 Ent schema 的数据库运行 post-schema migration
+docker exec -it itsm-backend sh -c "go run -tags migrate ./cmd/migrate -up"
 ```
 
 ### 8.2 前端访问白屏

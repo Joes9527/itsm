@@ -8,8 +8,9 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/common"
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/enttest"
@@ -41,7 +42,7 @@ func newDelegationFixture(t *testing.T) (*CustomProcessEngine, *KafDelegationSer
 	client := enttest.Open(t, "sqlite3", "file:kaf_delegation_service?mode=memory&cache=shared&_fk=1")
 	t.Cleanup(func() { client.Close() })
 
-	engineIface := NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar())
+	engineIface := NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	engine, ok := engineIface.(*CustomProcessEngine)
 	require.True(t, ok)
 
@@ -280,13 +281,15 @@ type failOncePersistingKafCallbackHandler struct {
 
 func (h *scopeCapturingKafCallbackHandler) GetTaskType() string  { return "kaf_scope_capture" }
 func (h *scopeCapturingKafCallbackHandler) GetHandlerID() string { return "kaf_scope_capture_handler" }
-func (h *scopeCapturingKafCallbackHandler) Validate(context.Context, map[string]interface{}) error {
-	return nil
+
+func (h *scopeCapturingKafCallbackHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
+	return bpmn.CallbackActionContract{}, true
 }
-func (h *scopeCapturingKafCallbackHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*dto.ServiceTaskResult, error) {
+
+func (h *scopeCapturingKafCallbackHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	h.calls++
 	h.scope, h.scopeOK = bpmn.KafActionScopeFromContext(ctx)
-	return &dto.ServiceTaskResult{Success: true}, nil
+	return bpmn.AppliedEffect("", nil), nil
 }
 
 var _ bpmn.ServiceTaskHandlerInterface = (*scopeCapturingKafCallbackHandler)(nil)
@@ -294,13 +297,16 @@ var _ bpmn.ServiceTaskHandlerInterface = (*scopeCapturingKafCallbackHandler)(nil
 func (h *failOncePersistingKafCallbackHandler) GetTaskType() string {
 	return "kaf_fail_once_persisting_callback"
 }
+
 func (h *failOncePersistingKafCallbackHandler) GetHandlerID() string {
 	return "kaf_fail_once_persisting_callback_handler"
 }
-func (h *failOncePersistingKafCallbackHandler) Validate(context.Context, map[string]interface{}) error {
-	return nil
+
+func (h *failOncePersistingKafCallbackHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
+	return bpmn.CallbackActionContract{}, true
 }
-func (h *failOncePersistingKafCallbackHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*dto.ServiceTaskResult, error) {
+
+func (h *failOncePersistingKafCallbackHandler) Execute(ctx context.Context, _ *ent.ProcessTask, _ map[string]interface{}) (*bpmn.CallbackEffect, error) {
 	h.calls++
 	h.scope, h.scopeOK = bpmn.KafActionScopeFromContext(ctx)
 	if !h.scopeOK {
@@ -314,7 +320,7 @@ func (h *failOncePersistingKafCallbackHandler) Execute(ctx context.Context, _ *e
 		return nil, err
 	}
 	if applied {
-		return &dto.ServiceTaskResult{Success: true}, nil
+		return bpmn.AppliedEffect("", nil), nil
 	}
 	err = h.client.TicketComment.Create().
 		SetTicketID(h.workItemID).
@@ -329,7 +335,7 @@ func (h *failOncePersistingKafCallbackHandler) Execute(ctx context.Context, _ *e
 	if h.calls == 1 {
 		return nil, errors.New("forced callback error after committed effect")
 	}
-	return &dto.ServiceTaskResult{Success: true}, nil
+	return bpmn.AppliedEffect("", nil), nil
 }
 
 var _ bpmn.ServiceTaskHandlerInterface = (*failOncePersistingKafCallbackHandler)(nil)
@@ -416,13 +422,6 @@ func validCompleteRequest(task *ent.ProcessTask, runID, stepID string) KafAction
 		},
 		Payload: KafActionPayload{ResultSummary: "KAF completed the delegated task"},
 	}
-}
-
-func countKafActionLedgers(t *testing.T, client *ent.Client, tenantID int) int {
-	t.Helper()
-	count, err := client.KafTaskActionLedger.Query().Where(kaftaskactionledger.TenantIDEQ(tenantID)).Count(context.Background())
-	require.NoError(t, err)
-	return count
 }
 
 func TestExecuteAction_RecoversCompletedTaskAfterAuditFailureWithoutSecondEngineCall(t *testing.T) {
@@ -939,4 +938,56 @@ func TestExecuteAction_RealEngineCallbackFailureRecoversWithoutSecondBPMNComplet
 	assert.Equal(t, KafActionAlreadyApplied, replay.ResultStatus)
 	assert.Equal(t, 2, handler.calls)
 	assert.Equal(t, 1, completionWrites)
+}
+
+func TestKafAccessResultParticipatesInActionDigest(t *testing.T) {
+	_, svc, task, ctx := newKafActionFixture(t)
+	first := validCompleteRequest(task, "verified-run", "finish")
+	raw, err := json.Marshal(first)
+	require.NoError(t, err)
+	var wire map[string]interface{}
+	require.NoError(t, json.Unmarshal(raw, &wire))
+	wire["payload"].(map[string]interface{})["accessResult"] = map[string]interface{}{"outcome": "granted", "provider": "graph", "subjectId": "subject", "groupId": "group", "baseline": "not_member", "verifiedAt": "2026-09-05T08:00:00Z", "evidenceRef": "e"}
+	raw, err = json.Marshal(wire)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(raw, &first))
+	ledger, claimed, err := svc.ClaimKafAction(ctx, task, first)
+	require.NoError(t, err)
+	require.True(t, claimed)
+	require.NoError(t, svc.finalizeKafAction(ctx, ledger, "applied", ""))
+	wire["payload"].(map[string]interface{})["accessResult"].(map[string]interface{})["groupId"] = "other"
+	raw, err = json.Marshal(wire)
+	require.NoError(t, err)
+	var second KafActionRequest
+	require.NoError(t, json.Unmarshal(raw, &second))
+	_, _, err = svc.ClaimKafAction(ctx, task, second)
+	require.ErrorIs(t, err, ErrKafActionConflict)
+}
+
+func TestDelegationInheritsStructuredExecutionReferenceInBothPaths(t *testing.T) {
+	for _, direct := range []bool{false, true} {
+		t.Run(fmt.Sprint(direct), func(t *testing.T) {
+			_, svc, ctx, old := newDelegationFixture(t)
+			current := svc.client.ProcessInstance.Create().SetProcessInstanceID("new-scoped").SetProcessDefinitionKey(old.ProcessDefinitionKey).SetProcessDefinitionID(old.ProcessDefinitionID).SetBusinessKey(old.BusinessKey).SetBusinessType(old.BusinessType).SetBusinessID(old.BusinessID).SetTenantID(old.TenantID).SetExecutionWorkItemID(old.BusinessID).SaveX(ctx)
+			var task *ent.ProcessTask
+			var err error
+			if direct {
+				tx, e := svc.client.Tx(ctx)
+				require.NoError(t, e)
+				defer tx.Rollback()
+				task, err = svc.CreateDelegatedTaskTx(ctx, tx, current.ID, kafDelegateTask("complete_bpmn_task"))
+				require.NoError(t, err)
+				require.NoError(t, tx.Commit())
+			} else {
+				task, err = svc.CreateDelegatedTask(ctx, current.ID, kafDelegateTask("complete_bpmn_task"))
+				require.NoError(t, err)
+			}
+			event := svc.client.OutboxEvent.Query().Where(outboxevent.AggregateIDEQ(task.TaskID)).OnlyX(ctx)
+			require.NotNil(t, event.ExecutionWorkItemID)
+			require.Equal(t, current.BusinessID, *event.ExecutionWorkItemID)
+			legacy, err := svc.CreateDelegatedTask(ctx, old.ID, kafDelegateTask("complete_bpmn_task"))
+			require.NoError(t, err)
+			require.Nil(t, svc.client.OutboxEvent.Query().Where(outboxevent.AggregateIDEQ(legacy.TaskID)).OnlyX(ctx).ExecutionWorkItemID)
+		})
+	}
 }

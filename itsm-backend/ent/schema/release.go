@@ -86,9 +86,6 @@ func (Release) Fields() []ent.Field {
 		field.Bool("is_emergency").
 			Comment("是否紧急发布").
 			Default(false),
-		field.Bool("requires_approval").
-			Comment("是否需要审批").
-			Default(true),
 		field.Time("created_at").
 			Comment("创建时间").
 			Default(time.Now),

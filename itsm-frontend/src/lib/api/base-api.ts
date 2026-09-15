@@ -8,10 +8,9 @@ import type {
   ApiResponse,
   PaginationResponse,
   ListQueryParams,
-  RequestOptions} from '@/lib/api/types';
-import {
-  BatchOperationRequest
+  RequestOptions,
 } from '@/lib/api/types';
+import { BatchOperationRequest } from '@/lib/api/types';
 
 /**
  * API错误码
@@ -305,9 +304,7 @@ export abstract class BaseApi {
     const url = `${httpClient.getBaseURL()}${path}`;
     const response = await fetch(url, {
       method: 'GET',
-      headers: {
-        Authorization: `Bearer ${httpClient.getAuthToken()}`,
-      },
+      credentials: 'include',
     });
 
     if (!response.ok) {

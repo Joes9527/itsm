@@ -3,16 +3,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Button, Card, Empty, Input, Select, Space, Spin, Typography } from 'antd';
-import {
-  Bell,
-  BookOpen,
-  Clock3,
-  Filter,
-  LayoutGrid,
-  Search,
-  Table,
-  Zap,
-} from 'lucide-react';
+import { Bell, BookOpen, Clock3, Filter, LayoutGrid, Search, Table, Zap } from 'lucide-react';
 import { useServiceCatalogData } from './hooks/useServiceCatalogData';
 import { ServiceItemCard } from './components/ServiceItemCard';
 
@@ -108,22 +99,20 @@ export default function ServiceCatalogPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-200">
-        <div className="w-full px-6 py-4">
+    <div className="min-w-0 bg-page text-[13px] text-foreground">
+      <div className="border-b border-border">
+        <div className="w-full px-[16px] md:px-[24px] py-4">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0">
               <div className="flex items-start gap-3">
-                <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-raised text-muted">
                   <BookOpen size={20} />
                 </div>
                 <div className="min-w-0">
-                  <Title level={2} style={{ marginBottom: 0 }}>
+                  <Title level={2} style={{ fontSize: 24, fontWeight: 600, marginBottom: 0 }}>
                     服务目录
                   </Title>
-                  <Text type="secondary">
-                    标准化自助申请入口，支持审批、SLA 与交付状态跟踪
-                  </Text>
+                  <Text type="secondary">标准化自助申请入口，支持审批、SLA 与交付状态跟踪</Text>
                 </div>
               </div>
             </div>
@@ -136,7 +125,7 @@ export default function ServiceCatalogPage() {
               >
                 高级筛选
               </Button>
-              <Link href="/approvals/pending">
+              <Link href="/approvals">
                 <Button icon={<Bell size={16} />}>我的审批</Button>
               </Link>
               <Button type="primary" icon={<Zap size={16} />} onClick={jumpToCatalogList}>
@@ -146,48 +135,48 @@ export default function ServiceCatalogPage() {
           </div>
 
           <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Card size="small" className="rounded-lg shadow-sm">
+            <Card size="small" className="rounded-[8px] shadow-none">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <Text type="secondary">已发布服务</Text>
-                  <div className="text-2xl font-bold text-blue-600">
+                  <div className="text-[26px] font-semibold text-muted">
                     {statsReady ? pageStats.total : '--'}
                   </div>
                 </div>
-                <BookOpen className="text-blue-500" />
+                <BookOpen className="text-muted" />
               </div>
             </Card>
-            <Card size="small" className="rounded-lg shadow-sm">
+            <Card size="small" className="rounded-[8px] shadow-none">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <Text type="secondary">免审批服务</Text>
-                  <div className="text-2xl font-bold text-emerald-600">
+                  <div className="text-[26px] font-semibold text-muted">
                     {statsReady ? pageStats.noApproval : '--'}
                   </div>
                 </div>
-                <Zap className="text-emerald-500" />
+                <Zap className="text-muted" />
               </div>
             </Card>
-            <Card size="small" className="rounded-lg shadow-sm">
+            <Card size="small" className="rounded-[8px] shadow-none">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <Text type="secondary">需审批服务</Text>
-                  <div className="text-2xl font-bold text-orange-500">
+                  <div className="text-[26px] font-semibold text-muted">
                     {statsReady ? pageStats.needApproval : '--'}
                   </div>
                 </div>
-                <Bell className="text-orange-500" />
+                <Bell className="text-muted" />
               </div>
             </Card>
-            <Card size="small" className="rounded-lg shadow-sm">
+            <Card size="small" className="rounded-[8px] shadow-none">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <Text type="secondary">快速交付</Text>
-                  <div className="text-2xl font-bold text-violet-600">
+                  <div className="text-[26px] font-semibold text-muted">
                     {statsReady ? pageStats.quickDelivery : '--'}
                   </div>
                 </div>
-                <Clock3 className="text-violet-500" />
+                <Clock3 className="text-muted" />
               </div>
             </Card>
           </div>
@@ -195,12 +184,14 @@ export default function ServiceCatalogPage() {
       </div>
 
       {showAdvancedFilters && (
-        <div className="bg-gray-50 border-b border-gray-200">
-          <div className="w-full px-6 py-4">
-            <Card size="small" className="rounded-lg shadow-sm">
+        <div className="bg-raised border-b border-border">
+          <div className="w-full px-[16px] md:px-[24px] py-4">
+            <Card size="small" className="rounded-[8px] shadow-none">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <div>
-                  <Text className="mb-2 block text-sm font-medium text-slate-700">审批类型</Text>
+                  <Text className="mb-2 block text-[13px] font-medium text-foreground">
+                    审批类型
+                  </Text>
                   <Select
                     value={approvalFilter}
                     onChange={value => setApprovalFilter(value)}
@@ -213,7 +204,9 @@ export default function ServiceCatalogPage() {
                   />
                 </div>
                 <div>
-                  <Text className="mb-2 block text-sm font-medium text-slate-700">排序方式</Text>
+                  <Text className="mb-2 block text-[13px] font-medium text-foreground">
+                    排序方式
+                  </Text>
                   <Select
                     value={sortBy}
                     onChange={value => setSortBy(value)}
@@ -234,13 +227,13 @@ export default function ServiceCatalogPage() {
         </div>
       )}
 
-      <div ref={listSectionRef} className="w-full px-6 py-6">
-        <Card className="rounded-xl shadow-sm">
+      <div ref={listSectionRef} className="w-full px-[16px] md:px-[24px] py-6">
+        <Card className="rounded-[8px] shadow-none">
           <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="w-full lg:max-w-xl">
               <Input
-                size="large"
-                prefix={<Search size={16} className="text-slate-400" />}
+                size="middle"
+                prefix={<Search size={16} className="text-muted" />}
                 placeholder="搜索服务名称、描述、关键字..."
                 value={searchText}
                 onChange={event => setSearchText(event.target.value)}
@@ -277,7 +270,9 @@ export default function ServiceCatalogPage() {
               全部
             </Button>
             {categories.map(category => {
-              const count = catalogs.filter(catalog => String(catalog.category) === category).length;
+              const count = catalogs.filter(
+                catalog => String(catalog.category) === category
+              ).length;
               const active = selectedCategory === category;
               return (
                 <Button
@@ -295,13 +290,17 @@ export default function ServiceCatalogPage() {
           {loading ? (
             <div className="flex h-72 flex-col items-center justify-center">
               <Spin size="large" />
-              <span className="mt-3 text-xs font-medium text-slate-400">
+              <span className="mt-3 text-[12px] font-medium text-muted">
                 加载服务目录清单中...
               </span>
             </div>
           ) : error ? (
             <div className="py-12 text-center">
-              <Empty description={<span className="text-sm text-slate-500">{error}</span>} />
+              <Empty
+                description={
+                  <span className="text-[13px] text-muted">{error}</span>
+                }
+              />
             </div>
           ) : filteredAndSortedCatalogs.length === 0 ? (
             <div className="py-12 text-center">
@@ -309,16 +308,19 @@ export default function ServiceCatalogPage() {
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={
                   <div className="space-y-1">
-                    <p className="m-0 text-sm font-medium text-slate-700">
+                    <p className="m-0 text-[13px] font-medium text-foreground">
                       未找到符合条件的服务项
                     </p>
-                    <p className="m-0 text-xs text-slate-400">
+                    <p className="m-0 text-[12px] text-muted">
                       请尝试更换检索关键词或清空筛选条件
                     </p>
                   </div>
                 }
               >
-                {(searchText || selectedCategory || approvalFilter !== 'all' || sortBy !== 'default') && (
+                {(searchText ||
+                  selectedCategory ||
+                  approvalFilter !== 'all' ||
+                  sortBy !== 'default') && (
                   <Button size="small" onClick={resetFilters} className="mt-2">
                     重置筛选条件
                   </Button>
@@ -326,7 +328,14 @@ export default function ServiceCatalogPage() {
               </Empty>
             </div>
           ) : viewMode === 'grid' ? (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div
+              style={{
+                display: 'grid',
+                gap: 14,
+                gridTemplateColumns:
+                  'repeat(auto-fit, minmax(min(100%, max(240px, calc((100% - 42px) / 4))), 1fr))',
+              }}
+            >
               {filteredAndSortedCatalogs.map(catalog => (
                 <div key={catalog.id} className="flex h-full flex-col">
                   <ServiceItemCard catalog={catalog} viewMode="grid" />

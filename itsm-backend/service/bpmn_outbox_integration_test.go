@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/migrate"
@@ -56,8 +58,13 @@ func (r *postgresIdempotentCallbackReceiver) executeClaimedCallback(
 	r.attempts = append(r.attempts, row.AttemptCount)
 	if _, exists := r.effects[key]; !exists {
 		r.effects[key] = 1
+		return bpmnCallbackExecutionResult{
+			Effect: bpmn.AppliedEffect("postgres integration callback applied", nil),
+		}, nil
 	}
-	return bpmnCallbackExecutionResult{}, nil
+	return bpmnCallbackExecutionResult{
+		Effect: bpmn.IdempotentEffect("postgres integration callback already applied", nil),
+	}, nil
 }
 
 func (r *postgresIdempotentCallbackReceiver) snapshot() ([]string, []string, []string, []int, int) {
@@ -372,8 +379,10 @@ func TestTicketNotificationWorkerPostgresCASAndExpiredLeaseRecovery(t *testing.T
 
 	_, workerClientOne := openPostgresEntClientInSchema(t, dsn, schemaName, false)
 	_, workerClientTwo := openPostgresEntClientInSchema(t, dsn, schemaName, false)
-	workerOne := NewTicketNotificationService(workerClientOne, zap.NewNop().Sugar())
-	workerTwo := NewTicketNotificationService(workerClientTwo, zap.NewNop().Sugar())
+	workerOne := NewTicketNotificationService(workerClientOne, zap.NewNop().Sugar(), executionfixture.Standard())
+	workerOne.SetDeliveryQueueClient(workerClientOne)
+	workerTwo := NewTicketNotificationService(workerClientTwo, zap.NewNop().Sugar(), executionfixture.Standard())
+	workerTwo.SetDeliveryQueueClient(workerClientTwo)
 	release := make(chan struct{})
 	fake := &durableNotificationConnector{entered: make(chan struct{}, 1), release: release}
 	configureDurableNotificationConnector(t, workerOne, tenant.ID, fake)
@@ -409,13 +418,13 @@ func TestTicketNotificationWorkerPostgresCASAndExpiredLeaseRecovery(t *testing.T
 		ExecX(ctx)
 	now = now.Add(2 * time.Minute)
 	completed, err = workerTwo.ProcessPendingDeliveries(ctx, "postgres-notification-worker-recovery", 10)
-	require.NoError(t, err)
-	require.Equal(t, 1, completed)
+	require.Error(t, err)
+	require.Zero(t, completed)
 	row = setupClient.TicketNotification.GetX(ctx, row.ID)
-	require.Equal(t, "sent", row.Status)
-	require.Equal(t, 2, row.AttemptCount)
-	require.Len(t, fake.sentMessages(), 2)
-	require.Equal(t, fake.sentMessages()[0].Metadata["delivery_key"], fake.sentMessages()[1].Metadata["delivery_key"])
+	require.Equal(t, "failed", row.Status)
+	require.Equal(t, "delivery_unknown", row.LastErrorClass)
+	require.Equal(t, 1, row.AttemptCount)
+	require.Len(t, fake.sentMessages(), 1)
 }
 
 func openPostgresEntClientInSchema(t *testing.T, dsn, schemaName string, createSchema bool) (*sql.DB, *ent.Client) {
@@ -531,8 +540,8 @@ func TestBPMNCallbackOutboxLeaseRecoveryPostgres(t *testing.T) {
 	receiver := &postgresIdempotentCallbackReceiver{effects: make(map[string]int)}
 	workerIDs := [2]string{"outbox-worker-a-" + namespace, "outbox-worker-b-" + namespace}
 	workers := [2]*bpmnCallbackOutbox{
-		{client: clientA, executor: receiver, now: func() time.Time { return now }},
-		{client: clientB, executor: receiver, now: func() time.Time { return now }},
+		{client: clientA, execution: executionfixture.Standard(), executor: receiver, now: func() time.Time { return now }},
+		{client: clientB, execution: executionfixture.Standard(), executor: receiver, now: func() time.Time { return now }},
 	}
 	barrier := &postgresOutboxLoadBarrier{
 		rowID: row.ID, arrived: make(chan postgresOutboxLoad, 2), release: make(chan struct{}),
@@ -599,8 +608,14 @@ func TestBPMNCallbackOutboxLeaseRecoveryPostgres(t *testing.T) {
 		processcallbackoutbox.ID(row.ID), processcallbackoutbox.TenantID(tenant.ID),
 	).Only(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, bpmnCallbackStatusProcessing, claimedRow.Status)
-	winner := claimedRow.LeaseOwner
+	require.Equal(t, bpmnCallbackStatusPending, claimedRow.Status)
+	winner := ""
+	for _, result := range results {
+		if result.err != nil {
+			winner = result.worker
+			break
+		}
+	}
 	require.Contains(t, workerIDs, winner)
 	loser := workerIDs[0]
 	if winner == loser {
@@ -608,16 +623,16 @@ func TestBPMNCallbackOutboxLeaseRecoveryPostgres(t *testing.T) {
 	}
 	require.Equal(t, 1, claimedRow.AttemptCount)
 	require.Equal(t, stableKey, claimedRow.ExecutionKey)
-	require.Equal(t, now.Add(bpmnCallbackLeaseDuration), claimedRow.LeaseExpiresAt)
-	require.Equal(t, targetBeforeSnapshot.NextAttemptAt, claimedRow.NextAttemptAt)
-	require.Equal(t, targetBeforeSnapshot.LastErrorClass, claimedRow.LastErrorClass)
+	require.True(t, claimedRow.LeaseExpiresAt.IsZero())
+	require.Equal(t, now.Add(bpmnCallbackRetryDelay(1)), claimedRow.NextAttemptAt)
+	require.Equal(t, "unknown_error", claimedRow.LastErrorClass)
 	require.True(t, claimedRow.CompletedAt.IsZero())
 	require.True(t, claimedRow.UpdatedAt.After(targetBeforeSnapshot.UpdatedAt))
 	expectedClaimed := targetBeforeSnapshot
-	expectedClaimed.Status = bpmnCallbackStatusProcessing
+	expectedClaimed.Status = bpmnCallbackStatusPending
 	expectedClaimed.AttemptCount = 1
-	expectedClaimed.LeaseOwner = winner
-	expectedClaimed.LeaseExpiresAt = now.Add(bpmnCallbackLeaseDuration)
+	expectedClaimed.NextAttemptAt = now.Add(bpmnCallbackRetryDelay(1))
+	expectedClaimed.LastErrorClass = "unknown_error"
 	expectedClaimed.UpdatedAt = claimedRow.UpdatedAt
 	require.Equal(t, expectedClaimed, snapshotPostgresOutbox(claimedRow))
 	require.False(t, failCompletion.Load(), "the lease holder did not reach the completion boundary")
@@ -658,11 +673,12 @@ func TestBPMNCallbackOutboxLeaseRecoveryPostgres(t *testing.T) {
 	require.Empty(t, completedRow.LeaseOwner)
 	require.True(t, completedRow.LeaseExpiresAt.IsZero())
 	require.Empty(t, completedRow.LastErrorClass)
-	require.Equal(t, targetBeforeSnapshot.NextAttemptAt, completedRow.NextAttemptAt)
+	require.Equal(t, claimedRow.NextAttemptAt, completedRow.NextAttemptAt)
 	require.True(t, completedRow.UpdatedAt.After(claimedRow.UpdatedAt))
 	expectedCompleted := targetBeforeSnapshot
 	expectedCompleted.Status = bpmnCallbackStatusCompleted
 	expectedCompleted.AttemptCount = 2
+	expectedCompleted.NextAttemptAt = claimedRow.NextAttemptAt
 	expectedCompleted.LastErrorClass = ""
 	expectedCompleted.CompletedAt = now
 	expectedCompleted.UpdatedAt = completedRow.UpdatedAt

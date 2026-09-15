@@ -48,7 +48,7 @@ func TestGenericServiceTaskHandler_CompleteService_ResolvesTicket(t *testing.T) 
 		"business_id": float64(tkt.ID),
 	})
 	require.NoError(t, err)
-	assert.True(t, result.Success)
+	assert.True(t, result.Status == CallbackEffectApplied)
 
 	updated, err := client.Ticket.Get(ctx, tkt.ID)
 	require.NoError(t, err)
@@ -65,7 +65,7 @@ func TestGenericServiceTaskHandler_NotifyRejection_CreatesNotificationForRequest
 		"business_id": float64(tkt.ID),
 	})
 	require.NoError(t, err)
-	assert.True(t, result.Success)
+	assert.True(t, result.Status == CallbackEffectApplied)
 
 	count, err := client.TicketNotification.Query().
 		Where(ticketnotification.TicketID(tkt.ID), ticketnotification.UserID(tkt.RequesterID)).
@@ -151,9 +151,10 @@ func TestGenericServiceTaskHandler_Notify_CrossTenantTicket_DoesNotLeak(t *testi
 		"business_type": "ticket",
 		"business_id":   float64(tkt.ID),
 	})
-	require.NoError(t, err, "跨租户查不到工单属于空态，应该干净跳过而不是让流程卡死")
+	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.True(t, result.Success)
+	assert.Equal(t, CallbackEffectBlocked, result.Status)
+	assert.Equal(t, CallbackBlockTargetMissing, result.BlockCode)
 
 	count, err := client.TicketNotification.Query().
 		Where(ticketnotification.TicketID(tkt.ID)).
@@ -170,7 +171,7 @@ func TestGenericServiceTaskHandler_Notify_CrossTenantTicket_DoesNotLeak(t *testi
 // incident_emergency_flow 的 Activity_Notify 同样声明 generic_task/notify，
 // 但它是以 business_type=incident、business_id=<事件ID> 触发的——事件 ID 和工单 ID
 // 是两个完全不同的 ID 空间，绝不能拿事件 ID 去查工单。
-func TestGenericServiceTaskHandler_Notify_NonTicketBusinessType_IsNoOp(t *testing.T) {
+func TestGenericServiceTaskHandler_Notify_NonTicketBusinessTypeBlocksTargetMismatch(t *testing.T) {
 	client, handler, tenantID, tkt := setupGenericHandlerFixture(t)
 	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
 
@@ -179,8 +180,9 @@ func TestGenericServiceTaskHandler_Notify_NonTicketBusinessType_IsNoOp(t *testin
 		"business_type": "incident",
 		"business_id":   float64(tkt.ID), // 故意撞上一个真实存在的工单 ID
 	})
-	require.NoError(t, err, "非工单业务类型应该跳过，不能让 incident 流程卡在通知节点上")
-	assert.True(t, result.Success)
+	require.NoError(t, err)
+	assert.Equal(t, CallbackEffectBlocked, result.Status)
+	assert.Equal(t, CallbackBlockTargetTypeMismatch, result.BlockCode)
 
 	count, err := client.TicketNotification.Query().
 		Where(ticketnotification.TicketID(tkt.ID)).

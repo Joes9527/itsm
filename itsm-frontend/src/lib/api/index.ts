@@ -31,7 +31,6 @@ export type {
 // 工单
 export { TicketApi } from './ticket-api';
 export { TicketCategoryApi } from './ticket-category-api';
-export { TicketApprovalApi } from './ticket-approval-api';
 export { TicketAssignmentApi } from './ticket-assignment-api';
 export { TicketAttachmentApi } from './ticket-attachment-api';
 export { TicketCommentApi } from './ticket-comment-api';
@@ -58,8 +57,6 @@ export { ProblemApi } from './problem-api';
 
 // 服务请求
 export { serviceRequestAPI } from './service-request-api';
-// 兼容别名
-export { serviceRequestAPI as ServiceRequestApi } from './service-request-api';
 export { ServiceCatalogApi } from './service-catalog-api';
 
 // 知识库
@@ -70,7 +67,6 @@ export { KnowledgeBaseApi } from './knowledge-base-api';
 // 用户和权限
 export { UserApi } from './user-api';
 export { RoleAPI } from './role-api';
-export { AuthAPI } from './auth-api';
 export { TenantAPI } from './tenant-api';
 
 // 通用API
@@ -85,7 +81,6 @@ export { SLAApi } from './sla-api';
 
 // ==================== 工作流API ====================
 
-export { WorkflowApi } from './workflow-api';
 export { BPMNAIApi } from './bpmn-ai-api';
 export { BPMNWorkflowApi } from './bpmn-workflow-api';
 export { BPMNMonitoringApi } from './bpmn-monitoring-api';
@@ -97,15 +92,12 @@ export type {
   ProcessInstanceListResponse,
   UserTask,
   UserTaskListResponse,
-  CounterSignTask,
-  CounterSignStatusResponse,
+  CounterSignStatus,
   ProcessVersion,
-  ProcessVersionListResponse,
-  VersionCompareResponse,
+  VersionComparison,
   InstanceStats,
   TaskStats,
   VersionChangeLog,
-  ChangeLogListResponse,
 } from './bpmn-workflow-api';
 export type {
   ProcessMetrics,

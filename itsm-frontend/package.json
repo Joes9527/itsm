@@ -7,7 +7,7 @@
     "npm": ">=10.0.0"
   },
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --port 3010",
     "build": "NEXT_DISABLE_TURBOPACK=1 next build && node scripts/prepare-standalone.mjs",
     "start": "node scripts/start-standalone.mjs",
     "lint": "eslint src tests --fix",
@@ -29,7 +29,12 @@
     "test:performance": "jest src/app/__tests__/performance --coverage=false",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:e2e && npm run test:ux && npm run test:performance",
     "screenshot": "npx ts-node tests/e2e/screenshot.ts",
-    "audit:ui": "node tools/generate-ui-audit-inventory.mjs"
+    "audit:ui": "node tools/generate-ui-audit-inventory.mjs",
+    "theme:generate": "node scripts/generate-theme-tokens.mjs",
+    "theme:check": "node scripts/generate-theme-tokens.mjs --check",
+    "predev": "npm run theme:generate",
+    "prebuild": "npm run theme:generate",
+    "pretype-check": "npm run theme:check"
   },
   "dependencies": {
     "@ant-design/charts": "^2.6.2",
@@ -53,7 +58,7 @@
     "framer-motion": "^12.42.2",
     "lodash-es": "^4.18.1",
     "lucide-react": "^0.525.0",
-    "next": "15.5.22",
+    "next": "15.5.25",
     "rc-field-form": "^2.7.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -87,7 +92,7 @@
     "@typescript-eslint/eslint-plugin": "^8.48.1",
     "@typescript-eslint/parser": "^8.48.1",
     "eslint": "^9",
-    "eslint-config-next": "15.5.22",
+    "eslint-config-next": "15.5.25",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
@@ -104,7 +109,7 @@
   },
   "overrides": {
     "postcss": "8.5.25",
-    "sharp": "0.35.3",
+    "sharp": "0.35.4",
     "uuid": "14.0.1"
   },
   "lint-staged": {

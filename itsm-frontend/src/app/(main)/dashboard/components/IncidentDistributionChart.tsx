@@ -1,6 +1,8 @@
 'use client';
 
 import React from 'react';
+import { useTheme } from '@/lib/design-system/theme';
+import { theme } from 'antd';
 import { Tag } from 'antd';
 import { Pie } from '@ant-design/charts';
 import { PieChart } from 'lucide-react';
@@ -9,6 +11,8 @@ import { DashboardChartCard } from './DashboardChartCard';
 
 const IncidentDistributionChart: React.FC<{ data: IncidentDistributionData[] }> = React.memo(
   ({ data }) => {
+    const { isDark } = useTheme();
+    const { token } = theme.useToken();
     // 确保数据有效性
     const validData = data.filter(
       item => item && typeof item.count === 'number' && !isNaN(item.count) && item.count >= 0
@@ -16,6 +20,7 @@ const IncidentDistributionChart: React.FC<{ data: IncidentDistributionData[] }> 
     const totalCount = validData.reduce((sum, item) => sum + (item.count || 0), 0);
 
     const config = {
+      theme: isDark ? 'classicDark' : 'classic',
       data: validData.map(item => ({
         type: item.category || '未知',
         value: item.count || 0,
@@ -30,7 +35,7 @@ const IncidentDistributionChart: React.FC<{ data: IncidentDistributionData[] }> 
           offsetY: -8,
           style: {
             fontSize: '12px', // antdTheme.token.fontSizeSM
-            fill: '#64748b', // antdTheme.token.colorTextSecondary
+            fill: token.colorTextSecondary, // antdTheme.token.colorTextSecondary
           },
           formatter: () => '总事件数',
         },

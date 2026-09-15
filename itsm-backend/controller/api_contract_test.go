@@ -317,56 +317,6 @@ func TestAssignmentRulesAPIContract_ListRules(t *testing.T) {
 	assert.Equal(t, common.SuccessCode, response.Code)
 }
 
-// ============ Auth Refresh API Contract Tests ============
-
-func TestAuthRefreshAPIContract_RefreshToken(t *testing.T) {
-	r := setupAPIContractTest(t)
-
-	// Test /api/v1/auth/refresh endpoint
-	r.POST("/api/v1/auth/refresh", func(c *gin.Context) {
-		common.Success(c, gin.H{
-			"accessToken":  "new-access-token",
-			"refreshToken": "new-refresh-token",
-		})
-	})
-
-	body := bytes.NewBufferString(`{}`)
-	req := httptest.NewRequest("POST", "/api/v1/auth/refresh", body)
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var response common.Response
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	require.NoError(t, err)
-	assert.Equal(t, common.SuccessCode, response.Code)
-
-	data := response.Data.(map[string]interface{})
-	assert.NotEmpty(t, data["accessToken"])
-	assert.NotEmpty(t, data["refreshToken"])
-}
-
-func TestAuthRefreshAPIContract_RefreshTokenAlias(t *testing.T) {
-	r := setupAPIContractTest(t)
-
-	// Test /api/v1/refresh-token alias endpoint
-	r.POST("/api/v1/refresh-token", func(c *gin.Context) {
-		common.Success(c, gin.H{
-			"accessToken": "new-access-token",
-		})
-	})
-
-	body := bytes.NewBufferString(`{}`)
-	req := httptest.NewRequest("POST", "/api/v1/refresh-token", body)
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
 // ============ Knowledge API Contract Tests ============
 
 func TestKnowledgeAPIContract_ArticleSearch(t *testing.T) {

@@ -17,44 +17,51 @@ import (
 )
 
 type Config struct {
-	Database   DatabaseConfig   `mapstructure:"database"`
-	Server     ServerConfig     `mapstructure:"server"`
-	JWT        JWTConfig        `mapstructure:"jwt"`
-	Log        LogConfig        `mapstructure:"log"`
-	LLM        LLMConfig        `mapstructure:"llm"`
-	SMS        SMSConfig        `mapstructure:"sms"`
-	SMTP       SMTPConfig       `mapstructure:"smtp"`
-	MinIO      MinIOConfig      `mapstructure:"minio"`
-	Ticket     TicketConfig     `mapstructure:"ticket"`
-	Redis      RedisConfig      `mapstructure:"redis"`
-	Security   SecurityConfig   `mapstructure:"security"`
-	Deployment DeploymentConfig `mapstructure:"deployment"`
-	RLS        RLSConfig        `mapstructure:"rls"`
-	KAFOutbox  KAFOutboxConfig
+	Execution      ExecutionConfig     `mapstructure:"execution"`
+	Database       DatabaseConfig      `mapstructure:"database"`
+	Server         ServerConfig        `mapstructure:"server"`
+	JWT            JWTConfig           `mapstructure:"jwt"`
+	Log            LogConfig           `mapstructure:"log"`
+	LLM            LLMConfig           `mapstructure:"llm"`
+	SMS            SMSConfig           `mapstructure:"sms"`
+	SMTP           SMTPConfig          `mapstructure:"smtp"`
+	EmailDelivery  EmailDeliveryConfig `mapstructure:"email_delivery"`
+	MinIO          MinIOConfig         `mapstructure:"minio"`
+	Ticket         TicketConfig        `mapstructure:"ticket"`
+	Redis          RedisConfig         `mapstructure:"redis"`
+	Security       SecurityConfig      `mapstructure:"security"`
+	Deployment     DeploymentConfig    `mapstructure:"deployment"`
+	RLS            RLSConfig           `mapstructure:"rls"`
+	KAFOutbox      KAFOutboxConfig
+	OutboxDelivery OutboxDeliveryConfig
+	IntakeIdentity IntakeIdentityConfig
+	IntakeRead     IntakeReadConfig
 }
 
 // KAFOutboxConfig controls reliable delivery of BPMN delegation events to KAF.
-// An empty WebhookURL intentionally disables the dispatcher.
+// It is optional for the API process and required by the dedicated KAF worker.
 type KAFOutboxConfig struct {
 	WebhookURL    string
 	WebhookSecret string
 	BatchSize     int
 	PollInterval  time.Duration
+	MaxAttempts   int
+	HealthPort    int
 }
 
-// RLSConfig 控制 PostgreSQL Row-Level Security 的启用档位。
-//
-// Mode:
-//   - "off"     : 默认。中间件仍会向 request.Context 注入 tenant_id，
-//     但不 SET SESSION 变量，也不启用 policy。零风险。
-//   - "shadow"  : 每次 request 走 rls.AcquireConn 设 SESSION 变量，
-//     但 policy 未启用 → 数据库不拦截，只观察是否有 ctx
-//     缺失情况；不影响任何业务。
-//   - "enforce" : SESSION 变量 + policy 同时生效，数据库层强制隔离。
-//     需先在 shadow 模式下把所有缺失点补齐。
-//
-// TenantVarName: PostgreSQL 用于承载 tenant_id 的 GUC 变量名，默认
-// "app.current_tenant"，与 policy 中的 current_setting() 保持一致。
+// OutboxDeliveryConfig controls the shared delivery worker. Handlers may own
+// different event semantics, but they share one retry and lease policy.
+type OutboxDeliveryConfig struct {
+	BatchSize      int
+	PollInterval   time.Duration
+	HandlerTimeout time.Duration
+	MaxAttempts    int
+}
+
+// RLSConfig selects off (pass-through), shadow (observe only), or enforce
+// (physical connection/transaction tenant settings with non-bypass roles).
+// Policies are managed separately by migrations; this setting does not enable
+// or disable them. TenantVarName must match the canonical app.current_tenant.
 type RLSConfig struct {
 	Mode          string `mapstructure:"mode"`
 	TenantVarName string `mapstructure:"tenant_var_name"`
@@ -71,11 +78,20 @@ type SecurityConfig struct {
 	CSRFEnabled bool `mapstructure:"csrf_enabled"` // 是否启用 CSRF 保护
 }
 
+type EventStreamConfig struct {
+	ClaimIdle     time.Duration `mapstructure:"claim_idle"`
+	ClaimInterval time.Duration `mapstructure:"claim_interval"`
+	// NackDelay backs off Redis operation failures. Rejected entries remain in
+	// the PEL and retry according to ClaimIdle and ClaimInterval.
+	NackDelay time.Duration `mapstructure:"nack_delay"`
+}
+
 type RedisConfig struct {
-	Host     string `mapstructure:"host"`
-	Port     int    `mapstructure:"port"`
-	Password string `mapstructure:"password"`
-	DB       int    `mapstructure:"db"`
+	EventStream EventStreamConfig `mapstructure:"event_stream"`
+	Host        string            `mapstructure:"host"`
+	Port        int               `mapstructure:"port"`
+	Password    string            `mapstructure:"password"`
+	DB          int               `mapstructure:"db"`
 }
 
 type TicketConfig struct {
@@ -84,12 +100,15 @@ type TicketConfig struct {
 }
 
 type DatabaseConfig struct {
-	Host     string `mapstructure:"host"`
-	Port     int    `mapstructure:"port"`
-	User     string `mapstructure:"user"`
-	Password string `mapstructure:"password"`
-	DBName   string `mapstructure:"dbname"`
-	SSLMode  string `mapstructure:"sslmode"`
+	Schema             string `mapstructure:"schema"`
+	SystemRoleUser     string `mapstructure:"system_role_user"`
+	SystemRolePassword string `mapstructure:"system_role_password"`
+	Host               string `mapstructure:"host"`
+	Port               int    `mapstructure:"port"`
+	User               string `mapstructure:"user"`
+	Password           string `mapstructure:"password"`
+	DBName             string `mapstructure:"dbname"`
+	SSLMode            string `mapstructure:"sslmode"`
 
 	// AppRoleUser / AppRolePassword: 应用请求路径使用的低权角色
 	// （不带 BYPASSRLS，走 policy 过滤）。留空时降级为使用 User/Password。
@@ -125,7 +144,7 @@ func (d *DatabaseConfig) AdminDSN() (user, password string) {
 type ServerConfig struct {
 	Port         int    `mapstructure:"port"`
 	Mode         string `mapstructure:"mode"`
-	CookieSecure bool   `mapstructure:"cookie_secure"` // Secure flag for cookies (set true only behind HTTPS)
+	CookieSecure *bool  `mapstructure:"cookie_secure"` // nil preserves production defaults; false explicitly permits HTTP
 	FrontendURL  string `mapstructure:"frontend_url"`  // 前端地址（邮件重置链接等用）
 }
 
@@ -222,19 +241,22 @@ func resolveEnvVars(input string) string {
 // resolveMapEnvVars 递归解析 map 中的环境变量
 func resolveMapEnvVars(m map[string]interface{}) {
 	for k, v := range m {
-		switch val := v.(type) {
-		case string:
-			m[k] = resolveEnvVars(val)
-		case map[string]interface{}:
-			resolveMapEnvVars(val)
-		case []interface{}:
-			for i, item := range val {
-				if s, ok := item.(string); ok {
-					val[i] = resolveEnvVars(s)
-				}
-			}
+		m[k] = resolveConfigEnvValue(v)
+	}
+}
+
+func resolveConfigEnvValue(value interface{}) interface{} {
+	switch val := value.(type) {
+	case string:
+		return resolveEnvVars(val)
+	case map[string]interface{}:
+		resolveMapEnvVars(val)
+	case []interface{}:
+		for i, item := range val {
+			val[i] = resolveConfigEnvValue(item)
 		}
 	}
+	return value
 }
 
 func LoadConfig() (*Config, error) {
@@ -266,12 +288,14 @@ func LoadConfig() (*Config, error) {
 	viper.Set("llm", rawConfig["llm"])
 	viper.Set("sms", rawConfig["sms"])
 	viper.Set("smtp", rawConfig["smtp"])
+	viper.Set("email_delivery", rawConfig["email_delivery"])
 	viper.Set("redis", rawConfig["redis"])
 	viper.Set("ticket", rawConfig["ticket"])
 	viper.Set("embedding", rawConfig["embedding"])
 	viper.Set("security", rawConfig["security"])
 	viper.Set("admin", rawConfig["admin"])
 	viper.Set("deployment", rawConfig["deployment"])
+	viper.Set("execution", rawConfig["execution"])
 
 	// 重新绑定到 Config 结构
 	var config Config
@@ -279,9 +303,34 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 
+	if err := config.Server.applyCookieSecureEnvironment(os.LookupEnv); err != nil {
+		return nil, err
+	}
+
 	// 后备: 如果环境变量直接设置了 ITSM_XXX，则使用它
-	config.JWT.Secret = getEnvWithDefault("JWT_SECRET", config.JWT.Secret)
-	config.Database.Password = getEnvWithDefault("DB_PASSWORD", config.Database.Password)
+	jwtSecret, err := readEnvironmentOrSecret("JWT_SECRET")
+	if err != nil {
+		return nil, err
+	}
+	if jwtSecret != "" {
+		config.JWT.Secret = jwtSecret
+	}
+	databasePassword, err := readEnvironmentOrSecret("DB_PASSWORD")
+	if err != nil {
+		return nil, err
+	}
+	if databasePassword != "" {
+		config.Database.Password = databasePassword
+	}
+	config.Database.Schema = getEnvWithDefault("DB_SCHEMA", config.Database.Schema)
+	config.Database.SystemRoleUser = getEnvWithDefault("DB_SYSTEM_ROLE_USER", config.Database.SystemRoleUser)
+	systemPassword, err := readEnvironmentOrSecret("DB_SYSTEM_ROLE_PASSWORD")
+	if err != nil {
+		return nil, err
+	}
+	if systemPassword != "" {
+		config.Database.SystemRolePassword = systemPassword
+	}
 	// RLS 双角色 DSN（可选）：留空则回落至默认 DB_USER/DB_PASSWORD
 	config.Database.AppRoleUser = getEnvWithDefault("DB_APP_ROLE_USER", config.Database.AppRoleUser)
 	config.Database.AppRolePassword = getEnvWithDefault("DB_APP_ROLE_PASSWORD", config.Database.AppRolePassword)
@@ -298,11 +347,33 @@ func LoadConfig() (*Config, error) {
 	config.Deployment.Mode = getEnvWithDefault("DEPLOYMENT_MODE", config.Deployment.Mode)
 	config.Deployment.AutoMigrate = getEnvBoolWithDefault("ITSM_AUTO_MIGRATE", config.Deployment.AutoMigrate)
 	config.Deployment.AutoSeed = getEnvBoolWithDefault("ITSM_AUTO_SEED", config.Deployment.AutoSeed)
-	kafOutboxConfig, err := loadKAFOutboxConfig(kafOutboxEnv)
+	kafWebhookSecret, err := readEnvironmentOrSecret("KAF_WEBHOOK_SECRET")
+	if err != nil {
+		return nil, err
+	}
+	kafOutboxConfig, err := loadKAFOutboxConfigWithSecret(outboxEnv, kafWebhookSecret)
 	if err != nil {
 		return nil, err
 	}
 	config.KAFOutbox = kafOutboxConfig
+	identityConfig, err := loadIntakeIdentityConfig(outboxEnv)
+	if err != nil {
+		return nil, err
+	}
+	if err = validateIdentitySecretSeparation(identityConfig, config.JWT.Secret, kafWebhookSecret); err != nil {
+		return nil, err
+	}
+	config.IntakeIdentity = identityConfig
+	intakeReadConfig, err := loadIntakeReadConfig(outboxEnv)
+	if err != nil {
+		return nil, err
+	}
+	config.IntakeRead = intakeReadConfig
+	outboxDeliveryConfig, err := loadOutboxDeliveryConfig(outboxEnv)
+	if err != nil {
+		return nil, err
+	}
+	config.OutboxDelivery = outboxDeliveryConfig
 
 	// RLS 三档开关，默认 off（零风险）。
 	config.RLS.Mode = getEnvWithDefault("RLS_MODE", config.RLS.Mode)
@@ -339,6 +410,10 @@ func LoadConfig() (*Config, error) {
 	config.SMTP.Password = getEnvWithDefault("SMTP_PASSWORD", config.SMTP.Password)
 	config.SMTP.FromEmail = getEnvWithDefault("SMTP_FROM_EMAIL", config.SMTP.FromEmail)
 	config.SMTP.FromName = getEnvWithDefault("SMTP_FROM_NAME", config.SMTP.FromName)
+	config.EmailDelivery.Transport = getEnvWithDefault("ITSM_EMAIL_DELIVERY_TRANSPORT", config.EmailDelivery.Transport)
+	if err := config.EmailDelivery.Validate(); err != nil {
+		return nil, err
+	}
 
 	// MinIO 环境变量支持
 	config.MinIO.Endpoint = getEnvWithDefault("MINIO_ENDPOINT", config.MinIO.Endpoint)
@@ -358,6 +433,50 @@ func getEnvWithDefault(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// readEnvironmentOrSecret resolves a sensitive value from NAME or NAME_FILE.
+// ITSM_NAME and ITSM_NAME_FILE are accepted for existing deployment
+// conventions. Supplying more than one source is rejected so a secret rotation
+// cannot silently choose an unexpected credential.
+func readEnvironmentOrSecret(name string) (string, error) {
+	var directValues []string
+	var secretFiles []string
+	for _, key := range []string{name, "ITSM_" + name} {
+		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+			directValues = append(directValues, value)
+		}
+		if file := strings.TrimSpace(os.Getenv(key + "_FILE")); file != "" {
+			secretFiles = append(secretFiles, file)
+		}
+	}
+
+	if len(directValues)+len(secretFiles) > 1 {
+		return "", fmt.Errorf("%s must be set from exactly one environment or secret-file source", name)
+	}
+	if len(directValues) == 1 {
+		return directValues[0], nil
+	}
+	if len(secretFiles) == 0 {
+		return "", nil
+	}
+
+	fileInfo, err := os.Stat(secretFiles[0])
+	if err != nil {
+		return "", fmt.Errorf("read %s_FILE: %w", name, err)
+	}
+	if !fileInfo.Mode().IsRegular() {
+		return "", fmt.Errorf("%s_FILE must reference a regular file", name)
+	}
+	contents, err := os.ReadFile(secretFiles[0])
+	if err != nil {
+		return "", fmt.Errorf("read %s_FILE: %w", name, err)
+	}
+	value := strings.TrimSpace(string(contents))
+	if value == "" {
+		return "", fmt.Errorf("%s_FILE must not be empty", name)
+	}
+	return value, nil
 }
 
 func getEnvBoolWithDefault(key string, defaultValue bool) bool {
@@ -382,7 +501,7 @@ func getEnvBoolWithDefault(key string, defaultValue bool) bool {
 	return defaultValue
 }
 
-func kafOutboxEnv(key string) string {
+func outboxEnv(key string) string {
 	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
 		return value
 	}
@@ -390,11 +509,17 @@ func kafOutboxEnv(key string) string {
 }
 
 func loadKAFOutboxConfig(getenv func(string) string) (KAFOutboxConfig, error) {
+	return loadKAFOutboxConfigWithSecret(getenv, getenv("KAF_WEBHOOK_SECRET"))
+}
+
+func loadKAFOutboxConfigWithSecret(getenv func(string) string, webhookSecret string) (KAFOutboxConfig, error) {
 	config := KAFOutboxConfig{
 		WebhookURL:    strings.TrimSpace(getenv("KAF_WEBHOOK_URL")),
-		WebhookSecret: strings.TrimSpace(getenv("KAF_WEBHOOK_SECRET")),
+		WebhookSecret: strings.TrimSpace(webhookSecret),
 		BatchSize:     20,
 		PollInterval:  5 * time.Second,
+		MaxAttempts:   5,
+		HealthPort:    8081,
 	}
 
 	if value := strings.TrimSpace(getenv("KAF_OUTBOX_BATCH_SIZE")); value != "" {
@@ -413,14 +538,117 @@ func loadKAFOutboxConfig(getenv func(string) string) (KAFOutboxConfig, error) {
 		config.PollInterval = pollInterval
 	}
 
-	if config.WebhookURL != "" && config.WebhookSecret == "" {
-		return KAFOutboxConfig{}, fmt.Errorf("KAF_WEBHOOK_SECRET is required when KAF_WEBHOOK_URL is configured")
+	if value := strings.TrimSpace(getenv("KAF_OUTBOX_MAX_ATTEMPTS")); value != "" {
+		maxAttempts, err := strconv.Atoi(value)
+		if err != nil || maxAttempts < 1 || maxAttempts > 20 {
+			return KAFOutboxConfig{}, fmt.Errorf("KAF_OUTBOX_MAX_ATTEMPTS must be an integer from 1 through 20")
+		}
+		config.MaxAttempts = maxAttempts
 	}
+
+	if value := strings.TrimSpace(getenv("KAF_WORKER_HEALTH_PORT")); value != "" {
+		healthPort, err := strconv.Atoi(value)
+		if err != nil || healthPort < 1 || healthPort > 65535 {
+			return KAFOutboxConfig{}, fmt.Errorf("KAF_WORKER_HEALTH_PORT must be an integer from 1 through 65535")
+		}
+		config.HealthPort = healthPort
+	}
+
 	if config.WebhookURL != "" {
-		parsedURL, err := url.ParseRequestURI(config.WebhookURL)
-		if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" || parsedURL.User != nil {
-			return KAFOutboxConfig{}, fmt.Errorf("KAF_WEBHOOK_URL must be an absolute HTTP(S) URL without userinfo")
+		if err := ValidateKAFPublicationConfig(&Config{KAFOutbox: config}); err != nil {
+			return KAFOutboxConfig{}, err
 		}
 	}
 	return config, nil
+}
+
+// ValidateKAFPublicationConfig validates the public deployment endpoint used by
+// API publication. It does not assert worker health or possession of credentials;
+// the dedicated worker validates its secret and execution settings on startup.
+func ValidateKAFPublicationConfig(cfg *Config) error {
+	if cfg == nil || strings.TrimSpace(cfg.KAFOutbox.WebhookURL) == "" {
+		return fmt.Errorf("KAF_WEBHOOK_URL is required for KAF delegation")
+	}
+	endpoint, err := url.ParseRequestURI(cfg.KAFOutbox.WebhookURL)
+	if err != nil || (endpoint.Scheme != "http" && endpoint.Scheme != "https") || endpoint.Host == "" || endpoint.User != nil {
+		return fmt.Errorf("KAF_WEBHOOK_URL must be an absolute HTTP(S) URL without userinfo")
+	}
+	return nil
+}
+
+// ValidateKAFWorkerStartupConfig makes KAF delivery configuration required for
+// the dedicated Worker while keeping it optional for the API process.
+func ValidateKAFWorkerStartupConfig(cfg *Config) error {
+	if err := ValidateKAFPublicationConfig(cfg); err != nil {
+		return err
+	}
+	if strings.TrimSpace(cfg.KAFOutbox.WebhookSecret) == "" {
+		return fmt.Errorf("KAF_WEBHOOK_SECRET is required for the KAF worker")
+	}
+	if cfg.KAFOutbox.BatchSize <= 0 {
+		return fmt.Errorf("KAF_OUTBOX_BATCH_SIZE must be positive for the KAF worker")
+	}
+	if cfg.KAFOutbox.PollInterval <= 0 {
+		return fmt.Errorf("KAF_OUTBOX_POLL_INTERVAL must be positive for the KAF worker")
+	}
+	if cfg.KAFOutbox.MaxAttempts <= 0 {
+		return fmt.Errorf("KAF_OUTBOX_MAX_ATTEMPTS must be positive for the KAF worker")
+	}
+	if cfg.KAFOutbox.HealthPort <= 0 || cfg.KAFOutbox.HealthPort > 65535 {
+		return fmt.Errorf("KAF_WORKER_HEALTH_PORT must be a valid port for the KAF worker")
+	}
+	return nil
+}
+
+func loadOutboxDeliveryConfig(getenv func(string) string) (OutboxDeliveryConfig, error) {
+	config := OutboxDeliveryConfig{
+		BatchSize:      20,
+		PollInterval:   5 * time.Second,
+		HandlerTimeout: 5 * time.Second,
+		MaxAttempts:    5,
+	}
+	if value := strings.TrimSpace(getenv("OUTBOX_DELIVERY_BATCH_SIZE")); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 || parsed > 100 {
+			return OutboxDeliveryConfig{}, fmt.Errorf("OUTBOX_DELIVERY_BATCH_SIZE must be an integer from 1 through 100")
+		}
+		config.BatchSize = parsed
+	}
+	if value := strings.TrimSpace(getenv("OUTBOX_DELIVERY_POLL_INTERVAL")); value != "" {
+		parsed, err := time.ParseDuration(value)
+		if err != nil || parsed < time.Second {
+			return OutboxDeliveryConfig{}, fmt.Errorf("OUTBOX_DELIVERY_POLL_INTERVAL must be a duration of at least 1s")
+		}
+		config.PollInterval = parsed
+	}
+	if value := strings.TrimSpace(getenv("OUTBOX_DELIVERY_HANDLER_TIMEOUT")); value != "" {
+		parsed, err := time.ParseDuration(value)
+		if err != nil || parsed < time.Second || parsed >= 5*time.Minute {
+			return OutboxDeliveryConfig{}, fmt.Errorf("OUTBOX_DELIVERY_HANDLER_TIMEOUT must be at least 1s and shorter than the 5m delivery lease")
+		}
+		config.HandlerTimeout = parsed
+	}
+	if value := strings.TrimSpace(getenv("OUTBOX_DELIVERY_MAX_ATTEMPTS")); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 || parsed > 20 {
+			return OutboxDeliveryConfig{}, fmt.Errorf("OUTBOX_DELIVERY_MAX_ATTEMPTS must be an integer from 1 through 20")
+		}
+		config.MaxAttempts = parsed
+	}
+	return config, nil
+}
+
+// applyCookieSecureEnvironment keeps absence distinct from an explicit false.
+// Invalid or empty overrides stop startup instead of silently permitting HTTP.
+func (s *ServerConfig) applyCookieSecureEnvironment(lookup func(string) (string, bool)) error {
+	raw, present := lookup("ITSM_COOKIE_SECURE")
+	if !present {
+		return nil
+	}
+	if raw != "true" && raw != "false" {
+		return fmt.Errorf("ITSM_COOKIE_SECURE must be true or false")
+	}
+	value := raw == "true"
+	s.CookieSecure = &value
+	return nil
 }

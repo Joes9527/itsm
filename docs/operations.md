@@ -47,7 +47,7 @@ docker exec -it itsm-postgres-prod psql -U postgres -d itsm
 | Service | URL |
 |---------|-----|
 | Backend | http://localhost:8090/api/v1/health |
-| Frontend | http://localhost:3000 |
+| Frontend | http://localhost:3010 |
 | MinIO | http://localhost:9000/minio/health/live |
 
 ### Metrics (Prometheus)

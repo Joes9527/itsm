@@ -1,3 +1,4 @@
+import type { CatalogAccessPolicy } from '@/types/access-grant';
 /**
  * 统一API类型定义
  * 包含所有API共用的类型定义
@@ -154,13 +155,18 @@ export interface SLAInfo {
 export type IncidentSeverity = 'critical' | 'high' | 'medium' | 'low';
 export type IncidentStatus =
   | 'new'
-  | 'investigating'
-  | 'identified'
-  | 'monitoring'
+  | 'acknowledged'
+  | 'assigned'
+  | 'triaged'
+  | 'in_progress'
+  | 'on_hold'
+  | 'escalated'
+  | 'cancelled'
   | 'resolved'
   | 'closed';
 
 export interface Incident {
+  version: number;
   id: number;
   incidentNumber: string;
   title: string;
@@ -214,7 +220,7 @@ export interface Change {
   assigneeId?: number;
   assignee?: UserBasicInfo;
   affectedCis?: string[];
-  relatedTickets?: string[];
+  relations?: import("@/lib/api/workitem-relations").RelationView[];
   createdAt: string;
   updatedAt: string;
 }
@@ -288,6 +294,7 @@ export interface ServiceRequest {
 }
 
 export interface ServiceCatalog {
+  accessPolicy?: CatalogAccessPolicy;
   id: number;
   name: string;
   description?: string;
@@ -315,32 +322,6 @@ export interface KnowledgeArticle {
   status: 'draft' | 'published' | 'archived';
   createdAt: string;
   updatedAt: string;
-}
-
-// ==================== 工作流相关类型 ====================
-
-export interface WorkflowDefinition {
-  id: number;
-  name: string;
-  description?: string;
-  xmlContent: string;
-  version: number;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface WorkflowInstance {
-  id: number;
-  workflowId: number;
-  workflow?: WorkflowDefinition;
-  entityType: string;
-  entityId: number;
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
-  currentNodeId?: string;
-  startedAt?: string;
-  completedAt?: string;
-  createdAt: string;
 }
 
 // ==================== 通知相关类型 ====================

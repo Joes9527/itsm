@@ -41,7 +41,7 @@ import {
   Alert,
   Empty,
 } from 'antd';
-import { WorkflowAPI } from '@/lib/api/workflow-api';
+import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 const { Title, Text } = Typography;
 
 // 工作流状态枚举
@@ -63,6 +63,7 @@ const WORKFLOW_TYPES = {
 // 工作流数据类型
 interface Workflow {
   id: number;
+  key: string;
   name: string;
   description: string;
   type: string;
@@ -75,7 +76,6 @@ interface Workflow {
   activeInstances: number;
   completedInstances: number;
 }
-
 
 // 工作流类型配置
 const WORKFLOW_TYPE_CONFIG = {
@@ -143,22 +143,21 @@ const WorkflowManagement = () => {
   const loadWorkflows = async () => {
     setLoading(true);
     try {
-      const response = await WorkflowAPI.getWorkflows({});
-      // 转换API数据格式
-       
-      const workflowList = (response.workflows || []).map((w: any) => ({
+      const response = await BPMNWorkflowApi.listProcessDefinitions({ page: 1, pageSize: 100 });
+      const workflowList = response.items.map(w => ({
         id: w.id,
-        name: w.name || w.key || '',
+        key: w.key,
+        name: w.name,
         description: w.description || '',
-        type: w.category || 'default',
-        status: w.isDeployed ? 'active' : 'draft',
-        version: String(w.version || '1.0'),
-        createdBy: w.createdBy || '系统',
-        createdAt: w.createdAt || new Date().toISOString(),
-        lastModified: w.updatedAt || w.createdAt || new Date().toISOString(),
-        stepsCount: w.stepCount || 0,
-        activeInstances: w.runningInstances || 0,
-        completedInstances: w.completedInstances || 0,
+        type: w.category || WORKFLOW_TYPES.APPROVAL,
+        status: w.isActive ? WORKFLOW_STATUS.ACTIVE : WORKFLOW_STATUS.DRAFT,
+        version: w.version,
+        createdBy: '系统',
+        createdAt: w.createdAt,
+        lastModified: w.updatedAt,
+        stepsCount: 0,
+        activeInstances: 0,
+        completedInstances: 0,
       }));
       setWorkflows(workflowList);
     } catch (error) {
@@ -210,16 +209,17 @@ const WorkflowManagement = () => {
     const workflow = workflows.find(w => w.id === workflowId);
     if (!workflow) return;
 
-    const newStatus = workflow.status === WORKFLOW_STATUS.ACTIVE
-      ? WORKFLOW_STATUS.INACTIVE
-      : WORKFLOW_STATUS.ACTIVE;
+    const newStatus =
+      workflow.status === WORKFLOW_STATUS.ACTIVE
+        ? WORKFLOW_STATUS.INACTIVE
+        : WORKFLOW_STATUS.ACTIVE;
 
     try {
       // 调用 API 更新状态
       if (newStatus === WORKFLOW_STATUS.ACTIVE) {
-        await WorkflowAPI.activateWorkflow(String(workflowId));
+        await BPMNWorkflowApi.setProcessDefinitionActive(workflow.key, workflow.version, true);
       } else {
-        await WorkflowAPI.deactivateWorkflow(String(workflowId));
+        await BPMNWorkflowApi.setProcessDefinitionActive(workflow.key, workflow.version, false);
       }
 
       // 更新本地状态
@@ -246,13 +246,10 @@ const WorkflowManagement = () => {
   const handleDuplicate = async (workflow: Workflow) => {
     try {
       setLoading(true);
-      await WorkflowAPI.createWorkflow({
-        code: `${workflow.name}-copy-${Date.now()}`,
-        name: `${workflow.name} (副本)`,
-        description: workflow.description,
-        type: (workflow.type as 'approval') || 'approval',
-        status: 'draft',
-      } as never);
+      await BPMNWorkflowApi.cloneProcessDefinition(workflow.key, workflow.version, {
+        newKey: `${workflow.key}-copy-${Date.now()}`,
+        newName: `${workflow.name} (副本)`,
+      });
       message.success('工作流已复制');
       loadWorkflows();
     } catch (error) {
@@ -267,7 +264,9 @@ const WorkflowManagement = () => {
   const handleDelete = async (workflowId: number) => {
     try {
       setLoading(true);
-      await WorkflowAPI.deleteWorkflow(String(workflowId));
+      const workflow = workflows.find(item => item.id === workflowId);
+      if (!workflow) throw new Error('流程定义不存在');
+      await BPMNWorkflowApi.deleteProcessDefinition(workflow.key, workflow.version);
       message.success('工作流已删除');
       loadWorkflows();
     } catch (error) {
@@ -283,7 +282,11 @@ const WorkflowManagement = () => {
     try {
       setLoading(true);
       await Promise.all(
-        selectedRowKeys.map(id => WorkflowAPI.deleteWorkflow(String(id)))
+        selectedRowKeys.map(id => {
+          const workflow = workflows.find(item => item.id === Number(id));
+          if (!workflow) throw new Error(`流程定义 ${String(id)} 不存在`);
+          return BPMNWorkflowApi.deleteProcessDefinition(workflow.key, workflow.version);
+        })
       );
       message.success(`已删除 ${selectedRowKeys.length} 个工作流`);
       setSelectedRowKeys([]);
@@ -310,36 +313,20 @@ const WorkflowManagement = () => {
 
       if (selectedWorkflow) {
         // 编辑
-        await WorkflowAPI.updateWorkflow(String(selectedWorkflow.id), {
-          name: values.name,
-          description: values.description,
-          category: values.type,
-        } as never);
+        await BPMNWorkflowApi.updateProcessDefinition(
+          selectedWorkflow.key,
+          selectedWorkflow.version,
+          {
+            name: values.name,
+            description: values.description,
+            category: values.type,
+          }
+        );
         message.success('工作流更新成功');
       } else {
         // 新建
-        const created = await WorkflowAPI.createWorkflow({
-          code: values.name,
-          name: values.name,
-          description: values.description,
-          type: (values.type as 'approval') || 'approval',
-          status: 'draft',
-        } as never);
-        message.success('工作流创建成功');
-
-        // 创建成功后引导进入设计器编排流程
-        const createdId = (created as { id?: number | string } | undefined)?.id;
-        if (createdId) {
-          Modal.confirm({
-            title: '是否立即进入设计器编排流程？',
-            content: '工作流已创建为草稿，需要在设计器中编排节点后才能启用。',
-            okText: '进入设计器',
-            cancelText: '稍后再说',
-            onOk: () => {
-              router.push(`/workflow/designer?id=${createdId}`);
-            },
-          });
-        }
+        message.info('新流程必须包含 BPMN 定义，正在进入设计器');
+        router.push('/workflow/designer');
       }
 
       setShowCreateModal(false);
@@ -375,12 +362,12 @@ const WorkflowManagement = () => {
             <Text strong>{record.name}</Text>
             <Badge count={record.version} color="blue" />
           </div>
-          <Text type="secondary" className="text-sm">
+          <Text type="secondary" className="text-[13px]">
             {record.description}
           </Text>
           <div className="flex items-center gap-4 mt-1">
-            <span className="text-xs text-gray-500">创建者: {record.createdBy}</span>
-            <span className="text-xs text-gray-500">步骤: {record.stepsCount}</span>
+            <span className="text-[12px] text-muted">创建者: {record.createdBy}</span>
+            <span className="text-[12px] text-muted">步骤: {record.stepsCount}</span>
           </div>
         </div>
       ),
@@ -419,9 +406,9 @@ const WorkflowManagement = () => {
       align: 'center' as const,
       render: (_: unknown, record: Workflow) => (
         <div className="text-center">
-          <div className="text-lg font-bold text-blue-600">{record.activeInstances}</div>
-          <div className="text-xs text-gray-500">活跃实例</div>
-          <div className="text-xs text-gray-500">已完成: {record.completedInstances}</div>
+          <div className="text-[15px] font-bold text-blue-600">{record.activeInstances}</div>
+          <div className="text-[12px] text-muted">活跃实例</div>
+          <div className="text-[12px] text-muted">已完成: {record.completedInstances}</div>
         </div>
       ),
     },
@@ -445,7 +432,7 @@ const WorkflowManagement = () => {
               percent={completionRate}
               format={percent => `${percent}%`}
             />
-            <div className="text-xs text-gray-500 mt-1">完成率</div>
+            <div className="text-[12px] text-muted mt-1">完成率</div>
           </div>
         );
       },
@@ -456,7 +443,7 @@ const WorkflowManagement = () => {
       key: 'lastModified',
       align: 'center' as const,
       render: (date: unknown) => {
-        if (!date) return <span className="text-gray-400">-</span>;
+        if (!date) return <span className="text-muted">-</span>;
         const dateStr = String(date);
         const datePart = dateStr.includes('T')
           ? dateStr.split('T')[0]
@@ -466,8 +453,8 @@ const WorkflowManagement = () => {
           : dateStr.split(' ')[1] || '';
         return (
           <div className="text-center">
-            <div className="text-sm">{datePart}</div>
-            <div className="text-xs text-gray-500">{timePart}</div>
+            <div className="text-[13px]">{datePart}</div>
+            <div className="text-[12px] text-muted">{timePart}</div>
           </div>
         );
       },
@@ -490,7 +477,7 @@ const WorkflowManagement = () => {
             <Button
               type="text"
               icon={<GitBranch className="w-4 h-4" />}
-              onClick={() => router.push(`/workflow/designer?id=${record.id}`)}
+              onClick={() => router.push(`/workflow/designer?id=${record.key}`)}
             />
           </Tooltip>
           <Tooltip title="编辑元数据">
@@ -534,7 +521,12 @@ const WorkflowManagement = () => {
             cancelText="取消"
             okType="danger"
           >
-            <Button type="text" danger icon={<Trash2 className="w-4 h-4" />} aria-label="删除工作流" />
+            <Button
+              type="text"
+              danger
+              icon={<Trash2 className="w-4 h-4" />}
+              aria-label="删除工作流"
+            />
           </Popconfirm>
         </Space>
       ),
@@ -590,7 +582,7 @@ const WorkflowManagement = () => {
               title="平均步骤数"
               value={stats.avgSteps}
               prefix={<BarChart3 className="w-5 h-5" />}
-              styles={{ content: { color: '#722ed1' } }}
+              styles={{ content: { color: 'var(--color-text-primary)' } }}
             />
           </Card>
         </Col>
@@ -602,7 +594,7 @@ const WorkflowManagement = () => {
           <Col xs={24} md={8}>
             <Input
               placeholder="搜索工作流名称或描述..."
-              prefix={<Search className="w-4 h-4 text-gray-400" />}
+              prefix={<Search className="w-4 h-4 text-muted" />}
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               allowClear
@@ -614,7 +606,13 @@ const WorkflowManagement = () => {
               value={typeFilter}
               onChange={setTypeFilter}
               style={{ width: '100%' }}
-              options={[{ value: 'all', label: '全部类型' }, ...Object.entries(WORKFLOW_TYPE_CONFIG).map(([key, config]) => ({ value: key, label: config.label }))]}
+              options={[
+                { value: 'all', label: '全部类型' },
+                ...Object.entries(WORKFLOW_TYPE_CONFIG).map(([key, config]) => ({
+                  value: key,
+                  label: config.label,
+                })),
+              ]}
             />
           </Col>
           <Col xs={24} md={4}>
@@ -623,7 +621,13 @@ const WorkflowManagement = () => {
               value={statusFilter}
               onChange={setStatusFilter}
               style={{ width: '100%' }}
-              options={[{ value: 'all', label: '全部状态' }, ...Object.entries(STATUS_CONFIG).map(([key, config]) => ({ value: key, label: config.label }))]}
+              options={[
+                { value: 'all', label: '全部状态' },
+                ...Object.entries(STATUS_CONFIG).map(([key, config]) => ({
+                  value: key,
+                  label: config.label,
+                })),
+              ]}
             />
           </Col>
           <Col xs={24} md={8} className="text-right">
@@ -728,7 +732,13 @@ const WorkflowManagement = () => {
                 name="type"
                 rules={[{ required: true, message: '请选择工作流类型' }]}
               >
-                <Select placeholder="选择工作流类型" options={Object.entries(WORKFLOW_TYPE_CONFIG).map(([key, config]) => ({ value: key, label: config.label }))} />
+                <Select
+                  placeholder="选择工作流类型"
+                  options={Object.entries(WORKFLOW_TYPE_CONFIG).map(([key, config]) => ({
+                    value: key,
+                    label: config.label,
+                  }))}
+                />
               </Form.Item>
             </Col>
           </Row>
@@ -747,7 +757,12 @@ const WorkflowManagement = () => {
             </Col>
             <Col span={12}>
               <Form.Item label="状态" name="status" initialValue={WORKFLOW_STATUS.DRAFT}>
-                <Select options={Object.entries(STATUS_CONFIG).map(([key, config]) => ({ value: key, label: config.label }))} />
+                <Select
+                  options={Object.entries(STATUS_CONFIG).map(([key, config]) => ({
+                    value: key,
+                    label: config.label,
+                  }))}
+                />
               </Form.Item>
             </Col>
           </Row>
@@ -774,7 +789,9 @@ const WorkflowManagement = () => {
         {selectedWorkflow && (
           <div className="space-y-6">
             <div>
-              <Title level={4}>{selectedWorkflow.name}</Title>
+              <Title style={{ fontSize: 15, fontWeight: 600 }} level={4}>
+                {selectedWorkflow.name}
+              </Title>
               <Text type="secondary">{selectedWorkflow.description}</Text>
             </div>
 
@@ -809,7 +826,9 @@ const WorkflowManagement = () => {
             </Row>
 
             <div>
-              <Title level={5}>基本信息</Title>
+              <Title style={{ fontSize: 15, fontWeight: 600 }} level={5}>
+                基本信息
+              </Title>
               <Row gutter={[16, 8]}>
                 <Col span={12}>
                   <Text strong>工作流类型：</Text>
@@ -869,7 +888,7 @@ const WorkflowManagement = () => {
                 type="primary"
                 icon={<GitBranch />}
                 onClick={() => {
-                  window.open(`/workflow/designer?id=${selectedWorkflow.id}`, '_blank');
+                  window.open(`/workflow/designer?id=${selectedWorkflow.key}`, '_blank');
                 }}
               >
                 打开工作流设计器

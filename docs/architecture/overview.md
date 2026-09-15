@@ -107,12 +107,14 @@
 - **`itsm-ai-service`** (Python)：可选 — 自托管 LLM 推理
 - **`itsm-rag`** (Python)：可选 — 自托管 embedding 模型
 
+飞书公开回调仅通过高熵连接器实例 ID 定位租户；原始请求验签、URL token 校验及严格 JSON 边界由 `FeishuController.Webhook` 负责。旧管理员 parse-only 回调与未使用的连接器 HTTP wrapper 已移除；未支持的执行事件显式拒绝。
+
 ## 数据流：典型工单生命周期
 
 ```
 1. 客户提交工单
    ├─ Web Form → POST /api/v1/tickets
-   └─ 邮件 (Connector) → POST /api/v1/connectors/feishu/callback
+   └─ 飞书任务 (Connector) → POST /api/v1/feishu/webhook/:instance_id
 
 2. Controller 接收
    ├─ middleware: Auth → RBAC → Tenant

@@ -211,7 +211,7 @@ const SLAMonitorPage = () => {
   }, [serviceSLA, stats.overallComplianceRate]);
 
   return (
-    <div className="p-6 min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-page p-[16px] text-[13px] text-foreground md:p-[24px]">
       {/* 页面头部 */}
       <div className="mb-6 flex justify-between items-center">
         <div>

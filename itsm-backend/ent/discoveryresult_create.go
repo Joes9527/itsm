@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/discoveryresult"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type DiscoveryResultCreate struct {
 	config
 	mutation *DiscoveryResultMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetJobID sets the "job_id" field.
@@ -247,6 +249,7 @@ func (_c *DiscoveryResultCreate) createSpec() (*DiscoveryResult, *sqlgraph.Creat
 		_node = &DiscoveryResult{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(discoveryresult.Table, sqlgraph.NewFieldSpec(discoveryresult.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.CiID(); ok {
 		_spec.SetField(discoveryresult.FieldCiID, field.TypeInt, value)
 		_node.CiID = value
@@ -303,11 +306,472 @@ func (_c *DiscoveryResultCreate) createSpec() (*DiscoveryResult, *sqlgraph.Creat
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.DiscoveryResult.Create().
+//		SetJobID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.DiscoveryResultUpsert) {
+//			SetJobID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *DiscoveryResultCreate) OnConflict(opts ...sql.ConflictOption) *DiscoveryResultUpsertOne {
+	_c.conflict = opts
+	return &DiscoveryResultUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.DiscoveryResult.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *DiscoveryResultCreate) OnConflictColumns(columns ...string) *DiscoveryResultUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &DiscoveryResultUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// DiscoveryResultUpsertOne is the builder for "upsert"-ing
+	//  one DiscoveryResult node.
+	DiscoveryResultUpsertOne struct {
+		create *DiscoveryResultCreate
+	}
+
+	// DiscoveryResultUpsert is the "OnConflict" setter.
+	DiscoveryResultUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetJobID sets the "job_id" field.
+func (u *DiscoveryResultUpsert) SetJobID(v int) *DiscoveryResultUpsert {
+	u.Set(discoveryresult.FieldJobID, v)
+	return u
+}
+
+// UpdateJobID sets the "job_id" field to the value that was provided on create.
+func (u *DiscoveryResultUpsert) UpdateJobID() *DiscoveryResultUpsert {
+	u.SetExcluded(discoveryresult.FieldJobID)
+	return u
+}
+
+// SetCiID sets the "ci_id" field.
+func (u *DiscoveryResultUpsert) SetCiID(v int) *DiscoveryResultUpsert {
+	u.Set(discoveryresult.FieldCiID, v)
+	return u
+}
+
+// UpdateCiID sets the "ci_id" field to the value that was provided on create.
+func (u *DiscoveryResultUpsert) UpdateCiID() *DiscoveryResultUpsert {
+	u.SetExcluded(discoveryresult.FieldCiID)
+	return u
+}
+
+// AddCiID adds v to the "ci_id" field.
+func (u *DiscoveryResultUpsert) AddCiID(v int) *DiscoveryResultUpsert {
+	u.Add(discoveryresult.FieldCiID, v)
+	return u
+}
+
+// ClearCiID clears the value of the "ci_id" field.
+func (u *DiscoveryResultUpsert) ClearCiID() *DiscoveryResultUpsert {
+	u.SetNull(discoveryresult.FieldCiID)
+	return u
+}
+
+// SetAction sets the "action" field.
+func (u *DiscoveryResultUpsert) SetAction(v string) *DiscoveryResultUpsert {
+	u.Set(discoveryresult.FieldAction, v)
+	return u
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *DiscoveryResultUpsert) UpdateAction() *DiscoveryResultUpsert {
+	u.SetExcluded(discoveryresult.FieldAction)
+	return u
+}
+
+// SetResourceType sets the "resource_type" field.
+func (u *DiscoveryResultUpsert) SetResourceType(v string) *DiscoveryResultUpsert {
+	u.Set(discoveryresult.FieldResourceType, v)
+	return u
+}
+
+// UpdateResourceType sets the "resource_type" field to the value that was provided on create.
+func (u *DiscoveryResultUpsert) UpdateResourceType() *DiscoveryResultUpsert {
+	u.SetExcluded(discoveryresult.FieldResourceType)
+	return u
+}
+
+// ClearResourceType clears the value of the "resource_type" field.
+func (u *DiscoveryResultUpsert) ClearResourceType() *DiscoveryResultUpsert {
+	u.SetNull(discoveryresult.FieldResourceType)
+	return u
+}
+
+// SetResourceID sets the "resource_id" field.
+func (u *DiscoveryResultUpsert) SetResourceID(v string) *DiscoveryResultUpsert {
+	u.Set(discoveryresult.FieldResourceID, v)
+	return u
+}
+
+// UpdateResourceID sets the "resource_id" field to the value that was provided on create.
+func (u *DiscoveryResultUpsert) UpdateResourceID() *DiscoveryResultUpsert {
+	u.SetExcluded(discoveryresult.FieldResourceID)
+	return u
+}
+
+// ClearResourceID clears the value of the "resource_id" field.
+func (u *DiscoveryResultUpsert) ClearResourceID() *DiscoveryResultUpsert {
+	u.SetNull(discoveryresult.FieldResourceID)
+	return u
+}
+
+// SetDiff sets the "diff" field.
+func (u *DiscoveryResultUpsert) SetDiff(v map[string]interface{}) *DiscoveryResultUpsert {
+	u.Set(discoveryresult.FieldDiff, v)
+	return u
+}
+
+// UpdateDiff sets the "diff" field to the value that was provided on create.
+func (u *DiscoveryResultUpsert) UpdateDiff() *DiscoveryResultUpsert {
+	u.SetExcluded(discoveryresult.FieldDiff)
+	return u
+}
+
+// ClearDiff clears the value of the "diff" field.
+func (u *DiscoveryResultUpsert) ClearDiff() *DiscoveryResultUpsert {
+	u.SetNull(discoveryresult.FieldDiff)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *DiscoveryResultUpsert) SetStatus(v string) *DiscoveryResultUpsert {
+	u.Set(discoveryresult.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *DiscoveryResultUpsert) UpdateStatus() *DiscoveryResultUpsert {
+	u.SetExcluded(discoveryresult.FieldStatus)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *DiscoveryResultUpsert) SetTenantID(v int) *DiscoveryResultUpsert {
+	u.Set(discoveryresult.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *DiscoveryResultUpsert) UpdateTenantID() *DiscoveryResultUpsert {
+	u.SetExcluded(discoveryresult.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *DiscoveryResultUpsert) AddTenantID(v int) *DiscoveryResultUpsert {
+	u.Add(discoveryresult.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *DiscoveryResultUpsert) SetCreatedAt(v time.Time) *DiscoveryResultUpsert {
+	u.Set(discoveryresult.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *DiscoveryResultUpsert) UpdateCreatedAt() *DiscoveryResultUpsert {
+	u.SetExcluded(discoveryresult.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *DiscoveryResultUpsert) SetUpdatedAt(v time.Time) *DiscoveryResultUpsert {
+	u.Set(discoveryresult.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *DiscoveryResultUpsert) UpdateUpdatedAt() *DiscoveryResultUpsert {
+	u.SetExcluded(discoveryresult.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.DiscoveryResult.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *DiscoveryResultUpsertOne) UpdateNewValues() *DiscoveryResultUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.DiscoveryResult.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *DiscoveryResultUpsertOne) Ignore() *DiscoveryResultUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *DiscoveryResultUpsertOne) DoNothing() *DiscoveryResultUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the DiscoveryResultCreate.OnConflict
+// documentation for more info.
+func (u *DiscoveryResultUpsertOne) Update(set func(*DiscoveryResultUpsert)) *DiscoveryResultUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&DiscoveryResultUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetJobID sets the "job_id" field.
+func (u *DiscoveryResultUpsertOne) SetJobID(v int) *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.SetJobID(v)
+	})
+}
+
+// UpdateJobID sets the "job_id" field to the value that was provided on create.
+func (u *DiscoveryResultUpsertOne) UpdateJobID() *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.UpdateJobID()
+	})
+}
+
+// SetCiID sets the "ci_id" field.
+func (u *DiscoveryResultUpsertOne) SetCiID(v int) *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.SetCiID(v)
+	})
+}
+
+// AddCiID adds v to the "ci_id" field.
+func (u *DiscoveryResultUpsertOne) AddCiID(v int) *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.AddCiID(v)
+	})
+}
+
+// UpdateCiID sets the "ci_id" field to the value that was provided on create.
+func (u *DiscoveryResultUpsertOne) UpdateCiID() *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.UpdateCiID()
+	})
+}
+
+// ClearCiID clears the value of the "ci_id" field.
+func (u *DiscoveryResultUpsertOne) ClearCiID() *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.ClearCiID()
+	})
+}
+
+// SetAction sets the "action" field.
+func (u *DiscoveryResultUpsertOne) SetAction(v string) *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.SetAction(v)
+	})
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *DiscoveryResultUpsertOne) UpdateAction() *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.UpdateAction()
+	})
+}
+
+// SetResourceType sets the "resource_type" field.
+func (u *DiscoveryResultUpsertOne) SetResourceType(v string) *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.SetResourceType(v)
+	})
+}
+
+// UpdateResourceType sets the "resource_type" field to the value that was provided on create.
+func (u *DiscoveryResultUpsertOne) UpdateResourceType() *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.UpdateResourceType()
+	})
+}
+
+// ClearResourceType clears the value of the "resource_type" field.
+func (u *DiscoveryResultUpsertOne) ClearResourceType() *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.ClearResourceType()
+	})
+}
+
+// SetResourceID sets the "resource_id" field.
+func (u *DiscoveryResultUpsertOne) SetResourceID(v string) *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.SetResourceID(v)
+	})
+}
+
+// UpdateResourceID sets the "resource_id" field to the value that was provided on create.
+func (u *DiscoveryResultUpsertOne) UpdateResourceID() *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.UpdateResourceID()
+	})
+}
+
+// ClearResourceID clears the value of the "resource_id" field.
+func (u *DiscoveryResultUpsertOne) ClearResourceID() *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.ClearResourceID()
+	})
+}
+
+// SetDiff sets the "diff" field.
+func (u *DiscoveryResultUpsertOne) SetDiff(v map[string]interface{}) *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.SetDiff(v)
+	})
+}
+
+// UpdateDiff sets the "diff" field to the value that was provided on create.
+func (u *DiscoveryResultUpsertOne) UpdateDiff() *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.UpdateDiff()
+	})
+}
+
+// ClearDiff clears the value of the "diff" field.
+func (u *DiscoveryResultUpsertOne) ClearDiff() *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.ClearDiff()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *DiscoveryResultUpsertOne) SetStatus(v string) *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *DiscoveryResultUpsertOne) UpdateStatus() *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *DiscoveryResultUpsertOne) SetTenantID(v int) *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *DiscoveryResultUpsertOne) AddTenantID(v int) *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *DiscoveryResultUpsertOne) UpdateTenantID() *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *DiscoveryResultUpsertOne) SetCreatedAt(v time.Time) *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *DiscoveryResultUpsertOne) UpdateCreatedAt() *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *DiscoveryResultUpsertOne) SetUpdatedAt(v time.Time) *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *DiscoveryResultUpsertOne) UpdateUpdatedAt() *DiscoveryResultUpsertOne {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *DiscoveryResultUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for DiscoveryResultCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *DiscoveryResultUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *DiscoveryResultUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *DiscoveryResultUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // DiscoveryResultCreateBulk is the builder for creating many DiscoveryResult entities in bulk.
 type DiscoveryResultCreateBulk struct {
 	config
 	err      error
 	builders []*DiscoveryResultCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the DiscoveryResult entities in the database.
@@ -337,6 +801,7 @@ func (_c *DiscoveryResultCreateBulk) Save(ctx context.Context) ([]*DiscoveryResu
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -387,6 +852,292 @@ func (_c *DiscoveryResultCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *DiscoveryResultCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.DiscoveryResult.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.DiscoveryResultUpsert) {
+//			SetJobID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *DiscoveryResultCreateBulk) OnConflict(opts ...sql.ConflictOption) *DiscoveryResultUpsertBulk {
+	_c.conflict = opts
+	return &DiscoveryResultUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.DiscoveryResult.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *DiscoveryResultCreateBulk) OnConflictColumns(columns ...string) *DiscoveryResultUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &DiscoveryResultUpsertBulk{
+		create: _c,
+	}
+}
+
+// DiscoveryResultUpsertBulk is the builder for "upsert"-ing
+// a bulk of DiscoveryResult nodes.
+type DiscoveryResultUpsertBulk struct {
+	create *DiscoveryResultCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.DiscoveryResult.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *DiscoveryResultUpsertBulk) UpdateNewValues() *DiscoveryResultUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.DiscoveryResult.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *DiscoveryResultUpsertBulk) Ignore() *DiscoveryResultUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *DiscoveryResultUpsertBulk) DoNothing() *DiscoveryResultUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the DiscoveryResultCreateBulk.OnConflict
+// documentation for more info.
+func (u *DiscoveryResultUpsertBulk) Update(set func(*DiscoveryResultUpsert)) *DiscoveryResultUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&DiscoveryResultUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetJobID sets the "job_id" field.
+func (u *DiscoveryResultUpsertBulk) SetJobID(v int) *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.SetJobID(v)
+	})
+}
+
+// UpdateJobID sets the "job_id" field to the value that was provided on create.
+func (u *DiscoveryResultUpsertBulk) UpdateJobID() *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.UpdateJobID()
+	})
+}
+
+// SetCiID sets the "ci_id" field.
+func (u *DiscoveryResultUpsertBulk) SetCiID(v int) *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.SetCiID(v)
+	})
+}
+
+// AddCiID adds v to the "ci_id" field.
+func (u *DiscoveryResultUpsertBulk) AddCiID(v int) *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.AddCiID(v)
+	})
+}
+
+// UpdateCiID sets the "ci_id" field to the value that was provided on create.
+func (u *DiscoveryResultUpsertBulk) UpdateCiID() *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.UpdateCiID()
+	})
+}
+
+// ClearCiID clears the value of the "ci_id" field.
+func (u *DiscoveryResultUpsertBulk) ClearCiID() *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.ClearCiID()
+	})
+}
+
+// SetAction sets the "action" field.
+func (u *DiscoveryResultUpsertBulk) SetAction(v string) *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.SetAction(v)
+	})
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *DiscoveryResultUpsertBulk) UpdateAction() *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.UpdateAction()
+	})
+}
+
+// SetResourceType sets the "resource_type" field.
+func (u *DiscoveryResultUpsertBulk) SetResourceType(v string) *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.SetResourceType(v)
+	})
+}
+
+// UpdateResourceType sets the "resource_type" field to the value that was provided on create.
+func (u *DiscoveryResultUpsertBulk) UpdateResourceType() *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.UpdateResourceType()
+	})
+}
+
+// ClearResourceType clears the value of the "resource_type" field.
+func (u *DiscoveryResultUpsertBulk) ClearResourceType() *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.ClearResourceType()
+	})
+}
+
+// SetResourceID sets the "resource_id" field.
+func (u *DiscoveryResultUpsertBulk) SetResourceID(v string) *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.SetResourceID(v)
+	})
+}
+
+// UpdateResourceID sets the "resource_id" field to the value that was provided on create.
+func (u *DiscoveryResultUpsertBulk) UpdateResourceID() *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.UpdateResourceID()
+	})
+}
+
+// ClearResourceID clears the value of the "resource_id" field.
+func (u *DiscoveryResultUpsertBulk) ClearResourceID() *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.ClearResourceID()
+	})
+}
+
+// SetDiff sets the "diff" field.
+func (u *DiscoveryResultUpsertBulk) SetDiff(v map[string]interface{}) *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.SetDiff(v)
+	})
+}
+
+// UpdateDiff sets the "diff" field to the value that was provided on create.
+func (u *DiscoveryResultUpsertBulk) UpdateDiff() *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.UpdateDiff()
+	})
+}
+
+// ClearDiff clears the value of the "diff" field.
+func (u *DiscoveryResultUpsertBulk) ClearDiff() *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.ClearDiff()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *DiscoveryResultUpsertBulk) SetStatus(v string) *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *DiscoveryResultUpsertBulk) UpdateStatus() *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *DiscoveryResultUpsertBulk) SetTenantID(v int) *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *DiscoveryResultUpsertBulk) AddTenantID(v int) *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *DiscoveryResultUpsertBulk) UpdateTenantID() *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *DiscoveryResultUpsertBulk) SetCreatedAt(v time.Time) *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *DiscoveryResultUpsertBulk) UpdateCreatedAt() *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *DiscoveryResultUpsertBulk) SetUpdatedAt(v time.Time) *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *DiscoveryResultUpsertBulk) UpdateUpdatedAt() *DiscoveryResultUpsertBulk {
+	return u.Update(func(s *DiscoveryResultUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *DiscoveryResultUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the DiscoveryResultCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for DiscoveryResultCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *DiscoveryResultUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

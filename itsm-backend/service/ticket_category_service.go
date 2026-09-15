@@ -57,9 +57,6 @@ func (s *TicketCategoryService) CreateCategory(ctx context.Context, req *CreateC
 	if req.ParentID > 0 {
 		create.SetParentID(req.ParentID)
 	}
-	if req.WorkflowID != nil && *req.WorkflowID > 0 {
-		create.SetWorkflowID(*req.WorkflowID)
-	}
 	if req.DepartmentID != nil && *req.DepartmentID > 0 {
 		create.SetDepartmentID(*req.DepartmentID)
 	}
@@ -223,13 +220,6 @@ func (s *TicketCategoryService) UpdateCategory(ctx context.Context, id int, req 
 	}
 	if req.IsActive != nil {
 		update.SetIsActive(*req.IsActive)
-	}
-	if req.WorkflowID != nil {
-		if *req.WorkflowID > 0 {
-			update.SetWorkflowID(*req.WorkflowID)
-		} else {
-			update.ClearWorkflowID()
-		}
 	}
 	if req.DepartmentID != nil {
 		if *req.DepartmentID > 0 {
@@ -411,7 +401,6 @@ type CreateCategoryRequest struct {
 	ParentID     int    `json:"parentId"`
 	SortOrder    int    `json:"sortOrder"`
 	IsActive     bool   `json:"isActive"`
-	WorkflowID   *int   `json:"workflowId"`
 	DepartmentID *int   `json:"departmentId"`
 	TenantID     int    `json:"tenantId"`
 }
@@ -424,7 +413,6 @@ type UpdateCategoryRequest struct {
 	ParentID     *int   `json:"parentId"`
 	SortOrder    *int   `json:"sortOrder"`
 	IsActive     *bool  `json:"isActive"`
-	WorkflowID   *int   `json:"workflowId"`
 	DepartmentID *int   `json:"departmentId"`
 }
 

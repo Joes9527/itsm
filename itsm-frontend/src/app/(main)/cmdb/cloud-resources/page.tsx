@@ -284,8 +284,8 @@ export default function CloudResourcePage() {
   return (
     <Card>
       <div className='mb-4'>
-        <h1 className='text-2xl font-bold'>云资源列表</h1>
-        <p className='text-gray-500 mt-1'>查看已发现的云资源，并将资源新建或绑定为 CMDB 配置项。</p>
+        <h1 className='text-[24px] font-semibold'>云资源列表</h1>
+        <p className='text-muted mt-1'>查看已发现的云资源，并将资源新建或绑定为 CMDB 配置项。</p>
       </div>
 
       <Breadcrumb
@@ -341,7 +341,7 @@ export default function CloudResourcePage() {
             </Space>
           </Form.Item>
         </Form>
-        <span className='ml-auto text-sm text-gray-500'>共 {total} 条资源</span>
+        <span className='ml-auto text-[13px] text-muted'>共 {total} 条资源</span>
       </div>
 
       <Table
@@ -380,12 +380,12 @@ export default function CloudResourcePage() {
             <Input placeholder='请输入已存在的配置项ID' />
           </Form.Item>
           {binding && (
-            <div className='p-3 bg-gray-50 rounded text-sm text-gray-600'>
+            <div className='p-3 bg-raised rounded text-[13px] text-muted'>
               <div className='font-medium mb-1'>将绑定资源：</div>
               <div>
                 {binding.resourceName || binding.resourceId}
               </div>
-              <div className='text-gray-400 mt-1'>
+              <div className='text-muted mt-1'>
                 {providerOptions.find(p => p.value === (binding as any).provider)?.label} /{' '}
                 {binding.region} / {binding.zone}
               </div>
@@ -425,7 +425,7 @@ export default function CloudResourcePage() {
           <div className='space-y-3'>
             <div className='grid grid-cols-2 gap-3'>
               <div>
-                <div className='text-sm text-gray-500'>云厂商</div>
+                <div className='text-[13px] text-muted'>云厂商</div>
                 <div>
                   {providerOptions.find(p => p.value === (selectedRow as any).provider)?.label ||
                     (selectedRow as any).provider ||
@@ -433,27 +433,27 @@ export default function CloudResourcePage() {
                 </div>
               </div>
               <div>
-                <div className='text-sm text-gray-500'>服务类型</div>
+                <div className='text-[13px] text-muted'>服务类型</div>
                 <div>{serviceMap.get(selectedRow.serviceId)?.serviceName || '-'}</div>
               </div>
               <div>
-                <div className='text-sm text-gray-500'>资源ID</div>
-                <div className='font-mono text-sm'>{selectedRow.resourceId || '-'}</div>
+                <div className='text-[13px] text-muted'>资源ID</div>
+                <div className='font-mono text-[13px]'>{selectedRow.resourceId || '-'}</div>
               </div>
               <div>
-                <div className='text-sm text-gray-500'>资源名称</div>
+                <div className='text-[13px] text-muted'>资源名称</div>
                 <div>{selectedRow.resourceName || '-'}</div>
               </div>
               <div>
-                <div className='text-sm text-gray-500'>Region</div>
+                <div className='text-[13px] text-muted'>Region</div>
                 <div>{selectedRow.region || '-'}</div>
               </div>
               <div>
-                <div className='text-sm text-gray-500'>Zone</div>
+                <div className='text-[13px] text-muted'>Zone</div>
                 <div>{selectedRow.zone || '-'}</div>
               </div>
               <div>
-                <div className='text-sm text-gray-500'>状态</div>
+                <div className='text-[13px] text-muted'>状态</div>
                 <Tag color={statusColors[selectedRow.status || ''] || 'default'}>
                   {cloudResourceStatusTextMap[selectedRow.status || ''] ||
                     selectedRow.status ||
@@ -461,7 +461,7 @@ export default function CloudResourcePage() {
                 </Tag>
               </div>
               <div>
-                <div className='text-sm text-gray-500'>最近发现</div>
+                <div className='text-[13px] text-muted'>最近发现</div>
                 <div>
                   {selectedRow.lastSeenAt
                     ? dayjs(selectedRow.lastSeenAt).format('YYYY-MM-DD HH:mm:ss')

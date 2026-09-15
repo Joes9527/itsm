@@ -3,128 +3,38 @@
  * 覆盖 SLA 定义、监控、告警、报表等核心功能
  */
 import { test, expect } from '@playwright/test';
-import { loginAs, logout, TEST_USERS } from '../utils/test-utils';
+import { loginAs, TEST_USERS } from '../utils/test-utils';
+import { establishSession, mutateWithCSRF } from '../auth-utils';
 import { TicketPage } from '../utils/page-objects/TicketPage';
 
 test.describe('SLA 监控完整测试', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/login');
-    await logout(page).catch(() => {});
-  });
+  test('SLA monitor loads and refreshes the canonical monitoring projection', async ({ page }) => {
+    await loginAs(page, 'admin');
 
-  test.describe('SLA 仪表盘', () => {
-    test('SLA 仪表盘页面加载', async ({ page }) => {
-      await loginAs(page, 'admin');
-
-      await page.goto('/sla-dashboard');
-      await page.waitForLoadState('domcontentloaded');
-
-      const bodyContent = await page.locator('body').textContent();
-      expect(bodyContent?.length).toBeGreaterThan(50);
+    const initialResponsePromise = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return response.request().method() === 'POST' && url.pathname === '/api/v1/sla/monitoring';
     });
+    await page.goto('/sla-monitor');
+    const initialResponse = await initialResponsePromise;
+    expect(initialResponse.status()).toBe(200);
+    const initialEnvelope = await initialResponse.json();
+    expect(initialEnvelope).toHaveProperty('code', 0);
+    expect(initialEnvelope).toHaveProperty('data');
+    await expect(page.getByRole('heading', { name: 'SLA实时监控' })).toBeVisible();
+    await expect(page.getByText('SLA总数', { exact: true })).toBeVisible();
 
-    test('SLA 统计卡片显示', async ({ page }) => {
-      await loginAs(page, 'admin');
-
-      await page.goto('/sla-dashboard');
-      await page.waitForLoadState('networkidle');
-
-      // 检查是否有统计相关的元素
-      const hasStats = await page.locator('[class*="stat"], [class*="card"], .ant-card').first().isVisible().catch(() => false);
-      console.log('Has stats cards:', hasStats);
+    const refreshResponsePromise = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return response.request().method() === 'POST' && url.pathname === '/api/v1/sla/monitoring';
     });
-  });
-
-  test.describe('SLA 定义管理', () => {
-    test('SLA 定义列表页面', async ({ page }) => {
-      await loginAs(page, 'admin');
-
-      await page.goto('/sla');
-      await page.waitForLoadState('domcontentloaded');
-
-      const bodyContent = await page.locator('body').textContent();
-      expect(bodyContent?.length).toBeGreaterThan(50);
-    });
-
-    test('SLA 创建页面加载', async ({ page }) => {
-      await loginAs(page, 'admin');
-
-      await page.goto('/sla/create');
-      await page.waitForLoadState('domcontentloaded');
-
-      const bodyContent = await page.locator('body').textContent();
-      expect(bodyContent?.length).toBeGreaterThan(30);
-    });
-
-    test('SLA 搜索功能', async ({ page }) => {
-      await loginAs(page, 'admin');
-
-      await page.goto('/sla');
-      await page.waitForLoadState('domcontentloaded');
-
-      // 尝试搜索
-      const searchInput = page.locator('input[placeholder*="搜索"], input[type="search"]');
-      if (await searchInput.isVisible().catch(() => false)) {
-        await searchInput.fill('test');
-        await searchInput.press('Enter');
-        await page.waitForLoadState('networkidle');
-      }
-
-      const bodyContent = await page.locator('body').textContent();
-      expect(bodyContent).toBeDefined();
-    });
-  });
-
-  test.describe('SLA 监控', () => {
-    test('SLA 监控页面加载', async ({ page }) => {
-      await loginAs(page, 'admin');
-
-      await page.goto('/sla-monitor');
-      await page.waitForLoadState('domcontentloaded');
-
-      const bodyContent = await page.locator('body').textContent();
-      expect(bodyContent?.length).toBeGreaterThan(50);
-    });
-
-    test('SLA 告警列表', async ({ page }) => {
-      await loginAs(page, 'admin');
-
-      await page.goto('/sla-monitor');
-      await page.waitForLoadState('networkidle');
-
-      // 检查是否有告警相关的元素
-      const hasAlert = await page.locator('[class*="alert"], [class*="warning"], [class*="breach"]').first().isVisible().catch(() => false);
-      console.log('Has alert elements:', hasAlert);
-    });
-
-    test('SLA 状态过滤', async ({ page }) => {
-      await loginAs(page, 'admin');
-
-      await page.goto('/sla-monitor');
-      await page.waitForLoadState('domcontentloaded');
-
-      // 尝试状态过滤
-      const filterDropdown = page.locator('.ant-select, [class*="filter"]');
-      if (await filterDropdown.first().isVisible().catch(() => false)) {
-        await filterDropdown.first().click();
-        await page.waitForLoadState('networkidle');
-      }
-
-      const bodyContent = await page.locator('body').textContent();
-      expect(bodyContent).toBeDefined();
-    });
-  });
-
-  test.describe('工作流 SLA', () => {
-    test('工作流 SLA 页面加载', async ({ page }) => {
-      await loginAs(page, 'admin');
-
-      await page.goto('/workflow/sla');
-      await page.waitForLoadState('domcontentloaded');
-
-      const bodyContent = await page.locator('body').textContent();
-      expect(bodyContent?.length).toBeGreaterThan(30);
-    });
+    await page.getByRole('button', { name: '刷新', exact: true }).click();
+    const refreshResponse = await refreshResponsePromise;
+    expect(refreshResponse.status()).toBe(200);
+    const refreshEnvelope = await refreshResponse.json();
+    expect(refreshEnvelope).toHaveProperty('code', 0);
+    expect(refreshEnvelope).toHaveProperty('data');
+    await expect(page.getByText('总体合规率', { exact: true })).toBeVisible();
   });
 
   test.describe('SLA API 接口测试', () => {
@@ -132,83 +42,47 @@ test.describe('SLA 监控完整测试', () => {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
 
       // 登录
-      const loginResponse = await request.post(`${apiUrl}/api/v1/auth/login`, {
-        data: {
-          username: TEST_USERS.admin.username,
-          password: TEST_USERS.admin.password,
-        },
-      });
-
-      expect(loginResponse.ok()).toBe(true);
-
-      const loginData = await loginResponse.json();
-      const token = loginData.data?.access_token;
-
-      if (!token) {
-        test.skip();
-        return;
-      }
+      await establishSession(request, TEST_USERS.admin, apiUrl);
 
       // 获取 SLA 列表
-      const response = await request.get(`${apiUrl}/api/v1/sla`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await request.get(`${apiUrl}/api/v1/sla`);
 
-      expect([200, 401, 403].includes(response.status())).toBe(true);
+      expect(response.status()).toBe(200);
+      const body = await response.json();
+      expect(body).toHaveProperty('code', 0);
+      expect(body).toHaveProperty('data');
     });
 
-    test('GET /api/v1/sla/monitor 监控数据接口', async ({ request }) => {
+    test('POST /api/v1/sla/monitoring 监控数据接口', async ({ request }) => {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
 
       // 登录
-      const loginResponse = await request.post(`${apiUrl}/api/v1/auth/login`, {
-        data: {
-          username: TEST_USERS.admin.username,
-          password: TEST_USERS.admin.password,
-        },
-      });
-
-      const loginData = await loginResponse.json();
-      const token = loginData.data?.access_token;
-
-      if (!token) {
-        test.skip();
-        return;
-      }
+      await establishSession(request, TEST_USERS.admin, apiUrl);
 
       // 获取 SLA 监控数据
-      const response = await request.get(`${apiUrl}/api/v1/sla/monitor`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const response = await mutateWithCSRF(request, 'POST', `${apiUrl}/api/v1/sla/monitoring`, {
+        data: {},
       });
 
-      expect([200, 401, 403].includes(response.status())).toBe(true);
+      expect(response.status()).toBe(200);
+      const body = await response.json();
+      expect(body).toHaveProperty('code', 0);
+      expect(body).toHaveProperty('data');
     });
 
-    test('GET /api/v1/sla/breaches 告警接口', async ({ request }) => {
+    test('GET /api/v1/sla/violations 告警接口', async ({ request }) => {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
 
       // 登录
-      const loginResponse = await request.post(`${apiUrl}/api/v1/auth/login`, {
-        data: {
-          username: TEST_USERS.admin.username,
-          password: TEST_USERS.admin.password,
-        },
-      });
-
-      const loginData = await loginResponse.json();
-      const token = loginData.data?.access_token;
-
-      if (!token) {
-        test.skip();
-        return;
-      }
+      await establishSession(request, TEST_USERS.admin, apiUrl);
 
       // 获取 SLA 告警列表
-      const response = await request.get(`${apiUrl}/api/v1/sla/breaches`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await request.get(`${apiUrl}/api/v1/sla/violations`);
 
-      expect([200, 401, 403].includes(response.status())).toBe(true);
+      expect(response.status()).toBe(200);
+      const body = await response.json();
+      expect(body).toHaveProperty('code', 0);
+      expect(body).toHaveProperty('data');
     });
   });
 
@@ -220,66 +94,18 @@ test.describe('SLA 监控完整测试', () => {
       await ticketPage.goto();
 
       // 检查表格是否存在
-      const tableExists = await page.locator('table').isVisible().catch(() => false);
-      if (!tableExists) {
-        test.skip();
-        return;
-      }
+      await expect(page.locator('table')).toBeVisible();
 
       const ticketId = await ticketPage.getFirstTicketId();
-      if (!ticketId) {
-        test.skip();
-        return;
-      }
+      expect(ticketId).not.toBeNull();
+      expect(Number(ticketId)).toBeGreaterThan(0);
 
       // 打开工单详情
       await ticketPage.openTicket(Number(ticketId));
       await page.waitForLoadState('domcontentloaded');
 
       // 检查是否有 SLA 相关信息
-      const pageContent = await page.locator('body').textContent();
-      const hasSLAInfo = pageContent?.includes('SLA') || pageContent?.includes('服务级别');
-      console.log('Has SLA info in ticket detail:', hasSLAInfo);
-    });
-
-    test('工单创建时可选择 SLA', async ({ page }) => {
-      await loginAs(page, 'admin');
-
-      await page.goto('/tickets/create');
-      await page.waitForLoadState('domcontentloaded');
-
-      // 检查是否有 SLA 选择
-      const hasSLASelect = await page.locator('[id*="sla"], [name*="sla"]').isVisible().catch(() => false);
-      console.log('Has SLA select in ticket create:', hasSLASelect);
-    });
-  });
-
-  test.describe('SLA 报表', () => {
-    test('SLA 报表页面加载', async ({ page }) => {
-      await loginAs(page, 'admin');
-
-      await page.goto('/sla-reports');
-      await page.waitForLoadState('domcontentloaded');
-
-      const bodyContent = await page.locator('body').textContent();
-      expect(bodyContent?.length).toBeGreaterThan(30);
-    });
-
-    test('SLA 报表时间范围选择', async ({ page }) => {
-      await loginAs(page, 'admin');
-
-      await page.goto('/sla-reports');
-      await page.waitForLoadState('domcontentloaded');
-
-      // 尝试选择时间范围
-      const datePicker = page.locator('.ant-picker, [class*="date"]');
-      if (await datePicker.first().isVisible().catch(() => false)) {
-        await datePicker.first().click();
-        await page.waitForLoadState('networkidle');
-      }
-
-      const bodyContent = await page.locator('body').textContent();
-      expect(bodyContent).toBeDefined();
+      await expect(page.getByText(/SLA|服务级别/).first()).toBeVisible();
     });
   });
 });
@@ -292,78 +118,43 @@ test.describe('SLA 监控 API 集成测试', () => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
 
     // 1. 登录
-    const loginResponse = await request.post(`${apiUrl}/api/v1/auth/login`, {
-      data: {
-        username: TEST_USERS.admin.username,
-        password: TEST_USERS.admin.password,
-      },
-    });
-
-    if (!loginResponse.ok()) {
-      test.skip();
-      return;
-    }
-
-    const loginData = await loginResponse.json();
-    const token = loginData.data?.access_token;
-
-    expect(token).toBeDefined();
+    await establishSession(request, TEST_USERS.admin, apiUrl);
 
     // 2. 获取 SLA 列表
-    const slaResponse = await request.get(`${apiUrl}/api/v1/sla`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const slaData = slaResponse.ok() ? await slaResponse.json() : null;
-    console.log('SLA count:', slaData?.data?.total ?? 0);
+    const slaResponse = await request.get(`${apiUrl}/api/v1/sla`);
+    expect(slaResponse.status()).toBe(200);
+    const slaData = await slaResponse.json();
+    expect(slaData).toHaveProperty('code', 0);
+    expect(slaData).toHaveProperty('data');
 
     // 3. 获取 SLA 监控数据
-    const monitorResponse = await request.get(`${apiUrl}/api/v1/sla/monitor`, {
-      headers: { Authorization: `Bearer ${token}` },
+    const monitorResponse = await mutateWithCSRF(request, 'POST', `${apiUrl}/api/v1/sla/monitoring`, {
+      data: {},
     });
-    const monitorData = monitorResponse.ok() ? await monitorResponse.json() : null;
-    console.log('SLA monitor data:', monitorData?.data ?? 'N/A');
+    expect(monitorResponse.status()).toBe(200);
+    const monitorData = await monitorResponse.json();
+    expect(monitorData).toHaveProperty('code', 0);
+    expect(monitorData).toHaveProperty('data');
 
     // 4. 获取 SLA 告警
-    const breachesResponse = await request.get(`${apiUrl}/api/v1/sla/breaches`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const breachesData = breachesResponse.ok() ? await breachesResponse.json() : null;
-    console.log('SLA breaches count:', breachesData?.data?.total ?? 0);
+    const breachesResponse = await request.get(`${apiUrl}/api/v1/sla/violations`);
+    expect(breachesResponse.status()).toBe(200);
+    const breachesData = await breachesResponse.json();
+    expect(breachesData).toHaveProperty('code', 0);
+    expect(breachesData).toHaveProperty('data');
 
-    // 验证 API 响应
-    expect([200, 401, 403].includes(slaResponse.status())).toBe(true);
-    expect([200, 401, 403].includes(monitorResponse.status())).toBe(true);
-    expect([200, 401, 403].includes(breachesResponse.status())).toBe(true);
+    // 每个端点都必须满足唯一的成功契约。
   });
 
   test('SLA 权限验证', async ({ request }) => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
 
     // 以普通用户登录
-    const loginResponse = await request.post(`${apiUrl}/api/v1/auth/login`, {
-      data: {
-        username: TEST_USERS.end_user.username,
-        password: TEST_USERS.end_user.password,
-      },
-    });
-
-    if (!loginResponse.ok()) {
-      test.skip();
-      return;
-    }
-
-    const loginData = await loginResponse.json();
-    const token = loginData.data?.access_token;
-
-    expect(token).toBeDefined();
+    await establishSession(request, TEST_USERS.end_user, apiUrl);
 
     // 尝试访问 SLA 管理接口
-    const response = await request.get(`${apiUrl}/api/v1/sla`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const response = await request.get(`${apiUrl}/api/v1/sla`);
 
-    // 普通用户可能只能查看，不能管理
-    console.log('End user SLA access status:', response.status());
-    expect([200, 403].includes(response.status())).toBe(true);
+    expect(response.status()).toBe(403);
   });
 });

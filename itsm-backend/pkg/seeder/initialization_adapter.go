@@ -19,6 +19,7 @@ import (
 	"itsm-backend/ent/sladefinition"
 	"itsm-backend/ent/standardchange"
 	"itsm-backend/ent/tenant"
+	"itsm-backend/ent/tickettype"
 	"itsm-backend/ent/user"
 	"itsm-backend/internal/initialization"
 	"itsm-backend/service"
@@ -29,7 +30,7 @@ type productionComponentInitializer struct {
 	name         string
 	dependencies []string
 	checksum     string
-	apply        func(context.Context, *Seeder)
+	apply        func(context.Context, *Seeder) error
 	verify       func(context.Context, *Seeder) error
 }
 
@@ -49,6 +50,9 @@ func ProductionInitializers(seeder *Seeder) ([]initialization.Initializer, error
 	if seeder == nil {
 		return nil, fmt.Errorf("seeder is required")
 	}
+	if err := seeder.validateProcessBindingIdentities(); err != nil {
+		return nil, err
+	}
 	payload, err := json.Marshal(seeder.config)
 	if err != nil {
 		return nil, fmt.Errorf("hash product seed manifest: %w", err)
@@ -61,7 +65,7 @@ func ProductionInitializers(seeder *Seeder) ([]initialization.Initializer, error
 		seeder:   seeder,
 		name:     "identity-rbac",
 		checksum: checksum("identity-rbac"),
-		apply: func(ctx context.Context, transactional *Seeder) {
+		apply: func(ctx context.Context, transactional *Seeder) error {
 			transactional.seedDefaultTenant(ctx)
 			transactional.seedDepartments(ctx)
 			transactional.seedTeams(ctx)
@@ -71,6 +75,7 @@ func ProductionInitializers(seeder *Seeder) ([]initialization.Initializer, error
 			transactional.seedAdmin(ctx)
 			transactional.seedMenuAndPermissionFixes(ctx)
 			transactional.seedRolePermissions(ctx)
+			return nil
 		},
 		verify: func(ctx context.Context, target *Seeder) error {
 			return target.verifyIdentityRBAC(ctx)
@@ -81,13 +86,14 @@ func ProductionInitializers(seeder *Seeder) ([]initialization.Initializer, error
 		name:         "itil-core",
 		dependencies: []string{"identity-rbac"},
 		checksum:     checksum("itil-core"),
-		apply: func(ctx context.Context, transactional *Seeder) {
+		apply: func(ctx context.Context, transactional *Seeder) error {
 			transactional.seedTicketTypes(ctx)
 			transactional.seedTicketCategories(ctx)
 			transactional.seedTicketTemplates(ctx)
 			transactional.seedIncidentCategories(ctx)
 			transactional.seedStandardChanges(ctx)
 			transactional.seedTicketTags(ctx)
+			return nil
 		},
 		verify: func(ctx context.Context, target *Seeder) error {
 			return target.verifyITILTemplates(ctx)
@@ -98,11 +104,11 @@ func ProductionInitializers(seeder *Seeder) ([]initialization.Initializer, error
 		name:         "workflow-core",
 		dependencies: []string{"identity-rbac", "itil-core"},
 		checksum:     checksum("workflow-core"),
-		apply: func(ctx context.Context, transactional *Seeder) {
+		apply: func(ctx context.Context, transactional *Seeder) error {
 			// legacy ApprovalWorkflow 种子已随引擎下线移除（见 Task 6）；
 			// 审批能力由 BPMN 工作流 + 流程绑定覆盖。
 			transactional.seedBPMNWorkflows(ctx)
-			transactional.seedProcessBindings(ctx)
+			return transactional.seedProcessBindings(ctx)
 		},
 		verify: func(ctx context.Context, target *Seeder) error {
 			return target.verifyWorkflowTemplates(ctx)
@@ -113,9 +119,10 @@ func ProductionInitializers(seeder *Seeder) ([]initialization.Initializer, error
 		name:         "sla-core",
 		dependencies: []string{"itil-core"},
 		checksum:     checksum("sla-core"),
-		apply: func(ctx context.Context, transactional *Seeder) {
+		apply: func(ctx context.Context, transactional *Seeder) error {
 			transactional.seedSLADefinitions(ctx)
 			transactional.seedSLAAlertRules(ctx)
+			return nil
 		},
 		verify: func(ctx context.Context, target *Seeder) error {
 			return target.verifySLATemplates(ctx)
@@ -126,9 +133,10 @@ func ProductionInitializers(seeder *Seeder) ([]initialization.Initializer, error
 		name:         "cmdb-core",
 		dependencies: []string{"identity-rbac"},
 		checksum:     checksum("cmdb-core"),
-		apply: func(ctx context.Context, transactional *Seeder) {
+		apply: func(ctx context.Context, transactional *Seeder) error {
 			transactional.seedCITypes(ctx)
 			transactional.seedCloudServiceTemplates(ctx)
+			return nil
 		},
 		verify: func(ctx context.Context, target *Seeder) error {
 			return target.verifyCMDBTemplates(ctx)
@@ -139,9 +147,10 @@ func ProductionInitializers(seeder *Seeder) ([]initialization.Initializer, error
 		name:         "extension-core",
 		dependencies: []string{"workflow-core", "sla-core", "cmdb-core"},
 		checksum:     checksum("extension-core"),
-		apply: func(ctx context.Context, transactional *Seeder) {
+		apply: func(ctx context.Context, transactional *Seeder) error {
 			transactional.seedTicketViews(ctx)
 			transactional.seedServiceCatalog(ctx)
+			return nil
 		},
 		verify: func(ctx context.Context, target *Seeder) error {
 			return target.verifyExtensionTemplates(ctx)
@@ -187,7 +196,9 @@ func (i *productionComponentInitializer) Apply(
 	defer func() {
 		_ = tx.Rollback()
 	}()
-	i.apply(ctx, transactional)
+	if err := i.apply(ctx, transactional); err != nil {
+		return initialization.Result{}, fmt.Errorf("apply %s transaction: %w", i.name, err)
+	}
 	if err := i.verify(ctx, transactional); err != nil {
 		return initialization.Result{}, fmt.Errorf("verify %s transaction: %w", i.name, err)
 	}
@@ -307,6 +318,10 @@ func (s *Seeder) verifyITILTemplates(ctx context.Context) error {
 	count, err := s.client.StandardChange.Query().Where(standardchange.TenantIDEQ(tenantID)).Count(ctx)
 	if err != nil || count < len(s.config.StandardChanges) {
 		return fmt.Errorf("verify standard changes: expected>=%d actual=%d err=%w", len(s.config.StandardChanges), count, err)
+	}
+	ticketTypeCount, err := s.client.TicketType.Query().Where(tickettype.TenantIDEQ(int64(tenantID))).Count(ctx)
+	if err != nil || ticketTypeCount < 12 {
+		return fmt.Errorf("verify ticket types: expected>=12 actual=%d err=%w", ticketTypeCount, err)
 	}
 	return nil
 }

@@ -336,7 +336,8 @@ func TestCustomProcessEngine_EvaluateCondition(t *testing.T) {
 		},
 	}
 
-	result := engine.evaluateCondition(flow, variables)
+	result, err := engine.evaluateCondition(flow, variables)
+	assert.NoError(t, err)
 	assert.True(t, result)
 }
 
@@ -351,7 +352,8 @@ func TestCustomProcessEngine_EvaluateCondition_NilExpression(t *testing.T) {
 		ConditionExpression: nil,
 	}
 
-	result := engine.evaluateCondition(flow, variables)
+	result, err := engine.evaluateCondition(flow, variables)
+	assert.NoError(t, err)
 	assert.True(t, result)
 }
 
@@ -369,7 +371,8 @@ func TestCustomProcessEngine_EvaluateCondition_InvalidExpression(t *testing.T) {
 		},
 	}
 
-	result := engine.evaluateCondition(flow, variables)
+	result, err := engine.evaluateCondition(flow, variables)
+	assert.Error(t, err)
 	assert.False(t, result)
 }
 
@@ -385,7 +388,8 @@ func TestCustomProcessEngine_EvaluateCondition_EmptyExpression(t *testing.T) {
 		},
 	}
 
-	result := engine.evaluateCondition(flow, variables)
+	result, err := engine.evaluateCondition(flow, variables)
+	assert.NoError(t, err)
 	assert.True(t, result)
 }
 

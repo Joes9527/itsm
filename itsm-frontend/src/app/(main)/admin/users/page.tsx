@@ -36,9 +36,12 @@ import {
 } from 'antd';
 import { UserApi, type User } from '@/lib/api/user-api';
 import { RoleAPI } from '@/lib/api/role-api';
-import { useAuthStore, useAuthStoreHydration } from '@/lib/store/auth-store';
+import { useAuthStore } from '@/lib/store/auth-store';
 import { departmentService, type Department } from '@/lib/services/department-service';
-import OrgDepartmentTree, { findDepartmentById, buildDeptTreeSelectData } from '@/components/common/OrgDepartmentTree';
+import OrgDepartmentTree, {
+  findDepartmentById,
+  buildDeptTreeSelectData,
+} from '@/components/common/OrgDepartmentTree';
 
 const { Title, Text } = Typography;
 const { Search: AntSearch } = Input;
@@ -47,8 +50,6 @@ const UserManagement: React.FC = () => {
   const { token } = theme.useToken();
   const { message } = App.useApp();
   const { currentTenant } = useAuthStore();
-  useAuthStoreHydration();
-
   // 状态管理
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
@@ -76,7 +77,9 @@ const UserManagement: React.FC = () => {
   const [isPasswordModalVisible, setIsPasswordModalVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [roleOptions, setRoleOptions] = useState<{ label: string; value: string }[]>([]);
-  const [additionalRoleOptions, setAdditionalRoleOptions] = useState<{ label: string; value: number }[]>([]);
+  const [additionalRoleOptions, setAdditionalRoleOptions] = useState<
+    { label: string; value: number }[]
+  >([]);
 
   // 表单
   const [createForm] = Form.useForm();
@@ -150,7 +153,9 @@ const UserManagement: React.FC = () => {
         message.error('无法获取租户信息，请重新登录');
         return;
       }
-      const dept = values.departmentId ? findDepartmentById(departments, values.departmentId) : null;
+      const dept = values.departmentId
+        ? findDepartmentById(departments, values.departmentId)
+        : null;
       await UserApi.createUser({
         username: values.username,
         email: values.email,
@@ -179,7 +184,9 @@ const UserManagement: React.FC = () => {
     if (!selectedUser) return;
     setLoading(true);
     try {
-      const dept = values.departmentId ? findDepartmentById(departments, values.departmentId) : null;
+      const dept = values.departmentId
+        ? findDepartmentById(departments, values.departmentId)
+        : null;
       await UserApi.updateUser(selectedUser.id, {
         username: values.username,
         email: values.email,
@@ -447,112 +454,122 @@ const UserManagement: React.FC = () => {
               }}
               height={560}
             />
-            <div className="mt-4 p-3 bg-gray-50 rounded border text-xs text-gray-500">
+            <div className="mt-4 p-3 bg-raised rounded border text-[12px] text-muted">
               <p className="font-semibold mb-1">提示：</p>
               <p>点选左侧部门节点，右侧只显示该部门直属用户；点选"组织架构"根节点查看全量用户。</p>
             </div>
           </Card>
         </Col>
         <Col xs={24} md={16} lg={17} xl={18}>
-      {/* 操作栏 */}
-      <Card style={{ marginBottom: token.marginLG }}>
-        <Row gutter={[16, 16]} align="middle">
-          <Col flex="auto">
-            <Space wrap>
-              <AntSearch
-                placeholder="搜索用户名、姓名、邮箱、职能条线"
-                style={{ width: 280 }}
-                onSearch={handleSearch}
-                allowClear
-              />
-              <Select
-                placeholder="状态筛选"
-                style={{ width: 120 }}
-                allowClear
-                onChange={value => handleFilterChange('status', value || '')}
-                options={[
-                  { value: 'active', label: '激活' },
-                  { value: 'inactive', label: '禁用' },
-                ]}
-              />
-            </Space>
-          </Col>
-          <Col>
-            <Space>
-              <Button
-                type="primary"
-                icon={<Plus size={16} />}
-                onClick={() => setIsCreateModalVisible(true)}
-              >
-                新建用户
-              </Button>
-              <Button
-                icon={<Download size={16} />}
-                onClick={() => {
-                  // 导出用户数据
-                  const exportData = users.map(user => ({
-                    用户名: user.username,
-                    姓名: user.name,
-                    邮箱: user.email,
-                    部门: user.department || '',
-                    电话: user.phone || '',
-                    状态: user.active ? '激活' : '禁用',
-                    创建时间: user.createdAt,
-                  }));
-                  const headers = ['用户名', '姓名', '邮箱', '部门', '电话', '状态', '创建时间'];
-                  const csvContent = [
-                    headers.join(','),
-                    ...exportData.map(row => headers.map(header => row[header as keyof typeof row]).join(',')),
-                  ].join('\n');
-                  const blob = new Blob(['\ufeff' + csvContent], {
-                    type: 'text/csv;charset=utf-8;',
-                  });
-                  const url = URL.createObjectURL(blob);
-                  const link = document.createElement('a');
-                  link.href = url;
-                  link.download = `用户列表_${new Date().toISOString().split('T')[0]}.csv`;
-                  link.click();
-                  URL.revokeObjectURL(url);
-                  message.success('导出成功');
-                }}
-              >
-                导出
-              </Button>
-            </Space>
-          </Col>
-        </Row>
-      </Card>
+          {/* 操作栏 */}
+          <Card style={{ marginBottom: token.marginLG }}>
+            <Row gutter={[16, 16]} align="middle">
+              <Col flex="auto">
+                <Space wrap>
+                  <AntSearch
+                    placeholder="搜索用户名、姓名、邮箱、职能条线"
+                    style={{ width: 280 }}
+                    onSearch={handleSearch}
+                    allowClear
+                  />
+                  <Select
+                    placeholder="状态筛选"
+                    style={{ width: 120 }}
+                    allowClear
+                    onChange={value => handleFilterChange('status', value || '')}
+                    options={[
+                      { value: 'active', label: '激活' },
+                      { value: 'inactive', label: '禁用' },
+                    ]}
+                  />
+                </Space>
+              </Col>
+              <Col>
+                <Space>
+                  <Button
+                    type="primary"
+                    icon={<Plus size={16} />}
+                    onClick={() => setIsCreateModalVisible(true)}
+                  >
+                    新建用户
+                  </Button>
+                  <Button
+                    icon={<Download size={16} />}
+                    onClick={() => {
+                      // 导出用户数据
+                      const exportData = users.map(user => ({
+                        用户名: user.username,
+                        姓名: user.name,
+                        邮箱: user.email,
+                        部门: user.department || '',
+                        电话: user.phone || '',
+                        状态: user.active ? '激活' : '禁用',
+                        创建时间: user.createdAt,
+                      }));
+                      const headers = [
+                        '用户名',
+                        '姓名',
+                        '邮箱',
+                        '部门',
+                        '电话',
+                        '状态',
+                        '创建时间',
+                      ];
+                      const csvContent = [
+                        headers.join(','),
+                        ...exportData.map(row =>
+                          headers.map(header => row[header as keyof typeof row]).join(',')
+                        ),
+                      ].join('\n');
+                      const blob = new Blob(['\ufeff' + csvContent], {
+                        type: 'text/csv;charset=utf-8;',
+                      });
+                      const url = URL.createObjectURL(blob);
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.download = `用户列表_${new Date().toISOString().split('T')[0]}.csv`;
+                      link.click();
+                      URL.revokeObjectURL(url);
+                      message.success('导出成功');
+                    }}
+                  >
+                    导出
+                  </Button>
+                </Space>
+              </Col>
+            </Row>
+          </Card>
 
-      {/* 用户表格 */}
-      <Card title={selectedDept ? selectedDept.name : '全量用户'}>
-        {users.length === 0 && !loading ? (
-          <Empty description="暂无用户数据" image={Empty.PRESENTED_IMAGE_SIMPLE}>
-            <Button type="primary" onClick={() => setIsCreateModalVisible(true)}>
-              创建第一个用户
-            </Button>
-          </Empty>
-        ) : (
-          <Table
-            columns={columns}
-            dataSource={users}
-            rowKey="id"
-            loading={loading}
-            scroll={{ x: 980 }}
-            pagination={{
-              current: pagination.current,
-              pageSize: pagination.pageSize,
-              total: pagination.total,
-              showSizeChanger: true,
-              showQuickJumper: true,
-              showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条/共 ${total} 条`,
-              pageSizeOptions: ['10', '20', '50', '100'],
-              onChange: (page, pageSize) => {
-                setPagination(prev => ({ ...prev, current: page, pageSize }));
-              },
-            }}
-          />
-        )}
-      </Card>
+          {/* 用户表格 */}
+          <Card title={selectedDept ? selectedDept.name : '全量用户'}>
+            {users.length === 0 && !loading ? (
+              <Empty description="暂无用户数据" image={Empty.PRESENTED_IMAGE_SIMPLE}>
+                <Button type="primary" onClick={() => setIsCreateModalVisible(true)}>
+                  创建第一个用户
+                </Button>
+              </Empty>
+            ) : (
+              <Table
+                columns={columns}
+                dataSource={users}
+                rowKey="id"
+                loading={loading}
+                scroll={{ x: 980 }}
+                pagination={{
+                  current: pagination.current,
+                  pageSize: pagination.pageSize,
+                  total: pagination.total,
+                  showSizeChanger: true,
+                  showQuickJumper: true,
+                  showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条/共 ${total} 条`,
+                  pageSizeOptions: ['10', '20', '50', '100'],
+                  onChange: (page, pageSize) => {
+                    setPagination(prev => ({ ...prev, current: page, pageSize }));
+                  },
+                }}
+              />
+            )}
+          </Card>
         </Col>
       </Row>
 
@@ -649,7 +666,12 @@ const UserManagement: React.FC = () => {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="isLeader" label="是否是领导" valuePropName="checked" initialValue={false}>
+              <Form.Item
+                name="isLeader"
+                label="是否是领导"
+                valuePropName="checked"
+                initialValue={false}
+              >
                 <Switch checkedChildren="是" unCheckedChildren="否" />
               </Form.Item>
             </Col>

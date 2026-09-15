@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/user"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type NotificationPreferenceCreate struct {
 	config
 	mutation *NotificationPreferenceMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetUserID sets the "user_id" field.
@@ -332,6 +334,7 @@ func (_c *NotificationPreferenceCreate) createSpec() (*NotificationPreference, *
 		_node = &NotificationPreference{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(notificationpreference.Table, sqlgraph.NewFieldSpec(notificationpreference.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(notificationpreference.FieldTenantID, field.TypeInt, value)
 		_node.TenantID = value
@@ -400,11 +403,511 @@ func (_c *NotificationPreferenceCreate) createSpec() (*NotificationPreference, *
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.NotificationPreference.Create().
+//		SetUserID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.NotificationPreferenceUpsert) {
+//			SetUserID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *NotificationPreferenceCreate) OnConflict(opts ...sql.ConflictOption) *NotificationPreferenceUpsertOne {
+	_c.conflict = opts
+	return &NotificationPreferenceUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.NotificationPreference.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *NotificationPreferenceCreate) OnConflictColumns(columns ...string) *NotificationPreferenceUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &NotificationPreferenceUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// NotificationPreferenceUpsertOne is the builder for "upsert"-ing
+	//  one NotificationPreference node.
+	NotificationPreferenceUpsertOne struct {
+		create *NotificationPreferenceCreate
+	}
+
+	// NotificationPreferenceUpsert is the "OnConflict" setter.
+	NotificationPreferenceUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetUserID sets the "user_id" field.
+func (u *NotificationPreferenceUpsert) SetUserID(v int) *NotificationPreferenceUpsert {
+	u.Set(notificationpreference.FieldUserID, v)
+	return u
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsert) UpdateUserID() *NotificationPreferenceUpsert {
+	u.SetExcluded(notificationpreference.FieldUserID)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *NotificationPreferenceUpsert) SetTenantID(v int) *NotificationPreferenceUpsert {
+	u.Set(notificationpreference.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsert) UpdateTenantID() *NotificationPreferenceUpsert {
+	u.SetExcluded(notificationpreference.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *NotificationPreferenceUpsert) AddTenantID(v int) *NotificationPreferenceUpsert {
+	u.Add(notificationpreference.FieldTenantID, v)
+	return u
+}
+
+// SetEventType sets the "event_type" field.
+func (u *NotificationPreferenceUpsert) SetEventType(v string) *NotificationPreferenceUpsert {
+	u.Set(notificationpreference.FieldEventType, v)
+	return u
+}
+
+// UpdateEventType sets the "event_type" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsert) UpdateEventType() *NotificationPreferenceUpsert {
+	u.SetExcluded(notificationpreference.FieldEventType)
+	return u
+}
+
+// SetEmailEnabled sets the "email_enabled" field.
+func (u *NotificationPreferenceUpsert) SetEmailEnabled(v bool) *NotificationPreferenceUpsert {
+	u.Set(notificationpreference.FieldEmailEnabled, v)
+	return u
+}
+
+// UpdateEmailEnabled sets the "email_enabled" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsert) UpdateEmailEnabled() *NotificationPreferenceUpsert {
+	u.SetExcluded(notificationpreference.FieldEmailEnabled)
+	return u
+}
+
+// SetSmsEnabled sets the "sms_enabled" field.
+func (u *NotificationPreferenceUpsert) SetSmsEnabled(v bool) *NotificationPreferenceUpsert {
+	u.Set(notificationpreference.FieldSmsEnabled, v)
+	return u
+}
+
+// UpdateSmsEnabled sets the "sms_enabled" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsert) UpdateSmsEnabled() *NotificationPreferenceUpsert {
+	u.SetExcluded(notificationpreference.FieldSmsEnabled)
+	return u
+}
+
+// SetInAppEnabled sets the "in_app_enabled" field.
+func (u *NotificationPreferenceUpsert) SetInAppEnabled(v bool) *NotificationPreferenceUpsert {
+	u.Set(notificationpreference.FieldInAppEnabled, v)
+	return u
+}
+
+// UpdateInAppEnabled sets the "in_app_enabled" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsert) UpdateInAppEnabled() *NotificationPreferenceUpsert {
+	u.SetExcluded(notificationpreference.FieldInAppEnabled)
+	return u
+}
+
+// SetPushEnabled sets the "push_enabled" field.
+func (u *NotificationPreferenceUpsert) SetPushEnabled(v bool) *NotificationPreferenceUpsert {
+	u.Set(notificationpreference.FieldPushEnabled, v)
+	return u
+}
+
+// UpdatePushEnabled sets the "push_enabled" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsert) UpdatePushEnabled() *NotificationPreferenceUpsert {
+	u.SetExcluded(notificationpreference.FieldPushEnabled)
+	return u
+}
+
+// SetFrequency sets the "frequency" field.
+func (u *NotificationPreferenceUpsert) SetFrequency(v string) *NotificationPreferenceUpsert {
+	u.Set(notificationpreference.FieldFrequency, v)
+	return u
+}
+
+// UpdateFrequency sets the "frequency" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsert) UpdateFrequency() *NotificationPreferenceUpsert {
+	u.SetExcluded(notificationpreference.FieldFrequency)
+	return u
+}
+
+// SetQuietHoursStart sets the "quiet_hours_start" field.
+func (u *NotificationPreferenceUpsert) SetQuietHoursStart(v time.Time) *NotificationPreferenceUpsert {
+	u.Set(notificationpreference.FieldQuietHoursStart, v)
+	return u
+}
+
+// UpdateQuietHoursStart sets the "quiet_hours_start" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsert) UpdateQuietHoursStart() *NotificationPreferenceUpsert {
+	u.SetExcluded(notificationpreference.FieldQuietHoursStart)
+	return u
+}
+
+// ClearQuietHoursStart clears the value of the "quiet_hours_start" field.
+func (u *NotificationPreferenceUpsert) ClearQuietHoursStart() *NotificationPreferenceUpsert {
+	u.SetNull(notificationpreference.FieldQuietHoursStart)
+	return u
+}
+
+// SetQuietHoursEnd sets the "quiet_hours_end" field.
+func (u *NotificationPreferenceUpsert) SetQuietHoursEnd(v time.Time) *NotificationPreferenceUpsert {
+	u.Set(notificationpreference.FieldQuietHoursEnd, v)
+	return u
+}
+
+// UpdateQuietHoursEnd sets the "quiet_hours_end" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsert) UpdateQuietHoursEnd() *NotificationPreferenceUpsert {
+	u.SetExcluded(notificationpreference.FieldQuietHoursEnd)
+	return u
+}
+
+// ClearQuietHoursEnd clears the value of the "quiet_hours_end" field.
+func (u *NotificationPreferenceUpsert) ClearQuietHoursEnd() *NotificationPreferenceUpsert {
+	u.SetNull(notificationpreference.FieldQuietHoursEnd)
+	return u
+}
+
+// SetTimezone sets the "timezone" field.
+func (u *NotificationPreferenceUpsert) SetTimezone(v string) *NotificationPreferenceUpsert {
+	u.Set(notificationpreference.FieldTimezone, v)
+	return u
+}
+
+// UpdateTimezone sets the "timezone" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsert) UpdateTimezone() *NotificationPreferenceUpsert {
+	u.SetExcluded(notificationpreference.FieldTimezone)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *NotificationPreferenceUpsert) SetCreatedAt(v time.Time) *NotificationPreferenceUpsert {
+	u.Set(notificationpreference.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsert) UpdateCreatedAt() *NotificationPreferenceUpsert {
+	u.SetExcluded(notificationpreference.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *NotificationPreferenceUpsert) SetUpdatedAt(v time.Time) *NotificationPreferenceUpsert {
+	u.Set(notificationpreference.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsert) UpdateUpdatedAt() *NotificationPreferenceUpsert {
+	u.SetExcluded(notificationpreference.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.NotificationPreference.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *NotificationPreferenceUpsertOne) UpdateNewValues() *NotificationPreferenceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.NotificationPreference.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *NotificationPreferenceUpsertOne) Ignore() *NotificationPreferenceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *NotificationPreferenceUpsertOne) DoNothing() *NotificationPreferenceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the NotificationPreferenceCreate.OnConflict
+// documentation for more info.
+func (u *NotificationPreferenceUpsertOne) Update(set func(*NotificationPreferenceUpsert)) *NotificationPreferenceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&NotificationPreferenceUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetUserID sets the "user_id" field.
+func (u *NotificationPreferenceUpsertOne) SetUserID(v int) *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertOne) UpdateUserID() *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *NotificationPreferenceUpsertOne) SetTenantID(v int) *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *NotificationPreferenceUpsertOne) AddTenantID(v int) *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertOne) UpdateTenantID() *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetEventType sets the "event_type" field.
+func (u *NotificationPreferenceUpsertOne) SetEventType(v string) *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetEventType(v)
+	})
+}
+
+// UpdateEventType sets the "event_type" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertOne) UpdateEventType() *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateEventType()
+	})
+}
+
+// SetEmailEnabled sets the "email_enabled" field.
+func (u *NotificationPreferenceUpsertOne) SetEmailEnabled(v bool) *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetEmailEnabled(v)
+	})
+}
+
+// UpdateEmailEnabled sets the "email_enabled" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertOne) UpdateEmailEnabled() *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateEmailEnabled()
+	})
+}
+
+// SetSmsEnabled sets the "sms_enabled" field.
+func (u *NotificationPreferenceUpsertOne) SetSmsEnabled(v bool) *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetSmsEnabled(v)
+	})
+}
+
+// UpdateSmsEnabled sets the "sms_enabled" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertOne) UpdateSmsEnabled() *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateSmsEnabled()
+	})
+}
+
+// SetInAppEnabled sets the "in_app_enabled" field.
+func (u *NotificationPreferenceUpsertOne) SetInAppEnabled(v bool) *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetInAppEnabled(v)
+	})
+}
+
+// UpdateInAppEnabled sets the "in_app_enabled" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertOne) UpdateInAppEnabled() *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateInAppEnabled()
+	})
+}
+
+// SetPushEnabled sets the "push_enabled" field.
+func (u *NotificationPreferenceUpsertOne) SetPushEnabled(v bool) *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetPushEnabled(v)
+	})
+}
+
+// UpdatePushEnabled sets the "push_enabled" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertOne) UpdatePushEnabled() *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdatePushEnabled()
+	})
+}
+
+// SetFrequency sets the "frequency" field.
+func (u *NotificationPreferenceUpsertOne) SetFrequency(v string) *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetFrequency(v)
+	})
+}
+
+// UpdateFrequency sets the "frequency" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertOne) UpdateFrequency() *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateFrequency()
+	})
+}
+
+// SetQuietHoursStart sets the "quiet_hours_start" field.
+func (u *NotificationPreferenceUpsertOne) SetQuietHoursStart(v time.Time) *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetQuietHoursStart(v)
+	})
+}
+
+// UpdateQuietHoursStart sets the "quiet_hours_start" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertOne) UpdateQuietHoursStart() *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateQuietHoursStart()
+	})
+}
+
+// ClearQuietHoursStart clears the value of the "quiet_hours_start" field.
+func (u *NotificationPreferenceUpsertOne) ClearQuietHoursStart() *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.ClearQuietHoursStart()
+	})
+}
+
+// SetQuietHoursEnd sets the "quiet_hours_end" field.
+func (u *NotificationPreferenceUpsertOne) SetQuietHoursEnd(v time.Time) *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetQuietHoursEnd(v)
+	})
+}
+
+// UpdateQuietHoursEnd sets the "quiet_hours_end" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertOne) UpdateQuietHoursEnd() *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateQuietHoursEnd()
+	})
+}
+
+// ClearQuietHoursEnd clears the value of the "quiet_hours_end" field.
+func (u *NotificationPreferenceUpsertOne) ClearQuietHoursEnd() *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.ClearQuietHoursEnd()
+	})
+}
+
+// SetTimezone sets the "timezone" field.
+func (u *NotificationPreferenceUpsertOne) SetTimezone(v string) *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetTimezone(v)
+	})
+}
+
+// UpdateTimezone sets the "timezone" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertOne) UpdateTimezone() *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateTimezone()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *NotificationPreferenceUpsertOne) SetCreatedAt(v time.Time) *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertOne) UpdateCreatedAt() *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *NotificationPreferenceUpsertOne) SetUpdatedAt(v time.Time) *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertOne) UpdateUpdatedAt() *NotificationPreferenceUpsertOne {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *NotificationPreferenceUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for NotificationPreferenceCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *NotificationPreferenceUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *NotificationPreferenceUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *NotificationPreferenceUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // NotificationPreferenceCreateBulk is the builder for creating many NotificationPreference entities in bulk.
 type NotificationPreferenceCreateBulk struct {
 	config
 	err      error
 	builders []*NotificationPreferenceCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the NotificationPreference entities in the database.
@@ -434,6 +937,7 @@ func (_c *NotificationPreferenceCreateBulk) Save(ctx context.Context) ([]*Notifi
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -484,6 +988,313 @@ func (_c *NotificationPreferenceCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *NotificationPreferenceCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.NotificationPreference.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.NotificationPreferenceUpsert) {
+//			SetUserID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *NotificationPreferenceCreateBulk) OnConflict(opts ...sql.ConflictOption) *NotificationPreferenceUpsertBulk {
+	_c.conflict = opts
+	return &NotificationPreferenceUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.NotificationPreference.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *NotificationPreferenceCreateBulk) OnConflictColumns(columns ...string) *NotificationPreferenceUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &NotificationPreferenceUpsertBulk{
+		create: _c,
+	}
+}
+
+// NotificationPreferenceUpsertBulk is the builder for "upsert"-ing
+// a bulk of NotificationPreference nodes.
+type NotificationPreferenceUpsertBulk struct {
+	create *NotificationPreferenceCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.NotificationPreference.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *NotificationPreferenceUpsertBulk) UpdateNewValues() *NotificationPreferenceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.NotificationPreference.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *NotificationPreferenceUpsertBulk) Ignore() *NotificationPreferenceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *NotificationPreferenceUpsertBulk) DoNothing() *NotificationPreferenceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the NotificationPreferenceCreateBulk.OnConflict
+// documentation for more info.
+func (u *NotificationPreferenceUpsertBulk) Update(set func(*NotificationPreferenceUpsert)) *NotificationPreferenceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&NotificationPreferenceUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetUserID sets the "user_id" field.
+func (u *NotificationPreferenceUpsertBulk) SetUserID(v int) *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertBulk) UpdateUserID() *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *NotificationPreferenceUpsertBulk) SetTenantID(v int) *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *NotificationPreferenceUpsertBulk) AddTenantID(v int) *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertBulk) UpdateTenantID() *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetEventType sets the "event_type" field.
+func (u *NotificationPreferenceUpsertBulk) SetEventType(v string) *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetEventType(v)
+	})
+}
+
+// UpdateEventType sets the "event_type" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertBulk) UpdateEventType() *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateEventType()
+	})
+}
+
+// SetEmailEnabled sets the "email_enabled" field.
+func (u *NotificationPreferenceUpsertBulk) SetEmailEnabled(v bool) *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetEmailEnabled(v)
+	})
+}
+
+// UpdateEmailEnabled sets the "email_enabled" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertBulk) UpdateEmailEnabled() *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateEmailEnabled()
+	})
+}
+
+// SetSmsEnabled sets the "sms_enabled" field.
+func (u *NotificationPreferenceUpsertBulk) SetSmsEnabled(v bool) *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetSmsEnabled(v)
+	})
+}
+
+// UpdateSmsEnabled sets the "sms_enabled" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertBulk) UpdateSmsEnabled() *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateSmsEnabled()
+	})
+}
+
+// SetInAppEnabled sets the "in_app_enabled" field.
+func (u *NotificationPreferenceUpsertBulk) SetInAppEnabled(v bool) *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetInAppEnabled(v)
+	})
+}
+
+// UpdateInAppEnabled sets the "in_app_enabled" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertBulk) UpdateInAppEnabled() *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateInAppEnabled()
+	})
+}
+
+// SetPushEnabled sets the "push_enabled" field.
+func (u *NotificationPreferenceUpsertBulk) SetPushEnabled(v bool) *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetPushEnabled(v)
+	})
+}
+
+// UpdatePushEnabled sets the "push_enabled" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertBulk) UpdatePushEnabled() *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdatePushEnabled()
+	})
+}
+
+// SetFrequency sets the "frequency" field.
+func (u *NotificationPreferenceUpsertBulk) SetFrequency(v string) *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetFrequency(v)
+	})
+}
+
+// UpdateFrequency sets the "frequency" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertBulk) UpdateFrequency() *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateFrequency()
+	})
+}
+
+// SetQuietHoursStart sets the "quiet_hours_start" field.
+func (u *NotificationPreferenceUpsertBulk) SetQuietHoursStart(v time.Time) *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetQuietHoursStart(v)
+	})
+}
+
+// UpdateQuietHoursStart sets the "quiet_hours_start" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertBulk) UpdateQuietHoursStart() *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateQuietHoursStart()
+	})
+}
+
+// ClearQuietHoursStart clears the value of the "quiet_hours_start" field.
+func (u *NotificationPreferenceUpsertBulk) ClearQuietHoursStart() *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.ClearQuietHoursStart()
+	})
+}
+
+// SetQuietHoursEnd sets the "quiet_hours_end" field.
+func (u *NotificationPreferenceUpsertBulk) SetQuietHoursEnd(v time.Time) *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetQuietHoursEnd(v)
+	})
+}
+
+// UpdateQuietHoursEnd sets the "quiet_hours_end" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertBulk) UpdateQuietHoursEnd() *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateQuietHoursEnd()
+	})
+}
+
+// ClearQuietHoursEnd clears the value of the "quiet_hours_end" field.
+func (u *NotificationPreferenceUpsertBulk) ClearQuietHoursEnd() *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.ClearQuietHoursEnd()
+	})
+}
+
+// SetTimezone sets the "timezone" field.
+func (u *NotificationPreferenceUpsertBulk) SetTimezone(v string) *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetTimezone(v)
+	})
+}
+
+// UpdateTimezone sets the "timezone" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertBulk) UpdateTimezone() *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateTimezone()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *NotificationPreferenceUpsertBulk) SetCreatedAt(v time.Time) *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertBulk) UpdateCreatedAt() *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *NotificationPreferenceUpsertBulk) SetUpdatedAt(v time.Time) *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *NotificationPreferenceUpsertBulk) UpdateUpdatedAt() *NotificationPreferenceUpsertBulk {
+	return u.Update(func(s *NotificationPreferenceUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *NotificationPreferenceUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the NotificationPreferenceCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for NotificationPreferenceCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *NotificationPreferenceUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

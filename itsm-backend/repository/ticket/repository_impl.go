@@ -2,12 +2,11 @@ package ticket
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"reflect"
-	"strings"
 	"time"
 
+	"itsm-backend/common"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/repository/base"
@@ -15,28 +14,10 @@ import (
 	"go.uber.org/zap"
 )
 
-// SequenceProvider 工单号生成接口（避免循环依赖）
-type SequenceProvider interface {
-	GetNextSequenceWithExpiry(ctx context.Context, key string, expiredAt time.Time) (int64, error)
-}
-
-// sequenceServiceAdapter SequenceService 适配器
-type sequenceServiceAdapter struct {
-	logger *zap.SugaredLogger
-	client *ent.Client
-}
-
-// NewSequenceServiceAdapter 创建适配器
-func NewSequenceServiceAdapter(logger *zap.SugaredLogger, client *ent.Client) *sequenceServiceAdapter {
-	return &sequenceServiceAdapter{logger: logger, client: client}
-}
-
 // EntRepository Ent 实现的工单仓储
 type EntRepository struct {
 	*base.EntRepository
-	logger          *zap.SugaredLogger
-	sequenceService SequenceProvider
-	rawDB           *sql.DB // for transactional SELECT FOR UPDATE
+	logger *zap.SugaredLogger
 }
 
 // NewEntRepository 创建 Ent 工单仓储
@@ -45,99 +26,6 @@ func NewEntRepository(client *ent.Client, logger *zap.SugaredLogger) *EntReposit
 		EntRepository: base.NewEntRepository(client),
 		logger:        logger,
 	}
-}
-
-// SetSequenceService 设置序列服务（用于 Redis 工单号生成）
-func (r *EntRepository) SetSequenceService(seqSvc SequenceProvider) {
-	// A typed nil pointer stored in an interface is not equal to nil. Redis
-	// initialization returns (*SequenceService)(nil) when unavailable; without
-	// this guard the repository attempts to call it and panics instead of using
-	// the database sequence fallback.
-	if seqSvc == nil || (reflect.ValueOf(seqSvc).Kind() == reflect.Ptr && reflect.ValueOf(seqSvc).IsNil()) {
-		r.sequenceService = nil
-		return
-	}
-	r.sequenceService = seqSvc
-}
-
-// SetRawDB 设置原生数据库连接（用于事务性编号生成）
-func (r *EntRepository) SetRawDB(db *sql.DB) {
-	r.rawDB = db
-}
-
-// Create 创建工单
-func (r *EntRepository) Create(ctx context.Context, params *CreateParams, tenantID int) (*Ticket, error) {
-	for attempt := 0; attempt < 3; attempt++ {
-		ticketNumber, err := r.GenerateTicketNumber(ctx, tenantID)
-		if err != nil {
-			return nil, fmt.Errorf("generate ticket number: %w", err)
-		}
-
-		builder := r.Client().Ticket.Create().
-			SetTitle(params.Title).
-			SetDescription(params.Description).
-			SetType(string(params.Type)).
-			SetPriority(string(params.Priority)).
-			SetTicketNumber(ticketNumber).
-			SetRequesterID(params.RequesterID).
-			SetTenantID(tenantID).
-			SetStatus(string(StatusNew))
-
-		// A Service Request's ticket is its WorkItem base record, so its class
-		// must be persisted when the authoritative ticket creation path runs.
-		if params.Type == TypeServiceRequest {
-			builder.SetRecordClass("service_request_item")
-		}
-
-		if params.AssigneeID != nil {
-			builder.SetAssigneeID(*params.AssigneeID)
-		}
-		if params.CategoryID != nil {
-			builder.SetCategoryID(*params.CategoryID)
-		}
-		if params.TemplateID != nil {
-			builder.SetTemplateID(*params.TemplateID)
-		}
-		if params.ParentTicketID != nil {
-			builder.SetParentTicketID(*params.ParentTicketID)
-		}
-		if len(params.TagIDs) > 0 {
-			builder.AddTagIDs(params.TagIDs...)
-		}
-		if len(params.CustomFieldValues) > 0 {
-			builder.SetCustomFieldValues(params.CustomFieldValues)
-		}
-		if params.Source != "" {
-			builder.SetSource(params.Source)
-		}
-		if params.CreatorEmail != "" {
-			builder.SetCreatorEmail(params.CreatorEmail)
-		}
-		if params.ExternalMessageID != "" {
-			builder.SetExternalMessageID(params.ExternalMessageID)
-		}
-		if params.ConversationID != "" {
-			builder.SetConversationID(params.ConversationID)
-		}
-
-		entity, err := builder.Save(ctx)
-		if err == nil {
-			return toDomainModel(entity), nil
-		}
-
-		if ent.IsConstraintError(err) || strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "23505") {
-			r.logger.Warnw("ticket number collision detected during create, retrying",
-				"ticket_number", ticketNumber,
-				"tenant_id", tenantID,
-				"attempt", attempt+1,
-				"error", err)
-			continue
-		}
-
-		return nil, fmt.Errorf("create ticket: %w", err)
-	}
-
-	return nil, fmt.Errorf("create ticket: ticket number collision persisted after retries")
 }
 
 // GetByID 根据 ID 获取工单
@@ -180,10 +68,36 @@ func (r *EntRepository) GetByNumber(ctx context.Context, ticketNumber string, te
 
 // Update 更新工单
 func (r *EntRepository) Update(ctx context.Context, id int, params *UpdateParams, tenantID int) (*Ticket, error) {
-	// 先获取当前工单（包含版本号）
-	current, err := r.GetByID(ctx, id, tenantID)
+	return updateTicket(ctx, r.Client(), id, params, tenantID)
+}
+
+// UpdateTx uses only the caller's transaction for reads, CAS and tag relations.
+// Authorization and execution-scope admission remain the command owner's duty.
+func (r *EntRepository) UpdateTx(ctx context.Context, tx *ent.Tx, id int, params *UpdateParams, tenantID int) (*Ticket, error) {
+	if tx == nil {
+		return nil, fmt.Errorf("ticket update requires caller transaction")
+	}
+	return updateTicket(ctx, tx.Client(), id, params, tenantID)
+}
+
+func updateTicket(ctx context.Context, client *ent.Client, id int, params *UpdateParams, tenantID int) (*Ticket, error) {
+	if params == nil {
+		return nil, fmt.Errorf("ticket update params are required")
+	}
+	current, err := client.Ticket.Query().Where(ticket.IDEQ(id), ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()).Only(ctx)
 	if err != nil {
-		return nil, err
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("ticket not found: %w", err)
+		}
+		return nil, fmt.Errorf("get ticket: %w", err)
+	}
+
+	coreMutation := params.Title != nil || params.Description != nil || params.Status != nil || params.GenericSubtype != nil || params.Priority != nil || params.CategoryID != nil || params.Resolution != nil
+	if coreMutation {
+		switch current.RecordClass {
+		case dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest:
+			return nil, common.NewValidationError(fmt.Sprintf("%s writes require the owning domain command", current.RecordClass), nil)
+		}
 	}
 
 	// 乐观锁检查
@@ -191,9 +105,16 @@ func (r *EntRepository) Update(ctx context.Context, id int, params *UpdateParams
 		return nil, fmt.Errorf("version conflict: expected %d, got %d", current.Version, params.Version)
 	}
 
-	builder := r.Client().Ticket.UpdateOneID(id).
+	builder := client.Ticket.UpdateOneID(id).
 		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(params.Version)).
 		SetVersion(current.Version + 1) // 版本号递增
+	if params.VersionAlreadyAdvanced {
+		builder.SetVersion(current.Version)
+	}
+
+	if coreMutation {
+		builder.Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest))
+	}
 
 	if params.Title != nil {
 		builder.SetTitle(*params.Title)
@@ -212,14 +133,14 @@ func (r *EntRepository) Update(ctx context.Context, id int, params *UpdateParams
 			builder.ClearResolvedAt().ClearClosedAt()
 		}
 	}
-	if params.Type != nil {
-		builder.SetType(string(*params.Type))
+	if params.GenericSubtype != nil {
+		if current.RecordClass != "generic" {
+			return nil, fmt.Errorf("generic subtype cannot mutate professional work item")
+		}
+		builder.SetGenericSubtype(*params.GenericSubtype)
 	}
 	if params.Priority != nil {
 		builder.SetPriority(string(*params.Priority))
-	}
-	if params.AssigneeID != nil {
-		builder.SetAssigneeID(*params.AssigneeID)
 	}
 	if params.CategoryID != nil {
 		if *params.CategoryID == 0 {
@@ -249,25 +170,6 @@ func (r *EntRepository) Update(ctx context.Context, id int, params *UpdateParams
 	return toDomainModel(entity), nil
 }
 
-// Delete 软删除工单，保留审计和关联记录。
-func (r *EntRepository) Delete(ctx context.Context, id int, tenantID int) error {
-	affected, err := r.Client().Ticket.Update().
-		Where(
-			ticket.ID(id),
-			ticket.TenantID(tenantID),
-			ticket.DeletedAtIsNil(),
-		).
-		SetDeletedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		return fmt.Errorf("delete ticket: %w", err)
-	}
-	if affected == 0 {
-		return fmt.Errorf("ticket not found")
-	}
-	return nil
-}
-
 // List 列表查询工单
 func (r *EntRepository) List(ctx context.Context, tenantID int, filters *FilterParams, pagination *base.QueryParams) (*base.ListResult[Ticket], error) {
 	query := r.Client().Ticket.Query().
@@ -281,8 +183,11 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, filters *FilterP
 		if filters.Priority != nil {
 			query = query.Where(ticket.PriorityEQ(string(*filters.Priority)))
 		}
-		if filters.Type != nil {
-			query = query.Where(ticket.TypeEQ(string(*filters.Type)))
+		if filters.RecordClass != nil {
+			query = query.Where(ticket.RecordClassEQ(*filters.RecordClass))
+		}
+		if filters.GenericSubtype != nil {
+			query = query.Where(ticket.RecordClassEQ("generic"), ticket.GenericSubtypeEQ(*filters.GenericSubtype))
 		}
 		if filters.RequesterID != nil {
 			query = query.Where(ticket.RequesterID(*filters.RequesterID))
@@ -318,20 +223,8 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, filters *FilterP
 		if filters.DateTo != nil {
 			query = query.Where(ticket.CreatedAtLTE(*filters.DateTo))
 		}
-		// 阻断8 修复：行级数据权限。
-		// DataScopeOwnedOrAssigned 强制追加 Or(RequesterIDEQ(uid), AssigneeIDEQ(uid))，
-		// 使普通员工只能看到自己创建或分配给自己的工单。
-		// 这是安全关键路径：即使上层忘记传 RequesterID 过滤，这里仍会兜底收窄。
-		if filters.DataScope == DataScopeOwnedOrAssigned {
-			if filters.CurrentUserID <= 0 {
-				// 防御性：未提供用户 ID 时 fail closed，返回空集而非全量。
-				query = query.Where(ticket.IDEQ(-1))
-			} else {
-				query = query.Where(ticket.Or(
-					ticket.RequesterIDEQ(filters.CurrentUserID),
-					ticket.AssigneeIDEQ(filters.CurrentUserID),
-				))
-			}
+		if filters.ReadScope != nil {
+			query = query.Where(filters.ReadScope)
 		}
 	}
 
@@ -373,25 +266,6 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, filters *FilterP
 	}
 
 	return result, nil
-}
-
-// BatchDelete 批量软删除工单。
-func (r *EntRepository) BatchDelete(ctx context.Context, ids []int, tenantID int) error {
-	if len(ids) == 0 {
-		return nil
-	}
-	_, err := r.Client().Ticket.Update().
-		Where(
-			ticket.IDIn(ids...),
-			ticket.TenantID(tenantID),
-			ticket.DeletedAtIsNil(),
-		).
-		SetDeletedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		return fmt.Errorf("batch delete tickets: %w", err)
-	}
-	return nil
 }
 
 // Exists 检查工单是否存在
@@ -510,152 +384,6 @@ func (r *EntRepository) CountByPriority(ctx context.Context, tenantID int) (map[
 	return counts, nil
 }
 
-// GenerateTicketNumber 生成工单编号
-// 格式: TKT-YYYYMM-XXXXXX
-// 优先使用 Redis 序列服务（原子递增，避免并发重复）；否则使用数据库回退
-func (r *EntRepository) GenerateTicketNumber(ctx context.Context, tenantID int) (string, error) {
-	now := time.Now()
-	year := now.Year()
-	month := int(now.Month())
-
-	// 计算本月最后一天作为过期时间
-	expiredAt := time.Date(year, time.Month(month)+1, 1, 0, 0, 0, 0, time.UTC)
-
-	// 优先使用 Redis 序列服务
-	if r.sequenceService != nil {
-		return r.generateTicketNumberWithRedis(ctx, tenantID, year, month, expiredAt)
-	}
-
-	// 备用方案：数据库查询
-	return r.generateTicketNumberWithDB(ctx, tenantID, year, month)
-}
-
-// generateTicketNumberWithRedis 使用 Redis INCR 生成工单编号
-func (r *EntRepository) generateTicketNumberWithRedis(ctx context.Context, tenantID, year, month int, expiredAt time.Time) (string, error) {
-	key := fmt.Sprintf("sequence:ticket:%d:%d%02d", tenantID, year, month)
-
-	// 获取序列号（带过期时间）
-	seq, err := r.sequenceService.GetNextSequenceWithExpiry(ctx, key, expiredAt)
-	if err != nil {
-		r.logger.Warnw("Redis sequence failed for ticket, fallback to DB", "error", err)
-		return r.generateTicketNumberWithDB(ctx, tenantID, year, month)
-	}
-
-	return fmt.Sprintf("TKT-%04d%02d-%06d", year, month, seq), nil
-}
-
-// generateTicketNumberWithDB 使用数据库事务+SELECT FOR UPDATE NOWAIT 生成工单编号（备用方案）
-// 重试机制（最多3次）解决并发竞态：当编号已存在时重新查询并生成
-func (r *EntRepository) generateTicketNumberWithDB(ctx context.Context, tenantID int, year, month int) (string, error) {
-	prefix := fmt.Sprintf("TKT-%04d%02d-", year, month)
-
-	for attempt := 0; attempt < 3; attempt++ {
-		var candidate string
-
-		// 路径1：有 rawDB，优先使用事务 + NOWAIT
-		if r.rawDB != nil {
-			tx, err := r.rawDB.BeginTx(ctx, nil)
-			if err != nil {
-				r.logger.Warnw("BeginTx failed, trying Ent fallback", "error", err, "attempt", attempt+1)
-				// fall through to Ent fallback below
-			} else {
-				// FOR UPDATE NOWAIT：立即失败而非跳过锁（快速感知冲突）
-				query := `SELECT ticket_number FROM tickets WHERE tenant_id = $1 AND ticket_number LIKE $2 AND ticket_number IS NOT NULL AND ticket_number != '' ORDER BY ticket_number DESC LIMIT 1 FOR UPDATE NOWAIT`
-				var maxTicketNum string
-				err = tx.QueryRowContext(ctx, query, tenantID, prefix+"%").Scan(&maxTicketNum)
-
-				var seq int = 0
-				if err == nil && maxTicketNum != "" {
-					if idx := strings.LastIndex(maxTicketNum, "-"); idx >= 0 {
-						fmt.Sscanf(maxTicketNum[idx+1:], "%d", &seq)
-					}
-				} else if err == sql.ErrNoRows {
-					r.logger.Infow("No existing tickets this month, starting from seed", "tenant", tenantID, "year", year, "month", month)
-				} else if err != nil {
-					tx.Rollback()
-					r.logger.Warnw("NOWAIT query failed, trying Ent fallback", "error", err, "attempt", attempt+1)
-					// fall through to Ent fallback
-				}
-
-				if seq > 0 {
-					candidate = fmt.Sprintf("TKT-%04d%02d-%06d", year, month, seq+1)
-				} else {
-					candidate = fmt.Sprintf("TKT-%04d%02d-%06d", year, month, 1)
-				}
-
-				r.logger.Infow("DB transaction generated ticket number",
-					"number", candidate, "tenant", tenantID, "attempt", attempt+1)
-
-				// 提交事务释放锁
-				if err := tx.Commit(); err != nil {
-					r.logger.Warnw("tx commit failed, retrying", "error", err, "attempt", attempt+1)
-					continue
-				}
-
-				// 双重保险：验证编号是否真的唯一
-				checkQuery := `SELECT COUNT(*) FROM tickets WHERE ticket_number = $1 AND tenant_id = $2`
-				var count int
-				if checkErr := r.rawDB.QueryRowContext(ctx, checkQuery, candidate, tenantID).Scan(&count); checkErr == nil && count > 0 {
-					r.logger.Warnw("Ticket number collision detected, retrying", "number", candidate, "attempt", attempt+1)
-					continue
-				}
-
-				return candidate, nil
-			}
-		}
-
-		// 路径2：Ent ORM fallback（没有 rawDB 或 rawDB 路径失败）
-		tickets, err := r.Client().Ticket.Query().
-			Where(
-				ticket.TenantID(tenantID),
-				ticket.TicketNumberContains(prefix[:len(prefix)-1]),
-			).
-			Order(ent.Desc(ticket.FieldTicketNumber)).
-			Limit(1).
-			All(ctx)
-
-		var seq int
-		if err != nil || len(tickets) == 0 {
-			seq = 1
-		} else {
-			maxNum := tickets[0].TicketNumber
-			if idx := strings.LastIndex(maxNum, "-"); idx >= 0 {
-				fmt.Sscanf(maxNum[idx+1:], "%d", &seq)
-				seq++
-			} else {
-				seq = 1
-			}
-		}
-
-		candidate = fmt.Sprintf("TKT-%04d%02d-%06d", year, month, seq)
-		r.logger.Infow("Ent fallback generated ticket number",
-			"number", candidate, "tenant", tenantID, "attempt", attempt+1)
-
-		// 如果有 rawDB，再验证一次（双重保险）
-		if r.rawDB != nil {
-			checkQuery := `SELECT COUNT(*) FROM tickets WHERE ticket_number = $1 AND tenant_id = $2`
-			var count int
-			if checkErr := r.rawDB.QueryRowContext(ctx, checkQuery, candidate, tenantID).Scan(&count); checkErr == nil && count > 0 {
-				r.logger.Warnw("Ent fallback ticket number collision, retrying", "number", candidate, "attempt", attempt+1)
-				continue
-			}
-		}
-
-		return candidate, nil
-	}
-
-	return "", fmt.Errorf("failed to generate unique ticket number after 3 attempts")
-}
-
-// _uniqueFallbackSuffix 生成唯一后缀（用于当月第一条记录的回退）
-//
-//lint:ignore U1000 utility for ticket number generation
-func _uniqueFallbackSuffix() string {
-	// 使用时间戳+随机数生成唯一后缀
-	n := time.Now().UnixNano()
-	return fmt.Sprintf("%010d", n)[2:]
-}
-
 // UpdateStatus 更新工单状态
 func (r *EntRepository) UpdateStatus(ctx context.Context, id int, status Status, tenantID int) (*Ticket, error) {
 	current, err := r.GetByID(ctx, id, tenantID)
@@ -666,23 +394,7 @@ func (r *EntRepository) UpdateStatus(ctx context.Context, id int, status Status,
 }
 
 // AssignTicket 分配工单
-func (r *EntRepository) AssignTicket(ctx context.Context, id int, assigneeID int, tenantID int) (*Ticket, error) {
-	current, err := r.GetByID(ctx, id, tenantID)
-	if err != nil {
-		return nil, err
-	}
-	if err := current.Assign(assigneeID); err != nil {
-		return nil, err
-	}
-	status := current.Status
-	return r.Update(ctx, id, &UpdateParams{
-		AssigneeID: &assigneeID,
-		Status:     &status,
-		Version:    current.Version,
-	}, tenantID)
-}
 
-// UpdateSLADeadlines 更新 SLA 截止时间
 func (r *EntRepository) UpdateSLADeadlines(ctx context.Context, id int, responseDeadline, resolutionDeadline *time.Time, slaDefinitionID *int, tenantID int) error {
 	builder := r.Client().Ticket.UpdateOneID(id).
 		Where(ticket.TenantID(tenantID), ticket.DeletedAtIsNil())
@@ -749,7 +461,8 @@ func toDomainModel(e *ent.Ticket) *Ticket {
 		Title:          e.Title,
 		Description:    e.Description,
 		Status:         Status(e.Status),
-		Type:           Type(e.Type),
+		GenericSubtype: e.GenericSubtype,
+		RecordClass:    e.RecordClass,
 		Priority:       Priority(e.Priority),
 		RequesterID:    e.RequesterID,
 		TenantID:       e.TenantID,

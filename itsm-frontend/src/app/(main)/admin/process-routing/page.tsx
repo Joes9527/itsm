@@ -31,7 +31,7 @@ import type {
 import {
   ProcessBindingApi
 } from '@/lib/api/process-binding-api';
-import { WorkflowApi } from '@/lib/api/workflow-api';
+import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 import type { Department } from '@/lib/services/department-service';
 import { departmentService } from '@/lib/services/department-service';
 import type { Team } from '@/lib/services/team-service';
@@ -95,10 +95,10 @@ export default function ProcessRoutingPage() {
 
   const loadProcessDefinitions = async () => {
     try {
-      const response = await WorkflowApi.getWorkflows({ page: 1, pageSize: 100 });
-      setProcessDefinitions(response.workflows.map(workflow => ({
-        key: workflow.code,
-        name: workflow.name,
+      const response = await BPMNWorkflowApi.listProcessDefinitions({ page: 1, pageSize: 100 });
+      setProcessDefinitions(response.items.map(definition => ({
+        key: definition.key,
+        name: definition.name,
       })));
     } catch (error) {
       console.error('Failed to load process definitions:', error);
@@ -214,8 +214,8 @@ export default function ProcessRoutingPage() {
       render: (type: string) => (
         <Tag color={
           type === 'incident' ? 'red' :
-          type === 'change' ? 'blue' :
-          type === 'service_request' ? 'green' :
+          type === 'change_request' ? 'blue' :
+          type === 'service_request_item' || type === 'catalog_task' ? 'green' :
           'default'
         }>
           {type}
@@ -395,7 +395,7 @@ export default function ProcessRoutingPage() {
                         label="Business Type"
                         rules={[{ required: true }]}
                         >
-                        <Select options={[{ value: 'ticket', label: 'Ticket' }, { value: 'incident', label: 'Incident' }, { value: 'change', label: 'Change' }, { value: 'service_request', label: 'Service Request' }, { value: 'problem', label: 'Problem' }, { value: 'release', label: 'Release' }]} />
+                        <Select options={[{ value: 'generic', label: '工单 / Generic' }, { value: 'incident', label: '事件 / Incident' }, { value: 'problem', label: '问题 / Problem' }, { value: 'change_request', label: '变更 / Change' }, { value: 'service_request_item', label: '服务请求 / Service Request' }, { value: 'catalog_task', label: '服务请求任务 / Catalog Task' }, { value: 'release', label: '发布 / Release' }]} />
                         </Form.Item>
                       </Col>
                       <Col span={12}>

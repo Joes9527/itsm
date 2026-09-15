@@ -2,29 +2,49 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"itsm-backend/common"
+	"itsm-backend/handlers/shared/workitemmutation"
+
+	"itsm-backend/database"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	incidentpkg "itsm-backend/ent/incident"
 	"itsm-backend/ent/incidentrule"
 	"itsm-backend/ent/incidentruleexecution"
+	"itsm-backend/ent/ticket"
+	"itsm-backend/service/bpmn"
 
 	"go.uber.org/zap"
 )
 
 type IncidentRuleEngine struct {
-	client *ent.Client
-	logger *zap.SugaredLogger
+	execution      *database.ExecutionPolicy
+	directory      database.DirectorySnapshot
+	client         *ent.Client
+	actorDirectory *ent.Client
+	logger         *zap.SugaredLogger
+	alertCreator   IncidentAlertCreator
 }
 
-func NewIncidentRuleEngine(client *ent.Client, logger *zap.SugaredLogger) *IncidentRuleEngine {
+func NewIncidentRuleEngine(client *ent.Client, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) *IncidentRuleEngine {
 	return &IncidentRuleEngine{
-		client: client,
-		logger: logger,
+		execution: execution,
+		client:    client,
+		logger:    logger,
 	}
 }
+
+func (e *IncidentRuleEngine) SetDirectorySnapshot(directory database.DirectorySnapshot) {
+	e.directory = directory
+}
+
+// SetActorDirectory wires the restricted directory used by committed Intake effects.
+func (e *IncidentRuleEngine) SetActorDirectory(directory *ent.Client) { e.actorDirectory = directory }
 
 // RuleCondition 规则条件接口
 type RuleCondition interface {
@@ -34,6 +54,7 @@ type RuleCondition interface {
 // RuleAction 规则动作接口
 type RuleAction interface {
 	Execute(ctx context.Context, incident *ent.Incident, tenantID int) error
+	ExecuteTx(context.Context, *ent.Tx, *ent.Incident, int) error
 }
 
 // PriorityCondition 优先级条件
@@ -43,7 +64,7 @@ type PriorityCondition struct {
 
 func (c *PriorityCondition) Evaluate(ctx context.Context, incident *ent.Incident) (bool, error) {
 	for _, priority := range c.Priorities {
-		if incident.Priority == priority {
+		if incident.Edges.WorkItem != nil && incident.Edges.WorkItem.Priority == priority {
 			return true, nil
 		}
 	}
@@ -71,7 +92,7 @@ type StatusCondition struct {
 
 func (c *StatusCondition) Evaluate(ctx context.Context, incident *ent.Incident) (bool, error) {
 	for _, status := range c.Statuses {
-		if incident.Status == status {
+		if incident.Edges.WorkItem != nil && incident.Edges.WorkItem.Status == status {
 			return true, nil
 		}
 	}
@@ -88,17 +109,23 @@ type TimeCondition struct {
 func (c *TimeCondition) Evaluate(ctx context.Context, incident *ent.Incident) (bool, error) {
 	var targetTime time.Time
 	now := time.Now()
+	if at, ok := ctx.Value(incidentRuleClockKey{}).(time.Time); ok {
+		now = at
+	}
 
 	switch c.Field {
 	case "created_at":
-		targetTime = incident.CreatedAt
+		if incident.Edges.WorkItem == nil {
+			return false, fmt.Errorf("incident is missing authoritative WorkItem")
+		}
+		targetTime = incident.Edges.WorkItem.CreatedAt
 	case "detected_at":
 		targetTime = incident.DetectedAt
 	case "resolved_at":
-		if incident.ResolvedAt.IsZero() {
+		if incident.Edges.WorkItem == nil || incident.Edges.WorkItem.ResolvedAt.IsZero() {
 			return false, nil
 		}
-		targetTime = incident.ResolvedAt
+		targetTime = incident.Edges.WorkItem.ResolvedAt
 	default:
 		return false, fmt.Errorf("unknown time field: %s", c.Field)
 	}
@@ -127,8 +154,15 @@ type CategoryCondition struct {
 }
 
 func (c *CategoryCondition) Evaluate(ctx context.Context, incident *ent.Incident) (bool, error) {
+	if incident.Edges.WorkItem == nil || incident.Edges.WorkItem.Edges.Category == nil {
+		return false, nil
+	}
+	categoryName := incident.Edges.WorkItem.Edges.Category.Name
+	if parent := incident.Edges.WorkItem.Edges.Category.Edges.Parent; parent != nil {
+		categoryName = parent.Name
+	}
 	for _, category := range c.Categories {
-		if incident.Category == category {
+		if categoryName == category {
 			return true, nil
 		}
 	}
@@ -137,18 +171,25 @@ func (c *CategoryCondition) Evaluate(ctx context.Context, incident *ent.Incident
 
 // EscalationAction 升级动作
 type EscalationAction struct {
-	Level       int
-	Reason      string
-	NotifyUsers []int
-	AutoAssign  bool
-	client      *ent.Client
-	logger      *zap.SugaredLogger
+	execution    *database.ExecutionPolicy
+	Level        int
+	Reason       string
+	NotifyUsers  []int
+	AutoAssign   bool
+	client       *ent.Client
+	logger       *zap.SugaredLogger
+	alertCreator IncidentAlertCreator
 }
 
 func (a *EscalationAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
-	incidentService := NewIncidentService(a.client, a.logger)
+	return executeIncidentRuleAction(ctx, a.client, a, incident, tenantID)
+}
 
-	_, err := incidentService.EscalateIncident(ctx, &dto.IncidentEscalationRequest{
+func (a *EscalationAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
+	incidentService := NewIncidentService(a.client, a.logger, a.execution)
+	incidentService.SetAlertCreator(a.alertCreator)
+
+	_, err := incidentService.EscalateIncidentTx(ctx, tx, &dto.IncidentEscalationRequest{
 		IncidentID:      incident.ID,
 		EscalationLevel: a.Level,
 		Reason:          a.Reason,
@@ -161,18 +202,35 @@ func (a *EscalationAction) Execute(ctx context.Context, incident *ent.Incident, 
 
 // NotificationAction 通知动作
 type NotificationAction struct {
-	Channels   []string
-	Recipients []string
-	Message    string
-	Severity   string
-	client     *ent.Client
-	logger     *zap.SugaredLogger
+	execution    *database.ExecutionPolicy
+	Channels     []string
+	Recipients   []string
+	Message      string
+	Severity     string
+	client       *ent.Client
+	logger       *zap.SugaredLogger
+	alertCreator IncidentAlertCreator
 }
 
 func (a *NotificationAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
-	incidentService := NewIncidentService(a.client, a.logger)
+	return executeIncidentRuleAction(ctx, a.client, a, incident, tenantID)
+}
 
-	_, err := incidentService.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
+func (a *NotificationAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
+	creator, ok := a.alertCreator.(IncidentAlertTransactionCreator)
+	if !ok {
+		return fmt.Errorf("incident alerting service is not configured")
+	}
+	if err := validateIncidentRuleRecipients(ctx, tx.Client(), a.Recipients, tenantID); err != nil {
+		return err
+	}
+	if incident == nil {
+		return common.NewValidationError("incident required", nil)
+	}
+	if err := requireIncidentExecutionTx(ctx, tx, a.execution, incident.ID, tenantID); err != nil {
+		return err
+	}
+	_, err := creator.CreateIncidentAlertTx(ctx, tx, &dto.CreateIncidentAlertRequest{
 		IncidentID: incident.ID,
 		AlertType:  "notification",
 		AlertName:  "规则触发通知",
@@ -187,6 +245,8 @@ func (a *NotificationAction) Execute(ctx context.Context, incident *ent.Incident
 
 // AssignmentAction 分配动作
 type AssignmentAction struct {
+	execution  *database.ExecutionPolicy
+	directory  database.DirectorySnapshot
 	AssigneeID int
 	Reason     string
 	client     *ent.Client
@@ -194,35 +254,95 @@ type AssignmentAction struct {
 }
 
 func (a *AssignmentAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
-	incidentService := NewIncidentService(a.client, a.logger)
+	return executeIncidentRuleAction(ctx, a.client, a, incident, tenantID)
+}
 
-	_, err := incidentService.UpdateIncident(ctx, incident.ID, &dto.UpdateIncidentRequest{
-		AssigneeID: &a.AssigneeID,
-	}, tenantID)
+func (a *AssignmentAction) SetDirectorySnapshot(directory database.DirectorySnapshot) {
+	a.directory = directory
+}
 
+func (a *AssignmentAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
+	if a.directory != nil {
+		if err := requireIncidentRuleSnapshot(ctx, tx); err != nil {
+			return err
+		}
+	}
+	actor, ok := ctx.Value(incidentAlertActorContextKey{}).(incidentAlertActor)
+	if !ok || actor.ID <= 0 || actor.Source == "" || actor.CorrelationID == "" || incident.Edges.WorkItem == nil {
+		return rejectIncidentAction("assignment rule requires trusted actor, stable action identity and WorkItem")
+	}
+	owner := NewIncidentService(a.client, a.logger, a.execution)
+	owner.SetDirectorySnapshot(a.directory)
+	cmd := dto.IncidentCommand{
+		IncidentID: incident.ID, Action: "assign", AssigneeID: a.AssigneeID, Reason: strings.TrimSpace(a.Reason),
+		Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: actor.ID, ExpectedVersion: incident.Edges.WorkItem.Version, Source: actor.Source, OperationID: actor.CorrelationID, CorrelationID: actor.CorrelationID},
+	}
+	digest, err := incidentCommandDigest(cmd)
+	if err != nil {
+		return err
+	}
+	_, err = owner.applyIncidentCommandTx(ctx, tx, cmd, digest)
+	if appErr, ok := common.AsAppError(err); ok && (appErr.Code == common.ErrCodeValidation || appErr.Code == common.ErrCodeForbidden || appErr.Code == common.ErrCodeNotFound) {
+		return rejectIncidentAction("%s", appErr.Message)
+	}
 	return err
 }
 
 // StatusChangeAction 状态变更动作
 type StatusChangeAction struct {
-	Status string
-	Reason string
-	client *ent.Client
-	logger *zap.SugaredLogger
+	execution  *database.ExecutionPolicy
+	directory  database.DirectorySnapshot
+	Status     string
+	Reason     string
+	Resolution string
+	client     *ent.Client
+	logger     *zap.SugaredLogger
+}
+
+// SetDirectorySnapshot supplies the same trusted directory capability as the owning rule engine.
+func (a *StatusChangeAction) SetDirectorySnapshot(directory database.DirectorySnapshot) {
+	a.directory = directory
 }
 
 func (a *StatusChangeAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
-	incidentService := NewIncidentService(a.client, a.logger)
+	return executeIncidentRuleAction(ctx, a.client, a, incident, tenantID)
+}
 
-	_, err := incidentService.UpdateIncident(ctx, incident.ID, &dto.UpdateIncidentRequest{
-		Status: &a.Status,
-	}, tenantID)
-
+func (a *StatusChangeAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
+	if a.directory != nil {
+		if err := requireIncidentRuleSnapshot(ctx, tx); err != nil {
+			return err
+		}
+	}
+	incidentService := NewIncidentService(a.client, a.logger, a.execution)
+	incidentService.SetDirectorySnapshot(a.directory)
+	actor, ok := ctx.Value(incidentAlertActorContextKey{}).(incidentAlertActor)
+	if !ok || actor.ID <= 0 || actor.Source == "" || actor.CorrelationID == "" || incident.Edges.WorkItem == nil {
+		return rejectIncidentAction("status rule requires trusted actor, stable action identity and WorkItem")
+	}
+	actions := map[string]string{"acknowledged": "acknowledge", "in_progress": "start", "resolved": "resolve", "closed": "close"}
+	action, ok := actions[a.Status]
+	if !ok {
+		return rejectIncidentAction("unsupported Incident lifecycle target")
+	}
+	if a.Status == "in_progress" && (incident.Edges.WorkItem.Status == "resolved" || incident.Edges.WorkItem.Status == "closed") {
+		action = "reopen"
+	}
+	cmd := dto.IncidentCommand{Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: actor.ID, ExpectedVersion: incident.Edges.WorkItem.Version, Source: actor.Source, OperationID: actor.CorrelationID, CorrelationID: actor.CorrelationID}, IncidentID: incident.ID, Action: action, Reason: strings.TrimSpace(a.Reason), Resolution: strings.TrimSpace(a.Resolution)}
+	digest, err := incidentCommandDigest(cmd)
+	if err != nil {
+		return err
+	}
+	_, err = incidentService.applyIncidentCommandTx(ctx, tx, cmd, digest)
+	if appErr, ok := common.AsAppError(err); ok && (appErr.Code == common.ErrCodeValidation || appErr.Code == common.ErrCodeForbidden || appErr.Code == common.ErrCodeNotFound) {
+		return rejectIncidentAction("%s", appErr.Message)
+	}
 	return err
 }
 
 // MetricCollectionAction 指标收集动作
 type MetricCollectionAction struct {
+	execution   *database.ExecutionPolicy
 	MetricType  string
 	MetricName  string
 	MetricValue float64
@@ -233,9 +353,13 @@ type MetricCollectionAction struct {
 }
 
 func (a *MetricCollectionAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
-	incidentService := NewIncidentService(a.client, a.logger)
+	return executeIncidentRuleAction(ctx, a.client, a, incident, tenantID)
+}
 
-	_, err := incidentService.CreateIncidentMetric(ctx, &dto.CreateIncidentMetricRequest{
+func (a *MetricCollectionAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
+	incidentService := NewIncidentService(tx.Client(), a.logger, a.execution)
+
+	_, err := incidentService.CreateIncidentMetricTx(ctx, tx, &dto.CreateIncidentMetricRequest{
 		IncidentID:  incident.ID,
 		MetricType:  a.MetricType,
 		MetricName:  a.MetricName,
@@ -249,25 +373,40 @@ func (a *MetricCollectionAction) Execute(ctx context.Context, incident *ent.Inci
 
 // ExecuteRule 执行规则
 func (e *IncidentRuleEngine) ExecuteRule(ctx context.Context, rule *ent.IncidentRule, incident *ent.Incident, tenantID int) error {
+	if e == nil || e.client == nil || e.execution == nil || rule == nil || incident == nil {
+		return common.NewForbiddenError("incident execution policy and rule required")
+	}
 	e.logger.Infow("Executing incident rule", "rule_id", rule.ID, "incident_id", incident.ID)
-	if rule.TenantID != tenantID || incident.TenantID != tenantID {
+	if incident.Edges.WorkItem == nil || rule.TenantID != tenantID || incident.Edges.WorkItem.TenantID != tenantID {
 		return fmt.Errorf("rule or incident does not belong to current tenant")
 	}
 	if !rule.IsActive {
 		return fmt.Errorf("incident rule is disabled")
 	}
-	activeIncident, err := e.client.Incident.Query().
-		Where(incidentpkg.IDEQ(incident.ID), incidentpkg.TenantIDEQ(tenantID), incidentpkg.DeletedAtIsNil()).
-		Exist(ctx)
+	tx, err := e.client.Tx(ctx)
 	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	authoritativeIncident, err := tx.Incident.Query().
+		Where(incidentpkg.IDEQ(incident.ID), incidentTenantScope(tenantID)).
+		WithWorkItem(withIncidentWorkItemProjection).Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return fmt.Errorf("incident not found")
+		}
 		return fmt.Errorf("failed to validate incident: %w", err)
 	}
-	if !activeIncident {
-		return fmt.Errorf("incident not found")
+	incident = authoritativeIncident
+	if err := e.execution.BindEnt(ctx, tx, tenantID); err != nil {
+		return incidentExecutionFailure(err)
+	}
+	if err := e.execution.RequireEntMembers(ctx, tx, tenantID, incident.WorkItemID); err != nil {
+		return incidentExecutionFailure(err)
 	}
 
 	// 记录规则执行开始
-	execution, err := e.client.IncidentRuleExecution.Create().
+	execution, err := tx.IncidentRuleExecution.Create().
 		SetRuleID(rule.ID).
 		SetIncidentID(incident.ID).
 		SetStatus("running").
@@ -285,12 +424,15 @@ func (e *IncidentRuleEngine) ExecuteRule(ctx context.Context, rule *ent.Incident
 		return err
 	}
 
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
 	// 评估条件
 	conditions, err := e.parseConditions(rule.Conditions)
 	if err != nil {
 		e.logger.Errorw("Failed to parse rule conditions", "error", err)
-		e.updateExecutionStatus(ctx, execution.ID, tenantID, "failed", fmt.Sprintf("Failed to parse conditions: %v", err))
-		return err
+		return errors.Join(err, e.updateExecutionStatus(ctx, execution.ID, tenantID, false, "failed", fmt.Sprintf("Failed to parse conditions: %v", err)))
 	}
 
 	// 检查所有条件是否满足
@@ -299,8 +441,7 @@ func (e *IncidentRuleEngine) ExecuteRule(ctx context.Context, rule *ent.Incident
 		met, err := condition.Evaluate(ctx, incident)
 		if err != nil {
 			e.logger.Errorw("Failed to evaluate condition", "error", err)
-			e.updateExecutionStatus(ctx, execution.ID, tenantID, "failed", fmt.Sprintf("Failed to evaluate condition: %v", err))
-			return err
+			return errors.Join(err, e.updateExecutionStatus(ctx, execution.ID, tenantID, false, "failed", fmt.Sprintf("Failed to evaluate condition: %v", err)))
 		}
 		if !met {
 			allConditionsMet = false
@@ -310,16 +451,14 @@ func (e *IncidentRuleEngine) ExecuteRule(ctx context.Context, rule *ent.Incident
 
 	if !allConditionsMet {
 		e.logger.Infow("Rule conditions not met", "rule_id", rule.ID, "incident_id", incident.ID)
-		e.updateExecutionStatus(ctx, execution.ID, tenantID, "skipped", "Rule conditions not met")
-		return nil
+		return e.updateExecutionStatus(ctx, execution.ID, tenantID, false, "skipped", "Rule conditions not met")
 	}
 
 	// 执行动作
 	actions, err := e.parseActions(rule.Actions)
 	if err != nil {
 		e.logger.Errorw("Failed to parse rule actions", "error", err)
-		e.updateExecutionStatus(ctx, execution.ID, tenantID, "failed", fmt.Sprintf("Failed to parse actions: %v", err))
-		return err
+		return errors.Join(err, e.updateExecutionStatus(ctx, execution.ID, tenantID, false, "failed", fmt.Sprintf("Failed to parse actions: %v", err)))
 	}
 
 	var executionResults []map[string]interface{}
@@ -358,19 +497,9 @@ func (e *IncidentRuleEngine) ExecuteRule(ctx context.Context, rule *ent.Incident
 		executionStatus = "failed"
 		executionResult = "One or more rule actions failed"
 	}
-	err = e.updateExecutionStatus(ctx, execution.ID, tenantID, executionStatus, executionResult, outputData)
+	err = e.updateExecutionStatus(ctx, execution.ID, tenantID, true, executionStatus, executionResult, outputData)
 	if err != nil {
-		e.logger.Errorw("Failed to update execution status", "error", err)
-	}
-
-	// 更新规则统计
-	_, err = e.client.IncidentRule.Update().
-		Where(incidentrule.IDEQ(rule.ID), incidentrule.TenantIDEQ(tenantID)).
-		AddExecutionCount(1).
-		SetLastExecutedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		e.logger.Errorw("Failed to update rule statistics", "error", err)
+		return errors.Join(firstActionErr, fmt.Errorf("persist incident rule result: %w", err))
 	}
 
 	if firstActionErr != nil {
@@ -388,10 +517,9 @@ func (e *IncidentRuleEngine) ExecuteRulesForIncident(ctx context.Context, incide
 	incidentEntity, err := e.client.Incident.Query().
 		Where(
 			incidentpkg.IDEQ(incidentID),
-			incidentpkg.TenantIDEQ(tenantID),
-			incidentpkg.DeletedAtIsNil(),
+			incidentTenantScope(tenantID),
 		).
-		Only(ctx)
+		WithWorkItem(withIncidentWorkItemProjection).Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return fmt.Errorf("incident not found")
@@ -445,11 +573,9 @@ func (e *IncidentRuleEngine) ExecuteRulesForAllIncidents(ctx context.Context, te
 	// 获取所有需要处理的事件
 	incidents, err := e.client.Incident.Query().
 		Where(
-			incidentpkg.TenantIDEQ(tenantID),
-			incidentpkg.DeletedAtIsNil(),
-			incidentpkg.StatusIn("new", "acknowledged", "assigned", "triaged", "in_progress", "on_hold", "escalated"),
+			incidentTenantScope(tenantID, ticket.StatusIn("new", "acknowledged", "assigned", "triaged", "in_progress", "on_hold", "escalated")),
 		).
-		All(ctx)
+		WithWorkItem(withIncidentWorkItemProjection).All(ctx)
 	if err != nil {
 		e.logger.Errorw("Failed to get incidents", "error", err)
 		return fmt.Errorf("failed to get incidents: %w", err)
@@ -484,6 +610,17 @@ func (e *IncidentRuleEngine) parseConditions(conditions map[string]interface{}) 
 
 	for conditionType, conditionData := range conditions {
 		switch conditionType {
+		case "event_type":
+			types, err := toStringSlice(conditionData)
+			if err != nil || len(types) == 0 {
+				return nil, fmt.Errorf("invalid Incident event subscription")
+			}
+			for _, name := range types {
+				if name != "incident.created" && name != "incident.status_changed" {
+					return nil, fmt.Errorf("unknown Incident event subscription")
+				}
+			}
+			parsedConditions = append(parsedConditions, &EventTypeCondition{Types: types})
 		case "priority":
 			priorities, err := toStringSlice(conditionData)
 			if err != nil {
@@ -560,6 +697,9 @@ func (e *IncidentRuleEngine) parseActions(actions []map[string]interface{}) ([]R
 	var parsedActions []RuleAction
 
 	for _, actionData := range actions {
+		if _, present := actionData["optional"]; present {
+			return nil, fmt.Errorf("optional incident rule actions are unsupported")
+		}
 		actionType, ok := actionData["type"].(string)
 		if !ok {
 			return nil, fmt.Errorf("action type is required")
@@ -612,31 +752,53 @@ func (e *IncidentRuleEngine) parseEscalationAction(actionData map[string]interfa
 	}
 
 	reason, _ := actionData["reason"].(string)
-	notifyUsers, _ := toIntSlice(actionData["notify_users"])
+	notifyUsers, err := toIntSlice(actionData["notify_users"])
+	if err != nil {
+		return nil, err
+	}
 	autoAssign, _ := actionData["auto_assign"].(bool)
+	if raw, exists := actionData["auto_assign"]; exists {
+		if _, ok := raw.(bool); !ok {
+			return nil, fmt.Errorf("auto_assign must be boolean")
+		}
+	}
+	if autoAssign {
+		return nil, fmt.Errorf("automatic escalation assignment is unsupported; configure an explicit assign action")
+	}
 
 	return &EscalationAction{
-		Level:       level,
-		Reason:      reason,
-		NotifyUsers: notifyUsers,
-		AutoAssign:  autoAssign,
-		client:      e.client,
-		logger:      e.logger,
+		execution:    e.execution,
+		Level:        level,
+		Reason:       reason,
+		NotifyUsers:  notifyUsers,
+		AutoAssign:   autoAssign,
+		client:       e.client,
+		logger:       e.logger,
+		alertCreator: e.alertCreator,
 	}, nil
 }
 
 // parseNotificationAction 解析通知动作
 func (e *IncidentRuleEngine) parseNotificationAction(actionData map[string]interface{}) (*NotificationAction, error) {
-	channels, _ := toStringSlice(actionData["channels"])
-	recipients, _ := toStringSlice(actionData["recipients"])
+	channels, err := toStringSlice(actionData["channels"])
+	if err != nil {
+		return nil, err
+	}
+	recipients, err := toStringSlice(actionData["recipients"])
+	if err != nil {
+		return nil, err
+	}
 	message, _ := actionData["message"].(string)
 	severity, _ := actionData["severity"].(string)
 
 	if len(channels) == 0 {
 		channels = []string{"email"}
 	}
+	if err := validateIncidentAlertChannels(channels); err != nil {
+		return nil, err
+	}
 	if len(recipients) == 0 {
-		recipients = []string{"admin@company.com"}
+		return nil, fmt.Errorf("configured notification recipients are required")
 	}
 	if message == "" {
 		message = "事件需要关注"
@@ -646,12 +808,14 @@ func (e *IncidentRuleEngine) parseNotificationAction(actionData map[string]inter
 	}
 
 	return &NotificationAction{
-		Channels:   channels,
-		Recipients: recipients,
-		Message:    message,
-		Severity:   severity,
-		client:     e.client,
-		logger:     e.logger,
+		execution:    e.execution,
+		Channels:     channels,
+		Recipients:   recipients,
+		Message:      message,
+		Severity:     severity,
+		client:       e.client,
+		logger:       e.logger,
+		alertCreator: e.alertCreator,
 	}, nil
 }
 
@@ -665,6 +829,8 @@ func (e *IncidentRuleEngine) parseAssignmentAction(actionData map[string]interfa
 	reason, _ := actionData["reason"].(string)
 
 	return &AssignmentAction{
+		execution:  e.execution,
+		directory:  e.directory,
 		AssigneeID: assigneeID,
 		Reason:     reason,
 		client:     e.client,
@@ -680,12 +846,15 @@ func (e *IncidentRuleEngine) parseStatusChangeAction(actionData map[string]inter
 	}
 
 	reason, _ := actionData["reason"].(string)
-
+	resolution, _ := actionData["resolution"].(string)
 	return &StatusChangeAction{
-		Status: status,
-		Reason: reason,
-		client: e.client,
-		logger: e.logger,
+		execution:  e.execution,
+		directory:  e.directory,
+		Status:     status,
+		Reason:     reason,
+		Resolution: resolution,
+		client:     e.client,
+		logger:     e.logger,
 	}, nil
 }
 
@@ -710,6 +879,7 @@ func (e *IncidentRuleEngine) parseMetricCollectionAction(actionData map[string]i
 	tags := toStringMap(actionData["tags"])
 
 	return &MetricCollectionAction{
+		execution:   e.execution,
 		MetricType:  metricType,
 		MetricName:  metricName,
 		MetricValue: metricValue,
@@ -721,17 +891,8 @@ func (e *IncidentRuleEngine) parseMetricCollectionAction(actionData map[string]i
 }
 
 func toInt(value interface{}) (int, bool) {
-	switch typed := value.(type) {
-	case int:
-		return typed, true
-	case int64:
-		return int(typed), true
-	case float64:
-		if typed == float64(int(typed)) {
-			return int(typed), true
-		}
-	}
-	return 0, false
+	n, err := bpmn.CallbackInteger(value)
+	return n, err == nil
 }
 
 func toStringSlice(value interface{}) ([]string, error) {
@@ -761,7 +922,10 @@ func toIntSlice(value interface{}) ([]int, error) {
 		if typed, ok := value.([]int); ok {
 			return typed, nil
 		}
-		return nil, nil
+		if value == nil {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("expected integer array")
 	}
 	result := make([]int, 0, len(items))
 	for _, item := range items {
@@ -790,8 +954,27 @@ func toStringMap(value interface{}) map[string]string {
 }
 
 // updateExecutionStatus 更新执行状态
-func (e *IncidentRuleEngine) updateExecutionStatus(ctx context.Context, executionID, tenantID int, status, result string, outputData ...map[string]interface{}) error {
-	updateQuery := e.client.IncidentRuleExecution.UpdateOneID(executionID).
+func (e *IncidentRuleEngine) updateExecutionStatus(ctx context.Context, executionID, tenantID int, recordStatistics bool, status, result string, outputData ...map[string]interface{}) error {
+	tx, err := e.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	execution, err := tx.IncidentRuleExecution.Query().Where(incidentruleexecution.IDEQ(executionID), incidentruleexecution.TenantIDEQ(tenantID)).Only(ctx)
+	if err != nil {
+		return err
+	}
+	incident, err := tx.Incident.Query().Where(incidentpkg.IDEQ(execution.IncidentID), incidentTenantScope(tenantID)).Only(ctx)
+	if err != nil {
+		return err
+	}
+	if err := e.execution.BindEnt(ctx, tx, tenantID); err != nil {
+		return incidentExecutionFailure(err)
+	}
+	if err := e.execution.RequireEntMembers(ctx, tx, tenantID, incident.WorkItemID); err != nil {
+		return incidentExecutionFailure(err)
+	}
+	updateQuery := tx.IncidentRuleExecution.UpdateOneID(executionID).
 		Where(incidentruleexecution.TenantIDEQ(tenantID), incidentruleexecution.StatusEQ("running")).
 		SetStatus(status).
 		SetResult(result).
@@ -802,6 +985,23 @@ func (e *IncidentRuleEngine) updateExecutionStatus(ctx context.Context, executio
 		updateQuery.SetOutputData(outputData[0])
 	}
 
-	_, err := updateQuery.Save(ctx)
-	return err
+	if _, err := updateQuery.Save(ctx); err != nil {
+		return err
+	}
+	if recordStatistics {
+		if _, err := tx.IncidentRule.UpdateOneID(execution.RuleID).
+			Where(incidentrule.TenantIDEQ(tenantID)).AddExecutionCount(1).
+			SetLastExecutedAt(time.Now()).Save(ctx); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// SetExecutionPolicy wires a trusted startup dependency, never request data.
+func (a *AssignmentAction) SetExecutionPolicy(policy *database.ExecutionPolicy) { a.execution = policy }
+
+// SetExecutionPolicy wires a trusted startup dependency, never request data.
+func (a *StatusChangeAction) SetExecutionPolicy(policy *database.ExecutionPolicy) {
+	a.execution = policy
 }

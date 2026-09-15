@@ -22,7 +22,7 @@ import type { SLAViolation, ProcessMetrics } from '@/lib/api/bpmn-dashboard-api'
 import BPMNDashboardApi from '@/lib/api/bpmn-dashboard-api';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { useI18n } from '@/lib/i18n';
-import { WorkflowApi } from '@/lib/api/workflow-api';
+import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 
 const { RangePicker } = DatePicker;
 
@@ -36,17 +36,15 @@ export default function SLAMonitoringPage() {
   const [processMetrics, setProcessMetrics] = useState<ProcessMetrics | null>(null);
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>([dayjs().subtract(7, 'day'), dayjs()]);
 
-  // 优先使用当前登录租户；未登录时回退到默认 1
-  // TODO: 待接入用户/租户选择器后移除硬编码回退值，避免未登录态误指向租户 1
-  const tenantId = currentTenant?.id ?? 1;
+  const tenantId = currentTenant?.id;
 
   const fetchProcesses = async () => {
     try {
-      const data = await WorkflowApi.getWorkflows({ page: 1, pageSize: 100 });
+      const data = await BPMNWorkflowApi.listProcessDefinitions({ page: 1, pageSize: 100 });
       setProcesses(
-        data.workflows.map(workflow => ({
-          key: workflow.code,
-          name: workflow.name || workflow.code,
+        data.items.map(workflow => ({
+          key: workflow.key,
+          name: workflow.name || workflow.key,
         }))
       );
     } catch (error) {
@@ -55,6 +53,11 @@ export default function SLAMonitoringPage() {
   };
 
   const fetchViolations = async () => {
+    if (!tenantId) {
+      setViolations([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const data = await BPMNDashboardApi.getSLAViolations(tenantId);
@@ -67,7 +70,7 @@ export default function SLAMonitoringPage() {
   };
 
   const fetchProcessMetrics = async () => {
-    if (!selectedProcess) return;
+    if (!selectedProcess || !tenantId) return;
     setLoading(true);
     try {
       const data = await BPMNDashboardApi.getProcessMetrics(
@@ -87,13 +90,13 @@ export default function SLAMonitoringPage() {
   useEffect(() => {
     fetchProcesses();
     fetchViolations();
-  }, []);
+  }, [tenantId]);
 
   useEffect(() => {
     if (selectedProcess) {
       fetchProcessMetrics();
     }
-  }, [selectedProcess, dateRange]);
+  }, [selectedProcess, dateRange, tenantId]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -169,10 +172,10 @@ export default function SLAMonitoringPage() {
   ];
 
   return (
-    <div className='p-6 space-y-6'>
+    <div className='p-[16px] md:p-[24px] space-y-6'>
       {/* Header */}
       <div className='flex justify-between items-center'>
-        <h1 className='text-2xl font-bold'>{t('bpmn.sla.title') || 'BPMN SLA监控'}</h1>
+        <h1 className='text-[24px] font-semibold'>{t('bpmn.sla.title') || 'BPMN SLA监控'}</h1>
         <Button
           icon={<RefreshCw size={16} />}
           onClick={() => {
@@ -206,7 +209,7 @@ export default function SLAMonitoringPage() {
         </Space>
 
         {selectedProcess && processMetrics && (
-          <Row gutter={[16, 16]}>
+          <Row gutter={[14, 14]}>
             <Col xs={12} sm={8}>
               <Statistic
                 title={t('bpmn.sla.totalInstances') || '总实例数'}
@@ -286,7 +289,7 @@ export default function SLAMonitoringPage() {
       </Card>
 
       {/* SLA Status Summary */}
-      <Row gutter={[16, 16]}>
+      <Row gutter={[14, 14]}>
         <Col xs={24} sm={8}>
           <Card>
             <Statistic

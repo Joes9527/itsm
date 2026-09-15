@@ -1,8 +1,6 @@
 package schema
 
 import (
-	"time"
-
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
@@ -17,21 +15,11 @@ type Problem struct {
 // Fields of the Problem.
 func (Problem) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("title").
-			Comment("问题标题").
-			NotEmpty(),
-		field.Text("description").
-			Comment("问题描述").
-			Optional(),
-		field.String("status").
-			Comment("状态").
-			Default("open"),
-		field.String("priority").
-			Comment("优先级").
-			Default("medium"),
-		field.String("category").
-			Comment("问题分类").
-			Optional(),
+		field.Int("verified_version").Optional(),
+		field.String("verification_digest").Optional(),
+		field.Int("verified_by").Optional(),
+		field.Time("verified_at").Optional(),
+		field.Text("verification_note").Optional(),
 		field.Text("root_cause").
 			Comment("根本原因").
 			Optional(),
@@ -44,59 +32,25 @@ func (Problem) Fields() []ent.Field {
 		field.Text("impact").
 			Comment("影响范围").
 			Optional(),
-		field.Int("assignee_id").
-			Comment("处理人ID").
-			Optional(),
-		field.Int("created_by").
-			Comment("创建人ID").
-			Positive(),
 		field.Int("work_item_id").
-			Comment("关联的 WorkItem（tickets.id），唯一，必填——迁移完成前允许为空").
-			Optional().
-			Unique(),
-		field.Int("tenant_id").
-			Comment("租户ID").
-			Positive(),
-		field.Time("created_at").
-			Comment("创建时间").
-			Default(time.Now),
-		field.Time("updated_at").
-			Comment("更新时间").
-			Default(time.Now).
-			UpdateDefault(time.Now),
-		field.Time("resolved_at").
-			Comment("解决时间").
-			Optional().
-			Nillable(),
-		field.Time("closed_at").
-			Comment("关闭时间").
-			Optional().
-			Nillable(),
-		field.Time("deleted_at").
-			Comment("删除时间").
-			Optional().
-			Nillable(),
+			Comment("关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入"),
 	}
 }
 
 // Edges of the Problem.
 func (Problem) Edges() []ent.Edge {
 	return []ent.Edge{
-		// 与工单的关联
-		edge.To("tickets", Ticket.Type).
-			Comment("关联的工单"),
-		// 与事件的关联
-		edge.To("incidents", Incident.Type).
-			Comment("关联的事件"),
-		// 与变更的关联
-		edge.To("changes", Change.Type).
-			Comment("关联的变更"),
+		edge.To("work_item", Ticket.Type).
+			Field("work_item_id").
+			Unique().
+			Required().
+			Comment("共享字段的唯一权威 WorkItem"),
 	}
 }
 
 // Indexes of the Problem.
 func (Problem) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("work_item_id"),
+		index.Fields("work_item_id").Unique(),
 	}
 }

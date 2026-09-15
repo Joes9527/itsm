@@ -1,4 +1,4 @@
-package service_request
+package service_request_test
 
 import (
 	"context"
@@ -7,9 +7,11 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/ent/enttest"
 	entticket "itsm-backend/ent/ticket"
-	"itsm-backend/handlers/cmdb"
+	"itsm-backend/ent/workitemnumbersequence"
 	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/service"
 
@@ -18,6 +20,44 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
+
+func TestService_Create_CommitsWorkItemExtensionAndNumberTogether(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sr_allocator_transaction?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	logger := zaptest.NewLogger(t).Sugar()
+	tenant, err := client.Tenant.Create().SetName("allocator").SetCode("sr-allocator").SetDomain("allocator.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	requester, err := client.User.Create().
+		SetUsername("allocator-requester").SetEmail("allocator-requester@test.com").SetName("Requester").
+		SetPasswordHash("hash").SetRole("end_user").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	scRepo := service_catalog.NewEntRepository(client)
+	scService := service_catalog.NewService(scRepo, client, logger, nil)
+	configureCatalogPublicationForTest(ctx, client, tenant.ID, scService)
+	catalog, err := scService.Create(ctx, tenant.ID, catalogCreateInput("allocator catalog", "software", "desc", 1, "enabled", 0, 0, nil, "", ""))
+	require.NoError(t, err)
+
+	svc := NewService(NewEntRepository(client, executionfixture.Standard()), client, logger, nil)
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+		ComplianceAck: true,
+		FormData:      map[string]interface{}{"title": "allocator request", "reason": "verify one aggregate"},
+	})
+	require.NoError(t, err)
+
+	workItem, err := client.Ticket.Get(ctx, created.TicketID)
+	require.NoError(t, err)
+	require.Equal(t, "service_request_item", workItem.RecordClass)
+	require.Regexp(t, `^TKT-[0-9]{6}-000001$`, workItem.TicketNumber)
+	extension, err := client.ServiceRequest.Get(ctx, created.ID)
+	require.NoError(t, err)
+	require.Equal(t, workItem.ID, extension.TicketID)
+	sequence, err := client.WorkItemNumberSequence.Query().
+		Where(workitemnumbersequence.TenantID(tenant.ID)).
+		Only(ctx)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), sequence.LastValue)
+}
 
 func TestService_Create_PersistsFieldValues(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:sr_field_values?mode=memory&cache=shared&_fk=1")
@@ -31,17 +71,15 @@ func TestService_Create_PersistsFieldValues(t *testing.T) {
 	require.NoError(t, err)
 
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "云主机申请", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0,
-		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", "")
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
+	configureCatalogPublicationForTest(ctx, client, tenant.ID, scService)
+	catalog, err := scService.Create(ctx, tenant.ID, catalogCreateInput("云主机申请", "云服务", "desc", 1, "enabled", 0, 0, []service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", ""))
 	require.NoError(t, err)
 
-	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
-	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+	srRepo := NewEntRepository(client, executionfixture.Standard())
+	svc := NewService(srRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
@@ -73,17 +111,16 @@ func TestService_Create_SystemFormDataFieldsNotCollectedAsCustomFields(t *testin
 	require.NoError(t, err)
 
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 	// 故意不定义任何 field_definitions，只提交系统已知字段。
-	catalog, err := scService.Create(ctx, "VPN权限", "网络", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	configureCatalogPublicationForTest(ctx, client, tenant.ID, scService)
+	catalog, err := scService.Create(ctx, tenant.ID, catalogCreateInput("VPN权限", "网络", "desc", 1, "enabled", 0, 0, nil, "", ""))
 	require.NoError(t, err)
 
-	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
-	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+	srRepo := NewEntRepository(client, executionfixture.Standard())
+	svc := NewService(srRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
@@ -111,17 +148,15 @@ func TestService_Create_PersistsFieldValues_ArrayShapeSnakeCaseName(t *testing.T
 	require.NoError(t, err)
 
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "办公用品申请", "行政", "desc", 1, tenant.ID, "enabled", 0, 0,
-		[]service.FieldDefinitionInput{{Name: "office_location", Label: "办公地点", FieldType: "text"}}, "", "")
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
+	configureCatalogPublicationForTest(ctx, client, tenant.ID, scService)
+	catalog, err := scService.Create(ctx, tenant.ID, catalogCreateInput("办公用品申请", "行政", "desc", 1, "enabled", 0, 0, []service.FieldDefinitionInput{{Name: "office_location", Label: "办公地点", FieldType: "text"}}, "", ""))
 	require.NoError(t, err)
 
-	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
-	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+	srRepo := NewEntRepository(client, executionfixture.Standard())
+	svc := NewService(srRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
@@ -159,17 +194,15 @@ func TestService_Create_RequiredFieldMissing_Rejected(t *testing.T) {
 	require.NoError(t, err)
 
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "服务器扩容", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0,
-		[]service.FieldDefinitionInput{{Name: "reason_code", Label: "原因代码", FieldType: "text", Required: true}}, "", "")
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
+	configureCatalogPublicationForTest(ctx, client, tenant.ID, scService)
+	catalog, err := scService.Create(ctx, tenant.ID, catalogCreateInput("服务器扩容", "云服务", "desc", 1, "enabled", 0, 0, []service.FieldDefinitionInput{{Name: "reason_code", Label: "原因代码", FieldType: "text", Required: true}}, "", ""))
 	require.NoError(t, err)
 
-	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
-	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+	srRepo := NewEntRepository(client, executionfixture.Standard())
+	svc := NewService(srRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
@@ -201,17 +234,16 @@ func TestService_Create_LinksTicketAndDelegatesFields(t *testing.T) {
 	require.NoError(t, err)
 
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "云主机申请-link", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
+	configureCatalogPublicationForTest(ctx, client, tenant.ID, scService)
+	catalog, err := scService.Create(ctx, tenant.ID, catalogCreateInput("云主机申请-link", "云服务", "desc", 1, "enabled", 0, 0, nil, "", ""))
 	require.NoError(t, err)
 
-	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
+	srRepo := NewEntRepository(client, executionfixture.Standard())
 	logger := zaptest.NewLogger(t).Sugar()
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, logger, nil)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
@@ -227,7 +259,7 @@ func TestService_Create_LinksTicketAndDelegatesFields(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "申请一台云主机-Link测试", tkt.Title)
 	assert.Equal(t, "delegation test reason", tkt.Description)
-	assert.Equal(t, "service_request", tkt.Type)
+	assert.Equal(t, "service_request_item", tkt.RecordClass)
 	assert.Equal(t, "service_catalog", tkt.Source, "服务目录发起的申请必须标记 ticket.source=service_catalog（Task 2 前端据此判断是否渲染 SR 面板）")
 	assert.Equal(t, tenant.ID, tkt.TenantID)
 	assert.Equal(t, requester.ID, tkt.RequesterID)
@@ -247,17 +279,16 @@ func TestService_GetByTicketID_ReturnsLinkedServiceRequest(t *testing.T) {
 	require.NoError(t, err)
 
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "云主机申请-getbyticket", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
+	configureCatalogPublicationForTest(ctx, client, tenant.ID, scService)
+	catalog, err := scService.Create(ctx, tenant.ID, catalogCreateInput("云主机申请-getbyticket", "云服务", "desc", 1, "enabled", 0, 0, nil, "", ""))
 	require.NoError(t, err)
 
-	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
+	srRepo := NewEntRepository(client, executionfixture.Standard())
 	logger := zaptest.NewLogger(t).Sugar()
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, logger, nil)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		CostCenter:         "CC-GETBYTICKET",
@@ -294,17 +325,16 @@ func TestService_List_BatchLoadsLinkedTicketSummary(t *testing.T) {
 	require.NoError(t, err)
 
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "云主机申请-list", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
+	configureCatalogPublicationForTest(ctx, client, tenant.ID, scService)
+	catalog, err := scService.Create(ctx, tenant.ID, catalogCreateInput("云主机申请-list", "云服务", "desc", 1, "enabled", 0, 0, nil, "", ""))
 	require.NoError(t, err)
 
-	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
+	srRepo := NewEntRepository(client, executionfixture.Standard())
 	logger := zaptest.NewLogger(t).Sugar()
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, logger, nil)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
@@ -363,23 +393,17 @@ func TestService_AttachTicketSummaries_DoesNotLeakCrossTenant(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	srRepo := NewEntRepository(client)
-	scRepo := service_catalog.NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
+	srRepo := NewEntRepository(client, executionfixture.Standard())
 	logger := zaptest.NewLogger(t).Sugar()
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, logger, nil)
 
-	// A tenant-A ServiceRequest whose ticket_id happens to equal tenant B's ticket ID —
-	// simulating the collision scenario without depending on ent's ID allocation order.
-	list := []*ServiceRequest{
-		{ID: 1, TenantID: tenantA.ID, TicketID: ticketB.ID},
-	}
-
-	svc.attachTicketSummaries(ctx, tenantA.ID, list)
-
-	assert.Empty(t, list[0].TicketTitle, "must not leak tenant B's ticket title into a tenant A list entry")
-	assert.Empty(t, list[0].TicketStatus, "must not leak tenant B's ticket status into a tenant A list entry")
+	// Public list must not expose tenant B's WorkItem or title to tenant A.
+	list, total, err := svc.List(ctx, tenantA.ID, ListFilters{Page: 1, Size: 10})
+	require.NoError(t, err)
+	assert.Zero(t, total)
+	assert.Empty(t, list)
+	_, err = svc.GetByTicketID(ctx, ticketB.ID, tenantA.ID)
+	require.Error(t, err)
 }
 
 // TestServiceRequest_ApprovalDegradedToSingleNodeBPMN locks in, as an explicit assertion rather
@@ -414,17 +438,16 @@ func TestServiceRequest_ApprovalDegradedToSingleNodeBPMN(t *testing.T) {
 	require.NoError(t, err)
 
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "退化审批测试", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
+	configureCatalogPublicationForTest(ctx, client, tenant.ID, scService)
+	catalog, err := scService.Create(ctx, tenant.ID, catalogCreateInput("退化审批测试", "云服务", "desc", 1, "enabled", 0, 0, nil, "", ""))
 	require.NoError(t, err)
 
-	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
+	srRepo := NewEntRepository(client, executionfixture.Standard())
 	logger := zaptest.NewLogger(t).Sugar()
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, logger, nil)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
@@ -460,16 +483,15 @@ func TestService_Create_NonInfraCatalog_SkipsInfraValidation(t *testing.T) {
 	// 显式传 "custom" 只是让测试意图更清楚，实际不传也会落到 ent schema 的
 	// field.String("service_type")...Default("custom")。
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "Copilot采购申请", "基础设施", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "custom")
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
+	configureCatalogPublicationForTest(ctx, client, tenant.ID, scService)
+	catalog, err := scService.Create(ctx, tenant.ID, catalogCreateInput("Copilot采购申请", "基础设施", "desc", 1, "enabled", 0, 0, nil, "", "custom"))
 	require.NoError(t, err)
 
-	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
-	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+	srRepo := NewEntRepository(client, executionfixture.Standard())
+	svc := NewService(srRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		// 故意不设置 ComplianceAck/ExpireAt/DataClassification/NeedsPublicIP——
 		// 非基础设施类型不应该要求这些。
 		FormData: map[string]interface{}{"title": "申请 Copilot 许可证", "reason": "提升研发效率"},
@@ -492,23 +514,22 @@ func TestService_Create_InfraCatalog_StillRequiresComplianceAck(t *testing.T) {
 	require.NoError(t, err)
 
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "云服务器申请", "云资源", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "vm")
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
+	configureCatalogPublicationForTest(ctx, client, tenant.ID, scService)
+	catalog, err := scService.Create(ctx, tenant.ID, catalogCreateInput("云服务器申请", "云资源", "desc", 1, "enabled", 0, 0, nil, "", "vm"))
 	require.NoError(t, err)
 
-	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
-	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+	srRepo := NewEntRepository(client, executionfixture.Standard())
+	svc := NewService(srRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 
-	_, err = svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	_, err = svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
 		// 故意不设置 ComplianceAck（零值 false）
 		FormData: map[string]interface{}{"title": "申请一台云主机", "reason": "测试"},
 	})
 	require.Error(t, err, "vm 类型目录项仍然应该要求合规确认")
-	require.Contains(t, err.Error(), "Compliance acknowledgement required")
+	require.Contains(t, err.Error(), "compliance acknowledgement is required")
 }
 
 // TestService_Create_PersistsContactAndQuantityFieldsThroughFullPath verifies that ContactName,
@@ -527,17 +548,16 @@ func TestService_Create_PersistsContactAndQuantityFieldsThroughFullPath(t *testi
 	require.NoError(t, err)
 
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "Copilot采购申请", "基础设施", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
+	configureCatalogPublicationForTest(ctx, client, tenant.ID, scService)
+	catalog, err := scService.Create(ctx, tenant.ID, catalogCreateInput("Copilot采购申请", "基础设施", "desc", 1, "enabled", 0, 0, nil, "", ""))
 	require.NoError(t, err)
 
-	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
-	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+	srRepo := NewEntRepository(client, executionfixture.Standard())
+	svc := NewService(srRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 
 	expected := time.Now().Add(72 * time.Hour)
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		FormData:     map[string]interface{}{"title": "申请Copilot许可证", "reason": "测试"},
 		ContactName:  "王五",
 		ContactEmail: "wangwu@example.com",

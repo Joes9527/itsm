@@ -128,10 +128,18 @@ const IncidentTrendsPage = () => {
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
-          <p className="font-semibold text-gray-800 mb-1">{`日期: ${label}`}</p>
+        <div className="bg-surface p-3 rounded-[8px] shadow-lg border border-border">
+          <p className="font-semibold text-foreground mb-1">{`日期: ${label}`}</p>
           {payload.map((entry: any, index: number) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
+            <p
+              key={index}
+              className="text-[13px]"
+              style={{
+                color: 'var(--color-text-primary)',
+                borderLeft: `3px solid ${entry.color}`,
+                paddingLeft: 8,
+              }}
+            >
               {`${entry.name}: ${entry.value}`}
             </p>
           ))}
@@ -142,10 +150,10 @@ const IncidentTrendsPage = () => {
   };
 
   return (
-    <div className="p-6 bg-gray-50 min-h-full">
+    <div className="p-[24px] max-[1200px]:p-[16px] bg-page min-h-full">
       <header className="mb-6">
         <Title level={2}>事件趋势报表</Title>
-        <p className="text-gray-500 mt-1">展示事件数量随时间变化的趋势以及按优先级的分布情况</p>
+        <p className="text-muted mt-1">展示事件数量随时间变化的趋势以及按优先级的分布情况</p>
       </header>
 
       {/* 控制面板 */}
@@ -153,11 +161,16 @@ const IncidentTrendsPage = () => {
         <Row justify="space-between" align="middle">
           <Col>
             <Space>
-              <Select value={selectedPeriod} onChange={setSelectedPeriod} style={{ width: 140 }} options={[
-                { value: '7d', label: '最近7天' },
-                { value: '30d', label: '最近30天' },
-                { value: '90d', label: '最近90天' },
-              ]} />
+              <Select
+                value={selectedPeriod}
+                onChange={setSelectedPeriod}
+                style={{ width: 140 }}
+                options={[
+                  { value: '7d', label: '最近7天' },
+                  { value: '30d', label: '最近30天' },
+                  { value: '90d', label: '最近90天' },
+                ]}
+              />
               <RangePicker
                 value={dateRange}
                 onChange={(dates: any, dateStrings: any) => {
@@ -179,7 +192,7 @@ const IncidentTrendsPage = () => {
       </Card>
 
       {/* 统计卡片 */}
-      <Row gutter={16} className="mb-6">
+      <Row gutter={[14, 14]} className="mb-6">
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
@@ -228,16 +241,23 @@ const IncidentTrendsPage = () => {
       ) : (
         <>
           {/* 趋势图表 */}
-          <Row gutter={[16, 16]} className="mb-6">
+          <Row gutter={[14, 14]} className="mb-6">
             <Col span={24}>
               <Card title="每日事件数量趋势">
                 <ResponsiveContainer width="100%" height={350}>
                   <AreaChart data={trendData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
+                    <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
+                    <XAxis
+                      stroke="var(--color-text-secondary)"
+                      tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }}
+                      dataKey="date"
+                    />
+                    <YAxis
+                      stroke="var(--color-text-secondary)"
+                      tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }}
+                    />
                     <Tooltip content={<CustomTooltip />} />
-                    <Legend />
+                    <Legend formatter={value => <span className="text-foreground">{value}</span>} />
                     <Area
                       type="monotone"
                       dataKey="created"
@@ -272,16 +292,23 @@ const IncidentTrendsPage = () => {
           </Row>
 
           {/* 优先级分布和解决趋势 */}
-          <Row gutter={[16, 16]}>
+          <Row gutter={[14, 14]}>
             <Col xs={24} lg={12}>
               <Card title="按优先级分布">
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={priorityData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
+                    <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
+                    <XAxis
+                      stroke="var(--color-text-secondary)"
+                      tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }}
+                      dataKey="name"
+                    />
+                    <YAxis
+                      stroke="var(--color-text-secondary)"
+                      tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }}
+                    />
                     <Tooltip content={<CustomTooltip />} />
-                    <Legend />
+                    <Legend formatter={value => <span className="text-foreground">{value}</span>} />
                     <Bar dataKey="value" name="事件数量" fill={colors.primary}>
                       {priorityData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color || colors.primary} />
@@ -295,11 +322,18 @@ const IncidentTrendsPage = () => {
               <Card title="事件解决率趋势">
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={trendData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
+                    <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
+                    <XAxis
+                      stroke="var(--color-text-secondary)"
+                      tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }}
+                      dataKey="date"
+                    />
+                    <YAxis
+                      stroke="var(--color-text-secondary)"
+                      tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }}
+                    />
                     <Tooltip content={<CustomTooltip />} />
-                    <Legend />
+                    <Legend formatter={value => <span className="text-foreground">{value}</span>} />
                     <Line
                       type="monotone"
                       dataKey="resolved"

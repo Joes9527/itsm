@@ -108,6 +108,7 @@ nav:
       - 标签体系: label-schema.md
       - Roadmap: roadmap.md
       - 文档规范: documentation-style-guide.md
+      - Agent 工程规范: agent-engineering-governance.md
 
 extra_css:
   - stylesheets/extra.css

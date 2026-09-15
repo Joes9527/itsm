@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/configurationitemhistory"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type ConfigurationItemHistoryCreate struct {
 	config
 	mutation *ConfigurationItemHistoryMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetCiID sets the "ci_id" field.
@@ -231,6 +233,7 @@ func (_c *ConfigurationItemHistoryCreate) createSpec() (*ConfigurationItemHistor
 		_node = &ConfigurationItemHistory{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(configurationitemhistory.Table, sqlgraph.NewFieldSpec(configurationitemhistory.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Version(); ok {
 		_spec.SetField(configurationitemhistory.FieldVersion, field.TypeInt, value)
 		_node.Version = value
@@ -291,11 +294,524 @@ func (_c *ConfigurationItemHistoryCreate) createSpec() (*ConfigurationItemHistor
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ConfigurationItemHistory.Create().
+//		SetCiID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ConfigurationItemHistoryUpsert) {
+//			SetCiID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ConfigurationItemHistoryCreate) OnConflict(opts ...sql.ConflictOption) *ConfigurationItemHistoryUpsertOne {
+	_c.conflict = opts
+	return &ConfigurationItemHistoryUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ConfigurationItemHistory.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ConfigurationItemHistoryCreate) OnConflictColumns(columns ...string) *ConfigurationItemHistoryUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ConfigurationItemHistoryUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ConfigurationItemHistoryUpsertOne is the builder for "upsert"-ing
+	//  one ConfigurationItemHistory node.
+	ConfigurationItemHistoryUpsertOne struct {
+		create *ConfigurationItemHistoryCreate
+	}
+
+	// ConfigurationItemHistoryUpsert is the "OnConflict" setter.
+	ConfigurationItemHistoryUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetCiID sets the "ci_id" field.
+func (u *ConfigurationItemHistoryUpsert) SetCiID(v int) *ConfigurationItemHistoryUpsert {
+	u.Set(configurationitemhistory.FieldCiID, v)
+	return u
+}
+
+// UpdateCiID sets the "ci_id" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsert) UpdateCiID() *ConfigurationItemHistoryUpsert {
+	u.SetExcluded(configurationitemhistory.FieldCiID)
+	return u
+}
+
+// SetVersion sets the "version" field.
+func (u *ConfigurationItemHistoryUpsert) SetVersion(v int) *ConfigurationItemHistoryUpsert {
+	u.Set(configurationitemhistory.FieldVersion, v)
+	return u
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsert) UpdateVersion() *ConfigurationItemHistoryUpsert {
+	u.SetExcluded(configurationitemhistory.FieldVersion)
+	return u
+}
+
+// AddVersion adds v to the "version" field.
+func (u *ConfigurationItemHistoryUpsert) AddVersion(v int) *ConfigurationItemHistoryUpsert {
+	u.Add(configurationitemhistory.FieldVersion, v)
+	return u
+}
+
+// SetOperation sets the "operation" field.
+func (u *ConfigurationItemHistoryUpsert) SetOperation(v string) *ConfigurationItemHistoryUpsert {
+	u.Set(configurationitemhistory.FieldOperation, v)
+	return u
+}
+
+// UpdateOperation sets the "operation" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsert) UpdateOperation() *ConfigurationItemHistoryUpsert {
+	u.SetExcluded(configurationitemhistory.FieldOperation)
+	return u
+}
+
+// SetBefore sets the "before" field.
+func (u *ConfigurationItemHistoryUpsert) SetBefore(v map[string]interface{}) *ConfigurationItemHistoryUpsert {
+	u.Set(configurationitemhistory.FieldBefore, v)
+	return u
+}
+
+// UpdateBefore sets the "before" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsert) UpdateBefore() *ConfigurationItemHistoryUpsert {
+	u.SetExcluded(configurationitemhistory.FieldBefore)
+	return u
+}
+
+// ClearBefore clears the value of the "before" field.
+func (u *ConfigurationItemHistoryUpsert) ClearBefore() *ConfigurationItemHistoryUpsert {
+	u.SetNull(configurationitemhistory.FieldBefore)
+	return u
+}
+
+// SetAfter sets the "after" field.
+func (u *ConfigurationItemHistoryUpsert) SetAfter(v map[string]interface{}) *ConfigurationItemHistoryUpsert {
+	u.Set(configurationitemhistory.FieldAfter, v)
+	return u
+}
+
+// UpdateAfter sets the "after" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsert) UpdateAfter() *ConfigurationItemHistoryUpsert {
+	u.SetExcluded(configurationitemhistory.FieldAfter)
+	return u
+}
+
+// ClearAfter clears the value of the "after" field.
+func (u *ConfigurationItemHistoryUpsert) ClearAfter() *ConfigurationItemHistoryUpsert {
+	u.SetNull(configurationitemhistory.FieldAfter)
+	return u
+}
+
+// SetChangedFields sets the "changed_fields" field.
+func (u *ConfigurationItemHistoryUpsert) SetChangedFields(v []string) *ConfigurationItemHistoryUpsert {
+	u.Set(configurationitemhistory.FieldChangedFields, v)
+	return u
+}
+
+// UpdateChangedFields sets the "changed_fields" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsert) UpdateChangedFields() *ConfigurationItemHistoryUpsert {
+	u.SetExcluded(configurationitemhistory.FieldChangedFields)
+	return u
+}
+
+// ClearChangedFields clears the value of the "changed_fields" field.
+func (u *ConfigurationItemHistoryUpsert) ClearChangedFields() *ConfigurationItemHistoryUpsert {
+	u.SetNull(configurationitemhistory.FieldChangedFields)
+	return u
+}
+
+// SetOperatorID sets the "operator_id" field.
+func (u *ConfigurationItemHistoryUpsert) SetOperatorID(v int) *ConfigurationItemHistoryUpsert {
+	u.Set(configurationitemhistory.FieldOperatorID, v)
+	return u
+}
+
+// UpdateOperatorID sets the "operator_id" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsert) UpdateOperatorID() *ConfigurationItemHistoryUpsert {
+	u.SetExcluded(configurationitemhistory.FieldOperatorID)
+	return u
+}
+
+// AddOperatorID adds v to the "operator_id" field.
+func (u *ConfigurationItemHistoryUpsert) AddOperatorID(v int) *ConfigurationItemHistoryUpsert {
+	u.Add(configurationitemhistory.FieldOperatorID, v)
+	return u
+}
+
+// SetOperatorName sets the "operator_name" field.
+func (u *ConfigurationItemHistoryUpsert) SetOperatorName(v string) *ConfigurationItemHistoryUpsert {
+	u.Set(configurationitemhistory.FieldOperatorName, v)
+	return u
+}
+
+// UpdateOperatorName sets the "operator_name" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsert) UpdateOperatorName() *ConfigurationItemHistoryUpsert {
+	u.SetExcluded(configurationitemhistory.FieldOperatorName)
+	return u
+}
+
+// ClearOperatorName clears the value of the "operator_name" field.
+func (u *ConfigurationItemHistoryUpsert) ClearOperatorName() *ConfigurationItemHistoryUpsert {
+	u.SetNull(configurationitemhistory.FieldOperatorName)
+	return u
+}
+
+// SetRemark sets the "remark" field.
+func (u *ConfigurationItemHistoryUpsert) SetRemark(v string) *ConfigurationItemHistoryUpsert {
+	u.Set(configurationitemhistory.FieldRemark, v)
+	return u
+}
+
+// UpdateRemark sets the "remark" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsert) UpdateRemark() *ConfigurationItemHistoryUpsert {
+	u.SetExcluded(configurationitemhistory.FieldRemark)
+	return u
+}
+
+// ClearRemark clears the value of the "remark" field.
+func (u *ConfigurationItemHistoryUpsert) ClearRemark() *ConfigurationItemHistoryUpsert {
+	u.SetNull(configurationitemhistory.FieldRemark)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ConfigurationItemHistoryUpsert) SetTenantID(v int) *ConfigurationItemHistoryUpsert {
+	u.Set(configurationitemhistory.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsert) UpdateTenantID() *ConfigurationItemHistoryUpsert {
+	u.SetExcluded(configurationitemhistory.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ConfigurationItemHistoryUpsert) AddTenantID(v int) *ConfigurationItemHistoryUpsert {
+	u.Add(configurationitemhistory.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ConfigurationItemHistoryUpsert) SetCreatedAt(v time.Time) *ConfigurationItemHistoryUpsert {
+	u.Set(configurationitemhistory.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsert) UpdateCreatedAt() *ConfigurationItemHistoryUpsert {
+	u.SetExcluded(configurationitemhistory.FieldCreatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ConfigurationItemHistory.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ConfigurationItemHistoryUpsertOne) UpdateNewValues() *ConfigurationItemHistoryUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ConfigurationItemHistory.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ConfigurationItemHistoryUpsertOne) Ignore() *ConfigurationItemHistoryUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ConfigurationItemHistoryUpsertOne) DoNothing() *ConfigurationItemHistoryUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ConfigurationItemHistoryCreate.OnConflict
+// documentation for more info.
+func (u *ConfigurationItemHistoryUpsertOne) Update(set func(*ConfigurationItemHistoryUpsert)) *ConfigurationItemHistoryUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ConfigurationItemHistoryUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetCiID sets the "ci_id" field.
+func (u *ConfigurationItemHistoryUpsertOne) SetCiID(v int) *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetCiID(v)
+	})
+}
+
+// UpdateCiID sets the "ci_id" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertOne) UpdateCiID() *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateCiID()
+	})
+}
+
+// SetVersion sets the "version" field.
+func (u *ConfigurationItemHistoryUpsertOne) SetVersion(v int) *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetVersion(v)
+	})
+}
+
+// AddVersion adds v to the "version" field.
+func (u *ConfigurationItemHistoryUpsertOne) AddVersion(v int) *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.AddVersion(v)
+	})
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertOne) UpdateVersion() *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateVersion()
+	})
+}
+
+// SetOperation sets the "operation" field.
+func (u *ConfigurationItemHistoryUpsertOne) SetOperation(v string) *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetOperation(v)
+	})
+}
+
+// UpdateOperation sets the "operation" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertOne) UpdateOperation() *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateOperation()
+	})
+}
+
+// SetBefore sets the "before" field.
+func (u *ConfigurationItemHistoryUpsertOne) SetBefore(v map[string]interface{}) *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetBefore(v)
+	})
+}
+
+// UpdateBefore sets the "before" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertOne) UpdateBefore() *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateBefore()
+	})
+}
+
+// ClearBefore clears the value of the "before" field.
+func (u *ConfigurationItemHistoryUpsertOne) ClearBefore() *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.ClearBefore()
+	})
+}
+
+// SetAfter sets the "after" field.
+func (u *ConfigurationItemHistoryUpsertOne) SetAfter(v map[string]interface{}) *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetAfter(v)
+	})
+}
+
+// UpdateAfter sets the "after" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertOne) UpdateAfter() *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateAfter()
+	})
+}
+
+// ClearAfter clears the value of the "after" field.
+func (u *ConfigurationItemHistoryUpsertOne) ClearAfter() *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.ClearAfter()
+	})
+}
+
+// SetChangedFields sets the "changed_fields" field.
+func (u *ConfigurationItemHistoryUpsertOne) SetChangedFields(v []string) *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetChangedFields(v)
+	})
+}
+
+// UpdateChangedFields sets the "changed_fields" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertOne) UpdateChangedFields() *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateChangedFields()
+	})
+}
+
+// ClearChangedFields clears the value of the "changed_fields" field.
+func (u *ConfigurationItemHistoryUpsertOne) ClearChangedFields() *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.ClearChangedFields()
+	})
+}
+
+// SetOperatorID sets the "operator_id" field.
+func (u *ConfigurationItemHistoryUpsertOne) SetOperatorID(v int) *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetOperatorID(v)
+	})
+}
+
+// AddOperatorID adds v to the "operator_id" field.
+func (u *ConfigurationItemHistoryUpsertOne) AddOperatorID(v int) *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.AddOperatorID(v)
+	})
+}
+
+// UpdateOperatorID sets the "operator_id" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertOne) UpdateOperatorID() *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateOperatorID()
+	})
+}
+
+// SetOperatorName sets the "operator_name" field.
+func (u *ConfigurationItemHistoryUpsertOne) SetOperatorName(v string) *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetOperatorName(v)
+	})
+}
+
+// UpdateOperatorName sets the "operator_name" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertOne) UpdateOperatorName() *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateOperatorName()
+	})
+}
+
+// ClearOperatorName clears the value of the "operator_name" field.
+func (u *ConfigurationItemHistoryUpsertOne) ClearOperatorName() *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.ClearOperatorName()
+	})
+}
+
+// SetRemark sets the "remark" field.
+func (u *ConfigurationItemHistoryUpsertOne) SetRemark(v string) *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetRemark(v)
+	})
+}
+
+// UpdateRemark sets the "remark" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertOne) UpdateRemark() *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateRemark()
+	})
+}
+
+// ClearRemark clears the value of the "remark" field.
+func (u *ConfigurationItemHistoryUpsertOne) ClearRemark() *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.ClearRemark()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ConfigurationItemHistoryUpsertOne) SetTenantID(v int) *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ConfigurationItemHistoryUpsertOne) AddTenantID(v int) *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertOne) UpdateTenantID() *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ConfigurationItemHistoryUpsertOne) SetCreatedAt(v time.Time) *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertOne) UpdateCreatedAt() *ConfigurationItemHistoryUpsertOne {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ConfigurationItemHistoryUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ConfigurationItemHistoryCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ConfigurationItemHistoryUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ConfigurationItemHistoryUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ConfigurationItemHistoryUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ConfigurationItemHistoryCreateBulk is the builder for creating many ConfigurationItemHistory entities in bulk.
 type ConfigurationItemHistoryCreateBulk struct {
 	config
 	err      error
 	builders []*ConfigurationItemHistoryCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ConfigurationItemHistory entities in the database.
@@ -325,6 +841,7 @@ func (_c *ConfigurationItemHistoryCreateBulk) Save(ctx context.Context) ([]*Conf
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -375,6 +892,320 @@ func (_c *ConfigurationItemHistoryCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ConfigurationItemHistoryCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ConfigurationItemHistory.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ConfigurationItemHistoryUpsert) {
+//			SetCiID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ConfigurationItemHistoryCreateBulk) OnConflict(opts ...sql.ConflictOption) *ConfigurationItemHistoryUpsertBulk {
+	_c.conflict = opts
+	return &ConfigurationItemHistoryUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ConfigurationItemHistory.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ConfigurationItemHistoryCreateBulk) OnConflictColumns(columns ...string) *ConfigurationItemHistoryUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ConfigurationItemHistoryUpsertBulk{
+		create: _c,
+	}
+}
+
+// ConfigurationItemHistoryUpsertBulk is the builder for "upsert"-ing
+// a bulk of ConfigurationItemHistory nodes.
+type ConfigurationItemHistoryUpsertBulk struct {
+	create *ConfigurationItemHistoryCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ConfigurationItemHistory.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ConfigurationItemHistoryUpsertBulk) UpdateNewValues() *ConfigurationItemHistoryUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ConfigurationItemHistory.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ConfigurationItemHistoryUpsertBulk) Ignore() *ConfigurationItemHistoryUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ConfigurationItemHistoryUpsertBulk) DoNothing() *ConfigurationItemHistoryUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ConfigurationItemHistoryCreateBulk.OnConflict
+// documentation for more info.
+func (u *ConfigurationItemHistoryUpsertBulk) Update(set func(*ConfigurationItemHistoryUpsert)) *ConfigurationItemHistoryUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ConfigurationItemHistoryUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetCiID sets the "ci_id" field.
+func (u *ConfigurationItemHistoryUpsertBulk) SetCiID(v int) *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetCiID(v)
+	})
+}
+
+// UpdateCiID sets the "ci_id" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertBulk) UpdateCiID() *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateCiID()
+	})
+}
+
+// SetVersion sets the "version" field.
+func (u *ConfigurationItemHistoryUpsertBulk) SetVersion(v int) *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetVersion(v)
+	})
+}
+
+// AddVersion adds v to the "version" field.
+func (u *ConfigurationItemHistoryUpsertBulk) AddVersion(v int) *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.AddVersion(v)
+	})
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertBulk) UpdateVersion() *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateVersion()
+	})
+}
+
+// SetOperation sets the "operation" field.
+func (u *ConfigurationItemHistoryUpsertBulk) SetOperation(v string) *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetOperation(v)
+	})
+}
+
+// UpdateOperation sets the "operation" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertBulk) UpdateOperation() *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateOperation()
+	})
+}
+
+// SetBefore sets the "before" field.
+func (u *ConfigurationItemHistoryUpsertBulk) SetBefore(v map[string]interface{}) *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetBefore(v)
+	})
+}
+
+// UpdateBefore sets the "before" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertBulk) UpdateBefore() *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateBefore()
+	})
+}
+
+// ClearBefore clears the value of the "before" field.
+func (u *ConfigurationItemHistoryUpsertBulk) ClearBefore() *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.ClearBefore()
+	})
+}
+
+// SetAfter sets the "after" field.
+func (u *ConfigurationItemHistoryUpsertBulk) SetAfter(v map[string]interface{}) *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetAfter(v)
+	})
+}
+
+// UpdateAfter sets the "after" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertBulk) UpdateAfter() *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateAfter()
+	})
+}
+
+// ClearAfter clears the value of the "after" field.
+func (u *ConfigurationItemHistoryUpsertBulk) ClearAfter() *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.ClearAfter()
+	})
+}
+
+// SetChangedFields sets the "changed_fields" field.
+func (u *ConfigurationItemHistoryUpsertBulk) SetChangedFields(v []string) *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetChangedFields(v)
+	})
+}
+
+// UpdateChangedFields sets the "changed_fields" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertBulk) UpdateChangedFields() *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateChangedFields()
+	})
+}
+
+// ClearChangedFields clears the value of the "changed_fields" field.
+func (u *ConfigurationItemHistoryUpsertBulk) ClearChangedFields() *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.ClearChangedFields()
+	})
+}
+
+// SetOperatorID sets the "operator_id" field.
+func (u *ConfigurationItemHistoryUpsertBulk) SetOperatorID(v int) *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetOperatorID(v)
+	})
+}
+
+// AddOperatorID adds v to the "operator_id" field.
+func (u *ConfigurationItemHistoryUpsertBulk) AddOperatorID(v int) *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.AddOperatorID(v)
+	})
+}
+
+// UpdateOperatorID sets the "operator_id" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertBulk) UpdateOperatorID() *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateOperatorID()
+	})
+}
+
+// SetOperatorName sets the "operator_name" field.
+func (u *ConfigurationItemHistoryUpsertBulk) SetOperatorName(v string) *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetOperatorName(v)
+	})
+}
+
+// UpdateOperatorName sets the "operator_name" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertBulk) UpdateOperatorName() *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateOperatorName()
+	})
+}
+
+// ClearOperatorName clears the value of the "operator_name" field.
+func (u *ConfigurationItemHistoryUpsertBulk) ClearOperatorName() *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.ClearOperatorName()
+	})
+}
+
+// SetRemark sets the "remark" field.
+func (u *ConfigurationItemHistoryUpsertBulk) SetRemark(v string) *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetRemark(v)
+	})
+}
+
+// UpdateRemark sets the "remark" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertBulk) UpdateRemark() *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateRemark()
+	})
+}
+
+// ClearRemark clears the value of the "remark" field.
+func (u *ConfigurationItemHistoryUpsertBulk) ClearRemark() *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.ClearRemark()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ConfigurationItemHistoryUpsertBulk) SetTenantID(v int) *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ConfigurationItemHistoryUpsertBulk) AddTenantID(v int) *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertBulk) UpdateTenantID() *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ConfigurationItemHistoryUpsertBulk) SetCreatedAt(v time.Time) *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ConfigurationItemHistoryUpsertBulk) UpdateCreatedAt() *ConfigurationItemHistoryUpsertBulk {
+	return u.Update(func(s *ConfigurationItemHistoryUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ConfigurationItemHistoryUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ConfigurationItemHistoryCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ConfigurationItemHistoryCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ConfigurationItemHistoryUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -8,10 +8,10 @@
 import React, { useState, useEffect } from 'react';
 import { App, Layout, theme } from 'antd';
 import { useRouter, usePathname } from 'next/navigation';
-import { useAuthStore, useAuthStoreHydration } from '@/lib/store/auth-store';
+import { useAuthStore } from '@/lib/store/auth-store';
 import { LAYOUT_CONFIG } from '@/config/layout.config';
 import styles from './Sidebar.module.css';
-import { getMenuConfig, type MenuItem } from './menu-config';
+import type { MenuItem } from './menu-config';
 import { getIconByName } from './icons';
 import { MenuItems, renderMenuItems } from './MenuItems';
 import {
@@ -58,9 +58,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, mobile 
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAuthStore();
-
-  // 触发 auth store 的 hydration
-  useAuthStoreHydration();
 
   // 动态菜单状态
   const [dynamicMenus, setDynamicMenus] = useState<MenuTreeResponse | null>(null);
@@ -115,22 +112,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, mobile 
     }
     try {
       router.push(key);
+      if (mobile) onCollapse(true);
     } catch (error) {
       console.error('Menu navigation error:', error);
       message.error('导航失败，请稍后重试');
     }
   };
 
-  // 转换动态菜单（当 API 返回空时使用静态配置作为 fallback）
-  const FORCE_STATIC_MENU = false;
-  const rawMainMenus =
-    dynamicMenus && !FORCE_STATIC_MENU
-      ? convertApiMenuToSidebar(dynamicMenus.main)
-      : getMenuConfig().main;
-  const rawAdminMenus =
-    dynamicMenus && !FORCE_STATIC_MENU
-      ? convertApiMenuToSidebar(dynamicMenus.admin)
-      : getMenuConfig().admin;
+  // 后端菜单是唯一运行时权限权威；未加载或失败时 fail closed，不用静态菜单推断权限。
+  const rawMainMenus = dynamicMenus ? convertApiMenuToSidebar(dynamicMenus.main) : [];
+  const rawAdminMenus = dynamicMenus ? convertApiMenuToSidebar(dynamicMenus.admin) : [];
 
   // 菜单 key 去重逻辑 — 避免后端返回重复 key 导致 React 警告
   const deduplicateMenus = (menus: MenuItem[]): MenuItem[] => {
@@ -152,10 +143,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, mobile 
   const mainMenus = deduplicateMenus(rawMainMenus);
   const adminMenus = deduplicateMenus(rawAdminMenus);
 
-  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
-
   return (
     <Sider
+      id='primary-navigation'
+      role='navigation'
+      aria-label='主导航'
+      aria-hidden={collapsed ? true : undefined}
+      inert={collapsed ? true : undefined}
       trigger={null}
       collapsible
       collapsed={collapsed}
@@ -165,15 +159,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, mobile 
       width={LAYOUT_CONFIG.sider.width}
       className={`${styles.sider} ${collapsed ? styles.siderCollapsed : ''}`}
       style={{
-        background: '#2A2A2A',
-        borderRight: 'none',
         zIndex: LAYOUT_CONFIG.zIndex.sider,
         transition: 'width 250ms cubic-bezier(0.4, 0, 0.2, 1), opacity 200ms',
       }}
     >
       {/* Logo 区域 */}
       <div className={`${styles.logoArea} ${collapsed ? styles.logoAreaCollapsed : ''}`}>
-        <img src="/kln-logo.png" alt="Kerry Logistics" className={styles.logoImg} />
+        <img src='/kln-logo.png' alt='Kerry Logistics' className={styles.logoImg} />
         {!collapsed && (
           <div className={styles.logoTextContainer}>
             <div className={styles.logoText}>ITSM</div>
@@ -186,8 +178,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, mobile 
         <MenuItems items={mainMenus} selectedKeys={[pathname]} onMenuClick={handleMenuClick} />
       </div>
 
-      {/* 管理员菜单 */}
-      {isAdmin && (
+      {/* 后端已按 RBAC 和租户过滤；前端不再二次推断角色。 */}
+      {adminMenus.length > 0 && (
         <div className={styles.adminMenuContainer}>
           {!collapsed && <div className={styles.adminMenuHeader}>管理功能</div>}
           <div className={styles.adminMenu}>
@@ -203,7 +195,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, mobile 
             <div className={styles.userAvatar}>{user?.name?.[0] || user?.username?.[0] || 'U'}</div>
             <div className={styles.userDetails}>
               <div className={styles.userName}>{user?.name || user?.username}</div>
-              <div className={styles.userRole}>{user?.role || 'user'}</div>
+              {user?.role && <div className={styles.userRole}>{user.role}</div>}
             </div>
           </div>
         </div>

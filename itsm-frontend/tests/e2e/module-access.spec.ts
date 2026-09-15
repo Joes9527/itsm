@@ -10,7 +10,7 @@ const protectedRoutes = [
   '/assets',
   '/licenses',
   '/sla-dashboard',
-  '/workflow',
+  '/admin/workflows',
   '/workflow/designer',
   '/workflow/instances',
   '/workflow/dashboard',

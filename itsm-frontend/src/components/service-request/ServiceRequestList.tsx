@@ -3,11 +3,8 @@
 /**
  * 服务请求列表组件——"我的请求"
  *
- * 原来还有一个内部"待办审批" Tab，数据源 ServiceRequestApi.getPendingApprovals 打在
- * Task 1 已经删除的 /api/v1/service-requests/approvals/pending 上（SR 自己的审批阶段
- * 概念整体退休，审批现在走关联 Ticket 自己的 BPMN 流程，对应视图见
- * /approvals/pending 页面的"我作为候选组员（BPMN）"Tab）。与其保留一个数据源已经不存在、
- * 靠 catch 掩盖成永远空的 Tab，不如去掉——只保留"我的请求"这一个真实存在的视图。
+ * 服务请求域只展示请求记录；审批由关联 WorkItem 的 BPMN ProcessTask
+ * 唯一承载，并在 /approvals 中展示。这里不再定义第二套待审数据源或阶段。
  */
 
 import React, { useState, useEffect } from 'react';
@@ -16,7 +13,7 @@ import { Eye, RefreshCw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
-import { ServiceRequestApi } from '@/lib/api/';
+import { serviceRequestAPI } from '@/lib/api/service-request-api';
 import { ServiceRequestStatus } from '@/constants/service-request';
 import type { ServiceRequest, ServiceRequestQuery } from '@/types/biz/service-request';
 
@@ -50,9 +47,10 @@ const ServiceRequestList: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const resp = await ServiceRequestApi.getServiceRequests({
-        ...query,
-        scope: 'me',
+      const resp = await serviceRequestAPI.getUserServiceRequests({
+        page: query.page,
+        size: query.size,
+        status: query.status,
       });
       setData((resp.requests || []) as unknown as ServiceRequest[]);
       setTotal(resp?.total ?? 0);
@@ -66,7 +64,6 @@ const ServiceRequestList: React.FC = () => {
 
   useEffect(() => {
     loadData();
-
   }, [query]);
 
   // 表格列定义
@@ -83,8 +80,12 @@ const ServiceRequestList: React.FC = () => {
       dataIndex: 'ticketTitle',
       render: (text: string, record: ServiceRequest) => (
         <div className="flex flex-col">
-          <span className="font-medium text-gray-900">{text || `请求 #${record.id}`}</span>
-          <span className="text-xs text-gray-500">{record.catalog?.name || '未知服务'}</span>
+          <span className="font-medium text-foreground">
+            {text || `请求 #${record.id}`}
+          </span>
+          <span className="text-[12px] text-muted">
+            {record.catalog?.name || '未知服务'}
+          </span>
         </div>
       ),
     },
@@ -112,7 +113,7 @@ const ServiceRequestList: React.FC = () => {
             <Button
               type="text"
               icon={<Eye />}
-              className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+              className="text-foreground hover:!text-foreground hover:!bg-raised"
               onClick={() => router.push(`/tickets/${record.ticketId}`)}
             />
           </Tooltip>
@@ -122,9 +123,9 @@ const ServiceRequestList: React.FC = () => {
   ];
 
   return (
-    <Card className="rounded-lg shadow-sm border border-gray-200">
+    <Card className="rounded-[8px] shadow-none border border-border">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-base font-medium text-gray-900">我的请求</h3>
+        <h3 className="text-[15px] font-semibold text-foreground">我的请求</h3>
         <Button icon={<RefreshCw />} onClick={loadData}>
           刷新
         </Button>

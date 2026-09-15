@@ -3,32 +3,48 @@ package service
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
+	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processinstance"
+	"itsm-backend/service/bpmn"
 
 	"go.uber.org/zap"
 )
 
 // BPMNAuditService BPMN审计服务
 type BPMNAuditService struct {
-	client *ent.Client
-	logger *zap.SugaredLogger
+	client               *ent.Client
+	logger               *zap.SugaredLogger
+	instanceAccessPolicy *bpmnInstanceAccessPolicy
 }
 
 // NewBPMNAuditService 创建BPMN审计服务
 func NewBPMNAuditService(client *ent.Client, logger *zap.SugaredLogger) *BPMNAuditService {
+	groupResolver := bpmn.NewGroupResolver(client)
+	participationResolver := newBPMNParticipationResolver(client, groupResolver)
 	return &BPMNAuditService{
-		client: client,
-		logger: logger,
+		client:               client,
+		logger:               logger,
+		instanceAccessPolicy: newBPMNInstanceAccessPolicy(client, participationResolver),
 	}
 }
 
 // ForClient binds audit writes to the caller's Ent client, including transaction clients.
 func (s *BPMNAuditService) ForClient(client *ent.Client) *BPMNAuditService {
-	return &BPMNAuditService{client: client, logger: s.logger}
+	policy := s.instanceAccessPolicy
+	if policy == nil {
+		groupResolver := bpmn.NewGroupResolver(s.client)
+		policy = newBPMNInstanceAccessPolicy(s.client, newBPMNParticipationResolver(s.client, groupResolver))
+	}
+	return &BPMNAuditService{
+		client:               client,
+		logger:               s.logger,
+		instanceAccessPolicy: policy.forClient(client),
+	}
 }
 
 // AuditAction 审计操作类型
@@ -44,6 +60,7 @@ const (
 	AuditActionTaskCompleted        = "completed"
 	AuditActionTaskCancelled        = "task_cancelled"
 	AuditActionTaskVariablesChanged = "task_variables_changed"
+	AuditActionTaskMutationRejected = "task_mutation_rejected"
 	AuditActionCounterSignCreated   = "counter_sign_created"
 	AuditActionTaskEscalated        = "escalated"
 	AuditActionTaskReassigned       = "reassigned"
@@ -228,6 +245,30 @@ func (s *BPMNAuditService) RecordTaskVariablesChanged(ctx context.Context, task 
 	return s.RecordAudit(ctx, auditCtx)
 }
 
+// RecordTaskMutationRejected records a fail-closed lifecycle rejection without
+// emitting any mutation-success audit entry.
+func (s *BPMNAuditService) RecordTaskMutationRejected(
+	ctx context.Context,
+	task *ent.ProcessTask,
+	actorID int,
+	actorName string,
+	command BPMNTaskCommand,
+	currentStatus string,
+) error {
+	auditCtx, err := s.taskAuditContext(ctx, task, actorID, actorName)
+	if err != nil {
+		return err
+	}
+	auditCtx.Action = AuditActionTaskMutationRejected
+	auditCtx.Metadata = map[string]interface{}{
+		"command":          string(command),
+		"current_status":   currentStatus,
+		"observed_version": task.AggregationVersion,
+		"result":           "conflict",
+	}
+	return s.RecordAudit(ctx, auditCtx)
+}
+
 // RecordCounterSignCreated records creation of a counter-sign task set.
 func (s *BPMNAuditService) RecordCounterSignCreated(ctx context.Context, parentTask *ent.ProcessTask, userID int, userName string, approverCount int) error {
 	auditCtx, err := s.taskAuditContext(ctx, parentTask, userID, userName)
@@ -317,7 +358,28 @@ func (s *BPMNAuditService) RecordVariableChanged(ctx context.Context, instance *
 
 // QueryAuditLogs 查询审计日志
 func (s *BPMNAuditService) QueryAuditLogs(ctx context.Context, req *QueryAuditLogsRequest) ([]*ent.ProcessAuditLog, int, error) {
-	query := s.client.ProcessAuditLog.Query()
+	if req == nil {
+		return nil, 0, common.NewBadRequestError("审计日志查询不能为空", nil)
+	}
+
+	scope, err := BPMNAccessScopeFromContext(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	if req.ProcessInstanceID > 0 {
+		if _, err = s.instanceAccessPolicy.loadForRead(ctx, strconv.Itoa(req.ProcessInstanceID)); err != nil {
+			return nil, 0, err
+		}
+	} else if req.ProcessInstanceKey != "" {
+		if _, err = s.instanceAccessPolicy.loadForRead(ctx, req.ProcessInstanceKey); err != nil {
+			return nil, 0, err
+		}
+	} else if _, err = RequireBPMNInstanceReadAll(ctx); err != nil {
+		return nil, 0, err
+	}
+
+	query := s.client.ProcessAuditLog.Query().
+		Where(processauditlog.TenantID(scope.TenantID))
 
 	// 构建查询条件
 	if req.ProcessInstanceID > 0 {
@@ -343,9 +405,6 @@ func (s *BPMNAuditService) QueryAuditLogs(ctx context.Context, req *QueryAuditLo
 	}
 	if req.AssigneeID > 0 {
 		query = query.Where(processauditlog.AssigneeID(req.AssigneeID))
-	}
-	if req.TenantID > 0 {
-		query = query.Where(processauditlog.TenantID(req.TenantID))
 	}
 	if !req.StartTime.IsZero() {
 		query = query.Where(processauditlog.TimestampGTE(req.StartTime))
@@ -390,15 +449,17 @@ func (s *BPMNAuditService) QueryAuditLogs(ctx context.Context, req *QueryAuditLo
 }
 
 // GetProcessTimeline 获取流程时间线
-func (s *BPMNAuditService) GetProcessTimeline(ctx context.Context, processInstanceKey string, tenantID int) ([]*ent.ProcessAuditLog, error) {
-	query := s.client.ProcessAuditLog.Query().
-		Where(processauditlog.ProcessInstanceKey(processInstanceKey))
-
-	if tenantID > 0 {
-		query = query.Where(processauditlog.TenantID(tenantID))
+func (s *BPMNAuditService) GetProcessTimeline(ctx context.Context, processInstanceKey string) ([]*ent.ProcessAuditLog, error) {
+	instance, err := s.instanceAccessPolicy.loadForRead(ctx, processInstanceKey)
+	if err != nil {
+		return nil, err
 	}
 
-	logs, err := query.
+	logs, err := s.client.ProcessAuditLog.Query().
+		Where(
+			processauditlog.TenantID(instance.TenantID),
+			processauditlog.ProcessInstanceID(instance.ID),
+		).
 		Order(ent.Asc(processauditlog.FieldTimestamp)).
 		All(ctx)
 	if err != nil {
@@ -408,31 +469,33 @@ func (s *BPMNAuditService) GetProcessTimeline(ctx context.Context, processInstan
 }
 
 // GetUserActivity 获取用户活动
-func (s *BPMNAuditService) GetUserActivity(ctx context.Context, userID int, tenantID int, startTime, endTime time.Time) ([]*ent.ProcessAuditLog, error) {
+func (s *BPMNAuditService) GetUserActivity(ctx context.Context, userID int, startTime, endTime time.Time) ([]*ent.ProcessAuditLog, error) {
+	scope, err := RequireBPMNInstanceReadAll(ctx)
+	if err != nil {
+		return nil, err
+	}
 	query := s.client.ProcessAuditLog.Query().
 		Where(processauditlog.UserID(userID)).
 		Where(processauditlog.TimestampGTE(startTime)).
-		Where(processauditlog.TimestampLTE(endTime))
-
-	if tenantID > 0 {
-		query = query.Where(processauditlog.TenantID(tenantID))
-	}
+		Where(processauditlog.TimestampLTE(endTime)).
+		Where(processauditlog.TenantID(scope.TenantID))
 
 	return query.Order(ent.Desc(processauditlog.FieldTimestamp)).All(ctx)
 }
 
 // GetActivityStatistics 获取活动统计
-func (s *BPMNAuditService) GetActivityStatistics(ctx context.Context, processDefinitionKey string, tenantID int, startTime, endTime time.Time) (map[string]int, error) {
+func (s *BPMNAuditService) GetActivityStatistics(ctx context.Context, processDefinitionKey string, startTime, endTime time.Time) (map[string]int, error) {
+	scope, err := RequireBPMNInstanceReadAll(ctx)
+	if err != nil {
+		return nil, err
+	}
 	stats := make(map[string]int)
 
 	query := s.client.ProcessAuditLog.Query().
 		Where(processauditlog.ProcessDefinitionKey(processDefinitionKey)).
 		Where(processauditlog.TimestampGTE(startTime)).
-		Where(processauditlog.TimestampLTE(endTime))
-
-	if tenantID > 0 {
-		query = query.Where(processauditlog.TenantID(tenantID))
-	}
+		Where(processauditlog.TimestampLTE(endTime)).
+		Where(processauditlog.TenantID(scope.TenantID))
 
 	logs, err := query.All(ctx)
 	if err != nil {
@@ -457,7 +520,6 @@ type QueryAuditLogsRequest struct {
 	Action               string
 	UserID               int
 	AssigneeID           int
-	TenantID             int
 	StartTime            time.Time
 	EndTime              time.Time
 	Page                 int

@@ -3,8 +3,6 @@
 package change
 
 import (
-	"time"
-
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 )
@@ -14,30 +12,40 @@ const (
 	Label = "change"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldTitle holds the string denoting the title field in the database.
-	FieldTitle = "title"
-	// FieldDescription holds the string denoting the description field in the database.
-	FieldDescription = "description"
+	// FieldOutcome holds the string denoting the outcome field in the database.
+	FieldOutcome = "outcome"
+	// FieldOutcomeEvidence holds the string denoting the outcome_evidence field in the database.
+	FieldOutcomeEvidence = "outcome_evidence"
+	// FieldAssessmentEvidence holds the string denoting the assessment_evidence field in the database.
+	FieldAssessmentEvidence = "assessment_evidence"
+	// FieldAssessmentDigest holds the string denoting the assessment_digest field in the database.
+	FieldAssessmentDigest = "assessment_digest"
+	// FieldAssessedBy holds the string denoting the assessed_by field in the database.
+	FieldAssessedBy = "assessed_by"
+	// FieldAssessedAt holds the string denoting the assessed_at field in the database.
+	FieldAssessedAt = "assessed_at"
+	// FieldReviewedBy holds the string denoting the reviewed_by field in the database.
+	FieldReviewedBy = "reviewed_by"
+	// FieldReviewedAt holds the string denoting the reviewed_at field in the database.
+	FieldReviewedAt = "reviewed_at"
+	// FieldReviewEvidence holds the string denoting the review_evidence field in the database.
+	FieldReviewEvidence = "review_evidence"
+	// FieldReviewDigest holds the string denoting the review_digest field in the database.
+	FieldReviewDigest = "review_digest"
+	// FieldStandardTemplateID holds the string denoting the standard_template_id field in the database.
+	FieldStandardTemplateID = "standard_change_changes"
+	// FieldStandardPolicy holds the string denoting the standard_policy field in the database.
+	FieldStandardPolicy = "standard_policy"
 	// FieldJustification holds the string denoting the justification field in the database.
 	FieldJustification = "justification"
 	// FieldType holds the string denoting the type field in the database.
 	FieldType = "type"
-	// FieldStatus holds the string denoting the status field in the database.
-	FieldStatus = "status"
-	// FieldPriority holds the string denoting the priority field in the database.
-	FieldPriority = "priority"
 	// FieldImpactScope holds the string denoting the impact_scope field in the database.
 	FieldImpactScope = "impact_scope"
 	// FieldRiskLevel holds the string denoting the risk_level field in the database.
 	FieldRiskLevel = "risk_level"
-	// FieldAssigneeID holds the string denoting the assignee_id field in the database.
-	FieldAssigneeID = "assignee_id"
-	// FieldCreatedBy holds the string denoting the created_by field in the database.
-	FieldCreatedBy = "created_by"
 	// FieldWorkItemID holds the string denoting the work_item_id field in the database.
 	FieldWorkItemID = "work_item_id"
-	// FieldTenantID holds the string denoting the tenant_id field in the database.
-	FieldTenantID = "tenant_id"
 	// FieldPlannedStartDate holds the string denoting the planned_start_date field in the database.
 	FieldPlannedStartDate = "planned_start_date"
 	// FieldPlannedEndDate holds the string denoting the planned_end_date field in the database.
@@ -52,23 +60,28 @@ const (
 	FieldRollbackPlan = "rollback_plan"
 	// FieldAffectedCis holds the string denoting the affected_cis field in the database.
 	FieldAffectedCis = "affected_cis"
-	// FieldRelatedTickets holds the string denoting the related_tickets field in the database.
-	FieldRelatedTickets = "related_tickets"
-	// FieldCreatedAt holds the string denoting the created_at field in the database.
-	FieldCreatedAt = "created_at"
-	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
-	FieldUpdatedAt = "updated_at"
-	// EdgeProblems holds the string denoting the problems edge name in mutations.
-	EdgeProblems = "problems"
+	// EdgeStandardTemplate holds the string denoting the standard_template edge name in mutations.
+	EdgeStandardTemplate = "standard_template"
+	// EdgeWorkItem holds the string denoting the work_item edge name in mutations.
+	EdgeWorkItem = "work_item"
 	// EdgePir holds the string denoting the pir edge name in mutations.
 	EdgePir = "pir"
 	// Table holds the table name of the change in the database.
 	Table = "changes"
-	// ProblemsTable is the table that holds the problems relation/edge. The primary key declared below.
-	ProblemsTable = "problem_changes"
-	// ProblemsInverseTable is the table name for the Problem entity.
-	// It exists in this package in order to avoid circular dependency with the "problem" package.
-	ProblemsInverseTable = "problems"
+	// StandardTemplateTable is the table that holds the standard_template relation/edge.
+	StandardTemplateTable = "changes"
+	// StandardTemplateInverseTable is the table name for the StandardChange entity.
+	// It exists in this package in order to avoid circular dependency with the "standardchange" package.
+	StandardTemplateInverseTable = "standard_changes"
+	// StandardTemplateColumn is the table column denoting the standard_template relation/edge.
+	StandardTemplateColumn = "standard_change_changes"
+	// WorkItemTable is the table that holds the work_item relation/edge.
+	WorkItemTable = "changes"
+	// WorkItemInverseTable is the table name for the Ticket entity.
+	// It exists in this package in order to avoid circular dependency with the "ticket" package.
+	WorkItemInverseTable = "tickets"
+	// WorkItemColumn is the table column denoting the work_item relation/edge.
+	WorkItemColumn = "work_item_id"
 	// PirTable is the table that holds the pir relation/edge.
 	PirTable = "change_pi_rs"
 	// PirInverseTable is the table name for the ChangePIR entity.
@@ -81,18 +94,23 @@ const (
 // Columns holds all SQL columns for change fields.
 var Columns = []string{
 	FieldID,
-	FieldTitle,
-	FieldDescription,
+	FieldOutcome,
+	FieldOutcomeEvidence,
+	FieldAssessmentEvidence,
+	FieldAssessmentDigest,
+	FieldAssessedBy,
+	FieldAssessedAt,
+	FieldReviewedBy,
+	FieldReviewedAt,
+	FieldReviewEvidence,
+	FieldReviewDigest,
+	FieldStandardTemplateID,
+	FieldStandardPolicy,
 	FieldJustification,
 	FieldType,
-	FieldStatus,
-	FieldPriority,
 	FieldImpactScope,
 	FieldRiskLevel,
-	FieldAssigneeID,
-	FieldCreatedBy,
 	FieldWorkItemID,
-	FieldTenantID,
 	FieldPlannedStartDate,
 	FieldPlannedEndDate,
 	FieldActualStartDate,
@@ -100,22 +118,7 @@ var Columns = []string{
 	FieldImplementationPlan,
 	FieldRollbackPlan,
 	FieldAffectedCis,
-	FieldRelatedTickets,
-	FieldCreatedAt,
-	FieldUpdatedAt,
 }
-
-// ForeignKeys holds the SQL foreign-keys that are owned by the "changes"
-// table and are not defined as standalone fields in the schema.
-var ForeignKeys = []string{
-	"standard_change_changes",
-}
-
-var (
-	// ProblemsPrimaryKey and ProblemsColumn2 are the table columns denoting the
-	// primary key for the problems relation (M2M).
-	ProblemsPrimaryKey = []string{"problem_id", "change_id"}
-)
 
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
@@ -124,37 +127,16 @@ func ValidColumn(column string) bool {
 			return true
 		}
 	}
-	for i := range ForeignKeys {
-		if column == ForeignKeys[i] {
-			return true
-		}
-	}
 	return false
 }
 
 var (
-	// TitleValidator is a validator for the "title" field. It is called by the builders before save.
-	TitleValidator func(string) error
 	// DefaultType holds the default value on creation for the "type" field.
 	DefaultType string
-	// DefaultStatus holds the default value on creation for the "status" field.
-	DefaultStatus string
-	// DefaultPriority holds the default value on creation for the "priority" field.
-	DefaultPriority string
 	// DefaultImpactScope holds the default value on creation for the "impact_scope" field.
 	DefaultImpactScope string
 	// DefaultRiskLevel holds the default value on creation for the "risk_level" field.
 	DefaultRiskLevel string
-	// CreatedByValidator is a validator for the "created_by" field. It is called by the builders before save.
-	CreatedByValidator func(int) error
-	// TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	TenantIDValidator func(int) error
-	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
-	DefaultCreatedAt func() time.Time
-	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
-	DefaultUpdatedAt func() time.Time
-	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
-	UpdateDefaultUpdatedAt func() time.Time
 )
 
 // OrderOption defines the ordering options for the Change queries.
@@ -165,14 +147,59 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
 }
 
-// ByTitle orders the results by the title field.
-func ByTitle(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTitle, opts...).ToFunc()
+// ByOutcome orders the results by the outcome field.
+func ByOutcome(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOutcome, opts...).ToFunc()
 }
 
-// ByDescription orders the results by the description field.
-func ByDescription(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldDescription, opts...).ToFunc()
+// ByOutcomeEvidence orders the results by the outcome_evidence field.
+func ByOutcomeEvidence(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOutcomeEvidence, opts...).ToFunc()
+}
+
+// ByAssessmentEvidence orders the results by the assessment_evidence field.
+func ByAssessmentEvidence(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAssessmentEvidence, opts...).ToFunc()
+}
+
+// ByAssessmentDigest orders the results by the assessment_digest field.
+func ByAssessmentDigest(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAssessmentDigest, opts...).ToFunc()
+}
+
+// ByAssessedBy orders the results by the assessed_by field.
+func ByAssessedBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAssessedBy, opts...).ToFunc()
+}
+
+// ByAssessedAt orders the results by the assessed_at field.
+func ByAssessedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAssessedAt, opts...).ToFunc()
+}
+
+// ByReviewedBy orders the results by the reviewed_by field.
+func ByReviewedBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReviewedBy, opts...).ToFunc()
+}
+
+// ByReviewedAt orders the results by the reviewed_at field.
+func ByReviewedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReviewedAt, opts...).ToFunc()
+}
+
+// ByReviewEvidence orders the results by the review_evidence field.
+func ByReviewEvidence(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReviewEvidence, opts...).ToFunc()
+}
+
+// ByReviewDigest orders the results by the review_digest field.
+func ByReviewDigest(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReviewDigest, opts...).ToFunc()
+}
+
+// ByStandardTemplateID orders the results by the standard_template_id field.
+func ByStandardTemplateID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStandardTemplateID, opts...).ToFunc()
 }
 
 // ByJustification orders the results by the justification field.
@@ -185,16 +212,6 @@ func ByType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldType, opts...).ToFunc()
 }
 
-// ByStatus orders the results by the status field.
-func ByStatus(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldStatus, opts...).ToFunc()
-}
-
-// ByPriority orders the results by the priority field.
-func ByPriority(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPriority, opts...).ToFunc()
-}
-
 // ByImpactScope orders the results by the impact_scope field.
 func ByImpactScope(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldImpactScope, opts...).ToFunc()
@@ -205,24 +222,9 @@ func ByRiskLevel(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRiskLevel, opts...).ToFunc()
 }
 
-// ByAssigneeID orders the results by the assignee_id field.
-func ByAssigneeID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAssigneeID, opts...).ToFunc()
-}
-
-// ByCreatedBy orders the results by the created_by field.
-func ByCreatedBy(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCreatedBy, opts...).ToFunc()
-}
-
 // ByWorkItemID orders the results by the work_item_id field.
 func ByWorkItemID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWorkItemID, opts...).ToFunc()
-}
-
-// ByTenantID orders the results by the tenant_id field.
-func ByTenantID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTenantID, opts...).ToFunc()
 }
 
 // ByPlannedStartDate orders the results by the planned_start_date field.
@@ -255,27 +257,17 @@ func ByRollbackPlan(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRollbackPlan, opts...).ToFunc()
 }
 
-// ByCreatedAt orders the results by the created_at field.
-func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
-}
-
-// ByUpdatedAt orders the results by the updated_at field.
-func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
-}
-
-// ByProblemsCount orders the results by problems count.
-func ByProblemsCount(opts ...sql.OrderTermOption) OrderOption {
+// ByStandardTemplateField orders the results by standard_template field.
+func ByStandardTemplateField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newProblemsStep(), opts...)
+		sqlgraph.OrderByNeighborTerms(s, newStandardTemplateStep(), sql.OrderByField(field, opts...))
 	}
 }
 
-// ByProblems orders the results by problems terms.
-func ByProblems(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+// ByWorkItemField orders the results by work_item field.
+func ByWorkItemField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newProblemsStep(), append([]sql.OrderTerm{term}, terms...)...)
+		sqlgraph.OrderByNeighborTerms(s, newWorkItemStep(), sql.OrderByField(field, opts...))
 	}
 }
 
@@ -292,11 +284,18 @@ func ByPir(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newPirStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
-func newProblemsStep() *sqlgraph.Step {
+func newStandardTemplateStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ProblemsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2M, true, ProblemsTable, ProblemsPrimaryKey...),
+		sqlgraph.To(StandardTemplateInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, StandardTemplateTable, StandardTemplateColumn),
+	)
+}
+func newWorkItemStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(WorkItemInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, false, WorkItemTable, WorkItemColumn),
 	)
 }
 func newPirStep() *sqlgraph.Step {

@@ -1,12 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Layout, ConfigProvider, App } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { usePathname, useRouter } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { Sidebar } from '@/components/layout/Sidebar';
-import { httpClient } from '@/lib/api/http-client';
 import { LAYOUT_CONFIG } from '@/config/layout.config';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { NetworkStatus } from '@/components/common/NetworkStatus';
@@ -14,8 +13,7 @@ import { useLayoutStore } from '@/lib/store/layout-store';
 import PageTransition from '@/components/common/PageTransition';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { usePersonaStore } from '@/lib/store/persona-store';
-import { PERSONAS, getRolePersonaConfig, getPersonaByPath } from '@/config/persona/persona-config';
-import type { Tenant } from '@/lib/api/api-config';
+import { getDefaultHomePath, getPersonaByPath } from '@/config/persona/persona-config';
 
 const { Content } = Layout;
 
@@ -34,6 +32,7 @@ export default function MainLayout({
   const [isMobile, setIsMobile] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const sidebarToggleRef = useRef<HTMLButtonElement>(null);
   const pathname = usePathname();
   const router = useRouter();
   const { activePersona, setActivePersona, initPersonaByRole } = usePersonaStore();
@@ -42,87 +41,27 @@ export default function MainLayout({
   useEffect(() => {
     setMounted(true);
     const checkAuth = async () => {
-      let userInfo = null;
-      let tenantInfo = null;
-
+      const { hydrateSession, logout } = useAuthStore.getState();
+      let userInfo;
       try {
-        userInfo = await httpClient.get<any>('/api/v1/auth/me');
+        userInfo = await hydrateSession();
       } catch (e) {
         console.error('Failed to fetch user info:', e);
-      }
-
-      try {
-        tenantInfo = await httpClient.get<any>('/api/v1/auth/tenants');
-      } catch (e) {
-        console.error('Failed to fetch tenant info:', e);
-      }
-
-      // 如果两个都失败，则认为未认证
-      if (!userInfo && !tenantInfo) {
+        logout();
         setIsAuthenticated(false);
         router.push(`/login?redirect=${encodeURIComponent(pathname || '/')}`);
         setCheckingAuth(false);
         return;
       }
 
-      const tenants = Array.isArray(tenantInfo?.tenants) ? tenantInfo.tenants : [];
-      const currentTenant = tenants[0];
-      const roleCode = String(userInfo?.role || 'end_user');
-
-      const { login, setCurrentTenant } = useAuthStore.getState();
-      login(
-        {
-          id: Number(userInfo?.id || 0),
-          username: String(userInfo?.username || ''),
-          email: String(userInfo?.email || ''),
-          name: String(userInfo?.name || ''),
-          role: roleCode,
-          department: userInfo?.department,
-          tenantId: userInfo?.tenantId ? Number(userInfo.tenantId) : undefined,
-          permissions: userInfo?.permissions,
-          createdAt: userInfo?.createdAt,
-          updatedAt: userInfo?.updatedAt,
-        },
-        'authenticated',
-        currentTenant
-          ? {
-              id: Number(currentTenant.id),
-              name: String(currentTenant.name),
-              code: String(currentTenant.code),
-              type: currentTenant.type,
-              status: currentTenant.status,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            }
-          : undefined
-      );
-
-      if (currentTenant) {
-        const tenantData: Tenant = {
-          id: Number(currentTenant.id),
-          name: String(currentTenant.name),
-          code: String(currentTenant.code),
-          type: currentTenant.type || 'standard',
-          status: currentTenant.status || 'active',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        setCurrentTenant(tenantData);
-      }
+      const roleCode = String(userInfo.role);
 
       // 初始化 Persona——带上 userId，跨账号登录时才能正确重置，见 persona-store.ts 注释。
       initPersonaByRole(roleCode, Number(userInfo?.id || 0));
 
-      // 如果用户直接访问了根路由或 /dashboard，重定向至该角色的默认工作台。
-      // 直接查 PERSONAS[defaultPersona].homePath，不要在这里逐个 persona 手写
-      // if/else 分支——之前漏了 'admin' 分支，导致 sysadmin/super_admin 等角色
-      // 登录后一直停在 /dashboard，不会像其它角色一样跳到自己的默认落地页。
+      // 兼容用户手动访问根路由或历史 /dashboard 入口；角色落点由 Persona 配置统一解析。
       if (pathname === '/' || pathname === '/dashboard') {
-        const roleConf = getRolePersonaConfig(roleCode);
-        const homePath = PERSONAS[roleConf.defaultPersona]?.homePath;
-        if (homePath) {
-          router.replace(homePath);
-        }
+        router.replace(getDefaultHomePath(roleCode));
       }
 
       setIsAuthenticated(true);
@@ -161,12 +100,57 @@ export default function MainLayout({
     return () => window.removeEventListener('resize', handleResize);
   }, [setCollapsed]);
 
+  const closeMobileNavigation = useCallback(() => {
+    setCollapsed(true);
+    window.setTimeout(() => sidebarToggleRef.current?.focus(), 250);
+  }, [setCollapsed]);
+
+  const handleSidebarChange = useCallback(
+    (nextCollapsed: boolean) => {
+      if (isMobile && nextCollapsed) closeMobileNavigation();
+      else setCollapsed(nextCollapsed);
+    },
+    [closeMobileNavigation, isMobile, setCollapsed]
+  );
+
   // 在移动端，点击内容区域时折叠侧边栏
   const handleContentClick = () => {
     if (isMobile && !collapsed) {
-      setCollapsed(true);
+      closeMobileNavigation();
     }
   };
+
+  useEffect(() => {
+    if (!isMobile || collapsed) return;
+    const navigation = document.getElementById('primary-navigation');
+    const focusable = () =>
+      Array.from(
+        navigation?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ) || []
+      );
+    focusable()[0]?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeMobileNavigation();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const items = focusable();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [closeMobileNavigation, collapsed, isMobile]);
 
   // 未挂载时显示 loading（避免服务端渲染问题）
   if (!mounted) {
@@ -176,8 +160,8 @@ export default function MainLayout({
   // 正在检查认证状态时显示 loading
   if (checkingAuth) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <LoadingSpinner size="lg" />
+      <div className='flex items-center justify-center min-h-screen'>
+        <LoadingSpinner size='lg' />
       </div>
     );
   }
@@ -194,8 +178,8 @@ export default function MainLayout({
     <ConfigProvider locale={zhCN}>
       <App>
         <a
-          href="#main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:bg-primary-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary-400"
+          href='#main-content'
+          className='sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:bg-primary-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary-400'
         >
           跳转到主要内容
         </a>
@@ -203,21 +187,26 @@ export default function MainLayout({
 
         {isPortalLayout ? (
           /* =================== 1. 自服务门户布局 (PortalLayout) =================== */
-          <Layout className="min-h-screen bg-[#f8fafc] dark:bg-slate-950 flex flex-col">
-            <Header collapsed={true} onCollapse={() => {}} showBreadcrumb={false} />
-            <Content id="main-content" tabIndex={-1} className="w-full flex-1 outline-none">
-              <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
+          <Layout className='min-h-screen bg-[var(--color-bg-secondary)] flex flex-col'>
+            <Header
+              collapsed={true}
+              onCollapse={() => {}}
+              showBreadcrumb={false}
+              showSidebarToggle={false}
+            />
+            <Content id='main-content' tabIndex={-1} className='w-full flex-1 outline-none'>
+              <div className='max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6'>
                 <PageTransition>{children}</PageTransition>
               </div>
             </Content>
-            <footer className="text-center py-6 bg-transparent text-slate-400 text-xs">
+            <footer className='text-center py-6 bg-transparent text-slate-400 text-xs'>
               AI-Native ITSM ©{new Date().getFullYear()} - 极简自服务与企业技术支持平台
             </footer>
           </Layout>
         ) : (
           /* =================== 2. 专业控制台布局 (ConsoleLayout) =================== */
           <Layout
-            className="min-h-screen bg-[#f5f7fb] dark:bg-slate-950"
+            className='min-h-screen bg-[var(--color-bg-secondary)]'
             style={{
               paddingLeft: isMobile
                 ? 0
@@ -227,26 +216,31 @@ export default function MainLayout({
               transition: 'padding-left 0.2s ease',
             }}
           >
-            <Sidebar
-              collapsed={collapsed}
-              onCollapse={setCollapsed}
-              mobile={isMobile}
-            />
+            <Sidebar collapsed={collapsed} onCollapse={handleSidebarChange} mobile={isMobile} />
 
-            <Layout className="bg-[#f5f7fb] dark:bg-slate-950 min-h-screen">
-              <Header collapsed={collapsed} onCollapse={setCollapsed} showBreadcrumb={true} />
+            <Layout
+              className='bg-[var(--color-bg-secondary)] min-h-screen'
+              aria-hidden={isMobile && !collapsed ? true : undefined}
+              inert={isMobile && !collapsed ? true : undefined}
+            >
+              <Header
+                collapsed={collapsed}
+                onCollapse={handleSidebarChange}
+                showBreadcrumb={true}
+                sidebarToggleRef={sidebarToggleRef}
+              />
 
               <Content
-                id="main-content"
+                id='main-content'
                 tabIndex={-1}
                 onClick={handleContentClick}
-                className="bg-[#f5f7fb] dark:bg-slate-950 w-auto min-w-0 max-w-full overflow-x-hidden shadow-none outline-none"
+                className='bg-[var(--color-bg-secondary)] w-auto min-w-0 max-w-full overflow-x-hidden shadow-none outline-none'
                 style={{
                   minHeight: LAYOUT_CONFIG.content.minHeight,
                 }}
               >
                 <div
-                  className="main-content"
+                  className='main-content'
                   style={{
                     padding: isMobile ? `${LAYOUT_CONFIG.content.paddingMobile}px` : '16px',
                   }}
@@ -255,15 +249,17 @@ export default function MainLayout({
                 </div>
               </Content>
 
-              <footer className="text-center p-4 bg-transparent text-gray-400 text-xs">
+              <footer className='text-center p-4 bg-transparent text-muted text-[12px]'>
                 AI-Native ITSM ©{new Date().getFullYear()} - AI驱动的IT服务管理系统
               </footer>
             </Layout>
 
             {!collapsed && isMobile && (
-              <div
-                onClick={() => setCollapsed(true)}
-                className="fixed inset-0 bg-black/45"
+              <button
+                type='button'
+                aria-label='关闭导航'
+                onClick={closeMobileNavigation}
+                className='fixed inset-0 bg-black/45 border-0 p-0'
                 style={{
                   zIndex: LAYOUT_CONFIG.zIndex.sider - 1,
                 }}

@@ -5,11 +5,23 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common/workitemidentity"
 	"itsm-backend/ent"
 )
 
 // BPMNTaskResponse 「我的待办」任务视图：任务字段 + 所属流程实例的业务上下文（camelCase）
+type BPMNTaskUIActions struct {
+	Claim    bool   `json:"claim"`
+	Complete bool   `json:"complete"`
+	Reason   string `json:"reason,omitempty"`
+}
+
 type BPMNTaskResponse struct {
+	AssigneeSource       string                 `json:"assigneeSource"`
+	AssignmentState      string                 `json:"assignmentState"`
+	ResponsibleUserID    int                    `json:"responsibleUserId"`
+	ActorID              int                    `json:"actorId"`
+	UIActions            BPMNTaskUIActions      `json:"uiActions"`
 	ID                   int                    `json:"id"`
 	TaskID               string                 `json:"taskId"`
 	TaskDefinitionKey    string                 `json:"taskDefinitionKey"`
@@ -26,6 +38,7 @@ type BPMNTaskResponse struct {
 	BusinessKey          string                 `json:"businessKey"`
 	BusinessType         string                 `json:"businessType"`
 	BusinessID           int                    `json:"businessId"`
+	WorkItemNumber       string                 `json:"workItemNumber,omitempty"`
 	TaskPurpose          string                 `json:"taskPurpose"`
 	FormKey              string                 `json:"formKey,omitempty"`
 	TaskVariables        map[string]interface{} `json:"taskVariables,omitempty"`
@@ -33,22 +46,29 @@ type BPMNTaskResponse struct {
 	CreatedTime          time.Time              `json:"createdTime"`
 }
 
-// parseBusinessKey 解析 "ticket:123" 形式的 businessKey
+// parseBusinessKey 解析规范业务键 "{recordClass}:{workItemId}"。
+//
+// 失败关闭：Wave-1 旧词表（ticket/change/service_request）与畸形键一律不解释，返回空身份，
+// 使新运行时不会把旧实例身份当成自己的。Release 保留其显式遗留值。
 func parseBusinessKey(businessKey string) (businessType string, businessID int) {
-	parts := strings.SplitN(businessKey, ":", 2)
-	if len(parts) != 2 {
+	class, rawID, found := strings.Cut(businessKey, ":")
+	if !found || rawID == "" {
 		return "", 0
 	}
-	id, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return parts[0], 0
+	id, err := strconv.Atoi(rawID)
+	if err != nil || id <= 0 {
+		return "", 0
 	}
-	return parts[0], id
+	if !workitemidentity.IsKnownProcessIdentity(class) {
+		return "", 0
+	}
+	return class, id
 }
 
 // ToBPMNTaskResponse 转换任务实体；instance 允许为 nil（历史数据缺实例时业务上下文留空）
 func ToBPMNTaskResponse(task *ent.ProcessTask, instance *ent.ProcessInstance) *BPMNTaskResponse {
 	resp := &BPMNTaskResponse{
+		AssigneeSource:       task.AssigneeSource,
 		ID:                   task.ID,
 		TaskID:               task.TaskID,
 		TaskDefinitionKey:    task.TaskDefinitionKey,
@@ -75,7 +95,12 @@ func ToBPMNTaskResponse(task *ent.ProcessTask, instance *ent.ProcessInstance) *B
 	if instance != nil {
 		resp.ProcessInstanceKey = instance.ProcessInstanceID
 		resp.BusinessKey = instance.BusinessKey
-		resp.BusinessType, resp.BusinessID = parseBusinessKey(instance.BusinessKey)
+		resp.WorkItemNumber, _ = instance.Variables["ticket_number"].(string)
+		if task.AssigneeSource != "" {
+			resp.BusinessType, resp.BusinessID = instance.BusinessType, instance.BusinessID
+		} else {
+			resp.BusinessType, resp.BusinessID = parseBusinessKey(instance.BusinessKey)
+		}
 	}
 	return resp
 }

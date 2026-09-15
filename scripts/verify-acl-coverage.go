@@ -8,6 +8,7 @@
 //	go run scripts/verify-acl-coverage.go
 //
 // Exit codes:
+//
 //	0 - all routes protected or explicitly documented as public
 //	1 - one or more routes missing RequirePermission
 package main
@@ -22,57 +23,63 @@ import (
 
 // Routes that are intentionally public (no auth required)
 var knownPublic = map[string]bool{
-	"/api/v1/health":                        true,
-	"/api/v1/healthz":                       true,
-	"/api/v1/readyz":                        true,
-	"/api/v1/version":                       true,
-	"/api/v1/auth/login":                    true,
-	"/api/v1/auth/register":                 true,
-	"/api/v1/auth/forgot-password":          true,
-	"/api/v1/auth/reset-password":           true,
-	"/api/v1/auth/validate-reset-token":     true,
-	"/api/v1/refresh-token":                 true,
-	"/api/v1/csrf-token":                    true,
-	"/api/v1/readiness/ga":                  true,
-	"/api/v1/ws/ticket":                     true,
-	"/api/v1/ws/notifications":              true,
-	"/auth/login":                           true,
-	"/auth/refresh":                         true,
-	"/auth/refresh-token":                   true,
-	"/auth/register":                        true,
-	"/auth/forgot-password":                 true,
-	"/auth/reset-password":                  true,
-	"/auth/validate-reset-token":            true,
-	"/auth/user-info":                       true,
-	"/auth/profile":                         true,
-	"/auth/tenants":                         true,
-	"/auth/switch-tenant":                   true,
-	"/auth/logout":                          true,
+	"/api/v1/health":                    true,
+	"/api/v1/healthz":                   true,
+	"/api/v1/readyz":                    true,
+	"/api/v1/version":                   true,
+	"/api/v1/auth/login":                true,
+	"/api/v1/auth/register":             true,
+	"/api/v1/auth/forgot-password":      true,
+	"/api/v1/auth/reset-password":       true,
+	"/api/v1/auth/validate-reset-token": true,
+	"/api/v1/auth/azure/login":          true,
+	"/api/v1/auth/azure/callback":       true,
+	"/api/v1/auth/refresh":              true,
+	"/api/v1/csrf-token":                true,
+	"/api/v1/readiness/ga":              true,
+	"/api/v1/ws/ticket":                 true,
+	"/api/v1/ws/notifications":          true,
+	"/auth/login":                       true,
+	"/auth/refresh":                     true,
+	"/auth/register":                    true,
+	"/auth/forgot-password":             true,
+	"/auth/reset-password":              true,
+	"/auth/validate-reset-token":        true,
+	"/auth/user-info":                   true,
+	"/auth/profile":                     true,
+	"/auth/tenants":                     true,
+	"/auth/switch-tenant":               true,
+	"/auth/logout":                      true,
 	// AuthMiddleware-only routes (no RBAC permission needed)
-	"/api/v1/auth/me":                       true,
-	"/api/v1/auth/tenants":                  true,
-	"/api/v1/auth/logout":                   true,
-	"/api/v1/menus":                         true,
+	"/api/v1/auth/me":      true,
+	"/api/v1/auth/tenants": true,
+	"/api/v1/auth/logout":  true,
+	"/api/v1/menus":        true,
+	// Application-layer professional read policy authorizes this WorkItem
+	// after immutable recordClass dispatch; route-level RBAC would duplicate it.
+	"/api/v1/tickets/:id/approval-decisions": true,
+	// Signed external callbacks cannot require an interactive user session.
+	"/api/v1/feishu/oauth/callback/:instance_id": true,
+	"/api/v1/feishu/webhook/:instance_id":        true,
 	// Protected by group-level RequirePermission in ticket_routes.go
-	"/tickets/associations":                 true,
-	// Legacy stub routes — only return BadRequestCode guidance
-	"/api/v1/workflows":                     true,
-	"/api/v1/definitions":                   true,
-	"/api/v1/definitions/:id":               true,
-	"/api/v1/services":                      true,
-	"/api/v1/slas":                          true,
-	"/api/v1/knowledge":                     true,
+	"/tickets/associations": true,
+	// Transitional non-workflow stubs — only return BadRequestCode guidance
+	"/api/v1/definitions":     true,
+	"/api/v1/definitions/:id": true,
+	"/api/v1/services":        true,
+	"/api/v1/slas":            true,
+	"/api/v1/knowledge":       true,
 	// Prometheus metrics — AuthMiddleware only (no RBAC)
-	"/api/v1/metrics":                     true,
+	"/api/v1/metrics": true,
 	// Tenant group provides implicit RBAC; specific paths listed explicitly
-	"/api/v1/roles/:id":                     true,
-	"/api/v1/roles/:id/permissions":         true,
-	"/api/v1/roles/init":                    true,
-	"/api/v1/menus/init":                    true,
+	"/api/v1/roles/:id":             true,
+	"/api/v1/roles/:id/permissions": true,
+	"/api/v1/roles/init":            true,
+	"/api/v1/menus/init":            true,
 	// Connectors configs — already protected by connector lifecycle auth
-	"/api/v1/configs":                      true,
+	"/api/v1/configs": true,
 	// Static ticket-types lookup stub (read-only reference data)
-	"/api/v1/ticket-types":               true,
+	"/api/v1/ticket-types": true,
 }
 
 // RouteInfo records a single route found during parsing
@@ -114,6 +121,26 @@ func main() {
 		}
 	}
 
+	// Intake capability routes live beside their thin adapter. Inspect each
+	// exact declaration: the signature handler or scoped JWT middleware is the
+	// authority; they are never added to knownPublic.
+	for _, name := range []string{"handler.go", "identity_mapping_handler.go"} {
+		p := filepath.Join(routerDir, "../handlers/intake", name)
+		data, err := os.ReadFile(p)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		for index, line := range strings.Split(string(data), "\n") {
+			match := routeRE.FindStringSubmatch(line)
+			if match == nil {
+				continue
+			}
+			if !regexp.MustCompile(`RequirePermission\s*\(|IntakeAuthMiddleware\s*\([^,]+,\s*"intake:(create|catalog:read|workitem:read)"|exchangeHandler\s*\(\s*"(create|read)"`).MatchString(line) {
+				unprotected = append(unprotected, RouteInfo{Method: match[1], Path: "/api/v1" + match[2], File: name, Line: index + 1})
+			}
+		}
+	}
 	if len(unprotected) > 0 {
 		fmt.Fprintf(os.Stderr, "verify-acl-coverage: %d non-public routes missing RequirePermission:\n", len(unprotected))
 		for _, r := range unprotected {
@@ -134,9 +161,7 @@ var routeRE = regexp.MustCompile(`^\s*(?:(?:\w+)\s*\.)?(GET|POST|PUT|PATCH|DELET
 
 var groupDeclRE = regexp.MustCompile(`^\s*(\w+)\s*:=\s*(?:r|auth|tenant|msp|public)\s*\.\s*Group\s*\(\s*"([^"]+)"`)
 
-var permRE = regexp.MustCompile(`RequirePermission\s*\(\s*"[^"]+"\s*,\s*"[^"]+"\s*\)`)
-var mspPermRE = regexp.MustCompile(`RequireMSPPermission\s*\(\s*"[^"]+"\s*,\s*"[^"]+"\s*\)`)
-var anyPermRE = regexp.MustCompile(`Require(MSP)?Permission\s*\(`)
+var anyPermRE = regexp.MustCompile(`Require(?:MSP)?Permission\s*\(|RequireWorkItemRecordClassPermission\s*\(|AuthMiddleware\s*\(`)
 
 func parseFile(path string) []RouteInfo {
 	data, err := os.ReadFile(path)

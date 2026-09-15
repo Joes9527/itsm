@@ -20,8 +20,8 @@ const (
 	FieldDescription = "description"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
-	// FieldType holds the string denoting the type field in the database.
-	FieldType = "type"
+	// FieldGenericSubtype holds the string denoting the generic_subtype field in the database.
+	FieldGenericSubtype = "generic_subtype"
 	// FieldSource holds the string denoting the source field in the database.
 	FieldSource = "source"
 	// FieldRecordClass holds the string denoting the record_class field in the database.
@@ -54,6 +54,14 @@ const (
 	FieldDepartmentID = "department_id"
 	// FieldParentTicketID holds the string denoting the parent_ticket_id field in the database.
 	FieldParentTicketID = "parent_ticket_id"
+	// FieldSLACycleNumber holds the string denoting the sla_cycle_number field in the database.
+	FieldSLACycleNumber = "sla_cycle_number"
+	// FieldSLACycleStartedAt holds the string denoting the sla_cycle_started_at field in the database.
+	FieldSLACycleStartedAt = "sla_cycle_started_at"
+	// FieldSLAPausedMinutes holds the string denoting the sla_paused_minutes field in the database.
+	FieldSLAPausedMinutes = "sla_paused_minutes"
+	// FieldAppliedSLAPolicy holds the string denoting the applied_sla_policy field in the database.
+	FieldAppliedSLAPolicy = "applied_sla_policy"
 	// FieldSLADefinitionID holds the string denoting the sla_definition_id field in the database.
 	FieldSLADefinitionID = "sla_definition_id"
 	// FieldSLAResponseDeadline holds the string denoting the sla_response_deadline field in the database.
@@ -104,8 +112,6 @@ const (
 	EdgeTags = "tags"
 	// EdgeRelatedTickets holds the string denoting the related_tickets edge name in mutations.
 	EdgeRelatedTickets = "related_tickets"
-	// EdgeApprovals holds the string denoting the approvals edge name in mutations.
-	EdgeApprovals = "approvals"
 	// EdgeWorkflowRecords holds the string denoting the workflow_records edge name in mutations.
 	EdgeWorkflowRecords = "workflow_records"
 	// EdgeNotifications holds the string denoting the notifications edge name in mutations.
@@ -151,13 +157,6 @@ const (
 	TagsColumn = "ticket_tags"
 	// RelatedTicketsTable is the table that holds the related_tickets relation/edge. The primary key declared below.
 	RelatedTicketsTable = "ticket_related_tickets"
-	// ApprovalsTable is the table that holds the approvals relation/edge.
-	ApprovalsTable = "ticket_approvals"
-	// ApprovalsInverseTable is the table name for the TicketApproval entity.
-	// It exists in this package in order to avoid circular dependency with the "ticketapproval" package.
-	ApprovalsInverseTable = "ticket_approvals"
-	// ApprovalsColumn is the table column denoting the approvals relation/edge.
-	ApprovalsColumn = "ticket_id"
 	// WorkflowRecordsTable is the table that holds the workflow_records relation/edge.
 	WorkflowRecordsTable = "ticket_workflow_records"
 	// WorkflowRecordsInverseTable is the table name for the TicketWorkflowRecord entity.
@@ -221,11 +220,13 @@ const (
 	AssigneeInverseTable = "users"
 	// AssigneeColumn is the table column denoting the assignee relation/edge.
 	AssigneeColumn = "assignee_id"
-	// CategoryTable is the table that holds the category relation/edge. The primary key declared below.
-	CategoryTable = "ticket_category_tickets"
+	// CategoryTable is the table that holds the category relation/edge.
+	CategoryTable = "tickets"
 	// CategoryInverseTable is the table name for the TicketCategory entity.
 	// It exists in this package in order to avoid circular dependency with the "ticketcategory" package.
 	CategoryInverseTable = "ticket_categories"
+	// CategoryColumn is the table column denoting the category relation/edge.
+	CategoryColumn = "category_id"
 )
 
 // Columns holds all SQL columns for ticket fields.
@@ -234,7 +235,7 @@ var Columns = []string{
 	FieldTitle,
 	FieldDescription,
 	FieldStatus,
-	FieldType,
+	FieldGenericSubtype,
 	FieldSource,
 	FieldRecordClass,
 	FieldOpenedByID,
@@ -251,6 +252,10 @@ var Columns = []string{
 	FieldCategoryID,
 	FieldDepartmentID,
 	FieldParentTicketID,
+	FieldSLACycleNumber,
+	FieldSLACycleStartedAt,
+	FieldSLAPausedMinutes,
+	FieldAppliedSLAPolicy,
 	FieldSLADefinitionID,
 	FieldSLAResponseDeadline,
 	FieldSLAResolutionDeadline,
@@ -279,7 +284,6 @@ var Columns = []string{
 var ForeignKeys = []string{
 	"configuration_item_tickets",
 	"department_tickets",
-	"problem_tickets",
 	"sla_definition_tickets",
 	"ticket_tag_tickets",
 	"ticket_template_tickets",
@@ -289,9 +293,6 @@ var (
 	// RelatedTicketsPrimaryKey and RelatedTicketsColumn2 are the table columns denoting the
 	// primary key for the related_tickets relation (M2M).
 	RelatedTicketsPrimaryKey = []string{"ticket_id", "related_ticket_id"}
-	// CategoryPrimaryKey and CategoryColumn2 are the table columns denoting the
-	// primary key for the category relation (M2M).
-	CategoryPrimaryKey = []string{"ticket_category_id", "ticket_id"}
 )
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -314,8 +315,6 @@ var (
 	TitleValidator func(string) error
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
-	// DefaultType holds the default value on creation for the "type" field.
-	DefaultType string
 	// DefaultSource holds the default value on creation for the "source" field.
 	DefaultSource string
 	// DefaultRecordClass holds the default value on creation for the "record_class" field.
@@ -328,6 +327,14 @@ var (
 	RequesterIDValidator func(int) error
 	// TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	TenantIDValidator func(int) error
+	// DefaultSLACycleNumber holds the default value on creation for the "sla_cycle_number" field.
+	DefaultSLACycleNumber int
+	// SLACycleNumberValidator is a validator for the "sla_cycle_number" field. It is called by the builders before save.
+	SLACycleNumberValidator func(int) error
+	// DefaultSLAPausedMinutes holds the default value on creation for the "sla_paused_minutes" field.
+	DefaultSLAPausedMinutes int
+	// SLAPausedMinutesValidator is a validator for the "sla_paused_minutes" field. It is called by the builders before save.
+	SLAPausedMinutesValidator func(int) error
 	// RatingValidator is a validator for the "rating" field. It is called by the builders before save.
 	RatingValidator func(int) error
 	// DefaultVersion holds the default value on creation for the "version" field.
@@ -367,9 +374,9 @@ func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
 }
 
-// ByType orders the results by the type field.
-func ByType(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldType, opts...).ToFunc()
+// ByGenericSubtype orders the results by the generic_subtype field.
+func ByGenericSubtype(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGenericSubtype, opts...).ToFunc()
 }
 
 // BySource orders the results by the source field.
@@ -450,6 +457,21 @@ func ByDepartmentID(opts ...sql.OrderTermOption) OrderOption {
 // ByParentTicketID orders the results by the parent_ticket_id field.
 func ByParentTicketID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldParentTicketID, opts...).ToFunc()
+}
+
+// BySLACycleNumber orders the results by the sla_cycle_number field.
+func BySLACycleNumber(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSLACycleNumber, opts...).ToFunc()
+}
+
+// BySLACycleStartedAt orders the results by the sla_cycle_started_at field.
+func BySLACycleStartedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSLACycleStartedAt, opts...).ToFunc()
+}
+
+// BySLAPausedMinutes orders the results by the sla_paused_minutes field.
+func BySLAPausedMinutes(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSLAPausedMinutes, opts...).ToFunc()
 }
 
 // BySLADefinitionID orders the results by the sla_definition_id field.
@@ -608,20 +630,6 @@ func ByRelatedTickets(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
-// ByApprovalsCount orders the results by approvals count.
-func ByApprovalsCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newApprovalsStep(), opts...)
-	}
-}
-
-// ByApprovals orders the results by approvals terms.
-func ByApprovals(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newApprovalsStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
 // ByWorkflowRecordsCount orders the results by workflow_records count.
 func ByWorkflowRecordsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -734,17 +742,10 @@ func ByAssigneeField(field string, opts ...sql.OrderTermOption) OrderOption {
 	}
 }
 
-// ByCategoryCount orders the results by category count.
-func ByCategoryCount(opts ...sql.OrderTermOption) OrderOption {
+// ByCategoryField orders the results by category field.
+func ByCategoryField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newCategoryStep(), opts...)
-	}
-}
-
-// ByCategory orders the results by category terms.
-func ByCategory(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newCategoryStep(), append([]sql.OrderTerm{term}, terms...)...)
+		sqlgraph.OrderByNeighborTerms(s, newCategoryStep(), sql.OrderByField(field, opts...))
 	}
 }
 func newCommentsStep() *sqlgraph.Step {
@@ -773,13 +774,6 @@ func newRelatedTicketsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(Table, FieldID),
 		sqlgraph.Edge(sqlgraph.M2M, false, RelatedTicketsTable, RelatedTicketsPrimaryKey...),
-	)
-}
-func newApprovalsStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ApprovalsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, ApprovalsTable, ApprovalsColumn),
 	)
 }
 func newWorkflowRecordsStep() *sqlgraph.Step {
@@ -849,6 +843,6 @@ func newCategoryStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(CategoryInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2M, true, CategoryTable, CategoryPrimaryKey...),
+		sqlgraph.Edge(sqlgraph.M2O, true, CategoryTable, CategoryColumn),
 	)
 }

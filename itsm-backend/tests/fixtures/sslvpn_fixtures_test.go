@@ -2,7 +2,10 @@ package fixtures_test
 
 import (
 	"context"
+	"strconv"
 	"testing"
+
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/fielddefinition"
@@ -45,14 +48,9 @@ func TestEnsureSSLVPNMetadata(t *testing.T) {
 	assert.True(t, res.CatalogItem.RequiresApproval)
 	assert.Equal(t, 2, res.CatalogItem.ApprovalLevel)
 
-	// 验证 8 个自定义字段
-	require.Len(t, res.FieldDefs, 8)
+	// 验证 3 个业务字段
+	require.Len(t, res.FieldDefs, 3)
 	expectedFieldNames := []string{
-		"applicant_name",
-		"applicant_upn",
-		"employee_id",
-		"department",
-		"vpn_level",
 		"target_systems",
 		"access_duration",
 		"access_reason",
@@ -102,17 +100,18 @@ func TestEnsureSSLVPNMetadata(t *testing.T) {
 		).
 		Count(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, 8, count, "幂等调用后自定义字段数量仍应为 8")
+	assert.Equal(t, 3, count, "幂等调用后自定义字段数量仍应为 3")
 
 	// 3. 验证通过 CustomProcessEngine 能够成功启动 sslvpn_approval_flow 流程
 	logger := zaptest.NewLogger(t).Sugar()
-	engineIface := service.NewCustomProcessEngine(client, logger)
+	engineIface := service.NewCustomProcessEngine(client, logger, executionfixture.Standard())
 	engine, ok := engineIface.(*service.CustomProcessEngine)
 	require.True(t, ok)
 
 	runCtx := service.WithTrustedBPMNTenantContext(ctx, tenant.ID)
 	instance, err := engine.StartProcess(runCtx, "sslvpn_approval_flow", "TICKET-VPN-TEST-1", "", 0, map[string]interface{}{
 		"requester_id": float64(res.Users.EndUser.ID),
+		"triggered_by": strconv.Itoa(res.Users.EndUser.ID),
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, instance)

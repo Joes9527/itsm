@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"strconv"
 	"strings"
-	"time"
 
 	"go.uber.org/zap"
 	"itsm-backend/ent"
@@ -72,9 +71,11 @@ func ToUserDetailResponseList(users []*ent.User) []*UserDetailResponse {
 // Incident Mappers
 // ===================================
 
-// ToIncidentResponse converts an ent.Incident to IncidentResponse
-func ToIncidentResponse(incident *ent.Incident) *IncidentResponse {
-	if incident == nil {
+// ToIncidentResponse converts an Incident extension and its authoritative
+// WorkItem to the public response. Shared fields never come from the
+// professional extension.
+func ToIncidentResponse(incident *ent.Incident, workItem *ent.Ticket) *IncidentResponse {
+	if incident == nil || workItem == nil {
 		return nil
 	}
 
@@ -97,29 +98,37 @@ func ToIncidentResponse(incident *ent.Incident) *IncidentResponse {
 
 	response := &IncidentResponse{
 		ID:              incident.ID,
-		Title:           incident.Title,
-		Description:     incident.Description,
-		Status:          incident.Status,
-		Priority:        incident.Priority,
+		CategoryID:      workItem.CategoryID,
+		Title:           workItem.Title,
+		Description:     workItem.Description,
+		Status:          workItem.Status,
+		Priority:        workItem.Priority,
 		Severity:        incident.Severity,
 		Impact:          incident.Impact,
 		Urgency:         incident.Urgency,
-		IncidentNumber:  incident.IncidentNumber,
-		ReporterID:      incident.ReporterID,
-		Category:        incident.Category,
-		Subcategory:     incident.Subcategory,
+		IncidentNumber:  workItem.TicketNumber,
+		Number:          workItem.TicketNumber,
+		ReporterID:      workItem.RequesterID,
 		ImpactAnalysis:  impactAnalysis,
 		RootCause:       rootCause,
 		ResolutionSteps: resolutionSteps,
 		EscalationLevel: incident.EscalationLevel,
 		IsAutomated:     incident.IsAutomated,
 		IsMajorIncident: incident.IsMajorIncident,
-		Source:          incident.Source,
+		Source:          workItem.Source,
 		Metadata:        incident.Metadata,
-		TenantID:        incident.TenantID,
-		Version:         incident.Version, // 乐观锁版本号
-		CreatedAt:       incident.CreatedAt,
-		UpdatedAt:       incident.UpdatedAt,
+		TenantID:        workItem.TenantID,
+		Version:         workItem.Version,
+		CreatedAt:       workItem.CreatedAt,
+		UpdatedAt:       workItem.UpdatedAt,
+	}
+	if category := workItem.Edges.Category; category != nil {
+		if parent := category.Edges.Parent; parent != nil {
+			response.Category = parent.Name
+			response.Subcategory = category.Name
+		} else {
+			response.Category = category.Name
+		}
 	}
 
 	if configurationItems := incident.Edges.ConfigurationItems; configurationItems != nil {
@@ -133,8 +142,8 @@ func ToIncidentResponse(incident *ent.Incident) *IncidentResponse {
 	}
 
 	// Add optional fields if present
-	if incident.AssigneeID > 0 {
-		response.AssigneeID = &incident.AssigneeID
+	if workItem.AssigneeID > 0 {
+		response.AssigneeID = &workItem.AssigneeID
 	}
 	if incident.ConfigurationItemID > 0 {
 		response.ConfigurationItemID = &incident.ConfigurationItemID
@@ -152,29 +161,15 @@ func ToIncidentResponse(incident *ent.Incident) *IncidentResponse {
 		response.EscalatedAt = &incident.EscalatedAt
 	}
 
-	if !incident.ResolvedAt.IsZero() {
-		response.ResolvedAt = &incident.ResolvedAt
+	if !workItem.ResolvedAt.IsZero() {
+		response.ResolvedAt = &workItem.ResolvedAt
 	}
 
-	if !incident.ClosedAt.IsZero() {
-		response.ClosedAt = &incident.ClosedAt
+	if workItem.ClosedAt != nil {
+		response.ClosedAt = workItem.ClosedAt
 	}
 
 	return response
-}
-
-// ToIncidentResponseList converts a slice of ent.Incident to IncidentResponse slice
-func ToIncidentResponseList(incidents []*ent.Incident) []*IncidentResponse {
-	if incidents == nil {
-		return nil
-	}
-	responses := make([]*IncidentResponse, 0, len(incidents))
-	for _, incident := range incidents {
-		if incident != nil {
-			responses = append(responses, ToIncidentResponse(incident))
-		}
-	}
-	return responses
 }
 
 // ===================================
@@ -352,110 +347,6 @@ func ToTenantResponseList(tenants []*ent.Tenant) []*TenantResponse {
 }
 
 // ===================================
-// Change Mappers
-// ===================================
-
-// ToChangeResponse converts an ent.Change to ChangeResponse
-func ToChangeResponse(change *ent.Change) *ChangeResponse {
-	if change == nil {
-		return nil
-	}
-
-	response := &ChangeResponse{
-		ID:                 change.ID,
-		Title:              change.Title,
-		Description:        change.Description,
-		Justification:      change.Justification,
-		Type:               ChangeType(change.Type),
-		Status:             ChangeStatus(change.Status),
-		Priority:           ChangePriority(change.Priority),
-		ImpactScope:        ChangeImpact(change.ImpactScope),
-		RiskLevel:          ChangeRisk(change.RiskLevel),
-		CreatedBy:          change.CreatedBy,
-		TenantID:           change.TenantID,
-		ImplementationPlan: change.ImplementationPlan,
-		RollbackPlan:       change.RollbackPlan,
-		AffectedCIs:        change.AffectedCis,
-		RelatedTickets:     change.RelatedTickets,
-		CreatedAt:          change.CreatedAt,
-		UpdatedAt:          change.UpdatedAt,
-		PlannedStartDate:   &change.PlannedStartDate,
-		PlannedEndDate:     &change.PlannedEndDate,
-		ActualStartDate:    &change.ActualStartDate,
-		ActualEndDate:      &change.ActualEndDate,
-	}
-
-	if change.AssigneeID > 0 {
-		response.AssigneeID = &change.AssigneeID
-	}
-
-	return response
-}
-
-// ToChangeResponseList converts a slice of ent.Change to ChangeResponse slice
-func ToChangeResponseList(changes []*ent.Change) []*ChangeResponse {
-	if changes == nil {
-		return nil
-	}
-	responses := make([]*ChangeResponse, 0, len(changes))
-	for _, change := range changes {
-		if change != nil {
-			responses = append(responses, ToChangeResponse(change))
-		}
-	}
-	return responses
-}
-
-// ===================================
-// Problem Mappers
-// ===================================
-
-// ToProblemResponse converts an ent.Problem to ProblemResponse
-func ToProblemResponse(problem *ent.Problem) *ProblemResponse {
-	if problem == nil {
-		return nil
-	}
-
-	response := &ProblemResponse{
-		ID:          problem.ID,
-		Title:       problem.Title,
-		Description: problem.Description,
-		Status:      problem.Status,
-		Priority:    problem.Priority,
-		Category:    problem.Category,
-		RootCause:   problem.RootCause,
-		Impact:      problem.Impact,
-		CreatedBy:   problem.CreatedBy,
-		TenantID:    problem.TenantID,
-		CreatedAt:   problem.CreatedAt,
-		UpdatedAt:   problem.UpdatedAt,
-	}
-
-	if problem.AssigneeID > 0 {
-		response.AssigneeID = &problem.AssigneeID
-	}
-	if problem.WorkItemID > 0 {
-		response.WorkItemID = &problem.WorkItemID
-	}
-
-	return response
-}
-
-// ToProblemResponseList converts a slice of ent.Problem to ProblemResponse slice
-func ToProblemResponseList(problems []*ent.Problem) []*ProblemResponse {
-	if problems == nil {
-		return nil
-	}
-	responses := make([]*ProblemResponse, 0, len(problems))
-	for _, problem := range problems {
-		if problem != nil {
-			responses = append(responses, ToProblemResponse(problem))
-		}
-	}
-	return responses
-}
-
-// ===================================
 // Project Mappers
 // ===================================
 
@@ -597,148 +488,6 @@ func ToGroupResponseList(groups []*ent.Group) []*GroupResponse {
 }
 
 // ===================================
-// Workflow Mappers
-// ===================================
-
-// WorkflowResponse 工作流响应
-type WorkflowResponse struct {
-	ID           int                    `json:"id"`
-	Name         string                 `json:"name"`
-	Description  string                 `json:"description"`
-	Type         string                 `json:"type"`
-	Definition   map[string]interface{} `json:"definition"`
-	Version      string                 `json:"version"`
-	IsActive     bool                   `json:"isActive"`
-	TenantID     int                    `json:"tenantId"`
-	DepartmentID *int                   `json:"departmentId,omitempty"`
-	CreatedAt    time.Time              `json:"createdAt"`
-	UpdatedAt    time.Time              `json:"updatedAt"`
-}
-
-// WorkflowInstanceResponse 工作流实例响应
-type WorkflowInstanceResponse struct {
-	ID          int                    `json:"id"`
-	Status      string                 `json:"status"`
-	CurrentStep string                 `json:"currentStep"`
-	Context     map[string]interface{} `json:"context"`
-	WorkflowID  int                    `json:"workflowId"`
-	EntityID    int                    `json:"entityId"`
-	EntityType  string                 `json:"entityType"`
-	TenantID    int                    `json:"tenantId"`
-	StartedAt   time.Time              `json:"startedAt"`
-	CompletedAt *time.Time             `json:"completedAt,omitempty"`
-	CreatedAt   time.Time              `json:"createdAt"`
-	UpdatedAt   time.Time              `json:"updatedAt"`
-}
-
-type WorkflowListResponse struct {
-	Workflows []*WorkflowResponse `json:"workflows"`
-	Total     int                 `json:"total"`
-	Page      int                 `json:"page"`
-	PageSize  int                 `json:"pageSize"`
-}
-
-type WorkflowInstanceListResponse struct {
-	Instances []*WorkflowInstanceResponse `json:"instances"`
-	Total     int                         `json:"total"`
-	Page      int                         `json:"page"`
-	PageSize  int                         `json:"pageSize"`
-}
-
-// ToWorkflowResponse converts an ent.Workflow to WorkflowResponse
-func ToWorkflowResponse(workflow *ent.Workflow) *WorkflowResponse {
-	if workflow == nil {
-		return nil
-	}
-
-	// Parse definition JSON bytes to map
-	var definition map[string]interface{}
-	if workflow.Definition != nil {
-		_ = json.Unmarshal(workflow.Definition, &definition)
-	}
-
-	response := &WorkflowResponse{
-		ID:          workflow.ID,
-		Name:        workflow.Name,
-		Description: workflow.Description,
-		Type:        workflow.Type,
-		Definition:  definition,
-		Version:     workflow.Version,
-		IsActive:    workflow.IsActive,
-		TenantID:    workflow.TenantID,
-		CreatedAt:   workflow.CreatedAt,
-		UpdatedAt:   workflow.UpdatedAt,
-	}
-
-	if workflow.DepartmentID > 0 {
-		response.DepartmentID = &workflow.DepartmentID
-	}
-
-	return response
-}
-
-// ToWorkflowResponseList converts a slice of ent.Workflow to WorkflowResponse slice
-func ToWorkflowResponseList(workflows []*ent.Workflow) []*WorkflowResponse {
-	if workflows == nil {
-		return nil
-	}
-	responses := make([]*WorkflowResponse, 0, len(workflows))
-	for _, workflow := range workflows {
-		if workflow != nil {
-			responses = append(responses, ToWorkflowResponse(workflow))
-		}
-	}
-	return responses
-}
-
-// ToWorkflowInstanceResponse converts an ent.WorkflowInstance to WorkflowInstanceResponse
-func ToWorkflowInstanceResponse(instance *ent.WorkflowInstance) *WorkflowInstanceResponse {
-	if instance == nil {
-		return nil
-	}
-
-	// Parse context JSON bytes to map
-	var context map[string]interface{}
-	if instance.Context != nil {
-		_ = json.Unmarshal(instance.Context, &context)
-	}
-
-	response := &WorkflowInstanceResponse{
-		ID:          instance.ID,
-		Status:      instance.Status,
-		CurrentStep: instance.CurrentStep,
-		Context:     context,
-		WorkflowID:  instance.WorkflowID,
-		EntityID:    instance.EntityID,
-		EntityType:  instance.EntityType,
-		TenantID:    instance.TenantID,
-		StartedAt:   instance.StartedAt,
-		CreatedAt:   instance.CreatedAt,
-		UpdatedAt:   instance.UpdatedAt,
-	}
-
-	if !instance.CompletedAt.IsZero() {
-		response.CompletedAt = &instance.CompletedAt
-	}
-
-	return response
-}
-
-// ToWorkflowInstanceResponseList converts a slice of ent.WorkflowInstance to WorkflowInstanceResponse slice
-func ToWorkflowInstanceResponseList(instances []*ent.WorkflowInstance) []*WorkflowInstanceResponse {
-	if instances == nil {
-		return nil
-	}
-	responses := make([]*WorkflowInstanceResponse, 0, len(instances))
-	for _, instance := range instances {
-		if instance != nil {
-			responses = append(responses, ToWorkflowInstanceResponse(instance))
-		}
-	}
-	return responses
-}
-
-// ===================================
 // TicketTag Mappers
 // ===================================
 
@@ -804,9 +553,6 @@ func ToTicketCategoryResponse(category *ent.TicketCategory) *TicketCategoryRespo
 
 	if category.ParentID > 0 {
 		response.ParentID = &category.ParentID
-	}
-	if category.WorkflowID > 0 {
-		response.WorkflowID = &category.WorkflowID
 	}
 	if category.DepartmentID > 0 {
 		response.DepartmentID = &category.DepartmentID

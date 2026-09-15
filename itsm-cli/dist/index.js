@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Text, Newline } from 'ink';
-import { LoginCommand } from './commands/login.js';
+import { LoginCommand, LogoutCommand } from './commands/login.js';
 import { TicketsCommand } from './commands/tickets.js';
 import { TicketViewCommand } from './commands/ticket.js';
 import { SearchCommand } from './commands/search.js';
@@ -10,11 +10,11 @@ import { ChangeListCommand, ChangeViewCommand } from './commands/change.js';
 import { CmdbListCommand, CmdbViewCommand } from './commands/cmdb.js';
 import { KnowledgeListCommand, KnowledgeViewCommand, KnowledgeSearchCommand, } from './commands/knowledge.js';
 import { SlaStatsCommand, SlaOverdueCommand } from './commands/sla.js';
-import { WorkflowInstancesCommand, WorkflowTasksCommand, WorkflowCompleteCommand, ApprovalListCommand, ApprovalActionCommand, } from './commands/workflow.js';
+import { WorkflowInstancesCommand, WorkflowTasksCommand, WorkflowCompleteCommand, ApprovalActionCommand, } from './commands/workflow.js';
 import { NotificationListCommand, NotificationReadCommand, } from './commands/notification.js';
 import { ConnectorListCommand, ConnectorTestCommand, ConnectorHealthCommand, ConnectorSendCommand, } from './commands/connector.js';
 import { DashboardOverviewCommand } from './commands/admin.js';
-import { isLoggedIn, clearCredentials } from './lib/credentials.js';
+import { isLoggedIn } from './lib/credentials.js';
 const HelpScreen = () => (React.createElement(Box, { flexDirection: "column", padding: 1 },
     React.createElement(Text, { bold: true, color: "cyan" }, "ITSM CLI v1.0.0"),
     React.createElement(Text, null, "AI-Native ITSM \u00B7 React for CLIs \u00B7 built with Ink"),
@@ -71,8 +71,7 @@ const Router = ({ input, flags }) => {
         case 'me':
             return React.createElement(MeCommand, null);
         case 'logout':
-            clearCredentials();
-            return React.createElement(Text, { color: "yellow" }, "\u2713 Logged out");
+            return React.createElement(LogoutCommand, null);
         case 'tickets':
             return React.createElement(TicketsCommand, { status: flags.status, priority: flags.priority, page: flags.page });
         case 'ticket': {
@@ -148,19 +147,7 @@ const Router = ({ input, flags }) => {
             if (sub === 'reject' && args[1]) {
                 return React.createElement(ApprovalActionCommand, { id: args[1], action: "reject", comment: flags.comment });
             }
-            if (sub === 'approvals' || sub === 'pending') {
-                return React.createElement(ApprovalListCommand, { status: flags.status });
-            }
-            return React.createElement(Text, { color: "red" }, "Usage: itsm workflow <instances|tasks|complete|approve|reject|approvals>");
-        }
-        case 'approvals': {
-            if (sub === 'pending' || sub === undefined)
-                return React.createElement(ApprovalListCommand, { status: flags.status });
-            if (sub === 'approve' && args[1])
-                return React.createElement(ApprovalActionCommand, { id: args[1], action: "approve", comment: flags.comment });
-            if (sub === 'reject' && args[1])
-                return React.createElement(ApprovalActionCommand, { id: args[1], action: "reject", comment: flags.comment });
-            return React.createElement(Text, { color: "red" }, "Usage: itsm approvals <pending|approve|reject>");
+            return React.createElement(Text, { color: "red" }, "Usage: itsm workflow <instances|tasks|complete|approve|reject>");
         }
         case 'notification': {
             if (sub === 'read' && args[1]) {

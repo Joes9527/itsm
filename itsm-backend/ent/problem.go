@@ -5,6 +5,7 @@ package ent
 import (
 	"fmt"
 	"itsm-backend/ent/problem"
+	"itsm-backend/ent/ticket"
 	"strings"
 	"time"
 
@@ -17,16 +18,16 @@ type Problem struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
-	// 问题标题
-	Title string `json:"title,omitempty"`
-	// 问题描述
-	Description string `json:"description,omitempty"`
-	// 状态
-	Status string `json:"status,omitempty"`
-	// 优先级
-	Priority string `json:"priority,omitempty"`
-	// 问题分类
-	Category string `json:"category,omitempty"`
+	// VerifiedVersion holds the value of the "verified_version" field.
+	VerifiedVersion int `json:"verified_version,omitempty"`
+	// VerificationDigest holds the value of the "verification_digest" field.
+	VerificationDigest string `json:"verification_digest,omitempty"`
+	// VerifiedBy holds the value of the "verified_by" field.
+	VerifiedBy int `json:"verified_by,omitempty"`
+	// VerifiedAt holds the value of the "verified_at" field.
+	VerifiedAt time.Time `json:"verified_at,omitempty"`
+	// VerificationNote holds the value of the "verification_note" field.
+	VerificationNote string `json:"verification_note,omitempty"`
 	// 根本原因
 	RootCause string `json:"root_cause,omitempty"`
 	// 临时解决方案
@@ -35,24 +36,8 @@ type Problem struct {
 	Resolution string `json:"resolution,omitempty"`
 	// 影响范围
 	Impact string `json:"impact,omitempty"`
-	// 处理人ID
-	AssigneeID int `json:"assignee_id,omitempty"`
-	// 创建人ID
-	CreatedBy int `json:"created_by,omitempty"`
-	// 关联的 WorkItem（tickets.id），唯一，必填——迁移完成前允许为空
+	// 关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入
 	WorkItemID int `json:"work_item_id,omitempty"`
-	// 租户ID
-	TenantID int `json:"tenant_id,omitempty"`
-	// 创建时间
-	CreatedAt time.Time `json:"created_at,omitempty"`
-	// 更新时间
-	UpdatedAt time.Time `json:"updated_at,omitempty"`
-	// 解决时间
-	ResolvedAt *time.Time `json:"resolved_at,omitempty"`
-	// 关闭时间
-	ClosedAt *time.Time `json:"closed_at,omitempty"`
-	// 删除时间
-	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ProblemQuery when eager-loading is set.
 	Edges               ProblemEdges `json:"edges"`
@@ -62,42 +47,22 @@ type Problem struct {
 
 // ProblemEdges holds the relations/edges for other nodes in the graph.
 type ProblemEdges struct {
-	// 关联的工单
-	Tickets []*Ticket `json:"tickets,omitempty"`
-	// 关联的事件
-	Incidents []*Incident `json:"incidents,omitempty"`
-	// 关联的变更
-	Changes []*Change `json:"changes,omitempty"`
+	// 共享字段的唯一权威 WorkItem
+	WorkItem *Ticket `json:"work_item,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [3]bool
+	loadedTypes [1]bool
 }
 
-// TicketsOrErr returns the Tickets value or an error if the edge
-// was not loaded in eager-loading.
-func (e ProblemEdges) TicketsOrErr() ([]*Ticket, error) {
-	if e.loadedTypes[0] {
-		return e.Tickets, nil
+// WorkItemOrErr returns the WorkItem value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e ProblemEdges) WorkItemOrErr() (*Ticket, error) {
+	if e.WorkItem != nil {
+		return e.WorkItem, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: ticket.Label}
 	}
-	return nil, &NotLoadedError{edge: "tickets"}
-}
-
-// IncidentsOrErr returns the Incidents value or an error if the edge
-// was not loaded in eager-loading.
-func (e ProblemEdges) IncidentsOrErr() ([]*Incident, error) {
-	if e.loadedTypes[1] {
-		return e.Incidents, nil
-	}
-	return nil, &NotLoadedError{edge: "incidents"}
-}
-
-// ChangesOrErr returns the Changes value or an error if the edge
-// was not loaded in eager-loading.
-func (e ProblemEdges) ChangesOrErr() ([]*Change, error) {
-	if e.loadedTypes[2] {
-		return e.Changes, nil
-	}
-	return nil, &NotLoadedError{edge: "changes"}
+	return nil, &NotLoadedError{edge: "work_item"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -105,11 +70,11 @@ func (*Problem) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case problem.FieldID, problem.FieldAssigneeID, problem.FieldCreatedBy, problem.FieldWorkItemID, problem.FieldTenantID:
+		case problem.FieldID, problem.FieldVerifiedVersion, problem.FieldVerifiedBy, problem.FieldWorkItemID:
 			values[i] = new(sql.NullInt64)
-		case problem.FieldTitle, problem.FieldDescription, problem.FieldStatus, problem.FieldPriority, problem.FieldCategory, problem.FieldRootCause, problem.FieldWorkaround, problem.FieldResolution, problem.FieldImpact:
+		case problem.FieldVerificationDigest, problem.FieldVerificationNote, problem.FieldRootCause, problem.FieldWorkaround, problem.FieldResolution, problem.FieldImpact:
 			values[i] = new(sql.NullString)
-		case problem.FieldCreatedAt, problem.FieldUpdatedAt, problem.FieldResolvedAt, problem.FieldClosedAt, problem.FieldDeletedAt:
+		case problem.FieldVerifiedAt:
 			values[i] = new(sql.NullTime)
 		case problem.ForeignKeys[0]: // known_error_problem
 			values[i] = new(sql.NullInt64)
@@ -134,35 +99,35 @@ func (_m *Problem) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
-		case problem.FieldTitle:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field title", values[i])
+		case problem.FieldVerifiedVersion:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field verified_version", values[i])
 			} else if value.Valid {
-				_m.Title = value.String
+				_m.VerifiedVersion = int(value.Int64)
 			}
-		case problem.FieldDescription:
+		case problem.FieldVerificationDigest:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field description", values[i])
+				return fmt.Errorf("unexpected type %T for field verification_digest", values[i])
 			} else if value.Valid {
-				_m.Description = value.String
+				_m.VerificationDigest = value.String
 			}
-		case problem.FieldStatus:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field status", values[i])
+		case problem.FieldVerifiedBy:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field verified_by", values[i])
 			} else if value.Valid {
-				_m.Status = value.String
+				_m.VerifiedBy = int(value.Int64)
 			}
-		case problem.FieldPriority:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field priority", values[i])
+		case problem.FieldVerifiedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field verified_at", values[i])
 			} else if value.Valid {
-				_m.Priority = value.String
+				_m.VerifiedAt = value.Time
 			}
-		case problem.FieldCategory:
+		case problem.FieldVerificationNote:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field category", values[i])
+				return fmt.Errorf("unexpected type %T for field verification_note", values[i])
 			} else if value.Valid {
-				_m.Category = value.String
+				_m.VerificationNote = value.String
 			}
 		case problem.FieldRootCause:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -188,62 +153,11 @@ func (_m *Problem) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Impact = value.String
 			}
-		case problem.FieldAssigneeID:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field assignee_id", values[i])
-			} else if value.Valid {
-				_m.AssigneeID = int(value.Int64)
-			}
-		case problem.FieldCreatedBy:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field created_by", values[i])
-			} else if value.Valid {
-				_m.CreatedBy = int(value.Int64)
-			}
 		case problem.FieldWorkItemID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field work_item_id", values[i])
 			} else if value.Valid {
 				_m.WorkItemID = int(value.Int64)
-			}
-		case problem.FieldTenantID:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
-			} else if value.Valid {
-				_m.TenantID = int(value.Int64)
-			}
-		case problem.FieldCreatedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field created_at", values[i])
-			} else if value.Valid {
-				_m.CreatedAt = value.Time
-			}
-		case problem.FieldUpdatedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
-			} else if value.Valid {
-				_m.UpdatedAt = value.Time
-			}
-		case problem.FieldResolvedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field resolved_at", values[i])
-			} else if value.Valid {
-				_m.ResolvedAt = new(time.Time)
-				*_m.ResolvedAt = value.Time
-			}
-		case problem.FieldClosedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field closed_at", values[i])
-			} else if value.Valid {
-				_m.ClosedAt = new(time.Time)
-				*_m.ClosedAt = value.Time
-			}
-		case problem.FieldDeletedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field deleted_at", values[i])
-			} else if value.Valid {
-				_m.DeletedAt = new(time.Time)
-				*_m.DeletedAt = value.Time
 			}
 		case problem.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -265,19 +179,9 @@ func (_m *Problem) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
 }
 
-// QueryTickets queries the "tickets" edge of the Problem entity.
-func (_m *Problem) QueryTickets() *TicketQuery {
-	return NewProblemClient(_m.config).QueryTickets(_m)
-}
-
-// QueryIncidents queries the "incidents" edge of the Problem entity.
-func (_m *Problem) QueryIncidents() *IncidentQuery {
-	return NewProblemClient(_m.config).QueryIncidents(_m)
-}
-
-// QueryChanges queries the "changes" edge of the Problem entity.
-func (_m *Problem) QueryChanges() *ChangeQuery {
-	return NewProblemClient(_m.config).QueryChanges(_m)
+// QueryWorkItem queries the "work_item" edge of the Problem entity.
+func (_m *Problem) QueryWorkItem() *TicketQuery {
+	return NewProblemClient(_m.config).QueryWorkItem(_m)
 }
 
 // Update returns a builder for updating this Problem.
@@ -303,20 +207,20 @@ func (_m *Problem) String() string {
 	var builder strings.Builder
 	builder.WriteString("Problem(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
-	builder.WriteString("title=")
-	builder.WriteString(_m.Title)
+	builder.WriteString("verified_version=")
+	builder.WriteString(fmt.Sprintf("%v", _m.VerifiedVersion))
 	builder.WriteString(", ")
-	builder.WriteString("description=")
-	builder.WriteString(_m.Description)
+	builder.WriteString("verification_digest=")
+	builder.WriteString(_m.VerificationDigest)
 	builder.WriteString(", ")
-	builder.WriteString("status=")
-	builder.WriteString(_m.Status)
+	builder.WriteString("verified_by=")
+	builder.WriteString(fmt.Sprintf("%v", _m.VerifiedBy))
 	builder.WriteString(", ")
-	builder.WriteString("priority=")
-	builder.WriteString(_m.Priority)
+	builder.WriteString("verified_at=")
+	builder.WriteString(_m.VerifiedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
-	builder.WriteString("category=")
-	builder.WriteString(_m.Category)
+	builder.WriteString("verification_note=")
+	builder.WriteString(_m.VerificationNote)
 	builder.WriteString(", ")
 	builder.WriteString("root_cause=")
 	builder.WriteString(_m.RootCause)
@@ -330,38 +234,8 @@ func (_m *Problem) String() string {
 	builder.WriteString("impact=")
 	builder.WriteString(_m.Impact)
 	builder.WriteString(", ")
-	builder.WriteString("assignee_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.AssigneeID))
-	builder.WriteString(", ")
-	builder.WriteString("created_by=")
-	builder.WriteString(fmt.Sprintf("%v", _m.CreatedBy))
-	builder.WriteString(", ")
 	builder.WriteString("work_item_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.WorkItemID))
-	builder.WriteString(", ")
-	builder.WriteString("tenant_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.TenantID))
-	builder.WriteString(", ")
-	builder.WriteString("created_at=")
-	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("updated_at=")
-	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	if v := _m.ResolvedAt; v != nil {
-		builder.WriteString("resolved_at=")
-		builder.WriteString(v.Format(time.ANSIC))
-	}
-	builder.WriteString(", ")
-	if v := _m.ClosedAt; v != nil {
-		builder.WriteString("closed_at=")
-		builder.WriteString(v.Format(time.ANSIC))
-	}
-	builder.WriteString(", ")
-	if v := _m.DeletedAt; v != nil {
-		builder.WriteString("deleted_at=")
-		builder.WriteString(v.Format(time.ANSIC))
-	}
 	builder.WriteByte(')')
 	return builder.String()
 }

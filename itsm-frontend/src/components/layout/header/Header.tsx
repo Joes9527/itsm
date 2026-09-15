@@ -2,10 +2,20 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Layout, Button, Tooltip, Badge, Dropdown, message, Breadcrumb } from 'antd';
-import { PanelLeftClose, PanelLeftOpen, Bell, Bot, Globe, Home, Moon, Sun } from 'lucide-react';
+import {
+  PanelLeftClose,
+  PanelLeftOpen,
+  Bell,
+  Bot,
+  Globe,
+  Moon,
+  MoreHorizontal,
+  Search,
+  Sun,
+} from 'lucide-react';
 import { useTheme } from '@/lib/design-system/theme';
 import { useRouter, usePathname } from 'next/navigation';
-import { useAuthStore, useAuthStoreHydration } from '@/lib/store/auth-store';
+import { useAuthStore } from '@/lib/store/auth-store';
 import { AuthService } from '@/lib/services/auth-service';
 import { DESIGN } from '@/design-system/tokens';
 import { useI18n } from '@/lib/i18n';
@@ -26,7 +36,8 @@ const NOTIFICATION_REFRESH_INTERVAL_MS = 30000; // 30秒
 const NOTIFICATION_PAGE_SIZE = 10;
 
 const normalizeNotification = (notification: any): TicketNotification => {
-  const isRead = typeof notification.read === 'boolean' ? notification.read : notification.status === 'read';
+  const isRead =
+    typeof notification.read === 'boolean' ? notification.read : notification.status === 'read';
   // 通用 Notification 表无 ticketId，从 actionUrl（如 "/tickets/30"）提取
   let ticketId = notification.ticketId ?? 0;
   if (!ticketId && notification.actionUrl) {
@@ -56,6 +67,8 @@ interface HeaderProps {
   showBackButton?: boolean;
   extra?: React.ReactNode;
   showBreadcrumb?: boolean;
+  showSidebarToggle?: boolean;
+  sidebarToggleRef?: React.Ref<HTMLButtonElement>;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -63,14 +76,14 @@ export const Header: React.FC<HeaderProps> = ({
   onCollapse,
   breadcrumb,
   showBreadcrumb = false,
+  showSidebarToggle = true,
+  sidebarToggleRef,
 }) => {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, token, hasPermission, isAdmin } = useAuthStore();
+  const { user, hasPermission, isAdmin } = useAuthStore();
   const { isDark, toggleTheme } = useTheme();
   const { language, changeLanguage } = useI18n();
-  useAuthStoreHydration();
-
   // UI 状态
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -107,9 +120,9 @@ export const Header: React.FC<HeaderProps> = ({
 
   // 初始化通知和WebSocket
   useEffect(() => {
-    if (user?.id && token) {
+    if (user?.id) {
       loadNotifications();
-      notificationWS.connect(user.id, token).catch(() => {
+      notificationWS.connect().catch(() => {
         // WebSocket server not available, ignore silently
       });
 
@@ -124,7 +137,7 @@ export const Header: React.FC<HeaderProps> = ({
         notificationWS.disconnect();
       };
     }
-  }, [user?.id, token, loadNotifications]);
+  }, [user?.id, loadNotifications]);
 
   // 定期刷新通知
   useEffect(() => {
@@ -146,10 +159,15 @@ export const Header: React.FC<HeaderProps> = ({
   }, []);
 
   // 登出处理
-  const handleLogout = () => {
-    AuthService.logout(); // calls backend to clear httpOnly cookies + clears store
-    // Use hard navigation to ensure middleware re-checks auth state
-    window.location.href = '/login';
+  const handleLogout = async () => {
+    try {
+      await AuthService.logout();
+      // Use hard navigation to ensure middleware re-checks auth state.
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Logout failed:', error);
+      message.error('退出登录失败，请重试');
+    }
   };
 
   // 搜索处理
@@ -226,32 +244,31 @@ export const Header: React.FC<HeaderProps> = ({
   ];
 
   return (
-    <AntHeader className={styles.header} style={{ background: '#2A2A2A', height: 56, lineHeight: '56px', padding: '0 20px' }}>
+    <AntHeader className={styles.header}>
       {/* 主行：Logo品牌 + 收缩按钮 / 面包屑 + 右侧工具 */}
       <div className={styles.mainRow}>
         {/* 左侧：收缩按钮 + Logo + 品牌文字 */}
         <div className={styles.left}>
-          <Button
-            type="text"
-            icon={collapsed ? <PanelLeftOpen size={18} color="#fff" /> : <PanelLeftClose size={18} color="#fff" />}
-            onClick={() => onCollapse(!collapsed)}
-            aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
-            title={collapsed ? '展开侧边栏' : '收起侧边栏'}
-            className={styles.collapseButton}
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: DESIGN.radius.md,
-              flexShrink: 0,
-              color: '#fff',
-            }}
-          />
+          {showSidebarToggle && (
+            <Button
+              type='text'
+              icon={collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+              onClick={() => onCollapse(!collapsed)}
+              aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
+              title={collapsed ? '展开侧边栏' : '收起侧边栏'}
+              data-sidebar-toggle
+              ref={sidebarToggleRef}
+              className={styles.collapseButton}
+            />
+          )}
           {showBreadcrumb && (
-            <div className={styles.breadcrumb} role="navigation" aria-label="面包屑导航" style={{ marginLeft: 16 }}>
-              <Breadcrumb
-                items={breadcrumb || buildBreadcrumb(pathname)}
-                separator="/"
-              />
+            <div
+              className={styles.breadcrumb}
+              role='navigation'
+              aria-label='面包屑导航'
+              style={{ marginLeft: 16 }}
+            >
+              <Breadcrumb items={breadcrumb || buildBreadcrumb(pathname)} separator='/' />
             </div>
           )}
         </div>
@@ -268,16 +285,26 @@ export const Header: React.FC<HeaderProps> = ({
             onSearch={handleSearch}
             onOpen={handleOpenSearch}
           />
+          <Tooltip title='全局搜索'>
+            <Button
+              type='text'
+              className={`${styles.actionButton} ${styles.compactSearchButton}`}
+              onClick={handleOpenSearch}
+              aria-label='全局搜索'
+            >
+              <Search size={17} />
+            </Button>
+          </Tooltip>
 
           {/* AI 助手入口：与侧边栏使用相同的 ai:use 权限，admin 默认放行 */}
           {hasPermission('ai:use') || isAdmin() ? (
-            <Tooltip title="AI助手">
+            <Tooltip title='AI助手'>
               <Button
-                type="text"
+                type='text'
                 className={styles.actionButton}
                 onClick={() => router.push('/ai/chat')}
-                aria-label="AI助手"
-                title="AI助手"
+                aria-label='AI助手'
+                title='AI助手'
               >
                 <Bot size={18} />
               </Button>
@@ -285,45 +312,86 @@ export const Header: React.FC<HeaderProps> = ({
           ) : null}
 
           {/* 通知 */}
-          <Tooltip title="通知中心">
-            <Badge count={unreadCount} size="small" offset={[-2, 2]}>
-              <Button
-                type="text"
-                className={`${styles.actionButton} ${styles.notificationButton}${notificationsOpen ? ` ${styles.active}` : ''}`}
-                onClick={() => setNotificationsOpen(true)}
-                aria-label="通知中心"
-                title="通知中心"
-              >
-                <Bell size={18} />
-              </Button>
-            </Badge>
-          </Tooltip>
+          <div className={styles.mobileOverflowItem}>
+            <Tooltip title='通知中心'>
+              <Badge count={unreadCount} size='small' offset={[-2, 2]}>
+                <Button
+                  type='text'
+                  className={`${styles.actionButton} ${styles.notificationButton}${notificationsOpen ? ` ${styles.active}` : ''}`}
+                  onClick={() => setNotificationsOpen(true)}
+                  aria-label='通知中心'
+                  title='通知中心'
+                >
+                  <Bell size={18} />
+                </Button>
+              </Badge>
+            </Tooltip>
+          </div>
 
           {/* 主题切换 */}
-          <Tooltip title={isDark ? '切换到亮色' : '切换到暗色'}>
-            <Button
-              type="text"
-              className={styles.actionButton}
-              onClick={toggleTheme}
-              aria-label={isDark ? '切换到亮色' : '切换到暗色'}
-              title={isDark ? '切换到亮色' : '切换到暗色'}
-            >
-              {isDark ? <Sun size={18} /> : <Moon size={18} />}
-            </Button>
-          </Tooltip>
-
-          {/* 语言切换 */}
-          <Dropdown menu={{ items: languageItems }} placement="bottomRight" trigger={['click']}>
-            <Tooltip title={language === 'zh-CN' ? '切换语言' : 'Switch Language'}>
+          <div className={styles.mobileOverflowItem}>
+            <Tooltip title={isDark ? '切换到亮色' : '切换到暗色'}>
               <Button
-                type="text"
+                type='text'
                 className={styles.actionButton}
-                aria-label={language === 'zh-CN' ? '切换语言' : 'Switch Language'}
-                title={language === 'zh-CN' ? '切换语言' : 'Switch Language'}
+                onClick={toggleTheme}
+                aria-label={isDark ? '切换到亮色' : '切换到暗色'}
+                title={isDark ? '切换到亮色' : '切换到暗色'}
               >
-                <Globe size={18} />
+                {isDark ? <Sun size={18} /> : <Moon size={18} />}
               </Button>
             </Tooltip>
+          </div>
+
+          {/* 语言切换 */}
+          <div className={styles.mobileOverflowItem}>
+            <Dropdown menu={{ items: languageItems }} placement='bottomRight' trigger={['click']}>
+              <Tooltip title={language === 'zh-CN' ? '切换语言' : 'Switch Language'}>
+                <Button
+                  type='text'
+                  className={styles.actionButton}
+                  aria-label={language === 'zh-CN' ? '切换语言' : 'Switch Language'}
+                  title={language === 'zh-CN' ? '切换语言' : 'Switch Language'}
+                >
+                  <Globe size={18} />
+                </Button>
+              </Tooltip>
+            </Dropdown>
+          </div>
+
+          <Dropdown
+            placement='bottomRight'
+            trigger={['click']}
+            menu={{
+              items: [
+                {
+                  key: 'notifications',
+                  icon: <Bell size={16} />,
+                  label: `通知${unreadCount ? ` (${unreadCount})` : ''}`,
+                  onClick: () => setNotificationsOpen(true),
+                },
+                {
+                  key: 'theme',
+                  icon: isDark ? <Sun size={16} /> : <Moon size={16} />,
+                  label: isDark ? '切换到亮色' : '切换到暗色',
+                  onClick: toggleTheme,
+                },
+                { type: 'divider' },
+                ...languageItems.map(item => ({
+                  ...item,
+                  key: `more-${item.key}`,
+                  icon: <Globe size={16} />,
+                })),
+              ],
+            }}
+          >
+            <Button
+              type='text'
+              className={`${styles.actionButton} ${styles.moreButton}`}
+              aria-label='更多工具'
+            >
+              <MoreHorizontal size={17} />
+            </Button>
           </Dropdown>
 
           {/* 工作台视图切换 */}

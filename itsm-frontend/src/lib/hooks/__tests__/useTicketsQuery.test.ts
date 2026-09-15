@@ -5,7 +5,6 @@ import {
   useTicketsQuery,
   useTicketStatsQuery,
   useTicketDetailQuery,
-  useCreateTicketMutation,
   useUpdateTicketMutation,
   useDeleteTicketMutation,
   useBatchDeleteTicketsMutation,
@@ -237,33 +236,6 @@ describe('useTicketsQuery hooks', () => {
     });
   });
 
-  describe('useCreateTicketMutation', () => {
-    it('should create a ticket', async () => {
-      mockService.createTicket.mockResolvedValue({ id: 1 } as any);
-
-      const { result } = renderHook(() => useCreateTicketMutation(), {
-        wrapper: createWrapper(),
-      });
-
-      result.current.mutate({ title: 'New Ticket' } as any);
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(mockService.createTicket).toHaveBeenCalledWith({ title: 'New Ticket' });
-    });
-
-    it('should handle create error', async () => {
-      mockService.createTicket.mockRejectedValue(new Error('Create failed'));
-
-      const { result } = renderHook(() => useCreateTicketMutation(), {
-        wrapper: createWrapper(),
-      });
-
-      result.current.mutate({ title: 'Bad' } as any);
-
-      await waitFor(() => expect(result.current.isError).toBe(true));
-    });
-  });
-
   describe('useUpdateTicketMutation', () => {
     it('should update a ticket', async () => {
       mockService.updateTicket.mockResolvedValue({ id: 1, title: 'Updated' } as any);
@@ -272,10 +244,10 @@ describe('useTicketsQuery hooks', () => {
         wrapper: createWrapper(),
       });
 
-      result.current.mutate({ id: 1, data: { title: 'Updated' } as any });
+      result.current.mutate({ id: 1, data: { title: 'Updated', version: 4, operationId: 'edit-test' } });
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(mockService.updateTicket).toHaveBeenCalledWith(1, { title: 'Updated' });
+      expect(mockService.updateTicket).toHaveBeenCalledWith(1, { title: 'Updated', version: 4, operationId: 'edit-test' });
     });
 
     it('should handle update error', async () => {
@@ -383,5 +355,22 @@ describe('useTicketsQuery hooks', () => {
       // Should not throw
       result.current();
     });
+  });
+});
+
+
+describe('edit result cache boundary', () => {
+  it('invalidates the detail without replacing the Ticket with an immutable result', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const ticket = { id: 1, title: 'Existing detail', version: 4 };
+    queryClient.setQueryData(ticketKeys.detail(1), ticket);
+    const receipt = { workItemId: 1, version: 5, status: 'open', replayed: false };
+    mockService.updateTicket.mockResolvedValue(receipt);
+    const wrapper = ({ children }: { children: React.ReactNode }) => React.createElement(QueryClientProvider, { client: queryClient }, children);
+    const { result } = renderHook(() => useUpdateTicketMutation(), { wrapper });
+    await result.current.mutateAsync({ id: 1, data: { title: 'New title', version: 4, operationId: 'cache-edit' } });
+    expect(queryClient.getQueryData(ticketKeys.detail(1))).toEqual(ticket);
+    expect(queryClient.getQueryState(ticketKeys.detail(1))?.isInvalidated).toBe(true);
+    queryClient.clear();
   });
 });

@@ -1,30 +1,23 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Alert, App, Button, Card } from 'antd';
-import { ArrowLeft, Link2 } from 'lucide-react';
+import { Alert, App, Button } from 'antd';
+import { ArrowLeft } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import ProblemDetail from '@/components/problem/ProblemDetail';
-import ProblemAssociationsTab from '@/components/problem/ProblemAssociationsTab';
 import { ProblemApi, type Problem } from '@/lib/api/problem-api';
 import { TicketApi } from '@/lib/api/ticket-api';
+import { workItemIdentity } from '@/components/work-item/identity';
+import { assignProblemWorkItem } from '@/lib/api/workitem-assignment';
+import { useAssignmentCandidates } from '@/components/work-item/useAssignmentCandidates';
+import type { AssignmentInput } from '@/components/work-item/WorkItemAssignment';
+import { mapWorkItemSLA } from '@/components/work-item/mapWorkItemSLA';
 import { WorkItemShell } from '@/components/work-item/WorkItemShell';
 import type { WorkItemCommon, WorkItemSLAState } from '@/components/work-item/WorkItemTypes';
 
-// 把 Problem 响应映射成 WorkItemShell 的公共字段契约。同 Incident 迁移那次的模式
-// （itsm-frontend/src/app/(main)/incidents/[id]/page.tsx）：id 用 workItemId
-// （tickets.id，评论/附件/未来的 SLA 都挂在这个 ID 下），number 用 Problem 自己的展示
-// 编号（后端 dto.ProblemResponse 目前没有专属的 problemNumber 字段，用 #id 兜底）。
-function toWorkItemCommon(problem: Problem): WorkItemCommon | null {
-  if (!problem.workItemId) {
-    // 迁移前创建、还没跑 cmd/backfill_problem_work_item 回填的存量问题没有 workItemId，
-    // 此时不渲染 WorkItemShell（下面 ProblemDetail 本身仍然完整可用），避免用一个假的
-    // ID 挂载评论/附件占位组件。
-    return null;
-  }
+function toWorkItemCommon(problem: Problem): WorkItemCommon {
   return {
-    id: problem.workItemId,
-    number: `#${problem.id}`,
+    ...workItemIdentity(problem),
     recordClass: 'problem',
     title: problem.title,
     status: problem.status,
@@ -44,28 +37,46 @@ export default function ProblemDetailPage() {
   const id = params?.id as string;
   const numericId = Number(id);
 
+  const [identityError, setIdentityError] = useState<string | null>(null);
   const [workItem, setWorkItem] = useState<WorkItemCommon | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [sla, setSla] = useState<WorkItemSLAState | undefined>(undefined);
+  const [panelRevision, setPanelRevision] = useState(0);
+  const directory = useAssignmentCandidates(Boolean(problem?.actions?.assign?.allowed));
 
   const syncProblemSummary = useCallback((nextProblem: Problem) => {
-    setProblem(nextProblem);
-    setWorkItem(toWorkItemCommon(nextProblem));
+    try {
+      const common = toWorkItemCommon(nextProblem);
+      setProblem(nextProblem);
+      setWorkItem(common);
+      setIdentityError(null);
+    } catch (error) {
+      setWorkItem(null);
+      setIdentityError(error instanceof Error ? error.message : 'WorkItem 身份或版本无效');
+    }
   }, []);
+
+  const refreshAssignment = useCallback(async () => {
+    const latest = await ProblemApi.getProblem(numericId);
+    const identity = workItemIdentity(latest);
+    syncProblemSummary(latest);
+    setPanelRevision(value => value + 1);
+    return {
+      version: identity.version,
+      currentAssigneeId: latest.assigneeId,
+      allowed: latest.actions?.assign?.allowed === true,
+      disabledReason: latest.actions?.assign?.reason,
+    };
+  }, [numericId, syncProblemSummary]);
+  const submitAssignment = async (input: AssignmentInput) => {
+    await assignProblemWorkItem(numericId, input);
+    await refreshAssignment();
+  };
 
   const loadSLA = useCallback(async (workItemId: number) => {
     try {
       const data = await TicketApi.getTicketSLA(workItemId);
-      setSla({
-        slaName: data.slaName,
-        responseTime: data.responseTime,
-        resolutionTime: data.resolutionTime,
-        responseDeadline: data.responseDeadline,
-        resolutionDeadline: data.resolutionDeadline,
-        responseTimeRemaining: data.responseTimeRemaining,
-        resolutionTimeRemaining: data.resolutionTimeRemaining,
-        isBreached: data.isBreached,
-      });
+      setSla(mapWorkItemSLA(data));
     } catch (err) {
       console.warn('[ProblemDetailPage] Failed to load SLA', err);
       setSla(undefined);
@@ -73,18 +84,16 @@ export default function ProblemDetailPage() {
   }, []);
 
   const loadWorkItemSummary = useCallback(async () => {
-    if (!Number.isFinite(numericId) || numericId <= 0) {
+    if (!Number.isInteger(numericId) || numericId <= 0) {
+      setIdentityError('专业记录身份无效');
       return;
     }
     try {
       const problem = await ProblemApi.getProblem(numericId);
       syncProblemSummary(problem);
     } catch (err) {
-      // WorkItemShell 只是这里的外层展示壳（专业字段仍然由下面完整功能的 ProblemDetail
-      // 负责渲染/编辑），summary 拉取失败时不阻塞整页——workItem 保持 null，下面直接
-      // 退化为原有的纯 ProblemDetail 展示，而不是让整页报错。ProblemDetail 组件自己
-      // 内部另有一次完整的问题详情拉取 + 错误处理，这里的失败不影响那条路径。
-      console.warn('[ProblemDetailPage] Failed to load WorkItem summary', err);
+      setWorkItem(null);
+      setIdentityError('无法加载权威身份和版本，请刷新详情');
     }
   }, [numericId, syncProblemSummary]);
 
@@ -96,37 +105,15 @@ export default function ProblemDetailPage() {
     if (workItem?.id) {
       void loadSLA(workItem.id);
     }
-  }, [workItem?.id, loadSLA]);
+  }, [workItem?.id, workItem?.version, loadSLA]);
 
   const detailAndTabs = (
     <>
       {/* 主详情组件保持不变——根因/临时解决方案/最终解决方案/影响范围等 Problem 专业
           字段、以及所有编辑动作都在这个组件内部完成，WorkItemShell 只包一层公共身份
           信息，不重新实现这些逻辑。 */}
-      <ProblemDetail id={id} onProblemLoaded={syncProblemSummary} />
-
-      {/* 追加：关联（工单/事件/变更）。历史现在由 WorkItemShell 自己的区块渲染，不再
-          在这里重复一份——见 docs/superpowers/specs/2026-08-28-work-item-detail-page-parity-design.md
-          §5.2。这里仍然保留 ProblemAssociationsTab：它的数据走 ProblemApi 专属的关联接口，
-          跟 WorkItemShell 的 TicketRelationCards（走 /tickets/:id/relations）不是同一份数据，
-          删掉会丢功能，不是去重。 */}
-      {Number.isFinite(numericId) && numericId > 0 && (
-        <Card className="mt-4 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center gap-1.5 mb-3 text-sm font-medium text-gray-700">
-            <Link2 size={14} />
-            关联（工单/事件/变更）
-          </div>
-          <ProblemAssociationsTab problemId={numericId} />
-        </Card>
-      )}
+      <ProblemDetail key={panelRevision} id={id} onProblemLoaded={syncProblemSummary} />
     </>
-  );
-  const fallbackDetail = (
-    <ProblemDetail
-      id={id}
-      fallbackActions={problem?.actions}
-      onProblemLoaded={syncProblemSummary}
-    />
   );
 
   return (
@@ -134,22 +121,29 @@ export default function ProblemDetailPage() {
       <div style={{ padding: 24 }}>
         <div style={{ marginBottom: 16 }}>
           <Button
-            type="link"
+            type='link'
             icon={<ArrowLeft />}
             onClick={() => router.back()}
-            style={{ paddingLeft: 0, color: '#666' }}
+            style={{ paddingLeft: 0, color: 'var(--color-text-secondary)' }}
           >
             返回列表
           </Button>
         </div>
 
-        {/* workItem 只有在问题摘要加载成功且带有 workItemId（Wave 2 迁移后创建/已跑过
-            cmd/backfill_problem_work_item 回填）时才非空。加载中、加载失败（见
-            loadWorkItemSummary 的 catch）、或存量未回填问题这三种情况下 workItem 都是
-            null，直接退化为原有的纯 ProblemDetail 展示——不用 WorkItemShell 自己的
-            loading/error 态挡住已经完整可用的 ProblemDetail。 */}
-        {workItem && problem ? (
+        {/* workItem 只有在问题摘要加载成功且满足 WorkItem 创建不变量时才非空。加载中、
+            加载失败（见 loadWorkItemSummary 的 catch）或无效开发记录下 workItem 为 null，
+            不用猜测的 ID 挂载 WorkItemShell。 */}
+        {workItem && problem?.id === numericId ? (
           <WorkItemShell
+            assignment={{
+              currentAssigneeId: workItem.assigneeId,
+              version: workItem.version,
+              allowed: problem.actions?.assign?.allowed === true && !directory.error,
+              disabledReason: directory.error || problem.actions?.assign?.reason,
+              candidates: directory.candidates,
+              submit: submitAssignment,
+              refresh: refreshAssignment,
+            }}
             workItem={workItem}
             sla={sla}
             actions={problem.actions ?? {}}
@@ -160,12 +154,11 @@ export default function ProblemDetailPage() {
         ) : (
           <>
             <Alert
-              type="info"
+              type={identityError ? 'error' : 'info'}
               showIcon
-              message="该问题尚未关联 WorkItem，评论/附件/历史/关联等协作能力暂不可用"
+              message={identityError ?? '正在加载权威身份和版本…'}
               style={{ marginBottom: 16 }}
             />
-            {fallbackDetail}
           </>
         )}
       </div>

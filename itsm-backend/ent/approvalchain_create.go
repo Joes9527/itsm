@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/schema"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type ApprovalChainCreate struct {
 	config
 	mutation *ApprovalChainMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -235,6 +237,7 @@ func (_c *ApprovalChainCreate) createSpec() (*ApprovalChain, *sqlgraph.CreateSpe
 		_node = &ApprovalChain{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(approvalchain.Table, sqlgraph.NewFieldSpec(approvalchain.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(approvalchain.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -274,11 +277,433 @@ func (_c *ApprovalChainCreate) createSpec() (*ApprovalChain, *sqlgraph.CreateSpe
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ApprovalChain.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ApprovalChainUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ApprovalChainCreate) OnConflict(opts ...sql.ConflictOption) *ApprovalChainUpsertOne {
+	_c.conflict = opts
+	return &ApprovalChainUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ApprovalChain.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ApprovalChainCreate) OnConflictColumns(columns ...string) *ApprovalChainUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ApprovalChainUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ApprovalChainUpsertOne is the builder for "upsert"-ing
+	//  one ApprovalChain node.
+	ApprovalChainUpsertOne struct {
+		create *ApprovalChainCreate
+	}
+
+	// ApprovalChainUpsert is the "OnConflict" setter.
+	ApprovalChainUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *ApprovalChainUpsert) SetName(v string) *ApprovalChainUpsert {
+	u.Set(approvalchain.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ApprovalChainUpsert) UpdateName() *ApprovalChainUpsert {
+	u.SetExcluded(approvalchain.FieldName)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *ApprovalChainUpsert) SetDescription(v string) *ApprovalChainUpsert {
+	u.Set(approvalchain.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ApprovalChainUpsert) UpdateDescription() *ApprovalChainUpsert {
+	u.SetExcluded(approvalchain.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ApprovalChainUpsert) ClearDescription() *ApprovalChainUpsert {
+	u.SetNull(approvalchain.FieldDescription)
+	return u
+}
+
+// SetEntityType sets the "entity_type" field.
+func (u *ApprovalChainUpsert) SetEntityType(v string) *ApprovalChainUpsert {
+	u.Set(approvalchain.FieldEntityType, v)
+	return u
+}
+
+// UpdateEntityType sets the "entity_type" field to the value that was provided on create.
+func (u *ApprovalChainUpsert) UpdateEntityType() *ApprovalChainUpsert {
+	u.SetExcluded(approvalchain.FieldEntityType)
+	return u
+}
+
+// SetChain sets the "chain" field.
+func (u *ApprovalChainUpsert) SetChain(v []schema.ApprovalChainStep) *ApprovalChainUpsert {
+	u.Set(approvalchain.FieldChain, v)
+	return u
+}
+
+// UpdateChain sets the "chain" field to the value that was provided on create.
+func (u *ApprovalChainUpsert) UpdateChain() *ApprovalChainUpsert {
+	u.SetExcluded(approvalchain.FieldChain)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *ApprovalChainUpsert) SetStatus(v string) *ApprovalChainUpsert {
+	u.Set(approvalchain.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ApprovalChainUpsert) UpdateStatus() *ApprovalChainUpsert {
+	u.SetExcluded(approvalchain.FieldStatus)
+	return u
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *ApprovalChainUpsert) SetCreatedBy(v int) *ApprovalChainUpsert {
+	u.Set(approvalchain.FieldCreatedBy, v)
+	return u
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *ApprovalChainUpsert) UpdateCreatedBy() *ApprovalChainUpsert {
+	u.SetExcluded(approvalchain.FieldCreatedBy)
+	return u
+}
+
+// AddCreatedBy adds v to the "created_by" field.
+func (u *ApprovalChainUpsert) AddCreatedBy(v int) *ApprovalChainUpsert {
+	u.Add(approvalchain.FieldCreatedBy, v)
+	return u
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (u *ApprovalChainUpsert) ClearCreatedBy() *ApprovalChainUpsert {
+	u.SetNull(approvalchain.FieldCreatedBy)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ApprovalChainUpsert) SetTenantID(v int) *ApprovalChainUpsert {
+	u.Set(approvalchain.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ApprovalChainUpsert) UpdateTenantID() *ApprovalChainUpsert {
+	u.SetExcluded(approvalchain.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ApprovalChainUpsert) AddTenantID(v int) *ApprovalChainUpsert {
+	u.Add(approvalchain.FieldTenantID, v)
+	return u
+}
+
+// ClearTenantID clears the value of the "tenant_id" field.
+func (u *ApprovalChainUpsert) ClearTenantID() *ApprovalChainUpsert {
+	u.SetNull(approvalchain.FieldTenantID)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ApprovalChainUpsert) SetCreatedAt(v time.Time) *ApprovalChainUpsert {
+	u.Set(approvalchain.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ApprovalChainUpsert) UpdateCreatedAt() *ApprovalChainUpsert {
+	u.SetExcluded(approvalchain.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ApprovalChainUpsert) SetUpdatedAt(v time.Time) *ApprovalChainUpsert {
+	u.Set(approvalchain.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ApprovalChainUpsert) UpdateUpdatedAt() *ApprovalChainUpsert {
+	u.SetExcluded(approvalchain.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ApprovalChain.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ApprovalChainUpsertOne) UpdateNewValues() *ApprovalChainUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ApprovalChain.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ApprovalChainUpsertOne) Ignore() *ApprovalChainUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ApprovalChainUpsertOne) DoNothing() *ApprovalChainUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ApprovalChainCreate.OnConflict
+// documentation for more info.
+func (u *ApprovalChainUpsertOne) Update(set func(*ApprovalChainUpsert)) *ApprovalChainUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ApprovalChainUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *ApprovalChainUpsertOne) SetName(v string) *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ApprovalChainUpsertOne) UpdateName() *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *ApprovalChainUpsertOne) SetDescription(v string) *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ApprovalChainUpsertOne) UpdateDescription() *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ApprovalChainUpsertOne) ClearDescription() *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetEntityType sets the "entity_type" field.
+func (u *ApprovalChainUpsertOne) SetEntityType(v string) *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.SetEntityType(v)
+	})
+}
+
+// UpdateEntityType sets the "entity_type" field to the value that was provided on create.
+func (u *ApprovalChainUpsertOne) UpdateEntityType() *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.UpdateEntityType()
+	})
+}
+
+// SetChain sets the "chain" field.
+func (u *ApprovalChainUpsertOne) SetChain(v []schema.ApprovalChainStep) *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.SetChain(v)
+	})
+}
+
+// UpdateChain sets the "chain" field to the value that was provided on create.
+func (u *ApprovalChainUpsertOne) UpdateChain() *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.UpdateChain()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ApprovalChainUpsertOne) SetStatus(v string) *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ApprovalChainUpsertOne) UpdateStatus() *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *ApprovalChainUpsertOne) SetCreatedBy(v int) *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// AddCreatedBy adds v to the "created_by" field.
+func (u *ApprovalChainUpsertOne) AddCreatedBy(v int) *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.AddCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *ApprovalChainUpsertOne) UpdateCreatedBy() *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (u *ApprovalChainUpsertOne) ClearCreatedBy() *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.ClearCreatedBy()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ApprovalChainUpsertOne) SetTenantID(v int) *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ApprovalChainUpsertOne) AddTenantID(v int) *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ApprovalChainUpsertOne) UpdateTenantID() *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// ClearTenantID clears the value of the "tenant_id" field.
+func (u *ApprovalChainUpsertOne) ClearTenantID() *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.ClearTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ApprovalChainUpsertOne) SetCreatedAt(v time.Time) *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ApprovalChainUpsertOne) UpdateCreatedAt() *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ApprovalChainUpsertOne) SetUpdatedAt(v time.Time) *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ApprovalChainUpsertOne) UpdateUpdatedAt() *ApprovalChainUpsertOne {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ApprovalChainUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ApprovalChainCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ApprovalChainUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ApprovalChainUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ApprovalChainUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ApprovalChainCreateBulk is the builder for creating many ApprovalChain entities in bulk.
 type ApprovalChainCreateBulk struct {
 	config
 	err      error
 	builders []*ApprovalChainCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ApprovalChain entities in the database.
@@ -308,6 +733,7 @@ func (_c *ApprovalChainCreateBulk) Save(ctx context.Context) ([]*ApprovalChain, 
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -358,6 +784,271 @@ func (_c *ApprovalChainCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ApprovalChainCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ApprovalChain.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ApprovalChainUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ApprovalChainCreateBulk) OnConflict(opts ...sql.ConflictOption) *ApprovalChainUpsertBulk {
+	_c.conflict = opts
+	return &ApprovalChainUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ApprovalChain.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ApprovalChainCreateBulk) OnConflictColumns(columns ...string) *ApprovalChainUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ApprovalChainUpsertBulk{
+		create: _c,
+	}
+}
+
+// ApprovalChainUpsertBulk is the builder for "upsert"-ing
+// a bulk of ApprovalChain nodes.
+type ApprovalChainUpsertBulk struct {
+	create *ApprovalChainCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ApprovalChain.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ApprovalChainUpsertBulk) UpdateNewValues() *ApprovalChainUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ApprovalChain.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ApprovalChainUpsertBulk) Ignore() *ApprovalChainUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ApprovalChainUpsertBulk) DoNothing() *ApprovalChainUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ApprovalChainCreateBulk.OnConflict
+// documentation for more info.
+func (u *ApprovalChainUpsertBulk) Update(set func(*ApprovalChainUpsert)) *ApprovalChainUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ApprovalChainUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *ApprovalChainUpsertBulk) SetName(v string) *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ApprovalChainUpsertBulk) UpdateName() *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *ApprovalChainUpsertBulk) SetDescription(v string) *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ApprovalChainUpsertBulk) UpdateDescription() *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ApprovalChainUpsertBulk) ClearDescription() *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetEntityType sets the "entity_type" field.
+func (u *ApprovalChainUpsertBulk) SetEntityType(v string) *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.SetEntityType(v)
+	})
+}
+
+// UpdateEntityType sets the "entity_type" field to the value that was provided on create.
+func (u *ApprovalChainUpsertBulk) UpdateEntityType() *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.UpdateEntityType()
+	})
+}
+
+// SetChain sets the "chain" field.
+func (u *ApprovalChainUpsertBulk) SetChain(v []schema.ApprovalChainStep) *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.SetChain(v)
+	})
+}
+
+// UpdateChain sets the "chain" field to the value that was provided on create.
+func (u *ApprovalChainUpsertBulk) UpdateChain() *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.UpdateChain()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ApprovalChainUpsertBulk) SetStatus(v string) *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ApprovalChainUpsertBulk) UpdateStatus() *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *ApprovalChainUpsertBulk) SetCreatedBy(v int) *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// AddCreatedBy adds v to the "created_by" field.
+func (u *ApprovalChainUpsertBulk) AddCreatedBy(v int) *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.AddCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *ApprovalChainUpsertBulk) UpdateCreatedBy() *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (u *ApprovalChainUpsertBulk) ClearCreatedBy() *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.ClearCreatedBy()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ApprovalChainUpsertBulk) SetTenantID(v int) *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ApprovalChainUpsertBulk) AddTenantID(v int) *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ApprovalChainUpsertBulk) UpdateTenantID() *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// ClearTenantID clears the value of the "tenant_id" field.
+func (u *ApprovalChainUpsertBulk) ClearTenantID() *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.ClearTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ApprovalChainUpsertBulk) SetCreatedAt(v time.Time) *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ApprovalChainUpsertBulk) UpdateCreatedAt() *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ApprovalChainUpsertBulk) SetUpdatedAt(v time.Time) *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ApprovalChainUpsertBulk) UpdateUpdatedAt() *ApprovalChainUpsertBulk {
+	return u.Update(func(s *ApprovalChainUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ApprovalChainUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ApprovalChainCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ApprovalChainCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ApprovalChainUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

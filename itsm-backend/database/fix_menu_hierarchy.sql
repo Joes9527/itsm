@@ -30,7 +30,7 @@ VALUES ('系统管理', '/admin', 'Shield', NULL, 'admin:write', 208, 1, true, t
 
 -- 更新admin子菜单的parent_id
 UPDATE menus SET parent_id = (SELECT id FROM menus WHERE path='/admin' AND tenant_id=1)
-WHERE path IN ('/admin/users', '/admin/roles', '/admin/groups', '/admin/sla-definitions', '/admin/ticket-categories', '/admin/system-config', '/admin/approvals', '/admin/cmdb-types') AND tenant_id = 1;
+WHERE path IN ('/admin/users', '/admin/roles', '/admin/groups', '/admin/sla-definitions', '/admin/ticket-categories', '/admin/system-config', '/admin/cmdb-types') AND tenant_id = 1;
 
 -- 5. 添加缺失的admin子菜单
 INSERT INTO menus (name, path, icon, parent_id, permission_code, sort_order, tenant_id, is_visible, is_enabled)

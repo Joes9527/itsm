@@ -31,6 +31,8 @@ const (
 	FieldProcedureRef = "procedure_ref"
 	// FieldProcedureVersion holds the string denoting the procedure_version field in the database.
 	FieldProcedureVersion = "procedure_version"
+	// FieldRequestDigest holds the string denoting the request_digest field in the database.
+	FieldRequestDigest = "request_digest"
 	// FieldResultStatus holds the string denoting the result_status field in the database.
 	FieldResultStatus = "result_status"
 	// FieldResultPayload holds the string denoting the result_payload field in the database.
@@ -61,6 +63,7 @@ var Columns = []string{
 	FieldCorrelationID,
 	FieldProcedureRef,
 	FieldProcedureVersion,
+	FieldRequestDigest,
 	FieldResultStatus,
 	FieldResultPayload,
 	FieldLeaseOwner,
@@ -99,6 +102,8 @@ var (
 	ProcedureRefValidator func(string) error
 	// ProcedureVersionValidator is a validator for the "procedure_version" field. It is called by the builders before save.
 	ProcedureVersionValidator func(string) error
+	// DefaultRequestDigest holds the default value on creation for the "request_digest" field.
+	DefaultRequestDigest string
 	// DefaultResultStatus holds the default value on creation for the "result_status" field.
 	DefaultResultStatus string
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
@@ -160,6 +165,11 @@ func ByProcedureRef(opts ...sql.OrderTermOption) OrderOption {
 // ByProcedureVersion orders the results by the procedure_version field.
 func ByProcedureVersion(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldProcedureVersion, opts...).ToFunc()
+}
+
+// ByRequestDigest orders the results by the request_digest field.
+func ByRequestDigest(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRequestDigest, opts...).ToFunc()
 }
 
 // ByResultStatus orders the results by the result_status field.

@@ -125,7 +125,7 @@ func newTestGraphServer(t *testing.T, messages []map[string]interface{}) (*httpt
 
 const graphDeltaLinkPlaceholder = "https://graph.example/delta-link"
 
-func TestCoordinator_HandleMessage_CreatesTicketAndReplies(t *testing.T) {
+func TestCoordinator_HandleMessage_FreezesCreationDeliveryInputs(t *testing.T) {
 	store := newFakeStore()
 	store.usersByEmail["alice@contoso.com"] = 42
 	triager := fakeTriager{suggestion: TriageSuggestion{Category: "network", Priority: "high", Confidence: 0.8, Explanation: "mentions VPN"}}
@@ -166,16 +166,15 @@ func TestCoordinator_HandleMessage_CreatesTicketAndReplies(t *testing.T) {
 	assert.Equal(t, "<abc@contoso.com>", store.created[0].ExternalMessageID)
 	assert.Equal(t, "alice@contoso.com", store.created[0].CreatorEmail)
 
-	require.Len(t, store.comments, 1)
-	assert.Contains(t, store.comments[0], "network", "category must be recorded as advisory, not applied to the ticket")
-	assert.Contains(t, store.comments[0], "80%")
-
-	require.NotNil(t, sentMail, "confirmation reply must be sent")
-	message := sentMail["message"].(map[string]interface{})
-	assert.Contains(t, message["subject"], "TCK-0001")
+	assert.Empty(t, store.comments, "creation triage must be written in the creation transaction")
+	assert.Contains(t, store.created[0].TriageComment, "network")
+	assert.Contains(t, store.created[0].TriageComment, "80%")
+	assert.Equal(t, "m1", store.created[0].GraphMessageID)
+	assert.Equal(t, "support@contoso.com", store.created[0].Mailbox)
+	assert.Nil(t, sentMail, "external confirmation is delivered by durable worker")
 }
 
-func TestCoordinator_HandleMessage_SavesAttachments(t *testing.T) {
+func TestCoordinator_HandleMessage_QueuesAttachmentIdentity(t *testing.T) {
 	store := newFakeStore()
 	store.usersByEmail["alice@contoso.com"] = 42
 	triager := fakeTriager{suggestion: TriageSuggestion{Priority: "medium"}}
@@ -216,8 +215,9 @@ func TestCoordinator_HandleMessage_SavesAttachments(t *testing.T) {
 	})
 
 	require.Len(t, store.created, 1)
-	require.Len(t, store.savedAttachments, 1, "attachment must be saved to the ticket")
-	assert.Equal(t, "report.pdf", store.savedAttachments[0])
+	assert.Empty(t, store.savedAttachments)
+	assert.True(t, store.created[0].HasAttachments)
+	assert.Equal(t, "m1", store.created[0].GraphMessageID)
 }
 
 func TestCoordinator_HandleMessage_SkipsDuplicateExternalMessageID(t *testing.T) {
@@ -453,4 +453,53 @@ func connectorConfigFor(mailbox, aadURL, graphURL string) connector.Config {
 			"azure_client_secret": "secret",
 		},
 	}
+}
+
+type blockingPollingStore struct {
+	*fakeStore
+	entered, cancelled, release chan struct{}
+}
+
+func (s *blockingPollingStore) TicketExistsForExternalMessage(ctx context.Context, _ int, _ string) (bool, error) {
+	close(s.entered)
+	<-ctx.Done()
+	close(s.cancelled)
+	<-s.release
+	return false, ctx.Err()
+}
+
+func TestCoordinatorCloseWaitsForPollAndRejectsRestart(t *testing.T) {
+	store := &blockingPollingStore{newFakeStore(), make(chan struct{}), make(chan struct{}), make(chan struct{})}
+	coord := NewEmailPollingCoordinator(store, fakeTriager{}, zaptest.NewLogger(t).Sugar())
+	aad, graph := newTestGraphServer(t, []map[string]interface{}{{"id": "m1", "internetMessageId": "<m1@example.com>", "from": map[string]interface{}{"emailAddress": map[string]interface{}{"address": "sender@example.com"}}}})
+	defer aad.Close()
+	defer graph.Close()
+	conn := New()
+	require.NoError(t, conn.Init(context.Background(), connectorConfigFor("support@contoso.com", aad.URL, graph.URL)))
+	require.NoError(t, coord.Start(context.Background(), 7, conn))
+	select {
+	case <-store.entered:
+	case <-time.After(3 * time.Second):
+		t.Fatal("poll did not enter store")
+	}
+	done := make(chan struct{})
+	go func() { coord.Close(); close(done) }()
+	select {
+	case <-store.cancelled:
+	case <-time.After(time.Second):
+		t.Fatal("poll was not cancelled")
+	}
+	select {
+	case <-done:
+		t.Fatal("close did not wait for poll completion")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(store.release)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("close did not complete")
+	}
+	require.Error(t, coord.Start(context.Background(), 7, New()))
+	coord.Close()
 }

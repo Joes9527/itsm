@@ -5,28 +5,17 @@
 
 import { test, expect } from '@playwright/test';
 import path from 'path';
+import { loginAndReturn } from './auth-utils';
 
 const SCREENSHOT_DIR = path.join(__dirname, '..', '..', '..', 'docs', 'images');
 
 // 辅助函数：登录并截图
 async function loginAndScreenshot(page: any, pagePath: string, name: string) {
-  // 访问登录页
-  await page.goto('/login');
-  await page.waitForSelector('.ant-input', { timeout: 15000 });
-
-  // 登录
-  const inputs = page.locator('input.ant-input');
-  await inputs.nth(0).fill('admin');
-  await inputs.nth(1).fill('admin123');
-  await page.click('button[type="submit"]');
-
-  // 等待跳转
-  await page.waitForURL(/\/(dashboard|tickets)/, { timeout: 20000 });
-  await page.waitForTimeout(2000);
+  await loginAndReturn(page);
 
   // 访问目标页面
   await page.goto(pagePath, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(3000);
+  await page.evaluate(() => document.fonts.ready);
 
   // 截图
   await page.screenshot({
@@ -39,7 +28,7 @@ test.describe('Screenshots - 页面截图', () => {
   test('01 - login page', async ({ page }) => {
     await page.goto('/login');
     await page.waitForSelector('.ant-input', { timeout: 15000 });
-    await page.waitForTimeout(2000);
+    await page.evaluate(() => document.fonts.ready);
     await page.screenshot({
       fullPage: true,
       path: path.join(SCREENSHOT_DIR, 'login.png')

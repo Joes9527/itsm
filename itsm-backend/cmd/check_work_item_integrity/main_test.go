@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -72,11 +73,7 @@ func TestFindMismatches_MissingExtension(t *testing.T) {
 
 	t.Run("after_creating_matching_extension", func(t *testing.T) {
 		_, err := client.Incident.Create().
-			SetTitle("磁盘空间不足").
-			SetIncidentNumber("INC-INTEGRITY-001").
-			SetReporterID(user.ID).
 			SetWorkItemID(tk.ID).
-			SetTenantID(tenant.ID).
 			Save(ctx)
 		require.NoError(t, err)
 
@@ -102,11 +99,7 @@ func TestFindMismatches_MissingExtension(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = client.Incident.Create().
-			SetTitle("错误关联的事件").
-			SetIncidentNumber("INC-INTEGRITY-002").
-			SetReporterID(user.ID).
 			SetWorkItemID(wrongClassTicket.ID).
-			SetTenantID(tenant.ID).
 			Save(ctx)
 		require.NoError(t, err)
 
@@ -177,7 +170,7 @@ func TestFindMismatches_MissingExtension(t *testing.T) {
 	})
 }
 
-func TestFindMismatches_DanglingWorkItemID(t *testing.T) {
+func TestProfessionalExtensionRejectsDanglingWorkItemID(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
 	ctx := context.Background()
@@ -190,7 +183,7 @@ func TestFindMismatches_DanglingWorkItemID(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	user, err := client.User.Create().
+	_, err = client.User.Create().
 		SetUsername("reporter-dangling").
 		SetEmail("reporter-dangling@example.com").
 		SetName("Reporter Dangling").
@@ -204,92 +197,9 @@ func TestFindMismatches_DanglingWorkItemID(t *testing.T) {
 	// work_item_id 指向一个不存在的 ticket id。
 	const danglingWorkItemID = 999999
 	_, err = client.Incident.Create().
-		SetTitle("孤儿事件").
-		SetIncidentNumber("INC-DANGLING-001").
-		SetReporterID(user.ID).
 		SetWorkItemID(danglingWorkItemID).
-		SetTenantID(tenant.ID).
 		Save(ctx)
-	require.NoError(t, err)
-
-	mismatches, err := findMismatches(ctx, client, tenant.ID)
-	require.NoError(t, err)
-	require.Len(t, mismatches, 1)
-	require.Equal(t, "dangling_work_item_id", mismatches[0].kind)
-	require.Equal(t, danglingWorkItemID, mismatches[0].ticketID)
-	t.Logf("SUCCESS: dangling_work_item_id correctly detected for work_item_id=%d", danglingWorkItemID)
-}
-
-// TestFindMismatches_TenantMismatch 覆盖 checkBackref 中新增的跨租户 work_item_id
-// 检测：某个租户的专业扩展记录（如 incident）的 work_item_id 指向另一个租户拥有的 ticket。
-// 这是修复审查意见（checkBackref 原先只比较 record_class，没有比较 tenant_id）时新增的路径。
-func TestFindMismatches_TenantMismatch(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", testDSN())
-	defer client.Close()
-	ctx := context.Background()
-
-	tenantA, err := client.Tenant.Create().
-		SetName("Tenant A").
-		SetCode("test-tenant-mismatch-a").
-		SetDomain("mismatch-a.example.com").
-		SetStatus("active").
-		Save(ctx)
-	require.NoError(t, err)
-
-	tenantB, err := client.Tenant.Create().
-		SetName("Tenant B").
-		SetCode("test-tenant-mismatch-b").
-		SetDomain("mismatch-b.example.com").
-		SetStatus("active").
-		Save(ctx)
-	require.NoError(t, err)
-
-	userA, err := client.User.Create().
-		SetUsername("reporter-a").
-		SetEmail("reporter-a@example.com").
-		SetName("Reporter A").
-		SetPasswordHash("hash").
-		SetRole("end_user").
-		SetActive(true).
-		SetTenantID(tenantA.ID).
-		Save(ctx)
-	require.NoError(t, err)
-
-	// ticket 属于 tenantA。
-	tk, err := client.Ticket.Create().
-		SetTitle("属于 A 租户的工单").
-		SetDescription("跨租户引用测试").
-		SetPriority("medium").
-		SetStatus("open").
-		SetTicketNumber("TICKET-TENANT-MISMATCH-001").
-		SetRecordClass("incident").
-		SetRequesterID(userA.ID).
-		SetTenantID(tenantA.ID).
-		Save(ctx)
-	require.NoError(t, err)
-
-	// incident 记录却标记为属于 tenantB，同时 work_item_id 指向 tenantA 的 ticket——
-	// 模拟数据错误导致的跨租户指向（work_item_id 只是普通 int 列，没有 DB 外键约束，
-	// 详见 ent/schema/incident.go 的注释）。
-	_, err = client.Incident.Create().
-		SetTitle("跨租户事件").
-		SetIncidentNumber("INC-TENANT-MISMATCH-001").
-		SetReporterID(userA.ID).
-		SetWorkItemID(tk.ID).
-		SetTenantID(tenantB.ID).
-		Save(ctx)
-	require.NoError(t, err)
-
-	// 检查 tenantB：应该报出 tenant_mismatch（因为该 incident 属于 tenantB，
-	// 但它引用的 ticket 属于 tenantA）。record_class 本身是匹配的（都是 incident），
-	// 所以不应该产生 record_class_mismatch。
-	mismatches, err := findMismatches(ctx, client, tenantB.ID)
-	require.NoError(t, err)
-	require.Len(t, mismatches, 1, "expected exactly one tenant_mismatch, got: %+v", mismatches)
-	require.Equal(t, "tenant_mismatch", mismatches[0].kind)
-	require.Equal(t, tk.ID, mismatches[0].ticketID)
-	require.Equal(t, tenantB.ID, mismatches[0].tenantID)
-	t.Logf("SUCCESS: tenant_mismatch correctly detected — incident belongs to tenant %d but points at ticket owned by tenant %d", tenantB.ID, tenantA.ID)
+	require.Error(t, err, "professional extension FK must reject a dangling WorkItem reference")
 }
 
 // TestFindMismatches_UnknownRecordClass 锁定 record_class 分派 switch 的 default 分支：
@@ -333,8 +243,8 @@ func TestFindMismatches_UnknownRecordClass(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	// Wave 1 已知的两个"暂不检查"取值仍必须静默跳过，不能被这次改动误报。
-	for i, deferredClass := range []string{"service_request_item", "catalog_task"} {
+	// CatalogTask 尚无扩展表；ServiceRequest 已由独立正反向用例覆盖。
+	for i, deferredClass := range []string{"catalog_task"} {
 		_, err = client.Ticket.Create().
 			SetTitle("Wave 2 才检查的类别").
 			SetDescription("暂不检查").
@@ -355,4 +265,43 @@ func TestFindMismatches_UnknownRecordClass(t *testing.T) {
 	require.Equal(t, bad.ID, mismatches[0].ticketID)
 	require.Equal(t, tenant.ID, mismatches[0].tenantID)
 	require.Equal(t, "change", mismatches[0].recordClass)
+}
+
+func TestFindMismatchesServiceRequestAuthority(t *testing.T) {
+	dsn := testDSN()
+	client := enttest.Open(t, "sqlite3", dsn)
+	defer client.Close()
+	ctx := t.Context()
+	tenant := client.Tenant.Create().SetName("SR").SetCode("sr").SaveX(ctx)
+	actor := client.User.Create().SetTenantID(tenant.ID).SetUsername("sr").SetName("SR").SetEmail("sr@example.test").SetPasswordHash("unused").SaveX(ctx)
+	item := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetTitle("SR").SetTicketNumber("SR1").SetRecordClass("service_request_item").SaveX(ctx)
+	mismatches, err := findMismatches(ctx, client, tenant.ID)
+	require.NoError(t, err)
+	require.Len(t, mismatches, 1)
+	require.Equal(t, "missing_extension", mismatches[0].kind)
+	client.ServiceRequest.Create().SetTicketID(item.ID).SetCatalogID(1).SaveX(ctx)
+	mismatches, err = findMismatches(ctx, client, tenant.ID)
+	require.NoError(t, err)
+	require.Empty(t, mismatches)
+	// The diagnostic must also detect damaged uniqueness, not assume the index.
+	db, err := sql.Open("sqlite3", dsn)
+	require.NoError(t, err)
+	defer db.Close()
+	_, err = db.Exec("DROP INDEX servicerequest_ticket_id")
+	require.NoError(t, err)
+	duplicate := client.ServiceRequest.Create().SetTicketID(item.ID).SetCatalogID(1).SaveX(ctx)
+	mismatches, err = findMismatches(ctx, client, tenant.ID)
+	require.NoError(t, err)
+	require.Len(t, mismatches, 1)
+	require.Equal(t, "duplicate_extension", mismatches[0].kind)
+	client.ServiceRequest.DeleteOne(duplicate).ExecX(ctx)
+	wrong := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetTitle("Wrong").SetTicketNumber("SR2").SetRecordClass("generic").SaveX(ctx)
+	client.ServiceRequest.Create().SetTicketID(wrong.ID).SetCatalogID(1).SaveX(ctx)
+	mismatches, err = findMismatches(ctx, client, tenant.ID)
+	require.NoError(t, err)
+	require.Len(t, mismatches, 1)
+	require.Equal(t, "record_class_mismatch", mismatches[0].kind)
+	mismatches, err = findMismatches(ctx, client, tenant.ID+1)
+	require.NoError(t, err)
+	require.Empty(t, mismatches)
 }

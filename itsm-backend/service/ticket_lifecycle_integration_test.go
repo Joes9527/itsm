@@ -5,11 +5,15 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/common/tenantctx"
+
 	_ "github.com/mattn/go-sqlite3"
 
 	"itsm-backend/common"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/handlers/shared/workitemmutation"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,7 +54,6 @@ func TestTicketLifecycle_CompleteFlow(t *testing.T) {
 		SetTitle("Lifecycle Test Ticket").
 		SetDescription("Testing complete lifecycle").
 		SetPriority("high").
-		SetType("incident").
 		SetStatus(common.TicketStatusOpen).
 		SetTicketNumber("TKT-LIFECYCLE-001").
 		SetTenantID(tenant.ID).
@@ -85,13 +88,13 @@ func TestTicketLifecycle_Escalate(t *testing.T) {
 	ctx := context.Background()
 
 	tenant, user := createTestUserAndTenant(t, ctx, client)
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
 
 	// 创建高优先级工单
 	ticketEntity, err := client.Ticket.Create().
 		SetTitle("Escalate Test Ticket").
 		SetDescription("Testing escalation").
 		SetPriority("critical").
-		SetType("incident").
 		SetStatus(common.TicketStatusOpen).
 		SetTicketNumber("TKT-ESC-001").
 		SetTenantID(tenant.ID).
@@ -99,12 +102,14 @@ func TestTicketLifecycle_Escalate(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	service := NewTicketLifecycleService(client, zaptest.NewLogger(t).Sugar())
+	service := newManualEscalationTestOwner(client, zaptest.NewLogger(t).Sugar())
 
+	client.User.UpdateOneID(user.ID).SetRole("super_admin").SaveX(ctx)
 	// 升级工单
-	escalated, err := service.EscalateTicket(ctx, ticketEntity.ID, "需要高级别支持", tenant.ID, user.ID)
+	result, err := service.EscalateTicket(ctx, dto.TicketEscalationCommand{WorkItemID: ticketEntity.ID, Reason: "需要高级别支持", Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, ExpectedVersion: ticketEntity.Version, OperationID: "lifecycle-escalate", Source: "test"}})
 	require.NoError(t, err)
-	assert.Equal(t, common.TicketStatusOpen, escalated.Status)
+	escalated := client.Ticket.GetX(ctx, result.WorkItemID)
+	assert.Equal(t, common.TicketStatusInProgress, escalated.Status)
 	assert.Equal(t, "critical", escalated.Priority)
 }
 
@@ -120,7 +125,6 @@ func TestTicketLifecycle_InvalidStatusTransition(t *testing.T) {
 		SetTitle("Closed Ticket").
 		SetDescription("Already closed").
 		SetPriority("medium").
-		SetType("incident").
 		SetStatus(common.TicketStatusClosed).
 		SetTicketNumber("TKT-CLOSED-001").
 		SetTenantID(tenant.ID).
@@ -175,7 +179,6 @@ func TestTicketLifecycle_StatusTransition_TableDriven(t *testing.T) {
 				SetTitle("Transition Test").
 				SetDescription("Test").
 				SetPriority("medium").
-				SetType("incident").
 				SetStatus(tt.initialStatus).
 				SetTicketNumber("TKT-TR-" + tt.initialStatus + "-" + tt.targetStatus).
 				SetTenantID(tenant.ID).
@@ -224,7 +227,6 @@ func TestSLA_CompleteFlow(t *testing.T) {
 		SetTitle("SLA Test Ticket").
 		SetDescription("Testing SLA").
 		SetPriority("critical").
-		SetType("incident").
 		SetStatus(common.TicketStatusOpen).
 		SetTicketNumber("TKT-SLA-001").
 		SetTenantID(tenant.ID).
@@ -263,7 +265,6 @@ func TestSLA_ViolationDetection(t *testing.T) {
 		SetTitle("Expired SLA Ticket").
 		SetDescription("SLA already violated").
 		SetPriority("high").
-		SetType("incident").
 		SetStatus(common.TicketStatusOpen).
 		SetTicketNumber("TKT-SLA-EXP-001").
 		SetTenantID(tenant.ID).
@@ -324,7 +325,6 @@ func TestSLA_PriorityMapping_TableDriven(t *testing.T) {
 				SetTitle("SLA Mapping Test").
 				SetDescription("Test").
 				SetPriority(tt.priority).
-				SetType("incident").
 				SetStatus(common.TicketStatusOpen).
 				SetTicketNumber("TKT-SLA-MAP-" + tt.priority).
 				SetTenantID(tenant.ID).

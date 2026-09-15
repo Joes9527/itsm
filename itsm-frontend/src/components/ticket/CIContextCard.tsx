@@ -10,7 +10,7 @@ import { CIType } from '@/types/cmdb';
 
 interface CIContextCardProps {
   ticketId: number;
-  source?: string;
+  recordClass?: string;
 }
 
 const CI_TYPE_LABELS: Record<string, string> = {
@@ -27,17 +27,17 @@ const CI_TYPE_LABELS: Record<string, string> = {
 
 /**
  * 工单详情右侧工具箱：关联 CMDB 配置项（CI）卡片。
- * 仅服务目录来源的工单有 ciId（通过 ServiceRequest 关联），其余来源不渲染。
+ * Requested Item 通过 ServiceRequest 关联 ciId；来源不决定专业归属。
  * 样式对齐 prototype：CI 名称 + 类型 chip + 描述 + 拓扑图入口。
  */
-export const CIContextCard: React.FC<CIContextCardProps> = ({ ticketId, source }) => {
+export const CIContextCard: React.FC<CIContextCardProps> = ({ ticketId, recordClass }) => {
   const [ciId, setCiId] = useState<number | null>(null);
   const [ci, setCi] = useState<{ name?: string; type?: string; description?: string } | null>(null);
   const [topology, setTopology] = useState<{ totalNodes: number; totalEdges: number } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (source !== 'service_catalog') {
+    if (recordClass !== 'service_request_item') {
       setLoading(false);
       return;
     }
@@ -81,22 +81,22 @@ export const CIContextCard: React.FC<CIContextCardProps> = ({ ticketId, source }
     return () => {
       cancelled = true;
     };
-  }, [ticketId, source]);
+  }, [ticketId, recordClass]);
 
-  if (source !== 'service_catalog') return null;
+  if (recordClass !== 'service_request_item') return null;
   if (loading) return null;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3 text-xs">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-        <span className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
-          <Server size={14} className="text-slate-500" />
+    <div className="bg-surface rounded-[8px] border border-border p-[16px] shadow-none space-y-3 text-[12px]">
+      <div className="flex items-center justify-between border-b border-border pb-2">
+        <span className="font-semibold text-foreground flex items-center gap-1.5 text-[15px]">
+          <Server size={14} className="text-muted" />
           关联配置项 (CI)
         </span>
         {ciId && (
           <Link
             href={`/cmdb/cis/${ciId}`}
-            className="text-[11px] text-slate-600 hover:text-orange-600 hover:underline flex items-center gap-0.5"
+            className="text-[11px] text-muted hover:text-orange-600 hover:underline flex items-center gap-0.5"
           >
             拓扑图 <ExternalLink size={11} />
           </Link>
@@ -104,18 +104,20 @@ export const CIContextCard: React.FC<CIContextCardProps> = ({ ticketId, source }
       </div>
 
       {ciId ? (
-        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1.5">
-          <div className="flex items-center justify-between font-mono text-slate-800 font-bold text-xs">
+        <div className="p-3 bg-raised rounded-[8px] border border-border space-y-1.5">
+          <div className="flex items-center justify-between font-mono text-foreground font-bold text-[12px]">
             <span className="truncate">{ci?.name || `CI #${ciId}`}</span>
             {ci?.type && (
-              <span className="text-[10px] text-slate-600 bg-slate-200 px-1.5 py-0.2 rounded font-normal shrink-0 ml-2">
+              <span className="text-[10px] text-muted bg-border px-1.5 py-0.2 rounded font-normal shrink-0 ml-2">
                 {CI_TYPE_LABELS[ci.type] || ci.type}
               </span>
             )}
           </div>
-          <p className="text-[11px] text-slate-500 m-0">
+          <p className="text-[11px] text-muted m-0">
             {ci?.description || `关联配置项 CI #${ciId}`}
-            {topology ? `，拓扑共 ${topology.totalNodes} 个节点 / ${topology.totalEdges} 条关系` : ''}
+            {topology
+              ? `，拓扑共 ${topology.totalNodes} 个节点 / ${topology.totalEdges} 条关系`
+              : ''}
           </p>
         </div>
       ) : (

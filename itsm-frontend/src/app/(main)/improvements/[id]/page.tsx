@@ -80,7 +80,7 @@ const ImprovementDetailPage = () => {
   }
 
   return (
-    <div className="p-6 bg-gray-50 min-h-full">
+    <div className="min-h-full bg-page p-[16px] text-[13px] text-foreground md:p-[24px]">
       <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
         <Button
           icon={<ArrowLeft />}
@@ -92,7 +92,7 @@ const ImprovementDetailPage = () => {
 
         <Card>
           <Space orientation="vertical" size="small" style={{ width: '100%' }}>
-            <h2 className="text-2xl font-bold text-gray-800">{improvement.title}</h2>
+            <h2 className="text-[24px] font-semibold text-foreground">{improvement.title}</h2>
             <Space>
               <Tag color="blue">{improvement.status || '待评估'}</Tag>
               <Tag>{improvement.priority || '中'}</Tag>

@@ -34,20 +34,35 @@ func TestRunPostSchemaMigrationsAppliesVersion007(t *testing.T) {
 
 	require.NoError(t, err)
 	require.True(t, runner.ensured)
-	require.Len(t, runner.migrations, 13)
+	expected := migration.PostSchemaMigrations()
+	require.Len(t, runner.migrations, len(expected))
+	for index, registered := range expected {
+		require.Equal(t, registered.Version, runner.migrations[index].Version)
+	}
 	require.Equal(t, "007_add_change_execution_tables", runner.migrations[0].Version)
 	require.Equal(t, "008_add_initialization_ledger", runner.migrations[1].Version)
 	require.Equal(t, "009_enable_rls_tenant_isolation", runner.migrations[2].Version)
-	require.Equal(t, "010_add_ticket_types", runner.migrations[3].Version)
-	require.Equal(t, "011_add_tool_invocation_tenant_id", runner.migrations[4].Version)
-	require.Equal(t, "012_drop_service_catalog_item", runner.migrations[5].Version)
-	require.Equal(t, "013_service_request_delegates_to_ticket", runner.migrations[6].Version)
-	require.Equal(t, "014_drop_legacy_approval_workflow", runner.migrations[7].Version)
-	require.Equal(t, "015_process_instance_running_unique_guard", runner.migrations[8].Version)
-	require.Equal(t, "016_add_service_request_contact_fields", runner.migrations[9].Version)
-	require.Equal(t, "017_drop_ticket_type_legacy_approval_fields", runner.migrations[10].Version)
-	require.Equal(t, "018_convert_legacy_serial_ids_to_identity", runner.migrations[11].Version)
-	require.Equal(t, "019_kaf_execution_integrity_rls", runner.migrations[12].Version)
+	require.Equal(t, "011_add_tool_invocation_tenant_id", runner.migrations[3].Version)
+	require.Equal(t, "012_drop_service_catalog_item", runner.migrations[4].Version)
+	require.Equal(t, "013_service_request_delegates_to_ticket", runner.migrations[5].Version)
+	require.Equal(t, "014_drop_legacy_approval_workflow", runner.migrations[6].Version)
+	require.Equal(t, "015_process_instance_running_unique_guard", runner.migrations[7].Version)
+	require.Equal(t, "016_add_service_request_contact_fields", runner.migrations[8].Version)
+	require.Equal(t, "017_drop_ticket_type_legacy_approval_fields", runner.migrations[9].Version)
+	require.Equal(t, "018_convert_legacy_serial_ids_to_identity", runner.migrations[10].Version)
+	require.Equal(t, "019_kaf_execution_integrity_rls", runner.migrations[11].Version)
+	require.Equal(t, "020_work_item_number_allocator", runner.migrations[12].Version)
+	require.Equal(t, "021_add_callback_optional_declared", runner.migrations[13].Version)
+	require.Equal(t, migration.WorkItemPrepareVersion, runner.migrations[14].Version)
+	require.Equal(t, "023_add_process_start_request_digest", runner.migrations[15].Version)
+	require.Equal(t, "024_incident_rule_action_receipts", runner.migrations[16].Version)
+	require.Equal(t, "025_email_attachment_source_identity", runner.migrations[17].Version)
+	require.Equal(t, "026_intake_actor_provenance", runner.migrations[18].Version)
+	require.Equal(t, "028_service_request_work_item_authority", runner.migrations[19].Version)
+	require.Equal(t, "029_catalog_target_class_authority", runner.migrations[20].Version)
+	require.Equal(t, "030_catalog_access_policy_result", runner.migrations[21].Version)
+	require.Equal(t, "031_kaf_action_request_digest", runner.migrations[22].Version)
+	require.Equal(t, migration.WorkItemRetireVersion, runner.migrations[len(runner.migrations)-1].Version)
 }
 
 func TestRunPostSchemaMigrationsFailsClosed(t *testing.T) {
@@ -63,4 +78,16 @@ func TestRunPostSchemaMigrationsFailsClosed(t *testing.T) {
 		err := runPostSchemaMigrations(context.Background(), runner)
 		require.ErrorContains(t, err, "run post-schema migrations")
 	})
+}
+
+func (m *recordingPostSchemaMigrator) ReconcileSchemaInvariants(context.Context) error { return nil }
+
+func (m *recordingPostSchemaMigrator) InspectMigrationTarget(context.Context) error { return nil }
+func (m *recordingPostSchemaMigrator) WithMigrationLock(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
+}
+
+func (m *recordingPostSchemaMigrator) InspectRuntimeMigrations(context.Context) error { return nil }
+func (m *recordingPostSchemaMigrator) NeedsSchemaBootstrap(context.Context) (bool, error) {
+	return true, nil
 }

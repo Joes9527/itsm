@@ -4,6 +4,47 @@
         "contact": {}
     },
     "paths": {
+        "/api/v1/work-items/{id}/relation-context": {
+            "get": {
+                "description": "Read-only current-actor source context; target authorization and relation validity are checked on mutation.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "work-items"
+                ],
+                "summary": "Get WorkItem relation context",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Source WorkItem ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.RelationContext"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
         "/api/knowledge/search": {
             "post": {
                 "description": "基于关键词搜索知识库文章",
@@ -780,7 +821,6 @@
         },
         "/api/v1/auth/login": {
             "post": {
-                "description": "使用用户名/邮箱和密码登录，通过 HttpOnly Cookie 建立会话",
                 "consumes": [
                     "application/json"
                 ],
@@ -793,34 +833,44 @@
                 "summary": "用户登录",
                 "parameters": [
                     {
-                        "description": "登录请求（username/email + password）",
+                        "description": "登录请求",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.LoginRequest"
+                            "$ref": "#/definitions/common.LoginRequest"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "登录成功，返回用户和租户信息",
+                        "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/dto.LoginResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/common.AuthResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
-                        "description": "请求参数错误",
+                        "description": "Bad Request",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/common.Response"
                         }
                     },
                     "401": {
-                        "description": "认证失败（用户名或密码错误）",
+                        "description": "Unauthorized",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/common.Response"
                         }
                     }
                 }
@@ -833,10 +883,6 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "使当前用户的令牌失效，退出登录",
-                "consumes": [
-                    "application/json"
-                ],
                 "produces": [
                     "application/json"
                 ],
@@ -846,17 +892,21 @@
                 "summary": "用户登出",
                 "responses": {
                     "200": {
-                        "description": "登出成功",
+                        "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/common.Response"
                         }
                     },
                     "401": {
-                        "description": "用户未认证",
+                        "description": "Unauthorized",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/common.Response"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/common.Response"
                         }
                     }
                 }
@@ -923,7 +973,6 @@
         },
         "/api/v1/auth/refresh": {
             "post": {
-                "description": "使用 HttpOnly 刷新令牌 Cookie 获取新的访问令牌",
                 "consumes": [
                     "application/json"
                 ],
@@ -934,35 +983,41 @@
                     "认证"
                 ],
                 "summary": "刷新访问令牌",
-                "parameters": [
-                    {
-                        "description": "非浏览器客户端的刷新令牌（兼容）",
-                        "name": "request",
-                        "in": "body",
-                        "schema": {
-                            "$ref": "#/definitions/dto.RefreshTokenRequest"
-                        }
-                    }
-                ],
                 "responses": {
                     "200": {
-                        "description": "刷新成功，Cookie 已更新",
+                        "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/dto.RefreshTokenResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/common.AuthResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
-                        "description": "请求参数错误",
+                        "description": "Bad Request",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/common.Response"
                         }
                     },
                     "401": {
-                        "description": "刷新令牌无效或已过期",
+                        "description": "Unauthorized",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/common.Response"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/common.Response"
                         }
                     }
                 }
@@ -1389,6 +1444,198 @@
                         "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/common.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/changes": {
+            "get": {
+                "description": "Current base read scope before pagination/count; relations use current actor RR projection.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "changes"
+                ],
+                "summary": "ListChanges",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.ChangeListResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Source relations use observed WorkItem versions and typed metadata; target, extension, links, audit and receipt commit atomically. Idempotency-Key required; replay HTTP 200.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "changes"
+                ],
+                "summary": "CreateChange",
+                "parameters": [
+                    {
+                        "description": "Request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateChangeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Replay",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/workitemcreation.CreateWorkItemResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/workitemcreation.CreateWorkItemResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/changes/{id}": {
+            "get": {
+                "description": "Current actor RR detail and relation endpoint projection.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "changes"
+                ],
+                "summary": "GetChange",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Professional extension ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.ChangeResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "Immutable mutation receipt. RelatedTickets is unsupported; refresh separately.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "changes"
+                ],
+                "summary": "UpdateChange",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Professional extension ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/change.MetadataRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/workitemmutation.Result"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -6873,7 +7120,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/ent.Problem"
+                                            "$ref": "#/definitions/dto.ProblemResponse"
                                         }
                                     }
                                 }
@@ -8787,6 +9034,304 @@
                 }
             }
         },
+        "/api/v1/problems": {
+            "get": {
+                "description": "Current read scope applies before pagination and count; each relation endpoint is authorized.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "problems"
+                ],
+                "summary": "List",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.ListProblemsResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Creation returns immutable intake receipt; replay is HTTP 200.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "problems"
+                ],
+                "summary": "Create",
+                "parameters": [
+                    {
+                        "description": "Request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateProblemRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Replay",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/workitemcreation.CreateWorkItemResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/workitemcreation.CreateWorkItemResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/problems/{id}": {
+            "get": {
+                "description": "Current actor RR read; relations is an authoritative array, including empty array.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "problems"
+                ],
+                "summary": "Get",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Professional extension ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.ProblemResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "Committed metadata response omits relations. Refresh separately; denied refresh does not undo the committed update.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "problems"
+                ],
+                "summary": "Update",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Professional extension ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateProblemRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.ProblemResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/problems/{id}/root-cause": {
+            "put": {
+                "description": "Committed metadata response omits relations; refresh separately.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "problems"
+                ],
+                "summary": "UpdateRootCause",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Professional extension ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateProblemRootCauseRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.ProblemResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/problems/{id}/solution": {
+            "put": {
+                "description": "Committed metadata response omits relations; refresh separately.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "problems"
+                ],
+                "summary": "UpdateSolution",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Professional extension ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateProblemResolutionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.ProblemResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/process-trigger": {
             "post": {
                 "description": "根据业务类型和业务ID触发对应的流程",
@@ -9172,6 +9717,77 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/common.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/standard-changes/{id}/instantiate": {
+            "post": {
+                "description": "Uses frozen approved template and observed sourceRelations; Idempotency-Key required; replay HTTP 200 returns original receipt.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "changes"
+                ],
+                "summary": "InstantiateStandardChange",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Professional extension ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.InstantiateStandardChangeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Replay",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/workitemcreation.CreateWorkItemResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/workitemcreation.CreateWorkItemResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -10130,55 +10746,6 @@
                 }
             }
         },
-        "/api/v1/tickets/workflow/approve": {
-            "post": {
-                "description": "审批工单（通过/拒绝/委派）",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "工单流转"
-                ],
-                "summary": "审批工单",
-                "parameters": [
-                    {
-                        "description": "审批请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.ApproveTicketRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/common.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object",
-                                            "additionalProperties": {
-                                                "type": "string"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/tickets/workflow/cc": {
             "post": {
                 "description": "将工单抄送给其他人",
@@ -10298,55 +10865,6 @@
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/dto.ForwardTicketRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/common.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object",
-                                            "additionalProperties": {
-                                                "type": "string"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/tickets/workflow/reject": {
-            "post": {
-                "description": "驳回工单并说明原因",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "工单流转"
-                ],
-                "summary": "驳回工单",
-                "parameters": [
-                    {
-                        "description": "驳回请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.RejectTicketRequest"
                         }
                     }
                 ],
@@ -11182,9 +11700,9 @@
                 }
             }
         },
-        "/api/v1/workflows": {
+        "/api/v1/work-items/{id}/relations": {
             "get": {
-                "description": "获取所有工作流列表，支持分页",
+                "description": "Current persisted actor, registry permission and both endpoint row scopes are rechecked. The path is a WorkItem ID; mutation body sourceWorkItemId must match. Writes return immutable receipts; refresh separately.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11192,34 +11710,44 @@
                     "application/json"
                 ],
                 "tags": [
-                    "工作流管理"
+                    "work-items"
                 ],
-                "summary": "获取工作流列表",
+                "summary": "List WorkItem relations",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "每页数量",
-                        "name": "page_size",
-                        "in": "query"
+                        "description": "Source WorkItem ID (read may traverse either endpoint)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/common.Response"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/relationmetadata.View"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
             },
             "post": {
-                "description": "创建新的工作流定义",
+                "description": "Current persisted actor, registry permission and both endpoint row scopes are rechecked. The path is a WorkItem ID; mutation body sourceWorkItemId must match. Writes return immutable receipts; refresh separately.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11227,88 +11755,24 @@
                     "application/json"
                 ],
                 "tags": [
-                    "工作流管理"
+                    "work-items"
                 ],
-                "summary": "创建工作流",
-                "parameters": [
-                    {
-                        "description": "工作流信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/service.CreateWorkflowRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/workflows/{id}": {
-            "get": {
-                "description": "获取指定工作流的详细信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "工作流管理"
-                ],
-                "summary": "获取工作流详情",
+                "summary": "Add WorkItem relations",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "工作流ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/common.Response"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "description": "更新已有的工作流定义",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "工作流管理"
-                ],
-                "summary": "更新工作流",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "工作流ID",
+                        "description": "Source WorkItem ID (read may traverse either endpoint)",
                         "name": "id",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "工作流信息",
-                        "name": "request",
+                        "description": "Observed source version, stable operationId, exact directed endpoints and typed metadata",
+                        "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/service.CreateWorkflowRequest"
+                            "$ref": "#/definitions/dto.WorkItemRelationRequest"
                         }
                     }
                 ],
@@ -11316,13 +11780,25 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/common.Response"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/workitemmutation.Result"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
             },
             "delete": {
-                "description": "删除指定的工作流",
+                "description": "Current persisted actor, registry permission and both endpoint row scopes are rechecked. The path is a WorkItem ID; mutation body sourceWorkItemId must match. Writes return immutable receipts; refresh separately.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11330,23 +11806,44 @@
                     "application/json"
                 ],
                 "tags": [
-                    "工作流管理"
+                    "work-items"
                 ],
-                "summary": "删除工作流",
+                "summary": "Remove WorkItem relations",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "工作流ID",
+                        "description": "Source WorkItem ID (read may traverse either endpoint)",
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "description": "Observed source version, stable operationId, exact directed endpoints and typed metadata",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.WorkItemRelationRequest"
+                        }
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/common.Response"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/workitemmutation.Result"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -11354,6 +11851,131 @@
         }
     },
     "definitions": {
+        "service.RelationContext": {
+            "type": "object",
+            "properties": {
+                "mutation": {
+                    "$ref": "#/definitions/service.RelationMutationAvailability"
+                },
+                "source": {
+                    "$ref": "#/definitions/relationmetadata.Endpoint"
+                }
+            }
+        },
+        "service.RelationMutationAvailability": {
+            "type": "object",
+            "properties": {
+                "allowed": {
+                    "type": "boolean"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "change.MetadataRequest": {
+            "type": "object",
+            "required": [
+                "expectedVersion",
+                "operationId"
+            ],
+            "properties": {
+                "affectedCis": {
+                    "description": "受影响的配置项",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "assigneeId": {
+                    "type": "integer"
+                },
+                "contingencyPlan": {
+                    "type": "string"
+                },
+                "description": {
+                    "description": "变更描述",
+                    "type": "string"
+                },
+                "expectedVersion": {
+                    "type": "integer"
+                },
+                "impactAnalysis": {
+                    "type": "string"
+                },
+                "impactScope": {
+                    "description": "影响范围",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ChangeImpact"
+                        }
+                    ]
+                },
+                "implementationPlan": {
+                    "description": "实施计划",
+                    "type": "string"
+                },
+                "justification": {
+                    "description": "变更理由",
+                    "type": "string"
+                },
+                "mitigationMeasures": {
+                    "type": "string"
+                },
+                "operationId": {
+                    "type": "string"
+                },
+                "plannedEndDate": {
+                    "description": "计划结束时间",
+                    "type": "string"
+                },
+                "plannedStartDate": {
+                    "description": "计划开始时间",
+                    "type": "string"
+                },
+                "priority": {
+                    "description": "优先级",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ChangePriority"
+                        }
+                    ]
+                },
+                "riskDescription": {
+                    "type": "string"
+                },
+                "riskLevel": {
+                    "description": "风险等级",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ChangeRisk"
+                        }
+                    ]
+                },
+                "riskOwner": {
+                    "type": "string"
+                },
+                "riskReviewDate": {
+                    "type": "string"
+                },
+                "rollbackPlan": {
+                    "description": "回滚计划",
+                    "type": "string"
+                },
+                "title": {
+                    "description": "变更标题",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "变更类型",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ChangeType"
+                        }
+                    ]
+                }
+            }
+        },
         "cirelationship.ImpactLevel": {
             "type": "string",
             "enum": [
@@ -11388,6 +12010,35 @@
                 "StrengthLow"
             ]
         },
+        "common.AuthResult": {
+            "type": "object",
+            "properties": {
+                "user": {
+                    "$ref": "#/definitions/common.User"
+                }
+            }
+        },
+        "common.LoginRequest": {
+            "type": "object",
+            "required": [
+                "password",
+                "username"
+            ],
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "tenantCode": {
+                    "type": "string"
+                },
+                "tenantId": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
         "common.Response": {
             "type": "object",
             "properties": {
@@ -11400,6 +12051,57 @@
                 }
             }
         },
+        "common.User": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "type": "boolean"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "department": {
+                    "type": "string"
+                },
+                "departmentId": {
+                    "type": "integer"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "mspRole": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "permissions": {
+                    "description": "用户权限列表",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "tenantId": {
+                    "type": "integer"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.AcceptTicketRequest": {
             "type": "object",
             "properties": {
@@ -11408,6 +12110,17 @@
                 },
                 "ticketId": {
                     "type": "integer"
+                }
+            }
+        },
+        "dto.ActionPermission": {
+            "type": "object",
+            "properties": {
+                "allowed": {
+                    "type": "boolean"
+                },
+                "reason": {
+                    "type": "string"
                 }
             }
         },
@@ -11475,97 +12188,6 @@
                 },
                 "title": {
                     "type": "string"
-                }
-            }
-        },
-        "dto.ApprovalRecord": {
-            "type": "object",
-            "properties": {
-                "action": {
-                    "description": "approve, reject, delegate",
-                    "type": "string"
-                },
-                "approver": {
-                    "$ref": "#/definitions/dto.WorkflowUserInfo"
-                },
-                "attachments": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.AttachmentInfo"
-                    }
-                },
-                "comment": {
-                    "type": "string"
-                },
-                "createdAt": {
-                    "type": "string"
-                },
-                "delegateTo": {
-                    "$ref": "#/definitions/dto.WorkflowUserInfo"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "level": {
-                    "type": "integer"
-                },
-                "levelName": {
-                    "type": "string"
-                },
-                "processedAt": {
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/dto.ApprovalStatus"
-                },
-                "ticketId": {
-                    "type": "integer"
-                }
-            }
-        },
-        "dto.ApprovalStatus": {
-            "type": "string",
-            "enum": [
-                "pending",
-                "in_progress",
-                "approved",
-                "rejected",
-                "cancelled"
-            ],
-            "x-enum-varnames": [
-                "ApprovalStatusPending",
-                "ApprovalStatusInProgress",
-                "ApprovalStatusApproved",
-                "ApprovalStatusRejected",
-                "ApprovalStatusCancelled"
-            ]
-        },
-        "dto.ApproveTicketRequest": {
-            "type": "object",
-            "required": [
-                "action",
-                "approvalId"
-            ],
-            "properties": {
-                "action": {
-                    "type": "string",
-                    "enum": [
-                        "approve",
-                        "reject",
-                        "delegate"
-                    ]
-                },
-                "approvalId": {
-                    "type": "integer"
-                },
-                "comment": {
-                    "type": "string"
-                },
-                "delegateToUserId": {
-                    "type": "integer"
-                },
-                "ticketId": {
-                    "type": "integer"
                 }
             }
         },
@@ -11649,20 +12271,7 @@
                 }
             }
         },
-        "dto.AttachmentInfo": {
-            "type": "object",
-            "properties": {
-                "filename": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "url": {
-                    "type": "string"
-                }
-            }
-        },
+
         "dto.AutomationRuleResponse": {
             "type": "object",
             "properties": {
@@ -12761,6 +13370,347 @@
                 }
             }
         },
+        "dto.ChangeImpact": {
+            "type": "string",
+            "enum": [
+                "low",
+                "medium",
+                "high"
+            ],
+            "x-enum-comments": {
+                "ChangeImpactHigh": "高",
+                "ChangeImpactLow": "低",
+                "ChangeImpactMedium": "中"
+            },
+            "x-enum-descriptions": [
+                "低",
+                "中",
+                "高"
+            ],
+            "x-enum-varnames": [
+                "ChangeImpactLow",
+                "ChangeImpactMedium",
+                "ChangeImpactHigh"
+            ]
+        },
+        "dto.ChangeListResponse": {
+            "type": "object",
+            "properties": {
+                "changes": {
+                    "description": "变更列表",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ChangeResponse"
+                    }
+                },
+                "pageSize": {
+                    "description": "每页数量",
+                    "type": "integer"
+                },
+                "total": {
+                    "description": "总数",
+                    "type": "integer"
+                },
+                "totalPages": {
+                    "description": "总页数",
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.ChangePriority": {
+            "type": "string",
+            "enum": [
+                "low",
+                "medium",
+                "high",
+                "critical"
+            ],
+            "x-enum-comments": {
+                "ChangePriorityCritical": "紧急",
+                "ChangePriorityHigh": "高",
+                "ChangePriorityLow": "低",
+                "ChangePriorityMedium": "中"
+            },
+            "x-enum-descriptions": [
+                "低",
+                "中",
+                "高",
+                "紧急"
+            ],
+            "x-enum-varnames": [
+                "ChangePriorityLow",
+                "ChangePriorityMedium",
+                "ChangePriorityHigh",
+                "ChangePriorityCritical"
+            ]
+        },
+        "dto.ChangeResponse": {
+            "type": "object",
+            "properties": {
+                "actions": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/dto.ActionPermission"
+                    }
+                },
+                "actualEndDate": {
+                    "description": "实际结束时间",
+                    "type": "string"
+                },
+                "actualStartDate": {
+                    "description": "实际开始时间",
+                    "type": "string"
+                },
+                "affectedCis": {
+                    "description": "受影响的配置项",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "assigneeId": {
+                    "description": "处理人ID",
+                    "type": "integer"
+                },
+                "assigneeName": {
+                    "description": "处理人姓名",
+                    "type": "string"
+                },
+                "createdAt": {
+                    "description": "创建时间",
+                    "type": "string"
+                },
+                "createdBy": {
+                    "description": "创建人ID",
+                    "type": "integer"
+                },
+                "createdByName": {
+                    "description": "创建人姓名",
+                    "type": "string"
+                },
+                "currentTasks": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "description": {
+                    "description": "变更描述",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "变更ID",
+                    "type": "integer"
+                },
+                "impactScope": {
+                    "description": "影响范围",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ChangeImpact"
+                        }
+                    ]
+                },
+                "implementationPlan": {
+                    "description": "实施计划",
+                    "type": "string"
+                },
+                "justification": {
+                    "description": "变更理由",
+                    "type": "string"
+                },
+                "number": {
+                    "type": "string"
+                },
+                "outcome": {
+                    "type": "string"
+                },
+                "outcomeEvidence": {
+                    "type": "string"
+                },
+                "plannedEndDate": {
+                    "description": "计划结束时间",
+                    "type": "string"
+                },
+                "plannedStartDate": {
+                    "description": "计划开始时间",
+                    "type": "string"
+                },
+                "priority": {
+                    "description": "优先级",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ChangePriority"
+                        }
+                    ]
+                },
+                "relations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/relationmetadata.View"
+                    }
+                },
+                "reviewEvidence": {
+                    "type": "string"
+                },
+                "reviewedAt": {
+                    "type": "string"
+                },
+                "reviewedBy": {
+                    "type": "integer"
+                },
+                "riskLevel": {
+                    "description": "风险等级",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ChangeRisk"
+                        }
+                    ]
+                },
+                "rollbackPlan": {
+                    "description": "回滚计划",
+                    "type": "string"
+                },
+                "standardTemplateId": {
+                    "type": "integer"
+                },
+                "status": {
+                    "description": "状态",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ChangeStatus"
+                        }
+                    ]
+                },
+                "tenantId": {
+                    "description": "租户ID",
+                    "type": "integer"
+                },
+                "title": {
+                    "description": "变更标题",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "变更类型",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ChangeType"
+                        }
+                    ]
+                },
+                "updatedAt": {
+                    "description": "更新时间",
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                },
+                "workItemId": {
+                    "description": "WorkItemID 关联的 WorkItem（tickets.id）。Change 创建事务保证该值存在；nil 表示\n开发数据违反 WorkItem 创建不变量。与 dto.IncidentResponse.WorkItemID /\ndto.ProblemResponse.WorkItemID 同一模式，供前端 WorkItemShell 使用。",
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.ChangeRisk": {
+            "type": "string",
+            "enum": [
+                "low",
+                "medium",
+                "high"
+            ],
+            "x-enum-comments": {
+                "ChangeRiskHigh": "高",
+                "ChangeRiskLow": "低",
+                "ChangeRiskMedium": "中"
+            },
+            "x-enum-descriptions": [
+                "低",
+                "中",
+                "高"
+            ],
+            "x-enum-varnames": [
+                "ChangeRiskLow",
+                "ChangeRiskMedium",
+                "ChangeRiskHigh"
+            ]
+        },
+        "dto.ChangeStatus": {
+            "type": "string",
+            "enum": [
+                "draft",
+                "submitted",
+                "pending",
+                "approved",
+                "rejected",
+                "scheduled",
+                "in_progress",
+                "completed",
+                "failed",
+                "rolled_back",
+                "cancelled"
+            ],
+            "x-enum-comments": {
+                "ChangeStatusApproved": "已批准",
+                "ChangeStatusCancelled": "已取消",
+                "ChangeStatusCompleted": "已完成",
+                "ChangeStatusDraft": "草稿",
+                "ChangeStatusFailed": "实施失败",
+                "ChangeStatusInProgress": "实施中",
+                "ChangeStatusPending": "待审批",
+                "ChangeStatusRejected": "已拒绝",
+                "ChangeStatusRolledBack": "已回滚",
+                "ChangeStatusScheduled": "已排期",
+                "ChangeStatusSubmitted": "已提交待审批"
+            },
+            "x-enum-descriptions": [
+                "草稿",
+                "已提交待审批",
+                "待审批",
+                "已批准",
+                "已拒绝",
+                "已排期",
+                "实施中",
+                "已完成",
+                "实施失败",
+                "已回滚",
+                "已取消"
+            ],
+            "x-enum-varnames": [
+                "ChangeStatusDraft",
+                "ChangeStatusSubmitted",
+                "ChangeStatusPending",
+                "ChangeStatusApproved",
+                "ChangeStatusRejected",
+                "ChangeStatusScheduled",
+                "ChangeStatusInProgress",
+                "ChangeStatusCompleted",
+                "ChangeStatusFailed",
+                "ChangeStatusRolledBack",
+                "ChangeStatusCancelled"
+            ]
+        },
+        "dto.ChangeType": {
+            "type": "string",
+            "enum": [
+                "normal",
+                "standard",
+                "emergency"
+            ],
+            "x-enum-comments": {
+                "ChangeTypeEmergency": "紧急变更",
+                "ChangeTypeNormal": "普通变更",
+                "ChangeTypeStandard": "标准变更"
+            },
+            "x-enum-descriptions": [
+                "普通变更",
+                "标准变更",
+                "紧急变更"
+            ],
+            "x-enum-varnames": [
+                "ChangeTypeNormal",
+                "ChangeTypeStandard",
+                "ChangeTypeEmergency"
+            ]
+        },
         "dto.ChangeUserStatusRequest": {
             "type": "object",
             "properties": {
@@ -13565,6 +14515,75 @@
                 }
             }
         },
+        "dto.CreateChangeRequest": {
+            "type": "object",
+            "required": [
+                "title"
+            ],
+            "properties": {
+                "affectedCis": {
+                    "description": "受影响的配置项",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "description": {
+                    "description": "变更描述",
+                    "type": "string"
+                },
+                "impactScope": {
+                    "description": "影响范围: low, medium, high",
+                    "type": "string"
+                },
+                "implementationPlan": {
+                    "description": "实施计划",
+                    "type": "string"
+                },
+                "justification": {
+                    "description": "变更理由",
+                    "type": "string"
+                },
+                "plannedEndDate": {
+                    "description": "计划结束时间",
+                    "type": "string"
+                },
+                "plannedStartDate": {
+                    "description": "计划开始时间",
+                    "type": "string"
+                },
+                "priority": {
+                    "description": "优先级: low, medium, high, critical",
+                    "type": "string"
+                },
+                "requesterId": {
+                    "description": "可选目标租户申请人",
+                    "type": "integer"
+                },
+                "riskLevel": {
+                    "description": "风险等级: low, medium, high",
+                    "type": "string"
+                },
+                "rollbackPlan": {
+                    "description": "回滚计划",
+                    "type": "string"
+                },
+                "sourceRelations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/workitemcreation.SourceRelationInput"
+                    }
+                },
+                "title": {
+                    "description": "变更标题",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "变更类型: normal, standard, emergency",
+                    "type": "string"
+                }
+            }
+        },
         "dto.CreateCloudAccountRequest": {
             "type": "object",
             "required": [
@@ -13883,6 +14902,46 @@
                 },
                 "sortOrder": {
                     "type": "integer"
+                }
+            }
+        },
+        "dto.CreateProblemRequest": {
+            "type": "object",
+            "required": [
+                "description",
+                "priority",
+                "title"
+            ],
+            "properties": {
+                "cti": {
+                    "$ref": "#/definitions/workitemcreation.CTIInput"
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 5000,
+                    "minLength": 10
+                },
+                "impact": {
+                    "type": "string"
+                },
+                "impactScope": {
+                    "description": "影响范围",
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "string"
+                },
+                "requesterId": {
+                    "description": "可选目标租户申请人",
+                    "type": "integer"
+                },
+                "rootCause": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "minLength": 2
                 }
             }
         },
@@ -15174,6 +16233,12 @@
         "dto.IncidentResponse": {
             "type": "object",
             "properties": {
+                "actions": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/dto.ActionPermission"
+                    }
+                },
                 "assigneeId": {
                     "type": "integer",
                     "example": 2
@@ -15335,6 +16400,40 @@
                 }
             }
         },
+        "dto.InstantiateStandardChangeRequest": {
+            "type": "object",
+            "properties": {
+                "affectedCis": {
+                    "description": "受影响配置项（可覆盖）",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "plannedEndDate": {
+                    "description": "计划结束时间",
+                    "type": "string"
+                },
+                "plannedStartDate": {
+                    "description": "计划开始时间",
+                    "type": "string"
+                },
+                "requesterId": {
+                    "description": "可选目标租户申请人",
+                    "type": "integer"
+                },
+                "sourceRelations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/workitemcreation.SourceRelationInput"
+                    }
+                },
+                "title": {
+                    "description": "可选：自定义标题",
+                    "type": "string"
+                }
+            }
+        },
         "dto.KnowledgeArticleListResponse": {
             "type": "object",
             "properties": {
@@ -15485,6 +16584,29 @@
                 }
             }
         },
+        "dto.ListProblemsResponse": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "pageSize": {
+                    "type": "integer"
+                },
+                "problems": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ProblemResponse"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "totalPages": {
+                    "type": "integer"
+                }
+            }
+        },
         "dto.ListResponse-dto_CIResponse": {
             "type": "object",
             "properties": {
@@ -15562,25 +16684,6 @@
                 },
                 "total": {
                     "type": "integer"
-                }
-            }
-        },
-        "dto.LoginRequest": {
-            "type": "object",
-            "required": [
-                "password",
-                "username"
-            ],
-            "properties": {
-                "password": {
-                    "type": "string"
-                },
-                "tenantCode": {
-                    "description": "可选的租户代码",
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
                 }
             }
         },
@@ -15813,6 +16916,88 @@
                 }
             }
         },
+        "dto.ProblemResponse": {
+            "type": "object",
+            "properties": {
+                "actions": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/dto.ActionPermission"
+                    }
+                },
+                "assigneeId": {
+                    "type": "integer"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "categoryId": {
+                    "type": "integer"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "createdBy": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "impact": {
+                    "type": "string"
+                },
+                "number": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "string"
+                },
+                "relations": {
+                    "description": "Relations is omitted in metadata mutation responses without a current-authorized query; reads return an array, including empty.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/relationmetadata.View"
+                    }
+                },
+                "resolution": {
+                    "type": "string"
+                },
+                "rootCause": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "tenantId": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "verificationNote": {
+                    "type": "string"
+                },
+                "verifiedVersion": {
+                    "type": "integer"
+                },
+                "version": {
+                    "type": "integer"
+                },
+                "workItemId": {
+                    "description": "WorkItemID 关联的 WorkItem（tickets.id）。Problem 创建事务保证该值存在；nil 表示\n开发数据违反 WorkItem 创建不变量。与 dto.IncidentResponse.WorkItemID 同一模式。",
+                    "type": "integer"
+                },
+                "workaround": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.ProcessApprovalDecisionResponse": {
             "type": "object",
             "properties": {
@@ -15965,18 +17150,6 @@
                 }
             }
         },
-        "dto.RefreshTokenRequest": {
-            "type": "object",
-            "properties": {
-                "refreshToken": {
-                    "description": "Kept for non-browser clients during the migration to cookie-only browser\nsessions. Browser requests obtain this value from the HttpOnly cookie.",
-                    "type": "string"
-                }
-            }
-        },
-        "dto.RefreshTokenResponse": {
-            "type": "object"
-        },
         "dto.RegisterRequest": {
             "type": "object",
             "required": [
@@ -16029,27 +17202,6 @@
                 },
                 "username": {
                     "type": "string"
-                }
-            }
-        },
-        "dto.RejectTicketRequest": {
-            "type": "object",
-            "required": [
-                "comment",
-                "reason"
-            ],
-            "properties": {
-                "comment": {
-                    "type": "string"
-                },
-                "reason": {
-                    "type": "string"
-                },
-                "returnToStatus": {
-                    "type": "string"
-                },
-                "ticketId": {
-                    "type": "integer"
                 }
             }
         },
@@ -16586,28 +17738,20 @@
             "type": "string",
             "enum": [
                 "accept",
-                "reject",
                 "withdraw",
                 "forward",
                 "cc",
                 "escalate",
-                "approve",
-                "approve_reject",
-                "delegate",
                 "resolve",
                 "close",
                 "reopen"
             ],
             "x-enum-varnames": [
                 "WorkflowActionAccept",
-                "WorkflowActionReject",
                 "WorkflowActionWithdraw",
                 "WorkflowActionForward",
                 "WorkflowActionCC",
                 "WorkflowActionEscalate",
-                "WorkflowActionApprove",
-                "WorkflowActionApproveReject",
-                "WorkflowActionDelegate",
                 "WorkflowActionResolve",
                 "WorkflowActionClose",
                 "WorkflowActionReopen"
@@ -16616,9 +17760,6 @@
         "dto.TicketWorkflowState": {
             "type": "object",
             "properties": {
-                "approvalStatus": {
-                    "$ref": "#/definitions/dto.ApprovalStatus"
-                },
                 "availableActions": {
                     "type": "array",
                     "items": {
@@ -16626,9 +17767,6 @@
                     }
                 },
                 "canAccept": {
-                    "type": "boolean"
-                },
-                "canApprove": {
                     "type": "boolean"
                 },
                 "canCc": {
@@ -16640,23 +17778,11 @@
                 "canForward": {
                     "type": "boolean"
                 },
-                "canReject": {
-                    "type": "boolean"
-                },
                 "canResolve": {
                     "type": "boolean"
                 },
                 "canWithdraw": {
                     "type": "boolean"
-                },
-                "completedApprovals": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.ApprovalRecord"
-                    }
-                },
-                "currentApprovalLevel": {
-                    "type": "integer"
                 },
                 "currentAssignee": {
                     "$ref": "#/definitions/dto.WorkflowUserInfo"
@@ -16664,16 +17790,7 @@
                 "currentStatus": {
                     "type": "string"
                 },
-                "pendingApprovers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.WorkflowUserInfo"
-                    }
-                },
                 "ticketId": {
-                    "type": "integer"
-                },
-                "totalApprovalLevels": {
                     "type": "integer"
                 }
             }
@@ -17350,6 +18467,78 @@
                 }
             }
         },
+        "dto.UpdateProblemRequest": {
+            "type": "object",
+            "required": [
+                "version"
+            ],
+            "properties": {
+                "categoryId": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 5000,
+                    "minLength": 10
+                },
+                "impact": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "string"
+                },
+                "rootCause": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "minLength": 2
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.UpdateProblemResolutionRequest": {
+            "type": "object",
+            "required": [
+                "version"
+            ],
+            "properties": {
+                "resolution": {
+                    "type": "string"
+                },
+                "solution": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                },
+                "workaround": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.UpdateProblemRootCauseRequest": {
+            "type": "object",
+            "required": [
+                "rootCause",
+                "version"
+            ],
+            "properties": {
+                "rootCause": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
         "dto.UpdateTenantRequest": {
             "type": "object",
             "properties": {
@@ -17683,6 +18872,36 @@
                     "type": "string"
                 },
                 "ticketId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.WorkItemRelationRequest": {
+            "type": "object",
+            "required": [
+                "expectedVersion",
+                "operationId",
+                "relationType",
+                "sourceWorkItemId",
+                "targetWorkItemId"
+            ],
+            "properties": {
+                "expectedVersion": {
+                    "type": "integer"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/relationmetadata.Metadata"
+                },
+                "operationId": {
+                    "type": "string"
+                },
+                "relationType": {
+                    "type": "string"
+                },
+                "sourceWorkItemId": {
+                    "type": "integer"
+                },
+                "targetWorkItemId": {
                     "type": "integer"
                 }
             }
@@ -18232,22 +19451,6 @@
                         "type": "string"
                     }
                 },
-                "assignee_id": {
-                    "description": "处理人ID",
-                    "type": "integer"
-                },
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "created_by": {
-                    "description": "创建人ID",
-                    "type": "integer"
-                },
-                "description": {
-                    "description": "变更描述",
-                    "type": "string"
-                },
                 "edges": {
                     "description": "Edges holds the relations/edges for other nodes in the graph.\nThe values are being populated by the ChangeQuery when eager-loading is set.",
                     "allOf": [
@@ -18280,17 +19483,6 @@
                     "description": "计划开始时间",
                     "type": "string"
                 },
-                "priority": {
-                    "description": "优先级",
-                    "type": "string"
-                },
-                "related_tickets": {
-                    "description": "相关工单",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
                 "risk_level": {
                     "description": "风险等级",
                     "type": "string"
@@ -18299,28 +19491,12 @@
                     "description": "回滚计划",
                     "type": "string"
                 },
-                "status": {
-                    "description": "状态",
-                    "type": "string"
-                },
-                "tenant_id": {
-                    "description": "租户ID",
-                    "type": "integer"
-                },
-                "title": {
-                    "description": "变更标题",
-                    "type": "string"
-                },
                 "type": {
                     "description": "变更类型",
                     "type": "string"
                 },
-                "updated_at": {
-                    "description": "更新时间",
-                    "type": "string"
-                },
                 "work_item_id": {
-                    "description": "关联的 WorkItem（tickets.id），唯一，必填——迁移完成前允许为空",
+                    "description": "关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入",
                     "type": "integer"
                 }
             }
@@ -18335,12 +19511,13 @@
                         "$ref": "#/definitions/ent.ChangePIR"
                     }
                 },
-                "problems": {
-                    "description": "关联的问题",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/ent.Problem"
-                    }
+                "work_item": {
+                    "description": "共享字段的唯一权威 WorkItem",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ent.Ticket"
+                        }
+                    ]
                 }
             }
         },
@@ -19200,13 +20377,6 @@
                     "items": {
                         "$ref": "#/definitions/ent.User"
                     }
-                },
-                "workflows": {
-                    "description": "部门工作流",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/ent.Workflow"
-                    }
                 }
             }
         },
@@ -19332,33 +20502,9 @@
         "ent.Incident": {
             "type": "object",
             "properties": {
-                "assignee_id": {
-                    "description": "处理人ID",
-                    "type": "integer"
-                },
-                "category": {
-                    "description": "事件分类",
-                    "type": "string"
-                },
-                "closed_at": {
-                    "description": "关闭时间",
-                    "type": "string"
-                },
                 "configuration_item_id": {
                     "description": "配置项ID",
                     "type": "integer"
-                },
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "deleted_at": {
-                    "description": "软删除时间",
-                    "type": "string"
-                },
-                "description": {
-                    "description": "事件描述",
-                    "type": "string"
                 },
                 "detected_at": {
                     "description": "检测时间",
@@ -19410,14 +20556,6 @@
                     "type": "object",
                     "additionalProperties": true
                 },
-                "priority": {
-                    "description": "优先级",
-                    "type": "string"
-                },
-                "reporter_id": {
-                    "description": "报告人ID",
-                    "type": "integer"
-                },
                 "resolution_steps": {
                     "description": "解决步骤",
                     "type": "array",
@@ -19425,10 +20563,6 @@
                         "type": "object",
                         "additionalProperties": true
                     }
-                },
-                "resolved_at": {
-                    "description": "解决时间",
-                    "type": "string"
                 },
                 "root_cause": {
                     "description": "根本原因",
@@ -19439,44 +20573,16 @@
                     "description": "严重程度",
                     "type": "string"
                 },
-                "source": {
-                    "description": "事件来源",
-                    "type": "string"
-                },
-                "status": {
-                    "description": "状态",
-                    "type": "string"
-                },
-                "subcategory": {
-                    "description": "事件子分类",
-                    "type": "string"
-                },
-                "tenant_id": {
-                    "description": "租户ID",
-                    "type": "integer"
-                },
-                "title": {
-                    "description": "事件标题",
-                    "type": "string"
-                },
                 "type": {
                     "description": "事件类型",
-                    "type": "string"
-                },
-                "updated_at": {
-                    "description": "更新时间",
                     "type": "string"
                 },
                 "urgency": {
                     "description": "紧急程度：low/medium/high/critical",
                     "type": "string"
                 },
-                "version": {
-                    "description": "版本号（乐观锁）",
-                    "type": "integer"
-                },
                 "work_item_id": {
-                    "description": "关联的 WorkItem（tickets.id），唯一，必填——Incident 迁移到 WorkItem 后每条记录必须有且仅有一条对应的 tickets 行",
+                    "description": "关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入",
                     "type": "integer"
                 }
             }
@@ -19620,19 +20726,20 @@
                         "$ref": "#/definitions/ent.Incident"
                     }
                 },
-                "problems": {
-                    "description": "关联的问题",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/ent.Problem"
-                    }
-                },
                 "related_incidents": {
                     "description": "关联事件",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/ent.Incident"
                     }
+                },
+                "work_item": {
+                    "description": "共享字段的唯一权威 WorkItem",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ent.Ticket"
+                        }
+                    ]
                 }
             }
         },
@@ -20747,34 +21854,6 @@
         "ent.Problem": {
             "type": "object",
             "properties": {
-                "assignee_id": {
-                    "description": "处理人ID",
-                    "type": "integer"
-                },
-                "category": {
-                    "description": "问题分类",
-                    "type": "string"
-                },
-                "closed_at": {
-                    "description": "关闭时间",
-                    "type": "string"
-                },
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "created_by": {
-                    "description": "创建人ID",
-                    "type": "integer"
-                },
-                "deleted_at": {
-                    "description": "删除时间",
-                    "type": "string"
-                },
-                "description": {
-                    "description": "问题描述",
-                    "type": "string"
-                },
                 "edges": {
                     "description": "Edges holds the relations/edges for other nodes in the graph.\nThe values are being populated by the ProblemQuery when eager-loading is set.",
                     "allOf": [
@@ -20791,40 +21870,16 @@
                     "description": "影响范围",
                     "type": "string"
                 },
-                "priority": {
-                    "description": "优先级",
-                    "type": "string"
-                },
                 "resolution": {
                     "description": "最终解决方案",
-                    "type": "string"
-                },
-                "resolved_at": {
-                    "description": "解决时间",
                     "type": "string"
                 },
                 "root_cause": {
                     "description": "根本原因",
                     "type": "string"
                 },
-                "status": {
-                    "description": "状态",
-                    "type": "string"
-                },
-                "tenant_id": {
-                    "description": "租户ID",
-                    "type": "integer"
-                },
-                "title": {
-                    "description": "问题标题",
-                    "type": "string"
-                },
-                "updated_at": {
-                    "description": "更新时间",
-                    "type": "string"
-                },
                 "work_item_id": {
-                    "description": "关联的 WorkItem（tickets.id），唯一，必填——迁移完成前允许为空",
+                    "description": "关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入",
                     "type": "integer"
                 },
                 "workaround": {
@@ -20836,26 +21891,13 @@
         "ent.ProblemEdges": {
             "type": "object",
             "properties": {
-                "changes": {
-                    "description": "关联的变更",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/ent.Change"
-                    }
-                },
-                "incidents": {
-                    "description": "关联的事件",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/ent.Incident"
-                    }
-                },
-                "tickets": {
-                    "description": "关联的工单",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/ent.Ticket"
-                    }
+                "work_item": {
+                    "description": "共享字段的唯一权威 WorkItem",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ent.Ticket"
+                        }
+                    ]
                 }
             }
         },
@@ -21405,12 +22447,32 @@
         "ent.ProcessTask": {
             "type": "object",
             "properties": {
+                "aggregation_version": {
+                    "description": "会签父任务聚合串行化版本；原子递增用于获取父行写锁",
+                    "type": "integer"
+                },
                 "assigned_time": {
                     "description": "分配时间",
                     "type": "string"
                 },
                 "assignee": {
                     "description": "任务负责人",
+                    "type": "string"
+                },
+                "callback_action": {
+                    "description": "创建任务时从流程定义解析的不可变回调动作",
+                    "type": "string"
+                },
+                "callback_config_ref": {
+                    "description": "创建任务时从流程定义解析的可信连接器配置引用，不包含端点或密钥",
+                    "type": "string"
+                },
+                "callback_handler_id": {
+                    "description": "创建任务时从流程定义解析的不可变回调处理器 ID；显式哨兵表示无回调或无法解析",
+                    "type": "string"
+                },
+                "callback_task_type": {
+                    "description": "创建任务时从流程定义解析的不可变回调任务类型",
                     "type": "string"
                 },
                 "candidate_groups": {
@@ -21423,6 +22485,10 @@
                 },
                 "completed_time": {
                     "description": "完成时间",
+                    "type": "string"
+                },
+                "correlation_id": {
+                    "description": "跨系统关联 ID（如 KAF session/Langfuse trace），用于委派任务的端到端追踪",
                     "type": "string"
                 },
                 "created_at": {
@@ -21502,7 +22568,7 @@
                     "type": "string"
                 },
                 "task_variables": {
-                    "description": "任务变量",
+                    "description": "参与者可编辑的任务表单变量；回调路由和系统元数据不得存放在此字段",
                     "type": "object",
                     "additionalProperties": true
                 },
@@ -22878,7 +23944,7 @@
                     "type": "string"
                 },
                 "record_class": {
-                    "description": "WorkItem 记录类型：generic/service_request_item/incident/problem/change_request/catalog_task；创建后不可变，由领域服务在事务内校验，不在 schema 层强制",
+                    "description": "WorkItem 记录类型：generic/service_request_item/incident/problem/change_request/catalog_task；创建后不可变，由领域服务在事务内校验",
                     "type": "string"
                 },
                 "requester_id": {
@@ -22944,84 +24010,6 @@
                 "version": {
                     "description": "版本号（乐观锁）",
                     "type": "integer"
-                }
-            }
-        },
-        "ent.TicketApproval": {
-            "type": "object",
-            "properties": {
-                "action": {
-                    "description": "审批动作: approve/reject/delegate",
-                    "type": "string"
-                },
-                "approver_id": {
-                    "description": "审批人ID",
-                    "type": "integer"
-                },
-                "comment": {
-                    "description": "审批意见",
-                    "type": "string"
-                },
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "delegate_to_user_id": {
-                    "description": "委派目标用户ID",
-                    "type": "integer"
-                },
-                "edges": {
-                    "description": "Edges holds the relations/edges for other nodes in the graph.\nThe values are being populated by the TicketApprovalQuery when eager-loading is set.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ent.TicketApprovalEdges"
-                        }
-                    ]
-                },
-                "id": {
-                    "description": "ID of the ent.",
-                    "type": "integer"
-                },
-                "level": {
-                    "description": "审批级别（1=一级,2=二级...）",
-                    "type": "integer"
-                },
-                "level_name": {
-                    "description": "级别名称",
-                    "type": "string"
-                },
-                "processed_at": {
-                    "description": "处理时间",
-                    "type": "string"
-                },
-                "status": {
-                    "description": "审批状态: pending/approved/rejected/cancelled",
-                    "type": "string"
-                },
-                "tenant_id": {
-                    "description": "租户ID",
-                    "type": "integer"
-                },
-                "ticket_id": {
-                    "description": "工单ID",
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "description": "更新时间",
-                    "type": "string"
-                }
-            }
-        },
-        "ent.TicketApprovalEdges": {
-            "type": "object",
-            "properties": {
-                "ticket": {
-                    "description": "所属工单",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ent.Ticket"
-                        }
-                    ]
                 }
             }
         },
@@ -23235,10 +24223,6 @@
                 "updated_at": {
                     "description": "更新时间",
                     "type": "string"
-                },
-                "workflow_id": {
-                    "description": "关联工作流ID",
-                    "type": "integer"
                 }
             }
         },
@@ -23274,14 +24258,6 @@
                     "items": {
                         "$ref": "#/definitions/ent.Ticket"
                     }
-                },
-                "workflow": {
-                    "description": "关联工作流",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ent.Workflow"
-                        }
-                    ]
                 }
             }
         },
@@ -23368,13 +24344,6 @@
         "ent.TicketEdges": {
             "type": "object",
             "properties": {
-                "approvals": {
-                    "description": "Approvals holds the value of the approvals edge.",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/ent.TicketApproval"
-                    }
-                },
                 "assignee": {
                     "description": "Assignee holds the value of the assignee edge.",
                     "allOf": [
@@ -23392,10 +24361,11 @@
                 },
                 "category": {
                     "description": "Category holds the value of the category edge.",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/ent.TicketCategory"
-                    }
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ent.TicketCategory"
+                        }
+                    ]
                 },
                 "cc_users": {
                     "description": "CcUsers holds the value of the cc_users edge.",
@@ -23513,7 +24483,7 @@
                     "type": "string"
                 },
                 "status": {
-                    "description": "状态: pending, sent, read",
+                    "description": "状态: pending, processing, sent, read",
                     "type": "string"
                 },
                 "tenant_id": {
@@ -24029,366 +24999,6 @@
                 }
             }
         },
-        "ent.Workflow": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "definition": {
-                    "description": "工作流定义",
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "department_id": {
-                    "description": "部门ID",
-                    "type": "integer"
-                },
-                "description": {
-                    "description": "工作流描述",
-                    "type": "string"
-                },
-                "edges": {
-                    "description": "Edges holds the relations/edges for other nodes in the graph.\nThe values are being populated by the WorkflowQuery when eager-loading is set.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ent.WorkflowEdges"
-                        }
-                    ]
-                },
-                "id": {
-                    "description": "ID of the ent.",
-                    "type": "integer"
-                },
-                "is_active": {
-                    "description": "是否启用",
-                    "type": "boolean"
-                },
-                "name": {
-                    "description": "工作流名称",
-                    "type": "string"
-                },
-                "tenant_id": {
-                    "description": "租户ID",
-                    "type": "integer"
-                },
-                "type": {
-                    "description": "工作流类型",
-                    "type": "string"
-                },
-                "updated_at": {
-                    "description": "更新时间",
-                    "type": "string"
-                },
-                "version": {
-                    "description": "版本号",
-                    "type": "string"
-                }
-            }
-        },
-        "ent.WorkflowEdges": {
-            "type": "object",
-            "properties": {
-                "department": {
-                    "description": "所属部门",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ent.Department"
-                        }
-                    ]
-                },
-                "workflow_instances": {
-                    "description": "工作流实例",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/ent.WorkflowInstance"
-                    }
-                },
-                "workflow_versions": {
-                    "description": "版本历史",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/ent.WorkflowVersion"
-                    }
-                }
-            }
-        },
-        "ent.WorkflowInstance": {
-            "type": "object",
-            "properties": {
-                "completed_at": {
-                    "description": "完成时间",
-                    "type": "string"
-                },
-                "context": {
-                    "description": "执行上下文",
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "current_step": {
-                    "description": "当前步骤",
-                    "type": "string"
-                },
-                "edges": {
-                    "description": "Edges holds the relations/edges for other nodes in the graph.\nThe values are being populated by the WorkflowInstanceQuery when eager-loading is set.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ent.WorkflowInstanceEdges"
-                        }
-                    ]
-                },
-                "entity_id": {
-                    "description": "关联实体ID",
-                    "type": "integer"
-                },
-                "entity_type": {
-                    "description": "关联实体类型",
-                    "type": "string"
-                },
-                "id": {
-                    "description": "ID of the ent.",
-                    "type": "integer"
-                },
-                "started_at": {
-                    "description": "开始时间",
-                    "type": "string"
-                },
-                "status": {
-                    "description": "实例状态",
-                    "type": "string"
-                },
-                "tenant_id": {
-                    "description": "租户ID",
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "description": "更新时间",
-                    "type": "string"
-                },
-                "workflow_id": {
-                    "description": "工作流ID",
-                    "type": "integer"
-                }
-            }
-        },
-        "ent.WorkflowInstanceEdges": {
-            "type": "object",
-            "properties": {
-                "workflow": {
-                    "description": "Workflow holds the value of the workflow edge.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ent.Workflow"
-                        }
-                    ]
-                },
-                "workflow_tasks": {
-                    "description": "任务列表",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/ent.WorkflowTask"
-                    }
-                }
-            }
-        },
-        "ent.WorkflowTask": {
-            "type": "object",
-            "properties": {
-                "activity_id": {
-                    "description": "活动ID",
-                    "type": "string"
-                },
-                "assignee": {
-                    "description": "处理人",
-                    "type": "string"
-                },
-                "candidate_groups": {
-                    "description": "候选人组，多个用逗号分隔",
-                    "type": "string"
-                },
-                "candidate_users": {
-                    "description": "候选人用户，多个用逗号分隔",
-                    "type": "string"
-                },
-                "comment": {
-                    "description": "备注",
-                    "type": "string"
-                },
-                "completed_at": {
-                    "description": "完成时间",
-                    "type": "string"
-                },
-                "completed_by": {
-                    "description": "完成人",
-                    "type": "string"
-                },
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "due_date": {
-                    "description": "截止时间",
-                    "type": "string"
-                },
-                "edges": {
-                    "description": "Edges holds the relations/edges for other nodes in the graph.\nThe values are being populated by the WorkflowTaskQuery when eager-loading is set.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ent.WorkflowTaskEdges"
-                        }
-                    ]
-                },
-                "form_data": {
-                    "description": "表单数据",
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "id": {
-                    "description": "ID of the ent.",
-                    "type": "integer"
-                },
-                "instance_id": {
-                    "description": "实例ID",
-                    "type": "integer"
-                },
-                "name": {
-                    "description": "任务名称",
-                    "type": "string"
-                },
-                "priority": {
-                    "description": "优先级: low, medium, high, urgent",
-                    "type": "string"
-                },
-                "status": {
-                    "description": "任务状态: pending, in_progress, completed, failed, cancelled",
-                    "type": "string"
-                },
-                "task_id": {
-                    "description": "任务ID",
-                    "type": "string"
-                },
-                "tenant_id": {
-                    "description": "租户ID",
-                    "type": "integer"
-                },
-                "type": {
-                    "description": "任务类型: user_task, service_task, script_task, call_activity",
-                    "type": "string"
-                },
-                "updated_at": {
-                    "description": "更新时间",
-                    "type": "string"
-                },
-                "variables": {
-                    "description": "流程变量",
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                }
-            }
-        },
-        "ent.WorkflowTaskEdges": {
-            "type": "object",
-            "properties": {
-                "instance": {
-                    "description": "Instance holds the value of the instance edge.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ent.WorkflowInstance"
-                        }
-                    ]
-                }
-            }
-        },
-        "ent.WorkflowVersion": {
-            "type": "object",
-            "properties": {
-                "bpmn_xml": {
-                    "description": "BPMN XML内容",
-                    "type": "string"
-                },
-                "change_log": {
-                    "description": "变更日志",
-                    "type": "string"
-                },
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "created_by": {
-                    "description": "创建人",
-                    "type": "string"
-                },
-                "edges": {
-                    "description": "Edges holds the relations/edges for other nodes in the graph.\nThe values are being populated by the WorkflowVersionQuery when eager-loading is set.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ent.WorkflowVersionEdges"
-                        }
-                    ]
-                },
-                "id": {
-                    "description": "ID of the ent.",
-                    "type": "integer"
-                },
-                "is_current": {
-                    "description": "是否为当前版本",
-                    "type": "boolean"
-                },
-                "process_variables": {
-                    "description": "流程变量定义",
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "status": {
-                    "description": "版本状态: draft, active, deprecated",
-                    "type": "string"
-                },
-                "tenant_id": {
-                    "description": "租户ID",
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "description": "更新时间",
-                    "type": "string"
-                },
-                "version": {
-                    "description": "版本号，如 1.0.0",
-                    "type": "string"
-                },
-                "workflow_id": {
-                    "description": "工作流ID",
-                    "type": "integer"
-                }
-            }
-        },
-        "ent.WorkflowVersionEdges": {
-            "type": "object",
-            "properties": {
-                "workflow": {
-                    "description": "Workflow holds the value of the workflow edge.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ent.Workflow"
-                        }
-                    ]
-                }
-            }
-        },
         "handlers.DashboardOverview": {
             "type": "object",
             "properties": {
@@ -24751,6 +25361,57 @@
                 "TypePlugin"
             ]
         },
+        "relationmetadata.Endpoint": {
+            "type": "object",
+            "properties": {
+                "number": {
+                    "type": "string"
+                },
+                "recordClass": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                },
+                "workItemId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "relationmetadata.Metadata": {
+            "type": "object",
+            "properties": {
+                "required": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "relationmetadata.View": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "relationType": {
+                    "type": "string"
+                },
+                "required": {
+                    "type": "boolean"
+                },
+                "source": {
+                    "$ref": "#/definitions/relationmetadata.Endpoint"
+                },
+                "target": {
+                    "$ref": "#/definitions/relationmetadata.Endpoint"
+                }
+            }
+        },
         "service.AIRecommendation": {
             "type": "object",
             "properties": {
@@ -24826,42 +25487,6 @@
                 },
                 "tenantId": {
                     "type": "integer"
-                },
-                "workflowId": {
-                    "type": "integer"
-                }
-            }
-        },
-        "service.CreateWorkflowRequest": {
-            "type": "object",
-            "required": [
-                "definition",
-                "name",
-                "tenantId",
-                "type"
-            ],
-            "properties": {
-                "definition": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "description": {
-                    "type": "string"
-                },
-                "isActive": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "tenantId": {
-                    "type": "integer"
-                },
-                "type": {
-                    "type": "string"
-                },
-                "version": {
-                    "type": "string"
                 }
             }
         },
@@ -25052,6 +25677,88 @@
                 "MspRoleProviderAgent",
                 "MspRoleCustomerUser"
             ]
+        },
+        "workitemcreation.CTIInput": {
+            "type": "object",
+            "properties": {
+                "categoryId": {
+                    "type": "integer"
+                },
+                "itemId": {
+                    "type": "integer"
+                },
+                "typeId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "workitemcreation.CreateWorkItemResult": {
+            "type": "object",
+            "properties": {
+                "number": {
+                    "type": "string"
+                },
+                "professionalReference": {
+                    "$ref": "#/definitions/workitemcreation.ProfessionalReference"
+                },
+                "recordClass": {
+                    "type": "string"
+                },
+                "replayed": {
+                    "type": "boolean"
+                },
+                "workItemId": {
+                    "type": "integer"
+                },
+                "workflowStartStatus": {
+                    "type": "string"
+                }
+            }
+        },
+        "workitemcreation.ProfessionalReference": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "workitemcreation.SourceRelationInput": {
+            "type": "object",
+            "properties": {
+                "expectedVersion": {
+                    "type": "integer"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/relationmetadata.Metadata"
+                },
+                "relationType": {
+                    "type": "string"
+                },
+                "sourceWorkItemId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "workitemmutation.Result": {
+            "type": "object",
+            "properties": {
+                "replayed": {
+                    "type": "boolean"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                },
+                "workItemId": {
+                    "type": "integer"
+                }
+            }
         }
     }
 }

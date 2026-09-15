@@ -1,25 +1,45 @@
+import tokens from '@/design-system/theme-tokens.json';
+
 /**
  * 设计系统颜色配置
  * 提供统一的颜色变量和主题支持
  */
 
+function functionalColors(palette: typeof tokens.themes.light) {
+  return {
+    background: {
+      primary: palette['--color-bg-primary'],
+      secondary: palette['--color-bg-secondary'],
+      tertiary: palette['--color-bg-tertiary'],
+      elevated: palette['--color-bg-primary'],
+    },
+    surface: {
+      primary: palette['--color-bg-primary'],
+      secondary: palette['--color-bg-tertiary'],
+      tertiary: palette['--color-bg-tertiary'],
+      elevated: palette['--color-bg-primary'],
+    },
+    border: {
+      primary: palette['--color-border'],
+      secondary: palette['--color-border'],
+      tertiary: palette['--color-border-strong'],
+      focus: tokens.brand.palette['500'],
+    },
+    text: {
+      primary: palette['--color-text-primary'],
+      secondary: palette['--color-text-secondary'],
+      tertiary: palette['--color-text-secondary'],
+      disabled: palette['--color-text-disabled'],
+      inverse: palette['--color-text-inverse'],
+    },
+  };
+}
+
 // 基础颜色定义
 export const colors = {
   // 主色调
   // KLN Brand Orange
-  primary: {
-    50: '#fff5f0',
-    100: '#ffe8d9',
-    200: '#ffd1b3',
-    300: '#ffb380',
-    400: '#F27C38',
-    500: '#F06820', // KLN Orange
-    600: '#D85E10',
-    700: '#B84A08',
-    800: '#933A06',
-    900: '#6E2B04',
-    950: '#4A1D02',
-  },
+  primary: tokens.brand.palette,
   charcoal: '#2A2A2A',
 
   // 中性色
@@ -90,52 +110,13 @@ export const colors = {
   },
 
   // 功能色
-  functional: {
-    background: {
-      primary: '#ffffff',
-      secondary: '#f8fafc',
-      tertiary: '#f1f5f9',
-      elevated: '#ffffff',
-    },
-    surface: {
-      primary: '#ffffff',
-      secondary: '#f8fafc',
-      tertiary: '#f1f5f9',
-      elevated: '#ffffff',
-    },
-    border: {
-      primary: '#e2e8f0',
-      secondary: '#cbd5e1',
-      tertiary: '#94a3b8',
-      focus: '#F06820',
-    },
-    text: {
-      primary: '#0f172a',
-      secondary: '#475569',
-      tertiary: '#64748b',
-      disabled: '#94a3b8',
-      inverse: '#ffffff',
-    },
-  },
+  functional: functionalColors(tokens.themes.light),
 } as const;
 
 // 暗色主题颜色
 export const darkColors = {
-  // 主色调（暗色主题下调整）
-  // KLN Orange — dark theme (inverted scale: lightest at 50)
-  primary: {
-    50: '#4A1D02',
-    100: '#6E2B04',
-    200: '#933A06',
-    300: '#B84A08',
-    400: '#D85E10',
-    500: '#F06820', // KLN Orange
-    600: '#F27C38',
-    700: '#ffb380',
-    800: '#ffd1b3',
-    900: '#ffe8d9',
-    950: '#fff5f0',
-  },
+  // Brand palette is shared across both themes.
+  primary: tokens.brand.palette,
   charcoal: '#2A2A2A',
 
   // 中性色（暗色主题）
@@ -154,33 +135,7 @@ export const darkColors = {
   },
 
   // 功能色（暗色主题）
-  functional: {
-    background: {
-      primary: '#0f172a',
-      secondary: '#1e293b',
-      tertiary: '#334155',
-      elevated: '#1e293b',
-    },
-    surface: {
-      primary: '#1e293b',
-      secondary: '#334155',
-      tertiary: '#475569',
-      elevated: '#334155',
-    },
-    border: {
-      primary: '#334155',
-      secondary: '#475569',
-      tertiary: '#64748b',
-      focus: '#F06820',
-    },
-    text: {
-      primary: '#f8fafc',
-      secondary: '#cbd5e1',
-      tertiary: '#94a3b8',
-      disabled: '#64748b',
-      inverse: '#0f172a',
-    },
-  },
+  functional: functionalColors(tokens.themes.dark),
 } as const;
 
 // 颜色使用指南

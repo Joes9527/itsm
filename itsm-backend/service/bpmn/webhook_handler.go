@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/connectorconfig"
 
@@ -106,7 +105,7 @@ func (h *WebhookHandler) GetHandlerID() string {
 }
 
 // Execute 执行Webhook服务任务
-func (h *WebhookHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *WebhookHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error) {
 	action, _ := variables["action"].(string)
 	switch action {
 	case "call_webhook", "send_notification":
@@ -114,11 +113,6 @@ func (h *WebhookHandler) Execute(ctx context.Context, task *ent.ProcessTask, var
 	default:
 		return nil, fmt.Errorf("不支持的 Webhook 回调动作")
 	}
-}
-
-// Validate 验证配置
-func (h *WebhookHandler) Validate(ctx context.Context, config map[string]interface{}) error {
-	return nil
 }
 
 type trustedWebhookSettings struct {
@@ -138,8 +132,9 @@ type bpmnWebhookEnvelope struct {
 	BusinessID   int    `json:"businessId"`
 }
 
-func (h *WebhookHandler) callTrustedWebhook(ctx context.Context, variables map[string]interface{}) (*dto.ServiceTaskResult, error) {
+func (h *WebhookHandler) callTrustedWebhook(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	if h.client == nil {
+		//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 		return nil, fmt.Errorf("Webhook 配置存储不可用")
 	}
 	tenantID, err := RequireTenantID(ctx, variables)
@@ -148,6 +143,7 @@ func (h *WebhookHandler) callTrustedWebhook(ctx context.Context, variables map[s
 	}
 	configRef := GetStringFromVars(variables, "callback_config_ref")
 	if configRef == "" {
+		//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 		return nil, fmt.Errorf("Webhook 回调缺少可信配置引用")
 	}
 	config, err := h.client.ConnectorConfig.Query().Where(
@@ -156,18 +152,22 @@ func (h *WebhookHandler) callTrustedWebhook(ctx context.Context, variables map[s
 		connectorconfig.Enabled(true),
 	).Only(ctx)
 	if err != nil {
+		//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 		return nil, fmt.Errorf("Webhook 可信配置不可用")
 	}
 	var settings trustedWebhookSettings
 	if err := json.Unmarshal([]byte(config.Settings), &settings); err != nil || settings.URL == "" {
+		//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 		return nil, fmt.Errorf("Webhook 可信配置无效")
 	}
 	if err := validateWebhookURL(settings.URL); err != nil {
+		//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 		return nil, fmt.Errorf("Webhook 可信端点不允许")
 	}
 	var credentials trustedWebhookCredentials
 	if config.Credentials != "" {
 		if err := json.Unmarshal([]byte(config.Credentials), &credentials); err != nil {
+			//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 			return nil, fmt.Errorf("Webhook 凭据配置无效")
 		}
 	}
@@ -193,6 +193,7 @@ func (h *WebhookHandler) callTrustedWebhook(ctx context.Context, variables map[s
 	if executionKey, ok := BPMNCallbackExecutionKey(ctx); ok {
 		req.Header.Set("Idempotency-Key", executionKey)
 	} else {
+		//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 		return nil, fmt.Errorf("Webhook 回调缺少幂等执行键")
 	}
 	if credentials.Secret != "" {
@@ -219,11 +220,12 @@ func (h *WebhookHandler) callTrustedWebhook(ctx context.Context, variables map[s
 	defer resp.Body.Close()
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		h.logger.Warnw("Webhook target rejected callback", "status_code", resp.StatusCode)
+		//lint:ignore ST1005 Preserve the existing domain term in this public error message.
 		return nil, fmt.Errorf("Webhook 目标返回非成功状态")
 	}
 	h.logger.Infow("Webhook called successfully", "status_code", resp.StatusCode)
-	return &dto.ServiceTaskResult{
-		Success:    true,
+	return &CallbackEffect{
+		Status:     CallbackEffectApplied,
 		Message:    fmt.Sprintf("Webhook调用成功，状态码: %d", resp.StatusCode),
 		OutputVars: map[string]interface{}{"status_code": resp.StatusCode},
 	}, nil

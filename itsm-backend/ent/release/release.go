@@ -59,8 +59,6 @@ const (
 	FieldTags = "tags"
 	// FieldIsEmergency holds the string denoting the is_emergency field in the database.
 	FieldIsEmergency = "is_emergency"
-	// FieldRequiresApproval holds the string denoting the requires_approval field in the database.
-	FieldRequiresApproval = "requires_approval"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -95,7 +93,6 @@ var Columns = []string{
 	FieldDeploymentSteps,
 	FieldTags,
 	FieldIsEmergency,
-	FieldRequiresApproval,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -129,8 +126,6 @@ var (
 	TenantIDValidator func(int) error
 	// DefaultIsEmergency holds the default value on creation for the "is_emergency" field.
 	DefaultIsEmergency bool
-	// DefaultRequiresApproval holds the default value on creation for the "requires_approval" field.
-	DefaultRequiresApproval bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -240,11 +235,6 @@ func ByValidationCriteria(opts ...sql.OrderTermOption) OrderOption {
 // ByIsEmergency orders the results by the is_emergency field.
 func ByIsEmergency(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIsEmergency, opts...).ToFunc()
-}
-
-// ByRequiresApproval orders the results by the requires_approval field.
-func ByRequiresApproval(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldRequiresApproval, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

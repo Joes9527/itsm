@@ -7,6 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/common/tenantctx"
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/connector"
 	msgraph "itsm-backend/connector/builtin/msgraph"
 
@@ -102,7 +105,7 @@ func TestApplicationStartsOneNotificationDeliveryWorkerAndStopsOnCancellation(t 
 func TestBootstrapEmailGraphProviderLookupUsesRequestedTenant(t *testing.T) {
 	registry := connector.NewRegistry()
 	registry.Register(func() connector.Connector { return msgraph.New() })
-	manager := connector.NewManager(registry, zaptest.NewLogger(t).Sugar())
+	manager := connector.NewManager(registry, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	t.Cleanup(manager.CloseAll)
 	for _, fixture := range []struct {
 		tenantID int
@@ -111,7 +114,7 @@ func TestBootstrapEmailGraphProviderLookupUsesRequestedTenant(t *testing.T) {
 		{tenantID: 1, mailbox: "tenant-one@example.test"},
 		{tenantID: 2, mailbox: "tenant-two@example.test"},
 	} {
-		require.NoError(t, manager.Provision(context.Background(), connector.Config{
+		require.NoError(t, manager.Provision(tenantctx.WithTenantID(context.Background(), fixture.tenantID), connector.Config{
 			TenantID: fixture.tenantID,
 			Name:     "msgraph-email",
 			Type:     connector.TypeEmail,

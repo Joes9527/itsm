@@ -3,12 +3,14 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/knownerror"
 	"itsm-backend/ent/problem"
+	"itsm-backend/ent/ticket"
 
 	"go.uber.org/zap"
 )
@@ -98,11 +100,11 @@ func (s *KnownErrorService) SearchKnownErrors(ctx context.Context, tenantID int,
 			continue
 		}
 		// Simple contains check
-		if ke.Title != "" && contains(ke.Title, keyword) {
+		if ke.Title != "" && strings.Contains(ke.Title, keyword) {
 			result = append(result, ke)
 			continue
 		}
-		if ke.Description != "" && contains(ke.Description, keyword) {
+		if ke.Description != "" && strings.Contains(ke.Description, keyword) {
 			result = append(result, ke)
 		}
 	}
@@ -206,7 +208,7 @@ func (s *KnownErrorService) MatchKnownErrorBySymptoms(ctx context.Context, tenan
 		if e.TenantID != tenantID || e.Status != "active" {
 			continue
 		}
-		if e.Symptoms != "" && contains(e.Symptoms, symptoms) {
+		if e.Symptoms != "" && strings.Contains(e.Symptoms, symptoms) {
 			// 增加匹配次数
 			if err := s.IncrementOccurrenceCount(ctx, e.ID); err != nil {
 				s.logger.Warnw("failed to increment occurrence count", "knownErrorID", e.ID, "error", err)
@@ -221,7 +223,7 @@ func (s *KnownErrorService) MatchKnownErrorBySymptoms(ctx context.Context, tenan
 // LinkKnownErrorToProblem 关联已知错误到问题
 func (s *KnownErrorService) LinkKnownErrorToProblem(ctx context.Context, knownErrorID, problemID, tenantID int) error {
 	problemExists, err := s.client.Problem.Query().
-		Where(problem.IDEQ(problemID), problem.TenantIDEQ(tenantID), problem.DeletedAtIsNil()).
+		Where(problem.IDEQ(problemID), problem.HasWorkItemWith(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil())).
 		Exist(ctx)
 	if err != nil {
 		return err

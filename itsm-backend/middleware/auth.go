@@ -2,14 +2,16 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
-	"time"
+
+	"itsm-backend/authentication"
+	"itsm-backend/common"
+	"itsm-backend/common/tenantctx"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 	"go.uber.org/zap"
-	"itsm-backend/common"
 )
 
 type authenticatedTenantIDContextKey struct{}
@@ -24,90 +26,6 @@ func WithAuthenticatedTenantID(ctx context.Context, tenantID int) context.Contex
 func AuthenticatedTenantIDFromContext(ctx context.Context) (int, bool) {
 	tenantID, ok := ctx.Value(authenticatedTenantIDContextKey{}).(int)
 	return tenantID, ok
-}
-
-type Claims struct {
-	UserID    int    `json:"userId"`
-	Username  string `json:"username"`
-	Role      string `json:"role"`
-	TenantID  int    `json:"tenantId"`
-	TokenType string `json:"tokenType"` // "access" 或 "refresh"
-	jwt.RegisteredClaims
-}
-
-// ValidateAccessToken 验证 access token 并返回声明。
-func ValidateAccessToken(tokenString, jwtSecret string) (*Claims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, jwt.ErrSignatureInvalid
-		}
-		return []byte(jwtSecret), nil
-	})
-	if err != nil || !token.Valid {
-		return nil, err
-	}
-	claims, ok := token.Claims.(*Claims)
-	if !ok || claims.TokenType != "access" {
-		return nil, jwt.ErrInvalidKey
-	}
-	return claims, nil
-}
-
-// ValidateRefreshToken 验证refresh token
-func ValidateRefreshToken(tokenString, jwtSecret string) (*Claims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		return []byte(jwtSecret), nil
-	})
-
-	if err != nil || !token.Valid {
-		return nil, err
-	}
-
-	claims, ok := token.Claims.(*Claims)
-	if !ok || claims.TokenType != "refresh" {
-		return nil, jwt.ErrInvalidKey
-	}
-
-	return claims, nil
-}
-
-// 生成Access Token
-func GenerateAccessToken(userID int, username, role string, tenantID int, jwtSecret string, expireTime time.Duration) (string, error) {
-	claims := Claims{
-		UserID:    userID,
-		Username:  username,
-		Role:      role,
-		TenantID:  tenantID,
-		TokenType: "access",
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expireTime)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(jwtSecret))
-}
-
-// 生成Refresh Token
-func GenerateRefreshToken(userID int, jwtSecret string, expireTime time.Duration) (string, error) {
-	// jti 用于 refresh token 黑名单唯一标识；带随机后缀避免同一秒重复
-	jti := fmt.Sprintf("rt-%d-%d-%d", userID, time.Now().UnixNano(), randSeq6())
-	claims := Claims{
-		UserID:    userID,
-		TokenType: "refresh",
-		RegisteredClaims: jwt.RegisteredClaims{
-			ID:        jti,
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expireTime)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(jwtSecret))
-}
-
-// randSeq6 生成 6 位数值序列，仅用于 jti 增加熵，非密码学安全用途
-func randSeq6() int64 {
-	return time.Now().UnixNano() % 1000000
 }
 
 // AuthMiddleware JWT认证中间件
@@ -178,15 +96,20 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 			"token_length", len(tokenString),
 		)
 
-		// 解析JWT token
-		token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-			// 验证签名算法，防止算法混淆攻击
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, jwt.ErrSignatureInvalid
-			}
-			return []byte(jwtSecret), nil
-		})
+		claims, err := authentication.ValidateAccessToken(c.Request.Context(), tokenString, jwtSecret)
 		if err != nil {
+			if errors.Is(err, authentication.ErrAccessTokenRevocationCheck) {
+				zap.S().Errorw("AuthMiddleware: token revocation check failed", "path", c.Request.URL.Path, "error", err)
+				common.Fail(c, common.AuthFailedCode, "token状态验证失败")
+				c.Abort()
+				return
+			}
+			if errors.Is(err, authentication.ErrAccessTokenRevoked) {
+				zap.S().Warnw("AuthMiddleware: revoked token rejected", "path", c.Request.URL.Path)
+				common.Fail(c, common.AuthFailedCode, "token已失效")
+				c.Abort()
+				return
+			}
 			zap.S().Warnw(
 				"AuthMiddleware: token parse failed",
 				"path", c.Request.URL.Path,
@@ -198,70 +121,20 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 			return
 		}
 
-		if !token.Valid {
-			zap.S().Warnw(
-				"AuthMiddleware: token invalid",
-				"path", c.Request.URL.Path,
-			)
-			common.Fail(c, common.AuthFailedCode, "token无效")
-			c.Abort()
-			return
-		}
+		c.Set("user_id", claims.UserID)
+		c.Set("username", claims.Username)
+		c.Set("role", claims.Role)
+		c.Set("tenant_id", claims.TenantID)
+		c.Set("token", tokenString)
+		c.Request = c.Request.WithContext(tenantctx.WithTenantID(WithAuthenticatedTenantID(c.Request.Context(), claims.TenantID), claims.TenantID))
 
-		// 提取用户信息
-		if claims, ok := token.Claims.(*Claims); ok {
-			// H4 修复：检查TokenType，必须是access类型
-			if claims.TokenType != "access" {
-				zap.S().Warnw(
-					"AuthMiddleware: invalid token type",
-					"path", c.Request.URL.Path,
-					"token_type", claims.TokenType,
-				)
-				common.Fail(c, common.AuthFailedCode, "无效的token类型，请使用access token")
-				c.Abort()
-				return
-			}
-
-			revoked, revocationErr := isAccessTokenRevoked(c.Request.Context(), tokenString)
-			if revocationErr != nil {
-				zap.S().Errorw("AuthMiddleware: token revocation check failed",
-					"path", c.Request.URL.Path, "error", revocationErr)
-				common.Fail(c, common.AuthFailedCode, "token状态验证失败")
-				c.Abort()
-				return
-			}
-			if revoked {
-				zap.S().Warnw("AuthMiddleware: revoked token rejected",
-					"path", c.Request.URL.Path, "user_id", claims.UserID)
-				common.Fail(c, common.AuthFailedCode, "token已失效")
-				c.Abort()
-				return
-			}
-
-			c.Set("user_id", claims.UserID)
-			c.Set("username", claims.Username)
-			c.Set("role", claims.Role)
-			c.Set("tenant_id", claims.TenantID) // 添加租户ID
-			c.Set("token", tokenString)
-			c.Request = c.Request.WithContext(WithAuthenticatedTenantID(c.Request.Context(), claims.TenantID))
-
-			// 调试日志：认证成功
-			zap.S().Infow(
-				"AuthMiddleware: authentication successful",
-				"path", c.Request.URL.Path,
-				"user_id", claims.UserID,
-				"username", claims.Username,
-				"tenant_id", claims.TenantID,
-			)
-		} else {
-			zap.S().Warnw(
-				"AuthMiddleware: failed to extract claims",
-				"path", c.Request.URL.Path,
-			)
-			common.Fail(c, common.AuthFailedCode, "token解析失败")
-			c.Abort()
-			return
-		}
+		zap.S().Infow(
+			"AuthMiddleware: authentication successful",
+			"path", c.Request.URL.Path,
+			"user_id", claims.UserID,
+			"username", claims.Username,
+			"tenant_id", claims.TenantID,
+		)
 
 		c.Next()
 	}

@@ -2,11 +2,16 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
 	"strings"
 
+	"go.uber.org/zap"
+
+	"itsm-backend/common"
+	"itsm-backend/common/workitemidentity"
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/incident"
@@ -16,6 +21,7 @@ import (
 	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
+	"itsm-backend/internal/jsonvalue"
 	"itsm-backend/service/bpmn"
 )
 
@@ -24,6 +30,7 @@ const (
 	bpmnUnresolvedUserTaskCallbackHandlerID = "__unresolved_user_task_callback__"
 	maxBPMNParticipantVariableDepth         = 8
 	maxBPMNParticipantVariableEntries       = 1024
+	maxBPMNCallbackConfigRefLength          = 128
 )
 
 type bpmnCallbackDescriptor struct {
@@ -73,6 +80,9 @@ func validateAndCloneBPMNParticipantVariables(variables map[string]interface{}, 
 			if rejectReserved {
 				return nil, fmt.Errorf("任务表单变量 %q 为系统保留字段", key)
 			}
+			// 剥离是 fail-closed 的动作，但不能是静默 no-op：AGENTS.md 要求被绕过的步骤
+			// 留下可观测痕迹。只记键名，不记变量内容（可能含敏感数据）。
+			zap.S().Warnw("BPMN 表单变量尝试覆盖流程保留键，已剥离", "key", key)
 			continue
 		}
 		cloned, err := cloneBPMNJSONValue(value, 0)
@@ -89,6 +99,11 @@ func cloneBPMNJSONValue(value interface{}, depth int) (interface{}, error) {
 		return nil, fmt.Errorf("嵌套层级超过限制")
 	}
 	switch typed := value.(type) {
+	case json.Number:
+		if _, err := common.ParseExactJSONNumber(typed); err != nil {
+			return nil, err
+		}
+		return typed, nil
 	case nil, bool, string, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
 		return typed, nil
 	case float32:
@@ -101,6 +116,8 @@ func cloneBPMNJSONValue(value interface{}, depth int) (interface{}, error) {
 			return nil, fmt.Errorf("非有限数值")
 		}
 		return typed, nil
+	case jsonvalue.NumberMap:
+		return cloneBPMNJSONValue(map[string]any(typed), depth)
 	case map[string]interface{}:
 		if len(typed) > maxBPMNParticipantVariableEntries {
 			return nil, fmt.Errorf("对象字段数量超过限制")
@@ -169,75 +186,169 @@ func mergeBPMNTaskCompletionVariables(existing, incoming map[string]interface{})
 }
 
 func filterBPMNCallbackPayload(handler bpmn.ServiceTaskHandlerInterface, action string, variables map[string]interface{}) (map[string]interface{}, error) {
+	contract, err := callbackActionContractForHandler(handler, action)
+	if err != nil {
+		return nil, err
+	}
 	if normalizer, ok := handler.(bpmn.CallbackPayloadNormalizer); ok {
 		payload, err := normalizer.NormalizeCallbackPayload(action, variables)
 		if err != nil {
 			return nil, err
 		}
-		if err := validateBPMNCallbackNormalizerOutput(handler, action, payload); err != nil {
+		if err := validateBPMNCallbackNormalizerContractOutput(contract, payload); err != nil {
 			return nil, err
 		}
-		return filterBPMNCallbackPayloadFields(handler, action, payload)
+		return normalizeBPMNCallbackContractPayload(contract, payload)
 	}
-	return filterBPMNCallbackPayloadFields(handler, action, variables)
+	return normalizeBPMNCallbackContractPayload(contract, variables)
 }
 
 // filterPersistedBPMNCallbackPayload validates a durable payload without
 // re-reading the dynamic source values that were resolved during enqueue.
 func filterPersistedBPMNCallbackPayload(handler bpmn.ServiceTaskHandlerInterface, action string, variables map[string]interface{}) (map[string]interface{}, error) {
-	return filterBPMNCallbackPayloadFields(handler, action, variables)
+	contract, err := callbackActionContractForHandler(handler, action)
+	if err != nil {
+		return nil, err
+	}
+	return normalizeBPMNCallbackContractPayload(contract, variables)
 }
 
-// validateBPMNCallbackNormalizerOutput rejects schema drift instead of silently
-// dropping a field. A normalizer may derive values, but its durable output must
-// still be fully declared by the handler-owned static payload policy.
-func validateBPMNCallbackNormalizerOutput(handler bpmn.ServiceTaskHandlerInterface, action string, payload map[string]interface{}) error {
-	policy, ok := handler.(bpmn.CallbackPayloadPolicy)
+func callbackActionContractForHandler(handler bpmn.ServiceTaskHandlerInterface, action string) (bpmn.CallbackActionContract, error) {
+	provider, ok := handler.(bpmn.CallbackContractProvider)
 	if !ok {
-		if len(payload) == 0 {
-			return nil
-		}
-		return fmt.Errorf("回调规范化输出包含未声明字段")
+		return bpmn.CallbackActionContract{}, fmt.Errorf("callback handler has no synchronous contract")
 	}
-	allowed := make(map[string]struct{}, len(policy.CallbackPayloadFields(action)))
-	for _, key := range policy.CallbackPayloadFields(action) {
-		allowed[key] = struct{}{}
+	contract, ok := provider.CallbackContract(action)
+	if !ok {
+		return bpmn.CallbackActionContract{}, fmt.Errorf("callback action is not declared")
 	}
-	for key := range payload {
-		if _, ok := allowed[key]; !ok {
-			return fmt.Errorf("回调规范化输出包含未声明字段: %s", key)
+	if err := validateBPMNCallbackActionContract(contract); err != nil {
+		return bpmn.CallbackActionContract{}, err
+	}
+	return contract, nil
+}
+
+// validateBPMNCallbackActionContract ensures a handler's declared callback
+// contract cannot carry system-owned identity or ambiguous fields into a
+// durable callback payload.
+func validateBPMNCallbackActionContract(contract bpmn.CallbackActionContract) error {
+	allowed, err := bpmnCallbackContractFieldSet(contract.PayloadFields)
+	if err != nil {
+		return err
+	}
+	for _, field := range append(append([]string(nil), contract.RequiredFields...), contract.PositiveIntegerFields...) {
+		if _, ok := allowed[field]; !ok {
+			return fmt.Errorf("回调必填字段未在负载契约中声明")
 		}
 	}
 	return nil
 }
 
-func filterBPMNCallbackPayloadFields(handler bpmn.ServiceTaskHandlerInterface, action string, variables map[string]interface{}) (map[string]interface{}, error) {
-	policy, ok := handler.(bpmn.CallbackPayloadPolicy)
-	if !ok {
-		return map[string]interface{}{}, nil
+// normalizeBPMNCallbackContractConfigRef accepts only a bounded identifier-like
+// definition reference. It deliberately rejects URLs, paths, whitespace, and
+// other values that could contain transport details or credentials.
+func normalizeBPMNCallbackContractConfigRef(contract bpmn.CallbackActionContract, configRef string) (string, error) {
+	if configRef == "" {
+		if contract.ConfigRefRequired {
+			return "", fmt.Errorf("回调配置引用缺失")
+		}
+		return "", nil
 	}
-	allowed := policy.CallbackPayloadFields(action)
-	payload := make(map[string]interface{}, len(allowed))
-	for _, key := range allowed {
-		value, exists := variables[key]
+	if configRef != strings.TrimSpace(configRef) || len(configRef) > maxBPMNCallbackConfigRefLength || !isBPMNCallbackConfigRef(configRef) {
+		return "", fmt.Errorf("回调配置引用无效")
+	}
+	return configRef, nil
+}
+
+func isBPMNCallbackConfigRef(configRef string) bool {
+	for i := 0; i < len(configRef); i++ {
+		char := configRef[i]
+		isAlphaNumeric := char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9'
+		if i == 0 {
+			if !isAlphaNumeric {
+				return false
+			}
+			continue
+		}
+		if !isAlphaNumeric && char != '.' && char != '_' && char != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+func normalizeBPMNCallbackContractPayload(contract bpmn.CallbackActionContract, payload map[string]interface{}) (map[string]interface{}, error) {
+	allowed, err := bpmnCallbackContractFieldSet(contract.PayloadFields)
+	if err != nil {
+		return nil, err
+	}
+
+	normalized := make(map[string]interface{}, len(allowed))
+	for _, field := range contract.PayloadFields {
+		value, exists := payload[field]
 		if !exists {
 			continue
 		}
-		payload[key] = value
-	}
-	return cloneBPMNCallbackPayload(payload)
-}
-
-func cloneBPMNCallbackPayload(payload map[string]interface{}) (map[string]interface{}, error) {
-	clonedPayload := make(map[string]interface{}, len(payload))
-	for key, value := range payload {
 		cloned, err := cloneBPMNJSONValue(value, 0)
 		if err != nil {
-			return nil, fmt.Errorf("回调字段 %q 类型无效", key)
+			return nil, fmt.Errorf("回调字段 %q 类型无效", field)
 		}
-		clonedPayload[key] = cloned
+		normalized[field] = cloned
 	}
-	return clonedPayload, nil
+	for _, field := range contract.PositiveIntegerFields {
+		value, exists := normalized[field]
+		if !exists {
+			continue
+		}
+		integer, err := bpmn.CallbackInteger(value)
+		if err != nil || integer <= 0 {
+			return nil, fmt.Errorf("回调字段 %q 必须是有效正整数", field)
+		}
+		normalized[field] = strconv.Itoa(integer)
+	}
+	for _, field := range contract.RequiredFields {
+		if _, exists := normalized[field]; !exists {
+			return nil, fmt.Errorf("回调必填字段缺失")
+		}
+	}
+	return normalized, nil
+}
+
+func validateBPMNCallbackNormalizerContractOutput(contract bpmn.CallbackActionContract, payload map[string]interface{}) error {
+	allowed, err := bpmnCallbackContractFieldSet(contract.PayloadFields)
+	if err != nil {
+		return err
+	}
+	return validateBPMNCallbackContractPayloadFields(payload, allowed)
+}
+
+func bpmnCallbackContractFieldSet(fields []string) (map[string]struct{}, error) {
+	if len(fields) > maxBPMNParticipantVariableEntries {
+		return nil, fmt.Errorf("回调负载契约字段无效")
+	}
+	allowed := make(map[string]struct{}, len(fields))
+	for _, field := range fields {
+		if field == "" || field != strings.TrimSpace(field) || len(field) > 128 || isReservedBPMNParticipantVariableKey(field) {
+			return nil, fmt.Errorf("回调负载契约字段无效")
+		}
+		if _, exists := allowed[field]; exists {
+			return nil, fmt.Errorf("回调负载契约字段重复")
+		}
+		allowed[field] = struct{}{}
+	}
+	return allowed, nil
+}
+
+func validateBPMNCallbackContractPayloadFields(payload map[string]interface{}, allowed map[string]struct{}) error {
+	if len(payload) > maxBPMNParticipantVariableEntries {
+		return fmt.Errorf("回调负载字段数量超过限制")
+	}
+	for field := range payload {
+		if _, ok := allowed[field]; !ok {
+			return fmt.Errorf("回调负载包含未声明字段: %s", field)
+		}
+	}
+	return nil
 }
 
 func (e *CustomProcessEngine) callbackDescriptor(taskType, action, configRef string) bpmnCallbackDescriptor {
@@ -352,6 +463,12 @@ func (e *CustomProcessEngine) authoritativeCallbackVariables(
 		variables["addedBy"] = initiatorID
 	}
 
+	if provider, ok := handler.(bpmn.CallbackContractProvider); ok {
+		action, _ := payload["action"].(string)
+		if contract, declared := provider.CallbackContract(action); declared && contract.CreatedRecordClass != "" {
+			return variables, nil
+		}
+	}
 	if !isBuiltInBusinessCallbackHandler(handler.GetTaskType()) {
 		return variables, nil
 	}
@@ -362,7 +479,7 @@ func (e *CustomProcessEngine) authoritativeCallbackVariables(
 	businessType := strings.ToLower(strings.TrimSpace(instance.BusinessType))
 	workItemID := 0
 	switch businessType {
-	case "ticket", "generic":
+	case workitemidentity.RecordClassGeneric:
 		if _, err := e.client.Ticket.Query().Where(
 			ticket.ID(instance.BusinessID), ticket.TenantID(instance.TenantID),
 		).Only(ctx); err != nil {
@@ -370,9 +487,9 @@ func (e *CustomProcessEngine) authoritativeCallbackVariables(
 		}
 		workItemID = instance.BusinessID
 		variables["ticket_id"] = workItemID
-	case "change", "change_request":
+	case workitemidentity.RecordClassChangeRequest:
 		entity, err := e.client.Change.Query().Where(
-			change.WorkItemID(instance.BusinessID), change.TenantID(instance.TenantID),
+			change.WorkItemID(instance.BusinessID), change.HasWorkItemWith(ticket.TenantID(instance.TenantID), ticket.DeletedAtIsNil()),
 		).Only(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("权威变更目标不存在")
@@ -382,7 +499,7 @@ func (e *CustomProcessEngine) authoritativeCallbackVariables(
 		variables["ticket_id"] = workItemID
 	case "incident":
 		entity, err := e.client.Incident.Query().Where(
-			incident.WorkItemID(instance.BusinessID), incident.TenantID(instance.TenantID),
+			incident.WorkItemID(instance.BusinessID), incident.HasWorkItemWith(ticket.TenantID(instance.TenantID), ticket.DeletedAtIsNil()),
 		).Only(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("权威事件目标不存在")
@@ -392,7 +509,7 @@ func (e *CustomProcessEngine) authoritativeCallbackVariables(
 		variables["ticket_id"] = workItemID
 	case "problem":
 		entity, err := e.client.Problem.Query().Where(
-			problem.WorkItemID(instance.BusinessID), problem.TenantID(instance.TenantID),
+			problem.WorkItemID(instance.BusinessID), problem.HasWorkItemWith(ticket.TenantID(instance.TenantID), ticket.DeletedAtIsNil()),
 		).Only(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("权威问题目标不存在")
@@ -400,9 +517,9 @@ func (e *CustomProcessEngine) authoritativeCallbackVariables(
 		workItemID = instance.BusinessID
 		variables["problem_id"] = entity.ID
 		variables["ticket_id"] = workItemID
-	case "service_request", "service_request_item":
+	case workitemidentity.RecordClassServiceRequestItem:
 		entity, err := e.client.ServiceRequest.Query().Where(
-			servicerequest.TicketID(instance.BusinessID), servicerequest.TenantID(instance.TenantID),
+			servicerequest.TicketID(instance.BusinessID), servicerequest.HasWorkItemWith(ticket.TenantID(instance.TenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item")),
 		).Only(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("权威服务请求目标不存在")
@@ -418,7 +535,9 @@ func (e *CustomProcessEngine) authoritativeCallbackVariables(
 		}
 		variables["release_id"] = instance.BusinessID
 	default:
-		return nil, fmt.Errorf("不支持的权威业务类型")
+		// Wave-1 旧词表（ticket/change/service_request）与尚未定义交付映射的
+		// catalog_task 都在此失败关闭，绝不猜测或翻译成别的专业类。
+		return nil, fmt.Errorf("不支持的权威业务类型 %q", businessType)
 	}
 
 	switch handler.GetTaskType() {

@@ -10,7 +10,6 @@ export interface GenerateBPMNRequest {
   includeSla: boolean;
   includeNotifications: boolean;
   includeApprovals: boolean;
-  tenantId?: number;
 }
 
 export interface GenerateBPMNResponse {
@@ -65,13 +64,9 @@ export class BPMNAIApi {
     request: GenerateBPMNRequest,
     options?: { autoDeploy?: boolean }
   ): Promise<GenerateBPMNResponse> {
-    const tenantId = request.tenantId ?? httpClient.getTenantId() ?? 1;
     const endpoint = `${this.baseUrl}/generate${options?.autoDeploy ? '?auto_deploy=true' : ''}`;
 
-    return httpClient.post<GenerateBPMNResponse>(endpoint, {
-      ...request,
-      tenantId,
-    });
+    return httpClient.post<GenerateBPMNResponse>(endpoint, request);
   }
 
   static async previewBPMN(request: PreviewBPMNRequest): Promise<PreviewBPMNResponse> {

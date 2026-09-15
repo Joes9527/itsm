@@ -1,13 +1,18 @@
 'use client';
 
 import React from 'react';
+import { useTheme } from '@/lib/design-system/theme';
+import { theme } from 'antd';
 import { Column } from '@ant-design/charts';
 import { LineChart } from 'lucide-react';
 import type { ResponseTimeDistribution } from '../types/dashboard.types';
 import { DashboardChartCard } from './DashboardChartCard';
 
 const ResponseTimeChart: React.FC<{ data: ResponseTimeDistribution[] }> = React.memo(({ data }) => {
+  const { isDark } = useTheme();
+  const { token } = theme.useToken();
   const config = {
+    theme: isDark ? 'classicDark' : 'classic',
     data: data.map(item => ({
       range: item.timeRange,
       count: item.count,
@@ -52,7 +57,7 @@ const ResponseTimeChart: React.FC<{ data: ResponseTimeDistribution[] }> = React.
       iconColor="#8b5cf6"
       extra={
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 12, color: '#8c8c8c' }}>平均响应</div>
+          <div style={{ fontSize: 12, color: token.colorTextSecondary }}>平均响应</div>
           <div style={{ fontSize: 16, fontWeight: 600, color: '#722ed1' }}>
             {avgTime.toFixed(1)}小时
           </div>

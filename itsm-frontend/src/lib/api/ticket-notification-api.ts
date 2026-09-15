@@ -41,9 +41,18 @@ export interface ListUserNotificationsResponse {
 
 export interface SendTicketNotificationRequest {
   userIds: number[];
-  type: string;
-  channel: 'email' | 'in_app' | 'sms';
+  eventType: string;
   content: string;
+}
+
+export interface SendTicketNotificationResult {
+  effect: 'queued' | 'applied' | 'idempotent';
+  recipientCount: number;
+  appliedCount: number;
+  idempotentCount: number;
+  deliveryCount: number;
+  queuedCount: number;
+  externalIntentCount: number;
 }
 
 export interface NotificationPreferenceItem {
@@ -56,7 +65,7 @@ export interface NotificationPreferenceItem {
 export interface NotificationPreferencesResponse {
   preferences: NotificationPreferenceItem[];
   eventTypes: Array<{
-    type: string;
+    code: string;
     name: string;
     description: string;
   }>;
@@ -78,8 +87,8 @@ export class TicketNotificationApi {
   static async sendTicketNotification(
     ticketId: number,
     data: SendTicketNotificationRequest
-  ): Promise<void> {
-    return httpClient.post(`/api/v1/tickets/${ticketId}/notifications`, data);
+  ): Promise<SendTicketNotificationResult> {
+    return httpClient.post<SendTicketNotificationResult>(`/api/v1/tickets/${ticketId}/notifications`, data);
   }
 
   // 获取用户通知列表

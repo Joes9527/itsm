@@ -38,7 +38,6 @@ export const DISABLED_API_CONTRACTS: readonly DisabledApiContract[] = [
   { capability: 'aiKnowledgeSearch', file: 'ai-api.ts', path: /\/ai\/knowledge\/search$/, reason: 'AI knowledge search backend route is not registered' },
   { capability: 'advancedBatchOperations', file: 'batch-operations-api.ts', reason: 'Advanced batch orchestration is roadmap-only' },
   { capability: 'changeClassification', file: 'change-classification-api.ts', reason: 'Change classification/rule APIs are not registered' },
-  { capability: 'changeClassification', file: 'change-api.ts', path: /\/changes\/templates\//, reason: 'Template instantiation route is not registered' },
   { capability: 'collaborationAdvanced', file: 'collaboration-api.ts', reason: 'Advanced comments, mentions and presence routes are not registered' },
   { capability: 'knowledgeAdvancedActions', file: 'knowledge-base-api.ts', reason: 'Advanced knowledge lifecycle actions are not registered' },
   { capability: 'notificationTemplateManagement', file: 'notification-preference-api.ts', reason: 'Preference reset/template application routes are not registered' },
@@ -49,5 +48,4 @@ export const DISABLED_API_CONTRACTS: readonly DisabledApiContract[] = [
   { capability: 'genericTemplateMarketplace', file: 'template-api.ts', reason: 'Generic template marketplace is not registered; ticket templates use a separate supported API' },
   { capability: 'advancedTicketRelations', file: 'ticket-relations-api.ts', reason: 'Advanced relation analytics and batch routes are not registered' },
   { capability: 'rootCauseWorkflowActions', file: 'ticket-root-cause-api.ts', reason: 'Root-cause confirm/resolve routes are not registered' },
-  { capability: 'workflowAnalytics', file: 'workflow-api.ts', path: /\/(workflow-templates|stats|node-stats|bottlenecks)(?:\/|$)/, reason: 'Workflow template and analytics routes are not registered' },
 ] as const;

@@ -445,7 +445,7 @@ const CIRelationshipManager: React.FC<CIRelationshipManagerProps> = ({
                   </Tooltip> }))} />
           </Form.Item>
 
-          <Row gutter={16}>
+          <Row gutter={14}>
             <Col span={12}>
               <Form.Item name='strength' label='关系强度'>
                 <Select placeholder='选择强度' style={{ width: '100%' }} options={[{ value: "critical", label: "关键" }, { value: "high", label: "高" }, { value: "medium", label: "中" }, { value: "low", label: "低" }]} />

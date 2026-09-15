@@ -17,6 +17,7 @@
  */
 
 import { ticketService } from '../ticket-service-v2';
+import { ticketService as legacyTicketService } from '../ticket-service';
 
 jest.mock('@/lib/security', () => ({
   security: {
@@ -82,32 +83,14 @@ describe('ticketService', () => {
       expect(init.method).toBe('GET');
     });
 
-    it('createTicket calls POST /api/v1/tickets with the body', async () => {
-      mockSuccess({ id: 1, ticketNumber: 'TKT-001' });
-      await ticketService.createTicket({
-        title: 'New',
-        priority: 'medium' as never,
-        requesterId: 1,
-      });
-
-      const [url, init] = fetchMock.mock.calls[0];
-      expect(url).toContain('/api/v1/tickets');
-      // basePath should not have a trailing slash, so URL must end with /tickets (no // )
-      expect(url.endsWith('/api/v1/tickets')).toBe(true);
-      expect(init.method).toBe('POST');
-      const body = JSON.parse(init.body as string);
-      expect(body.title).toBe('New');
-      expect(body.priority).toBe('medium');
-    });
-
     it('updateTicket calls PUT /api/v1/tickets/:id with the body', async () => {
       mockSuccess({ id: 1 });
-      await ticketService.updateTicket(1, { title: 'Updated' });
+      await ticketService.updateTicket(1, { title: 'Updated', version: 4, operationId: 'edit-test' });
 
       const [url, init] = fetchMock.mock.calls[0];
       expect(url).toContain('/api/v1/tickets/1');
       expect(init.method).toBe('PUT');
-      expect(JSON.parse(init.body as string).title).toBe('Updated');
+      expect(JSON.parse(init.body as string)).toEqual({ title: 'Updated', version: 4, operationId: 'edit-test' });
     });
 
     it('deleteTicket calls DELETE /api/v1/tickets/:id', async () => {
@@ -196,27 +179,7 @@ describe('ticketService', () => {
     });
   });
 
-  describe('approval & flow actions', () => {
-    it('approve calls POST /api/v1/tickets/workflow/approve with ticketId + action', async () => {
-      mockSuccess({ success: true, message: 'approved' });
-      await ticketService.approve(1, { action: 'approve', comment: 'lgtm' });
-
-      const [url, init] = fetchMock.mock.calls[0];
-      expect(url).toContain('/api/v1/tickets/workflow/approve');
-      const body = JSON.parse(init.body as string);
-      expect(body.ticketId).toBe(1);
-      expect(body.action).toBe('approve');
-      expect(body.comment).toBe('lgtm');
-    });
-
-    it('reject calls POST /api/v1/tickets/workflow/reject', async () => {
-      mockSuccess({ message: 'rejected' });
-      await ticketService.reject(1, 'invalid');
-
-      const [url] = fetchMock.mock.calls[0];
-      expect(url).toContain('/api/v1/tickets/workflow/reject');
-    });
-
+  describe('flow actions', () => {
     it('accept calls POST /api/v1/tickets/workflow/accept', async () => {
       mockSuccess({ message: 'accepted' });
       await ticketService.accept(1);
@@ -306,6 +269,20 @@ describe('ticketService', () => {
     });
   });
 
+  describe.each([['v2', ticketService], ['legacy', legacyTicketService]])('%s edit version', (_name, client) => {
+    it.each([undefined, 0, -1, 1.5, NaN])('rejects version %s without sending a request', async version => {
+      await expect(client.updateTicket(1, { title: 'Updated', version } as any)).rejects.toThrow('工单版本');
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+    it('sends the observed version without fetching a newer one', async () => {
+      mockSuccess({ id: 1 });
+      await client.updateTicket(1, { title: 'Updated', version: 4, operationId: 'edit-test' });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0][1].method).toBe('PUT');
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ title: 'Updated', version: 4, operationId: 'edit-test' });
+    });
+  });
+
   describe('error propagation', () => {
     it('propagates backend error message on non-zero code', async () => {
       fetchMock.mockResolvedValueOnce(
@@ -313,11 +290,7 @@ describe('ticketService', () => {
       );
 
       await expect(
-        ticketService.createTicket({
-          title: '',
-          priority: 'medium' as never,
-          requesterId: 1,
-        })
+        ticketService.updateTicket(1, { title: '', version: 4, operationId: 'edit-test' })
       ).rejects.toThrow('标题不能为空');
     });
 

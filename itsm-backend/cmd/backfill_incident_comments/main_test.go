@@ -15,8 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// testDSN 为每个测试返回唯一的 SQLite 内存数据库 DSN，避免测试间数据库残留
-// （与 cmd/backfill_incident_work_item/main_test.go 同一做法）。
+// testDSN 为每个测试返回唯一的 SQLite 内存数据库 DSN，避免测试间数据库残留。
 var testDBCounter int64
 
 func testDSN() string {
@@ -38,8 +37,7 @@ func setupTenantAndUser(t *testing.T, client *ent.Client, ctx context.Context, c
 	return tenant, user
 }
 
-// setupIncidentWithWorkItem 创建一条已经跑过 backfill_incident_work_item 的 Incident
-// （即 work_item_id 非空），是本工具大多数测试用例的正常前置状态。
+// setupIncidentWithWorkItem 创建一条满足 WorkItem 创建不变量的 Incident。
 func setupIncidentWithWorkItem(t *testing.T, client *ent.Client, ctx context.Context, tenantID, userID int, code string) *ent.Incident {
 	t.Helper()
 	wi, err := client.Ticket.Create().
@@ -48,8 +46,7 @@ func setupIncidentWithWorkItem(t *testing.T, client *ent.Client, ctx context.Con
 		Save(ctx)
 	require.NoError(t, err)
 	inc, err := client.Incident.Create().
-		SetTitle("INC-" + code).SetIncidentNumber("INC-" + code).
-		SetReporterID(userID).SetTenantID(tenantID).SetWorkItemID(wi.ID).
+		SetWorkItemID(wi.ID).
 		Save(ctx)
 	require.NoError(t, err)
 	return inc
@@ -57,6 +54,8 @@ func setupIncidentWithWorkItem(t *testing.T, client *ent.Client, ctx context.Con
 
 func createCommentEvent(t *testing.T, client *ent.Client, ctx context.Context, inc *ent.Incident, userID int, content string, createdAt time.Time) *ent.IncidentEvent {
 	t.Helper()
+	workItem, err := client.Ticket.Get(ctx, inc.WorkItemID)
+	require.NoError(t, err)
 	event, err := client.IncidentEvent.Create().
 		SetIncidentID(inc.ID).
 		SetEventType("comment").
@@ -64,7 +63,7 @@ func createCommentEvent(t *testing.T, client *ent.Client, ctx context.Context, i
 		SetDescription(content).
 		SetUserID(userID).
 		SetSource("user").
-		SetTenantID(inc.TenantID).
+		SetTenantID(workItem.TenantID).
 		SetOccurredAt(createdAt).
 		SetCreatedAt(createdAt).
 		Save(ctx)
@@ -92,25 +91,6 @@ func TestResolvePlan_HappyPath(t *testing.T) {
 	require.True(t, createdAt.Equal(plan.createdAt))
 }
 
-func TestResolvePlan_SkipsWhenWorkItemIDMissing(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", testDSN())
-	defer client.Close()
-	ctx := context.Background()
-
-	tenant, user := setupTenantAndUser(t, client, ctx, "nowi")
-	inc, err := client.Incident.Create().
-		SetTitle("未回填WorkItem的事件").SetIncidentNumber("INC-NOWI-1").
-		SetReporterID(user.ID).SetTenantID(tenant.ID).
-		Save(ctx)
-	require.NoError(t, err)
-	event := createCommentEvent(t, client, ctx, inc, user.ID, "评论内容", time.Now())
-
-	_, ok, reason, err := resolvePlan(ctx, client, event)
-	require.NoError(t, err)
-	require.False(t, ok)
-	require.NotEmpty(t, reason)
-}
-
 func TestResolvePlan_SkipsWhenIncidentSoftDeleted(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
@@ -119,7 +99,7 @@ func TestResolvePlan_SkipsWhenIncidentSoftDeleted(t *testing.T) {
 	tenant, user := setupTenantAndUser(t, client, ctx, "del")
 	inc := setupIncidentWithWorkItem(t, client, ctx, tenant.ID, user.ID, "del")
 	event := createCommentEvent(t, client, ctx, inc, user.ID, "评论内容", time.Now())
-	_, err := client.Incident.UpdateOneID(inc.ID).SetDeletedAt(time.Now()).Save(ctx)
+	_, err := client.Ticket.UpdateOneID(inc.WorkItemID).SetDeletedAt(time.Now()).Save(ctx)
 	require.NoError(t, err)
 
 	_, ok, reason, err := resolvePlan(ctx, client, event)
@@ -224,32 +204,8 @@ func TestBackfillOne_CreatesTicketComment(t *testing.T) {
 	require.True(t, createdAt.Equal(rows[0].CreatedAt))
 }
 
-func TestBackfillOne_SkippedEventProducesNoRow(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", testDSN())
-	defer client.Close()
-	ctx := context.Background()
-
-	tenant, user := setupTenantAndUser(t, client, ctx, "skip")
-	inc, err := client.Incident.Create().
-		SetTitle("未回填WorkItem").SetIncidentNumber("INC-SKIP-1").
-		SetReporterID(user.ID).SetTenantID(tenant.ID).
-		Save(ctx)
-	require.NoError(t, err)
-	event := createCommentEvent(t, client, ctx, inc, user.ID, "评论内容", time.Now())
-
-	result, reason, err := backfillOne(ctx, client, event)
-	require.NoError(t, err)
-	require.Equal(t, outcomeSkipped, result)
-	require.NotEmpty(t, reason)
-
-	count, err := client.TicketComment.Query().Count(ctx)
-	require.NoError(t, err)
-	require.Equal(t, 0, count)
-}
-
-// TestBackfillOne_Idempotent 验证重复运行不产生第二条 ticket_comments：跟
-// backfill_incident_work_item 的并发写入冲突（返回 error）不同，这里的"已经回填过"
-// 是预期中的正常重跑场景，应该静默 skip，不是 error。
+// TestBackfillOne_Idempotent 验证重复运行不产生第二条 ticket_comments；这里的
+// "已经回填过"是预期中的正常重跑场景，应该静默 skip，不是 error。
 func TestBackfillOne_Idempotent(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
@@ -292,37 +248,4 @@ func TestPreviewBackfill_CountsWithoutWriting(t *testing.T) {
 	count, err := client.TicketComment.Query().Count(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 0, count, "dry-run 预览不能实际写入")
-}
-
-// TestPreviewBackfill_BreaksDownDistinctSkipReasons 验证不同跳过原因在 skipReasons
-// 里各自计数，而不是像旧版 wouldSkip 那样被折叠成一个笼统的总数——运维需要区分
-// "incident 尚未回填 work_item_id"（评论一旦前端切换就永久不可见，必须先跑
-// cmd/backfill_incident_work_item）和其他跳过原因，折叠后就看不出该不该优先处理。
-func TestPreviewBackfill_BreaksDownDistinctSkipReasons(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", testDSN())
-	defer client.Close()
-	ctx := context.Background()
-
-	tenant, user := setupTenantAndUser(t, client, ctx, "breakdown")
-	incWithWorkItem := setupIncidentWithWorkItem(t, client, ctx, tenant.ID, user.ID, "breakdown-wi")
-	incNoWorkItem, err := client.Incident.Create().
-		SetTitle("未回填WorkItem").SetIncidentNumber("INC-BREAKDOWN-1").
-		SetReporterID(user.ID).SetTenantID(tenant.ID).
-		Save(ctx)
-	require.NoError(t, err)
-
-	missingWorkItem := createCommentEvent(t, client, ctx, incNoWorkItem, user.ID, "评论内容", time.Now())
-	missingWorkItem2 := createCommentEvent(t, client, ctx, incNoWorkItem, user.ID, "另一条评论", time.Now())
-	emptyContent := createCommentEvent(t, client, ctx, incWithWorkItem, user.ID, "", time.Now())
-
-	wouldCreate, skipReasons, failed, err := previewBackfill(
-		ctx, client,
-		[]*ent.IncidentEvent{missingWorkItem, missingWorkItem2, emptyContent},
-	)
-	require.NoError(t, err)
-	require.Equal(t, 0, wouldCreate)
-	require.Equal(t, 0, failed)
-	require.Equal(t, 2, len(skipReasons), "两种不同的跳过原因应该产生两个独立的 map 条目")
-	require.Equal(t, 2, skipReasons["incident 尚未回填 work_item_id（先跑 cmd/backfill_incident_work_item）"])
-	require.Equal(t, 1, skipReasons["评论事件 description 为空"])
 }

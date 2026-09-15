@@ -1,6 +1,22 @@
 'use client';
 
 import React, { useEffect } from 'react';
+import tokens from '@/design-system/theme-tokens.json';
+import { expandThemeTokens } from '@/design-system/expand-theme-tokens.mjs';
+import {
+  applyThemePreference,
+  getThemeBootstrapScript,
+} from '@/lib/design-system/theme-preference';
+
+// Root failure cannot assume the layout stylesheet or providers survived.
+const failureThemeCss = [false, true]
+  .map(isDark => {
+    const declarations = Object.entries(expandThemeTokens(tokens, isDark))
+      .map(([name, value]) => `${name}:${value}`)
+      .join(';');
+    return `${isDark ? ':root.dark' : ':root'}{${declarations}}`;
+  })
+  .join('');
 
 /**
  * 根级错误边界 (global-error.tsx)
@@ -16,35 +32,40 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
+    // React-inserted scripts do not run when a client error replaces the root.
+    applyThemePreference();
     console.error('[GlobalError]', error);
   }, [error]);
 
   const containerStyle: React.CSSProperties = {
     minHeight: '100vh',
+    boxSizing: 'border-box',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: 'linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%)',
+    background: 'var(--color-bg-secondary)',
     padding: '24px',
-    fontFamily:
-      "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    fontFamily: tokens.typography.fontFamily,
+    fontSize: tokens.typography.fontSize.base,
+    color: 'var(--color-text-primary)',
   };
 
   const cardStyle: React.CSSProperties = {
     maxWidth: '480px',
     width: '100%',
-    background: '#ffffff',
-    borderRadius: '12px',
-    padding: '40px',
+    background: 'var(--color-bg-primary)',
+    borderRadius: tokens.sizes.cardRadius,
+    padding: tokens.sizes.cardPadding,
     textAlign: 'center',
-    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+    border: '1px solid var(--color-border)',
+    boxSizing: 'border-box',
   };
 
   const iconStyle: React.CSSProperties = {
     width: '64px',
     height: '64px',
     margin: '0 auto 24px',
-    background: '#fff2f0',
+    background: 'var(--color-bg-tertiary)',
     borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',
@@ -53,15 +74,15 @@ export default function GlobalError({
   };
 
   const titleStyle: React.CSSProperties = {
-    fontSize: 'var(--font-size-3xl)',
-    fontWeight: 700,
-    color: '#1f2937',
+    fontSize: tokens.typography.pageTitle,
+    fontWeight: tokens.typography.strong,
+    color: 'var(--color-text-primary)',
     marginBottom: '12px',
   };
 
   const subtitleStyle: React.CSSProperties = {
     fontSize: 'var(--font-size-base)',
-    color: '#6b7280',
+    color: 'var(--color-text-secondary)',
     lineHeight: 'var(--line-height-relaxed)',
     marginBottom: '32px',
   };
@@ -77,12 +98,15 @@ export default function GlobalError({
     display: 'inline-flex',
     alignItems: 'center',
     gap: '8px',
-    background: '#F06820',
+    background: tokens.brand.palette['500'],
     color: '#ffffff',
     border: 'none',
-    borderRadius: '8px',
-    padding: '10px 24px',
+    borderRadius: tokens.sizes.buttonRadius,
+    height: tokens.sizes.button,
+    padding: '0 16px',
+    boxSizing: 'border-box',
     fontSize: 'var(--font-size-sm)',
+    fontFamily: 'inherit',
     fontWeight: 500,
     cursor: 'pointer',
     transition: 'background 0.2s',
@@ -92,12 +116,15 @@ export default function GlobalError({
     display: 'inline-flex',
     alignItems: 'center',
     gap: '8px',
-    background: '#ffffff',
-    color: '#374151',
-    border: '1px solid #d1d5db',
-    borderRadius: '8px',
-    padding: '10px 24px',
+    background: 'var(--color-bg-primary)',
+    color: 'var(--color-text-primary)',
+    border: '1px solid var(--color-border)',
+    borderRadius: tokens.sizes.buttonRadius,
+    height: tokens.sizes.button,
+    padding: '0 16px',
+    boxSizing: 'border-box',
     fontSize: 'var(--font-size-sm)',
+    fontFamily: 'inherit',
     fontWeight: 500,
     cursor: 'pointer',
     transition: 'background 0.2s',
@@ -106,12 +133,16 @@ export default function GlobalError({
   const errorIdStyle: React.CSSProperties = {
     marginTop: '24px',
     fontSize: 'var(--font-size-xs)',
-    color: '#9ca3af',
+    color: 'var(--color-text-secondary)',
   };
 
   return (
-    <html>
-      <body>
+    <html lang='zh-CN' suppressHydrationWarning>
+      <head>
+        <style dangerouslySetInnerHTML={{ __html: failureThemeCss }} />
+        <script dangerouslySetInnerHTML={{ __html: getThemeBootstrapScript() }} />
+      </head>
+      <body style={{ margin: 0 }}>
         <div style={containerStyle}>
           <div style={cardStyle}>
             <div style={iconStyle}>⚠️</div>
@@ -121,7 +152,7 @@ export default function GlobalError({
             </p>
             <div style={buttonContainerStyle}>
               <button style={primaryButtonStyle} onClick={() => reset()}>
-                🔄 重试
+                ↻ 重试
               </button>
               <button
                 style={secondaryButtonStyle}
@@ -129,12 +160,10 @@ export default function GlobalError({
                   window.location.href = '/dashboard';
                 }}
               >
-                🏠 返回仪表盘
+                ⌂ 返回仪表盘
               </button>
             </div>
-            {error?.digest && (
-              <div style={errorIdStyle}>错误 ID: {error.digest}</div>
-            )}
+            {error?.digest && <div style={errorIdStyle}>错误 ID: {error.digest}</div>}
           </div>
         </div>
       </body>

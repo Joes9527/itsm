@@ -2,13 +2,19 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/common"
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/service"
@@ -27,13 +33,78 @@ func setupTicketNotificationController(t *testing.T) (*gin.Engine, *ent.Client, 
 	tenantID, userID := seedTenantUser(t, client)
 	core, logs := observer.New(zap.DebugLevel)
 	logger := zap.New(core).Sugar()
-	controller := NewTicketNotificationController(service.NewTicketNotificationService(client, logger), logger)
+	policy := executionfixture.Standard()
+	notificationService := service.NewTicketNotificationService(client, logger, policy)
+	email := service.NewEmailService(service.EmailConfig{DeliveryTransport: "smtp", Host: "smtp.example.invalid", Port: 2525, Username: "sender", From: "sender@example.invalid"}, logger)
+	email.SetDeliveryTargetDependencies(nil, policy)
+	notificationService.SetEmailService(email)
+	notificationService.SetNotificationPreferenceService(service.NewNotificationPreferenceService(client, logger))
+	controller := NewTicketNotificationController(notificationService, logger)
 
 	router := gin.New()
-	router.Use(gin.Recovery(), withTestAuth(tenantID, userID))
+	router.Use(gin.Recovery(), withTestAuth(tenantID, userID), func(c *gin.Context) {
+		if c.GetInt("tenant_id") > 0 {
+			c.Request = c.Request.WithContext(tenantctx.WithTenantID(c.Request.Context(), c.GetInt("tenant_id")))
+		}
+		c.Next()
+	})
+	router.POST("/api/v1/tickets/:id/notifications", controller.SendTicketNotification)
 	router.PUT("/api/v1/ticket-notifications/:id/read", controller.MarkNotificationRead)
 	router.PUT("/api/v1/ticket-notifications/read-all", controller.MarkAllNotificationsRead)
 	return router, client, tenantID, userID, logs
+}
+
+func TestTicketNotificationController_SendRejectsLegacyFields(t *testing.T) {
+	router, client, tenantID, userID, _ := setupTicketNotificationController(t)
+	ticketEntity, err := client.Ticket.Create().
+		SetTicketNumber("TKT-NOTIFICATION-SEND-" + uniqueTestID()).
+		SetTitle("Notification send contract").SetDescription("d").SetStatus("open").SetPriority("medium").
+		SetRequesterID(userID).SetTenantID(tenantID).Save(context.Background())
+	require.NoError(t, err)
+
+	response := doReq(t, router, http.MethodPost, "/api/v1/tickets/"+strconv.Itoa(ticketEntity.ID)+"/notifications", map[string]interface{}{
+		"userIds": []int{userID}, "eventType": "ticket_updated", "content": "x", "channel": "in_app",
+	}, false)
+	require.Equal(t, common.ParamErrorCode, response.Code, "body=%s", mustString(response))
+}
+
+func TestTicketNotificationController_SendUsesStrictEventTypeContract(t *testing.T) {
+	router, client, tenantID, userID, _ := setupTicketNotificationController(t)
+	ticketEntity, err := client.Ticket.Create().
+		SetTicketNumber("TKT-NOTIFICATION-STRICT-" + uniqueTestID()).
+		SetTitle("Notification send contract").SetDescription("d").SetStatus("open").SetPriority("medium").
+		SetRequesterID(userID).SetTenantID(tenantID).Save(context.Background())
+	require.NoError(t, err)
+	path := "/api/v1/tickets/" + strconv.Itoa(ticketEntity.ID) + "/notifications"
+	_, err = client.NotificationPreference.Create().
+		SetUserID(userID).SetTenantID(tenantID).SetEventType("ticket_updated").
+		SetEmailEnabled(false).SetInAppEnabled(true).SetSmsEnabled(false).SetPushEnabled(false).
+		Save(context.Background())
+	require.NoError(t, err)
+
+	for _, payload := range []map[string]interface{}{
+		{"userIds": []int{userID}, "content": "x"},
+		{"userIds": []int{userID}, "eventType": "unknown", "content": "x"},
+		{"userIds": []int{userID}, "eventType": "ticket_updated", "content": "x", "type": "assigned"},
+		{"userIds": []int{userID}, "eventType": "ticket_updated", "content": "x", "channel": "in_app"},
+	} {
+		response := doReq(t, router, http.MethodPost, path, payload, false)
+		require.Equal(t, common.ParamErrorCode, response.Code, "body=%s", mustString(response))
+	}
+
+	response := doReq(t, router, http.MethodPost, path, map[string]interface{}{
+		"userIds": []int{userID}, "eventType": "ticket_updated", "content": "x",
+	}, false)
+	require.Equal(t, common.SuccessCode, response.Code, "body=%s", mustString(response))
+	summary, ok := response.Data.(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, "applied", summary["effect"])
+	require.EqualValues(t, 1, summary["recipientCount"])
+	require.EqualValues(t, 1, summary["appliedCount"])
+	require.EqualValues(t, 0, summary["idempotentCount"])
+	require.EqualValues(t, 1, summary["deliveryCount"])
+	_, leaksBlockCode := summary["blockCode"]
+	require.False(t, leaksBlockCode)
 }
 
 func createTicketNotificationForController(t *testing.T, client *ent.Client, tenantID, userID int, status string) *ent.TicketNotification {
@@ -120,4 +191,37 @@ func TestTicketNotificationController_MarkReadSanitizesStorageFailure(t *testing
 	require.Equal(t, "ticket_notification_read_storage", fields["error_class"])
 	require.NotContains(t, fields, "error")
 	require.NotContains(t, fmt.Sprint(entries), "sql: database is closed")
+}
+
+func TestTicketNotificationController_QueuedReturnsAccepted(t *testing.T) {
+	router, client, tenantID, userID, _ := setupTicketNotificationController(t)
+	ctx := context.Background()
+	item := client.Ticket.Create().SetTicketNumber("QUEUED-" + uniqueTestID()).SetTitle("Queue").SetDescription("d").SetStatus("open").SetPriority("medium").SetRequesterID(userID).SetTenantID(tenantID).SaveX(ctx)
+	client.NotificationPreference.Create().SetUserID(userID).SetTenantID(tenantID).SetEventType("ticket_updated").SetEmailEnabled(true).SetInAppEnabled(false).SetSmsEnabled(false).SetPushEnabled(false).SaveX(ctx)
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/tickets/%d/notifications", item.ID), strings.NewReader(fmt.Sprintf(`{"userIds":[%d],"eventType":"ticket_updated","content":"queued"}`, userID)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusAccepted, rec.Code, rec.Body.String())
+	var body struct {
+		Code int
+		Data struct {
+			Effect                    string
+			QueuedCount, AppliedCount int
+		}
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, common.SuccessCode, body.Code)
+	require.Equal(t, "queued", body.Data.Effect)
+	require.Equal(t, 1, body.Data.QueuedCount)
+	require.Zero(t, body.Data.AppliedCount)
+	row := client.TicketNotification.Query().OnlyX(ctx)
+	require.Equal(t, "pending", row.Status)
+	require.NotNil(t, row.TargetProtocolVersion)
+	require.Equal(t, 2, *row.TargetProtocolVersion)
+	require.NotNil(t, row.TargetTransport)
+	require.Equal(t, "smtp", *row.TargetTransport)
+	require.NotNil(t, row.TargetDestinationDigest)
+	require.Len(t, *row.TargetDestinationDigest, 64)
+	require.True(t, row.SentAt.IsZero())
 }

@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"testing"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	_ "github.com/mattn/go-sqlite3"
 
 	"itsm-backend/common"
@@ -104,6 +106,12 @@ func setupReleaseController(t *testing.T) (*gin.Engine, *ent.Client, int, int) {
 	tenantID, userID := seedTenantUser(t, client)
 
 	svc := service.NewReleaseService(client, logger)
+	_, err := service.NewBPMNTemplateService(client).LoadAndDeployTemplates(context.Background(), tenantID)
+	require.NoError(t, err)
+	require.NoError(t, service.NewProcessBindingService(client).InitDefaultBindings(context.Background(), tenantID))
+	engine := service.NewCustomProcessEngine(client, logger, executionfixture.Standard())
+	svc.SetProcessEngine(engine)
+	svc.SetProcessTriggerService(service.NewProcessTriggerService(client, engine))
 	ctrl := NewReleaseController(logger, svc)
 
 	r := gin.New()
