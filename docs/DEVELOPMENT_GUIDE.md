@@ -105,7 +105,8 @@ npm run theme:check      # 检查已提交的生成 CSS 是否与 token 源一�
 ```bash
 # 在 itsm-frontend 中执行；API 代理目标必须在构建时提供。
 npm ci
-ITSM_BACKEND_URL=http://127.0.0.1:8080 NEXT_PUBLIC_API_URL='' npm run build
+ITSM_BACKEND_URL=http://127.0.0.1:8080 NEXT_PUBLIC_API_URL='' \
+  NEXT_PUBLIC_WS_URL=ws://192.168.31.66:3010/api/v1/ws/notifications npm run build
 NODE_ENV=production HOSTNAME=127.0.0.1 PORT=3301 npm start
 ```
 
@@ -138,6 +139,7 @@ authenticated reads succeed, refresh renews the session, CSRF-protected writes
 retain their token check, and logout clears the session. Unit tests do not prove
 that target deployment or browser acceptance has occurred.
 
+WSL 通知连接同样走 3010 → 8080。`NEXT_PUBLIC_WS_URL` 必须在构建时指定为实际浏览器入口，不能只在运行时设置，否则旧默认可能连接 localhost:8090。上例是当前 WSL LAN HTTP 地址；其它环境按真实入口使用 ws/wss。后端 `WEBSOCKET_ALLOWED_ORIGINS` 明确列出该浏览器来源（当前为 `http://192.168.31.66:3010`），不使用通配。发布后分别确认通知列表 HTTP 200 与浏览器 WebSocket 101，避免只验证普通 API。
 
 工作流分组使用 `/workflow`，该页面跳转 `/admin/workflows`。三个默认子入口为工作流管理、流程设计器和流程实例。审批链规则使用已有页面 `/admin/approval-chains`，旧 `/workflow/approval-chains` 跳转到该页面；`workflow` 菜单修复会同步迁移旧菜单地址，保留已有分组、权限和可见性配置。动态菜单仍由后端按租户、角色和权限过滤。升级已有租户的旧菜单时，使用定向命令，而非全量初始化：
 
@@ -175,6 +177,17 @@ ITSM_ALLOW_DESTRUCTIVE_FRESH=true ITSM_FRESH_HOST="$DB_HOST" \
   go run -tags migrate ./cmd/migrate -fresh
 go run -tags create_user main.go
 ```
+
+WSL 嵌套 worktree 的发布构建应显式绑定 Git 来源：Go 的自动 VCS 探测可能取到父仓库，导致嵌入的提交与当前 worktree 不一致。先提交并验证工作树干净，在 `itsm-backend` 目录执行：
+
+```bash
+task_git_dir="$(git rev-parse --absolute-git-dir)"
+task_source_root="$(git rev-parse --show-toplevel)"
+GIT_DIR="$task_git_dir" GIT_WORK_TREE="$task_source_root" go build -buildvcs=true -o /tmp/itsm-api-candidate .
+go version -m /tmp/itsm-api-candidate
+```
+
+发布前核对 `vcs.revision` 等于受审提交且 `vcs.modified=false`，再记录二进制 SHA256、私有启动描述和实际运行 PID。不能仅凭二进制文件名或启动描述中的版本标签认定构建来源；旧制品内嵌父仓库信息也不能单独证明实际编译的是父仓库代码。前端另行记录源码提交、Build ID 和发布目录。
 
 ### BPMN instance authorization
 
