@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within, act } from '@testing-library/react';
 import userEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
 import TicketDetail from '../TicketDetail';
 
@@ -104,6 +104,7 @@ jest.mock('@/lib/api/cmdb-api', () => ({
 jest.mock('../KBRecommendCard', () => ({ KBRecommendCard: () => null }));
 jest.mock('@/components/common/UserSelect', () => ({ UserSelect: () => null }));
 
+import { useErrorHandler } from '@/lib/hooks/useErrorHandler';
 import { TicketApi } from '@/lib/api/ticket-api';
 import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 import { TicketRelationsApi } from '@/lib/api/ticket-relations-api';
@@ -278,6 +279,37 @@ describe('TicketDetail', () => {
     });
     afterEach(() => Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: originalRandomUUID }));
 
+    it('submits generic new to in_progress to the backend with the opening version', async () => {
+      mockGetTicket.mockResolvedValue({ ...baseTicket, recordClass: 'generic', status: 'new' });
+      update.mockResolvedValue({ workItemId: 101, version: 2, status: 'in_progress' });
+      const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+      render(<TicketDetail />);
+      await user.click((await screen.findByText('编辑', { selector: 'span' })).closest('button')!);
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByLabelText('状态'));
+      await user.click(await screen.findByText('处理中', { selector: '.ant-select-item-option-content' }));
+      await user.click(within(dialog).getByText('保存修改').closest('button')!);
+      await waitFor(() => expect(update).toHaveBeenCalledWith(101, expect.objectContaining({
+        status: 'in_progress', version: 1, operationId: 'confirmed-edit-1',
+      })));
+    });
+
+    it('surfaces backend lifecycle rejection and leaves the form available for correction', async () => {
+      mockGetTicket.mockResolvedValue({ ...baseTicket, recordClass: 'generic', status: 'new' });
+      const rejection = Object.assign(new Error('transition denied by backend'), { status: 400 });
+      update.mockRejectedValue(rejection);
+      const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+      render(<TicketDetail />);
+      await user.click((await screen.findByText('编辑', { selector: 'span' })).closest('button')!);
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByLabelText('状态'));
+      await user.click(await screen.findByText('处理中', { selector: '.ant-select-item-option-content' }));
+      await user.click(within(dialog).getByText('保存修改').closest('button')!);
+      await waitFor(() => expect(useErrorHandler().handleError).toHaveBeenCalledWith(rejection, 'updateTicket', '更新失败'));
+      expect(within(dialog).getByText('保存修改')).toBeInTheDocument();
+      expect(mockGetTicket).toHaveBeenCalledTimes(1);
+    });
+
     it('keeps the form opening version across refresh and reuses the full uncertain request', async () => {
       update.mockRejectedValueOnce(new Error('connection lost after submission')).mockResolvedValueOnce({ workItemId: 101, version: 2, status: 'open', replayed: true });
       const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
@@ -328,17 +360,74 @@ describe('TicketDetail', () => {
   it.each(['ENGINEER.WANG', '王工'])('searches assignees by %s and submits the selected identity', async search => {
     mockHasPermission.mockImplementation(permission => permission === 'user:read');
     mockGetTicket.mockResolvedValue({ ...baseTicket, status: 'open' });
-    mockGetUsers.mockResolvedValue({ users: [{ id: 12, name: '王工', username: 'engineer.wang' }, { id: 13, name: '李工', username: 'engineer.li' }] });
+    mockGetUsers.mockImplementation(({ search }) => Promise.resolve({ users: search ? [{ id: 7879, name: '王工', username: 'engineer.wang' }] : [{ id: 13, name: '李工', username: 'engineer.li' }] }));
     (TicketApi.assignTicket as jest.Mock).mockResolvedValue({});
     const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
     render(<TicketDetail />);
     await user.click(await screen.findByText('转派分配'));
     const select = screen.getByLabelText('分配给');
     await user.type(select, search);
-    expect(screen.queryByText('李工')).not.toBeInTheDocument();
+    await waitFor(() => expect(mockGetUsers).toHaveBeenCalledWith({ pageSize: 100, search }));
+    await waitFor(() => expect(screen.queryByText('李工')).not.toBeInTheDocument());
     await user.click(await screen.findByText('王工'));
     await user.click(screen.getByText('确认分配'));
-    await waitFor(() => expect(TicketApi.assignTicket).toHaveBeenCalledWith(101, expect.objectContaining({ assigneeId: 12 })));
+    await waitFor(() => expect(TicketApi.assignTicket).toHaveBeenCalledWith(101, expect.objectContaining({ assigneeId: 7879 })));
+  });
+
+  it('ignores late lookup results and retains selected CC identities across searches', async () => {
+    mockHasPermission.mockImplementation(permission => permission === 'user:read');
+    mockGetTicket.mockResolvedValue({ ...baseTicket, status: 'open' });
+    let finishOld!: (value: unknown) => void;
+    mockGetUsers.mockImplementation(({ search }) => {
+      if (search === 'old') return new Promise(resolve => { finishOld = resolve; });
+      return Promise.resolve({ users: search === 'admin'
+        ? [{ id: 7879, name: '管理员', username: 'admin' }]
+        : search === 'second' ? [{ id: 20, name: '第二人', username: 'second' }] : [] });
+    });
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+    render(<TicketDetail />);
+    await user.click(await screen.findByText('抄送'));
+    const select = screen.getByLabelText('抄送给');
+    fireEvent.change(select, { target: { value: 'o' } });
+    fireEvent.change(select, { target: { value: 'ol' } });
+    fireEvent.change(select, { target: { value: 'old' } });
+    await waitFor(() => expect(finishOld).toBeDefined());
+    expect(mockGetUsers.mock.calls.map(([params]) => params.search)).toEqual(['', 'old']);
+    fireEvent.change(select, { target: { value: 'admin' } });
+    await user.click(await screen.findByText('管理员', { selector: '.ant-select-item-option-content' }));
+    fireEvent.change(select, { target: { value: 'second' } });
+    expect(await screen.findByText('第二人', { selector: '.ant-select-item-option-content' })).toBeInTheDocument();
+    await act(async () => finishOld({ users: [{ id: 21, name: '过期结果', username: 'old' }] }));
+    expect(screen.queryByText('过期结果')).not.toBeInTheDocument();
+    expect(screen.getByText('管理员', { selector: '.ant-select-selection-item-content' })).toBeInTheDocument();
+    await user.click(screen.getByText('第二人', { selector: '.ant-select-item-option-content' }));
+    await user.click(screen.getByText('确认抄送'));
+    await waitFor(() => expect(TicketApi.ccTicket).toHaveBeenCalledWith(101, [7879, 20], undefined, ['in_app']));
+  });
+
+  it('preserves the current assignee outside the first lookup page', async () => {
+    mockHasPermission.mockImplementation(permission => permission === 'user:read');
+    mockGetTicket.mockResolvedValue({ ...baseTicket, status: 'open', assigneeId: 7879,
+      assignee: { id: 7879, name: '当前处理人', username: 'current' } });
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+    render(<TicketDetail />);
+    await user.click(await screen.findByText('转派分配'));
+    expect((await screen.findByRole('dialog')).querySelector('.ant-select')).toHaveTextContent('当前处理人');
+  });
+
+  it('discards a lookup response when user read permission is revoked', async () => {
+    mockHasPermission.mockImplementation(permission => permission === 'user:read');
+    mockGetTicket.mockResolvedValue({ ...baseTicket, status: 'open' });
+    let finish!: (value: unknown) => void;
+    mockGetUsers.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+    render(<TicketDetail />);
+    await user.click(await screen.findByText('转派分配'));
+    mockHasPermission.mockImplementation(() => false);
+    await act(async () => finish({ users: [{ id: 7879, name: '受限人员', username: 'restricted' }] }));
+    expect(screen.queryByText('受限人员')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('分配给')).toBeDisabled();
+    expect(await within(await screen.findByRole('dialog')).findByRole('alert')).toHaveTextContent('无权读取人员列表');
   });
 
   it('shows a retryable user lookup failure in the assignment form', async () => {
