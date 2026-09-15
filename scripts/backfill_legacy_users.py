@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -33,8 +34,12 @@ from pathlib import Path
 DATA = Path('/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main/data')
 PROFILE = Path('/home/administrator/.local/state/itsm-backend-switch-20260915/profiles/ga/config.yaml')
 BASE = 'http://localhost:3010'          # the running environment's web entry
-TENANT_CODE, ADMIN_USER, ADMIN_PASS = 'default', 'admin', 'admin123'
-MIGRATED_PASSWORD = 'P@ssw0rd2026!'     # SOP default for migrated users
+TENANT_CODE = 'default'
+# Credentials come from the environment so no password is hardcoded in the repository. The migrated
+# users' default password is the one documented in docs/ITSM_Legacy_Master_Data_Migration_SOP.md.
+ADMIN_USER = os.environ.get('ITSM_ADMIN_USER', 'admin')
+ADMIN_PASS = os.environ.get('ITSM_ADMIN_PASSWORD', '')
+MIGRATED_PASSWORD = os.environ.get('MIGRATED_DEFAULT_PASSWORD', '')
 TARGET_USERNAMES = [
     'D78089', 'D83223', 'D83360', 'D83364', 'D83473', 'H83436', 'H83510', 'D84725', 'D84735',
     'H82255', 'H84813', 'H84410', 'H84946', 'H84947', 'D33743', 'D44967', 'D50002', 'D52745',
@@ -176,6 +181,11 @@ def main() -> int:
             Path(args.evidence_out).write_text(json.dumps(evidence, indent=2, ensure_ascii=False))
         return 0
 
+    if not MIGRATED_PASSWORD:
+        raise SystemExit('MIGRATED_DEFAULT_PASSWORD is not set; export the value documented in '
+                         'docs/ITSM_Legacy_Master_Data_Migration_SOP.md before applying')
+    if not ADMIN_PASS:
+        raise SystemExit('ITSM_ADMIN_PASSWORD is not set; export the environment admin password')
     api = Api()
     csrf = api.login()
     for p in payloads:
