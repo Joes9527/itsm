@@ -5941,7 +5941,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			fresh, err := app.Create(ctx, identity, command("edit-status-channel-"+channel, "generic"))
 			require.NoError(t, err)
 			before := owner.Ticket.GetX(ctx, fresh.WorkItemID)
-			_, err = svc.UpdateTicket(ctx, editCommandForTest(before.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{Status: "in_progress", AssigneeID: actor.ID}, Meta: workitemmutation.Meta{ExpectedVersion: before.Version, ActorID: actor.ID}}, tenant.ID))
+			_, err = svc.UpdateTicket(ctx, editCommandForTest(before.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{Status: "in_progress", AssigneeID: &actor.ID}, Meta: workitemmutation.Meta{ExpectedVersion: before.Version, ActorID: actor.ID}}, tenant.ID))
 			require.NoError(t, err)
 			var count int
 			require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM ticket_notifications WHERE ticket_id=$1`, before.ID).Scan(&count))

@@ -30,6 +30,14 @@ func (e *IncidentRuleEngine) Deliver(ctx context.Context, event *ent.OutboxEvent
 	return e.ExecuteCreatedEvent(ctx, event)
 }
 
+type (
+	incidentRuleAssignmentKey   struct{}
+	incidentRuleAssignmentProof struct {
+		tx      *ent.Tx
+		payload incidentCreatedPayload
+	}
+)
+
 type incidentCreatedPayload struct {
 	StatusSnapshot  *incidentRuleSnapshot `json:"-"`
 	OperationID     string                `json:"-"`
@@ -349,6 +357,7 @@ func (e *IncidentRuleEngine) applyNextCreatedAction(ctx context.Context, event *
 	index := len(receipts)
 	actionKey := fmt.Sprintf("%s:action:%d", execution.ExecutionKey, index)
 	actionCtx := WithIncidentAlertActor(ctx, p.ActorID, "incident_rule", actionKey)
+	actionCtx = context.WithValue(actionCtx, incidentRuleAssignmentKey{}, incidentRuleAssignmentProof{tx: tx, payload: p})
 	if err = actions[index].ExecuteTx(actionCtx, tx, current, p.TenantID); err != nil {
 		var rejected *incidentActionRejection
 		if errors.As(err, &rejected) {

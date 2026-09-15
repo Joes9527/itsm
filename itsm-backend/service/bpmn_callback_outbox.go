@@ -145,7 +145,14 @@ func (o *bpmnCallbackOutbox) enqueue(ctx context.Context, client *ent.Client, re
 	if request.Variables != nil {
 		create.SetVariables(copyBPMNCallbackVariables(request.Variables))
 	}
-	return create.Save(ctx)
+	row, err := create.Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := recordCallbackProvenance(ctx, client, row); err != nil {
+		return nil, err
+	}
+	return row, nil
 }
 
 // enqueueBlocked records a definition-time contract failure as a terminal

@@ -3262,6 +3262,7 @@ var (
 		{Name: "task_name", Type: field.TypeString},
 		{Name: "task_type", Type: field.TypeString, Default: "user_task"},
 		{Name: "assignee", Type: field.TypeString, Nullable: true},
+		{Name: "assignee_source", Type: field.TypeString, Default: ""},
 		{Name: "candidate_users", Type: field.TypeString, Nullable: true},
 		{Name: "candidate_groups", Type: field.TypeString, Nullable: true},
 		{Name: "status", Type: field.TypeString, Default: "created"},
@@ -3295,7 +3296,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "process_tasks_process_instances_process_tasks",
-				Columns:    []*schema.Column{ProcessTasksColumns[30]},
+				Columns:    []*schema.Column{ProcessTasksColumns[31]},
 				RefColumns: []*schema.Column{ProcessInstancesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -3309,7 +3310,7 @@ var (
 			{
 				Name:    "processtask_process_instance_id",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessTasksColumns[30]},
+				Columns: []*schema.Column{ProcessTasksColumns[31]},
 			},
 			{
 				Name:    "processtask_process_definition_key",
@@ -3329,37 +3330,37 @@ var (
 			{
 				Name:    "processtask_status",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessTasksColumns[9]},
+				Columns: []*schema.Column{ProcessTasksColumns[10]},
 			},
 			{
 				Name:    "processtask_priority",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessTasksColumns[10]},
+				Columns: []*schema.Column{ProcessTasksColumns[11]},
 			},
 			{
 				Name:    "processtask_due_date",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessTasksColumns[11]},
+				Columns: []*schema.Column{ProcessTasksColumns[12]},
 			},
 			{
 				Name:    "processtask_tenant_id",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessTasksColumns[27]},
+				Columns: []*schema.Column{ProcessTasksColumns[28]},
 			},
 			{
 				Name:    "processtask_created_time",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessTasksColumns[12]},
+				Columns: []*schema.Column{ProcessTasksColumns[13]},
 			},
 			{
 				Name:    "processtask_parent_task_id",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessTasksColumns[25]},
+				Columns: []*schema.Column{ProcessTasksColumns[26]},
 			},
 			{
 				Name:    "processtask_root_task_id",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessTasksColumns[26]},
+				Columns: []*schema.Column{ProcessTasksColumns[27]},
 			},
 		},
 	}

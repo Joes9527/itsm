@@ -99,6 +99,9 @@ func (tc *TicketController) UpdateTicket(c *gin.Context) {
 	tenantID := c.GetInt("tenant_id")
 	result, err := tc.ticketService.UpdateTicket(c.Request.Context(), dto.TicketEditCommand{WorkItemID: ticketID, Fields: req.TicketEditFields, Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: c.GetInt("user_id"), ExpectedVersion: req.Version, OperationID: req.OperationID, CorrelationID: c.GetString("request_id"), Source: "http"}})
 	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
 		if errors.Is(err, executionscope.ErrDenied) || errors.Is(err, creation.ErrPermissionDenied) {
 			common.Forbidden(c, "ticket edit permission or execution scope denied")
 			return
@@ -339,8 +342,11 @@ func (tc *TicketController) AssignTicket(c *gin.Context) {
 		return
 	}
 
-	ticket, err := tc.ticketService.AssignTicket(c.Request.Context(), ticketID, assigneeID, tenantID)
+	ticket, err := tc.ticketService.AssignTicket(c.Request.Context(), ticketID, assigneeID, tenantID, creation.Identity{ActorID: assignedBy, TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
 		tc.logger.Errorw("Failed to assign ticket", "error", err, "ticket_id", ticketID, "tenant_id", tenantID)
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
@@ -373,6 +379,9 @@ func (tc *TicketController) EscalateTicket(c *gin.Context) {
 
 	result, err := tc.ticketService.EscalateTicket(c.Request.Context(), dto.TicketEscalationCommand{WorkItemID: ticketID, Reason: req.Reason, Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: escalatedBy, ExpectedVersion: req.Version, OperationID: req.OperationID, CorrelationID: c.GetString("request_id"), Source: "http"}})
 	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
 		tc.logger.Errorw("Failed to escalate ticket", "error", err, "ticket_id", ticketID, "tenant_id", tenantID)
 		respondTicketEscalationError(c, err)
 		return
@@ -557,8 +566,11 @@ func (tc *TicketController) AssignTickets(c *gin.Context) {
 	tenantID := c.GetInt("tenant_id")
 
 	// 实现工单分配功能
-	err := tc.ticketService.AssignTickets(c.Request.Context(), tenantID, req.TicketIDs, req.AssigneeID)
+	err := tc.ticketService.AssignTickets(c.Request.Context(), tenantID, req.TicketIDs, req.AssigneeID, creation.Identity{ActorID: c.GetInt("user_id"), TenantID: tenantID, Role: c.GetString("role"), Channel: "http"})
 	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
 		tc.logger.Errorw("Assign tickets failed", "error", err, "ticket_ids", req.TicketIDs, "assignee_id", req.AssigneeID, "tenant_id", tenantID)
 		common.Fail(c, common.InternalErrorCode, "分配失败: "+err.Error())
 		return
@@ -930,6 +942,9 @@ func (tc *TicketController) UpdateSubtask(c *gin.Context) {
 	tenantID := c.GetInt("tenant_id")
 	result, err := tc.ticketService.UpdateTicket(c.Request.Context(), dto.TicketEditCommand{WorkItemID: subtaskID, ExpectedParentID: parentID, Fields: req.TicketEditFields, Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: c.GetInt("user_id"), ExpectedVersion: req.Version, OperationID: req.OperationID, CorrelationID: c.GetString("request_id"), Source: "http"}})
 	if err != nil {
+		if common.RespondSerializationConflict(c, err) {
+			return
+		}
 		if errors.Is(err, executionscope.ErrDenied) || errors.Is(err, creation.ErrPermissionDenied) {
 			common.Forbidden(c, "ticket edit permission or execution scope denied")
 			return

@@ -151,6 +151,7 @@ type BPMNUserTask struct {
 	ID                      string `xml:"id,attr"`
 	Name                    string `xml:"name,attr"`
 	Assignee                string `xml:"assignee,attr"`
+	AssigneeSource          string `xml:"assigneeSource,attr"`
 	CandidateUsers          string `xml:"candidateUsers,attr"`
 	CandidateGroups         string `xml:"candidateGroups,attr"`
 	Priority                int    `xml:"priority,attr"`

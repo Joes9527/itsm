@@ -6,7 +6,6 @@ import (
 	"sort"
 	"time"
 
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
@@ -73,44 +72,6 @@ type RoutingRule struct {
 }
 
 // AssignTicket 智能分配工单
-func (s *TicketAssignmentService) AssignTicket(ctx context.Context, req *AssignmentRequest) (*AssignmentResponse, error) {
-	// 1. 验证工单是否存在
-	ticketEntity, err := s.client.Ticket.Query().
-		Where(ticket.IDEQ(req.TicketID), ticket.TenantIDEQ(req.TenantID), ticket.DeletedAtIsNil()).
-		Only(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("获取工单失败: %w", err)
-	}
-
-	if err := rejectProfessionalTicketMutation(ticketEntity.RecordClass); err != nil {
-		return nil, err
-	}
-
-	// 2. 如果指定了首选用户，直接分配
-	if req.PreferredUser != nil {
-		return s.assignToSpecificUser(ctx, req, *req.PreferredUser)
-	}
-
-	// 3. 自动分配
-	if req.AutoAssign {
-		return s.autoAssignTicket(ctx, req)
-	}
-
-	// 4. 基于路由规则分配
-	return s.routeTicket(ctx, req)
-}
-
-// autoAssignTicket 自动分配工单
-func (s *TicketAssignmentService) autoAssignTicket(ctx context.Context, req *AssignmentRequest) (*AssignmentResponse, error) {
-	result, err := s.selectAutoAssignment(ctx, req)
-	if err != nil || result.AssignedTo == nil {
-		return result, err
-	}
-	if err := s.client.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).SetAssigneeID(*result.AssignedTo).Exec(ctx); err != nil {
-		return nil, fmt.Errorf("分配工单失败: %w", err)
-	}
-	return result, nil
-}
 
 func (s *TicketAssignmentService) selectAutoAssignment(ctx context.Context, req *AssignmentRequest) (*AssignmentResponse, error) {
 	// 1. 获取可用的处理人
@@ -623,40 +584,7 @@ func (s *TicketAssignmentService) checkUserCategoryAccess(ctx context.Context, u
 }
 
 // assignToSpecificUser 分配给指定用户
-func (s *TicketAssignmentService) assignToSpecificUser(ctx context.Context, req *AssignmentRequest, userID int) (*AssignmentResponse, error) {
-	// 检查用户是否存在且可用
-	_, err := s.client.User.Query().
-		Where(user.IDEQ(userID), user.TenantIDEQ(req.TenantID), user.ActiveEQ(true)).
-		Only(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("用户不存在: %w", err)
-	}
 
-	// 执行分配
-	err = s.client.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
-		Where(ticket.TenantIDEQ(req.TenantID), ticket.DeletedAtIsNil()).
-		SetAssigneeID(userID).
-		Exec(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("分配工单失败: %w", err)
-	}
-
-	return &AssignmentResponse{
-		TicketID:       req.TicketID,
-		AssignedTo:     &userID,
-		AssignmentType: "manual",
-		Reason:         "手动指定分配",
-	}, nil
-}
-
-// routeTicket 基于路由规则分配工单
-func (s *TicketAssignmentService) routeTicket(ctx context.Context, req *AssignmentRequest) (*AssignmentResponse, error) {
-	// 这里实现基于规则的路由逻辑
-	// 暂时返回自动分配结果
-	return s.autoAssignTicket(ctx, req)
-}
-
-// getAlternativeUserIDs 获取备选用户ID列表
 func (s *TicketAssignmentService) getAlternativeUserIDs(users []UserWorkload) []int {
 	var ids []int
 	for _, u := range users {
@@ -694,77 +622,7 @@ func (s *TicketAssignmentService) GetTeamWorkload(ctx context.Context, tenantID 
 }
 
 // ReassignTicket 重新分配工单
-func (s *TicketAssignmentService) ReassignTicket(ctx context.Context, ticketID int, newAssigneeID int, reason string) error {
-	item, err := s.client.Ticket.Get(ctx, ticketID)
-	if err != nil {
-		return err
-	}
-	if err := rejectProfessionalTicketMutation(item.RecordClass); err != nil {
-		return err
-	}
-	// 更新工单分配人
-	err = s.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
-		SetAssigneeID(newAssigneeID).
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("重新分配失败: %w", err)
-	}
 
-	// 这里可以添加分配历史记录和通知逻辑
-	return nil
-}
-
-// LoadBalance 负载均衡
-func (s *TicketAssignmentService) LoadBalance(ctx context.Context, tenantID int) error {
-	// 获取所有活跃工单
-	_, err := s.client.Ticket.Query().
-		Where(ticket.StatusIn("open", "in_progress", "pending")).
-		Where(ticket.TenantIDEQ(tenantID)).
-		All(ctx)
-	if err != nil {
-		return err
-	}
-
-	// 获取团队工作负载
-	workloads, err := s.GetTeamWorkload(ctx, tenantID)
-	if err != nil {
-		return err
-	}
-
-	// 计算平均负载
-	var totalLoad int
-	for _, w := range workloads {
-		totalLoad += w.ActiveTickets
-	}
-	avgLoad := totalLoad / len(workloads)
-
-	// 重新分配超载用户的工单
-	for _, w := range workloads {
-		if w.ActiveTickets > avgLoad+2 { // 超过平均负载2个工单
-			// 找到负载较低的用户
-			var targetUser *UserWorkload
-			for _, candidate := range workloads {
-				if candidate.UserID != w.UserID && candidate.ActiveTickets < avgLoad {
-					if targetUser == nil || candidate.ActiveTickets < targetUser.ActiveTickets {
-						targetUser = &candidate
-					}
-				}
-			}
-
-			if targetUser != nil {
-				// 重新分配一个工单
-				err := s.ReassignTicket(ctx, 0, targetUser.UserID, "负载均衡自动重新分配")
-				if err != nil {
-					continue
-				}
-			}
-		}
-	}
-
-	return nil
-}
-
-// GetTicketsByAssignee 根据处理人ID获取工单列表
 func (s *TicketAssignmentService) GetTicketsByAssignee(ctx context.Context, assigneeID int, tenantID int) ([]*ent.Ticket, error) {
 	tickets, err := s.client.Ticket.Query().
 		Where(
@@ -781,30 +639,3 @@ func (s *TicketAssignmentService) GetTicketsByAssignee(ctx context.Context, assi
 }
 
 // AssignTickets 批量分配工单
-func (s *TicketAssignmentService) AssignTickets(ctx context.Context, tenantID int, ticketIDs []int, assigneeID int) error {
-	if len(ticketIDs) == 0 {
-		return nil
-	}
-
-	// 验证用户是否存在
-	_, err := s.client.User.Get(ctx, assigneeID)
-	if err != nil {
-		return fmt.Errorf("用户不存在: %w", err)
-	}
-
-	// 批量更新工单分配人
-	if err := validateTicketMutationClasses(ctx, s.client, tenantID, ticketIDs); err != nil {
-		return err
-	}
-	for _, ticketID := range ticketIDs {
-		err := s.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest), ticket.TenantID(tenantID)).
-			SetAssigneeID(assigneeID).
-			Exec(ctx)
-		if err != nil {
-			s.logger.Errorw("Failed to assign ticket", "ticketID", ticketID, "error", err)
-			continue
-		}
-	}
-
-	return nil
-}

@@ -111,3 +111,30 @@ func TestBPMNInstanceAccessPolicyForClientRebindsResolver(t *testing.T) {
 	assert.Same(t, tx.Client(), bound.client)
 	assert.Same(t, tx.Client(), bound.participationResolver.client)
 }
+
+func TestBPMNInstanceParticipationPropagatesBoundResolutionFailure(t *testing.T) {
+	for _, stage := range []string{"source", "actor", "owner", "instance", "workitem", "audit"} {
+		t.Run(stage, func(t *testing.T) {
+			f := newBPMNAuthorizationFixture(t)
+			grantBoundPermissions(t, f, f.actor, "service_request", "read", "task", "read")
+			legacy := f.seedNonParticipantApprovalTask(t, "earlier-participation")
+			f.client.ProcessTask.UpdateOne(legacy).SetCandidateUsers(f.actor.Username).SaveX(f.userCtx)
+			_, task := seedBoundAssignment(t, f, "participation-failure")
+			if stage == "audit" {
+				task = f.client.ProcessTask.UpdateOne(task).SetStatus("completed").SaveX(f.userCtx)
+			}
+			scope := BPMNAccessScope{UserID: f.actor.ID, TenantID: f.tenant.ID}
+			ctx := WithBPMNAccessScope(f.userCtx, scope)
+			actor, err := f.resolver.resolveActor(ctx, scope)
+			require.NoError(t, err)
+			installBoundAssignmentReadFault(f, task, stage, context.Canceled)
+			ids, err := f.resolver.participatingInstanceIDs(ctx, actor)
+			require.Nil(t, ids)
+			if stage == "source" {
+				require.ErrorContains(t, err, "unsupported")
+			} else {
+				require.ErrorIs(t, err, context.Canceled)
+			}
+		})
+	}
+}

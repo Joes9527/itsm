@@ -365,12 +365,15 @@ func NewApplication() *Application {
 	emailService.SetGraphProvider(newTenantGraphProvider(connectorManager))
 	emailService.SetDeliveryTargetDependencies(connectorManager, executionPolicy)
 	ticketNotificationService.SetEmailService(emailService)
+	ticketNotificationService.SetAssignmentDirectory(clients.IntakeDirectorySnapshot())
 	ticketSLAService := service.NewTicketSLAService(client, sugar)
 	ticketAutomationRuleService := service.NewTicketAutomationRuleService(client, sugar)
 
+	sessionReader := authorization.NewSessionReader(client, clients.IntakeDirectorySnapshot())
 	// V2 工单服务（构造函数注入）
 	ticketService := service.NewTicketService(&service.TicketServiceConfig{
 		Execution:             executionPolicy,
+		SessionReader:         sessionReader,
 		Directory:             clients.IntakeDirectorySnapshot(),
 		ProcessTriggerService: processTriggerService,
 		Repository:            ticketRepoImpl,
@@ -519,11 +522,15 @@ func NewApplication() *Application {
 	ticketAutomationRuleService.SetNotificationService(ticketNotificationService)
 	ticketAssignmentRuleService := service.NewTicketAssignmentRuleService(client, sugar)
 	ticketAssignmentSmartService := service.NewTicketAssignmentSmartService(client, sugar, ticketAssignmentService, ticketAssignmentRuleService)
+	ticketAssignmentSmartService.SetSessionReader(sessionReader)
+	ticketAssignmentSmartService.SetExecutionPolicy(executionPolicy)
 	ticketAssignmentSmartController := controller.NewTicketAssignmentSmartController(ticketAssignmentSmartService, ticketAssignmentRuleService, sugar)
 
 	// Ticket Workflow Service & Controller
 	ticketWorkflowService := service.NewTicketWorkflowService(client, sugar)
 	ticketWorkflowService.SetNotificationService(ticketNotificationService)
+	ticketWorkflowService.SetSessionReader(sessionReader)
+	ticketWorkflowService.SetExecutionPolicy(executionPolicy)
 	ticketWorkflowController := controller.NewTicketWorkflowController(ticketWorkflowService, database.GetRawDB(), sugar)
 
 	// Ticket Automation Rule Controller (service 已于 131 行预创建并注入 V2)
@@ -544,6 +551,7 @@ func NewApplication() *Application {
 			h.SetNotificationTargetBinder(ticketNotificationService)
 		}
 		if h, ok := cpe.CallbackRegistry().GetHandler("ticket_service_handler").(*bpmn.TicketServiceTaskHandler); ok {
+			ticketService.SetWorkflowAssignmentBoundary(service.NewWorkflowAssignmentBoundary(clients.IntakeDirectorySnapshot()))
 			h.SetTicketService(ticketService)
 			h.SetEscalationService(ticketService)
 			h.SetNotificationService(ticketNotificationService)
@@ -647,6 +655,7 @@ func NewApplication() *Application {
 	chainResolver := service.NewApprovalChainResolver(client, sugar)
 	srService := service_request.NewService(srRepo, client, sugar, chainResolver, executionPolicy)
 	srService.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
+	srService.SetWorkflowAssignmentBoundary(service.NewWorkflowAssignmentBoundary(clients.IntakeDirectorySnapshot()))
 	srHandler := service_request.NewHandler(srService)
 	bpmnWorkflowController.SetApprovedAccessReader(srService)
 	concreteProcessEngine.SetAccessCompletionContributor(srService)
@@ -701,7 +710,7 @@ func NewApplication() *Application {
 	toolQueue := service.NewToolQueue(client, toolRegistry, intakeApplication, ticketService, 100, sugar, executionPolicy)
 	feishuSyncService := service.NewFeishuSyncService(client, sugar, intakeApplication)
 	outboxRegistry, err := newOutboxRegistry(cfg.Execution,
-		[]service.OutboxDeliveryHandler{service.NewFeishuUpdateDeliveryHandler(client, executionPolicy, clients.IntakeDirectorySnapshot(), func(tenantID int) (service.FeishuTaskUpdater, bool) {
+		[]service.OutboxDeliveryHandler{service.NewWorkItemAssignmentNotificationHandler(client, ticketNotificationService), service.NewFeishuUpdateDeliveryHandler(client, executionPolicy, clients.IntakeDirectorySnapshot(), func(tenantID int) (service.FeishuTaskUpdater, bool) {
 			conn, ok := connectorManager.Get(tenantID, "feishu")
 			if !ok {
 				return nil, false
@@ -789,7 +798,6 @@ func NewApplication() *Application {
 		sugar.Warn("REDIS_HOST is not configured; token refresh unavailable")
 	}
 	refreshTokenConsumer := authentication.NewRefreshTokenConsumer(cfg.JWT.Secret, refreshTokenStore)
-	sessionReader := authorization.NewSessionReader(client, clients.IntakeDirectorySnapshot())
 	commonServiceDomain := domainCommon.NewService(commonRepo, cfg.JWT.Secret, sugar, systemClient, refreshTokenConsumer, sessionReader)
 	commonHandler := domainCommon.NewHandler(commonServiceDomain)
 

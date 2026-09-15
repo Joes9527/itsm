@@ -53,7 +53,7 @@ type TicketEditFields struct {
 	Type        string                 `json:"type" binding:"omitempty,oneof=incident service_request change ticket problem improvement"`
 	Category    string                 `json:"category" binding:"omitempty"`
 	CategoryID  *int                   `json:"categoryId,omitempty"`
-	AssigneeID  int                    `json:"assigneeId"`
+	AssigneeID  *int                   `json:"assigneeId"`
 	RequesterID int                    `json:"requesterId"` // 创建人ID
 	Tags        []string               `json:"tags"`
 	Resolution  string                 `json:"resolution" binding:"omitempty"`

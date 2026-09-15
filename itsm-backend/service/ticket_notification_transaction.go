@@ -13,7 +13,6 @@ import (
 	"itsm-backend/ent/slaalerthistory"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketnotification"
-	"itsm-backend/ent/user"
 )
 
 var errNotificationRecipientMissing = errors.New("notification recipient missing")
@@ -28,13 +27,13 @@ func (s *TicketNotificationService) EnqueueNotificationTx(ctx context.Context, t
 // selectedChannels is a server-owned restriction on the recipient preferences.
 // nil retains all eligible preference channels; an empty set explicitly disables all.
 func (s *TicketNotificationService) enqueueNotificationTx(ctx context.Context, tx *ent.Tx, ticketID, tenantID int, req *dto.SendTicketNotificationRequest, selectedChannels map[string]bool) error {
-	_, err := s.enqueueNotificationResultTx(ctx, tx, ticketID, tenantID, req, selectedChannels)
+	_, err := s.enqueueNotificationResultTx(ctx, tx, ticketID, tenantID, req, selectedChannels, 0)
 	return err
 }
 
 // enqueueNotificationResultTx is the sole channel materialization path. Counts
 // describe persisted intents, never provider delivery. The caller owns commit.
-func (s *TicketNotificationService) enqueueNotificationResultTx(ctx context.Context, tx *ent.Tx, ticketID, tenantID int, req *dto.SendTicketNotificationRequest, selectedChannels map[string]bool) (*dto.SendTicketNotificationResult, error) {
+func (s *TicketNotificationService) enqueueNotificationResultTx(ctx context.Context, tx *ent.Tx, ticketID, tenantID int, req *dto.SendTicketNotificationRequest, selectedChannels map[string]bool, verifiedAssignmentRecipient int) (*dto.SendTicketNotificationResult, error) {
 	if s == nil || tx == nil || req == nil || strings.TrimSpace(req.DeliveryKey) == "" || strings.TrimSpace(req.EventType) == "" || strings.TrimSpace(req.Content) == "" || len(req.UserIDs) == 0 {
 		return nil, fmt.Errorf("notification intent requires transaction, target, recipients and stable delivery identity")
 	}
@@ -44,7 +43,8 @@ func (s *TicketNotificationService) enqueueNotificationResultTx(ctx context.Cont
 	if err := s.execution.RequireEntMembers(ctx, tx, tenantID, ticketID); err != nil {
 		return nil, err
 	}
-	if _, err := tx.Ticket.Query().Where(ticket.IDEQ(ticketID), ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()).Only(ctx); err != nil {
+	item, err := tx.Ticket.Query().Where(ticket.IDEQ(ticketID), ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()).Only(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("notification intent target: %w", err)
 	}
 	if req.SLAAlertHistoryID != nil {
@@ -59,6 +59,10 @@ func (s *TicketNotificationService) enqueueNotificationResultTx(ctx context.Cont
 		preferences := *s.prefService
 		preferences.client = tx.Client()
 		reader.prefService = &preferences
+	} else {
+		// The owning transaction always reads the authoritative persisted preferences,
+		// even when optional standalone service wiring was not supplied.
+		reader.prefService = NewNotificationPreferenceService(tx.Client(), s.logger)
 	}
 	result := &dto.SendTicketNotificationResult{RecipientCount: len(uniqueTicketNotificationUserIDs(req.UserIDs))}
 	seen := map[int]bool{}
@@ -67,11 +71,18 @@ func (s *TicketNotificationService) enqueueNotificationResultTx(ctx context.Cont
 			continue
 		}
 		seen[userID] = true
-		if _, err := tx.User.Query().Where(user.IDEQ(userID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).Only(ctx); err != nil {
-			if ent.IsNotFound(err) {
-				return nil, errNotificationRecipientMissing
-			}
+		recipient, err := s.currentNotificationRecipient(ctx, tx, userID, tenantID)
+		if ent.IsNotFound(err) {
+			return nil, errNotificationRecipientMissing
+		}
+		if err != nil {
 			return nil, fmt.Errorf("notification intent recipient: %w", err)
+		}
+		// Public notification requests may address native users or the actual current
+		// WorkItem owner. Historical assignment delivery supplies only its audit-verified
+		// assignee, after immutable event/assignment evidence has been matched.
+		if recipient.TenantID != tenantID && userID != item.AssigneeID && userID != verifiedAssignmentRecipient {
+			return nil, errNotificationRecipientMissing
 		}
 		persisted, err := tx.TicketNotification.Query().Where(ticketnotification.TenantIDEQ(tenantID), ticketnotification.TicketIDEQ(ticketID), ticketnotification.UserIDEQ(userID), ticketnotification.DeliveryKeyEQ(req.DeliveryKey)).All(ctx)
 		if err != nil {

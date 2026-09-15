@@ -190,15 +190,16 @@ type FilterParams struct {
 
 // UpdateParams 工单更新参数
 type UpdateParams struct {
-	Title          *string
-	Description    *string
-	Status         *Status
-	GenericSubtype *string
-	Priority       *Priority
-	AssigneeID     *int
-	CategoryID     *int
-	ReplaceTags    bool
-	TagIDs         []int
-	Resolution     *string
-	Version        int // 乐观锁版本号
+	// VersionAlreadyAdvanced is set only when the shared assignment writer advanced this same transaction.
+	VersionAlreadyAdvanced bool
+	Title                  *string
+	Description            *string
+	Status                 *Status
+	GenericSubtype         *string
+	Priority               *Priority
+	CategoryID             *int
+	ReplaceTags            bool
+	TagIDs                 []int
+	Resolution             *string
+	Version                int // 乐观锁版本号
 }

@@ -52,7 +52,7 @@ func TestCanAssign_NotExcludedForRequester(t *testing.T) {
 	require.NoError(t, err)
 	seedRolePermission(t, client, tenant.ID, "sd_manager", "ticket", "assign")
 
-	tk := &ticket.Ticket{ID: 1, RequesterID: 42, Status: ticket.StatusOpen}
+	tk := &ticket.Ticket{ID: 1, RequesterID: 42, Status: ticket.StatusOpen, RecordClass: "generic"}
 	actor := ActionActor{Client: client, TenantID: tenant.ID, UserID: 42, Role: "sd_manager"}
 
 	perm := CanAssign(actor, tk)

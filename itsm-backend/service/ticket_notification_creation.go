@@ -7,7 +7,7 @@ import (
 	"net/mail"
 	"strings"
 
-	"itsm-backend/common/executionscope"
+	"itsm-backend/authorization"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -36,12 +36,18 @@ func (s *TicketNotificationService) EnqueueCreationTx(ctx context.Context, tx *e
 	if !actor {
 		return creation.NewPermissionDenied("notification actor is unavailable", nil)
 	}
+	return s.enqueueTicketNotificationTx(ctx, tx, item, eventType, content, deliveryKey, recipientIDs, 0)
+}
+
+// enqueueTicketNotificationTx persists channel intent only. The existing delivery
+// worker owns external calls, leases and delivery_unknown reconciliation.
+func (s *TicketNotificationService) enqueueTicketNotificationTx(ctx context.Context, tx *ent.Tx, item *ent.Ticket, eventType, content, deliveryKey string, recipientIDs []int, verifiedAssignmentRecipient int) error {
 	recipients := uniqueTicketNotificationUserIDs(recipientIDs)
 	if len(recipients) == 0 {
 		return creation.NewDomainValidationFailed("creation notification recipients are required", nil)
 	}
 	for _, recipientID := range recipients {
-		recipient, err := tx.User.Query().Where(user.IDEQ(recipientID), user.TenantIDEQ(item.TenantID), user.ActiveEQ(true)).Only(ctx)
+		recipient, err := s.currentNotificationRecipient(ctx, tx, recipientID, item.TenantID)
 		if ent.IsNotFound(err) {
 			return creation.NewReferenceNotFound("notification recipient is unavailable", err)
 		}
@@ -52,13 +58,6 @@ func (s *TicketNotificationService) EnqueueCreationTx(ctx context.Context, tx *e
 		if err != nil {
 			return creation.NewInfrastructureUnavailable("could not resolve notification preferences", err)
 		}
-		req := &dto.SendTicketNotificationRequest{UserIDs: []int{recipientID}, EventType: eventType, Content: content, DeliveryKey: deliveryKey}
-		if preferences.InAppEnabled {
-			if err := createInAppNotificationPair(ctx, tx.Client(), item.ID, recipientID, req, item.TenantID, s.clock()); err != nil {
-				return creation.NewInfrastructureUnavailable("could not persist creation notification", err)
-			}
-		}
-		channels := []string{}
 		if preferences.EmailEnabled {
 			if s.emailService == nil {
 				return creation.NewDomainValidationFailed("configured email notification has no delivery owner", nil)
@@ -66,7 +65,6 @@ func (s *TicketNotificationService) EnqueueCreationTx(ctx context.Context, tx *e
 			if _, err := mail.ParseAddress(recipient.Email); err != nil {
 				return creation.NewDomainValidationFailed("notification email address is invalid", err)
 			}
-			channels = append(channels, "email")
 		}
 		if preferences.SmsEnabled {
 			if s.connectorManager == nil {
@@ -75,26 +73,39 @@ func (s *TicketNotificationService) EnqueueCreationTx(ctx context.Context, tx *e
 			if strings.TrimSpace(recipient.Phone) == "" {
 				return creation.NewDomainValidationFailed("configured SMS notification target is unavailable", nil)
 			}
-			channels = append(channels, "sms")
 		}
 		if preferences.PushEnabled {
 			if s.wsService == nil {
 				return creation.NewDomainValidationFailed("configured push notification has no delivery owner", nil)
 			}
-			channels = append(channels, "push")
 		}
-		for _, channel := range channels {
-			create := tx.TicketNotification.Create().SetTenantID(item.TenantID).SetTicketID(item.ID).SetUserID(recipient.ID).SetType(eventType).SetChannel(channel).SetContent(content).SetDeliveryKey(deliveryKey).SetStatus(ticketNotificationStatusPending).SetNextAttemptAt(s.clock())
-			if err := s.BindNotificationTargetTx(ctx, tx, item.TenantID, channel, create); err != nil {
-				if errors.Is(err, executionscope.ErrDenied) {
-					return creation.NewPermissionDenied("notification target is not permitted", err)
-				}
-				return creation.NewInfrastructureUnavailable("notification target resolution failed", err)
-			}
-			if err := create.Exec(ctx); err != nil {
-				return creation.NewInfrastructureUnavailable(fmt.Sprintf("could not persist %s creation notification", channel), err)
-			}
-		}
+
 	}
-	return nil
+	_, err := s.enqueueNotificationResultTx(ctx, tx, item.ID, item.TenantID, &dto.SendTicketNotificationRequest{UserIDs: recipients, EventType: eventType, Content: content, DeliveryKey: deliveryKey}, nil, verifiedAssignmentRecipient)
+	return err
+}
+
+func (s *TicketNotificationService) currentNotificationRecipient(ctx context.Context, tx *ent.Tx, recipientID, tenantID int) (*ent.User, error) {
+	native, err := tx.User.Query().Where(user.ID(recipientID), user.TenantID(tenantID), user.Active(true)).Only(ctx)
+	if err == nil {
+		return native, nil
+	}
+	if !ent.IsNotFound(err) {
+		return nil, err
+	}
+	if s.assignmentDirectory == nil {
+		return nil, &ent.NotFoundError{}
+	}
+	directory, closeDirectory, err := s.assignmentDirectory.Open(ctx, tx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if directory == nil || closeDirectory == nil {
+		return nil, fmt.Errorf("assignment notification directory unavailable")
+	}
+	recipient, lookupErr := authorization.ResolveCurrentTenantUser(ctx, directory, recipientID, tenantID, s.clock())
+	if err := errors.Join(lookupErr, closeDirectory()); err != nil {
+		return nil, err
+	}
+	return recipient, nil
 }

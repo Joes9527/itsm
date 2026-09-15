@@ -470,7 +470,7 @@ func toolEditCommand(raw string, invocationID, actorID, tenantID int) (dto.Ticke
 			case "expectedVersion":
 				cmd.Meta.ExpectedVersion = n
 			case "assignee_id":
-				cmd.Fields.AssigneeID = n
+				cmd.Fields.AssigneeID = &n
 			}
 		case "status":
 			status, ok := value.(string)
