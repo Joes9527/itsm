@@ -10,8 +10,8 @@ import { DetailReadState } from '@/components/business/detail-tabs/DetailReadSta
 
 // Wire identity mapping only; lifecycle and authorization remain in BPMN.
 const businessTypes: Record<string, string> = {
-  generic: 'ticket', service_request_item: 'service_request', incident: 'incident',
-  problem: 'problem', change_request: 'change',
+  generic: 'generic', service_request_item: 'service_request_item', incident: 'incident',
+  problem: 'problem', change_request: 'change_request',
 };
 const terminal = new Set(['completed', 'cancelled']);
 const statuses: Record<string, string> = {

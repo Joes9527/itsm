@@ -1,19 +1,19 @@
 import React from 'react';
-import { render, screen, fireEvent, act } from '@/lib/test-utils';
+import { render, screen, fireEvent, act, waitFor } from '@/lib/test-utils';
 import { TicketProcessTasks } from '../TicketProcessTasks';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { ApiError } from '@/lib/api/http-client';
 import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 jest.mock('@/lib/api/bpmn-workflow-api', () => ({ BPMNWorkflowApi: { listUserTasks: jest.fn(), claimTask: jest.fn(), completeTask: jest.fn() } }));
 const read = BPMNWorkflowApi.listUserTasks as jest.Mock;
-const task = { id: 8, businessType: 'service_request', businessId: 42, taskName: '主管审批', taskPurpose: 'approval', status: 'created', assignee: '主管甲' };
+const task = { id: 8, businessType: 'service_request_item', businessId: 42, taskName: '主管审批', taskPurpose: 'approval', status: 'created', assignee: '主管甲' };
 const page = (items: unknown[], total = items.length) => ({ items, total, page: 1, pageSize: 100 });
 beforeEach(() => { jest.clearAllMocks(); read.mockReset(); });
 it('reads scoped tasks and links approvals without using the ticket assignee', async () => {
   read.mockResolvedValue(page([task]));
   render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
   expect(await screen.findByText('主管审批')).toBeInTheDocument();
-  expect(read).toHaveBeenCalledWith(expect.objectContaining({ businessType: 'service_request', businessId: 42 }));
+  expect(read).toHaveBeenCalledWith(expect.objectContaining({ businessType: 'service_request_item', businessId: 42 }));
   expect(screen.getByText('主管甲')).toBeInTheDocument();
   expect(screen.getByRole('link', { name: '前往审批中心' })).toHaveAttribute('href', '/approvals');
 });
@@ -151,4 +151,10 @@ it('clears actions when a mutation loses permission', async () => {
   fireEvent.click(await screen.findByRole('button', { name: '领取任务' }));
   await screen.findAllByText('任务权限已变化');
   expect(screen.queryByRole('button', { name: '领取任务' })).not.toBeInTheDocument();
+});
+
+it.each(['generic','service_request_item','incident','problem','change_request'])('queries the canonical %s record class', async recordClass => {
+  read.mockResolvedValue(page([]));
+  render(<TicketProcessTasks ticketId={42} recordClass={recordClass} />);
+  await waitFor(() => expect(read).toHaveBeenCalledWith(expect.objectContaining({businessType:recordClass,businessId:42})));
 });

@@ -58,6 +58,7 @@ const workItem: WorkItemCommon = {
 
 const incident = {
   id: 301,
+  version: 3,
   incidentNumber: 'INC-202608-000301',
   title: '数据库连接失败',
   description: '生产数据库连接失败',
@@ -183,7 +184,8 @@ describe('IncidentDetail action eligibility', () => {
     await waitFor(() =>
       expect(mockResolveIncident).toHaveBeenCalledWith(301, {
         resolution: '已恢复数据库连接并验证服务正常',
-        resolutionCode: undefined,
+        version: 3,
+        operationId: 'conversion-key',
       })
     );
   });
@@ -227,6 +229,25 @@ describe('IncidentDetail action eligibility', () => {
     await expectDisabledAction('解决', '只有处理中的事件可以解决');
   });
 
+  it('requires close reason and reuses the confirmed command after an uncertain failure', async () => {
+    mockCloseIncident.mockRejectedValueOnce(new Error('connection lost')).mockResolvedValueOnce({workItemId: 999,version:4,status:'closed',replayed:true});
+    mockGetIncident.mockResolvedValueOnce({...incident,status:'resolved'}).mockResolvedValueOnce({...incident,title:'Refreshed incident',status:'closed',version:4});
+    renderWithProvider({close:{allowed:true}});
+    fireEvent.click(await screen.findByRole('button', {name:/关\s*闭/}));
+    const dialog = await screen.findByRole('dialog', {name:'关闭事件'});
+    fireEvent.click(within(dialog).getByRole('button',{name:'确认关闭'}));
+    expect(mockCloseIncident).not.toHaveBeenCalled();
+    fireEvent.change(within(dialog).getByLabelText('关闭说明'),{target:{value:'验证恢复'}});
+    fireEvent.click(within(dialog).getByRole('button',{name:'确认关闭'}));
+    await waitFor(() => expect(mockCloseIncident).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(within(dialog).getByRole('button',{name:'确认关闭'})).not.toHaveClass('ant-btn-loading'));
+    fireEvent.click(within(dialog).getByRole('button',{name:'确认关闭'}));
+    await waitFor(() => expect(mockCloseIncident).toHaveBeenCalledTimes(2));
+    expect(mockCloseIncident.mock.calls[1]).toEqual(mockCloseIncident.mock.calls[0]);
+    await screen.findByText(/Refreshed incident/);
+    expect(mockGetIncident).toHaveBeenCalledTimes(2);
+  });
+
   it('disables sibling actions while an incident mutation is in flight', async () => {
     mockCloseIncident.mockImplementation(() => new Promise(() => {}));
     renderWithProvider({
@@ -236,7 +257,10 @@ describe('IncidentDetail action eligibility', () => {
 
     const user = userEvent.setup();
     await user.click(await screen.findByRole('button', { name: /关\s*闭/ }));
-    await waitFor(() => expect(mockCloseIncident).toHaveBeenCalledWith(301));
+    const dialog = await screen.findByRole('dialog', {name: '关闭事件'});
+    fireEvent.change(within(dialog).getByLabelText('关闭说明'), {target: {value: '用户已确认恢复'}});
+    await user.click(within(dialog).getByRole('button', {name:'确认关闭'}));
+    await waitFor(() => expect(mockCloseIncident).toHaveBeenCalledWith(301, {version:3,operationId:'conversion-key',reason:'用户已确认恢复'}));
 
     expect(screen.getByRole('button', { name: '重新打开' })).toBeDisabled();
   });

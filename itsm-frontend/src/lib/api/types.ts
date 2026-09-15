@@ -162,6 +162,7 @@ export type IncidentStatus =
   | 'closed';
 
 export interface Incident {
+  version?: number;
   id: number;
   incidentNumber: string;
   title: string;

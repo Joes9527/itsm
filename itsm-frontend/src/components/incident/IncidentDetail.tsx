@@ -1,4 +1,6 @@
 'use client';
+import { useDetailIdentity } from '@/components/business/detail-tabs/useDetailResource';
+import { ticketEditVersion, prepareTicketEdit, isTicketEditConflict, type TicketEditIntent } from '@/lib/api/ticket-edit';
 import { WorkItemClassificationSelect } from '@/components/work-item/WorkItemClassificationSelect';
 import { classificationUpdate } from '@/components/work-item/classification';
 
@@ -15,7 +17,7 @@ import { CreationRequester } from '@/components/work-item/CreationRequester';
  * 包含：基本信息、根因分析、影响评估、事件分类的编辑入口
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Card,
   Descriptions,
@@ -118,7 +120,7 @@ interface IncidentClassificationData {
   createdAt?: string;
 }
 
-const IncidentDetail: React.FC<IncidentDetailProps> = ({
+const IncidentDetailContent: React.FC<IncidentDetailProps> = ({
   id: propId,
   fallbackActions,
   onIncidentLoaded,
@@ -128,8 +130,18 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
   const creation = useWorkItemCreation();
   const [conversionForm] = Form.useForm();
   const [conversionOpen, setConversionOpen] = useState(false);
+  const commandAttempts = useRef(new Map<string, TicketEditIntent<Record<string, unknown>>>());
+  const commandPayload = (action: string, fields: Record<string, unknown> = {}) => {
+    const key = `${data?.id}:${action}`;
+    const attempt = prepareTicketEdit(commandAttempts.current.get(key), fields, data?.version);
+    commandAttempts.current.set(key, attempt);
+    return attempt.payload;
+  };
+  const [closeModalVisible, setCloseModalVisible] = useState(false);
+  const [closeReason, setCloseReason] = useState('');
   // 支持通过props传入id，或通过useParams获取
   const id = propId || (params?.id as string);
+  useEffect(() => { commandAttempts.current.clear(); }, [id]);
   const workItemContext = useOptionalWorkItemContext();
   const { handleError } = useErrorHandler();
   const hasPermission = useAuthStore(s => s.hasPermission);
@@ -151,7 +163,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [assigning, setAssigning] = useState(false);
-  const [assignForm] = Form.useForm<{ assigneeId: number }>();
+  const [assignForm] = Form.useForm<{ assigneeId: number; reason?: string }>();
 
   // ===== 升级为重大事件：弹窗状态 =====
   const [majorModalVisible, setMajorModalVisible] = useState(false);
@@ -312,13 +324,15 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
     try {
       // 使用专门的 resolve 端点，而非直接更新状态
       await IncidentAPI.resolveIncident(data.id, {
+        ...commandPayload('resolve', { resolution: values.resolution }),
         resolution: values.resolution,
-        resolutionCode: values.resolutionCode,
       });
+      commandAttempts.current.delete(`${data.id}:resolve`);
       message.success('事件已解决');
       setResolveModalVisible(false);
       loadData();
     } catch (error) {
+      if (isTicketEditConflict(error)) { commandAttempts.current.delete(`${data.id}:resolve`); await loadData(); }
       handleError(error, 'resolveIncident', '解决失败');
     } finally {
       setResolving(false);
@@ -330,10 +344,14 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
 
     setClosing(true);
     try {
-      await IncidentAPI.closeIncident(data.id);
+      if (!closeReason.trim()) { message.error('请填写关闭说明'); return; }
+      await IncidentAPI.closeIncident(data.id, { ...commandPayload('close', { reason: closeReason.trim() }), reason: closeReason.trim() });
+      setCloseModalVisible(false);
+      commandAttempts.current.delete(`${data.id}:close`);
       message.success('事件已关闭');
       loadData();
     } catch (error) {
+      if (isTicketEditConflict(error)) { commandAttempts.current.delete(`${data.id}:close`); await loadData(); }
       handleError(error, 'closeIncident', '关闭失败');
     } finally {
       setClosing(false);
@@ -363,10 +381,12 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
 
     setReopening(true);
     try {
-      await IncidentAPI.reopenIncident(data.id);
+      await IncidentAPI.reopenIncident(data.id, commandPayload('reopen'));
+      commandAttempts.current.delete(`${data.id}:reopen`);
       message.success('事件已重新打开');
       loadData();
     } catch (error) {
+      if (isTicketEditConflict(error)) { commandAttempts.current.delete(`${data.id}:reopen`); await loadData(); }
       handleError(error, 'reopenIncident', '重新打开失败');
     } finally {
       setReopening(false);
@@ -380,16 +400,18 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
   };
 
   // 提交指派（使用专用 assign 端点）
-  const handleAssignSubmit = async (values: { assigneeId: number }) => {
+  const handleAssignSubmit = async (values: { assigneeId: number; reason?: string }) => {
     if (!data) return;
     setAssigning(true);
     try {
-      await IncidentAPI.assignIncident(data.id, values.assigneeId);
+      await IncidentAPI.assignIncident(data.id, { ...commandPayload('assign', values), ...values });
+      commandAttempts.current.delete(`${data.id}:assign`);
       message.success('事件指派成功');
       setAssignModalVisible(false);
       assignForm.resetFields();
       loadData();
     } catch (error) {
+      if (isTicketEditConflict(error)) { commandAttempts.current.delete(`${data.id}:assign`); await loadData(); }
       handleError(error, 'assignIncident', '指派失败');
     } finally {
       setAssigning(false);
@@ -528,6 +550,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
     setSavingAnalysis(true);
     try {
       await IncidentAPI.updateIncident(data.id, {
+        version: ticketEditVersion(data.version),
         ...classificationUpdate(values.classification, categoryForm.isFieldTouched('classification')),
         urgency: values.urgency,
         impact: values.impact,
@@ -580,6 +603,10 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
   return (
     <>
       <CreationAttempts creation={creation} />
+      <Modal open={closeModalVisible} title='关闭事件' okText='确认关闭' onCancel={() => setCloseModalVisible(false)} onOk={handleClose} confirmLoading={closing}>
+        <label htmlFor='incident-close-reason'>关闭说明</label>
+        <Input.TextArea id='incident-close-reason' value={closeReason} onChange={event => setCloseReason(event.target.value)} />
+      </Modal>
       <Modal open={conversionOpen} title='创建关联问题' onCancel={() => setConversionOpen(false)} onOk={submitConversion} confirmLoading={converting}>
         <p>保留当前事件并创建关联问题，请确认申请人。</p>
         <Form form={conversionForm}><CreationRequester resource="problem" /></Form>
@@ -670,7 +697,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
                 actionName='close'
                 button={{
                   danger: true,
-                  onClick: handleClose,
+                  onClick: () => { setCloseModalVisible(true); },
                   loading: closing,
                   disabled: actionMutationInFlight,
                 }}
@@ -1047,6 +1074,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
         width={480}
       >
         <Form form={assignForm} layout='vertical' onFinish={handleAssignSubmit}>
+          <Form.Item name='reason' label='指派原因' rules={[{ required: !!data?.assigneeId, whitespace: true, message: '请填写重新指派原因' }]}><Input.TextArea /></Form.Item>
           <Form.Item
             name='assigneeId'
             label='指派给'
@@ -1352,4 +1380,9 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
   );
 };
 
+const IncidentDetail: React.FC<IncidentDetailProps> = props => {
+  const params = useParams();
+  const identity = useDetailIdentity(props.id ?? (params?.id as string) ?? '');
+  return <IncidentDetailContent key={identity} {...props} />;
+};
 export default IncidentDetail;

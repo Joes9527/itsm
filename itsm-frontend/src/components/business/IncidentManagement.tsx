@@ -1,4 +1,6 @@
 'use client';
+import { useDetailIdentity } from '@/components/business/detail-tabs/useDetailResource';
+import { prepareTicketEdit, isTicketEditConflict, type TicketEditIntent } from '@/lib/api/ticket-edit';
 import { WorkItemClassificationSelect } from '@/components/work-item/WorkItemClassificationSelect';
 import { classificationInput, classificationUpdate } from '@/components/work-item/classification';
 
@@ -1286,19 +1288,27 @@ const AssignIncidentModal: React.FC<{
   onAssigned: () => void;
 }> = ({ incident, visible, onClose, onAssigned }) => {
   const [assigning, setAssigning] = useState(false);
+  const identity = useDetailIdentity(incident?.id ?? '');
   const [assignUserIds, setAssignUserIds] = useState<number[]>([]);
+  const [reason, setReason] = useState('');
+  const assignIntent = React.useRef<TicketEditIntent<{assigneeId:number;reason:string}> | undefined>(undefined);
+  React.useEffect(() => { assignIntent.current = undefined; setReason(''); }, [identity]);
 
   const handleAssign = async () => {
     const assignUserId = assignUserIds[0];
     if (!assignUserId || !incident) return;
     setAssigning(true);
     try {
-      await IncidentAPI.assignIncident(incident.id, assignUserId);
+      if (incident.assigneeId && !reason.trim()) { message.error('请填写重新指派原因'); return; }
+      assignIntent.current = prepareTicketEdit(assignIntent.current, { assigneeId: assignUserId, reason: reason.trim() }, incident.version);
+      await IncidentAPI.assignIncident(incident.id, assignIntent.current.payload);
+      assignIntent.current = undefined;
       message.success('分配成功');
       setAssignUserIds([]);
       onAssigned();
       onClose();
-    } catch {
+    } catch (error) {
+      if (isTicketEditConflict(error)) { assignIntent.current = undefined; onAssigned(); }
       message.error('分配失败');
     } finally {
       setAssigning(false);
@@ -1316,6 +1326,7 @@ const AssignIncidentModal: React.FC<{
       cancelText="取消"
     >
       <Form layout="vertical">
+        <Form.Item label='指派原因'><Input.TextArea aria-label='指派原因' placeholder='重新指派时请填写原因' value={reason} onChange={event => setReason(event.target.value)} /></Form.Item>
         <Form.Item label="选择处理人" required>
           <UserSelect
             value={assignUserIds}

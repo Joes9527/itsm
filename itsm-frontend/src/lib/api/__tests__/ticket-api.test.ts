@@ -74,10 +74,10 @@ describe('TicketApi', () => {
 
   describe('updateTicket', () => {
     it('should update ticket', async () => {
-      const data = { title: 'Updated' };
+      const data = { title: 'Updated', version: 3, operationId: 'edit-1' };
       const expected = { id: 1, title: 'Updated' };
       mockPut.mockResolvedValue(expected);
-      const result = await TicketApi.updateTicket(1, data as any);
+      const result = await TicketApi.updateTicket(1, data);
       expect(result).toEqual(expected);
     });
   });
@@ -115,14 +115,14 @@ describe('TicketApi', () => {
   });
 
   describe('escalateTicket', () => {
-    it('should escalate with string reason', async () => {
+    it('should escalate with a confirmed reason', async () => {
       mockPost.mockResolvedValue({ id: 1 });
-      await TicketApi.escalateTicket(1, 'urgent');
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/tickets/1/escalate', { reason: 'urgent' });
+      await TicketApi.escalateTicket(1, { reason: 'urgent', version: 3, operationId: 'escalate-1' });
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/tickets/1/escalate', { reason: 'urgent', version: 3, operationId: 'escalate-1' });
     });
 
     it('should escalate with object', async () => {
-      const data = { level: 'L2', reason: 'complex' };
+      const data = { reason: 'complex', version: 3, operationId: 'escalate-2' };
       mockPost.mockResolvedValue({ id: 1 });
       await TicketApi.escalateTicket(1, data);
       expect(mockPost).toHaveBeenCalledWith('/api/v1/tickets/1/escalate', data);

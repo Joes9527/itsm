@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
 import TicketDetail from '../TicketDetail';
 
@@ -164,6 +164,8 @@ describe('TicketDetail', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetTicket.mockReset();
+    (TicketApi.updateTicket as jest.Mock).mockReset();
     mockHasPermission.mockImplementation(() => false);
     mockGetSLA.mockResolvedValue(null);
     mockGetUsers.mockResolvedValue({ users: [] });
@@ -171,6 +173,26 @@ describe('TicketDetail', () => {
     mockGetRelationStats.mockResolvedValue({ totalRelations: 0 });
     mockGetHistory.mockResolvedValue([]);
     mockGetTicketNotifications.mockResolvedValue({ notifications: [], total: 0 });
+  });
+
+  it('retries the same edit command and refreshes detail after a command receipt', async () => {
+    Object.defineProperty(crypto, 'randomUUID', {configurable:true,value:jest.fn().mockReturnValueOnce('edit-first').mockReturnValue('edit-second')});
+    mockGetTicket.mockResolvedValueOnce({...baseTicket,status:'new'}).mockResolvedValueOnce({...baseTicket,status:'new',title:'Server refreshed title',version:2});
+    const update = TicketApi.updateTicket as jest.Mock;
+    update.mockRejectedValueOnce(new Error('connection lost')).mockResolvedValueOnce({workItemId:101,version:2,status:'new',replayed:true});
+    render(<TicketDetail />);
+    fireEvent.click(await screen.findByText('编辑'));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('工单标题'),{target:{value:'Confirmed title'}});
+    fireEvent.click(within(dialog).getByRole('button',{name:'保存修改'}));
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(within(dialog).getByRole('button',{name:'保存修改'})).not.toHaveClass('ant-btn-loading'));
+    fireEvent.click(within(dialog).getByRole('button',{name:'保存修改'}));
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+    expect(update.mock.calls[0][1]).toEqual(expect.objectContaining({title:'Confirmed title',version:1,operationId:'edit-first'}));
+    expect(update.mock.calls[1]).toEqual(update.mock.calls[0]);
+    await screen.findByText(/Server refreshed title/);
+    expect(mockGetTicket).toHaveBeenCalledTimes(2);
   });
 
   it('renders Chinese label for open status instead of raw "open"', async () => {

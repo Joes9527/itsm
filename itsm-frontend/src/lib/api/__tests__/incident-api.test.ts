@@ -61,50 +61,42 @@ describe('IncidentAPI', () => {
   describe('updateIncident', () => {
     it('should update an incident', async () => {
       mockPut.mockResolvedValue({ id: 1, title: 'Updated' });
-      const result = await IncidentAPI.updateIncident(1, { title: 'Updated' });
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/incidents/1', { title: 'Updated' });
+      const result = await IncidentAPI.updateIncident(1, { title: 'Updated', version: 3 });
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/incidents/1', { title: 'Updated', version: 3 });
       expect(result.title).toBe('Updated');
-    });
-  });
-
-  describe('updateIncidentStatus', () => {
-    it('should update status', async () => {
-      mockPut.mockResolvedValue({ id: 1, status: 'resolved' });
-      const result = await IncidentAPI.updateIncidentStatus(1, { status: 'resolved' });
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/incidents/1/status', { status: 'resolved' });
     });
   });
 
   describe('resolveIncident', () => {
     it('should resolve an incident', async () => {
       mockPost.mockResolvedValue({ id: 1, status: 'resolved' });
-      await IncidentAPI.resolveIncident(1, { resolution: 'Fixed the server' });
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/resolve', { resolution: 'Fixed the server' });
+      await IncidentAPI.resolveIncident(1, { resolution: 'Fixed the server', version: 3, operationId: 'resolve-1' });
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/resolve', { resolution: 'Fixed the server', version: 3, operationId: 'resolve-1' });
     });
   });
 
   describe('assignIncident', () => {
     it('should assign an incident', async () => {
       mockPost.mockResolvedValue({ id: 1, assigneeId: 5 });
-      await IncidentAPI.assignIncident(1, 5);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/assign', { assigneeId: 5 });
+      await IncidentAPI.assignIncident(1, { assigneeId: 5, version: 3, operationId: 'assign-1' });
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/assign', { assigneeId: 5, version: 3, operationId: 'assign-1' });
     });
   });
 
   describe('acknowledgeIncident', () => {
     it('should acknowledge incident', async () => {
-      mockPost.mockResolvedValue({ message: 'acknowledged' });
-      const result = await IncidentAPI.acknowledgeIncident(1);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/acknowledge', {});
-      expect(result.message).toBe('acknowledged');
+      mockPost.mockResolvedValue({ workItemId: 1, version: 4, status: 'acknowledged', replayed: false });
+      const result = await IncidentAPI.acknowledgeIncident(1, {version:3,operationId:'ack-1'});
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/acknowledge', {version:3,operationId:'ack-1'});
+      expect(result.status).toBe('acknowledged');
     });
   });
 
   describe('closeIncident', () => {
     it('should close an incident', async () => {
       mockPost.mockResolvedValue({ message: 'closed' });
-      await IncidentAPI.closeIncident(1, { closeNotes: 'Done' });
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/close', { closeNotes: 'Done' });
+      await IncidentAPI.closeIncident(1, { reason: 'Done', version: 3, operationId: 'close-1' });
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/close', { reason: 'Done', version: 3, operationId: 'close-1' });
     });
   });
 
@@ -136,8 +128,8 @@ describe('IncidentAPI', () => {
   describe('reopenIncident', () => {
     it('should reopen an incident', async () => {
       mockPost.mockResolvedValue({ id: 1, status: 'in_progress' });
-      await IncidentAPI.reopenIncident(1);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/reopen', {});
+      await IncidentAPI.reopenIncident(1, {version:3,operationId:'reopen-1'});
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/reopen', {version:3,operationId:'reopen-1'});
     });
   });
 

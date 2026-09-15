@@ -1,6 +1,8 @@
 'use client';
+import { prepareTicketEdit, isTicketEditConflict, type TicketEditIntent } from '@/lib/api/ticket-edit';
+import { useDetailIdentity } from '@/components/business/detail-tabs/useDetailResource';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button, Space, message, Pagination, Badge, Modal, Select, Input, Form } from 'antd';
 import {
   Plus,
@@ -44,8 +46,13 @@ const KANBAN_COLUMNS: KanbanColumnConfig<Incident>[] = [
 ];
 
 export default function IncidentsPage() {
+  const identity = useDetailIdentity('incident-list');
+  return <IncidentsPageContent key={identity} />;
+}
+function IncidentsPageContent() {
   const router = useRouter();
   const { t } = useI18n();
+  const batchAttempts = useRef(new Map<string, TicketEditIntent<Record<string, unknown>>>());
 
   // ====== 状态管理 ======
   const [loading, setLoading] = useState(false);
@@ -197,7 +204,7 @@ export default function IncidentsPage() {
   const [assignUserOptions, setAssignUserOptions] = useState<
     { label: string; value: number }[]
   >([]);
-  const [assignForm] = Form.useForm<{ assigneeId: number }>();
+  const [assignForm] = Form.useForm<{ assigneeId: number; reason?: string }>();
 
   // 逐条循环兜底：后端目前尚未提供 incident 批量端点，此处封装 Promise.allSettled，失败逐条汇总
   const runIncidentBatch = useCallback(
@@ -210,14 +217,14 @@ export default function IncidentsPage() {
       if (ids.length === 0) return;
       setBatchLoading(true);
       try {
-        const results = await Promise.allSettled(ids.map((id) => handler(Number(id))));
+        const results = await Promise.allSettled(ids.map(async (id) => handler(Number(id))));
         const failCount = results.filter((r) => r.status === 'rejected').length;
         if (failCount === 0) {
           message.success(`${successMsg}：${ids.length} 项`);
         } else {
           message.warning(`${failPrefix}：成功 ${ids.length - failCount} 项，失败 ${failCount} 项`);
         }
-        setSelectedRowKeys([]);
+        setSelectedRowKeys(ids.filter((_, index) => results[index].status === 'rejected'));
         await fetchIncidents();
       } finally {
         setBatchLoading(false);
@@ -246,26 +253,60 @@ export default function IncidentsPage() {
     setAssignModalOpen(false);
     await runIncidentBatch(
       selectedRowKeys,
-      (id) => IncidentAPI.assignIncident(id, values.assigneeId),
+      (id) => {
+        const version = incidents.find(item => item.id === id)?.version;
+        const reason = values.reason?.trim() ?? '';
+        const key = `${id}:assign`;
+        const intent = prepareTicketEdit(batchAttempts.current.get(key), { assigneeId: values.assigneeId, reason }, version);
+        batchAttempts.current.set(key, intent);
+        return IncidentAPI.assignIncident(id, { ...intent.payload, assigneeId: values.assigneeId, reason }).then(result => {
+          batchAttempts.current.delete(key); return result;
+        }).catch(error => {
+          if (isTicketEditConflict(error)) batchAttempts.current.delete(key);
+          throw error;
+        });
+      },
       '批量分派成功',
     );
-  }, [assignForm, selectedRowKeys, runIncidentBatch]);
+  }, [assignForm, selectedRowKeys, runIncidentBatch, incidents]);
 
   const handleBatchResolve = useCallback(async () => {
-    await runIncidentBatch(
-      selectedRowKeys,
-      (id) => IncidentAPI.resolveIncident(id, { resolution: '批量解决' }),
-      '批量解决成功',
-    );
-  }, [selectedRowKeys, runIncidentBatch]);
+    let resolution = '';
+    Modal.confirm({ title: '批量解决事件', content: <Input.TextArea aria-label='恢复验证说明' onChange={event => { resolution = event.target.value; }} />, onOk: async () => {
+      if (!resolution.trim()) throw new Error('请填写恢复验证说明');
+      await runIncidentBatch(selectedRowKeys, id => {
+        const version = incidents.find(item => item.id === id)?.version;
+        const key = `${id}:resolve`;
+        const intent = prepareTicketEdit(batchAttempts.current.get(key), { resolution: resolution.trim() }, version);
+        batchAttempts.current.set(key, intent);
+        return IncidentAPI.resolveIncident(id, { ...intent.payload, resolution: resolution.trim() }).then(result => {
+          batchAttempts.current.delete(key); return result;
+        }).catch(error => {
+          if (isTicketEditConflict(error)) batchAttempts.current.delete(key);
+          throw error;
+        });
+      }, '批量解决成功');
+    } });
+  }, [selectedRowKeys, runIncidentBatch, incidents]);
 
   const handleBatchClose = useCallback(async () => {
-    await runIncidentBatch(
-      selectedRowKeys,
-      (id) => IncidentAPI.closeIncident(id, { closeNotes: '批量关闭' }),
-      '批量关闭成功',
-    );
-  }, [selectedRowKeys, runIncidentBatch]);
+    let reason = '';
+    Modal.confirm({ title: '批量关闭事件', content: <Input.TextArea aria-label='关闭说明' onChange={event => { reason = event.target.value; }} />, onOk: async () => {
+      if (!reason.trim()) throw new Error('请填写关闭说明');
+      await runIncidentBatch(selectedRowKeys, id => {
+        const version = incidents.find(item => item.id === id)?.version;
+        const key = `${id}:close`;
+        const intent = prepareTicketEdit(batchAttempts.current.get(key), { reason: reason.trim() }, version);
+        batchAttempts.current.set(key, intent);
+        return IncidentAPI.closeIncident(id, { ...intent.payload, reason: reason.trim() }).then(result => {
+          batchAttempts.current.delete(key); return result;
+        }).catch(error => {
+          if (isTicketEditConflict(error)) batchAttempts.current.delete(key);
+          throw error;
+        });
+      }, '批量关闭成功');
+    } });
+  }, [selectedRowKeys, runIncidentBatch, incidents]);
 
   const handleBatchDelete = useCallback(async () => {
     await runIncidentBatch(
@@ -518,6 +559,9 @@ export default function IncidentsPage() {
               optionFilterProp="label"
               options={assignUserOptions}
             />
+          </Form.Item>
+          <Form.Item name="reason" label="转派原因" rules={[{ required: selectedRowKeys.some(id => !!incidents.find(item => item.id === id)?.assigneeId), whitespace: true, message: '请填写转派原因' }]}>
+            <Input.TextArea rows={3} />
           </Form.Item>
         </Form>
       </Modal>

@@ -1,3 +1,4 @@
+import { ticketEditVersion, ticketEditOperation, type TicketEditResult } from './ticket-edit';
 import { createWorkItem, type CreationRequestOptions, type CreateWorkItemResult } from './work-item-creation';
 import { httpClient } from './http-client';
 import { handleApiRequest } from './base-api-handler';
@@ -42,9 +43,11 @@ export class TicketApi {
   // Update ticket information
   static async updateTicket(
     id: number,
-    data: Partial<Ticket> & { version?: number; force?: boolean }
-  ): Promise<Ticket> {
-    return handleApiRequest(httpClient.put<Ticket>(`/api/v1/tickets/${id}`, data), {
+    data: Partial<Ticket> & { version: number; operationId: string }
+  ): Promise<TicketEditResult> {
+    ticketEditVersion(data.version);
+    ticketEditOperation(data.operationId);
+    return handleApiRequest(httpClient.put<TicketEditResult>(`/api/v1/tickets/${id}`, data), {
       errorMessage: 'Failed to update ticket',
       showSuccess: true,
     });
@@ -87,13 +90,14 @@ export class TicketApi {
     return httpClient.post<Ticket>(`/api/v1/tickets/${id}/assign`, payload);
   }
 
-  // Escalate ticket
+  // A retry reuses the original operationId and version.
   static async escalateTicket(
     id: number,
-    reasonOrData: string | { level: string; reason: string; assigneeId?: number }
-  ): Promise<Ticket> {
-    const payload = typeof reasonOrData === 'string' ? { reason: reasonOrData } : reasonOrData;
-    return httpClient.post<Ticket>(`/api/v1/tickets/${id}/escalate`, payload);
+    data: { reason: string; version: number; operationId: string }
+  ): Promise<{ workItemId: number; version: number; status: string; replayed: boolean }> {
+    ticketEditVersion(data.version);
+    ticketEditOperation(data.operationId);
+    return httpClient.post(`/api/v1/tickets/${id}/escalate`, data);
   }
 
   // Resolve ticket
