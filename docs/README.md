@@ -1,6 +1,6 @@
 # ITSM 文档中心
 
-- [Ticket 详情体验统一实施计划](./superpowers/plans/2026-09-15-ticket-detail-experience-unification.md)：六项有序任务，尚未实施。
+- [Ticket 详情体验统一实施计划](./superpowers/plans/2026-09-15-ticket-detail-experience-unification.md)：Tasks 1–5 已实现并审阅，当前源码浏览器 6/6 通过；最终独立审查与 PR 待完成。
 
 - [Ticket 详情体验统一设计（accepted）](./superpowers/specs/2026-09-15-ticket-detail-experience-unification-design.md)：统一刷新、局部恢复、编辑保护和当前／历史任务展示。
 
