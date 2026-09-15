@@ -8,7 +8,7 @@ await stat(server).catch(() => {
 });
 
 const child = spawn(process.execPath, [server], {
-  env: process.env,
+  env: { ...process.env, PORT: process.env.PORT || '3010' },
   stdio: 'inherit',
 });
 
