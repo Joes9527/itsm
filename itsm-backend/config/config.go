@@ -144,7 +144,7 @@ func (d *DatabaseConfig) AdminDSN() (user, password string) {
 type ServerConfig struct {
 	Port         int    `mapstructure:"port"`
 	Mode         string `mapstructure:"mode"`
-	CookieSecure bool   `mapstructure:"cookie_secure"` // Secure flag for cookies (set true only behind HTTPS)
+	CookieSecure *bool  `mapstructure:"cookie_secure"` // nil preserves production defaults; false explicitly permits HTTP
 	FrontendURL  string `mapstructure:"frontend_url"`  // 前端地址（邮件重置链接等用）
 }
 
@@ -300,6 +300,10 @@ func LoadConfig() (*Config, error) {
 	// 重新绑定到 Config 结构
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {
+		return nil, err
+	}
+
+	if err := config.Server.applyCookieSecureEnvironment(os.LookupEnv); err != nil {
 		return nil, err
 	}
 
@@ -632,4 +636,19 @@ func loadOutboxDeliveryConfig(getenv func(string) string) (OutboxDeliveryConfig,
 		config.MaxAttempts = parsed
 	}
 	return config, nil
+}
+
+// applyCookieSecureEnvironment keeps absence distinct from an explicit false.
+// Invalid or empty overrides stop startup instead of silently permitting HTTP.
+func (s *ServerConfig) applyCookieSecureEnvironment(lookup func(string) (string, bool)) error {
+	raw, present := lookup("ITSM_COOKIE_SECURE")
+	if !present {
+		return nil
+	}
+	if raw != "true" && raw != "false" {
+		return fmt.Errorf("ITSM_COOKIE_SECURE must be true or false")
+	}
+	value := raw == "true"
+	s.CookieSecure = &value
+	return nil
 }

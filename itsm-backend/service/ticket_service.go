@@ -7,6 +7,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -408,7 +409,9 @@ func (s *TicketService) UpdateTicket(ctx context.Context, cmd dto.TicketEditComm
 		}
 	}
 
-	if isFinalStatus(current.Status) {
+	isGenericClose := current.RecordClass == "generic" && current.Status == ticket.StatusResolved &&
+		reflect.DeepEqual(cmd.Fields, dto.TicketEditFields{Status: string(ticket.StatusClosed)})
+	if isFinalStatus(current.Status) && !isGenericClose {
 		return empty, common.NewForbiddenError("工单已结束，无法编辑")
 	}
 

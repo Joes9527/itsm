@@ -44,6 +44,17 @@ func CanEdit(actor ActionActor, t *ticket.Ticket) dto.ActionPermission {
 	return dto.ActionPermission{Allowed: true}
 }
 
+// CanClose projects the narrow generic resolved-to-closed command, not edit permission.
+func CanClose(actor ActionActor, t *ticket.Ticket) dto.ActionPermission {
+	if t.RecordClass != "generic" || t.Status != ticket.StatusResolved || t.TenantID != actor.TenantID {
+		return dto.ActionPermission{Allowed: false, Reason: "仅当前租户已解决的通用工单可关闭"}
+	}
+	if !authorization.HasResourcePermission(actor.Client, actor.Role, "ticket", "update", actor.TenantID) {
+		return dto.ActionPermission{Allowed: false, Reason: "无关闭权限"}
+	}
+	return dto.ActionPermission{Allowed: true}
+}
+
 // CanDelete：ticket:delete 权限 + 工单未结束 + 无运行中的 BPMN 流程实例。
 func CanDelete(ctx context.Context, actor ActionActor, t *ticket.Ticket) dto.ActionPermission {
 	if !authorization.HasResourcePermission(actor.Client, actor.Role, "ticket", "delete", actor.TenantID) {
@@ -104,6 +115,7 @@ func BuildTicketActions(ctx context.Context, actor ActionActor, t *ticket.Ticket
 	return map[string]dto.ActionPermission{
 		"assign": CanAssign(actor, t),
 		"edit":   CanEdit(actor, t),
+		"close":  CanClose(actor, t),
 		"cc":     CanCC(ctx, actor, t.ID),
 		"delete": CanDelete(ctx, actor, t),
 	}

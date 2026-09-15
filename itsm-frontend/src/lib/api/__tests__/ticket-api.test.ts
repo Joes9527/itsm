@@ -521,3 +521,36 @@ describe('explicit edit conflict versus unknown result', () => {
     expect(isTicketEditConflict(Object.assign(new Error('proxy conflict'), { status: 409 }))).toBe(false);
   });
 });
+
+
+describe('ticket edit identity over LAN HTTP', () => {
+  const originalRandomUUID = crypto.randomUUID;
+  const originalGetRandomValues = crypto.getRandomValues;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: undefined });
+  });
+  afterEach(() => {
+    Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: originalRandomUUID });
+    Object.defineProperty(crypto, 'getRandomValues', { configurable: true, value: originalGetRandomValues });
+  });
+
+  it('sends an edit with cryptographic identity and preserves it across uncertain retries', async () => {
+    const first = prepareTicketEdit<Partial<import('../api-config').Ticket>>(undefined, { status: 'in_progress' }, 4);
+    expect(first.payload.operationId).toMatch(/^[0-9a-f]{32}$/);
+    await TicketApi.updateTicket(1, first.payload);
+    expect(mockPut).toHaveBeenCalledWith('/api/v1/tickets/1', {
+      status: 'in_progress', version: 4, operationId: first.payload.operationId,
+    });
+    // A retry must not need another random draw, even if the source later fails.
+    Object.defineProperty(crypto, 'getRandomValues', { configurable: true, value: () => { throw new Error('random source failed'); } });
+    expect(prepareTicketEdit(first, { status: 'in_progress' }, 9)).toBe(first);
+    expect(() => prepareTicketEdit(first, { status: 'pending' }, 9)).toThrow('random source failed');
+  });
+
+  it('rejects a new intent when no cryptographic random source exists', () => {
+    Object.defineProperty(crypto, 'getRandomValues', { configurable: true, value: undefined });
+    expect(() => prepareTicketEdit(undefined, { title: 'changed' }, 4)).toThrow('浏览器不支持安全操作标识');
+    expect(mockPut).not.toHaveBeenCalled();
+  });
+});

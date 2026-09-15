@@ -1,21 +1,42 @@
 package authentication
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"strings"
 )
 
-// ShouldUseSecureCookies is the single transport policy for session and OAuth
-// state cookies. Production/release mode fails safe even if a reverse proxy
-// omits X-Forwarded-Proto.
+type cookieTransportKey struct{}
+
+// WithCookieTransportPolicy binds startup configuration to a request without
+// mutable package state. An omitted setting preserves safe production defaults.
+func WithCookieTransportPolicy(request *http.Request, secure *bool, release bool) *http.Request {
+	value := release || defaultSecureCookies()
+	if secure != nil {
+		value = *secure
+	}
+	return request.WithContext(context.WithValue(request.Context(), cookieTransportKey{}, value))
+}
+
+func defaultSecureCookies() bool {
+	return strings.EqualFold(os.Getenv("ENV"), "production") || strings.EqualFold(os.Getenv("GIN_MODE"), "release")
+}
+
+// ShouldUseSecureCookies is shared by session, OAuth state and CSRF cookies.
+// TLS and forwarded HTTPS only strengthen the policy: client-supplied forwarding
+// headers can never opt an HTTP request out of Secure. The ingress must replace
+// forwarding headers with its observed transport, never append client values.
 func ShouldUseSecureCookies(request *http.Request) bool {
 	if request != nil {
 		if request.TLS != nil || strings.EqualFold(request.Header.Get("X-Forwarded-Proto"), "https") {
 			return true
 		}
+		if secure, ok := request.Context().Value(cookieTransportKey{}).(bool); ok {
+			return secure
+		}
 	}
-	return strings.EqualFold(os.Getenv("ENV"), "production") || strings.EqualFold(os.Getenv("GIN_MODE"), "release")
+	return defaultSecureCookies()
 }
 
 func WriteSessionCookies(writer http.ResponseWriter, request *http.Request, tokens *SessionTokens) {
