@@ -2,6 +2,8 @@
 """Manage only the recorded native processes in the maintained WSL stack."""
 
 import argparse
+from contextlib import contextmanager
+import fcntl
 import hashlib
 import json
 import os
@@ -35,7 +37,10 @@ def identity(pid):
         capture_output=True,
     )
     value = result.stdout.strip()
-    if result.returncode or not value or value.startswith("Z"):
+    if result.returncode or not value:
+        return None
+    state, _, started = value.partition(" ")
+    if state.startswith("Z") or not started.strip():
         return None
     cwd_result = subprocess.run(
         ["lsof", "-a", "-p", str(pid), "-d", "cwd", "-Fn"],
@@ -45,7 +50,7 @@ def identity(pid):
     cwd = next((line[1:] for line in cwd_result.stdout.splitlines() if line.startswith("n")), None)
     if not cwd:
         return None
-    return {"start_ticks": value, "cwd": cwd}
+    return {"start_ticks": started.strip(), "cwd": cwd}
 
 
 def load_json(path):
@@ -64,6 +69,31 @@ def recipe_path(state, name):
 
 def record_path(state, name):
     return state / "evidence" / f"{name}-process.json"
+
+
+@contextmanager
+def lifecycle_lock(state, name, timeout):
+    lock_dir = state / "locks"
+    lock_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(lock_dir, 0o700)
+    path = lock_dir / f"{name}.lock"
+    with path.open("a+") as lock_file:
+        os.chmod(path, 0o600)
+        deadline = time.monotonic() + max(timeout, 0)
+        while True:
+            try:
+                fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError(
+                        f"{name}: lifecycle lock is busy; retry after the active operation finishes"
+                    )
+                time.sleep(0.05)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
 
 
 def config_fingerprint(recipe):
@@ -200,6 +230,54 @@ def port_owners(port):
     return sorted(owners)
 
 
+def process_parent(pid):
+    try:
+        data = Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()
+        return int(data[1])
+    except (FileNotFoundError, ProcessLookupError, PermissionError):
+        if Path("/proc").exists():
+            return None
+    result = subprocess.run(
+        ["ps", "-p", str(pid), "-o", "ppid="], text=True, capture_output=True
+    )
+    value = result.stdout.strip()
+    return int(value) if result.returncode == 0 and value.isdigit() else None
+
+
+def belongs_to_process_tree(pid, root_pid):
+    current = pid
+    seen = set()
+    for _ in range(128):
+        if current == root_pid:
+            return True
+        if current <= 1 or current in seen:
+            return False
+        seen.add(current)
+        parent = process_parent(current)
+        if parent is None:
+            return False
+        current = parent
+    return False
+
+
+def port_drift(recipe, root_pid):
+    port = recipe.get("port")
+    if not port:
+        return []
+    owners = port_owners(port)
+    if not owners:
+        return [f"port {port} has no listener"]
+    if "unknown" in owners:
+        return [f"port {port} listener owner is unknown"]
+    foreign = [
+        owner for owner in owners
+        if not belongs_to_process_tree(int(owner), root_pid)
+    ]
+    if foreign:
+        return [f"port {port} is owned by foreign PID(s) {','.join(foreign)}"]
+    return []
+
+
 def describe_metadata(recipe):
     parts = []
     for key in ("source_revision", "build_id"):
@@ -251,6 +329,7 @@ def status(state, name):
         if recorded_fingerprint and recorded_fingerprint != config_fingerprint(recipe):
             problems.append("runtime configuration drift")
         problems.extend(configured_problems)
+        problems.extend(port_drift(recipe, int(record["pid"])))
     suffix = describe_metadata(recipe or {})
     if problems:
         print(f"{name}: running (PID {record['pid']}) with " + "; ".join(problems) + suffix)
@@ -259,7 +338,7 @@ def status(state, name):
     return 0
 
 
-def start(state, name):
+def start(state, name, startup_timeout=5.0):
     path = recipe_path(state, name)
     if not path.exists():
         print(f"{name}: not configured")
@@ -273,6 +352,7 @@ def start(state, name):
         if record.get("config_sha256") and record["config_sha256"] != config_fingerprint(recipe):
             problems.append("runtime configuration drift")
         problems.extend(configured_drift(recipe))
+        problems.extend(port_drift(recipe, int(record["pid"])))
         if problems:
             raise RuntimeError(f"{name}: running (PID {record['pid']}) with " + "; ".join(problems))
         print(f"{name}: running (PID {record['pid']}){describe_metadata(recipe)}")
@@ -311,6 +391,28 @@ def start(state, name):
     )
     record_path(state, name).parent.mkdir(parents=True, exist_ok=True)
     record_path(state, name).write_text(json.dumps(record, indent=2) + "\n")
+    if port:
+        deadline = time.monotonic() + startup_timeout
+        last_problems = port_drift(recipe, process.pid)
+        while last_problems and time.monotonic() < deadline:
+            if identity(process.pid) != found:
+                raise RuntimeError(
+                    f"{name}: exited before its configured port {port} became ready; "
+                    f"see {logpath}"
+                )
+            time.sleep(0.1)
+            last_problems = port_drift(recipe, process.pid)
+        if last_problems:
+            raise RuntimeError(
+                f"{name}: listener did not become ready before timeout; "
+                + "; ".join(last_problems)
+                + f"; recorded PID {process.pid} remains available for exact cleanup"
+            )
+        if identity(process.pid) != found:
+            raise RuntimeError(
+                f"{name}: process identity changed after port {port} became ready; "
+                "record remains available for exact cleanup"
+            )
     print(f"{name}: started (PID {process.pid}); see {logpath}{describe_metadata(recipe)}")
     return 0
 
@@ -346,6 +448,8 @@ def stop(state, name):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--state", type=Path, default=STATE)
+    parser.add_argument("--startup-timeout", type=float, default=5.0)
+    parser.add_argument("--lock-timeout", type=float, default=2.0)
     parser.add_argument("action", choices=("start", "stop", "status"))
     parser.add_argument("service", nargs="?", choices=ORDER)
     args = parser.parse_args()
@@ -353,7 +457,13 @@ def main():
     failed = False
     for name in names:
         try:
-            result = start(args.state, name) if args.action == "start" else stop(args.state, name) if args.action == "stop" else status(args.state, name)
+            with lifecycle_lock(args.state, name, args.lock_timeout):
+                if args.action == "start":
+                    result = start(args.state, name, args.startup_timeout)
+                elif args.action == "stop":
+                    result = stop(args.state, name)
+                else:
+                    result = status(args.state, name)
             failed = failed or bool(result)
         except RuntimeError as error:
             print(error, file=sys.stderr)
