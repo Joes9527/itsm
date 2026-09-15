@@ -95,3 +95,14 @@ context** 上、由 `database/rls.AcquireConn` 读取。
 | `640f2301` | 复审包 |
 | `03452e12` | 迁移验证工具 |
 | `45c12607` | 迁移验证报告 + 证据 |
+
+## 7. 旧数据在新系统的可用性验证（走 3010）
+
+| 流程 | 结果 |
+| --- | --- |
+| 迁移用户登录 | `sha256:4b1c60bd` 用 SOP 默认口令登录 → **200**（id=2、邮箱 `sha256:4161c9bd`），随后 `GET /api/v1/auth/me` → 200，会话可用 |
+| 组织树 | `GET /api/v1/departments/tree` → 200，返回 **7,975 个节点**，与库内部门数一致 |
+| 人员选择器 | `GET /api/v1/users` 可见 **7,861** 个用户（tenant 1 作用域；库内 7,862 含 1 个 tenant 2 账号）；`?search=sha256:4b1c60bd` → 命中 1 条；`?search=Wang` → 403 条 |
+
+注意：选择器的检索参数是 **`search`**（不是 `keyword`/`username`）；`?keyword=` 会被忽略并返回默认列表，
+早期因此误判为失败。组织树与选择器分别是 `department` 与 `user` 读权限，均通过。
