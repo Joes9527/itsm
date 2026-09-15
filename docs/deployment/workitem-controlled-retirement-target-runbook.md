@@ -38,16 +38,16 @@ BEGIN; CREATE TEMP TABLE itsm_temp_probe(x int); ROLLBACK;
 
 ## 3. 阶段 1：结构准备 P（037，需独立授权）
 
-- [ ] R 前完整备份与校验（含 WAL、角色、附件、配置）。
+- [ ] P 前完成与本次变更范围匹配的备份、摘要和独立恢复验证；记录数据库、角色、附件、配置覆盖范围，不能把逻辑库恢复称为完整物理恢复。
 - [ ] `migrate -prepare-workitem -dry-run` 产出清单并与已批准清单逐项比对。
-- [ ] `migrate -prepare-workitem -evidence-file <signed>` 绑定证据；拒绝任何未授权签名。
-- [ ] `migrate -prepare-workitem` 执行 P；核对新回执、旧对象仍保留、无业务行/回执被改写。
+- [ ] `migrate -prepare-workitem -evidence-file /reviewed/preparation.json` 执行 P：校验可信配置的目标、实际 OS 身份、库存、制品和真实备份／恢复摘要；核对新回执、保留对象和历史数据。P 不使用 R 的 Ed25519 签名契约；不能省略证据文件另执行一次 P。
 - [ ] 运行 `ReconcileSchemaInvariants`；确认访问 invariants 已存在且 identity 未变。
 - [ ] 本阶段仅核验 P 所需结构、受限角色/RLS 与真实回执；完整三域 + Requested Item V1 在下一阶段普通迁移完成后执行。
 
 ## 4. 阶段 2：普通迁移与观察（P 之后，需独立授权）
 
-- [ ] `migrate -up` 应用到 036；确认不自动执行 P/R。
+- [ ] 按所选源码的唯一迁移目录列出准确普通迁移计划；2026-09-15 主干目录到 047，031 历史目标在 P 后需要 032–036、039–047。运行 `migrate -up` 不自动执行 P/R，038 保持 pending_manual；以后目录变化须重新核对，不能把 036 或最高编号当完成证明。
+- [ ] 独立核对 runtime/system/inspection 角色、执行域 SELECT-only 与 deployment/standard 绑定；建表完成不等于运行配置完成。开发恢复沿用[开发环境合同](../development-environment.md#development-and-migration-validation-database-contract)，无需提前执行 R。
 - [ ] 应用启动仅走 canonical 流，不使用 Ent overlay；确认只读准入通过。
 - [ ] 运行完整业务 V1；观察期正常写入（记录/关系/SLA/流程/审计/附件）。
 - [ ] 记录观察期开始/结束时间、业务验收人、异常与处置。
