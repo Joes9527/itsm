@@ -10,7 +10,7 @@
 
 **Spec:** [2026-09-15-ticket-detail-experience-unification-design.md](../specs/2026-09-15-ticket-detail-experience-unification-design.md)
 
-**Status:** accepted（Tasks 1–5 已实现并逐项审阅；Task 6 浏览器验收完成，最终独立审查与 PR 待完成）
+**Status:** implemented（六项任务与最终独立复审完成；PR #35 已创建，待维护者合并）
 
 ## Global Constraints
 
@@ -221,8 +221,8 @@ for (const width of [1440, 390]) {
 补齐输入草稿→刷新→保留、打开编辑→刷新→版本冲突、失败区域重试、全局请求计数、暗色、键盘、任务完成→活动消失/历史折叠、只读与拒绝权限。使用精确等待条件，避免任意 sleep。
 - [x] 运行 `npm run type-check`、`npm run lint:check`、`npm run build`。运行 `PLAYWRIGHT_SKIP_CHANNELS=1 npx playwright test tests/e2e/flows/ticket-detail-refresh.spec.ts tests/e2e/flows/ticket-process-tasks-ui.spec.ts --project=chromium --workers=1`；未配置 fixture 导致 skip 不算通过。
 - [x] 定向测试外，仅在共享影响或新失败确有需要时扩大测试。检查 diff 无重复实现、临时文件及无关格式化，运行 `git diff --check`。
-- [ ] 独立审查重点：授权未被 UI 推断、资源单一来源、写后读取顺序、旧身份隔离、草稿/版本保护、任务命令唯一入口。修复阻断项并重跑相关验证。
-- [ ] 将设计标记 implemented 仅限上述功能与证据齐备后；记录浏览器范围、已有警告和环境限制。提交 `test(ticket): verify unified detail refresh and task experience`，创建聚焦 PR，未经用户后续授权不部署/合并。
+- [x] 独立审查重点：授权未被 UI 推断、资源单一来源、写后读取顺序、旧身份隔离、草稿/版本保护、任务命令唯一入口。修复阻断项并重跑相关验证。
+- [x] 将设计标记 implemented 仅限上述功能与证据齐备后；记录浏览器范围、已有警告和环境限制。提交 `test(ticket): verify unified detail refresh and task experience`，创建聚焦 PR，未经用户后续授权不部署/合并。
 
 ## 依赖与执行顺序
 
@@ -238,6 +238,8 @@ Task 6 使用当前 worktree 的 standalone 生产构建，专用端口 3012，�
 - 覆盖评论草稿、单次主体/评论/任务读取、其他 API 每批不重复、AI 不随刷新重发、Alt+R、原编辑版本冲突、局部重试、最终拒绝清理、服务端只读动作、任务领取/完成及历史折叠。1440/390 亮暗主题无 body 横向溢出，并保存菜单与任务状态截图于 `/tmp`。
 - 共享组件回归初次最终依赖运行 179/180 通过；唯一失败为旧 ServiceRequestPanel 把读取失败当空状态的断言。改为成功 null 与失败后局部重试的独立断言，聚焦重跑 **12/12 通过**。WorkItemShell、审批页及 useApprovalTasks 兼容集 **39/39 通过**。未反复运行未改动的全套测试。
 - 浏览器错误、AI 建议、只读权限、版本冲突与任务命令均为 route 隔离数据；兜底 abort 所有非认证业务写请求。真实共享环境仅登录/读取；未运行真实工单、评论、任务命令或 KAF/外部授权。未以模拟响应证明真实后端命令成功。
-- 截图和详细命令日志仅留 `/tmp` 与本地忽略产物。最终控制器独立审查、设计 implemented 状态和 PR 创建仍待完成；未推送、部署或合并。
+- 截图和详细命令日志仅留 `/tmp` 与本地忽略产物。最终独立审查及修复复审已完成，设计标记 implemented，功能分支已推送并创建 [PR #35](https://github.com/Joes9527/itsm/pull/35)；未部署或合并。
 
-Task 6 复审修复：后注册的读取 fixture 改为 method gate + `route.fallback()`，复用 `read-only-routes.ts`，不再绕过业务写入兜底拦截。新增纯模拟下游测试证明 20 个匹配／不匹配 POST/PUT/PATCH/DELETE 请求被拒绝，5 个 GET 仅到达模拟响应，任何失败均不会访问真实写接口。版本冲突新增可见解释断言后发现既有“更新失败”覆盖了具体原因；仅将该既有错误分支文案改为“工单已被更新，请重新打开编辑后重试”，保留原版本、幂等、关闭和读取行为。新生产构建通过；TicketDetail 21/21、浏览器 7/7、改动文件 lint 与 type-check 均通过。最终独立审查与 PR 仍待完成。
+Task 6 复审修复：后注册的读取 fixture 改为 method gate + `route.fallback()`，复用 `read-only-routes.ts`，不再绕过业务写入兜底拦截。新增纯模拟下游测试证明 20 个匹配／不匹配 POST/PUT/PATCH/DELETE 请求被拒绝，5 个 GET 仅到达模拟响应，任何失败均不会访问真实写接口。版本冲突新增可见解释断言后发现既有“更新失败”覆盖了具体原因；仅将该既有错误分支文案改为“工单已被更新，请重新打开编辑后重试”，保留原版本、幂等、关闭和读取行为。新生产构建通过；TicketDetail 21/21、浏览器 7/7、改动文件 lint 与 type-check 均通过。后续整分支审查及交付结果见下段。
+
+最终整分支审查发现 AI 更新／编辑冲突后读取仍占用写入标记，导致并发任务完成刷新跳过工单。提交 78483d78 分离实际命令 pending 与界面防重复锁；三个真实组件组合用例先复现缺失第三次读取，再验证新读取及旧响应丢弃。最终相关 6 套件 98/98、type-check、改动文件 ESLint 与生产构建通过，独立复审无剩余问题。浏览器 7/7 对应 102c7f6d；最终并发差异由上述组合测试覆盖，未重跑浏览器或宣称验证最新 main 合并树。与当时 origin/main 6ff43cf8 的 merge-tree 预检无冲突。
