@@ -1,3 +1,5 @@
+import { sessionSecurity } from '@/lib/security';
+
 // Editing uses the version the user observed, never a refreshed server version.
 export function ticketEditVersion(version: unknown): number {
   if (typeof version !== 'number' || !Number.isSafeInteger(version) || version <= 0) {
@@ -39,7 +41,7 @@ export function prepareTicketEdit<T extends object>(
     payload: {
       ...JSON.parse(fingerprint),
       version: ticketEditVersion(version),
-      operationId: crypto.randomUUID(),
+      operationId: sessionSecurity.generateOperationId(),
     },
   };
 }

@@ -51,7 +51,7 @@ import { useErrorHandler } from '@/lib/hooks/useErrorHandler';
 import { formatDateTime } from '@/lib/formatters';
 import { SafeTextBlock } from '@/components/common/SafeContent';
 import { AISuggestionPanel } from '@/components/business/AISuggestionPanel';
-import { isValidTransition, isFinalStatus } from '@/lib/utils/workflow-state-machine';
+import { isFinalStatus } from '@/lib/utils/workflow-state-machine';
 import { TicketStatus, TicketStatusConfig, getPriorityConfig } from '@/constants/taxonomy';
 import { ticketAttachmentAdapter } from '@/components/business/detail-tabs';
 import { ApprovalMiniStepper } from '@/components/business/detail-tabs/ApprovalMiniStepper';
@@ -138,9 +138,17 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
     aiEditIntent.current = undefined;
     editSnapshot.current = undefined;
   }, [ticketId]);
+  const [closeModalVisible, setCloseModalVisible] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const closeIntent = useRef<TicketEditIntent<{ status: 'closed' }> | undefined>(undefined);
+  const closeVersion = useRef<number | undefined>(undefined);
+  const closeInFlight = useRef(false);
   const [ccModalVisible, setCCModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<Array<Pick<User, 'id' | 'name'> & { username?: string; department?: string }>>([]);
+  const userSearch = useRef('');
+  const userSearchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const userSearchRequest = useRef(0);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
   const [assigning, setAssigning] = useState(false);
@@ -187,24 +195,48 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
   }, [ticketId, handleError]);
 
   // Get users for assignment
-  const fetchUsers = useCallback(async () => {
+  const fetchUsers = useCallback(async (search = userSearch.current) => {
+    const request = ++userSearchRequest.current;
     if (!hasPermission('user:read')) {
       setUsersError('无权读取人员列表');
       setUsers([]);
+      setLoadingUsers(false);
       return;
     }
     try {
       setLoadingUsers(true);
       setUsersError(null);
-      const data = await UserApi.getUsers({ pageSize: 100 });
-      setUsers(hasPermission('user:read') ? data.users || [] : []);
+      const data = await UserApi.getUsers({ pageSize: 100, search });
+      if (request !== userSearchRequest.current) return;
+      if (!hasPermission('user:read')) {
+        setUsers([]);
+        setUsersError('无权读取人员列表');
+        return;
+      }
+      const selectedIds = new Set([
+        assignForm.getFieldValue('assigneeId'),
+        ...(ccForm.getFieldValue('ccUsers') || []),
+      ]);
+      setUsers(previous => [
+        ...(data.users || []),
+        ...previous.filter(user => selectedIds.has(user.id) && !data.users?.some(result => result.id === user.id)),
+      ]);
     } catch (error) {
+      if (request !== userSearchRequest.current) return;
       setUsersError(error instanceof Error ? error.message : '人员列表加载失败');
       setUsers([]);
     } finally {
-      setLoadingUsers(false);
+      if (request === userSearchRequest.current) setLoadingUsers(false);
     }
-  }, [hasPermission]);
+  }, [hasPermission, assignForm, ccForm]);
+
+  const searchUsers = (search: string) => {
+    userSearch.current = search;
+    ++userSearchRequest.current;
+    clearTimeout(userSearchTimer.current);
+    setLoadingUsers(true);
+    userSearchTimer.current = setTimeout(() => void fetchUsers(search), 300);
+  };
 
   // Get ticket SLA info
   const fetchSLAInfo = useCallback(async () => {
@@ -266,8 +298,14 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
   }, [ticketId]);
 
   useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+    userSearch.current = '';
+    setUsers([]);
+    void fetchUsers('');
+    return () => {
+      ++userSearchRequest.current;
+      clearTimeout(userSearchTimer.current);
+    };
+  }, [fetchUsers, ticketId, currentUser?.tenantId]);
 
   const handleCCSubmit = async (values: {
     ccUsers: number[];
@@ -295,6 +333,13 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   // Handle assignment
   const handleAssign = () => {
+    if (ticket?.assigneeId && hasPermission('user:read')) {
+      assignForm.setFieldsValue({ assigneeId: ticket.assigneeId });
+      const assignee = ticket.assignee;
+      if (assignee) {
+        setUsers(previous => previous.some(user => user.id === assignee.id) ? previous : [...previous, assignee]);
+      }
+    }
     setAssignModalVisible(true);
   };
 
@@ -322,6 +367,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
         description: ticket.description,
         priority: ticket.priority,
         status: ticket.status,
+        ...(ticket.recordClass === 'generic' ? { resolution: ticket.resolution } : {}),
       });
       editSnapshot.current = { version: ticketEditVersion(ticket.version), status: ticket.status };
       editIntent.current = undefined;
@@ -333,16 +379,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
   const handleEditSubmit = async (values: Partial<Ticket>) => {
     try {
       setUpdating(true);
-      // 状态转换验证
-      if (values.status && editSnapshot.current?.status && values.status !== editSnapshot.current.status) {
-        if (!isValidTransition(editSnapshot.current.status as TicketStatus, values.status as TicketStatus)) {
-          antMessage.error(
-            `不允许从 "${ticket?.recordClass === 'service_request_item' ? '服务请求' : getTicketStatusLabel(editSnapshot.current.status)}" 转换到 "${getTicketStatusLabel(values.status)}"`
-          );
-          return;
-        }
-      }
-
+      // The owning backend validates status transitions and professional lifecycle boundaries.
       editIntent.current = prepareTicketEdit(editIntent.current, values, editSnapshot.current?.version);
       await TicketApi.updateTicket(ticketId, editIntent.current.payload);
       editIntent.current = undefined;
@@ -359,6 +396,31 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
       handleError(error, 'updateTicket', '更新失败');
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleCloseSubmit = async () => {
+    if (closeInFlight.current) return;
+    closeInFlight.current = true;
+    setClosing(true);
+    try {
+      closeIntent.current = prepareTicketEdit(closeIntent.current, { status: 'closed' }, closeVersion.current);
+      await TicketApi.updateTicket(ticketId, closeIntent.current.payload);
+      closeIntent.current = undefined;
+      setCloseModalVisible(false);
+      antMessage.success('工单已关闭');
+      await fetchTicket();
+    } catch (error) {
+      if (isTicketEditConflict(error)) {
+        closeIntent.current = undefined;
+        closeVersion.current = undefined;
+        setCloseModalVisible(false);
+        await fetchTicket();
+      }
+      handleError(error, 'closeTicket', '关闭失败');
+    } finally {
+      closeInFlight.current = false;
+      setClosing(false);
     }
   };
 
@@ -548,6 +610,16 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
               <Edit size={13} className="text-muted" />
               <span>编辑</span>
             </button>
+
+            {ticket.recordClass === 'generic' && ticket.actions?.close?.allowed && (
+              <Button onClick={() => {
+                closeVersion.current = ticketEditVersion(ticket.version);
+                closeIntent.current = undefined;
+                setCloseModalVisible(true);
+              }}>
+                关闭工单
+              </Button>
+            )}
 
             <button
               type='button'
@@ -881,6 +953,18 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
       {/* ================= 业务操作弹窗集群（零丢失） ================= */}
       {/* 1. Assignment Modal */}
       <Modal
+        title='关闭工单'
+        open={closeModalVisible}
+        confirmLoading={closing}
+        okText='确认关闭'
+        cancelText='取消'
+        onOk={() => void handleCloseSubmit()}
+        onCancel={() => { if (!closeInFlight.current) setCloseModalVisible(false); }}
+      >
+        确认关闭此工单？已有解决方案将保留，关闭后不可编辑。
+      </Modal>
+
+      <Modal
         title={
           <Space>
             <UserCheck className='w-5 h-5 text-blue-600' />
@@ -909,9 +993,8 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
               loading={loadingUsers}
               disabled={!hasPermission('user:read') || !!usersError}
               showSearch
-              filterOption={(input, option) =>
-                (option?.searchText ?? '').toLowerCase().includes(input.toLowerCase())
-              }
+              filterOption={false}
+              onSearch={searchUsers}
               options={users.map(user => ({
                 value: user.id,
                 searchText: [user.name, user.username].filter(Boolean).join(' '),
@@ -1032,6 +1115,22 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
               />
             </Form.Item>
           </div>
+          {ticket.recordClass === 'generic' && (
+            <Form.Item
+              label='解决方案'
+              name='resolution'
+              dependencies={['status']}
+              rules={[
+                ({ getFieldValue }) => ({
+                  required: getFieldValue('status') === 'resolved',
+                  whitespace: true,
+                  message: '请填写解决方案',
+                }),
+              ]}
+            >
+              <TextArea rows={4} placeholder='请描述解决方案和验证结果' />
+            </Form.Item>
+          )}
           <Form.Item className='mb-0'>
             <Space className='w-full justify-end'>
               <Button
@@ -1085,7 +1184,8 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
               loading={loadingUsers}
               disabled={!hasPermission('user:read') || !!usersError}
               showSearch
-              optionFilterProp='label'
+              filterOption={false}
+              onSearch={searchUsers}
               options={users.map(user => ({
                 value: user.id,
                 label: `${user.name || user.username}${user.department ? ` (${user.department})` : ''}`,

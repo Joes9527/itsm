@@ -233,6 +233,17 @@ export const sessionSecurity = {
     return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
   },
 
+  // Shared command identity: LAN HTTP may expose getRandomValues without randomUUID.
+  generateOperationId: (): string => {
+    if (typeof globalThis.crypto?.randomUUID === 'function') {
+      return globalThis.crypto.randomUUID();
+    }
+    if (typeof globalThis.crypto?.getRandomValues !== 'function') {
+      throw new Error('浏览器不支持安全操作标识，请使用支持加密随机数的浏览器');
+    }
+    return sessionSecurity.generateSessionId();
+  },
+
   // 安全的localStorage操作
   // 警告：localStorage不是一个安全的地方来存储敏感信息，例如认证令牌。
   // 任何在同一域名下运行的脚本都可以访问localStorage。
