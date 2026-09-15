@@ -31,6 +31,8 @@
 - Create: `scripts/migration/profile.py`
 - Create: `scripts/requirements.txt`
 - Test: `scripts/__tests__/test_migration_profile.py`
+- Create: `scripts/__tests__/conftest.py` (puts `scripts/` on `sys.path` so `import migration` works when
+  pytest runs from the repository root)
 
 **Interfaces:**
 - Consumes: nothing.
@@ -47,24 +49,37 @@ import pytest
 
 from migration.profile import ProfileError, load_profile
 
+
+@pytest.fixture(autouse=True)
+def register_entity_stub():
+    """Profile loading validates entity names against the plug-in registry.
+
+    Task 1 ships an empty registry, so the loader's check is exercised with a stub. Once a real
+    plug-in registers the same name the stub is ignored (`setdefault`), so this stays valid later.
+    """
+    from migration.checks import REGISTRY
+    REGISTRY.setdefault('departments', type('StubCheck', (), {'name': 'departments'})())
+    yield
+
+
 MINIMAL = """
 version: 1
 name: demo
 source:
   dir: {dir}
   files:
-    departments: {{file: departments.json, records: 1, id_field: departmentId}}
+    departments: {file: departments.json, records: 1, id_field: departmentId}
 target:
   access: docker
   container: c
   user: u
   database: d
-  credential: {{from_env: TARGET_PW}}
+  credential: {from_env: TARGET_PW}
 entities:
   - name: departments
     source: departments
     target_table: departments
-    keys: {{source: departmentId, target: code}}
+    keys: {source: departmentId, target: code}
     structure_checks: [tree_single_root]
 """
 
@@ -72,7 +87,8 @@ entities:
 def write_profile(tmp_path: Path, body: str, dept_rows: str = '[{"departmentId": "A"}]') -> Path:
     (tmp_path / 'departments.json').write_text(dept_rows, encoding='utf-8')
     path = tmp_path / 'p.yaml'
-    path.write_text(textwrap.dedent(body).format(dir=tmp_path), encoding='utf-8')
+    # replace() rather than format(): injected snippets contain literal braces
+    path.write_text(textwrap.dedent(body).replace('{dir}', str(tmp_path)), encoding='utf-8')
     return path
 
 
@@ -431,6 +447,11 @@ PyYAML>=6.0
 
 Run: `python3 -m pytest scripts/__tests__/test_migration_profile.py -q`
 Expected: `7 passed`
+
+Notes recorded while executing this task (three plan gaps found by running the tests):
+the entity-name validation needs a registered plug-in, so the tests register a stub; the profile
+template uses single braces because the helper substitutes `{dir}` with `replace()`; and
+`scripts/__tests__/conftest.py` is required for `import migration` to resolve.
 
 - [ ] **Step 5: Commit**
 
