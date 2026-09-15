@@ -1877,7 +1877,13 @@ def run(profile, entity_name: str, apply: bool, target, check, src, tgt, evidenc
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m pytest scripts/__tests__/test_migration_backfill.py -q`
-Expected: `6 passed`
+Expected: `11 passed`
+
+Notes recorded while executing this task:
+1. The evidence keys are `backfill_results`, `backfill_rollback` and `backfill_blocked`; the planned
+   test asserted `evidence.results`, which the implementation never sets.
+2. Extra tests cover the other two preflight checks (duplicate address, unresolved department), the
+   CSRF refresh between writes, a profile with writing disabled, and the empty-plan case.
 
 - [ ] **Step 5: Commit**
 
