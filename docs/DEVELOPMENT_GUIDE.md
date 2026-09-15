@@ -484,3 +484,16 @@ only the original task's allowed action and original run/idempotency identity.
 Cross-file behavioral test mappings live in `scripts/test-coverage-mappings.json`. They identify reviewed domain tests rather than duplicate filename-matching tests. Pure removal-only changes add no implementation to cover; mixed edits remain guarded. Run `node --test scripts/__tests__/test-coverage-guard.test.js` to validate paths and removal classification. Mapping a conditional PostgreSQL test does not assert that it ran; record database evidence separately.
 
 Jest ignores `.next` build copies. Only `theme-preference.ts` is excluded from coverage instrumentation: its functions are serialized into a standalone pre-paint script, and Istanbul counters introduce unavailable module closures. Its full bootstrap and global-error behavior tests still execute. Global coverage thresholds are unchanged.
+
+
+### GA Gate 的可丢弃数据库准备
+
+`ga-gate` 使用 `scripts/ga-controlled-preparation.py` 在 GitHub Actions 专属 Compose project 内编排既有迁移 CLI。它先验证空数据库，并确认普通初始化精确停在 P037 缺失边界；随后执行实际备份、独立恢复和账本核对，通过受控 `-prepare-workitem -evidence-file` 完成 P，再执行普通迁移与 seed。最终应用健康检查及 API smoke 测试保持原门禁。
+
+该脚本只供可丢弃 CI 使用，不是开发或生产部署入口。容器、卷、网络及日志目录均属于本次随机 project；端口已占用或发现外部资源时拒绝执行。运行时使用独立 app/system/inspection 身份。生成的控制文件、凭据、备份及原始准备证据不上传，仅上传脱敏摘要；失败日志包含已删除初始化容器与迁移命令的 stderr，经过凭据过滤，清理前验证资源归属。隔离初始化也不得在 canonical 迁移后用全表或全函数 blanket grants 覆盖迁移拥有的最小权限；标准运行身份只获得既有 runtime admission 要求的 registry 只读权限，并由隔离环境 owner 预配匹配的 standard 绑定。Python 编排单测与实际组装验证分别记录，P/R 回执及摘要来自实际 CLI 执行，不能以 mock 结果代替。普通 bootstrap/up 不执行 P/R，R038 保持未执行；真实环境操作仍遵循 [WorkItem 受控退役 Runbook](./deployment/workitem-controlled-retirement-target-runbook.md)。
+
+编排回归检查不连接 Docker 或数据库：
+
+```bash
+python3 -m unittest discover -s scripts/__tests__ -p test_ga_controlled_preparation.py
+```
