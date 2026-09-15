@@ -72,18 +72,25 @@ func (m *Migrator) EnsureMigrationsTable(ctx context.Context) error {
 		if _, err = tx.ExecContext(ctx, query); err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `
+		err = ensureMigrationLedgerColumns(ctx, tx)
+		if err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
+}
+
+// ensureMigrationLedgerColumns runs only after read-only target admission, in the
+// caller's transaction so failed preparation cannot leave a partial ledger upgrade.
+func ensureMigrationLedgerColumns(ctx context.Context, tx *sql.Tx) error {
+	_, err := tx.ExecContext(ctx, `
 		ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS checksum VARCHAR(128) NOT NULL DEFAULT '';
 		ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS execution_ms BIGINT NOT NULL DEFAULT 0;
 		ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS release_version VARCHAR(64) NOT NULL DEFAULT '';
  ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS catalog_revision TEXT;
  ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS evidence_digest TEXT;
 	`)
-		if err != nil {
-			return err
-		}
-		return tx.Commit()
-	})
+	return err
 }
 
 // GetAppliedMigrations returns all applied migrations sorted by version

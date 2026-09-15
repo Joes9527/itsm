@@ -383,3 +383,48 @@ func TestWorkItemControlledPreparationUnreviewedEnforcingIndexes(t *testing.T) {
 		})
 	}
 }
+
+// P must upgrade an admitted legacy ledger atomically, without rewriting history.
+func TestWorkItemControlledPreparationLegacyLedger(t *testing.T) {
+	for _, failReceipt := range []bool{false, true} {
+		t.Run(fmt.Sprintf("receipt_failure_%t", failReceipt), func(t *testing.T) {
+			db, ctx := preparationFixture(t)
+			_, err := db.ExecContext(ctx, `ALTER TABLE schema_migrations DROP COLUMN catalog_revision, DROP COLUMN evidence_digest`)
+			require.NoError(t, err)
+			var before string
+			require.NoError(t, db.QueryRow(`SELECT jsonb_agg(to_jsonb(m) ORDER BY version)::text FROM schema_migrations m`).Scan(&before))
+			if failReceipt {
+				_, err = db.ExecContext(ctx, `CREATE FUNCTION reject_legacy_p_receipt() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN IF NEW.version='037_work_item_structure_preparation' THEN RAISE EXCEPTION 'receipt fault'; END IF; RETURN NEW;END$$;CREATE TRIGGER reject_legacy_p_receipt BEFORE INSERT ON schema_migrations FOR EACH ROW EXECUTE FUNCTION reject_legacy_p_receipt()`)
+				require.NoError(t, err)
+			}
+			m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{Operator: "test", DeploymentID: "owned-v2"})
+			require.NoError(t, m.InspectMigrationTarget(ctx))
+			evidence := preparationEvidence(t, m, ctx)
+			wrong := evidence
+			wrong.Target.Database = "wrong-target"
+			require.Error(t, m.ApplyPreparation(ctx, wrong))
+			var columns int
+			require.NoError(t, db.QueryRow(`SELECT count(*) FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='schema_migrations' AND column_name IN ('catalog_revision','evidence_digest')`).Scan(&columns))
+			require.Zero(t, columns, "rejected evidence must not upgrade ledger columns")
+			err = m.ApplyPreparation(ctx, evidence)
+			require.NoError(t, db.QueryRow(`SELECT count(*) FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='schema_migrations' AND column_name IN ('catalog_revision','evidence_digest')`).Scan(&columns))
+			if failReceipt {
+				require.ErrorContains(t, err, "receipt fault")
+				require.Zero(t, columns, "failed P must roll back ledger DDL too")
+				var exists bool
+				require.NoError(t, db.QueryRow(`SELECT to_regclass(current_schema()||'.work_item_migration_evidence') IS NOT NULL`).Scan(&exists))
+				require.False(t, exists)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, 2, columns)
+				require.NoError(t, m.InspectMigrationTarget(ctx))
+				var receipts int
+				require.NoError(t, db.QueryRow(`SELECT count(*) FROM schema_migrations WHERE version='037_work_item_structure_preparation' AND catalog_revision IS NOT NULL AND evidence_digest IS NOT NULL`).Scan(&receipts))
+				require.Equal(t, 1, receipts)
+			}
+			var after string
+			require.NoError(t, db.QueryRow(`SELECT jsonb_agg(to_jsonb(m)-'catalog_revision'-'evidence_digest' ORDER BY version)::text FROM schema_migrations m WHERE version<>'037_work_item_structure_preparation'`).Scan(&after))
+			require.Equal(t, before, after, "historical receipts must remain unchanged")
+		})
+	}
+}
