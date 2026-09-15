@@ -8,7 +8,7 @@ export function DetailReadState({
 }: {
   error?: string;
   loading: boolean;
-  reload: () => Promise<void>;
+  reload: () => Promise<unknown>;
 }) {
   return (
     <div className='mb-3 space-y-2'>
