@@ -101,13 +101,9 @@ func TestConvergedAssignmentBoundariesMapSerializationConflict(t *testing.T) {
 				handler = (&MSPController{ticketService: tc.ticketService, logger: logger}).AssignMSPTechnician
 				payload = fmt.Sprintf(`{"customerTenantId":%d}`, tenant.ID)
 			case "auto":
-				smart := service.NewTicketAssignmentSmartService(client, logger, nil, nil)
-				smart.SetSessionReader(sessions)
-				handler = NewTicketAssignmentSmartController(smart, nil, logger).AutoAssign
+				handler = serializationConflictAutoAssignHandler(client, logger, sessions)
 			case "accept":
-				workflow := service.NewTicketWorkflowService(client, logger)
-				workflow.SetSessionReader(sessions)
-				handler = NewTicketWorkflowController(workflow, nil, logger).AcceptTicket
+				handler = serializationConflictAcceptTicketHandler(client, logger, sessions)
 				payload = fmt.Sprintf(`{"ticketId":%d}`, item.ID)
 			case "escalate":
 				handler = tc.EscalateTicket
