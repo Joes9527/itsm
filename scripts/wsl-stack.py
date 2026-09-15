@@ -338,7 +338,7 @@ def status(state, name):
     return 0
 
 
-def start(state, name, startup_timeout=5.0):
+def start(state, name, startup_timeout=60.0):
     path = recipe_path(state, name)
     if not path.exists():
         print(f"{name}: not configured")
@@ -448,7 +448,7 @@ def stop(state, name):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--state", type=Path, default=STATE)
-    parser.add_argument("--startup-timeout", type=float, default=5.0)
+    parser.add_argument("--startup-timeout", type=float, default=60.0)
     parser.add_argument("--lock-timeout", type=float, default=2.0)
     parser.add_argument("action", choices=("start", "stop", "status"))
     parser.add_argument("service", nargs="?", choices=ORDER)
