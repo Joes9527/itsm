@@ -276,15 +276,20 @@ def field_checks(exports: dict, db: dict) -> dict:
         want_active = str(exp.get('status')) == ACTIVE_STATUS
         if (row['active'] == 'true') == want_active:
             active_matches += 1
-        if not exp.get('departmentId'):
-            continue
+        # The migration bound users through the unit code, not the leaf department id: an existing
+        # user's department code equals the export's `departmentUnit` (7,470 of 7,816), while the
+        # leaf `departmentId` almost never equals it. Comparing against departmentId scored 0 and
+        # was misleading.
+        unit = (exp.get('departmentUnit') or '').strip()
         code = dept_code_by_id.get(row['department_id'])
-        if code == exp['departmentId']:
+        if not unit:
+            continue
+        if code == unit:
             department_matches += 1
         elif not row['department_id']:
             department_missing += 1
         else:
-            department_mismatch_sample.append((name, exp['departmentId'], code))
+            department_mismatch_sample.append((name, unit, code))
 
     # Password storage is a security invariant of the whole table, not only of matched rows: every
     # hash must be bcrypt and no legacy password value may survive anywhere.

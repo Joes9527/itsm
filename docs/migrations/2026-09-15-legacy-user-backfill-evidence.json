@@ -1,0 +1,669 @@
+{
+  "mode": "apply",
+  "mapping_rules": {
+    "role": "end_user (derived from 7812/7816 existing migrated users)",
+    "department": "departmentId resolved from the export departmentUnit",
+    "email": "local part preserved, domain intentionally rewritten to keas.kln.comm",
+    "password": "SOP default for migrated users (not recorded here)",
+    "not_sent": "gender, isLeader, functionLine, managerId, phone: the original batch left them empty"
+  },
+  "payloads": [
+    {
+      "username": "D78089",
+      "payload": {
+        "username": "D78089",
+        "name": "滕海强",
+        "email": "sha256:99b979dd",
+        "departmentId": 635,
+        "role": "end_user",
+        "tenantId": 1
+      },
+      "export_department_unit": "11D030304",
+      "export_email": "sha256:4c4d274e",
+      "export_status": "userstatus01",
+      "preflight": "ok",
+      "result": {
+        "http": 200,
+        "code": 0,
+        "message": "success",
+        "created_id": 7921
+      }
+    },
+    {
+      "username": "D83223",
+      "payload": {
+        "username": "D83223",
+        "name": "于慧琛",
+        "email": "sha256:95b40c91",
+        "departmentId": 635,
+        "role": "end_user",
+        "tenantId": 1
+      },
+      "export_department_unit": "11D030304",
+      "export_email": "sha256:0b7e79ec",
+      "export_status": "userstatus01",
+      "preflight": "ok",
+      "result": {
+        "http": 200,
+        "code": 0,
+        "message": "success",
+        "created_id": 7922
+      }
+    },
+    {
+      "username": "D83360",
+      "payload": {
+        "username": "D83360",
+        "name": "周志伟",
+        "email": "sha256:6dc41c22",
+        "departmentId": 654,
+        "role": "end_user",
+        "tenantId": 1
+      },
+      "export_department_unit": "11D03040I",
+      "export_email": "sha256:8c5d94b4",
+      "export_status": "userstatus01",
+      "preflight": "ok",
+      "result": {
+        "http": 200,
+        "code": 0,
+        "message": "success",
+        "created_id": 7923
+      }
+    },
+    {
+      "username": "D83364",
+      "payload": {
+        "username": "D83364",
+        "name": "穆欣",
+        "email": "sha256:6e74ec58",
+        "departmentId": 609,
+        "role": "end_user",
+        "tenantId": 1
+      },
+      "export_department_unit": "11D030106",
+      "export_email": "sha256:1b4c560a",
+      "export_status": "userstatus01",
+      "preflight": "ok",
+      "result": {
+        "http": 200,
+        "code": 0,
+        "message": "success",
+        "created_id": 7924
+      }
+    },
+    {
+      "username": "D83473",
+      "payload": {
+        "username": "D83473",
+        "name": "陈俊",
+        "email": "sha256:61a92e3a",
+        "departmentId": 633,
+        "role": "end_user",
+        "tenantId": 1
+      },
+      "export_department_unit": "11D030234",
+      "export_email": "sha256:2ce53dce",
+      "export_status": "userstatus01",
+      "preflight": "ok",
+      "result": {
+        "http": 200,
+        "code": 0,
+        "message": "success",
+        "created_id": 7925
+      }
+    },
+    {
+      "username": "H83436",
+      "payload": {
+        "username": "H83436",
+        "name": "刘仲会",
+        "email": "sha256:40243feb",
+        "departmentId": 3575,
+        "role": "end_user",
+        "tenantId": 1
+      },
+      "export_department_unit": "11H010301",
+      "export_email": "sha256:4c2cfe03",
+      "export_status": "userstatus01",
+      "preflight": "ok",
+      "result": {
+        "http": 200,
+        "code": 0,
+        "message": "success",
+        "created_id": 7926
+      }
+    },
+    {
+      "username": "H83510",
+      "payload": {
+        "username": "H83510",
+        "name": "王华才",
+        "email": "sha256:ed443d82",
+        "departmentId": 3575,
+        "role": "end_user",
+        "tenantId": 1
+      },
+      "export_department_unit": "11H010301",
+      "export_email": "sha256:f6b08cb0",
+      "export_status": "userstatus01",
+      "preflight": "ok",
+      "result": {
+        "http": 200,
+        "code": 0,
+        "message": "success",
+        "created_id": 7927
+      }
+    },
+    {
+      "username": "D84725",
+      "payload": {
+        "username": "D84725",
+        "name": "张佳燕",
+        "email": "sha256:ed109d91",
+        "departmentId": 620,
+        "role": "end_user",
+        "tenantId": 1
+      },
+      "export_department_unit": "11D030209",
+      "export_email": "sha256:6f847387",
+      "export_status": "userstatus01",
+      "preflight": "ok",
+      "result": {
+        "http": 200,
+        "code": 0,
+        "message": "success",
+        "created_id": 7928
+      }
+    },
+    {
+      "username": "D84735",
+      "payload": {
+        "username": "D84735",
+        "name": "朱彦铭",
+        "email": "sha256:0c03d27a",
+        "departmentId": 620,
+        "role": "end_user",
+        "tenantId": 1
+      },
+      "export_department_unit": "11D030209",
+      "export_email": "sha256:86c1b516",
+      "export_status": "userstatus01",
+      "preflight": "ok",
+      "result": {
+        "http": 200,
+        "code": 0,
+        "message": "success",
+        "created_id": 7929
+      }
+    },
+    {
+      "username": "H82255",
+      "payload": {
+        "username": "H82255",
+        "name": "王发俊",
+        "email": "sha256:ac9976c5",
+        "departmentId": 3514,
+        "role": "end_user",
+        "tenantId": 1
+      },
+      "export_department_unit": "11H01010B",
+      "export_email": "sha256:f9c687c6",
+      "export_status": "userstatus01",
+      "preflight": "ok",
+      "result": {
+        "http": 200,
+        "code": 0,
+        "message": "success",
+        "created_id": 7930
+      }
+    },
+    {
+      "username": "H84813",
+      "payload": {
+        "username": "H84813",
+        "name": "郭秀青",
+        "email": "sha256:69d566f5",
+        "departmentId": 3514,
+        "role": "end_user",
+        "tenantId": 1
+      },
+      "export_department_unit": "11H01010B",
+      "export_email": "sha256:72aa585b",
+      "export_status": "userstatus01",
+      "preflight": "ok",
+      "result": {
+        "http": 200,
+        "code": 0,
+        "message": "success",
+        "created_id": 7931
+      }
+    },
+    {
+      "username": "H84410",
+      "payload": {
+        "username": "H84410",
+        "name": "才仁·巴依尔塔",
+        "email": "sha256:a55aace1",
+        "departmentId": 3453,
+        "role": "end_user",
+        "tenantId": 1
+      },
+      "export_department_unit": "11H010106",
+      "export_email": "sha256:cc50c8d5",
+      "export_status": "userstatus01",
+      "preflight": "ok",
+      "result": {
+        "http": 200,
+        "code": 0,
+        "message": "success",
+        "created_id": 7932
+      }
+    },
+    {
+      "username": "H84946",
+      "payload": {
+        "username": "H84946",
+        "name": "田转过",
+        "email": "sha256:2a33784c",
+        "departmentId": 664,
+        "role": "end_user",
+        "tenantId": 1
+      },
+      "export_department_unit": "11H011601",
+      "export_email": "sha256:bd5effca",
+      "export_status": "userstatus01",
+      "preflight": "ok",
+      "result": {
+        "http": 200,
+        "code": 0,
+        "message": "success",
+        "created_id": 7933
+      }
+    },
+    {
+      "username": "H84947",
+      "payload": {
+        "username": "H84947",
+        "name": "刘继萍",
+        "email": "sha256:f13ab284",
+        "departmentId": 3687,
+        "role": "end_user",
+        "tenantId": 1
+      },
+      "export_department_unit": "11H011101",
+      "export_email": "sha256:0ce6529a",
+      "export_status": "userstatus01",
+      "preflight": "ok",
+      "result": {
+        "http": 200,
+        "code": 0,
+        "message": "success",
+        "created_id": 7934
+      }
+    },
+    {
+      "username": "D33743",
+      "payload": {
+        "username": "D33743",
+        "name": "吕艳飞",
+        "email": "sha256:27d3720f",
+        "departmentId": 601,
+        "role": "end_user",
+        "tenantId": 1
+      },
+      "export_department_unit": "11D030201",
+      "export_email": "sha256:bcbd122d",
+      "export_status": "userstatus04",
+      "preflight": "ok",
+      "result": {
+        "http": 200,
+        "code": 0,
+        "message": "success",
+        "created_id": 7935
+      }
+    },
+    {
+      "username": "D44967",
+      "payload": {
+        "username": "D44967",
+        "name": "张三",
+        "email": "sha256:f7e6bd32",
+        "departmentId": 4063,
+        "role": "end_user",
+        "tenantId": 1
+      },
+      "export_department_unit": "15D060101",
+      "export_email": "sha256:75abbf21",
+      "export_status": "userstatus01",
+      "preflight": "ok",
+      "result": {
+        "http": 200,
+        "code": 0,
+        "message": "success",
+        "created_id": 7936
+      }
+    },
+    {
+      "username": "D50002",
+      "payload": {
+        "username": "D50002",
+        "name": "宋丹丹",
+        "email": "sha256:417b181a",
+        "departmentId": 633,
+        "role": "end_user",
+        "tenantId": 1
+      },
+      "export_department_unit": "11D030234",
+      "export_email": "sha256:269bc40f",
+      "export_status": "userstatus01",
+      "preflight": "ok",
+      "result": {
+        "http": 200,
+        "code": 0,
+        "message": "success",
+        "created_id": 7937
+      }
+    },
+    {
+      "username": "D52745",
+      "payload": {
+        "username": "D52745",
+        "name": "秦通",
+        "email": "sha256:3c16bfc5",
+        "departmentId": 661,
+        "role": "end_user",
+        "tenantId": 1
+      },
+      "export_department_unit": "11D03040Y",
+      "export_email": "sha256:2fb3bb36",
+      "export_status": "userstatus01",
+      "preflight": "ok",
+      "result": {
+        "http": 200,
+        "code": 0,
+        "message": "success",
+        "created_id": 7938
+      }
+    }
+  ],
+  "results": [
+    {
+      "username": "D78089",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7921
+    },
+    {
+      "username": "D83223",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7922
+    },
+    {
+      "username": "D83360",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7923
+    },
+    {
+      "username": "D83364",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7924
+    },
+    {
+      "username": "D83473",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7925
+    },
+    {
+      "username": "H83436",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7926
+    },
+    {
+      "username": "H83510",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7927
+    },
+    {
+      "username": "D84725",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7928
+    },
+    {
+      "username": "D84735",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7929
+    },
+    {
+      "username": "H82255",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7930
+    },
+    {
+      "username": "H84813",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7931
+    },
+    {
+      "username": "H84410",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7932
+    },
+    {
+      "username": "H84946",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7933
+    },
+    {
+      "username": "H84947",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7934
+    },
+    {
+      "username": "D33743",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7935
+    },
+    {
+      "username": "D44967",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7936
+    },
+    {
+      "username": "D50002",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7937
+    },
+    {
+      "username": "D52745",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7938
+    }
+  ],
+  "created": [
+    {
+      "username": "D78089",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7921
+    },
+    {
+      "username": "D83223",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7922
+    },
+    {
+      "username": "D83360",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7923
+    },
+    {
+      "username": "D83364",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7924
+    },
+    {
+      "username": "D83473",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7925
+    },
+    {
+      "username": "H83436",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7926
+    },
+    {
+      "username": "H83510",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7927
+    },
+    {
+      "username": "D84725",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7928
+    },
+    {
+      "username": "D84735",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7929
+    },
+    {
+      "username": "H82255",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7930
+    },
+    {
+      "username": "H84813",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7931
+    },
+    {
+      "username": "H84410",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7932
+    },
+    {
+      "username": "H84946",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7933
+    },
+    {
+      "username": "H84947",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7934
+    },
+    {
+      "username": "D33743",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7935
+    },
+    {
+      "username": "D44967",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7936
+    },
+    {
+      "username": "D50002",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7937
+    },
+    {
+      "username": "D52745",
+      "http": 200,
+      "code": 0,
+      "message": "success",
+      "created_id": 7938
+    }
+  ],
+  "rollback": {
+    "disable_via_api": [
+      "PUT /api/v1/users/7921/status {\"active\": false}",
+      "PUT /api/v1/users/7922/status {\"active\": false}",
+      "PUT /api/v1/users/7923/status {\"active\": false}",
+      "PUT /api/v1/users/7924/status {\"active\": false}",
+      "PUT /api/v1/users/7925/status {\"active\": false}",
+      "PUT /api/v1/users/7926/status {\"active\": false}",
+      "PUT /api/v1/users/7927/status {\"active\": false}",
+      "PUT /api/v1/users/7928/status {\"active\": false}",
+      "PUT /api/v1/users/7929/status {\"active\": false}",
+      "PUT /api/v1/users/7930/status {\"active\": false}",
+      "PUT /api/v1/users/7931/status {\"active\": false}",
+      "PUT /api/v1/users/7932/status {\"active\": false}",
+      "PUT /api/v1/users/7933/status {\"active\": false}",
+      "PUT /api/v1/users/7934/status {\"active\": false}",
+      "PUT /api/v1/users/7935/status {\"active\": false}",
+      "PUT /api/v1/users/7936/status {\"active\": false}",
+      "PUT /api/v1/users/7937/status {\"active\": false}",
+      "PUT /api/v1/users/7938/status {\"active\": false}"
+    ],
+    "sql_delete": "DELETE FROM users WHERE id IN (7921, 7922, 7923, 7924, 7925, 7926, 7927, 7928, 7929, 7930, 7931, 7932, 7933, 7934, 7935, 7936, 7937, 7938);"
+  }
+}
