@@ -64,7 +64,7 @@ func (c *NotificationController) GetNotifications(ctx *gin.Context) {
 		req.Size = 100
 	}
 
-	result, err := c.notificationService.GetNotifications(ctx, &req)
+	result, err := c.notificationService.GetNotifications(ctx.Request.Context(), &req)
 	if err != nil {
 		common.Fail(ctx, common.InternalErrorCode, "获取通知失败: "+err.Error())
 		return
@@ -107,7 +107,7 @@ func (c *NotificationController) MarkNotificationRead(ctx *gin.Context) {
 		TenantID:       tenantID,
 	}
 
-	err = c.notificationService.MarkNotificationRead(ctx, req)
+	err = c.notificationService.MarkNotificationRead(ctx.Request.Context(), req)
 	if err != nil {
 		common.Fail(ctx, common.InternalErrorCode, "标记已读失败: "+err.Error())
 		return
@@ -142,7 +142,7 @@ func (c *NotificationController) MarkAllNotificationsRead(ctx *gin.Context) {
 		TenantID: tenantID,
 	}
 
-	err = c.notificationService.MarkAllNotificationsRead(ctx, req)
+	err = c.notificationService.MarkAllNotificationsRead(ctx.Request.Context(), req)
 	if err != nil {
 		common.Fail(ctx, common.InternalErrorCode, "标记全部已读失败: "+err.Error())
 		return
@@ -185,7 +185,7 @@ func (c *NotificationController) DeleteNotification(ctx *gin.Context) {
 		TenantID:       tenantID,
 	}
 
-	err = c.notificationService.DeleteNotification(ctx, req)
+	err = c.notificationService.DeleteNotification(ctx.Request.Context(), req)
 	if err != nil {
 		common.Fail(ctx, common.InternalErrorCode, "删除通知失败: "+err.Error())
 		return
@@ -208,7 +208,7 @@ func (c *NotificationController) GetUnreadCount(ctx *gin.Context) {
 		return
 	}
 
-	count, err := c.notificationService.GetUnreadCount(ctx, userID, tenantID)
+	count, err := c.notificationService.GetUnreadCount(ctx.Request.Context(), userID, tenantID)
 	if err != nil {
 		common.Fail(ctx, common.InternalErrorCode, "获取未读数量失败: "+err.Error())
 		return
@@ -232,7 +232,7 @@ func (c *NotificationController) CreateNotification(ctx *gin.Context) {
 	}
 	// 租户只能来自认证上下文，禁止管理员通过请求体跨租户投递。
 	req.TenantID = tenantID
-	notification, err := c.notificationService.CreateNotification(ctx, &req)
+	notification, err := c.notificationService.CreateNotification(ctx.Request.Context(), &req)
 	if err != nil {
 		common.Fail(ctx, common.InternalErrorCode, "创建通知失败: "+err.Error())
 		return
@@ -257,7 +257,7 @@ func (c *NotificationController) MarkNotificationsRead(ctx *gin.Context) {
 		common.Fail(ctx, common.AuthFailedCode, "无法确认当前租户")
 		return
 	}
-	count, err := c.notificationService.MarkNotificationsRead(ctx, req.NotificationIDs, userID, tenantID)
+	count, err := c.notificationService.MarkNotificationsRead(ctx.Request.Context(), req.NotificationIDs, userID, tenantID)
 	if err != nil {
 		common.Fail(ctx, common.InternalErrorCode, "批量标记已读失败")
 		return
@@ -281,7 +281,7 @@ func (c *NotificationController) DeleteNotifications(ctx *gin.Context) {
 		common.Fail(ctx, common.AuthFailedCode, "无法确认当前租户")
 		return
 	}
-	count, err := c.notificationService.DeleteNotifications(ctx, req.NotificationIDs, userID, tenantID)
+	count, err := c.notificationService.DeleteNotifications(ctx.Request.Context(), req.NotificationIDs, userID, tenantID)
 	if err != nil {
 		common.Fail(ctx, common.InternalErrorCode, "批量删除通知失败")
 		return
