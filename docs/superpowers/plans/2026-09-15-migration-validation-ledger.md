@@ -5,6 +5,7 @@
 - 权威约束：[AGENTS.md](../../../AGENTS.md)、[工程治理](../../agent-engineering-governance.md)。本清单维护本轮续办状态；历史设计、报告保留证据，不再各自生成平行待办。
 - 取代范围：取代 2026-09-15 环境审计报告中的“下一任务顺序”；不否定其当时的运行/数据库观测，不取代领域合同。
 
+> 最新执行结论以本文末尾“最终运行与UI验收收口”为准；中间的失败/构建中条目是定位过程，不代表当前仍失败。
 ## 1. 数据来源与明确范围
 
 旧系统是既有抽取设计记录的 `https://keas-itsm-test.gazellio.com`，不是 WSL 的 PostgreSQL `itsm` 库。本轮核验的是设计、交接与已有抽取证据，未重新登录旧系统或抽取最新数据。
@@ -265,3 +266,31 @@ R1 readyz、C3七条SLA空字符串绑定/19补班、C4专业流程配置与消�
 ### 实时通知端口收口完成
 
 WS纯配置经独立复审：构建时NEXT_PUBLIC_WS_URL=ws://192.168.31.66:3010/api/v1/ws/notifications，ITSM_BACKEND_URL=http://127.0.0.1:8080；后端仅新增WEBSOCKET_ALLOWED_ORIGINS=http://192.168.31.66:3010，无通配来源。相同f1eda552源码重新构建，Build ID Ic9uWpAfDlAOyWQpwA25S。正常停止/启动完成后，真实LAN浏览器刷新，观察连接路径3010/api/v1/ws/notifications且握手101；未将短期票据写入本清单。通知列表HTTP200和实时WS101分别通过。
+
+### 通用工单关闭路径候选
+
+实现3ff095360d6fff1c7c6867ae64d159377fbc17ab：后端actions.close仅generic/resolved/当前租户ticket:update，UpdateTicket仅纯status=closed命令豁免终态编辑拦截；CanEdit和全局终态规则不变。前端独立确认按钮使用既有expectedVersion/operationId命令，不接旧非幂等close接口。已独立审查，无未决P0/P1/P2；切换工单疑虑经现有session/tenant/ticket key wrapper及rerender回归证实不成立，撤回该误报。
+
+实际WSL窄移植：API3ea58ca774fb07347dc6ad25ff0b3683bfc29a58；前端c950b60e5a36a7fcb10e593403468032d76b8e8f。仅import与相邻ref冲突，保留原基线；旧AssigneeID为int，测试夹带负责人改用非零actor ID，不迁入新DTO/047。WSL后端14场景、前端37组件tests、typecheck通过；最初npm test默认对单文件计算全仓80%覆盖率导致门禁失败，随后按已声明的组件范围运行无全仓覆盖收集的targeted Jest通过，未声称全仓覆盖率达标。最终生产构建中。
+
+### 最终运行与UI验收收口（2026-09-15 17:22 CST）
+
+本节取代上方“关闭未通过/构建中”等中间状态，保留原证据用于追溯。主agent负责设计、共享变更及真实UI验收；generic_ui_fixes/cookie_transport_fix分别实现，menu_target_plan独立复核代码，菜单SQL由另一agent交叉复核。
+
+| 项目 | 最终结果 |
+| --- | --- |
+| API8080 | 3ea58ca774fb07347dc6ad25ff0b3683bfc29a58，PID2480484；构建内嵌同提交且modified=false；SHA256 53645b7fc69c8aef43eef722f7f2d68d0cd5c3a05dcddeb5e93cfb5368630223 |
+| UI3010 | c950b60e5a36a7fcb10e593403468032d76b8e8f，PID2483592；Build ID D8aFX3Fwxo4VgBxJnUliJ；独立发布目录itsm-web-c950b60e-D8aFX3Fwxo4VgBxJnUliJ |
+| 版本核验 | stack status核对无源码/制品漂移；两侧生产构建通过；窄移植最终SHA经独立复审 |
+| 关闭实际路径 | LAN /tickets/9 → 关闭工单 → 确认关闭 → PUT200/code0；刷新已关闭，关闭按钮不再提供 |
+| 持久化 | ID9 closed/version4；解决方案保持原合成说明，resolved_at=09:04:24Z、closed_at=09:22:06Z，解决时间未被覆盖 |
+| 通知 | 最终制品刷新GET notifications200；WebSocket通过3010/api/v1/ws/notifications握手101 |
+| 其它服务 | KAF、KAF web、worker1/2仍停用；没有新启消费者或外部服务调用 |
+
+本次可关闭项：C5菜单、F1服务端人员搜索、F2后端状态裁定、R5 LAN Cookie、R6既有执行表错误写权限、R7 HTTP操作编号、R8通知租户上下文，以及R9解决方案输入/通用关闭入口、通知WS端口配置。验收记录ID8、ID9均为新建合成记录，不属于旧ticket迁移；保留用于追溯。
+
+V1登录/创建/详情刷新已通过；V2分派/处理中/评论/附件读写已通过（附件前期localhost隧道，其它已在LAN直接验证）；V3解决→关闭已通过。未声称重新打开、跨角色全流程、Incident/Requested Item/SLA/BPMN端到端验收通过。V4只验证当前管理员会话刷新/退出/重启；权限负例来自受影响单元回归，不代替真实跨角色验收。
+
+仍按唯一清单继续：R1 readiness身份/阶段选择与真实初始化收据；C3七个SLA空绑定及19补班配置；C4专业流程；V4跨角色与V5专业域验收。数据库清理仍待准确对象和恢复证据核验，不因有备份名称直接删除。五批384对象对账已完成，无需重跑；Dev PG未变更，未导入旧工单，未运行seed/迁移。本批源码已提交到独立分支和WSL窄候选，但尚未推送/合并；此前PR30与本批不同。
+
+最终回滚材料仍在WSL私有目录itsm-migration-ui-fixes-20260915：before-close-itsm/itsm-web启动描述、此前制品、菜单备份/精确回滚及权限审计。回退前核对当前服务身份与依赖；不能恢复R6错误DML权限，否则旧API同样启动失败。
