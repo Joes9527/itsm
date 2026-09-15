@@ -1,100 +1,68 @@
-# KAF / ITSM 本机 WSL 开发环境
+# KAF / ITSM maintained WSL development environment
 
-状态：已核对，2026-09-08。本文记录维护者的本机环境，不是所有部署的默认配置；路径、进程和提交在后续操作前必须复核。目录整理已经完成，版本升级和业务验收另行进行。
+Status: maintained operational contract, updated 2026-09-15. The maintainer selected **3010 as the ITSM frontend port**. Deployment filenames containing `ga`, `candidate`, or `prod` do not establish environment identity or release acceptance. This environment is named **WSL development**.
 
-## 主机与职责
+## Endpoint ownership
 
-- `192.168.31.66` 是 Windows 主机，Ubuntu WSL 运行在其中。
-- 主路由 `192.168.31.1` 部署 WireGuard。MacBook 通过 WireGuard 和公钥 SSH 访问 WSL（用户 `administrator`，端口 `22222`）；也会在 Mac 本地运行前后端，连接 WSL 数据基础设施。Mac 项目路径尚未确认，不使用文档中的历史个人目录作为默认值。
-- KAF 与 ITSM 各有独立入口，共用一个 Azure AD 租户，尚未区分开发/生产租户；Azure 登录仍在调试。
-- ITSM 持有审批与业务状态，KAF 受控执行 SR。KAF 生产位于公司内网 `10.128.35.0/24`，本机四个应用入口是开发环境。
+| Service | Windows/LAN host port | Authority |
+| --- | --- | --- |
+| ITSM frontend | **3010** | Native Next.js standalone process; same-origin `/api/*` forwards to ITSM 8080 |
+| ITSM backend | 8080 | Native Go binary pinned by SHA-256 |
+| KAF frontend | 5173 | Its own configured frontend release |
+| KAF API | 8000 | Its own configured API release |
+| Langfuse | **3000** | `acp-langfuse` container; never start ITSM on this host port |
+| Former ITSM frontend | **3001 — retired** | Do not use for startup, tests, callbacks, or current documentation |
 
-## 唯一开发入口与固定运行副本
+Windows host: `192.168.31.66`. SSH reaches Ubuntu WSL as `administrator`, port `22222` (the host also has an SSH forwarding alias on `22223`). Browser address from the LAN/Mac: `http://192.168.31.66:3010`; Windows localhost: `http://localhost:3010`. A Mac `localhost` is the Mac, not WSL. A container's internal port 3000 is not the Windows/WSL published port and need not be renamed.
 
-| 角色 | 路径 | 本次整理后的状态 |
-|---|---|---|
-| ITSM 开发主仓库 | `/home/administrator/project/itsm` | `main` / `2fa93c1b` |
-| KAF 开发主仓库 | `/home/administrator/project/kaf` | 原功能分支 / `a936411b`，没有切换版本 |
-| KAF 功能 worktree | `/home/administrator/project/kaf-worktrees/<task>` | 后续开发任务单独创建 |
-| ITSM 功能 worktree | `/home/administrator/project/itsm/.worktrees/<task>` | 后续开发任务单独创建 |
-| KAF 运行副本 | `/home/administrator/apps/itsm-kaf/kaf` | detached HEAD / `3daa5520` |
-| ITSM 运行源码副本 | `/home/administrator/apps/itsm-kaf/itsm` | detached HEAD / `2fa93c1b`；API 使用下面的专用二进制 |
+## One startup authority
 
-KAF 主仓库的 `a936411b` 与运行副本的 `3daa5520` 提交编号不同，但已提交文件树相同。不要为统一编号擅自切换版本。远端为 `github.com/DawnproIN/kaf` 和 `github.com/Joes9527/itsm`。
+The maintained entrypoint is `/home/administrator/apps/itsm-kaf/stack`, deployed from [`scripts/wsl-stack.py`](../scripts/wsl-stack.py). Its private state remains `/home/administrator/.local/state/itsm-kaf-baseline-20260908`; the historical date is a storage path, not a version identifier.
 
-KAF 运行副本的 `.git` 文件指向 `/home/administrator/project/kaf/.git/worktrees/kaf`，common dir 为 `/home/administrator/project/kaf/.git`。ITSM 运行副本继续共用 `/home/administrator/project/itsm/.git`。工作目录不是分支；detached HEAD 对固定版本运行副本是预期状态。应用不执行 `.git`，但版本管理依赖该关联，不得删除其 Git 数据目录。
-
-以下目录已退出开发入口使用，原文件保留用于回滚，目录同级有 `.ARCHIVED.md` 标记：
-
-- Windows 原仓库 `D:\SynologyDrive\kerry\KAF_Migration_Pack\kaf-main`；其 WSL 映射 `/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main` 是同一份文件。
-- 旧 WSL 仓库 `/home/administrator/.worktrees/kaf-sslvpn-unified-intake`。
-
-新主仓库保存完整 WSL Git 元数据，并在 `refs/archive/windows/*` 保留 Windows 的 132 条引用。Windows 已修改/未跟踪文件单独备份，未自动应用到新主仓库。不要从归档入口继续开发，也不要让 CI runner checkout 承载开发或运行 worktree 的 Git 元数据。
-
-## 当前运行入口与启动来源
-
-| 应用 | 端口 | 本机只读探测 |
-|---|---|---|
-| ITSM 前端（生产构建运行） | 3001 | `/login` |
-| ITSM API | 8080 | `/api/v1/health` |
-| KAF 前端 | 5173 | `/` |
-| KAF API | 8000 | `/health` |
+- `config/<service>-launch.json` is the active startup recipe: argv, cwd, private environment, port, source revision and artifact/build identity where available.
+- `evidence/<service>-process.json` binds a managed process to PID, process start time, cwd and the recipe fingerprint.
+- `active-release.json` is a sanitized deployment snapshot containing endpoint ownership, actual frontend revision/build ID, backend executable hash and source provenance, and known verification limits. Use current process/config checks to detect drift after this snapshot.
+- `logs/<service>.log` contains service output; never publish secrets or whole environment/config files.
 
 ```bash
-curl --fail --silent --output /dev/null http://127.0.0.1:3001/login
-curl --fail --silent --output /dev/null http://127.0.0.1:8080/api/v1/health
+/home/administrator/apps/itsm-kaf/stack status
+/home/administrator/apps/itsm-kaf/stack status itsm-web
+# Only when startup/restart is part of the authorized task:
+/home/administrator/apps/itsm-kaf/stack stop itsm-web
+/home/administrator/apps/itsm-kaf/stack start itsm-web
+```
+
+Use a named service for bounded maintenance. Status detects recorded/configured version drift and untracked port owners; do not defeat it by deleting process records. Stop validates process identity and signals only the recorded PID. A listening port alone does not prove service health.
+
+Old one-off launchers, historical JSON snapshots and handoff reports are rollback evidence, not additional active deployment authorities. Do not run historical `ga-frontend-switch.py`, `ga-backend-switch.py`, `pin-ga-frontend.py`, or `dev-services.py` to replace the active recipe. Any new deployment must update the canonical recipe, process evidence and sanitized release snapshot together.
+
+## Version selection and build boundaries
+
+Always verify **host → port → listener PID/start time → executable/cwd → artifact hash/build ID → source revision → backend destination**. Never infer identity from a branch name, directory name, file modification time, or port alone.
+
+The 2026-09-15 frontend integration starts from the running workbench source `93480226` and merges A/C visual theme source `eb76c3bc`. The exact deployed merge/fix revision and Next.js build ID are recorded in `active-release.json`. This preserves current workbench commands while adding the completed theme. Newer `main` also contains unrelated domain/database work; updating it is not authorization to deploy its entire backend.
+
+The backend source provenance recorded by the previous deployment is `c3c880df`; its binary fingerprint before the port change is `d395dbd5a03739d48cde6fe7898ec45d7daadb19686ac265f5bf6e70239a58ef`. A source label is recorded provenance, not a fresh reproducible-build attestation. The frontend-port task keeps that binary and database target, changes only the frontend URL/origins necessary for 3010, and records the resulting configuration fingerprint. It does not run migrations or grant database permissions.
+
+Source checkout edits do not automatically update a standalone build. Build in an isolated worktree, verify current command/theme behavior, copy required `.next/static` and `public` artifacts into standalone output, verify `/api/*` targets 8080, and record revision/build ID before switching. Avoid concurrent builds or dependency installs against the active runtime directory.
+
+## Verification and honest status
+
+```bash
+curl --fail --silent --output /dev/null http://127.0.0.1:3010/login
+curl --fail --silent http://127.0.0.1:8080/api/v1/readyz
+curl --fail --silent http://127.0.0.1:8000/health
 curl --fail --silent --output /dev/null http://127.0.0.1:5173/
-curl --fail --silent --output /dev/null http://127.0.0.1:8000/health
 ```
 
-四应用在 WSL 作为本地进程运行，启动描述位于 `/home/administrator/.local/state/itsm-kaf-baseline-20260908/config/`，文件名为 `itsm-launch.json`、`kaf-launch.json`、`itsm-web-launch.json`、`kaf-web-launch.json`。它们保存 argv、cwd 和私有环境；不能把完整 JSON、dotenv、进程环境或 Docker inspect 输出粘贴到文档/日志。
+Also verify representative frontend assets against the deployed filesystem, same-origin API responses, light/dark theme behavior, LAN access, no ITSM listener on 3001, and unchanged Langfuse ownership of 3000. Authenticate through normal sessions when business UI validation is needed. Do not create requests, approvals, provider calls or IAM mutations merely to validate a port change.
 
-该主机已有四应用启动工具（本机交付文件，不是仓库内通用脚本）：
+On 2026-09-15 before this change, ITSM `/health` returned 200 but `/readyz` returned 503 because its database identity could not read `schema_migrations`; this is a permission/readiness failure, not proof of missing schema. KAF 8000/5173 and ITSM workers were stopped. A frontend deployment does not certify these independent services or fix their readiness. Report their current status separately.
 
-```bash
-launcher=/mnt/c/Users/Administrator/Documents/Codex/2026-09-08/kaf-itms-wsl/outputs/dev-services.py
-python3 "$launcher" check
-python3 "$launcher" status
-# 仅在已授权启动、确认目标进程与配置后执行：
-python3 "$launcher" up
-```
+## Shared infrastructure and rollback
 
-工具只提供 check/status/up；占用端口会跳过，不接管进程，不负责 stop/restart、构建、数据库或 worker。维护时先核对监听 PID、进程父子关系、cwd 和可执行文件，再停止目标应用；不能使用 `lsof ... | xargs kill` 或全局进程名批量终止。同机还有 CI 与其他服务。
+Preserve existing PostgreSQL, Redis, MinIO, Qdrant, Langfuse and Ollama containers and volumes. Do not run generic `init`, `reset`, `down -v`, migration/bootstrap tools, or database cleanup against this shared environment.
 
-两个 ITSM worker 在维护前已运行，本次按 `itsm-worker-1-launch.json`、`itsm-worker-2-launch.json` 原配置恢复。恢复前检查实际进程，避免重复启动消费者。四入口 HTTP 200 和 worker 存活只证明进程/基础健康，不代表 Azure、SR、SSLVPN 或授权回收验收通过。
+Before changing a runtime, save private launch recipes, exact PID identities, executable hashes, frontend build ID and relevant configuration. The 3010 task's pre-change backup is `/home/administrator/.local/state/itsm-wsl-3010-20260915T035625Z` (private). Record any later supplemental backups alongside it. Restore only the identified affected service and configuration; verify no concurrent operator replaced its process. Rollback is an explicit operation, not a second normal startup path.
 
-### 2026-09-08 前端生产模式更新
-
-3001 改为运行完整 standalone 发布目录 `/home/administrator/apps/itsm-kaf/releases/itsm-web-20260908-workflow`，启动命令为 `node server.js`，环境设置 `NODE_ENV=production`、`HOSTNAME=0.0.0.0`、`PORT=3001`。既有 `itsm-web-launch.json` 已更新，因此 launcher 后续 `up` 会继续启动生产构建。生产模式仅指前端构建方式，仍连接原本机开发 API/数据库，不表示环境已转为正式生产租户。
-
-构建来源是 ITSM 修复分支 `codex/fix/workflow-menu-production`；发布目录中的 `release.json` 记录源码提交和 Next.js build ID。原运行源码副本保留作回滚，3001 不再执行其中的 `next dev`。原启动配置与菜单操作日志保存在私有目录 `/home/administrator/.local/state/itsm-workflow-production-20260908/`。回滚时核对并停止当前 3001 进程，恢复 `itsm-web-launch.before.json` 为原启动描述，再通过 launcher 启动；不得停止其他端口或全量重建 API。
-
-工作流菜单使用[运维手册的定向命令](DEVELOPMENT_GUIDE.md#前端生产模式与工作流入口维护)修复当前租户；8080 专用 API 和两个 worker 均保持原版本。
-
-## ITSM 修复交付必须保留
-
-8080 使用 `/home/administrator/.local/state/itsm-kaf-baseline-20260908/bin/itsm-api-intake-catalog-discovery-v2`。其 SHA-256 匹配 `evidence/intake-catalog-discovery-v2-verification.json` 中的交付记录。
-
-修复源码在 `/home/administrator/project/itsm/.worktrees/intake-catalog-discovery`，分支 `codex/fix/intake-catalog-discovery`，提交 `7c114b3e`，比本地 `main` 多两个提交。二进制内嵌版本仍标记 `2fa93c1b`，与交付记录不一致，构建来源/打标过程需核对。不能只从 main 重建并覆盖当前 API。目录整理不合并这项修复，也不解决其构建证据差异。
-
-## 数据基础设施与 CI 边界
-
-数据库、Redis 等由 WSL Docker 提供，不能因应用停止而清理 Docker。当前快照：
-
-| 用途 | PostgreSQL | Redis | 其他 |
-|---|---|---|---|
-| ITSM 开发 | 5432 | 6389 / DB11 | 配置以当前私有启动描述为准 |
-| KAF 开发 | 5434 | 6380 / DB10 | Qdrant 6335 |
-| KAF CI acp 栈 | 5433 | 根据 Docker labels/配置核对 | CI 独立管理 |
-
-KAF 开发目前有意共用 acp MinIO（9000）；不能据此声称 CI 与开发完全存储隔离。维护者目标是 CI 独立、Mac/WSL 开发共享，后续存储拆分需单独规划，本次没有迁移数据。对共享数据执行初始化、迁移、清理前明确目标 host、port、database、Redis DB、bucket、volume 和授权范围；通用 quickstart/fresh/bootstrap 不适用于直接接管现有实例。
-
-## 维护、备份与回滚
-
-目录整理按保全、核对、新主仓库恢复、运行关联迁移、重启验证、归档顺序完成。保留 Git 历史与引用不等于备份未提交文件；必须分别保存 bundle、完整 Git 元数据、工作区文件、`.superpowers/sdd` 证据、私有启动配置和实际二进制。
-
-本机私有备份在 `/home/administrator/.local/state/kaf-repository-migration-20260908/`（权限 700）。其中 `backup-sha256.json` 和 `backup-verification.json` 记录 10 个 bundle/tar 的哈希核验；`before-*`、`after-*` 与 `launch-fingerprints.json` 保存维护前后基线，`old-runtime-registration/` 保存旧 Git 注册。此备份含敏感配置/用户文件，不能提交或上传仓库。
-
-完整逐步回滚记录位于本机 `/mnt/c/Users/Administrator/Documents/Codex/2026-09-08/kaf-itms-wsl/outputs/repository-migration.md`。回滚前先保全迁移后新增工作并停止应用，恢复旧注册及运行 `.git` 指针、退出新注册，核对 HEAD/common dir/工作区后按原配置启动。不能只执行一次 `worktree repair` 就认定跨仓库关联迁移或回滚完成。
-
-后续正常开发使用各自功能分支/worktree；源码编辑不会自动更新固定运行副本。版本升级、依赖安装、数据库迁移和真实业务验收分别规划，不与目录整理混做。
+Development repositories remain `/home/administrator/project/itsm` and `/home/administrator/project/kaf`, with task worktrees. Retain linked-worktree Git metadata, uncommitted work, `.superpowers/sdd` ledgers and archived source copies. Do not delete or reorganize another agent's work as part of port/version maintenance.
