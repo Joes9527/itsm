@@ -78,9 +78,9 @@ curl http://localhost:8090/api/v1/health
 # 期望返回：{"code":0,"message":"success","data":{"status":"ok",...}}
 
 # 前端访问
-open http://localhost:3000  # macOS
-xdg-open http://localhost:3000  # Linux
-start http://localhost:3000  # Windows
+open http://localhost:3010  # macOS
+xdg-open http://localhost:3010  # Linux
+start http://localhost:3010  # Windows
 ```
 
 默认登录：`admin / admin123`

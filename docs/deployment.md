@@ -61,7 +61,7 @@ make dev-stop-local
 
 访问地址：
 
-- 前端：`http://localhost:3000`
+- 前端：`http://localhost:3010`
 - 后端：`http://localhost:8090`
 - 健康检查：`http://localhost:8090/api/v1/health`
 - Swagger：`http://localhost:8090/swagger/index.html`

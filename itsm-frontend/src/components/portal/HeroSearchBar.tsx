@@ -10,7 +10,7 @@ export function HeroSearchBar() {
 
   return (
     <div className="relative w-full max-w-3xl mx-auto my-8">
-      <div className="relative flex items-center bg-surface dark:bg-slate-900 rounded-[8px] shadow-lg border border-border dark:border-slate-800 p-2">
+      <div className="relative flex items-center bg-surface rounded-[8px] shadow-none border border-border p-2">
         <div className="pl-3 pr-2 text-muted">
           <Search size={22} aria-hidden="true" />
         </div>

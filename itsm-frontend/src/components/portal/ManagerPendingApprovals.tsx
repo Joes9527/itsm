@@ -131,7 +131,7 @@ export const ManagerPendingApprovals: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2">
           <ShieldCheck size={18} className="text-amber-600" />
-          <h3 className="text-base font-bold text-foreground dark:text-slate-100 m-0">
+          <h3 className="text-base font-bold text-foreground m-0">
             审批待办（预览 {approvals.length} 项）
           </h3>
 
@@ -156,7 +156,7 @@ export const ManagerPendingApprovals: React.FC = () => {
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-muted">
-                <span className="font-medium text-foreground dark:text-muted">申请人：{item.requesterName}</span>
+                <span className="font-medium text-foreground">申请人：{item.requesterName}</span>
                 <span>•</span>
                 <span>{item.department}</span>
                 <span>•</span>

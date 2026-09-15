@@ -14,10 +14,10 @@ export function AssignedTicketQueue({ queue }: { queue: QueueState }) {
   return (
     <aside
       aria-label='个人工单队列'
-      className='min-w-0 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900'
+      className='min-w-0 rounded-lg border border-border bg-surface p-4'
     >
       <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
-        <h2 className='m-0 text-base font-semibold text-slate-900 dark:text-slate-100'>
+        <h2 className='m-0 text-[15px] font-semibold text-foreground'>
           分给我的{queue.total !== undefined ? ` (${queue.total})` : ''}
         </h2>
         <Button
@@ -35,7 +35,7 @@ export function AssignedTicketQueue({ queue }: { queue: QueueState }) {
             key={name}
             type='button'
             disabled
-            className='rounded-lg border border-slate-200 p-2 text-left text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400'
+            className='rounded-lg border border-border p-2 text-left text-[12px] text-muted'
           >
             <span className='block font-medium'>{name}</span>
             <span>{reason}</span>
@@ -70,16 +70,16 @@ export function AssignedTicketQueue({ queue }: { queue: QueueState }) {
               type='button'
               aria-pressed={item.id === queue.selectedId}
               onClick={() => queue.select(item.id)}
-              className={`w-full min-w-0 rounded-xl border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+              className={`w-full min-w-0 rounded-lg border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
                 item.id === queue.selectedId
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
-                  : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
+                  ? 'border-primary-600 bg-selected'
+                  : 'border-border hover:bg-raised'
               }`}
             >
-              <span className='block break-all font-mono text-xs text-slate-500 dark:text-slate-400'>
+              <span className='block break-all font-mono text-[12px] text-muted'>
                 {item.ticketNumber || `#${item.id}`}
               </span>
-              <span className='mt-1 block break-words text-sm font-medium text-slate-900 dark:text-slate-100'>
+              <span className='mt-1 block break-words text-[13px] font-medium text-foreground'>
                 {item.title}
               </span>
             </button>
