@@ -11,6 +11,7 @@ on:
       - 'docker-compose.dev.yml'
       - 'scripts/smoke-test.sh'
       - 'scripts/ga-controlled-preparation.py'
+      - 'scripts/fixtures/ga-minio-provision/**'
       - 'scripts/__tests__/test_ga_controlled_preparation.py'
       - '.github/workflows/ga-gate.yml'
   push:
@@ -21,6 +22,7 @@ on:
       - 'docker-compose.dev.yml'
       - 'scripts/smoke-test.sh'
       - 'scripts/ga-controlled-preparation.py'
+      - 'scripts/fixtures/ga-minio-provision/**'
       - 'scripts/__tests__/test_ga_controlled_preparation.py'
       - '.github/workflows/ga-gate.yml'
   workflow_dispatch:
@@ -61,6 +63,10 @@ jobs:
 
       - name: Verify controlled preparation orchestration
         run: python3 -m unittest discover -s scripts/__tests__ -p test_ga_controlled_preparation.py
+
+      - name: Verify explicit storage provisioning
+        working-directory: itsm-backend
+        run: go test ../scripts/fixtures/ga-minio-provision/main.go ../scripts/fixtures/ga-minio-provision/main_test.go
 
       - name: Prepare disposable database and start core stack
         run: python3 scripts/ga-controlled-preparation.py prepare
