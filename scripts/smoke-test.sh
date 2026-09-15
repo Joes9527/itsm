@@ -19,7 +19,7 @@ NC='\033[0m' # No Color
 
 # 配置
 BACKEND_URL=${ITSM_BACKEND_URL:-"http://localhost:8090"}
-FRONTEND_URL=${ITSM_FRONTEND_URL:-"http://localhost:3000"}
+FRONTEND_URL=${ITSM_FRONTEND_URL:-"http://localhost:3010"}
 ADMIN_USER=${ITSM_ADMIN_USER:-"admin"}
 ADMIN_PASS=${ITSM_ADMIN_PASS:-"admin123"}
 MAX_RETRIES=${MAX_RETRIES:-30}
