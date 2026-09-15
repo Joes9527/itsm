@@ -42,6 +42,8 @@
 
 集成复审发现的五项问题已修正并回归：混合编辑的当前改派权限、绑定任务的当前有效授权、详情的一致读取快照、MSP 通知的统一身份与持久偏好、Incident 序列化冲突反馈。测试文件重命名同步修正了现有覆盖映射；没有添加豁免或削弱断言。最终独立复审与远端合并检查以 PR #27 为准；本节不表示运行环境已升级。
 
+PR #27 首轮主干 CI 的静态检查发现未使用的旧辅助声明及 pq 废弃类型别名。后续清理删除无调用方的旧校验/helper，并使用等价的 pqerror.Code；受影响测试的 54 个测试身份与实际断言保持不变，没有添加 lint 豁免。修正后的完整 Go 测试和 CI 同版本 staticcheck 均通过，独立复审通过；远端最终检查仍须针对更新后的提交确认。
+
 另有独立基础门禁记录：main `8f8d34fe` 的 [GA Gate](https://github.com/Joes9527/itsm/actions/runs/34841437201) 在空库初始化时返回 `runtime requires migration 037_work_item_structure_preparation`；main `14292cb4` 的[文档流水线](https://github.com/Joes9527/itsm/actions/runs/34842574381)构建成功，但 GitHub Pages 创建部署返回 404。前者需按既有初始化/迁移阶段契约单独修复并通过组装门禁；后者需核实 Pages 发布配置，不能写成文档构建失败，也不能用它替代应用运行验收。
 
 ## 4. 建议继续顺序
