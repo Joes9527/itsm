@@ -100,7 +100,8 @@ target:
   credential: {from_env: ITSM_TARGET_DB_PASSWORD}
   # access=dsn 时改为：{dsn_env: ITSM_TARGET_DSN}（psql 客户端，DSN 由环境变量提供）
   api_base: http://localhost:3010      # 仅写操作需要
-  api_credential: {user_env: ITSM_ADMIN_USER, from_env: ITSM_ADMIN_PASSWORD}
+  api_user_env: ITSM_ADMIN_USER        # 管理员账号名从环境变量读取
+  api_credential: {from_env: ITSM_ADMIN_PASSWORD}
 
 lineage:                               # 可选；只读对照，用于判断是否单批/克隆忠实
   - {label: "itsm (DEV)", container: itsm-postgres-dev, user: itsm_user, database: itsm,

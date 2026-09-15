@@ -125,6 +125,7 @@ class TargetSpec:
     container: str | None = None
     dsn_env: str | None = None
     api_base: str | None = None
+    api_user_env: str | None = None
     api_credential: Credential | None = None
     scope: str = 'tenant'
     tenant_filter: int | None = None
@@ -187,7 +188,8 @@ def load_profile(path: Path, allow_record_drift: bool = False) -> MigrationProfi
 
     target_raw = raw.get('target') or {}
     _unknown('target', target_raw, {'access', 'container', 'dsn_env', 'user', 'database',
-                                    'credential', 'api_base', 'api_credential', 'scope', 'tenant_filter'})
+                                    'credential', 'api_base', 'api_user_env', 'api_credential',
+                                    'scope', 'tenant_filter'})
     access = target_raw.get('access')
     if access not in {'docker', 'dsn'}:
         raise ProfileError('target.access must be docker or dsn, got %r' % access)
@@ -199,7 +201,7 @@ def load_profile(path: Path, allow_record_drift: bool = False) -> MigrationProfi
         access=access, user=target_raw['user'], database=target_raw['database'],
         credential=_credential(target_raw.get('credential'), 'target.credential') or Credential(),
         container=target_raw.get('container'), dsn_env=target_raw.get('dsn_env'),
-        api_base=target_raw.get('api_base'),
+        api_base=target_raw.get('api_base'), api_user_env=target_raw.get('api_user_env'),
         api_credential=_credential(target_raw.get('api_credential'), 'target.api_credential'),
         scope=target_raw.get('scope', 'tenant'), tenant_filter=target_raw.get('tenant_filter'))
 

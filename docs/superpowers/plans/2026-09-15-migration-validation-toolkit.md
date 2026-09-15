@@ -276,6 +276,7 @@ class TargetSpec:
     container: str | None = None
     dsn_env: str | None = None
     api_base: str | None = None
+    api_user_env: str | None = None
     api_credential: Credential | None = None
     scope: str = 'tenant'
     tenant_filter: int | None = None
@@ -337,7 +338,8 @@ def load_profile(path: Path, allow_record_drift: bool = False) -> MigrationProfi
 
     target_raw = raw.get('target') or {}
     _unknown('target', target_raw, {'access', 'container', 'dsn_env', 'user', 'database',
-                                    'credential', 'api_base', 'api_credential', 'scope', 'tenant_filter'})
+                                    'credential', 'api_base', 'api_user_env', 'api_credential',
+                                    'scope', 'tenant_filter'})
     access = target_raw.get('access')
     if access not in {'docker', 'dsn'}:
         raise ProfileError('target.access must be docker or dsn, got %r' % access)
@@ -349,7 +351,7 @@ def load_profile(path: Path, allow_record_drift: bool = False) -> MigrationProfi
         access=access, user=target_raw['user'], database=target_raw['database'],
         credential=_credential(target_raw.get('credential'), 'target.credential') or Credential(),
         container=target_raw.get('container'), dsn_env=target_raw.get('dsn_env'),
-        api_base=target_raw.get('api_base'),
+        api_base=target_raw.get('api_base'), api_user_env=target_raw.get('api_user_env'),
         api_credential=_credential(target_raw.get('api_credential'), 'target.api_credential'),
         scope=target_raw.get('scope', 'tenant'), tenant_filter=target_raw.get('tenant_filter'))
 
@@ -1051,6 +1053,13 @@ def test_reconcile_counts_filtered_and_matched():
     assert result.only_target == ['C']
 
 
+def test_field_mismatch_samples_are_tokenised():
+    check = REGISTRY['users']
+    src = source([{'userName': 'A', 'realName': 'Real Name', 'status': 'userstatus01'}])
+    report = check.check_fields(src, [{'username': 'A', 'name': 'Different'}], SPEC)
+    assert all(item.startswith('sha256:') for item in report['name']['mismatch_sample'][0])
+
+
 def test_structure_checks_tenant_and_bcrypt():
     check = REGISTRY['users']
     facts = check.check_structure([{'username': 'A', 'tenant_id': 1, 'password_hash': '$2a$10$x'},
@@ -1058,6 +1067,20 @@ def test_structure_checks_tenant_and_bcrypt():
     assert facts['duplicate_usernames'] == 1
     assert facts['foreign_tenant_rows'] == 1
     assert facts['non_bcrypt_rows'] == 1
+
+
+def test_write_plan_resolves_the_department_from_the_unit_code():
+    check = REGISTRY['users']
+    src = source([{'userName': 'B', 'status': 'userstatus01', 'departmentUnit': 'U1'}])
+    src.department_ids = {'U1': 635}
+    assert [i.payload['departmentId'] for i in check.render_write_plan(src, [], SPEC)] == [635]
+
+
+def test_write_plan_leaves_zero_when_the_unit_is_unknown():
+    check = REGISTRY['users']
+    src = source([{'userName': 'B', 'status': 'userstatus01', 'departmentUnit': 'NOPE'}])
+    src.department_ids = {'U1': 635}
+    assert check.render_write_plan(src, [], SPEC)[0].payload['departmentId'] == 0
 
 
 def test_write_plan_is_empty_when_nothing_is_missing():
@@ -1080,6 +1103,7 @@ from __future__ import annotations
 
 from migration.checks.base import ReconcileResult, WriteIntent
 from migration.profile import EntitySpec
+from migration.report import tokenise
 from migration.sources import SourceIndex
 
 
@@ -1160,7 +1184,8 @@ class UsersCheck:
                 else:
                     mismatched += 1
                     if len(samples) < 20:
-                        samples.append([key, str(expected)[:40], str(actual)[:40]])
+                        # tokenised, not raw: the evidence contract forbids names and addresses
+                        samples.append([tokenise(key), tokenise(str(expected)), tokenise(str(actual))])
             total = matched + mismatched
             report[check.name] = {'rule': check.rule, 'matched': matched, 'mismatched': mismatched,
                                   'unresolvable': unresolved,
@@ -1223,7 +1248,7 @@ REGISTRY = {'departments': DepartmentsCheck(), 'users': UsersCheck()}
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m pytest scripts/__tests__/test_migration_checks_users.py -q`
-Expected: `6 passed`
+Expected: `9 passed`
 
 - [ ] **Step 5: Commit**
 
@@ -1373,12 +1398,12 @@ class Target:
 
     # --- product API (writes only) -------------------------------------------------------------
     def api_login(self) -> str:
-        credential = self.spec.api_credential or Credential()
-        user = str(credential.from_file or '').strip()
         import os
-        user = os.environ.get(credential.from_env or '', '') or user
+        credential = self.spec.api_credential or Credential()
+        user = os.environ.get(self.spec.api_user_env or '', '')
         if not user:
-            raise TargetError('the API user must be provided through the environment')
+            raise TargetError('target.api_user_env (%s) must be set in the environment'
+                              % self.spec.api_user_env)
         password = credential.resolve('the product API')
         body = json.dumps({'tenantCode': 'default', 'username': user, 'password': password}).encode()
         request = urllib.request.Request('%s/api/v1/auth/login' % self.spec.api_base, data=body,
@@ -1391,6 +1416,11 @@ class Target:
             payload = json.loads(response.read().decode())
         self._csrf = payload['data']['csrf_token']
         return self._csrf
+
+    def department_ids_by_code(self) -> dict[str, int]:
+        """Map department code to id so a write plan can resolve `department_by:<field>`."""
+        rows = self.query('SELECT code, id::text FROM departments')
+        return {code: int(identifier) for code, identifier in rows if identifier.isdigit()}
 
     def api_post(self, path: str, body: dict, csrf: str) -> tuple[int, dict]:
         request = urllib.request.Request('%s%s' % (self.spec.api_base, path),
@@ -1947,6 +1977,9 @@ def main(argv=None) -> int:
         source = indexes[spec.source]
         target = _target(profile, args)
         tgt = check.fetch_target(target, spec)
+        if args.command == 'backfill' and hasattr(target, 'department_ids_by_code'):
+            # the write plan resolves department_by:<source field> through this map
+            source.department_ids = target.department_ids_by_code()
         if args.command == 'verify':
             result = check.reconcile(source, tgt, spec)
             evidence.payload().setdefault('entities', {})[name] = {
@@ -2176,7 +2209,8 @@ target:
   database: itsm_ga_ready
   credential: {from_env: ITSM_TARGET_DB_PASSWORD}
   api_base: http://localhost:3010
-  api_credential: {user_env: ITSM_ADMIN_USER, from_env: ITSM_ADMIN_PASSWORD}
+  api_user_env: ITSM_ADMIN_USER
+  api_credential: {from_env: ITSM_ADMIN_PASSWORD}
   scope: full-database
 lineage:
   - {label: itsm (DEV), container: itsm-postgres-dev, user: itsm_user, database: itsm,
@@ -2367,6 +2401,16 @@ entry point."
 ```
 
 ---
+
+Notes recorded while reviewing the remaining tasks before implementing them (three defects that
+would have blocked or broken the toolkit):
+1. `api_credential` only supports `from_env`/`from_file`, so the planned `{user_env: ...}` form would
+   have made the real profile fail to load; the API user now has its own `target.api_user_env` key.
+2. `render_write_plan` read a `department_ids` map that nothing populated, so every write plan would
+   have carried `departmentId: 0` and been blocked by preflight; the CLI now fills the map from
+   `Target.department_ids_by_code()`.
+3. `check_fields` stored raw usernames and addresses in its mismatch samples, which the privacy guard
+   refuses to write (and which would have leaked if it did not); samples are tokenised.
 
 ## Self-Review
 
