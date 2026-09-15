@@ -127,3 +127,10 @@ KAF 开发目前有意共用 acp MinIO（9000）；不能据此声称 CI 与开�
 - ITSM 工具修复 `7c8cee6fae181400573308bfb7e73043d11ed0b9` 与 KAF 工具修复 `e6fd8a50368a15505c98c8826dee5af975cef5c2` 独立复审通过；G-B 仍 BLOCKED，不能据工具测试切换连接。
 - 首期范围：单租户功能收口；旧路由后续处理，使用现有分派及规范流程；不迁历史工单。SLA 日历已修复并准备新配置，但七个现有流程绑定没有 SLA ID，实际新建计时接线尚需完成。
 - 运行时集成工作树 `config-launch-integration` 尚在开发，未替代 G-A 固定运行时，未启动候选应用。
+
+
+### 2026-09-15 当前 DEV 与新目标的澄清
+
+最新只读核对：8080 Backend 实际连接 `itsm-postgres-dev / itsm_config_baseline_20260908 / public`，不是 `itsm_ga_ready`。当前DEV已有26条符合核心WorkItem关联结构的记录及12条产品类型；旧库itsm和旧克隆itsm_migration_20260914仍有未完成适配的数据。新目标不是DEV的完整克隆，不应据其0工单反推DEV没有测试数据。
+
+保留候选、046字段差额及目录/分类/SLA ID重映射要求见 [DEV数据保留核对](review/2026-09-15-dev-workitem-data-preservation-audit.md)。当前DEV未切换，未修改数据。
