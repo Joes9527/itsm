@@ -453,6 +453,10 @@ the entity-name validation needs a registered plug-in, so the tests register a s
 template uses single braces because the helper substitutes `{dir}` with `replace()`; and
 `scripts/__tests__/conftest.py` is required for `import migration` to resolve.
 
+Notes recorded while executing this task: the planned phone pattern only matched digits written
+without separators or a country code, so it missed realistic input such as `+86 138 1010 1665`; the
+implementation now strips separators and accepts an optional `+86` prefix before matching.
+
 - [ ] **Step 5: Commit**
 
 ```bash
@@ -669,7 +673,8 @@ from pathlib import Path
 from typing import Any
 
 EMAIL = re.compile(r'[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}')
-PHONE = re.compile(r'(?<!\d)(?:\+?\d{1,3}[\s\-]?)?1[3-9]\d{9}(?!\d)')
+PHONE = re.compile(r'(?<!\d)(?:\+?86)?1[3-9]\d{9}(?!\d)')
+SEPARATORS = re.compile(r'[\s\-().]')
 CODE = re.compile(r'\b[DH]\d{5}\b')
 TOKEN = re.compile(r'^sha256:[0-9a-f]{8}$')
 
@@ -692,8 +697,11 @@ def _walk(node: Any, path: str, hits: list[str]) -> None:
     elif isinstance(node, str):
         if TOKEN.match(node):
             return
-        for label, pattern in (('email', EMAIL), ('phone', PHONE), ('code', CODE)):
-            if pattern.search(node):
+        # a phone number is often written with spaces, hyphens or a country code; normalise first
+        normalised = SEPARATORS.sub('', node)
+        for label, pattern, subject in (('email', EMAIL, node), ('phone', PHONE, normalised),
+                                        ('code', CODE, node)):
+            if pattern.search(subject):
                 hits.append('%s (%s): %s' % (path, label, node[:40]))
                 return
 
