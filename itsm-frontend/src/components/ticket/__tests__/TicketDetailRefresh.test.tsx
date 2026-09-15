@@ -1,6 +1,6 @@
 import React from 'react';
 import { App } from 'antd';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
 import TicketDetail from '../TicketDetail';
 import { TicketApi } from '@/lib/api/ticket-api';
@@ -255,4 +255,72 @@ it('shares sidebar decisions with the approval tab and derives its count from th
   await waitFor(() => expect(screen.getAllByText('暂无审批决策记录')).toHaveLength(2));
   expect(screen.getByText(/审批链.*0/)).toBeInTheDocument();
   expect(read).toHaveBeenCalledTimes(2);
+});
+
+
+describe('ticket mutation follow-up ordering', () => {
+  const originalRandomUUID = crypto.randomUUID;
+  beforeEach(() => Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: () => 'ticket-follow-up-operation' }));
+  afterEach(() => Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: originalRandomUUID }));
+
+  it.each(['AI acceptance', 'AI conflict', 'edit conflict'])(
+    'starts a task-fresh ticket read during %s recovery and rejects its older response',
+    async mode => {
+      let finishUpdate!: () => void;
+      let finishOldTicket!: (value: unknown) => void;
+      let finishFreshTicket!: (value: unknown) => void;
+      const read = TicketApi.getTicket as jest.Mock;
+      const update = TicketApi.updateTicket as jest.Mock;
+      read.mockReset();
+      update.mockReset();
+      const editableTicket = { ...ticket, actions: { edit: { allowed: true } } };
+      read.mockResolvedValue(editableTicket);
+      const task = { id: 8, businessType: 'generic', businessId: 101, taskName: '交付设备',
+        status: 'started', taskPurpose: 'fulfillment', uiActions: { complete: true } };
+      (BPMNWorkflowApi.listUserTasks as jest.Mock).mockResolvedValue({
+        items: [task], total: 1, page: 1, pageSize: 100,
+      });
+      (BPMNWorkflowApi.completeTask as jest.Mock).mockResolvedValue(undefined);
+      (aiTriage as jest.Mock).mockResolvedValue({ category: 'network', priority: 'medium', confidence: 0.9 });
+      update.mockImplementationOnce(() => new Promise((resolve, reject) => {
+        finishUpdate = () => mode === 'AI acceptance'
+          ? resolve({ workItemId: 101, version: 2 })
+          : reject(Object.assign(new Error('version conflict'), { status: 409, code: 4090 }));
+      }));
+      const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+      mount();
+      if (mode === 'edit conflict') {
+        await user.click((await screen.findByText('编辑', { selector: 'span' })).closest('button')!);
+        const dialog = await screen.findByRole('dialog');
+        await user.click(within(dialog).getByText('保存修改').closest('button')!);
+      } else {
+        await user.click(await screen.findByText('采纳建议', {}, { timeout: 2000 }));
+      }
+      await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+      // Ordinary refresh must still skip the ticket during the actual mutation.
+      fireEvent.keyDown(document.body, { key: 'r', altKey: true });
+      await screen.findByText('部分区域正在操作或已离开，未刷新。');
+      expect(read).toHaveBeenCalledTimes(1);
+      read.mockImplementationOnce(() => new Promise(resolve => { finishOldTicket = resolve; }));
+      await act(async () => finishUpdate());
+      await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+      if (mode !== 'edit conflict') {
+        fireEvent.click(screen.getByText('采纳建议'));
+        expect(update).toHaveBeenCalledTimes(1);
+      }
+      read.mockImplementationOnce(() => new Promise(resolve => { finishFreshTicket = resolve; }));
+      fireEvent.click(await screen.findByText('完成任务'));
+      fireEvent.click(await screen.findByText('确认完成'));
+      await screen.findByText('任务操作已提交，请以刷新后的状态为准。');
+      await waitFor(() => expect(read).toHaveBeenCalledTimes(3));
+      await act(async () => finishFreshTicket({ ...editableTicket, title: '任务完成后最新工单', version: 3 }));
+      expect(await screen.findByText('#101 任务完成后最新工单')).toBeInTheDocument();
+      await act(async () => finishOldTicket({ ...editableTicket, title: '任务前过时工单', version: 2 }));
+      expect(screen.queryByText('#101 任务前过时工单')).not.toBeInTheDocument();
+      expect(screen.getByText('#101 任务完成后最新工单')).toBeInTheDocument();
+      expect(update).toHaveBeenCalledTimes(1);
+      expect(BPMNWorkflowApi.completeTask).toHaveBeenCalledTimes(1);
+    }
+  );
+
 });

@@ -131,8 +131,9 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
   const { message: antMessage } = App.useApp();
   const { handleError } = useErrorHandler();
 
-  const writing = useRef(false);
-  const resource = useTicketDetailResource(ticketId, () => writing.current);
+  const locked = useRef(false);
+  const commandPending = useRef(false);
+  const resource = useTicketDetailResource(ticketId, () => commandPending.current);
   const { data: ticket, initialLoading: loading, error } = resource;
   const refresh = useDetailRefresh()!;
   const refreshDetail = useCallback(() => { void refresh.refresh(); }, [refresh.refresh]);
@@ -158,7 +159,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
   const [deleting, setDeleting] = useState(false);
   const sla = useDetailResource<TicketSLAInfo | null>(ticketId, () => TicketApi.getTicketSLA(ticketId), () => 0);
   const slaInfo = sla.data;
-  useDetailRefreshEntry({ key: 'sla', label: 'SLA', reload: sla.reload, isWriting: () => writing.current });
+  useDetailRefreshEntry({ key: 'sla', label: 'SLA', reload: sla.reload, isWriting: () => commandPending.current });
   const [tabCounts, setTabCounts] = useState<{
     comments?: number;
     attachments?: number;
@@ -176,7 +177,8 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   useEffect(() => {
     if (!resource.denied) return;
-    writing.current = false;
+    commandPending.current = false;
+    locked.current = false;
     editIntent.current = undefined;
     aiEditIntent.current = undefined;
     editSnapshot.current = undefined;
@@ -219,10 +221,11 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
     comment?: string;
     notifyChannels?: string[];
   }) => {
-    if (writing.current || !resource.ready) return;
+    if (locked.current || !resource.ready) return;
     const current = resource.capture();
     try {
-      writing.current = true;
+      locked.current = true;
+      commandPending.current = true;
       setCCing(true);
       await TicketApi.ccTicket(
         ticketId,
@@ -230,17 +233,20 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
         values.comment,
         values.notifyChannels || ['in_app']
       );
+      commandPending.current = false;
       if (!current()) return;
       antMessage.success('抄送成功');
       setCCModalVisible(false);
       ccForm.resetFields();
       fetchTicket();
     } catch (error) {
+      commandPending.current = false;
       if (!current()) return;
       resource.deny(error);
       handleError(error, 'ccTicket', '抄送失败');
     } finally {
-      writing.current = false;
+      commandPending.current = false;
+      locked.current = false;
       setCCing(false);
     }
   };
@@ -252,23 +258,27 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   // Handle assignment submit
   const handleAssignSubmit = async (values: { assigneeId: number; comment?: string }) => {
-    if (writing.current || !resource.ready) return;
+    if (locked.current || !resource.ready) return;
     const current = resource.capture();
     try {
-      writing.current = true;
+      locked.current = true;
+      commandPending.current = true;
       setAssigning(true);
       await TicketApi.assignTicket(ticketId, values);
+      commandPending.current = false;
       if (!current()) return;
       antMessage.success('工单分配成功');
       setAssignModalVisible(false);
       assignForm.resetFields();
       fetchTicket();
     } catch (error) {
+      commandPending.current = false;
       if (!current()) return;
       resource.deny(error);
       handleError(error, 'assignTicket', '分配失败');
     } finally {
-      writing.current = false;
+      commandPending.current = false;
+      locked.current = false;
       setAssigning(false);
     }
   };
@@ -290,10 +300,11 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   // Handle edit submit
   const handleEditSubmit = async (values: Partial<Ticket>) => {
-    if (writing.current || !resource.ready) return;
+    if (locked.current || !resource.ready) return;
     const current = resource.capture();
     try {
-      writing.current = true;
+      locked.current = true;
+      commandPending.current = true;
       setUpdating(true);
       // 状态转换验证
       if (values.status && editSnapshot.current?.status && values.status !== editSnapshot.current.status) {
@@ -307,12 +318,14 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
 
       editIntent.current = prepareTicketEdit(editIntent.current, values, editSnapshot.current?.version);
       await TicketApi.updateTicket(ticketId, editIntent.current.payload);
+      commandPending.current = false;
       editIntent.current = undefined;
       if (!current()) return;
       antMessage.success('工单更新成功');
       setEditModalVisible(false);
       fetchTicket();
     } catch (error) {
+      commandPending.current = false;
       if (!current()) return;
       resource.deny(error);
       if (isTicketEditConflict(error)) {
@@ -323,7 +336,8 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
       }
       handleError(error, 'updateTicket', isTicketEditConflict(error) ? '工单已被更新，请重新打开编辑后重试' : '更新失败');
     } finally {
-      writing.current = false;
+      commandPending.current = false;
+      locked.current = false;
       setUpdating(false);
     }
   };
@@ -335,23 +349,27 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   // Handle delete confirm
   const handleDeleteConfirm = async () => {
-    if (writing.current || !resource.ready) return;
+    if (locked.current || !resource.ready) return;
     const current = resource.capture();
     try {
-      writing.current = true;
+      locked.current = true;
+      commandPending.current = true;
       setDeleting(true);
       await TicketApi.deleteTicket(ticketId);
+      commandPending.current = false;
       if (!current()) return;
       antMessage.success('工单删除成功');
       setDeleteModalVisible(false);
       // Navigate back to ticket list
       window.location.href = '/tickets';
     } catch (error) {
+      commandPending.current = false;
       if (!current()) return;
       resource.deny(error);
       handleError(error, 'deleteTicket', '删除失败');
     } finally {
-      writing.current = false;
+      commandPending.current = false;
+      locked.current = false;
       setDeleting(false);
     }
   };
@@ -677,7 +695,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
             title={ticket.title}
             description={ticket.description}
             onAccept={async suggestion => {
-              if (writing.current || !resource.ready) return;
+              if (locked.current || !resource.ready) return;
               const current = resource.capture();
               if (
                 suggestion.priority === ticket.priority &&
@@ -686,18 +704,23 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
                 antMessage.info('AI建议与当前分类/优先级一致，无需更新');
                 return;
               }
-              writing.current = true;
+              locked.current = true;
+              commandPending.current = true;
               try {
                 aiEditIntent.current = prepareTicketEdit(aiEditIntent.current, {
                   category: suggestion.category,
                   priority: toTicketPriority(suggestion.priority),
                 }, ticket.version);
                 await TicketApi.updateTicket(ticketId, aiEditIntent.current.payload);
+                // Keep duplicate commands locked through the read, but allow later
+                // task outcomes to supersede it with a fresh ticket snapshot.
+                commandPending.current = false;
                 if (!current()) return;
                 aiEditIntent.current = undefined;
                 antMessage.success(`已采纳AI建议：分类 ${suggestion.category}，优先级 ${suggestion.priority}`);
                 await fetchTicket();
               } catch (err) {
+                commandPending.current = false;
                 if (!current()) return;
                 resource.deny(err);
                 if (isTicketEditConflict(err)) {
@@ -706,7 +729,8 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
                 }
                 handleError(err, 'applyAISuggestion', '采纳建议失败');
               } finally {
-                writing.current = false;
+                commandPending.current = false;
+                locked.current = false;
               }
             }}
           />
