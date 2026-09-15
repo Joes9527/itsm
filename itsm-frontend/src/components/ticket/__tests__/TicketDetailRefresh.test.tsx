@@ -172,3 +172,21 @@ it('does not reopen a sensitive edit form after a denied read is retried', async
   await screen.findByText('#101 刷新测试工单');
   expect(screen.queryByLabelText('工单标题')).not.toBeInTheDocument();
 });
+
+it('shares sidebar decisions with the approval tab and derives its count from the same response', async () => {
+  const read = BPMNWorkflowApi.getTicketApprovalDecisions as jest.Mock;
+  read.mockResolvedValue([{ id: 1, nodeKey: '共享决策', decision: 'approved', actorName: '主管' }]);
+  const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+  mount();
+  await screen.findByText('共享决策');
+  expect(screen.getByText(/审批链.*1/)).toBeInTheDocument();
+  expect(read).toHaveBeenCalledTimes(1);
+  await user.click(screen.getByText(/^审批链/));
+  await waitFor(() => expect(screen.getAllByText('共享决策')).toHaveLength(2));
+  expect(read).toHaveBeenCalledTimes(1);
+  read.mockResolvedValue([]);
+  await user.click(screen.getByLabelText('刷新工单详情'));
+  await waitFor(() => expect(screen.getAllByText('暂无审批决策记录')).toHaveLength(2));
+  expect(screen.getByText(/审批链.*0/)).toBeInTheDocument();
+  expect(read).toHaveBeenCalledTimes(2);
+});

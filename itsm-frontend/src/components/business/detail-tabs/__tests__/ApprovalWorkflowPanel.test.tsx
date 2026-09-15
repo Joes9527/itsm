@@ -1,4 +1,5 @@
 import React from 'react';
+import { ApprovalDecisionHistoryProvider } from '../ApprovalDecisionHistoryContext';
 import { render, screen, waitFor } from '@/lib/test-utils';
 
 const mockGetApprovalDecisions = jest.fn();
@@ -38,10 +39,10 @@ describe('ApprovalWorkflowPanel — 真实审批决策展示', () => {
     ]);
 
     render(
-      <ApprovalWorkflowPanel
+      <ApprovalDecisionHistoryProvider ticketId={5}><ApprovalWorkflowPanel
         ticketId={5}
         isTicketFinal={false}
-      />
+      /></ApprovalDecisionHistoryProvider>
     );
 
     await waitFor(() => expect(mockGetApprovalDecisions).toHaveBeenCalledWith(5));
@@ -55,10 +56,10 @@ describe('ApprovalWorkflowPanel — 真实审批决策展示', () => {
     mockGetApprovalDecisions.mockResolvedValue([]);
 
     render(
-      <ApprovalWorkflowPanel
+      <ApprovalDecisionHistoryProvider ticketId={6}><ApprovalWorkflowPanel
         ticketId={6}
         isTicketFinal={false}
-      />
+      /></ApprovalDecisionHistoryProvider>
     );
 
     await waitFor(() => expect(mockGetApprovalDecisions).toHaveBeenCalledWith(6));

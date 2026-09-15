@@ -1,6 +1,7 @@
 'use client';
 
 /**
+ * The containing page must provide ApprovalDecisionHistoryProvider.
  * 工单审批链 Tab
  *
  * 只读展示该工单在 BPMN 引擎里留下的审批决策历史（ProcessApprovalDecision）。

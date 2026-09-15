@@ -53,6 +53,8 @@ import { AISuggestionPanel } from '@/components/business/AISuggestionPanel';
 import { isValidTransition, isFinalStatus } from '@/lib/utils/workflow-state-machine';
 import { TicketStatus, TicketStatusConfig, getPriorityConfig } from '@/constants/taxonomy';
 import { ticketAttachmentAdapter } from '@/components/business/detail-tabs';
+import { ApprovalDecisionHistoryProvider } from '@/components/business/detail-tabs/ApprovalDecisionHistoryContext';
+import { useApprovalDecisionHistory } from '@/components/business/detail-tabs/useApprovalDecisionHistory';
 import { ApprovalMiniStepper } from '@/components/business/detail-tabs/ApprovalMiniStepper';
 import ServiceRequestPanel from './ServiceRequestPanel';
 import ServiceCatalogApprovalChain from './ServiceCatalogApprovalChain';
@@ -160,7 +162,6 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
   const [tabCounts, setTabCounts] = useState<{
     comments?: number;
     attachments?: number;
-    approvals?: number;
     history?: number;
     relations?: number;
   }>({});
@@ -445,6 +446,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
   const isTicketFinal = isFinalStatus(ticket.status as TicketStatus);
 
   return (
+    <ApprovalDecisionHistoryProvider ticketId={ticketId}>
     <div className="w-full space-y-4 pt-4 text-foreground font-sans antialiased">
       {error && <DetailReadState error={error} loading={resource.loading} reload={resource.reload} />}
       {sla.error && <DetailReadState error={`SLA：${sla.error}`} loading={sla.loading} reload={sla.reload} />}
@@ -1164,6 +1166,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
         </Space>
       </Modal>
     </div>
+    </ApprovalDecisionHistoryProvider>
   );
 };
 
@@ -1180,7 +1183,6 @@ interface TicketDetailTabsProps {
   tabCounts?: {
     comments?: number;
     attachments?: number;
-    approvals?: number;
     history?: number;
     relations?: number;
   };
@@ -1201,6 +1203,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
   const attachmentsCount = useCallback((count: number | undefined) => updateCount('attachments', count), [updateCount]);
   const historyCount = useCallback((count: number | undefined) => updateCount('history', count), [updateCount]);
   const relationsCount = useCallback((count: number | undefined) => updateCount('relations', count), [updateCount]);
+  const { decisionCount } = useApprovalDecisionHistory(ticketId);
   const countSuffix = (count?: number) => (count !== undefined ? ` (${count})` : '');
 
   const items = [
@@ -1243,7 +1246,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
       label: (
         <span className="flex items-center gap-1.5 text-[12px] font-medium">
           <GitBranch size={13} />
-          审批链{countSuffix(tabCounts?.approvals)}
+          审批链{countSuffix(decisionCount)}
         </span>
       ),
       children: (

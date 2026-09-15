@@ -61,6 +61,7 @@ function formatStepTime(iso?: string): string {
 }
 
 /**
+ * The containing page must provide ApprovalDecisionHistoryProvider.
  * 工单详情右侧工具箱：审批决策历史。
  * 样式对齐 prototype 的 ✓/●/○ 时间轴；数据源与审批链 Tab 相同
  * （BPMNWorkflowApi.getTicketApprovalDecisions），不引入第二套状态映射。

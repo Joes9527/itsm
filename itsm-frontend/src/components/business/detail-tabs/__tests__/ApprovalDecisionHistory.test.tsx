@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent, act } from '@/lib/test-utils';
+import { ApprovalDecisionHistoryProvider } from '../ApprovalDecisionHistoryContext';
 import { ApprovalMiniStepper } from '../ApprovalMiniStepper';
 import { ApprovalWorkflowPanel } from '../ApprovalWorkflowPanel';
 import { ProcessApprovalDecisionCards } from '@/components/ticket/ProcessApprovalDecisionCards';
@@ -18,7 +19,8 @@ const views = [
   ['cards', (id: number) => <ProcessApprovalDecisionCards ticketId={id} />],
 ] as const;
 
-describe.each(views)('%s decision history', (_name, view) => {
+describe.each(views)('%s decision history', (_name, consumer) => {
+  const view = (id: number) => <ApprovalDecisionHistoryProvider ticketId={id}>{consumer(id)}</ApprovalDecisionHistoryProvider>;
   beforeEach(() => read.mockReset());
   it('distinguishes read failure from empty history and retries', async () => {
     read.mockRejectedValueOnce(new Error('读取审批失败')).mockResolvedValueOnce([]);
