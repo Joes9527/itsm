@@ -17,7 +17,15 @@
 
 ## 2. 现在真实运行在哪里（交接时重新核对）
 
-2026-09-15 10:15 CST 实测：
+> **2026-09-15 13:45 CST 起环境口径已变更**（详见
+> [`docs/review/2026-09-15-environment-and-migration-closure.md`](docs/review/2026-09-15-environment-and-migration-closure.md)）：
+> 由**发布环境启动器**（`itsm-kaf-baseline-20260908`）在 **8080** 提供后端、**3010** 提供 web，
+> 后端连接的是**克隆库** `itsm_ga_ready`（容器 `ga-itsm-20260914`，运行时角色 `ga_runtime`）；
+> **不使用 3000/3001**；DEV PostgreSQL 保持稳定（只允许只读对比）。
+> 协调方的 `ga-backend-switch.py` / `ga-backend-restart.py` / `ga-frontend-switch.py` /
+> `promote-ga-backend-fix.py` / `pin-ga-frontend.py` 已 retire，不得再用于启停。
+
+2026-09-15 10:15 CST 实测（**历史快照，切换前的 DEV 状态**）：
 
 | 项 | 当前状态 |
 | --- | --- |

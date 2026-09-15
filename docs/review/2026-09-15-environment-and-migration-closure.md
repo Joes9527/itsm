@@ -1,0 +1,97 @@
+# 环境口径与迁移结论收尾（2026-09-15）
+
+承接 [`2026-09-14-config-launch-closure.md`](2026-09-14-config-launch-closure.md)。本文件记录
+2026-09-15 当天**实际执行**的变更、决策与仍未闭合的项，是这一天的权威来源；HANDOFF 第 2 节指向本文件。
+
+## 1. 环境口径（最终）
+
+| 项 | 现状 |
+| --- | --- |
+| 后端 | **8080**，由发布环境启动器 `itsm-kaf-baseline-20260908` 管理 |
+| web | **3010** |
+| 数据库 | **克隆库** `itsm_ga_ready`（容器 `ga-itsm-20260914`，运行时角色 `ga_runtime`） |
+| 禁止 | **不得使用 3000 / 3001** |
+| DEV PostgreSQL | **保持稳定**；只允许只读对比（计数/时间戳），不得写入或改配置 |
+| 在役制品 | `itsm-api-ga-workbench` sha256 `d395dbd5a03739d48cde6fe7898ec45d7daadb19686ac265f5bf6e70239a58ef` |
+
+运行环境的后端配置（`itsm-kaf-baseline-20260908/config/itsm-wsl-development/config.yaml`）确认其
+`dbname=itsm_ga_ready`、`user=ga_runtime`、Redis `127.0.0.1:6389 db12`。
+
+协调方的启停工具已 **retire**（`ga-backend-switch.py`、`ga-backend-restart.py`、
+`ga-frontend-switch.py`、`promote-ga-backend-fix.py`、`pin-ga-frontend.py`）：
+每个脚本顶部都加了 fail-closed 守卫，实测 5/5 拒绝运行。记录见私有目录
+`retired-tools-20260915.json`。
+
+## 2. 代码修复与回归测试
+
+`GET /api/v1/notifications` 曾返回 500 `rls: no tenant_id in context and system bypass not set`。
+根因：控制器把裸 `*gin.Context` 传给持久化方法，而租户由 `middleware/auth.go` 放在 **request
+context** 上、由 `database/rls.AcquireConn` 读取。
+
+- `f3844a19`：8 个持久化调用改传 `ctx.Request.Context()`（与 incident/cmdb/connector 约定一致）
+- `0ca6fb5c`：新增驱动层租户守卫回归测试（**修复前 FAIL / 修复后 ok** 已双向验证）+ 跨租户负例
+- `docs/review/2026-09-15-notification-tenant-context-fix-review-packet.md`：复审包
+
+## 3. 运行时 ACL 决策（放弃收窄）
+
+原切换期为"当前路径最小权限"临时收窄了 `ga_runtime` 的授权（159 张表中仅 20 张可写、55 张可读），
+导致产品写入路径静默失败（连接器配置持久化只记 Warn 且接口仍返回 200，随后建单 403）。
+
+**决策（用户 2026-09-15 明确授权）**：放弃收窄，采用产品自身角色模型（`001_roles.sql:48-58`），
+**core4 一并放开写**。落地结果：
+
+| | 之前 | 之后 |
+| --- | --- | --- |
+| 可写表 | 20 / 159 | **152 / 159** |
+| 可读表 | 55 | **155** |
+| 可用序列 | 20 / 137 | **137 / 137** |
+| RLS 策略 / 启用 RLS 的表 | 129 / 129 | **129 / 129（未变）** |
+
+保留的跨角色控制（不放开）：`execution_runtime_bindings`、`execution_scopes`、
+`execution_scope_members`（只读）；`auth_state_authorities`、`kaf_task_action_ledgers`、
+`work_item_migration_evidence`、`schema_migrations`（无权限）。
+
+- 工件：`runtime-acl-ga.sql`（私有目录；旧的收窄件标记 `superseded-narrowing-20260915`）
+- 回滚：`acl-broaden/acl-rollback-*.sql`（依据执行前全量授权快照生成）
+- 验证：以真实 `ga_runtime` 凭据在回滚事务内实测（写路径通过、跨租户 UPDATE 命中 0 行、控制表仍被拒）；
+  HTTP 级 `PUT /api/v1/notifications/13/read` → 200 且未读数 7→6 持久化（走 3010）
+
+## 4. 旧主数据迁移验证结论
+
+真值 = SOP 指定的导出文件；口径 = 逐项差异归因；工具 = `scripts/verify_itsm_migration_data.py`
+（只读、可自检）；报告 = `docs/migrations/2026-09-15-legacy-migration-validation-report.md`。
+
+- **血统**：四个库（运行环境、专用迁移库、DEV、baseline）携带**同一批 2026-08-19** 迁移数据
+  → 克隆忠实、无重复执行。
+- **用户**：导出活跃唯一用户名 9,011，库内匹配 7,816；缺 **1,261**，其中
+  **1,243 个无 `HR_USERID`**（迁移口径＝只迁 HR 关联员工）、
+  **18 个有 `HR_USERID` 却未迁移 = 真遗漏**（邮箱在库中 0/18 存在、部门 18/18 存在、导出中邮箱无重复）。
+- **邮箱**：库内一律为 `<局部名>@keas.kln.comm`（7,826 条）。**用户确认属有意为之**（防止开发环境
+  向真实地址发信），不是缺陷；三个库一致 → 迁移时行为。
+- **部门**：导出 5,272（文件时间 08-04）vs 库内 7,975；精确匹配 4,975、仅导出 297、仅库中 3,000
+  （其中 1,986 的名称在导出中存在）。KAF 包内所有部门导出副本均为 5,272 条；额外部门**不是**来自
+  分类导出（0 命中）。→ 08-19 那次使用的部门输入不在机器上，**无法复现**，保留为待补输入项。
+- **仓库口径**：`org_type=warehouse` 可按**名称**推出（737 中 728 个含"库/仓/物流"，非仓库行 0 命中）；
+  SOP 的 246 与此不符。9 个未命中的仓库名待复核。
+- **以旧数据为准（用户裁定）**：与导出不一致处按旧数据为准 → 66 条 `active` 差异、17 条库内重复邮箱、
+  316 个匹配用户无部门归属、18 个遗漏用户，均属**待修**项。
+
+## 5. 未闭合项
+
+1. 18 个遗漏用户的补迁（需确认补迁方式与口令来源）。
+2. 按"以旧数据为准"修正：`active` 66 条、重复邮箱 17 条、无部门归属 316 条。
+3. 08-19 部门迁移的输入文件与迁移 CLI（`cmd/migrate_legacy_itsm` / `cmd/migrate_legacy_users`）
+   **从未提交进仓库**，迁移规则无法复现——需从 KAF 侧取回或补写文档。
+4. `d395dbd5…` 制品的**独立复审**仍未完成（复审包已提交，批准前该制品不该被视为已审）。
+5. 审查闸门在工具 retire 后**不再由可运行程序强制**，需由部署路径或文档承接。
+6. 旧数据在新系统的可用性验证（登录、组织树、人员选择器，走 **3010**）——下一步执行。
+
+## 6. 本日提交（分支 `codex/feat/config-launch-integration`，未合 main）
+
+| 提交 | 内容 |
+| --- | --- |
+| `f3844a19` | 通知控制器改传 request context |
+| `0ca6fb5c` | 租户上下文回归测试 |
+| `640f2301` | 复审包 |
+| `03452e12` | 迁移验证工具 |
+| `45c12607` | 迁移验证报告 + 证据 |
