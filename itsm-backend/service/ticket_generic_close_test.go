@@ -1,6 +1,9 @@
 package service
 
 import (
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/authorization"
@@ -10,8 +13,6 @@ import (
 	"itsm-backend/handlers/shared/workitemmutation"
 	ticketrepo "itsm-backend/repository/ticket"
 	executionfixture "itsm-backend/tests/fixtures/execution"
-	"testing"
-	"time"
 )
 
 func TestGenericCloseUsesVersionedEditAuthority(t *testing.T) {
