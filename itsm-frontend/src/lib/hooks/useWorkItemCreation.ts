@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { message } from 'antd';
+import { sessionSecurity } from '@/lib/security';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { ApiError } from '@/lib/api/http-client';
 import {
@@ -87,8 +88,10 @@ export function useWorkItemCreation() {
     if (busyRef.current) return undefined;
     if (activeRef.current) return run(activeRef.current);
     let context: string;
+    let operationId: string;
     try {
       context = submissionContext();
+      operationId = sessionSecurity.generateOperationId();
     } catch (error) {
       message.error((error as Error).message);
       return undefined;
@@ -97,7 +100,7 @@ export function useWorkItemCreation() {
     const serialized = JSON.stringify(payload);
     const snapshot = JSON.parse(serialized) as { title?: string };
     const attempt: Attempt = {
-      key: crypto.randomUUID(),
+      key: operationId,
       context,
       title: snapshot.title || '已确认申请',
       state: 'sending',

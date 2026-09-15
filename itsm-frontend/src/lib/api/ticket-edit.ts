@@ -27,17 +27,6 @@ export interface TicketEditIntent<T extends object> {
   payload: T & { version: number; operationId: string };
 }
 
-function createTicketEditOperation(): string {
-  if (typeof globalThis.crypto?.randomUUID === 'function') {
-    return globalThis.crypto.randomUUID();
-  }
-  // LAN HTTP can expose getRandomValues without the secure-context randomUUID API.
-  if (typeof globalThis.crypto?.getRandomValues !== 'function') {
-    throw new Error('浏览器不支持安全操作标识，请使用支持加密随机数的浏览器');
-  }
-  return sessionSecurity.generateSessionId();
-}
-
 // Hold one confirmed payload across uncertain retries. A background refresh does
 // not replace its observed version; changed form values define a new intent.
 export function prepareTicketEdit<T extends object>(
@@ -52,7 +41,7 @@ export function prepareTicketEdit<T extends object>(
     payload: {
       ...JSON.parse(fingerprint),
       version: ticketEditVersion(version),
-      operationId: createTicketEditOperation(),
+      operationId: sessionSecurity.generateOperationId(),
     },
   };
 }
