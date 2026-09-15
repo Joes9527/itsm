@@ -38,3 +38,12 @@
 绑定选择的独立证据位于 `/home/administrator/.local/state/itsm-task2-remediation-20260914/sla-binding-evidence/`：固定0788源码，四档优先级精确匹配、Change normal/emergency、默认绑定不截获均通过；显式流程key路径的SLA为空也已复现。G-A的八个默认目录流程key均为空，不触发此旁路；后续显式配置流程key需另行处理。
 
 合并后验证：go build ./...、go test ./service -run ^TestSLACalendar -count=1、go test ./cmd/initialize_ticket_types -count=1 均通过。未运行或宣称全后端测试通过；旧基线全量测试差额见工具修复证据。
+
+
+## 2026-09-15 用户最终范围决定
+
+- 当前DEV使用 `itsm_config_baseline_20260908`；新目标 `itsm_ga_ready` 已存在，二者不得混称同一DEV克隆。
+- 用户明确：26条现有DEV WorkItem及关联评论、附件、关系无需迁移；旧流程不迁移、不执行。源数据保留，不清空任何数据库或历史任务。
+- 目标继续承接新规范下所需配置和基础数据；E2E新建记录，不为历史测试记录补齐目录、SLA周期或执行上下文。
+- 通过可切换配置复用现有Backend与前端，保留原DEV配置供切回；不另建整套环境。同一Backend切换期间服务目标库，不宣称两个库同时由同一进程服务。
+- 下一步收口连接配置、必要产品配置及运行权限，核对缓存/后台任务指向，再执行新建E2E。此决定不等于既有SLA功能差额已验收，也不授权源数据清理。
