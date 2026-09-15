@@ -1660,7 +1660,16 @@ def drifted(measurements: dict, profile: MigrationProfile) -> list[dict]:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m pytest scripts/__tests__/test_migration_analyze.py -q`
-Expected: `4 passed`
+Expected: `8 passed`
+
+Notes recorded while executing this task:
+1. `derive_map` reuses `check_fields` rather than recomputing the comparison, so a rule change can
+   not make the two disagree.
+2. The fields `discriminate` compares are a module constant (`DISCRIMINATE_CANDIDATES`), so the
+   candidate list is visible in one place instead of buried in the signature.
+3. A rule whose measurement is missing counts as drift (fail closed): a filter that matched nothing
+   because the data changed must not look like a pass.
+4. Extra tests cover derive_map, a weak discriminating field, and a raised threshold from the profile.
 
 - [ ] **Step 5: Commit**
 
