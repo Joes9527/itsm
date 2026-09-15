@@ -510,6 +510,12 @@ def test_missing_id_field_is_an_error(tmp_path):
     (tmp_path / 'u.json').write_text(json.dumps([{'other': 1}]))
     with pytest.raises(SourceError, match='userName'):
         load_source(tmp_path, SourceFile(name='users', file='u.json', id_field='userName'))
+
+
+def test_non_list_payload_is_an_error(tmp_path):
+    (tmp_path / 'u.json').write_text(json.dumps({'userName': 'A'}))
+    with pytest.raises(SourceError, match='list'):
+        load_source(tmp_path, SourceFile(name='users', file='u.json', id_field='userName'))
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
