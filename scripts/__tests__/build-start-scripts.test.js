@@ -174,15 +174,16 @@ test('production deploy stops immediately when a compose start phase fails', () 
   );
 });
 
-test('production init and backend services share one immutable image contract', () => {
+test('production init, backend and worker share the backend image contract', () => {
   const compose = fs.readFileSync(path.join(root, 'docker-compose.prod.yml'), 'utf8');
-  const sharedImage = 'image: itsm-backend:${VERSION:-latest}';
+  const sharedImage = 'itsm-backend:${VERSION:-latest}';
 
-  assert.equal(
-    compose.split(sharedImage).length - 1,
-    2,
-    'itsm-init and itsm-backend must run the exact same backend image'
-  );
+  for (const service of ['itsm-init', 'itsm-backend', 'itsm-worker']) {
+    const section = compose.match(new RegExp(`^  ${service}:\\n([\\s\\S]*?)(?=^  [a-zA-Z0-9_-]+:|(?![\\s\\S]))`, 'm'));
+    assert.ok(section, `${service} must be declared`);
+    const image = section[1].match(/^    image: (.+)$/m)?.[1].trim();
+    assert.equal(image, sharedImage, `${service} must use the same backend image`);
+  }
 });
 
 test('backend production image excludes local binaries and coverage artifacts', () => {
