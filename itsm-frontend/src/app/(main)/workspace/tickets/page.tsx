@@ -16,7 +16,7 @@ export default function WorkspaceTicketsPage() {
             id={String(queue.selectedId)}
           />
         ) : (
-          <div className='rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400'>
+          <div className='rounded-[8px] border border-border bg-surface p-6 text-[13px] text-muted'>
             请从个人队列选择工单进行处理
           </div>
         )}

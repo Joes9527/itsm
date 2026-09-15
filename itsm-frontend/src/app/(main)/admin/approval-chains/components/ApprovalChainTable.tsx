@@ -6,16 +6,8 @@
 
 import React, { useMemo, useCallback } from 'react';
 import { Table, Tag, Button, Space, Tooltip, Dropdown, Switch } from 'antd';
-import {
-  Edit,
-  Trash2,
-  Eye,
-  MoreHorizontal,
-  Play,
-  Pause,
-  Copy,
-} from 'lucide-react';
-import type { ApprovalChain} from '@/types/approval-chain';
+import { Edit, Trash2, Eye, MoreHorizontal, Play, Pause, Copy } from 'lucide-react';
+import type { ApprovalChain } from '@/types/approval-chain';
 import { ApprovalChainFilters } from '@/types/approval-chain';
 import type { TableColumn, ActionButton } from '@/types/common';
 
@@ -62,9 +54,9 @@ export function ApprovalChainTable({
         width: 200,
         render: (value: unknown, record: ApprovalChain) => (
           <div>
-            <div className="font-medium text-gray-900">{value as string}</div>
+            <div className="font-medium text-foreground">{value as string}</div>
             {record.description && (
-              <div className="text-sm text-gray-500 mt-1">{record.description}</div>
+              <div className="text-[13px] text-muted mt-1">{record.description}</div>
             )}
           </div>
         ),
@@ -131,7 +123,11 @@ export function ApprovalChainTable({
               { type: 'divider' as const },
               {
                 key: 'toggle',
-                icon: record.isActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />,
+                icon: record.isActive ? (
+                  <Pause className="w-4 h-4" />
+                ) : (
+                  <Play className="w-4 h-4" />
+                ),
                 label: record.isActive ? '停用' : '启用',
                 onClick: () => onToggleStatus(record),
               },
@@ -207,9 +203,9 @@ export function ApprovalChainTable({
     <div>
       {/* 批量操作 */}
       {selectedRowKeys.length > 0 && (
-        <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+        <div className="mb-4 p-3 bg-raised rounded-[8px]">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-blue-600">已选择 {selectedRowKeys.length} 项</span>
+            <span className="text-[13px] text-foreground">已选择 {selectedRowKeys.length} 项</span>
             <Space>
               {batchActions.map(action => (
                 <Button

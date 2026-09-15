@@ -22,6 +22,8 @@ npm test                 # 运行全部测试
 npm run test:unit        # 仅单元测试
 npm run test:integration # 仅集成测试
 npm run test:e2e         # 运行 Playwright E2E 测试
+npm run theme:generate   # 从主题 token 源重新生成 CSS（修改 token 后执行）
+npm run theme:check      # 检查已提交的生成 CSS 是否与 token 源一致
 ```
 
 ### 前端生产模式与工作流入口维护
@@ -56,6 +58,8 @@ go build -o /tmp/itsm-reconcile-menus ./cmd/reconcile_menus
 `approvals` 将“我的待办”统一到主导航 `/approvals`（BPMN 任务收件箱），修正旧 `/approvals/pending` 并合并重复记录，保留已有可见性与启用状态。菜单权限是 `task:read`，不是流程定义管理权限；审计动作是 `reconcile_approvals_menus`。
 
 产品用词：主导航“服务目录”用于浏览与申请；管理导航“服务目录管理”用于维护目录项、申请字段、流程和服务级别；“目录分类”是目录项的展示分组；“工单分类”是已产生工作的业务分类树。当前 `ServiceCatalog.category` 是字符串，`Ticket.category_id` 关联独立分类树，二者没有自动映射。自定义字段归属于目录项或工单模板，不从分类继承。
+
+主题的权威源是 `itsm-frontend/src/design-system/theme-tokens.json`，展开逻辑位于 `itsm-frontend/src/design-system/expand-theme-tokens.mjs`，生成产物是 `itsm-frontend/src/styles/generated-theme-tokens.css`。不要直接编辑生成 CSS；修改权威源或展开逻辑后运行 `npm run theme:generate`，并把源文件与生成产物一同提交。`theme:check` 会检测漂移，并已接入前端类型检查前置步骤；开发与生产构建使用现有 npm pre-hook 自动重新生成。
 
 ### 后端 (itsm-backend)
 

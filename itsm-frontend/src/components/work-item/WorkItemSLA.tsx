@@ -24,21 +24,21 @@ export function WorkItemSLA({ sla }: { sla?: WorkItemSLAState }) {
       size="small"
       title={
         <span className="flex items-center gap-1.5">
-          <Clock size={14} className="text-slate-500" />
+          <Clock size={14} className="text-muted" />
           SLA 时效与承诺
         </span>
       }
       extra={<Tag color={sla.isBreached ? 'red' : 'blue'}>{sla.slaName}</Tag>}
     >
-      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-2 text-xs">
+      <div className="bg-raised p-3 rounded-[8px] border border-border space-y-2 text-[12px]">
         {sla.responseDeadline && (
           <div className="flex items-center justify-between">
-            <span className="text-slate-500 text-[11px]">响应截止:</span>
+            <span className="text-muted text-[11px]">响应截止:</span>
             <span
-              className={`font-mono text-xs ${
+              className={`font-mono text-[12px] ${
                 sla.responseTimeRemaining !== null && sla.responseTimeRemaining < 0
-                  ? 'text-red-600 font-bold'
-                  : 'text-slate-800'
+                  ? 'text-red-600 font-semibold'
+                  : 'text-foreground'
               }`}
             >
               {new Date(sla.responseDeadline).toLocaleString()}
@@ -49,12 +49,12 @@ export function WorkItemSLA({ sla }: { sla?: WorkItemSLAState }) {
 
         {sla.resolutionDeadline && (
           <div className="flex items-center justify-between">
-            <span className="text-slate-500 text-[11px]">解决截止:</span>
+            <span className="text-muted text-[11px]">解决截止:</span>
             <span
-              className={`font-mono text-xs ${
+              className={`font-mono text-[12px] ${
                 sla.resolutionTimeRemaining !== null && sla.resolutionTimeRemaining < 0
-                  ? 'text-red-600 font-bold'
-                  : 'text-slate-800'
+                  ? 'text-red-600 font-semibold'
+                  : 'text-foreground'
               }`}
             >
               {new Date(sla.resolutionDeadline).toLocaleString()}
@@ -73,7 +73,7 @@ export function WorkItemSLA({ sla }: { sla?: WorkItemSLAState }) {
 
         {sla.responseTime > 0 && (
           <div className="space-y-1">
-            <div className="flex justify-between text-[11px] text-slate-500">
+            <div className="flex justify-between text-[11px] text-muted">
               <span>响应进度</span>
               <span>
                 {sla.responseTimeRemaining !== null ? `剩余 ${sla.responseTimeRemaining} 分钟` : '--'}
@@ -90,7 +90,7 @@ export function WorkItemSLA({ sla }: { sla?: WorkItemSLAState }) {
                     : '#52c41a'
               }
             />
-            <div className="flex justify-between text-[11px] text-slate-400 font-mono">
+            <div className="flex justify-between text-[11px] text-muted font-mono">
               <span>
                 {sla.responseTimeRemaining !== null
                   ? `剩余 ${formatHours(sla.responseTimeRemaining)} 小时`
@@ -103,7 +103,7 @@ export function WorkItemSLA({ sla }: { sla?: WorkItemSLAState }) {
 
         {sla.resolutionTime > 0 && (
           <div className="space-y-1">
-            <div className="flex justify-between text-[11px] text-slate-500">
+            <div className="flex justify-between text-[11px] text-muted">
               <span>解决进度</span>
               <span>
                 {sla.resolutionTimeRemaining !== null
@@ -122,7 +122,7 @@ export function WorkItemSLA({ sla }: { sla?: WorkItemSLAState }) {
                     : '#52c41a'
               }
             />
-            <div className="flex justify-between text-[11px] text-slate-400 font-mono">
+            <div className="flex justify-between text-[11px] text-muted font-mono">
               <span>
                 {sla.resolutionTimeRemaining !== null
                   ? `剩余 ${formatHours(sla.resolutionTimeRemaining)} 小时`

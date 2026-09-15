@@ -33,7 +33,7 @@ const BasicInfoCard: React.FC<BasicInfoCardProps> = ({ data }) => {
   if (!data) {
     return (
       <Card styles={{ body: { padding: '16px 24px' } }}>
-        <div style={{ textAlign: 'center', color: '#999' }}>暂无数据</div>
+        <div style={{ textAlign: 'center', color: 'var(--color-text-muted)' }}>暂无数据</div>
       </Card>
     );
   }

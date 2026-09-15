@@ -72,7 +72,7 @@ export default function MyTicketCCPage() {
       render: (_, record) => (
         <Space orientation="vertical" size={0}>
           <Link href={`/tickets/${record.ticketId}`}>{record.title || record.ticketNumber}</Link>
-          <Text type="secondary" className="text-xs">
+          <Text type="secondary" className="text-[12px]">
             {record.ticketNumber}
           </Text>
         </Space>
@@ -97,7 +97,8 @@ export default function MyTicketCCPage() {
       dataIndex: ['user', 'name'],
       key: 'user',
       width: 140,
-      render: (_, record) => record.user?.name || record.user?.username || `User#${record.user?.id}`,
+      render: (_, record) =>
+        record.user?.name || record.user?.username || `User#${record.user?.id}`,
     },
     {
       title: '添加人',
@@ -117,13 +118,13 @@ export default function MyTicketCCPage() {
   ];
 
   return (
-    <div className="p-6">
+    <div className="p-[16px] md:p-[24px]">
       <Card>
         <div className="flex items-center justify-between mb-4">
           <Space>
             <Inbox className="w-6 h-6 text-blue-600" />
             <div>
-              <Title level={3} className="!mb-0">
+              <Title level={3} style={{ fontSize: 24, fontWeight: 600 }} className="!mb-0">
                 我的抄送
               </Title>
               <Text type="secondary">集中查看所有抄送给我的工单和抄送历史</Text>
@@ -135,6 +136,7 @@ export default function MyTicketCCPage() {
         </div>
 
         <Table
+          scroll={{ x: 'max-content' }}
           rowKey="id"
           columns={columns}
           dataSource={records}

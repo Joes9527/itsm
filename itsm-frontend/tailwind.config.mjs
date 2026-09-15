@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+const tokens = JSON.parse(readFileSync(new URL('./src/design-system/theme-tokens.json', import.meta.url), 'utf8'));
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -11,18 +14,14 @@ export default {
       colors: {
         // 品牌色彩
         // KLN Brand Orange
-        primary: {
-          50: '#fff5f0',
-          100: '#ffe8d9',
-          200: '#ffd1b3',
-          300: '#ffb380',
-          400: '#F27C38',
-          500: '#F06820',
-          600: '#D85E10',
-          700: '#B84A08',
-          800: '#933A06',
-          900: '#6E2B04',
-        },
+        primary: tokens.brand.palette,
+        surface: 'var(--color-bg-primary)',
+        page: 'var(--color-bg-secondary)',
+        raised: 'var(--color-bg-tertiary)',
+        foreground: 'var(--color-text-primary)',
+        muted: 'var(--color-text-secondary)',
+        border: 'var(--color-border)',
+        selected: 'var(--color-selected-bg)',
         // 语义色彩
         success: {
           50: '#f0fdf4',
@@ -174,7 +173,7 @@ export default {
         'strong': '0 10px 40px -10px rgba(0, 0, 0, 0.15), 0 20px 25px -5px rgba(0, 0, 0, 0.1)',
       },
       fontFamily: {
-        'sans': ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', 'Helvetica', 'Arial', 'sans-serif'],
+        'sans': tokens.typography.fontFamily,
         'mono': ['SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Source Code Pro', 'Menlo', 'Consolas', 'DejaVu Sans Mono', 'monospace'],
       },
     },

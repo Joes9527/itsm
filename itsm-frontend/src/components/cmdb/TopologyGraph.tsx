@@ -37,6 +37,7 @@ import ReactFlow, {
   ReactFlowProvider,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+import graphStyles from '@/components/cmdb/TopologyGraph.module.css';
 
 import {
   CIRelationshipAPI,
@@ -71,7 +72,7 @@ const CINode: React.FC<NodeProps<any>> = ({ data }) => {
     <div
       style={{
         padding: '12px 16px',
-        background: '#fff',
+        background: 'var(--color-bg-primary)',
         borderRadius: 8,
         border: `2px solid ${statusColor}`,
         boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
@@ -87,7 +88,7 @@ const CINode: React.FC<NodeProps<any>> = ({ data }) => {
           <Text strong style={{ fontSize: 13 }}>
             {data.name}
           </Text>
-          <div style={{ fontSize: 11, color: '#888' }}>{data.type}</div>
+          <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>{data.type}</div>
         </div>
       </div>
 
@@ -187,7 +188,7 @@ const TopologyGraphViewInner: React.FC<TopologyGraphViewProps> = ({
         },
         label: edge.relationshipLabel,
         labelStyle: {
-          fill: '#666',
+          fill: 'var(--color-text-primary)',
           fontSize: 11,
         },
       }));
@@ -304,7 +305,7 @@ const TopologyGraphViewInner: React.FC<TopologyGraphViewProps> = ({
           </Space>
         }
       >
-        <div style={{ height, border: '1px solid #f0f0f0', borderRadius: 8, overflow: 'hidden' }}>
+        <div style={{ height, border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden' }}>
           {loading ? (
             <div
               style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height }}
@@ -335,6 +336,7 @@ const TopologyGraphViewInner: React.FC<TopologyGraphViewProps> = ({
             </div>
           ) : (
             <ReactFlow
+                className={graphStyles.host}
               nodes={nodes}
               edges={edges}
               nodeTypes={nodeTypes}
@@ -343,9 +345,11 @@ const TopologyGraphViewInner: React.FC<TopologyGraphViewProps> = ({
               fitView
               attributionPosition='bottom-left'
             >
-              <Background color='#f0f0f0' gap={20} />
+              <Background color='var(--color-border)'  gap={20} />
               <Controls />
               <MiniMap
+                style={{ background: 'var(--color-bg-secondary)' }}
+                maskColor="color-mix(in srgb, var(--color-bg-tertiary) 70%, transparent)"
                 nodeColor={node => {
                   const statusColors: Record<string, string> = {
                     operational: '#52c41a',
@@ -361,7 +365,7 @@ const TopologyGraphViewInner: React.FC<TopologyGraphViewProps> = ({
         </div>
 
         {/* 图例 */}
-        <div style={{ marginTop: 16, padding: '8px 16px', background: '#fafafa', borderRadius: 8 }}>
+        <div style={{ marginTop: 16, padding: '8px 16px', background: 'var(--color-bg-tertiary)', borderRadius: 8 }}>
           <Space split='|'>
             <Space>
               <span>节点状态:</span>

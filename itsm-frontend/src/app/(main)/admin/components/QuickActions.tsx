@@ -48,26 +48,21 @@ interface QuickActionItem {
 // 独特的设计系统 - 精品企业风格
 const DESIGN = {
   colors: {
-    primary: '#0f172a',
+    primary: 'var(--color-text-primary)',
     accent: '#F06820',
     success: '#10b981',
     warning: '#f59e0b',
-    surface: '#ffffff',
-    surfaceSubtle: '#f8fafc',
-    border: '#e2e8f0',
-    text: '#1e293b',
-    textMuted: '#64748b',
-  },
-  shadows: {
-    card: '0 1px 3px rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05)',
-    cardHover: '0 10px 40px -10px rgb(0 0 0 / 0.15)',
-    glow: (color: string) => `0 0 30px ${color}20`,
+    surface: 'var(--color-bg-primary)',
+    surfaceSubtle: 'var(--color-bg-tertiary)',
+    border: 'var(--color-border)',
+    text: 'var(--color-text-primary)',
+    textMuted: 'var(--color-text-secondary)',
   },
   radius: {
     sm: '8px',
-    md: '12px',
-    lg: '16px',
-    xl: '20px',
+    md: '8px',
+    lg: '8px',
+    xl: '8px',
   },
 };
 
@@ -82,10 +77,38 @@ export const QuickActions: React.FC = () => {
       icon: Users,
       accent: '#F06820',
       items: [
-        { title: '用户管理', desc: '用户账户与组织', href: '/admin/users', count: 1234, color: '#F06820', icon: UserCheck },
-        { title: '角色管理', desc: '角色与权限配置', href: '/admin/roles', count: 15, color: '#6366f1', icon: UserCog },
-        { title: '用户组', desc: '组织架构管理', href: '/admin/groups', count: 28, color: '#06b6d4', icon: UserPlus },
-        { title: '权限矩阵', desc: '细粒度权限控制', href: '/admin/permissions', count: 156, color: '#8b5cf6', icon: Lock },
+        {
+          title: '用户管理',
+          desc: '用户账户与组织',
+          href: '/admin/users',
+          count: 1234,
+          color: '#F06820',
+          icon: UserCheck,
+        },
+        {
+          title: '角色管理',
+          desc: '角色与权限配置',
+          href: '/admin/roles',
+          count: 15,
+          color: '#6366f1',
+          icon: UserCog,
+        },
+        {
+          title: '用户组',
+          desc: '组织架构管理',
+          href: '/admin/groups',
+          count: 28,
+          color: '#06b6d4',
+          icon: UserPlus,
+        },
+        {
+          title: '权限矩阵',
+          desc: '细粒度权限控制',
+          href: '/admin/permissions',
+          count: 156,
+          color: '#8b5cf6',
+          icon: Lock,
+        },
       ],
     },
     {
@@ -95,10 +118,38 @@ export const QuickActions: React.FC = () => {
       icon: Workflow,
       accent: '#10b981',
       items: [
-        { title: '工作流设计', desc: 'BPMN流程编排', href: '/admin/workflows', count: 45, color: '#10b981', icon: Workflow },
-        { title: '审批链', desc: '多级审批规则', href: '/admin/approval-chains', count: 12, color: '#14b8a6', icon: CheckSquare },
-        { title: 'SLA定义', desc: '服务级别协议', href: '/admin/sla-definitions', count: 8, color: '#f59e0b', icon: Clock },
-        { title: '升级规则', desc: '自动升级策略', href: '/admin/escalation-rules', count: 6, color: '#f97316', icon: AlertTriangle },
+        {
+          title: '工作流设计',
+          desc: 'BPMN流程编排',
+          href: '/admin/workflows',
+          count: 45,
+          color: '#10b981',
+          icon: Workflow,
+        },
+        {
+          title: '审批链',
+          desc: '多级审批规则',
+          href: '/admin/approval-chains',
+          count: 12,
+          color: '#14b8a6',
+          icon: CheckSquare,
+        },
+        {
+          title: 'SLA定义',
+          desc: '服务级别协议',
+          href: '/admin/sla-definitions',
+          count: 8,
+          color: '#f59e0b',
+          icon: Clock,
+        },
+        {
+          title: '升级规则',
+          desc: '自动升级策略',
+          href: '/admin/escalation-rules',
+          count: 6,
+          color: '#f97316',
+          icon: AlertTriangle,
+        },
       ],
     },
     {
@@ -108,10 +159,38 @@ export const QuickActions: React.FC = () => {
       icon: Settings,
       accent: '#8b5cf6',
       items: [
-        { title: '服务目录', desc: '服务项管理', href: '/admin/service-catalogs', count: 89, color: '#ec4899', icon: BookOpen },
-        { title: '通知配置', desc: '消息推送规则', href: '/notifications', count: 24, color: '#ef4444', icon: Megaphone },
-        { title: '工单分类', desc: '分类与模板', href: '/admin/ticket-categories', count: 32, color: '#64748b', icon: Folder },
-        { title: '系统设置', desc: '全局参数配置', href: '/admin/system-config', count: 67, color: '#0f172a', icon: Cog },
+        {
+          title: '服务目录',
+          desc: '服务项管理',
+          href: '/admin/service-catalogs',
+          count: 89,
+          color: '#ec4899',
+          icon: BookOpen,
+        },
+        {
+          title: '通知配置',
+          desc: '消息推送规则',
+          href: '/notifications',
+          count: 24,
+          color: '#ef4444',
+          icon: Megaphone,
+        },
+        {
+          title: '工单分类',
+          desc: '分类与模板',
+          href: '/admin/ticket-categories',
+          count: 32,
+          color: 'var(--color-text-secondary)',
+          icon: Folder,
+        },
+        {
+          title: '系统设置',
+          desc: '全局参数配置',
+          href: '/admin/system-config',
+          count: 67,
+          color: 'var(--color-text-primary)',
+          icon: Cog,
+        },
       ],
     },
   ];
@@ -125,7 +204,7 @@ export const QuickActions: React.FC = () => {
     index: number;
     groupIndex: number;
   }) => {
-    const delay = (groupIndex * 100) + (index * 50);
+    const delay = groupIndex * 100 + index * 50;
 
     return (
       <Link href={item.href} style={{ textDecoration: 'none' }}>
@@ -133,13 +212,14 @@ export const QuickActions: React.FC = () => {
           hoverable
           style={{
             height: '100%',
+            boxShadow: 'none',
             borderRadius: DESIGN.radius.lg,
             border: `1px solid ${DESIGN.colors.border}`,
-            background: 'white',
+            background: 'var(--color-bg-primary)',
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             overflow: 'hidden',
           }}
-          styles={{ body: { padding: '20px' } }}
+          styles={{ body: { padding: '16px' } }}
           className="action-card"
         >
           {/* 悬停效果背景 */}
@@ -150,7 +230,7 @@ export const QuickActions: React.FC = () => {
               left: 0,
               right: 0,
               bottom: 0,
-              background: `linear-gradient(135deg, ${item.color}08 0%, transparent 100%)`,
+              background: 'var(--color-bg-tertiary)',
               opacity: 0,
               transition: 'opacity 0.3s',
               pointerEvents: 'none',
@@ -160,26 +240,33 @@ export const QuickActions: React.FC = () => {
 
           <div style={{ position: 'relative', zIndex: 1 }}>
             {/* 图标行 */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                marginBottom: 14,
+              }}
+            >
               <div
                 style={{
                   width: 42,
                   height: 42,
                   borderRadius: DESIGN.radius.md,
-                  background: `linear-gradient(135deg, ${item.color}15 0%, ${item.color}08 100%)`,
+                  background: 'var(--color-bg-tertiary)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  border: `1px solid ${item.color}20`,
+                  border: '1px solid var(--color-border)',
                 }}
               >
-                <item.icon size={20} style={{ color: item.color }} />
+                <item.icon size={20} style={{ color: 'var(--color-text-primary)' }} />
               </div>
               <Badge
                 count={item.count}
                 style={{
-                  backgroundColor: `${item.color}15`,
-                  color: item.color,
+                  backgroundColor: 'var(--color-bg-tertiary)',
+                  color: 'var(--color-text-primary)',
                   border: 'none',
                   fontWeight: 600,
                   fontSize: 11,
@@ -195,7 +282,14 @@ export const QuickActions: React.FC = () => {
             </div>
 
             {/* 描述 */}
-            <Text style={{ fontSize: 13, color: DESIGN.colors.textMuted, display: 'block', lineHeight: 1.5 }}>
+            <Text
+              style={{
+                fontSize: 13,
+                color: DESIGN.colors.textMuted,
+                display: 'block',
+                lineHeight: 1.5,
+              }}
+            >
               {item.desc}
             </Text>
 
@@ -208,7 +302,7 @@ export const QuickActions: React.FC = () => {
                 opacity: 0,
                 transform: 'translateX(-8px)',
                 transition: 'all 0.3s',
-                color: item.color,
+                color: 'var(--color-text-primary)',
               }}
               className="arrow-indicator"
             >
@@ -217,10 +311,6 @@ export const QuickActions: React.FC = () => {
           </div>
 
           <style>{`
-            .action-card:hover {
-              box-shadow: ${DESIGN.shadows.cardHover}, ${DESIGN.shadows.glow(item.color)};
-              transform: translateY(-2px);
-            }
             .action-card:hover .card-bg {
               opacity: 1;
             }
@@ -234,13 +324,7 @@ export const QuickActions: React.FC = () => {
     );
   };
 
-  const GroupSection = ({
-    group,
-    index,
-  }: {
-    group: typeof actionGroups[0];
-    index: number;
-  }) => {
+  const GroupSection = ({ group, index }: { group: (typeof actionGroups)[0]; index: number }) => {
     const Icon = group.icon;
 
     return (
@@ -281,22 +365,20 @@ export const QuickActions: React.FC = () => {
               level={4}
               style={{
                 margin: 0,
-                fontSize: 18,
-                fontWeight: 700,
+                fontSize: 15,
+                fontWeight: 600,
                 color: DESIGN.colors.text,
                 letterSpacing: '-0.01em',
               }}
             >
               {group.title}
             </Title>
-            <Text style={{ fontSize: 13, color: DESIGN.colors.textMuted }}>
-              {group.subtitle}
-            </Text>
+            <Text style={{ fontSize: 13, color: DESIGN.colors.textMuted }}>{group.subtitle}</Text>
           </div>
         </div>
 
         {/* 卡片网格 */}
-        <Row gutter={[16, 16]}>
+        <Row gutter={[14, 14]}>
           {group.items.map((item, itemIndex) => (
             <Col xs={24} sm={12} lg={6} key={itemIndex}>
               <ActionCard item={item} index={itemIndex} groupIndex={index} />
@@ -337,8 +419,8 @@ export const QuickActions: React.FC = () => {
             level={3}
             style={{
               margin: 0,
-              fontSize: 22,
-              fontWeight: 700,
+              fontSize: 15,
+              fontWeight: 600,
               color: DESIGN.colors.text,
               letterSpacing: '-0.02em',
             }}
@@ -346,7 +428,7 @@ export const QuickActions: React.FC = () => {
             快捷操作
           </Title>
         </div>
-        <Text style={{ fontSize: 14, color: DESIGN.colors.textMuted }}>
+        <Text style={{ fontSize: 13, color: DESIGN.colors.textMuted }}>
           快速访问系统管理和配置功能
         </Text>
       </div>

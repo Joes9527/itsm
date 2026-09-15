@@ -84,16 +84,16 @@ export const TicketRelationCards: React.FC<TicketRelationCardsProps> = ({
     );
   if (relations.length === 0) {
     return (
-      <div className='text-center py-6 text-slate-400'>
+      <div className='text-center py-6 text-muted'>
         {feedback}
-        <Link2 className='w-8 h-8 mx-auto mb-2 text-slate-300' />
-        <span className='text-xs'>暂无关联工单</span>
+        <Link2 className='w-8 h-8 mx-auto mb-2 text-muted' />
+        <span className='text-[12px]'>暂无关联工单</span>
       </div>
     );
   }
 
   return (
-    <div className='space-y-2.5 pt-2 text-xs'>
+    <div className='space-y-2.5 pt-2 text-[12px]'>
       {feedback}
       {relations.map(relation => {
         const isOutbound = relation.sourceTicketId === ticketId;
@@ -111,17 +111,17 @@ export const TicketRelationCards: React.FC<TicketRelationCardsProps> = ({
         return (
           <div
             key={relation.id}
-            className='p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs space-y-2'
+            className="p-4 bg-raised rounded-[8px] border border-border text-[12px] space-y-2"
           >
-            <div className='flex items-center justify-between gap-2 font-medium text-slate-700'>
-              <span className='truncate'>
+            <div className="flex items-center justify-between gap-2 font-medium text-foreground">
+              <span className="truncate">
                 关联工单: {otherNumber || `#${otherId}`} ({otherTitle})
               </span>
               {otherStatus && (
                 <Tag color={statusColor(otherStatus)}>{statusLabel(otherStatus)}</Tag>
               )}
             </div>
-            <p className='text-[11px] text-slate-500 m-0'>{description}</p>
+            <p className="text-[11px] text-muted m-0">{description}</p>
           </div>
         );
       })}

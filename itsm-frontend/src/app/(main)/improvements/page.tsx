@@ -129,12 +129,12 @@ const ImprovementListPage = () => {
   ];
 
   return (
-    <div className="p-6 bg-gray-50 min-h-full">
+    <div className="min-h-full bg-page p-[16px] text-[13px] text-foreground md:p-[24px]">
       <Card>
         <div className="mb-6 flex justify-between items-center">
           <div>
-            <h2 className="text-2xl font-bold text-gray-800">持续改进</h2>
-            <p className="text-gray-500 mt-1">识别、规划和实施IT服务和流程的改进</p>
+            <h2 className="text-[24px] font-semibold text-foreground">持续改进</h2>
+            <p className="mt-1 text-[12px] text-muted">识别、规划和实施IT服务和流程的改进</p>
           </div>
           <Space>
             <Button icon={<RotateCcw />} onClick={loadImprovements} loading={loading}>

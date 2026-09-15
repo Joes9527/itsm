@@ -554,12 +554,12 @@ export default function NotificationsPage() {
                 <div className='space-y-1'>
                   <Text>{notification.content}</Text>
                   {notification.sentAt && (
-                    <div className='text-xs text-gray-500'>
+                    <div className='text-xs text-muted'>
                       {t('notifications.sentAt')}: {formatDateTime(notification.sentAt)}
                     </div>
                   )}
                   {notification.readAt && (
-                    <div className='text-xs text-gray-500'>
+                    <div className='text-xs text-muted'>
                       {t('notifications.readAt')}: {formatDateTime(notification.readAt)}
                     </div>
                   )}

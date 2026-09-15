@@ -67,37 +67,44 @@ export const TicketHistoryList: React.FC<TicketHistoryListProps> = ({
   }, [fetchHistory]);
 
   if (loading) {
-    return <div className="p-6 text-center text-xs text-slate-400">历史加载中...</div>;
+    return (
+      <div className="p-6 text-center text-[12px] text-muted">历史加载中...</div>
+    );
   }
 
   if (rows.length === 0) {
     return (
-      <div className="text-center py-6 text-slate-400">
-        <HistoryIcon className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-        <span className="text-xs">暂无流转历史</span>
+      <div className="text-center py-6 text-muted">
+        <HistoryIcon className="w-8 h-8 mx-auto mb-2 text-muted" />
+        <span className="text-[12px]">暂无流转历史</span>
       </div>
     );
   }
 
   return (
-    <div className="space-y-2.5 pt-2 text-xs">
+    <div className="space-y-2.5 pt-2 text-[12px]">
       {rows.map(row => {
         const userName = row.user?.name || row.user?.username || '系统';
-        const detail = row.oldValue || row.newValue
-          ? `旧值: ${row.oldValue ?? '-'} → 新值: ${row.newValue ?? '-'}`
-          : row.changeReason || row.fieldName;
+        const detail =
+          row.oldValue || row.newValue
+            ? `旧值: ${row.oldValue ?? '-'} → 新值: ${row.newValue ?? '-'}`
+            : row.changeReason || row.fieldName;
         return (
           <div
             key={row.id}
-            className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between gap-3"
+            className="p-3 bg-raised rounded-[8px] border border-border flex items-center justify-between gap-3"
           >
             <div className="space-y-0.5 min-w-0">
-              <span className="font-semibold text-slate-800">
+              <span className="font-semibold text-foreground">
                 {userName} {row.action || '更新了工单'}
               </span>
-              {detail && <p className="text-[11px] text-slate-400 m-0 truncate">{detail}</p>}
+              {detail && (
+                <p className="text-[11px] text-muted m-0 truncate">
+                  {detail}
+                </p>
+              )}
             </div>
-            <span className="text-[11px] text-slate-400 font-mono shrink-0">
+            <span className="text-[11px] text-muted font-mono shrink-0">
               {row.createdAt ? formatDateTime(row.createdAt) : ''}
             </span>
           </div>

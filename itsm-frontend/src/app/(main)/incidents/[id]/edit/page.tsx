@@ -82,13 +82,13 @@ export default function IncidentEditPage() {
   };
 
   return (
-    <div className="p-6 min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-page p-[16px] text-[13px] text-foreground md:p-[24px]">
       <div className="mb-6">
         <Button
           type="link"
           icon={<ArrowLeft />}
           onClick={() => router.back()}
-          style={{ paddingLeft: 0, color: '#666' }}
+          style={{ paddingLeft: 0, color: 'var(--color-text-secondary)' }}
         >
           返回
         </Button>

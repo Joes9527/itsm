@@ -17,7 +17,17 @@ import {
   Col,
   Divider,
 } from 'antd';
-import { Filter, Plus, Pencil, Trash2, Download, Eye, RotateCcw, AlertCircle, CheckCircle } from 'lucide-react';
+import {
+  Filter,
+  Plus,
+  Pencil,
+  Trash2,
+  Download,
+  Eye,
+  RotateCcw,
+  AlertCircle,
+  CheckCircle,
+} from 'lucide-react';
 import type { ColumnsType, TableProps, TablePaginationConfig } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { useRouter } from 'next/navigation';
@@ -109,7 +119,6 @@ const TicketList: React.FC<TicketListProps> = ({
   // 当防抖值变化时触发搜索
   useEffect(() => {
     updateFilters({ keyword: debouncedSearchValue || undefined });
-     
   }, [debouncedSearchValue]);
 
   // 用 JSON 序列化做深比较，避免对象引用变化导致无限循环
@@ -117,7 +126,6 @@ const TicketList: React.FC<TicketListProps> = ({
   useEffect(() => {
     if (advancedFilters === undefined) return;
     updateFilters(advancedFilters);
-     
   }, [advancedFiltersKey]);
 
   // 选择操作
@@ -205,31 +213,42 @@ const TicketList: React.FC<TicketListProps> = ({
     }
   }, [selectedTickets, batchDeleteTickets, deselectAll]);
 
-  const openTicket = useCallback((ticket: Ticket) => {
-    if (onTicketSelect) onTicketSelect(ticket);
-    else router.push(`/tickets/${ticket.id}`);
-  }, [onTicketSelect, router]);
+  const openTicket = useCallback(
+    (ticket: Ticket) => {
+      if (onTicketSelect) onTicketSelect(ticket);
+      else router.push(`/tickets/${ticket.id}`);
+    },
+    [onTicketSelect, router]
+  );
 
-  const handleClose = useCallback((ticket: Ticket) => {
-    Modal.confirm({
-      title: `关闭工单 ${ticket.ticketNumber}？`,
-      content: '关闭后工单将进入终态，请确认处理结果已经记录。',
-      okText: '确认关闭',
-      cancelText: '取消',
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        await TicketApi.closeTicket(ticket.id);
-        message.success('工单已关闭');
-        await fetchTickets(filters);
-      },
-    });
-  }, [fetchTickets, filters, message]);
+  const handleClose = useCallback(
+    (ticket: Ticket) => {
+      Modal.confirm({
+        title: `关闭工单 ${ticket.ticketNumber}？`,
+        content: '关闭后工单将进入终态，请确认处理结果已经记录。',
+        okText: '确认关闭',
+        cancelText: '取消',
+        okButtonProps: { danger: true },
+        onOk: async () => {
+          await TicketApi.closeTicket(ticket.id);
+          message.success('工单已关闭');
+          await fetchTickets(filters);
+        },
+      });
+    },
+    [fetchTickets, filters, message]
+  );
 
   // 列表操作快捷键：在输入控件中不抢占按键。
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
-      if (target.matches('input, textarea, select') || target.isContentEditable || tickets.length === 0) return;
+      if (
+        target.matches('input, textarea, select') ||
+        target.isContentEditable ||
+        tickets.length === 0
+      )
+        return;
       if (event.key === 'j') setActiveRowIndex(index => Math.min(index + 1, tickets.length - 1));
       if (event.key === 'k') setActiveRowIndex(index => Math.max(index - 1, 0));
       if (event.key === 'o') openTicket(tickets[Math.min(activeRowIndex, tickets.length - 1)]);
@@ -369,7 +388,8 @@ const TicketList: React.FC<TicketListProps> = ({
         title: '处理人',
         key: 'assignee',
         width: 120,
-        render: (_, record: Ticket) => record.assignee?.name || (record.assigneeId ? `用户 #${record.assigneeId}` : '未分配'),
+        render: (_, record: Ticket) =>
+          record.assignee?.name || (record.assigneeId ? `用户 #${record.assigneeId}` : '未分配'),
       },
       {
         title: '创建时间',
@@ -393,9 +413,32 @@ const TicketList: React.FC<TicketListProps> = ({
         render: (_, record: Ticket) => {
           return (
             <Space size={0} className="opacity-70 transition-opacity hover:opacity-100">
-              <Tooltip title="查看 (o)"><Button type="text" aria-label="查看工单" icon={<Eye size={16} />} onClick={() => openTicket(record)} /></Tooltip>
-              <Tooltip title="编辑"><Button type="text" aria-label="编辑工单" icon={<Pencil size={16} />} onClick={() => router.push(`/tickets/${record.id}?mode=edit`)} /></Tooltip>
-              {!['closed', 'cancelled'].includes(record.status) && <Tooltip title="关闭"><Button type="text" aria-label="关闭工单" icon={<CheckCircle size={16} />} onClick={() => handleClose(record)} /></Tooltip>}
+              <Tooltip title="查看 (o)">
+                <Button
+                  type="text"
+                  aria-label="查看工单"
+                  icon={<Eye size={16} />}
+                  onClick={() => openTicket(record)}
+                />
+              </Tooltip>
+              <Tooltip title="编辑">
+                <Button
+                  type="text"
+                  aria-label="编辑工单"
+                  icon={<Pencil size={16} />}
+                  onClick={() => router.push(`/tickets/${record.id}?mode=edit`)}
+                />
+              </Tooltip>
+              {!['closed', 'cancelled'].includes(record.status) && (
+                <Tooltip title="关闭">
+                  <Button
+                    type="text"
+                    aria-label="关闭工单"
+                    icon={<CheckCircle size={16} />}
+                    onClick={() => handleClose(record)}
+                  />
+                </Tooltip>
+              )}
             </Space>
           );
         },
@@ -424,9 +467,9 @@ const TicketList: React.FC<TicketListProps> = ({
   );
 
   return (
-    <div className="ticket-list space-y-4">
+    <div className="ticket-list min-w-0 max-w-full space-y-4">
       {showHeader && (
-        <Card className="rounded-lg shadow-sm">
+        <Card className="min-w-0 rounded-[8px] shadow-none">
           <Row gutter={[16, 16]} align="middle">
             <Col flex="auto">
               <Space size="middle">
@@ -478,7 +521,11 @@ const TicketList: React.FC<TicketListProps> = ({
                     onChange={value => handleFilterChange('status', value)}
                     allowClear
                     style={{ width: '100%' }}
-                   options={Object.entries(TICKET_STATUS_CONFIG).map(([key, config]) => ({ value: key, label: <Tag color={config.color}>{config.text}</Tag> }))} />
+                    options={Object.entries(TICKET_STATUS_CONFIG).map(([key, config]) => ({
+                      value: key,
+                      label: <Tag color={config.color}>{config.text}</Tag>,
+                    }))}
+                  />
                 </Col>
                 <Col xs={24} sm={12} md={6}>
                   <Select
@@ -487,7 +534,11 @@ const TicketList: React.FC<TicketListProps> = ({
                     onChange={value => handleFilterChange('priority', value)}
                     allowClear
                     style={{ width: '100%' }}
-                   options={Object.entries(PRIORITY_CONFIG).map(([key, config]) => ({ value: key, label: <Tag color={config.color}>{config.text}</Tag> }))} />
+                    options={Object.entries(PRIORITY_CONFIG).map(([key, config]) => ({
+                      value: key,
+                      label: <Tag color={config.color}>{config.text}</Tag>,
+                    }))}
+                  />
                 </Col>
                 <Col xs={24} sm={12} md={6}>
                   <Select
@@ -496,7 +547,11 @@ const TicketList: React.FC<TicketListProps> = ({
                     onChange={value => handleFilterChange('type', value)}
                     allowClear
                     style={{ width: '100%' }}
-                   options={Object.entries(TICKET_TYPE_CONFIG).map(([key, text]) => ({ value: key, label: text }))} />
+                    options={Object.entries(TICKET_TYPE_CONFIG).map(([key, text]) => ({
+                      value: key,
+                      label: text,
+                    }))}
+                  />
                 </Col>
                 <Col xs={24} sm={12} md={6}>
                   <RangePicker
@@ -525,9 +580,14 @@ const TicketList: React.FC<TicketListProps> = ({
         />
       )}
 
-      <Card className="rounded-lg shadow-sm">
-        <div className="mb-3 flex justify-end text-xs text-gray-500" aria-label="键盘快捷键">
-          快捷键：<kbd className="mx-1 rounded border bg-gray-50 px-1.5">j</kbd>/<kbd className="mx-1 rounded border bg-gray-50 px-1.5">k</kbd> 导航，<kbd className="mx-1 rounded border bg-gray-50 px-1.5">o</kbd> 打开
+      <Card className="min-w-0 rounded-[8px] shadow-none">
+        <div
+          className="mb-3 flex justify-end text-[12px] text-muted"
+          aria-label="键盘快捷键"
+        >
+          快捷键：<kbd className="mx-1 rounded border bg-raised px-1.5">j</kbd>/
+          <kbd className="mx-1 rounded border bg-raised px-1.5">k</kbd> 导航，
+          <kbd className="mx-1 rounded border bg-raised px-1.5">o</kbd> 打开
         </div>
         <Table<Ticket>
           columns={columns}
@@ -548,7 +608,9 @@ const TicketList: React.FC<TicketListProps> = ({
           scroll={{ x: 1200 }}
           size="middle"
           onRow={(_, index) => ({ onMouseEnter: () => setActiveRowIndex(index ?? 0) })}
-          rowClassName={(_, index) => index === activeRowIndex ? 'bg-blue-50/60' : ''}
+          rowClassName={(_, index) =>
+            index === activeRowIndex ? 'bg-selected' : ''
+          }
           getPopupContainer={node => node.parentElement || document.body}
         />
       </Card>

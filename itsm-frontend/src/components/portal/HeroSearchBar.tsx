@@ -10,8 +10,8 @@ export function HeroSearchBar() {
 
   return (
     <div className="relative w-full max-w-3xl mx-auto my-8">
-      <div className="relative flex items-center bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 p-2">
-        <div className="pl-3 pr-2 text-slate-400">
+      <div className="relative flex items-center bg-surface rounded-[8px] shadow-none border border-border p-2">
+        <div className="pl-3 pr-2 text-muted">
           <Search size={22} aria-hidden="true" />
         </div>
         <input
@@ -20,10 +20,10 @@ export function HeroSearchBar() {
           aria-describedby="portal-search-help"
           disabled
           placeholder="知识搜索暂未开放"
-          className="w-full min-w-0 bg-transparent border-none text-slate-500 placeholder-slate-400 text-base px-2 py-1.5 cursor-not-allowed"
+          className="w-full min-w-0 bg-transparent border-none text-muted placeholder-slate-400 text-base px-2 py-1.5 cursor-not-allowed"
         />
       </div>
-      <p id="portal-search-help" className="text-xs text-slate-500 mt-2">
+      <p id="portal-search-help" className="text-[12px] text-muted mt-2">
         知识搜索暂未开放。您可以直接提交问题或申请服务。
       </p>
       <div className="flex flex-wrap justify-center gap-3 mt-3">

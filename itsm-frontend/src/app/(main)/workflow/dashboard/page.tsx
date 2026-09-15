@@ -150,10 +150,10 @@ export default function BPMNDashboardPage() {
   }
 
   return (
-    <div className='p-6 space-y-6'>
+    <div className='p-[16px] md:p-[24px] space-y-6'>
       {/* Header */}
       <div className='flex justify-between items-center'>
-        <h1 className='text-2xl font-bold'>
+        <h1 className='text-[24px] font-semibold'>
           {t('workflow.bpmnDashboard.title') || 'BPMN流程监控仪表盘'}
         </h1>
         <Space>
@@ -172,7 +172,7 @@ export default function BPMNDashboardPage() {
       </div>
 
       {/* Summary Cards */}
-      <Row gutter={[16, 16]}>
+      <Row gutter={[14, 14]}>
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
@@ -215,10 +215,10 @@ export default function BPMNDashboardPage() {
       </Row>
 
       {/* Health & SLA */}
-      <Row gutter={[16, 16]}>
+      <Row gutter={[14, 14]}>
         <Col xs={24} lg={12}>
           <Card title={t('workflow.bpmnDashboard.processHealth') || '流程健康度'}>
-            <Row gutter={16}>
+            <Row gutter={14}>
               <Col span={8}>
                 <Statistic
                   title={t('workflow.bpmnDashboard.healthy') || '健康'}
@@ -264,7 +264,7 @@ export default function BPMNDashboardPage() {
                 suffix='%'
                 styles={{
                   content: {
-                    fontSize: 48,
+                    fontSize: 26,
                     color:
                       (metrics?.slaComplianceRate || 0) >= 90
                         ? '#52c41a'
@@ -274,7 +274,7 @@ export default function BPMNDashboardPage() {
                   },
                 }}
               />
-              <p className='text-gray-500 mt-2'>
+              <p className='text-muted mt-2'>
                 {t('workflow.bpmnDashboard.slaComplianceRate') || 'SLA合规率'}
               </p>
             </div>
@@ -283,7 +283,7 @@ export default function BPMNDashboardPage() {
       </Row>
 
       {/* Top Processes & Task Distribution */}
-      <Row gutter={[16, 16]}>
+      <Row gutter={[14, 14]}>
         <Col xs={24} lg={12}>
           <Card title={t('workflow.bpmnDashboard.topProcesses') || '热门流程'}>
             <Table

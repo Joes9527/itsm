@@ -248,10 +248,10 @@ export default function AuditLogsPage() {
   ];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-[16px] md:p-[24px] space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">
+        <h1 className="text-[24px] font-semibold">
           {t('bpmn.audit.title') || 'BPMN审计日志'}
         </h1>
         <Button icon={<RefreshCw size={16} />} onClick={fetchLogs}>
@@ -357,12 +357,12 @@ export default function AuditLogsPage() {
               {selectedLog.ipAddress || '-'}
             </Descriptions.Item>
             <Descriptions.Item label="变量变更前" span={2}>
-              <pre className="text-xs bg-gray-50 p-2 rounded">
+              <pre className="text-[12px] bg-raised p-2 rounded">
                 {JSON.stringify(selectedLog.variablesBefore, null, 2) || '-'}
               </pre>
             </Descriptions.Item>
             <Descriptions.Item label="变量变更后" span={2}>
-              <pre className="text-xs bg-gray-50 p-2 rounded">
+              <pre className="text-[12px] bg-raised p-2 rounded">
                 {JSON.stringify(selectedLog.variablesAfter, null, 2) || '-'}
               </pre>
             </Descriptions.Item>
@@ -392,7 +392,7 @@ export default function AuditLogsPage() {
                     <Tag color={getActionColor(log.action)}>{log.action}</Tag>
                     <span>{log.activityName}</span>
                   </Space>
-                  <div className="text-sm text-gray-500 mt-1">
+                  <div className="text-[13px] text-muted mt-1">
                     <Space>
                       <User size={12} /> {log.userName}
                       <Clock size={12} /> {new Date(log.timestamp).toLocaleString()}

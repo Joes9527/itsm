@@ -155,33 +155,35 @@ const TicketCommentStreamContent: React.FC<TicketCommentStreamProps> = ({
             const name = comment.user?.name || comment.user?.username || '未知用户';
             const isOwn = currentUserId ? comment.userId === currentUserId : false;
             return (
-              <div key={comment.id} className='flex items-start gap-3 text-xs'>
+              <div key={comment.id} className="flex items-start gap-3 text-[12px]">
                 <div
                   className={`w-8 h-8 rounded-full font-bold flex items-center justify-center shrink-0 ${
                     comment.isInternal
                       ? 'bg-amber-100 text-amber-800'
                       : ticketAssigneeId && comment.userId === ticketAssigneeId
                         ? 'bg-orange-100 text-orange-700'
-                        : 'bg-slate-100 text-slate-700'
+                        : 'bg-raised text-foreground'
                   }`}
                 >
                   {name[0]}
                 </div>
                 <div
-                  className={`flex-1 rounded-xl p-3.5 border space-y-1.5 ${
+                  className={`flex-1 rounded-[8px] p-3.5 border space-y-1.5 ${
                     comment.isInternal
                       ? 'bg-amber-50/50 border-amber-200/70'
                       : ticketAssigneeId && comment.userId === ticketAssigneeId
-                        ? 'bg-orange-50/30 border-orange-100'
-                        : 'bg-slate-50 border-slate-100'
+                        ? 'bg-selected border-border'
+                        : 'bg-raised border-border'
                   }`}
                 >
-                  <div className='flex items-center justify-between'>
-                    <div className='flex items-center gap-1.5 flex-wrap'>
-                      <span className='font-semibold text-slate-900 text-xs'>{name}</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-semibold text-foreground text-[12px]">
+                        {name}
+                      </span>
                       {renderBadges(comment)}
                     </div>
-                    <span className='text-slate-400 font-mono text-[11px] shrink-0 ml-2'>
+                    <span className="text-muted font-mono text-[11px] shrink-0 ml-2">
                       {formatDateTime(comment.createdAt)}
                     </span>
                   </div>
@@ -192,7 +194,7 @@ const TicketCommentStreamContent: React.FC<TicketCommentStreamProps> = ({
                         value={editingContent}
                         onChange={e => setEditingContent(e.target.value)}
                         rows={3}
-                        className='!rounded-xl !text-xs'
+                        className="!rounded-[8px] !text-[12px]"
                       />
                       <div className='flex justify-end gap-2'>
                         <button
@@ -201,7 +203,7 @@ const TicketCommentStreamContent: React.FC<TicketCommentStreamProps> = ({
                             setEditingId(null);
                             setEditingContent('');
                           }}
-                          className='px-2.5 py-1 rounded-md text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-200'
+                          className="px-2.5 h-[29px] rounded-[6px] text-[12px] font-medium bg-surface hover:bg-raised text-foreground border border-border"
                         >
                           取消
                         </button>
@@ -209,14 +211,14 @@ const TicketCommentStreamContent: React.FC<TicketCommentStreamProps> = ({
                           type='button'
                           onClick={() => handleEdit(comment.id)}
                           disabled={!editingContent.trim() || submitting}
-                          className='px-2.5 py-1 rounded-md text-xs font-medium bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-50'
+                          className="px-2.5 h-[29px] rounded-[6px] text-[12px] font-medium bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white disabled:opacity-50"
                         >
                           保存
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <p className='text-slate-700 m-0 leading-relaxed text-xs whitespace-pre-wrap'>
+                    <p className="text-foreground m-0 leading-relaxed text-[13px] whitespace-pre-wrap">
                       {comment.content}
                     </p>
                   )}
@@ -230,7 +232,7 @@ const TicketCommentStreamContent: React.FC<TicketCommentStreamProps> = ({
                             setEditingId(comment.id);
                             setEditingContent(comment.content);
                           }}
-                          className='text-[11px] text-slate-400 hover:text-orange-600 inline-flex items-center gap-0.5'
+                          className="text-[11px] text-muted hover:text-orange-600 inline-flex items-center gap-0.5"
                         >
                           <Edit size={11} /> 编辑
                         </button>
@@ -238,7 +240,7 @@ const TicketCommentStreamContent: React.FC<TicketCommentStreamProps> = ({
                       <button
                         type='button'
                         onClick={() => handleDelete(comment.id)}
-                        className='text-[11px] text-slate-400 hover:text-red-600 inline-flex items-center gap-0.5'
+                        className="text-[11px] text-muted hover:text-red-600 inline-flex items-center gap-0.5"
                       >
                         <Trash2 size={11} /> 删除
                       </button>
@@ -250,15 +252,15 @@ const TicketCommentStreamContent: React.FC<TicketCommentStreamProps> = ({
           })}
         </div>
       ) : (
-        <div className='text-center py-6 text-slate-400'>
-          <MessageSquare className='w-8 h-8 mx-auto mb-2 text-slate-300' />
-          <span className='text-xs'>暂无评论</span>
+        <div className="text-center py-6 text-muted">
+          <MessageSquare className="w-8 h-8 mx-auto mb-2 text-muted" />
+          <span className="text-[12px]">暂无评论</span>
         </div>
       )}
 
       {/* 添加评论区域 */}
-      <div className='pt-3 mt-4 border-t border-slate-100 space-y-3'>
-        <div className='flex items-center space-x-2'>
+      <div className="pt-3 mt-4 border-t border-border space-y-3">
+        <div className="flex items-center space-x-2">
           <input
             type='checkbox'
             id={`workbench-internal-${ticketId}`}
@@ -268,16 +270,16 @@ const TicketCommentStreamContent: React.FC<TicketCommentStreamProps> = ({
           />
           <label
             htmlFor={`workbench-internal-${ticketId}`}
-            className='text-xs text-slate-600 font-medium cursor-pointer'
+            className="text-[12px] text-muted font-medium cursor-pointer"
           >
             仅内部可见
           </label>
         </div>
 
         <div>
-          <div className='mb-1.5'>
-            <span className='text-xs text-slate-500 font-medium flex items-center gap-1'>
-              <AtSign size={13} className='text-slate-400' />
+          <div className="mb-1.5">
+            <span className="text-[12px] text-muted font-medium flex items-center gap-1">
+              <AtSign size={13} className="text-muted" />
               @用户（可选）
             </span>
           </div>
@@ -295,7 +297,7 @@ const TicketCommentStreamContent: React.FC<TicketCommentStreamProps> = ({
           placeholder='输入您的评论或内部评估记录...'
           value={replyText}
           onChange={e => setReplyText(e.target.value)}
-          className='!rounded-xl !border-slate-200 !text-xs !p-3 shadow-none focus:!border-orange-500'
+          className="!rounded-[8px] !border-border !text-[13px] !p-3 shadow-none focus:!border-[var(--color-primary)]"
         />
 
         <div className='flex justify-end pt-1'>
@@ -303,7 +305,7 @@ const TicketCommentStreamContent: React.FC<TicketCommentStreamProps> = ({
             type='button'
             onClick={handleSend}
             disabled={!replyText.trim() || submitting}
-            className='inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white transition-colors duration-150 cursor-pointer shadow-xs disabled:opacity-50'
+            className="inline-flex items-center gap-1.5 px-4 h-[34px] rounded-[6px] text-[13px] font-medium bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:bg-[var(--color-primary-hover)] text-white transition-colors duration-150 cursor-pointer shadow-none disabled:opacity-50"
           >
             <Send size={13} />
             <span>{submitting ? '发送中...' : '发送评论'}</span>

@@ -41,7 +41,7 @@ export const SLACountdownTimer: React.FC<SLACountdownTimerProps> = ({
 
   if (timeLeft.isBreached) {
     return (
-      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-100 dark:bg-red-950/60 border border-red-300 dark:border-red-800 text-red-700 dark:text-red-300 text-xs font-bold animate-pulse">
+      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-[8px] bg-red-100 dark:bg-red-950/60 border border-red-300 dark:border-red-800 text-red-700 dark:text-red-300 text-[12px] font-semibold animate-pulse">
         <AlertTriangle size={14} />
         <span>SLA 已违规</span>
       </div>
@@ -52,7 +52,7 @@ export const SLACountdownTimer: React.FC<SLACountdownTimerProps> = ({
 
   return (
     <div
-      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors ${
+      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[8px] text-[12px] font-semibold border transition-colors ${
         isUrgent
           ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 animate-pulse'
           : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300'

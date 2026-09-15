@@ -110,8 +110,8 @@ export default function ProblemDetailPage() {
           跟 WorkItemShell 的 TicketRelationCards（走 /tickets/:id/relations）不是同一份数据，
           删掉会丢功能，不是去重。 */}
       {Number.isFinite(numericId) && numericId > 0 && (
-        <Card className="mt-4 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center gap-1.5 mb-3 text-sm font-medium text-gray-700">
+        <Card className="mt-4 rounded-lg shadow-sm border border-border">
+          <div className="flex items-center gap-1.5 mb-3 text-sm font-medium text-foreground">
             <Link2 size={14} />
             关联（工单/事件/变更）
           </div>
@@ -136,7 +136,7 @@ export default function ProblemDetailPage() {
             type="link"
             icon={<ArrowLeft />}
             onClick={() => router.back()}
-            style={{ paddingLeft: 0, color: '#666' }}
+            style={{ paddingLeft: 0, color: 'var(--color-text-secondary)' }}
           >
             返回列表
           </Button>

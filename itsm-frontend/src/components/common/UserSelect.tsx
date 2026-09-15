@@ -94,14 +94,22 @@ export const UserSelect: React.FC<UserSelectProps> = ({
       onSearch={handleSearch}
       notFoundContent={loading ? <Spin size="small" /> : '未找到用户'}
       optionLabelProp="label"
-     options={filteredUsers.map(user => ({ value: user.id, label: <div className="flex items-center space-x-2">
+      options={filteredUsers.map(user => ({
+        value: user.id,
+        label: (
+          <div className="flex items-center space-x-2">
             <Avatar size="small" icon={<UserIcon size={14} />}>
               {user.name?.[0] || user.username?.[0]}
             </Avatar>
             <div className="flex flex-col">
-              <span className="text-sm font-medium">{user.name || user.username}</span>
-              {user.email && <span className="text-xs text-gray-500">{user.email}</span>}
+              <span className="text-[13px] font-medium">{user.name || user.username}</span>
+              {user.email && (
+                <span className="text-[12px] text-muted">{user.email}</span>
+              )}
             </div>
-          </div> }))} />
+          </div>
+        ),
+      }))}
+    />
   );
 };

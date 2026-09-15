@@ -320,7 +320,7 @@ const TicketTemplatesPage = () => {
     >
       <div className="flex items-start mb-3">
         <div
-          className={`inline-flex items-center justify-center w-12 h-12 bg-${template.color}-50 rounded-lg mr-3`}
+          className={`inline-flex items-center justify-center w-12 h-12 bg-${template.color}-50 rounded-[8px] mr-3`}
         >
           <span className={`text-${template.color}-500`}>{template.icon}</span>
         </div>
@@ -328,7 +328,7 @@ const TicketTemplatesPage = () => {
           <Title level={5} className="mb-1 truncate">
             {template.name}
           </Title>
-          <Text type="secondary" className="text-sm line-clamp-2">
+          <Text type="secondary" className="text-[13px] line-clamp-2">
             {template.description}
           </Text>
         </div>
@@ -336,13 +336,13 @@ const TicketTemplatesPage = () => {
 
       <div className="space-y-2 mb-4">
         <div className="flex items-center justify-between">
-          <Text type="secondary" className="text-xs">
+          <Text type="secondary" className="text-[12px]">
             Type
           </Text>
           <Tag color={template.color}>{template.category}</Tag>
         </div>
         <div className="flex items-center justify-between">
-          <Text type="secondary" className="text-xs">
+          <Text type="secondary" className="text-[12px]">
             Priority
           </Text>
           <Tag
@@ -358,14 +358,14 @@ const TicketTemplatesPage = () => {
           </Tag>
         </div>
         <div className="flex items-center justify-between">
-          <Text type="secondary" className="text-xs">
+          <Text type="secondary" className="text-[12px]">
             SLA
           </Text>
-          <Text className="text-xs">{template.sla}</Text>
+          <Text className="text-[12px]">{template.sla}</Text>
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
+      <div className="flex items-center justify-between text-[12px] text-muted mb-3">
         <span>创建时间: {new Date(template.createdAt).toLocaleDateString('zh-CN')}</span>
         <span>更新时间: {new Date(template.updatedAt).toLocaleDateString('zh-CN')}</span>
       </div>
@@ -373,7 +373,7 @@ const TicketTemplatesPage = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <Switch checked={template.isActive} size="small" />
-          <Text className="text-xs">{template.isActive ? 'Active' : 'Inactive'}</Text>
+          <Text className="text-[12px]">{template.isActive ? 'Active' : 'Inactive'}</Text>
         </div>
       </div>
     </Card>
@@ -384,7 +384,7 @@ const TicketTemplatesPage = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <div
-            className={`inline-flex items-center justify-center w-10 h-10 bg-${template.color}-50 rounded-lg`}
+            className={`inline-flex items-center justify-center w-10 h-10 bg-${template.color}-50 rounded-[8px]`}
           >
             <span className={`text-${template.color}-500`}>{template.icon}</span>
           </div>
@@ -392,7 +392,7 @@ const TicketTemplatesPage = () => {
             <Title level={5} className="mb-1">
               {template.name}
             </Title>
-            <Text type="secondary" className="text-sm">
+            <Text type="secondary" className="text-[13px]">
               {template.description}
             </Text>
           </div>
@@ -400,7 +400,7 @@ const TicketTemplatesPage = () => {
 
         <div className="flex items-center space-x-4">
           <div className="text-center">
-            <Text className="text-xs text-gray-500">更新时间</Text>
+            <Text className="text-[12px] text-muted">更新时间</Text>
             <div className="font-semibold">
               {new Date(template.updatedAt).toLocaleDateString('zh-CN')}
             </div>
@@ -457,8 +457,10 @@ const TicketTemplatesPage = () => {
       {/* Page header actions */}
       <div className="mb-6 flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Ticket Template Management</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-[24px] font-semibold text-foreground">
+            Ticket Template Management
+          </h1>
+          <p className="text-muted mt-1">
             Manage and configure ticket templates to improve ticket creation efficiency
           </p>
         </div>
@@ -483,7 +485,7 @@ const TicketTemplatesPage = () => {
             <Statistic
               title="Total Templates"
               value={templates.length}
-              prefix={<FileText size={16} style={{ color: '#F06820' }} />}
+              prefix={<FileText size={16} style={{ color: 'var(--color-primary)' }} />}
             />
           </Card>
         </Col>
@@ -545,7 +547,12 @@ const TicketTemplatesPage = () => {
                 { value: 'all', label: 'All Categories' },
                 ...templateCategories.map(cat => ({
                   value: cat.key,
-                  label: <div className="flex items-center"><span className={`text-${cat.color}-500 mr-2`}>{cat.icon}</span>{cat.label}</div>,
+                  label: (
+                    <div className="flex items-center">
+                      <span className={`text-${cat.color}-500 mr-2`}>{cat.icon}</span>
+                      {cat.label}
+                    </div>
+                  ),
                 })),
               ]}
             />
@@ -578,19 +585,21 @@ const TicketTemplatesPage = () => {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-50 rounded-full mb-4">
               <RefreshCw size={32} className="text-blue-500 animate-spin" />
             </div>
-            <Text className="text-gray-500">Loading templates...</Text>
+            <Text className="text-muted">Loading templates...</Text>
           </div>
         </Card>
       ) : filteredTemplates.length === 0 ? (
         <Card>
           <div className="text-center py-16">
-            <div className="inline-flex items-center justify-center w-24 h-24 bg-gray-50 rounded-full mb-4">
-              <FileText size={48} className="text-gray-400" />
+            <div className="inline-flex items-center justify-center w-24 h-24 bg-raised rounded-full mb-4">
+              <FileText size={48} className="text-muted" />
             </div>
-            <Title level={4} className="text-gray-600 mb-2">
+            <Title level={4} className="text-muted mb-2">
               No Templates
             </Title>
-            <p className="text-gray-500 mb-4">No matching ticket templates found</p>
+            <p className="text-muted mb-4">
+              No matching ticket templates found
+            </p>
             <Button type="primary" onClick={() => setModalVisible(true)}>
               Create First Template
             </Button>
@@ -701,12 +710,15 @@ const TicketTemplatesPage = () => {
                 name="type"
                 rules={[{ required: true, message: 'Please select template type' }]}
               >
-                <Select placeholder="Please select template type" options={[
-                  { value: 'incident', label: 'Incident' },
-                  { value: 'service_request', label: 'Service Request' },
-                  { value: 'problem', label: 'Problem' },
-                  { value: 'change', label: 'Change' },
-                ]} />
+                <Select
+                  placeholder="Please select template type"
+                  options={[
+                    { value: 'incident', label: 'Incident' },
+                    { value: 'service_request', label: 'Service Request' },
+                    { value: 'problem', label: 'Problem' },
+                    { value: 'change', label: 'Change' },
+                  ]}
+                />
               </Form.Item>
             </Col>
           </Row>
@@ -746,12 +758,15 @@ const TicketTemplatesPage = () => {
                 name="priority"
                 rules={[{ required: true, message: 'Please select priority' }]}
               >
-                <Select placeholder="Please select priority" options={[
-                  { value: 'low', label: 'Low' },
-                  { value: 'medium', label: 'Medium' },
-                  { value: 'high', label: 'High' },
-                  { value: 'urgent', label: 'Urgent' },
-                ]} />
+                <Select
+                  placeholder="Please select priority"
+                  options={[
+                    { value: 'low', label: 'Low' },
+                    { value: 'medium', label: 'Medium' },
+                    { value: 'high', label: 'High' },
+                    { value: 'urgent', label: 'Urgent' },
+                  ]}
+                />
               </Form.Item>
             </Col>
             <Col span={8}>
@@ -781,12 +796,15 @@ const TicketTemplatesPage = () => {
                 name="impact"
                 rules={[{ required: true, message: 'Please select impact scope' }]}
               >
-                <Select placeholder="Please select impact scope" options={[
-                  { value: 'individual', label: 'Individual' },
-                  { value: 'department', label: 'Department' },
-                  { value: 'organization', label: 'Organization' },
-                  { value: 'customer', label: 'Customer' },
-                ]} />
+                <Select
+                  placeholder="Please select impact scope"
+                  options={[
+                    { value: 'individual', label: 'Individual' },
+                    { value: 'department', label: 'Department' },
+                    { value: 'organization', label: 'Organization' },
+                    { value: 'customer', label: 'Customer' },
+                  ]}
+                />
               </Form.Item>
             </Col>
             <Col span={8}>
@@ -795,12 +813,15 @@ const TicketTemplatesPage = () => {
                 name="urgency"
                 rules={[{ required: true, message: 'Please select urgency level' }]}
               >
-                <Select placeholder="Please select urgency level" options={[
-                  { value: 'low', label: 'Low' },
-                  { value: 'medium', label: 'Medium' },
-                  { value: 'high', label: 'High' },
-                  { value: 'critical', label: 'Critical' },
-                ]} />
+                <Select
+                  placeholder="Please select urgency level"
+                  options={[
+                    { value: 'low', label: 'Low' },
+                    { value: 'medium', label: 'Medium' },
+                    { value: 'high', label: 'High' },
+                    { value: 'critical', label: 'Critical' },
+                  ]}
+                />
               </Form.Item>
             </Col>
             <Col span={8}>
@@ -809,12 +830,15 @@ const TicketTemplatesPage = () => {
                 name="businessValue"
                 rules={[{ required: true, message: 'Please select business value' }]}
               >
-                <Select placeholder="Please select business value" options={[
-                  { value: 'low', label: 'Low' },
-                  { value: 'medium', label: 'Medium' },
-                  { value: 'high', label: 'High' },
-                  { value: 'critical', label: 'Critical' },
-                ]} />
+                <Select
+                  placeholder="Please select business value"
+                  options={[
+                    { value: 'low', label: 'Low' },
+                    { value: 'medium', label: 'Medium' },
+                    { value: 'high', label: 'High' },
+                    { value: 'critical', label: 'Critical' },
+                  ]}
+                />
               </Form.Item>
             </Col>
           </Row>
@@ -826,12 +850,15 @@ const TicketTemplatesPage = () => {
                 name="source"
                 rules={[{ required: true, message: 'Please select source' }]}
               >
-                <Select placeholder="Please select source" options={[
-                  { value: 'web', label: 'Web Portal' },
-                  { value: 'email', label: 'Email' },
-                  { value: 'phone', label: 'Phone' },
-                  { value: 'chat', label: 'Online Chat' },
-                ]} />
+                <Select
+                  placeholder="Please select source"
+                  options={[
+                    { value: 'web', label: 'Web Portal' },
+                    { value: 'email', label: 'Email' },
+                    { value: 'phone', label: 'Phone' },
+                    { value: 'chat', label: 'Online Chat' },
+                  ]}
+                />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -871,21 +898,27 @@ const TicketTemplatesPage = () => {
                 name="slaType"
                 rules={[{ required: true, message: 'Please select SLA type' }]}
               >
-                <Select placeholder="Please select SLA type" options={[
-                  { value: 'hours', label: 'Hours' },
-                  { value: 'days', label: 'Days' },
-                  { value: 'business_hours', label: 'Business Hours' },
-                ]} />
+                <Select
+                  placeholder="Please select SLA type"
+                  options={[
+                    { value: 'hours', label: 'Hours' },
+                    { value: 'days', label: 'Days' },
+                    { value: 'business_hours', label: 'Business Hours' },
+                  ]}
+                />
               </Form.Item>
             </Col>
             <Col span={8}>
               <Form.Item label="Approval Level" name="approvalLevel">
-                <Select placeholder="Please select approval level" options={[
-                  { value: 'none', label: 'No Approval Required' },
-                  { value: 'manager', label: 'Manager Approval' },
-                  { value: 'director', label: 'Director Approval' },
-                  { value: 'executive', label: 'Executive Approval' },
-                ]} />
+                <Select
+                  placeholder="Please select approval level"
+                  options={[
+                    { value: 'none', label: 'No Approval Required' },
+                    { value: 'manager', label: 'Manager Approval' },
+                    { value: 'director', label: 'Director Approval' },
+                    { value: 'executive', label: 'Executive Approval' },
+                  ]}
+                />
               </Form.Item>
             </Col>
           </Row>

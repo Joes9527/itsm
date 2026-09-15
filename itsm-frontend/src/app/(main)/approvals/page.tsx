@@ -169,11 +169,12 @@ export default function ApprovalsCenterPage() {
       title: '任务',
       dataIndex: 'taskName',
       key: 'taskName',
+      width: 280,
       render: (text: string, record: UserTask) => (
-        <div>
-          <div className="font-medium text-gray-900">{text || record.taskDefinitionKey}</div>
+        <div className="min-w-[220px]">
+          <div className="font-medium text-foreground">{text || record.taskDefinitionKey}</div>
           {record.taskPurpose && (
-            <Text type="secondary" className="text-xs">{record.taskPurpose}</Text>
+            <Text type="secondary" className="text-[12px]">{record.taskPurpose}</Text>
           )}
         </div>
       ),
@@ -227,7 +228,7 @@ export default function ApprovalsCenterPage() {
       responsive: ['xl'] as any,
       render: (t: string) => t ? (
         <Tooltip title={dayjs(t).format('YYYY-MM-DD HH:mm:ss')}>
-          <span className="text-gray-500">{dayjs(t).fromNow()}</span>
+          <span className="text-muted">{dayjs(t).fromNow()}</span>
         </Tooltip>
       ) : '-',
     },
@@ -281,7 +282,7 @@ export default function ApprovalsCenterPage() {
   );
 
   return (
-    <div className="p-4 md:p-6">
+    <div style={{ padding: 24, fontSize: 13 }}>
       {/* 头部区域 */}
       <div className="mb-4 md:mb-6 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div className="flex items-center gap-3">
@@ -290,7 +291,7 @@ export default function ApprovalsCenterPage() {
           </div>
           <div>
             <Title level={3} className="!mb-0 !text-xl md:!text-2xl">审批中心</Title>
-            <Text type="secondary" className="text-sm">
+            <Text type="secondary" className="text-[13px]">
               {user?.username ? `${user.username}，` : ''}当前授权范围内的审批待办{resource.ready ? `：${tasks.length} 项` : ''}
             </Text>
           </div>
@@ -310,7 +311,7 @@ export default function ApprovalsCenterPage() {
           <Card className="border-l-4 border-l-blue-500">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs md:text-sm text-gray-500">审批待办</div>
+                <div className="text-[12px] md:text-[13px] text-muted">审批待办</div>
                 <div className="text-2xl md:text-3xl font-bold text-blue-600">{resource.ready ? tasks.length : '—'}</div>
               </div>
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-blue-50 flex items-center justify-center">
@@ -323,7 +324,7 @@ export default function ApprovalsCenterPage() {
           <Card className="border-l-4 border-l-gold-500">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs md:text-sm text-gray-500">待领取</div>
+                <div className="text-[12px] text-muted md:text-[13px]">待领取</div>
                 <div className="text-2xl md:text-3xl font-bold text-amber-500">
                   {resource.ready ? tasks.filter((t) => !t.assignee).length : '—'}
                 </div>
@@ -347,13 +348,13 @@ export default function ApprovalsCenterPage() {
             dataSource={tasks}
             columns={taskColumns}
             pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 项` }}
-            scroll={{ x: 900 }}
+            scroll={{ x: 1200 }}
             locale={{
               emptyText: (
                 <div className="py-12 text-center">
-                  <Clock className="mx-auto mb-3 text-gray-300 w-10 h-10" />
-                  <div className="text-gray-500 mb-1">暂无审批待办</div>
-                  <Text type="secondary" className="text-sm">当前授权范围内没有审批待办</Text>
+                  <Clock className="mx-auto mb-3 text-muted w-10 h-10" />
+                  <div className="text-muted mb-1">暂无审批待办</div>
+                  <Text type="secondary" className="text-[13px]">当前授权范围内没有审批待办</Text>
                 </div>
               ),
             }}

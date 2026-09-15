@@ -90,8 +90,8 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
 }) => {
   if (selectedCount <= 0) return null;
 
-  const primaryActions = actions.filter((a) => !a.overflow);
-  const overflowActions = actions.filter((a) => a.overflow);
+  const primaryActions = actions.filter(a => !a.overflow);
+  const overflowActions = actions.filter(a => a.overflow);
 
   const renderActionButton = (action: BatchAction) => {
     const btn = (
@@ -108,30 +108,31 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
       </Button>
     );
 
-    const wrapped = action.danger && action.confirmTitle ? (
-      <Popconfirm
-        key={action.key}
-        title={action.confirmTitle}
-        onConfirm={() => void action.onClick()}
-        okText="确定"
-        cancelText="取消"
-        okButtonProps={{ danger: true }}
-        disabled={action.disabled || loading}
-      >
-        <Button
-          size="small"
-          type={action.type || 'default'}
-          danger
-          icon={action.icon as React.ReactElement | undefined}
+    const wrapped =
+      action.danger && action.confirmTitle ? (
+        <Popconfirm
+          key={action.key}
+          title={action.confirmTitle}
+          onConfirm={() => void action.onClick()}
+          okText="确定"
+          cancelText="取消"
+          okButtonProps={{ danger: true }}
           disabled={action.disabled || loading}
-          loading={action.loading}
         >
-          {action.label}
-        </Button>
-      </Popconfirm>
-    ) : (
-      btn
-    );
+          <Button
+            size="small"
+            type={action.type || 'default'}
+            danger
+            icon={action.icon as React.ReactElement | undefined}
+            disabled={action.disabled || loading}
+            loading={action.loading}
+          >
+            {action.label}
+          </Button>
+        </Popconfirm>
+      ) : (
+        btn
+      );
 
     if (action.disabled && action.disabledTooltip) {
       return (
@@ -144,7 +145,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
   };
 
   const overflowMenu: MenuProps = {
-    items: overflowActions.map((a) => ({
+    items: overflowActions.map(a => ({
       key: a.key,
       label: a.label,
       icon: a.icon,
@@ -156,10 +157,11 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
 
   const content = (
     <div className="flex items-center justify-between gap-4 w-full">
-      <div className="text-sm">
+      <div className="text-[13px]">
         {leftExtra ?? (
           <>
-            已选择 <span className="font-semibold text-blue-600">{selectedCount}</span> 个{itemLabel}
+            已选择 <span className="font-semibold text-foreground">{selectedCount}</span> 个
+            {itemLabel}
           </>
         )}
       </div>
@@ -190,19 +192,16 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
 
   if (variant === 'card') {
     return (
-      <div className={`bg-blue-50 border border-blue-200 rounded-md px-4 py-2 mb-4 ${className || ''}`}>
+      <div
+        className={`bg-raised border border-border rounded-md px-4 py-2 mb-4 ${className || ''}`}
+      >
         {content}
       </div>
     );
   }
 
   return (
-    <Alert
-      type="info"
-      showIcon={false}
-      className={`mb-4 ${className || ''}`}
-      message={content}
-    />
+    <Alert type="info" showIcon={false} className={`mb-4 ${className || ''}`} message={content} />
   );
 };
 

@@ -2,11 +2,8 @@
 
 import type { ReactNode } from 'react';
 import React from 'react';
-import { theme } from 'antd';
 import { cn } from '@/lib/utils';
 import { layout, semanticSpacing } from '@/lib/design-system/spacing';
-
-const { token } = theme.useToken();
 
 /**
  * 页面布局属性接口
@@ -62,7 +59,7 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
     <div
       className={cn('min-h-screen flex flex-col', className)}
       style={{
-        backgroundColor: backgroundColor || token.colorBgLayout,
+        backgroundColor: backgroundColor || 'var(--color-bg-secondary)',
         ...style,
       }}
     >
@@ -71,9 +68,9 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
         <header
           className="sticky top-0 z-50"
           style={{
-            backgroundColor: token.colorBgContainer,
-            borderBottom: `1px solid ${token.colorBorder}`,
-            boxShadow: token.boxShadowSecondary,
+            backgroundColor: 'var(--color-bg-primary)',
+            borderBottom: '1px solid var(--color-border)',
+            boxShadow: 'none',
           }}
         >
           {header}
@@ -88,8 +85,8 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
             className="hidden lg:block"
             style={{
               width: layout.sidebar.width.lg,
-              backgroundColor: token.colorBgContainer,
-              borderRight: `1px solid ${token.colorBorder}`,
+              backgroundColor: 'var(--color-bg-primary)',
+              borderRight: '1px solid var(--color-border)',
             }}
           >
             {sidebar}
@@ -103,8 +100,8 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
             <div
               className="px-4 py-6 lg:px-8"
               style={{
-                backgroundColor: token.colorBgContainer,
-                borderBottom: `1px solid ${token.colorBorder}`,
+                backgroundColor: 'var(--color-bg-primary)',
+                borderBottom: '1px solid var(--color-border)',
               }}
             >
               <div
@@ -117,11 +114,11 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
                 {/* 面包屑 */}
                 {showBreadcrumb && breadcrumb.length > 0 && (
                   <nav className="mb-4">
-                    <ol className="flex items-center space-x-2 text-sm">
+                    <ol className="flex items-center space-x-2 text-[13px]">
                       {breadcrumb.map((item, index) => (
                         <li key={index} className="flex items-center">
                           {index > 0 && (
-                            <span className="mx-2" style={{ color: token.colorTextTertiary }}>
+                            <span className="mx-2" style={{ color: 'var(--color-text-secondary)' }}>
                               /
                             </span>
                           )}
@@ -129,12 +126,12 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
                             <a
                               href={item.href}
                               className="hover:underline"
-                              style={{ color: token.colorPrimary }}
+                              style={{ color: 'var(--color-selected-text)' }}
                             >
                               {item.label}
                             </a>
                           ) : (
-                            <span style={{ color: token.colorTextSecondary }}>{item.label}</span>
+                            <span style={{ color: 'var(--color-text-secondary)' }}>{item.label}</span>
                           )}
                         </li>
                       ))}
@@ -144,14 +141,14 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
 
                 {/* 页面标题 */}
                 {title && (
-                  <h1 className="text-3xl font-bold mb-2" style={{ color: token.colorText }}>
+                  <h1 className="text-[24px] font-semibold mb-2" style={{ color: 'var(--color-text-primary)' }}>
                     {title}
                   </h1>
                 )}
 
                 {/* 页面描述 */}
                 {description && (
-                  <p className="text-lg" style={{ color: token.colorTextSecondary }}>
+                  <p className="text-[12px]" style={{ color: 'var(--color-text-secondary)' }}>
                     {description}
                   </p>
                 )}
@@ -182,8 +179,8 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
       {footer && (
         <footer
           style={{
-            backgroundColor: token.colorBgContainer,
-            borderTop: `1px solid ${token.colorBorder}`,
+            backgroundColor: 'var(--color-bg-primary)',
+            borderTop: '1px solid var(--color-border)',
             padding: semanticSpacing.padding[padding],
           }}
         >
@@ -238,13 +235,13 @@ export const ContentLayout: React.FC<ContentLayoutProps> = ({
 }) => {
   return (
     <div
-      className={cn('w-full', bordered && 'border rounded-lg', className)}
+      className={cn('w-full', bordered && 'border rounded-[8px]', className)}
       style={{
         maxWidth: layout.content.maxWidth,
         padding: semanticSpacing.padding[padding],
         ...(bordered && {
-          borderColor: token.colorBorder,
-          backgroundColor: token.colorBgContainer,
+          borderColor: 'var(--color-border)',
+          backgroundColor: 'var(--color-bg-primary)',
         }),
       }}
     >
@@ -253,13 +250,13 @@ export const ContentLayout: React.FC<ContentLayoutProps> = ({
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
             {title && (
-              <h2 className="text-2xl font-semibold" style={{ color: token.colorText }}>
+              <h2 className="text-[15px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>
                 {title}
               </h2>
             )}
             {actions && <div className="ml-4">{actions}</div>}
           </div>
-          {description && <p style={{ color: token.colorTextSecondary }}>{description}</p>}
+          {description && <p style={{ color: 'var(--color-text-secondary)' }}>{description}</p>}
         </div>
       )}
 

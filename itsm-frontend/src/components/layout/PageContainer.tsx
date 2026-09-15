@@ -90,7 +90,7 @@ export const PageContainer: React.FC<EnterprisePageTemplateProps> = ({
             )}
             <span
               style={{
-                fontSize: 'var(--font-size-lg)',
+                fontSize: 'var(--font-size-card-title)',
                 fontWeight: 'var(--font-weight-semibold)',
                 color: 'var(--color-text-primary)',
               }}
@@ -144,11 +144,11 @@ export const PageContainer: React.FC<EnterprisePageTemplateProps> = ({
           </div>
         )}
 
-        <div className="flex justify-between items-start">
+        <div className="flex flex-wrap gap-3 justify-between items-start">
           <div>
             <h1
               style={{
-                fontSize: 'var(--font-size-3xl)',
+                fontSize: 'var(--font-size-page-title)',
                 fontWeight: 'var(--font-weight-semibold)',
                 lineHeight: 'var(--line-height-tight)',
                 color: 'var(--color-text-primary)',
@@ -158,7 +158,7 @@ export const PageContainer: React.FC<EnterprisePageTemplateProps> = ({
               {title}
             </h1>
             {description && (
-              <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
+              <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
                 {description}
               </p>
             )}
@@ -207,16 +207,16 @@ export const EnterpriseStatCard: React.FC<{
       {prefix && <div className="mb-2">{prefix}</div>}
       <div
         style={{
-          fontSize: 'var(--font-size-4xl)',
-          fontWeight: 'var(--font-weight-bold)',
+          fontSize: '26px',
+          fontWeight: 'var(--font-weight-semibold)',
           color: 'var(--color-text-primary)',
           ...valueStyle,
         }}
       >
         {value}
-        {suffix && <span style={{ fontSize: 'var(--font-size-lg)', color: 'var(--color-text-secondary)', marginLeft: '4px' }}>{suffix}</span>}
+        {suffix && <span style={{ fontSize: 'var(--font-size-card-title)', color: 'var(--color-text-secondary)', marginLeft: '4px' }}>{suffix}</span>}
       </div>
-      <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginTop: '8px' }}>{title}</div>
+      <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '8px' }}>{title}</div>
     </div>
   </Card>
 );

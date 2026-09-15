@@ -23,10 +23,9 @@ import { Plus, Edit, Delete, PlayCircle, PauseCircle, Settings } from 'lucide-re
 import type {
   AutomationRule,
   CreateAutomationRuleRequest,
-  UpdateAutomationRuleRequest} from '@/lib/api/ticket-automation-rule-api';
-import {
-  TicketAutomationRuleApi
+  UpdateAutomationRuleRequest,
 } from '@/lib/api/ticket-automation-rule-api';
+import { TicketAutomationRuleApi } from '@/lib/api/ticket-automation-rule-api';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -161,8 +160,8 @@ const AutomationRulesPage: React.FC = () => {
     },
     {
       title: '执行次数',
-      dataIndex:'executionCount',
-      key:'executionCount',
+      dataIndex: 'executionCount',
+      key: 'executionCount',
       width: 100,
       render: (count: number) => <Tag>{count || 0}</Tag>,
     },
@@ -209,7 +208,7 @@ const AutomationRulesPage: React.FC = () => {
       <Card>
         <div className="flex justify-between items-center mb-4">
           <div>
-            <Title level={3} style={{ marginBottom: 4 }}>
+            <Title level={2} style={{ marginBottom: 4 }}>
               工单自动化规则
             </Title>
             <Text type="secondary">配置自动化规则来简化工单处理流程</Text>
@@ -281,11 +280,7 @@ const AutomationRulesPage: React.FC = () => {
                 <>
                   {fields.map(({ key, name, ...restField }) => (
                     <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
-                      <Form.Item
-                        {...restField}
-                        name={[name, 'field']}
-                        noStyle
-                      >
+                      <Form.Item {...restField} name={[name, 'field']} noStyle>
                         <Select style={{ width: 120 }} placeholder="字段">
                           <Select.Option value="status">状态</Select.Option>
                           <Select.Option value="priority">优先级</Select.Option>
@@ -293,11 +288,7 @@ const AutomationRulesPage: React.FC = () => {
                           <Select.Option value="category">分类</Select.Option>
                         </Select>
                       </Form.Item>
-                      <Form.Item
-                        {...restField}
-                        name={[name, 'operator']}
-                        noStyle
-                      >
+                      <Form.Item {...restField} name={[name, 'operator']} noStyle>
                         <Select style={{ width: 100 }} placeholder="操作符">
                           <Select.Option value="equals">等于</Select.Option>
                           <Select.Option value="not_equals">不等于</Select.Option>
@@ -305,14 +296,15 @@ const AutomationRulesPage: React.FC = () => {
                           <Select.Option value="in">在列表中</Select.Option>
                         </Select>
                       </Form.Item>
-                      <Form.Item
-                        {...restField}
-                        name={[name, 'value']}
-                        noStyle
-                      >
+                      <Form.Item {...restField} name={[name, 'value']} noStyle>
                         <Input placeholder="值" style={{ width: 150 }} />
                       </Form.Item>
-                      <Button type="text" danger icon={<Delete size={14} />} onClick={() => remove(name)} />
+                      <Button
+                        type="text"
+                        danger
+                        icon={<Delete size={14} />}
+                        onClick={() => remove(name)}
+                      />
                     </Space>
                   ))}
                   <Button type="dashed" onClick={() => add()} block icon={<Plus size={14} />}>
@@ -324,19 +316,12 @@ const AutomationRulesPage: React.FC = () => {
           </Form.Item>
 
           <Form.Item label="执行动作" required>
-            <Form.List
-              name="actions"
-              initialValue={[{ type: 'notify', config: {} }]}
-            >
+            <Form.List name="actions" initialValue={[{ type: 'notify', config: {} }]}>
               {(fields, { add, remove }) => (
                 <>
                   {fields.map(({ key, name, ...restField }) => (
                     <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
-                      <Form.Item
-                        {...restField}
-                        name={[name, 'type']}
-                        noStyle
-                      >
+                      <Form.Item {...restField} name={[name, 'type']} noStyle>
                         <Select style={{ width: 140 }} placeholder="动作类型">
                           <Select.Option value="assign">自动分配</Select.Option>
                           <Select.Option value="notify">发送通知</Select.Option>
@@ -345,18 +330,19 @@ const AutomationRulesPage: React.FC = () => {
                           <Select.Option value="close">自动关闭</Select.Option>
                         </Select>
                       </Form.Item>
-                      <Form.Item
-                        {...restField}
-                        name={[name, 'config']}
-                        noStyle
-                      >
+                      <Form.Item {...restField} name={[name, 'config']} noStyle>
                         <Input.TextArea
                           placeholder='{"assignee_id": 1}'
                           style={{ width: 200 }}
                           rows={1}
                         />
                       </Form.Item>
-                      <Button type="text" danger icon={<Delete size={14} />} onClick={() => remove(name)} />
+                      <Button
+                        type="text"
+                        danger
+                        icon={<Delete size={14} />}
+                        onClick={() => remove(name)}
+                      />
                     </Space>
                   ))}
                   <Button type="dashed" onClick={() => add()} block icon={<Plus size={14} />}>

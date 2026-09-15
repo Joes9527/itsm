@@ -197,7 +197,7 @@ function DefaultCard<T>({
         </div>
 
         <div className="flex items-center justify-between">
-          <span className="text-xs text-gray-500">#{number}</span>
+          <span className="text-[12px] text-muted">#{number}</span>
           {category && (
             <Tag color="blue" className="text-xs">
               {category}
@@ -205,9 +205,9 @@ function DefaultCard<T>({
           )}
         </div>
 
-        {description && <div className="text-xs text-gray-500 line-clamp-2">{description}</div>}
+        {description && <div className="line-clamp-2 text-[12px] text-muted">{description}</div>}
 
-        <div className="flex items-center justify-between text-xs text-slate-600">
+        <div className="flex items-center justify-between text-[12px] text-muted">
           <div className="flex items-center gap-2">
             {assignee ? (
               <>
@@ -424,7 +424,7 @@ export function UnifiedKanbanBoard<T>({
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-gray-500">加载中...</div>
+        <div className="text-muted">加载中...</div>
       </div>
     );
   }
@@ -433,7 +433,7 @@ export function UnifiedKanbanBoard<T>({
     <div className="space-y-4">
       {/* 工具栏 */}
       {showToolbar && (
-        <div className="flex items-center justify-between flex-wrap gap-4 bg-white p-4 rounded-lg shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-[8px] border border-border bg-surface p-[16px] shadow-none">
           <div className="flex items-center gap-3 flex-1 min-w-[300px]">
             <Search
               placeholder={searchPlaceholder}
@@ -510,7 +510,7 @@ export function UnifiedKanbanBoard<T>({
           {columnsData.map(column => (
             <div
               key={column.key}
-              className="min-w-0 rounded-lg bg-gray-50 p-4"
+              className="min-w-0 rounded-[8px] border border-border bg-raised p-[16px]"
               data-testid={`kanban-column-${column.key}`}
               onDragOver={event => {
                 if (enableDrag && onItemStatusChange) event.preventDefault();
@@ -527,7 +527,7 @@ export function UnifiedKanbanBoard<T>({
                     className="w-2.5 h-2.5 rounded-full"
                     style={{ backgroundColor: column.color }}
                   />
-                  <span className="font-semibold text-gray-900 text-sm">{column.title}</span>
+                  <span className="text-[13px] font-semibold text-foreground">{column.title}</span>
                 </div>
                 <Badge
                   count={column.items.length}

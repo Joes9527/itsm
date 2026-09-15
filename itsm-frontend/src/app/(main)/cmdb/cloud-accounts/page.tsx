@@ -259,8 +259,8 @@ export default function CloudAccountPage() {
   return (
     <Card>
       <div className='mb-4'>
-        <h1 className='text-2xl font-bold'>云账号管理</h1>
-        <p className='text-gray-500 mt-1'>管理云服务商的访问账号，用于资源同步和发现</p>
+        <h1 className='text-[24px] font-semibold'>云账号管理</h1>
+        <p className='text-muted mt-1'>管理云服务商的访问账号，用于资源同步和发现</p>
       </div>
 
       <Breadcrumb
@@ -277,7 +277,7 @@ export default function CloudAccountPage() {
       <div className='mb-4 flex flex-wrap items-center gap-3'>
         <Input
           placeholder='搜索账号名称/ID'
-          prefix={<Search className='text-gray-400' />}
+          prefix={<Search className='text-muted' />}
           value={searchText}
           onChange={e => setSearchText(e.target.value)}
           allowClear
@@ -299,7 +299,7 @@ export default function CloudAccountPage() {
             新增云账号
           </Button>
         </Space>
-        <span className='ml-auto text-sm text-gray-500'>共 {filteredData().length} 个账号</span>
+        <span className='ml-auto text-[13px] text-muted'>共 {filteredData().length} 个账号</span>
       </div>
 
       <Table

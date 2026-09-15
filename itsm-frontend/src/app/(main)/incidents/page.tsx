@@ -406,7 +406,7 @@ function IncidentsPageContent() {
     if (incidents.length === 0 && !loading) {
       return (
         <div className="py-12 text-center">
-          <div className="text-gray-400 mb-4">暂无事件记录</div>
+          <div className="text-muted mb-4">暂无事件记录</div>
           <Button type="primary" onClick={handleCreate}>
             创建第一个事件
           </Button>
@@ -567,7 +567,7 @@ function IncidentsPageContent() {
         cancelText="取消"
         confirmLoading={batchLoading}
       >
-        <div className="mb-3 text-sm text-gray-500">
+        <div className="mb-3 text-sm text-muted">
           将为已选择的 <span className="text-blue-600 font-semibold">{selectedRowKeys.length}</span> 个事件分派处理人
         </div>
         <Form form={assignForm} layout="vertical">

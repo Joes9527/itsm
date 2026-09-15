@@ -323,11 +323,11 @@ const CIList: React.FC = () => {
   ];
 
   return (
-    <div className="p-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+    <div className="min-w-0">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-[14px] mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">配置管理</h1>
-          <p className="text-gray-500 mt-1">管理和维护系统中的所有配置项(CI)及其关系</p>
+          <h1 className="text-[24px] font-semibold text-foreground">配置管理</h1>
+          <p className="text-muted mt-1">管理和维护系统中的所有配置项(CI)及其关系</p>
         </div>
         <Space wrap>
           <Button
@@ -340,7 +340,7 @@ const CIList: React.FC = () => {
         </Space>
       </div>
 
-      <Card className="rounded-lg shadow-sm border border-gray-200">
+      <Card className="rounded-[8px] shadow-none border border-border">
         {/* 搜索工具栏 */}
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <Input
@@ -349,7 +349,7 @@ const CIList: React.FC = () => {
             value={filters.search}
             onChange={event => handleSearchInputChange(event.target.value)}
             onClear={() => handleSearchInputChange('')}
-            prefix={<Search className="text-gray-400" />}
+            prefix={<Search className="text-muted" />}
             style={{ width: 200 }}
           />
           <Select
@@ -380,8 +380,8 @@ const CIList: React.FC = () => {
 
         {/* 批量操作工具栏 */}
         {selectedRowKeys.length > 0 && (
-          <div className="mb-4 p-3 bg-blue-50 rounded-lg flex items-center gap-3">
-            <span className="text-sm text-blue-700">
+          <div className="mb-4 p-3 bg-raised rounded-[8px] flex items-center gap-3">
+            <span className="text-[13px] text-foreground">
               已选择 <strong>{selectedRowKeys.length}</strong> 项
             </span>
             <Space>

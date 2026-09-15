@@ -114,15 +114,15 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
                     </Tag>
                   )}
                   {r.fieldName && (
-                    <div className="text-sm text-gray-600 mt-1">
+                    <div className="text-sm text-muted mt-1">
                       修改了 <Text code>{r.fieldName}</Text>
                     </div>
                   )}
                   {r.changeReason && (
-                    <div className="text-sm text-gray-500 mt-1">原因: {r.changeReason}</div>
+                    <div className="text-sm text-muted mt-1">原因: {r.changeReason}</div>
                   )}
                   {source === 'audit' && (r.method || r.path) && (
-                    <div className="text-xs text-gray-400 mt-1">
+                    <div className="text-xs text-muted mt-1">
                       {r.method} {r.path}{' '}
                       {r.statusCode !== undefined && (
                         <Tag color={r.statusCode >= 400 ? 'red' : 'default'}>{r.statusCode}</Tag>
@@ -131,9 +131,9 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
                   )}
                 </div>
                 <div className="text-right ml-4 shrink-0">
-                  <div className="text-sm text-gray-500">{formatDateTime(r.createdAt)}</div>
+                  <div className="text-sm text-muted">{formatDateTime(r.createdAt)}</div>
                   {r.oldValue !== undefined && r.newValue !== undefined && (
-                    <div className="text-xs text-gray-400">
+                    <div className="text-xs text-muted">
                       {String(r.oldValue) || '(空)'} → {String(r.newValue) || '(空)'}
                     </div>
                   )}
@@ -144,7 +144,7 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
         </Timeline>
       ) : (
         <Empty
-          image={<HistoryIcon size={48} className="text-gray-300 mx-auto" />}
+          image={<HistoryIcon size={48} className="text-muted mx-auto" />}
           description="暂无历史记录"
         />
       )}

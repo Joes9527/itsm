@@ -4,12 +4,7 @@
 
 import React from 'react';
 import { Card, Row, Col, Statistic, Typography } from 'antd';
-import {
-  CheckCircle,
-  Clock,
-  Users,
-  Settings,
-} from 'lucide-react';
+import { CheckCircle, Clock, Users, Settings } from 'lucide-react';
 import type { ApprovalChainStats } from '@/types/approval-chain';
 
 const { Title } = Typography;
@@ -42,14 +37,14 @@ export function ApprovalChainStatsCards({ stats, loading = false }: ApprovalChai
     {
       title: '平均步骤数',
       value: stats.avgStepsPerChain.toFixed(1),
-      icon: <Users className="w-5 h-5 text-purple-500" />,
-      color: '#722ed1',
+      icon: <Users className="w-5 h-5 text-muted" />,
+      color: 'var(--color-text-primary)',
     },
   ];
 
   return (
     <div className="mb-6">
-      <Title level={4} className="mb-4">
+      <Title style={{ fontSize: 15, fontWeight: 600 }} level={4} className="mb-4">
         审批链统计
       </Title>
       <Row gutter={[16, 16]}>

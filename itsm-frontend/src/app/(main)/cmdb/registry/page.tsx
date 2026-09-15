@@ -203,7 +203,7 @@ export default function ServiceGraphRegistryPage() {
   ];
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-[16px] md:p-[24px]">
       <ManagementPageHeader
         title="Service Graph Registry"
         description="把发现源、云服务、云账号和发现历史放到同一张接入注册表里，为 Service Graph 提供统一入口。"
@@ -221,10 +221,10 @@ export default function ServiceGraphRegistryPage() {
 
       <StatsOverview items={statsItems} />
 
-      <Card loading={loading} className="shadow-sm">
-        <Row gutter={[16, 16]}>
+      <Card loading={loading} className="shadow-none">
+        <Row gutter={[14, 14]}>
           <Col xs={24} md={12}>
-            <Card size="small" className="h-full bg-slate-50">
+            <Card size="small" className="h-full bg-raised">
               <Text type="secondary">最后刷新</Text>
               <div className="mt-2 text-lg font-semibold">
                 {refreshAt ? new Date(refreshAt).toLocaleString('zh-CN') : '-'}
@@ -232,7 +232,7 @@ export default function ServiceGraphRegistryPage() {
             </Card>
           </Col>
           <Col xs={24} md={12}>
-            <Card size="small" className="h-full bg-slate-50">
+            <Card size="small" className="h-full bg-raised">
               <Text type="secondary">注册中心说明</Text>
               <div className="mt-2">
                 先定义发现源和云服务，再把云账号与 CI、关系和对账串起来，才能形成可持续的图谱治理闭环。

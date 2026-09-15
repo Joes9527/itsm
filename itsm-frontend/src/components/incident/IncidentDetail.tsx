@@ -1006,7 +1006,7 @@ const IncidentDetailContent: React.FC<IncidentDetailProps> = ({
               {data.resolutionSteps.map((step, index) => (
                 <Timeline.Item key={index}>
                   <p>{(step as unknown as { description?: string }).description || '处理步骤'}</p>
-                  <span style={{ fontSize: '12px', color: '#999' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
                     {(step as unknown as { timestamp?: string }).timestamp}
                   </span>
                 </Timeline.Item>
@@ -1114,7 +1114,7 @@ const IncidentDetailContent: React.FC<IncidentDetailProps> = ({
         cancelText='取消'
         width={520}
       >
-        <div style={{ marginBottom: 16, color: '#8c8c8c', fontSize: 13 }}>
+        <div style={{ marginBottom: 16, color: 'var(--color-text-muted)', fontSize: 13 }}>
           升级后事件严重程度将提升为“严重”，并记录影响评估与审计日志，此操作不可撤销。
         </div>
         <Form form={majorForm} layout='vertical' onFinish={handleMajorSubmit}>
@@ -1198,7 +1198,7 @@ const IncidentDetailContent: React.FC<IncidentDetailProps> = ({
             </Select>
           </Form.Item>
           {data?.problemId && (
-            <div style={{ padding: '8px 12px', background: '#f5f5f5', borderRadius: 4 }}>
+            <div style={{ padding: '8px 12px', background: 'var(--color-bg-tertiary)', borderRadius: 6 }}>
               <AlertCircle style={{ marginRight: 8, color: '#faad14' }} />
               <span>此事件已关联问题记录 #{data.problemId}</span>
             </div>

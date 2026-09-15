@@ -212,7 +212,7 @@ const ChangeImpactAnalysis: React.FC<ChangeImpactAnalysisProps> = ({
 
   // Transfer组件的渲染函数
   const renderSystemItem = (item: SystemItem) => (
-    <div className="p-2 border border-gray-200 rounded mb-2">
+    <div className="p-2 border border-border rounded mb-2">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
           {getSystemIcon(item.category)}
@@ -247,11 +247,11 @@ const ChangeImpactAnalysis: React.FC<ChangeImpactAnalysisProps> = ({
       case '缓存':
         return <Database className="w-4 h-4 text-red-500" />;
       case '监控':
-        return <Target className="w-4 h-4 text-gray-500" />;
+        return <Target className="w-4 h-4 text-muted" />;
       case '备份':
         return <Shield className="w-4 h-4 text-teal-500" />;
       default:
-        return <Server className="w-4 h-4 text-gray-500" />;
+        return <Server className="w-4 h-4 text-muted" />;
     }
   };
 
