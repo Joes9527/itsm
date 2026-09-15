@@ -25,7 +25,7 @@ it('preserves standalone callback after a confirmed command even when task refre
   const onTaskChange = jest.fn().mockRejectedValue(new Error('主体离线'));
   render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" onTaskChange={onTaskChange} />);
   fireEvent.click(await screen.findByRole('button', { name: '领取任务' }));
-  expect(await screen.findByText('操作已完成，部分数据更新失败')).toBeInTheDocument();
+  expect(await screen.findByText('操作已完成，首次更新时部分数据读取失败')).toBeInTheDocument();
   expect(onTaskChange).toHaveBeenCalledTimes(1);
   expect(screen.getByRole('button', { name: '领取任务' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: '重试' }));
@@ -53,7 +53,7 @@ it('clears tasks when the standalone parent refresh reports final denial after a
   const onTaskChange = jest.fn().mockRejectedValue(new ApiError('工单已撤权', 403));
   render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" onTaskChange={onTaskChange} />);
   fireEvent.click(await screen.findByRole('button', { name: '领取任务' }));
-  await screen.findByText('操作已完成，部分数据更新失败');
+  await screen.findByText('操作已完成，首次更新时部分数据读取失败');
   expect(screen.queryByRole('button', { name: '领取任务' })).not.toBeInTheDocument();
   expect(BPMNWorkflowApi.claimTask).toHaveBeenCalledTimes(1);
 });

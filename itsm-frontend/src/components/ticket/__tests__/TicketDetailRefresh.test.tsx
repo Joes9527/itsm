@@ -75,7 +75,7 @@ it.each(['claim', 'complete'])('refreshes directed outcomes after %s and retries
   } else {
     (TicketApi.getTicket as jest.Mock).mockRejectedValueOnce(new Error('主体离线'));
   }
-  expect(await screen.findByText('操作已完成，部分数据更新失败')).toBeInTheDocument();
+  expect(await screen.findByText('操作已完成，首次更新时部分数据读取失败')).toBeInTheDocument();
   expect(command).toHaveBeenCalledTimes(1);
   expect(TicketApi.getTicket).toHaveBeenCalledTimes(2);
   expect(BPMNWorkflowApi.getTicketApprovalDecisions).toHaveBeenCalledTimes(2);
@@ -83,6 +83,13 @@ it.each(['claim', 'complete'])('refreshes directed outcomes after %s and retries
   expect(TicketCommentApi.getComments).toHaveBeenCalledTimes(1);
   fireEvent.click(screen.getByLabelText('重试'));
   await waitFor(() => expect(action === 'claim' ? TicketApi.getTicket : BPMNWorkflowApi.getTicketApprovalDecisions).toHaveBeenCalledTimes(3));
+  await waitFor(() => expect(screen.queryByLabelText('重试')).not.toBeInTheDocument());
+  expect(screen.getByText('操作已完成，首次更新时部分数据读取失败')).toBeInTheDocument();
+  expect(screen.queryByText('操作已完成，部分数据更新失败')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText('刷新工单详情'));
+  await waitFor(() => expect(action === 'claim' ? TicketApi.getTicket : BPMNWorkflowApi.getTicketApprovalDecisions).toHaveBeenCalledTimes(4));
+  await waitFor(() => expect(screen.queryByText('部分区域更新失败')).not.toBeInTheDocument());
+  expect(screen.getByText('操作已完成，首次更新时部分数据读取失败')).toBeInTheDocument();
   expect(command).toHaveBeenCalledTimes(1);
 });
 

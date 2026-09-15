@@ -198,7 +198,7 @@ function ProcessTasksPanel({ ticketId, recordClass, onTaskChange, session }: {
       <DetailReadState error={resource.error} loading={resource.loading || busy} reload={async () => { if (!locked.current) await resource.reload(); }} />
       {mutationError && !selected && <Alert type="error" showIcon title={mutationError} />}
       {submitted && <p role="status">任务操作已提交，请以刷新后的状态为准。</p>}
-      {updateFailed && <Alert type="warning" showIcon title="操作已完成，部分数据更新失败" />}
+      {updateFailed && <Alert type="warning" showIcon title="操作已完成，首次更新时部分数据读取失败" />}
       {resource.loading && !resource.ready && <p role="status">流程任务加载中...</p>}
       {resource.ready && !resource.loading && !resource.error && activeTasks.length === 0 && (
         <p className="text-sm text-muted">当前账号暂无可见的活动任务</p>
