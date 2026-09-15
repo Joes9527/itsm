@@ -1,0 +1,23 @@
+diff --git a/itsm-frontend/src/app/(main)/incidents/__tests__/command-actions.test.tsx b/itsm-frontend/src/app/(main)/incidents/__tests__/command-actions.test.tsx
+index 502430ba..b5a9e465 100644
+--- a/itsm-frontend/src/app/(main)/incidents/__tests__/command-actions.test.tsx
++++ b/itsm-frontend/src/app/(main)/incidents/__tests__/command-actions.test.tsx
+@@ -46,3 +46,18 @@ test('list closure reuses the original version after an uncertain response and r
+   expect(calls[1]).toEqual(calls[0]);
+   await waitFor(()=>expect(IncidentAPI.listIncidents).toHaveBeenCalledTimes(3));
+ });
++
++test('review: a retired page must not submit a retained static confirmation', async () => {
++  (IncidentAPI.closeIncident as jest.Mock).mockResolvedValue({workItemId:101,version:4,status:'closed',replayed:false});
++  const page = render(<IncidentsPage />);
++  await waitFor(()=>expect(IncidentAPI.listIncidents).toHaveBeenCalledTimes(1));
++  fireEvent.click(await screen.findByRole('button',{name:'Select incidents'}));
++  fireEvent.click(await screen.findByRole('button',{name:'批量关闭'}));
++  const dialog = await screen.findByRole('dialog');
++  fireEvent.change(within(dialog).getByLabelText('关闭说明'),{target:{value:'Old session confirmation'}});
++  page.unmount();
++  const lingering = screen.queryByRole('dialog');
++  if (lingering) fireEvent.click(within(lingering).getByRole('button',{name:/确|OK/}));
++  await new Promise(resolve=>setTimeout(resolve,30));
++  expect(IncidentAPI.closeIncident).not.toHaveBeenCalled();
++});

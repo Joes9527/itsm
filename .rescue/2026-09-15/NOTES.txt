@@ -1,0 +1,109 @@
+抢救记录：client-review 追加的回归用例
+=====================================
+
+来源（/tmp 下的游离 worktree，随时可能被系统清理）
+  路径   : /tmp/itsm-client-review-7f7862b9
+  HEAD   : 7f7862b9  fix(frontend): align current workbench command contracts for GA
+  状态   : detached HEAD，未提交
+
+被抢救的内容
+  文件   : itsm-frontend/src/app/(main)/incidents/__tests__/command-actions.test.tsx
+  改动   : 追加 1 个测试用例（+15 行，纯 EOF 追加，无其他改动）
+  用例名 : 'review: a retired page must not submit a retained static confirmation'
+  改动前 : 48 行（见同目录 baseline-7f7862b9-command-actions.test.tsx）
+  改动后 : 63 行
+  改动后 md5: 8e1df7dd756a9295a96ddbdfcdf524d1
+
+未直接落入「对应分支工作区」的原因
+  包含 7f7862b9 且已有 worktree 的分支有 6 个，其中语义最贴近的是
+  codex/fix/ga-workbench-client-contract（工作区 .worktrees/ga-workbench-client-contract）。
+  但该工作区已推进到 93480226 "fix(frontend): scope batch confirmations and retire
+  successful intents"，同一文件已重构为 67 行，并已内含相邻用例
+  'destroys the pending batch confirmation when the tenant changes'，
+  上下文不匹配，本补丁无法直接 git apply。
+
+如何应用
+  # 方式 A：在某工作区先回到补丁基线（7f7862b9）
+  git -C <worktree> checkout 7f7862b9 -- itsm-frontend/src/app/(main)/incidents/__tests__/command-actions.test.tsx
+  git -C <worktree> apply /home/administrator/project/itsm/.rescue/2026-09-15/0001-client-review-retired-page-no-submit.patch
+
+  # 方式 B：手工追加到 93480226 版本的文件末尾（补丁为纯 EOF 追加，需自行确认断言仍成立）
+
+  # 反向校验补丁与来源一致（在 /tmp/itsm-client-review-7f7862b9 中）
+  git -C /tmp/itsm-client-review-7f7862b9 apply --check -R \
+    /home/administrator/project/itsm/.rescue/2026-09-15/0001-client-review-retired-page-no-submit.patch
+
+备注
+  该用例名在所有分支/所有工作区中均不存在，即从未被提交过。
+
+------------------------------------------------------------
+2026-09-15 实测结论（重要：本用例不是一个「绿色回归用例」，而是「缺陷复现用例」）
+------------------------------------------------------------
+在两地实跑 jest（--reporters=default --coverage=false，"command-actions"）：
+
+  [基线] /tmp/itsm-client-review-7f7862b9  (HEAD 7f7862b9, 48 行版本 + 本用例)
+    → 失败，原因正是断言本身：
+      expect(jest.fn()).not.toHaveBeenCalled()
+      Received number of calls: 1
+      1: 7, {"operationId":"first-close","reason":"Old session confirmation","version":3}
+    即：页面卸载后，保留的静态确认框仍真的发起了关闭请求。这就是 reviewer 要复现的缺陷。
+
+  [已修复] .worktrees/ga-workbench-client-contract  (HEAD 93480226, 67 行版本 + 本用例手工追加)
+    → closeIncident 不再被调用（缺陷已修），但用例仍红，原因变了：
+      抛出 "会话已变化，请重新确认操作"
+      来源 src/app/(main)/incidents/page.tsx:67 assertSubmissionContext()
+      该守卫在 93480226 新增了 mounted 检查：
+        if (!mounted.current || before.user?.id !== current.user?.id || ...) throw ...
+    且该抛错是【异步】的（卸载后的未处理 rejection）：
+      实测 DIAG_LINGERING=true，但用 try/catch 包住那次 click 并不能捕获（无 DIAG_CAUGHT），
+      故无法简单地靠 try/catch 让其变绿。
+
+结论
+  · 该用例无法原样落在 93480226 上（会让分支测试变红，不能提交）。
+  · 其记录的缺陷已由 93480226 "scope batch confirmations and retire successful intents" 修复，
+    价值体现在「复现证据」而非「回归防线」。
+  · 追加后已 git checkout 还原，.worktrees/ga-workbench-client-contract 保持干净（67 行）。
+  · 若确需一条能在 93480226 上通过的回归用例，需改写断言形态（把异步守卫抛错纳入预期），
+    而不是照搬本补丁。
+
+------------------------------------------------------------
+2026-09-15 最终方案：绿色适配版已落地（未提交，待人工确认）
+------------------------------------------------------------
+落地位置
+  .worktrees/ga-workbench-client-contract/itsm-frontend/src/app/(main)/incidents/__tests__/command-actions.test.tsx
+  改动量：+14 行（EOF 追加 1 个用例），文件 67 → 81 行
+  HEAD 仍为 93480226，改动留在工作区，未 commit。
+
+适配版的差异（相对 reviewer 原用例）
+  原：page.unmount(); const lingering = screen.queryByRole('dialog');
+      if (lingering) fireEvent.click(within(lingering).getByRole('button',{name:/确|OK/}));
+      await new Promise(r=>setTimeout(r,30));
+
+  改：page.unmount();
+      await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await new Promise(r=>setTimeout(r,30));
+
+  即：不去点那个"残留对话框"，而是断言它必须被回收。
+  实测 DIAG_LINGERING=true（卸载后对话框 DOM 仍在，故原用例必然点到它）；
+  93480226 的卸载清理会销毁确认框，等待其消失即可表达"退役后不得再提交"这一契约。
+
+抛错机制（实测确认）
+  page.tsx:67 assertSubmissionContext() 在卸载后必然抛 '会话已变化，请重新确认操作'。
+  调用链：fireEvent.click → antd ActionButton.js:93 的 async onClick → page.tsx:317。
+  因该 onClick 是 async，抛错实际变成 promise rejection：
+  Error 堆栈里带同步调用链，但 try/catch 抓不到（实测无 DIAG_CAUGHT），
+  所以"吞错"路线不可行，必须改断言形态。
+
+红/绿双验证（--reporters=default --coverage=false）
+  [缺陷版] 7f7862b9 + 适配版用例
+     → 失败（waitFor 超时：卸载后对话框未回收，正是该缺陷的表现）
+     临时验证文件 zz-diag-adapted.test.tsx 已删除，源工作区状态未受影响
+  [修复版] 93480226 + 适配版用例
+     → ✓ list closure reuses the original version ... (1718 ms)
+       ✓ destroys the pending batch confirmation when the tenant changes (857 ms)
+       ✓ a retired page must not submit a retained static confirmation (466 ms)
+       Tests: 3 passed, 3 total
+
+因此这是一条有效的回归测试：修复前红、修复后绿。
+
+
