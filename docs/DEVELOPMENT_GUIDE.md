@@ -1,6 +1,6 @@
 # 开发与运维手册 (Development & Operations Guide)
 
-> 在维护者的 Windows/WSL 联调环境工作前，先读[本机开发环境](development-environment.md)。其中记录已迁移源码入口、固定运行副本、3001/8080/5173/8000 端口、ITSM 专用修复二进制和维护约束。下面的通用安装/初始化命令不用于直接重建现有验收实例。
+> **WSL 联调环境入口：** 先读[本机开发环境](development-environment.md)。该环境维护的 ITSM 前端固定使用 3010；运行状态、进程身份、构建版本和启动配置以运行栈记录为准。GA 文件名、目录名或端口占用都不能单独证明环境身份。查看或操作已登记进程时使用 `python3 scripts/wsl-stack.py status|start|stop [service]`，不要用通用脚本直接重建现有验收实例。3000 由 WSL Langfuse 使用，3001 不再作为 ITSM 前端入口。
 
 本文档维护 ITSM 项目的开发命令、部署运维和验证流程。API/DTO、前端和源文件命名的公共规则见[共享工程约定](engineering-conventions.md)，对所有开发者及 Coding Agent 同样适用；架构和领域约束见 [AGENTS.md](../AGENTS.md)。
 
@@ -109,7 +109,7 @@ ITSM_BACKEND_URL=http://127.0.0.1:8080 NEXT_PUBLIC_API_URL='' npm run build
 NODE_ENV=production HOSTNAME=127.0.0.1 PORT=3301 npm start
 ```
 
-`npm run build` 会准备 `.next/standalone`，包含 `server.js`、依赖、静态资源和 `public`。发布可复制该完整目录并执行 `NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3001 node server.js`；不要只复制 `server.js`。保留启动描述和上一发布目录，切换后验证登录、同源 `/api/v1/health`、静态资源及已登录业务页面。本机固定路径与启动描述见[本机开发环境](development-environment.md)。
+`npm run build` 会准备 `.next/standalone`，包含 `server.js`、依赖、静态资源和 `public`。发布可复制该完整目录并执行 `NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3010 node server.js`；不要只复制 `server.js`。保留启动描述和上一发布目录，切换后验证登录、同源 `/api/v1/health`、静态资源及已登录业务页面。本机固定路径与启动描述见[本机开发环境](development-environment.md)。
 
 工作流分组使用 `/workflow`，该页面跳转 `/admin/workflows`。三个默认子入口为工作流管理、流程设计器和流程实例。审批链规则使用已有页面 `/admin/approval-chains`，旧 `/workflow/approval-chains` 跳转到该页面；`workflow` 菜单修复会同步迁移旧菜单地址，保留已有分组、权限和可见性配置。动态菜单仍由后端按租户、角色和权限过滤。升级已有租户的旧菜单时，使用定向命令，而非全量初始化：
 

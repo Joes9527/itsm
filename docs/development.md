@@ -226,7 +226,7 @@ cd itsm-frontend && rm -rf node_modules && npm install
 ```bash
 # Check what's using the port
 lsof -i :8090  # Backend
-lsof -i :3000  # Frontend
+lsof -i :3010  # Frontend
 lsof -i :5432  # PostgreSQL
 ```
 

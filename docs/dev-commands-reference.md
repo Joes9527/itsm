@@ -87,7 +87,7 @@ make dev-doctor            # 诊断环境问题（端口冲突、Docker 状态�
 
 | 服务 | 地址 |
 |------|------|
-| 前端 | http://localhost:3000 |
+| 前端 | http://localhost:3010 |
 | 后端 API | http://localhost:8090 |
 | Swagger 文档 | http://localhost:8090/swagger |
 | 登录账号 | admin / admin123 |
@@ -478,7 +478,7 @@ curl -s http://localhost:8090/swagger/doc.json | jq '.paths | keys'
 
 # 检查端口占用
 lsof -nP -iTCP:8090 -sTCP:LISTEN
-lsof -nP -iTCP:3000 -sTCP:LISTEN
+lsof -nP -iTCP:3010 -sTCP:LISTEN
 ```
 
 ---
@@ -537,7 +537,7 @@ docker stats itsm-backend-dev itsm-frontend-dev
 
 ```bash
 # 检查端口占用
-lsof -nP -iTCP:8090 -iTCP:3000 -iTCP:5432 -iTCP:6379 -iTCP:9001
+lsof -nP -iTCP:8090 -iTCP:3010 -iTCP:5432 -iTCP:6379 -iTCP:9001
 
 # 或一键检查所有开发相关端口
 make dev-doctor

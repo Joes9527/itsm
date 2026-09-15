@@ -88,7 +88,7 @@ make dev-start-docker
 # 等价：docker compose --env-file .env -f docker-compose.dev.yml --profile dev up -d --build
 
 # 4. 访问
-#   前端  http://localhost:3000
+#   前端  http://localhost:3010
 #   后端  http://localhost:8090/api/v1/health
 #   默认账号 admin / admin123（生产环境务必修改！）
 ```

@@ -91,6 +91,30 @@ test('standalone start fails with an actionable message when build output is abs
   assert.match(result.stderr, /Run "npm run build"/);
 });
 
+test('standalone start defaults the frontend listener to port 3010', () => {
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'itsm-standalone-port-'));
+  const standalone = path.join(fixture, '.next', 'standalone');
+  fs.mkdirSync(standalone, { recursive: true });
+  fs.writeFileSync(
+    path.join(standalone, 'server.js'),
+    `require('node:fs').writeFileSync(process.env.ITSM_TEST_PORT_LOG, process.env.PORT || '');\n`
+  );
+  const portLog = path.join(fixture, 'port.log');
+
+  const result = spawnSync(
+    process.execPath,
+    [path.join(root, 'itsm-frontend', 'scripts', 'start-standalone.mjs')],
+    {
+      cwd: fixture,
+      env: { ...process.env, PORT: '', ITSM_TEST_PORT_LOG: portLog },
+      encoding: 'utf8',
+    }
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.readFileSync(portLog, 'utf8'), '3010');
+});
+
 test('standalone preparation copies static and public assets into the runtime bundle', () => {
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'itsm-standalone-prepare-'));
   fs.mkdirSync(path.join(fixture, '.next', 'standalone'), { recursive: true });
