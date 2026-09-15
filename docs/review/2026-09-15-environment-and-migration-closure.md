@@ -87,8 +87,9 @@ context** 上、由 `database/rls.AcquireConn` 读取。
 3. ~~迁移输入与 CLI 归档~~ **已于 2026-09-15 完成**：导出身份（sha256/条数/时间）、CLI 缺席证据
    （目录已不存在、git 无历史）与**由数据反推的重建规则**记录在
    `docs/migrations/2026-09-15-legacy-migration-input-and-rule-archive.md`（+ manifest）；
-   原始导出文件复制到受控私有归档目录。仍不可复现的部分（库内 3,000 个部门 code 无来源、
-   `function_line` 约定、297 个导出 id 缺失）在该文档 §4 如实列明。
+   原始导出文件复制到受控私有归档目录。归档时进一步查明：**部门数据是树结构**（1 根、11 层、深度与 code
+   长度对应），库内多出的 3,000 个部门里 1,083 个是中间层级、**2,323 个（77.4%）的名称来自用户
+   `departmentName` 路径分段**，仅 677 个仍待解释；`function_line` 约定与 297 个缺失 id 仍不可复现，见该文档 §4。
 4. ~~`d395dbd5…` 制品的独立复审~~ **已于 2026-09-15 由人工复审者批准**
    （复审包 §2–§4 结论通过，§5 未验证项转为后续跟踪项）；`reviewed_binary_sha256` 已更新为
    `d395dbd5…`，manifest 留有 review record。
