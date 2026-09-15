@@ -1,5 +1,7 @@
 # 开发与运维手册 (Development & Operations Guide)
 
+> **Coding Agent 当前结构目标：** [047_bpmn_assignment_source](development-environment.md#selected-schema-target-047)。Dev 与迁移验证均面向该目标；实际升级状态见[唯一清单](superpowers/plans/2026-09-15-migration-validation-ledger.md#schema-target-status)。下文较早迁移说明不表示当前只需到031、036或046。
+
 > **WSL 联调环境入口：** 先读[本机开发环境](development-environment.md)。该环境维护的 ITSM 前端固定使用 3010；运行状态、进程身份、构建版本和启动配置以运行栈记录为准。GA 文件名、目录名或端口占用都不能单独证明环境身份。查看或操作已登记进程时使用 `python3 scripts/wsl-stack.py status|start|stop [service]`，不要用通用脚本直接重建现有验收实例。3000 由 WSL Langfuse 使用，3001 不再作为 ITSM 前端入口。
 
 > **开发与迁移验证：** 遵循[双数据库用途与版本约定](development-environment.md#development-and-migration-validation-database-contract)：同一新版代码，分别使用 Dev 和克隆／隔离验证库，两库结构均须匹配所选代码。Dev 落后时规划规范升级，禁止靠恢复旧代码切库；后续状态只维护在[唯一续办清单](superpowers/plans/2026-09-15-migration-validation-ledger.md#development-restoration-update)。

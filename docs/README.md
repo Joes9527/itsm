@@ -1,5 +1,7 @@
 # ITSM 文档中心
 
+> **开发／迁移任务先读：[当前结构目标047](development-environment.md#selected-schema-target-047)及[实际数据库状态](superpowers/plans/2026-09-15-migration-validation-ledger.md#schema-target-status)。目标版本与已部署状态分开记录。**
+
 - [Ticket 详情体验统一实施计划](./superpowers/plans/2026-09-15-ticket-detail-experience-unification.md)：六项任务及最终复审完成；浏览器 7/7、最终并发回归 98/98，已提交 PR #35。
 
 - [Ticket 详情体验统一设计（implemented）](./superpowers/specs/2026-09-15-ticket-detail-experience-unification-design.md)：统一刷新、局部恢复、编辑保护和当前／历史任务展示。
