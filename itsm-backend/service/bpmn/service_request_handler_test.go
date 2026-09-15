@@ -481,12 +481,6 @@ func TestServiceRequestHandler_SetLinkedTicketStatus_AlwaysTenantScoped(t *testi
 	assert.Equal(t, "open", after.Status, "跨租户请求不得改写关联工单状态")
 }
 
-type requestCallbackDirectory struct{}
-
-func (requestCallbackDirectory) Open(_ context.Context, tx *ent.Tx, _ int) (*ent.Client, func() error, error) {
-	return tx.Client(), func() error { return nil }, nil
-}
-
 func requestAssignmentContext(t *testing.T, client *ent.Client, tenant int, item *ent.Ticket) context.Context {
 	t.Helper()
 	ctx := tenantctx.WithTenantID(context.Background(), tenant)

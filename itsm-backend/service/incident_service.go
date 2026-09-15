@@ -20,7 +20,6 @@ import (
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcategory"
-	"itsm-backend/ent/user"
 
 	entsql "entgo.io/ent/dialect/sql"
 	"go.uber.org/zap"
@@ -451,22 +450,6 @@ func canAssignIncidentStatus(status string) bool {
 	default:
 		return false
 	}
-}
-
-func (s *IncidentService) validateIncidentAssignee(ctx context.Context, assigneeID, tenantID int) error {
-	if assigneeID <= 0 {
-		return common.NewValidationError("invalid assignee id", nil)
-	}
-	assigneeExists, err := s.client.User.Query().
-		Where(user.IDEQ(assigneeID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).
-		Exist(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to validate assignee: %w", err)
-	}
-	if !assigneeExists {
-		return common.NewValidationError("assignee not found or inactive", nil)
-	}
-	return nil
 }
 
 // requireIncidentExecutionTx resolves the owning WorkItem in the caller's write transaction.

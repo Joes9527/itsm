@@ -135,9 +135,7 @@ func TestIncidentService_CreateIncidentRejectsCrossTenantAssigneeAtomically(t *t
 	eventCount, err := client.IncidentEvent.Query().Count(ctx)
 	require.NoError(t, err)
 	assert.Zero(t, eventCount)
-	// 这个校验发生在 CreateIncident 打开事务之前（validateIncidentAssignee 是
-	// tx.Begin 之前的前置校验），所以连 WorkItem 都不应该被创建——但明确断言总比
-	// 依赖"没打开事务所以自然不会有"这条隐含推理更可靠，尤其是以后如果校验顺序被调整。
+	// 创建被拒绝时，专业记录、事件和基础 WorkItem 都必须保持原子性，不留下部分记录。
 	ticketCount, err := client.Ticket.Query().Count(ctx)
 	require.NoError(t, err)
 	assert.Zero(t, ticketCount, "校验失败必须连 WorkItem 都不留下")

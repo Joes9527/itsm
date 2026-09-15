@@ -6,12 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processauditlog"
-	"itsm-backend/service/bpmn"
 )
 
 func TestCallbackProvenanceExactEvidence(t *testing.T) {
@@ -72,20 +69,4 @@ type callbackFixtureDirectory struct{}
 
 func (callbackFixtureDirectory) Open(_ context.Context, tx *ent.Tx, _ int) (*ent.Client, func() error, error) {
 	return tx.Client(), func() error { return nil }, nil
-}
-
-func callbackAssignmentTestContext(t *testing.T, client *ent.Client, actor *ent.User, target, workItemID int) context.Context {
-	t.Helper()
-	ctx := tenantctx.WithTenantID(context.Background(), target)
-	key := uuid.NewString()
-	deployment := client.ProcessDeployment.Create().SetDeploymentID(key).SetDeploymentName(key).SetTenantID(target).SaveX(ctx)
-	definition := client.ProcessDefinition.Create().SetKey(key).SetName(key).SetBpmnXML([]byte("<definitions/>")).SetDeploymentID(deployment.ID).SetTenantID(target).SaveX(ctx)
-	instance := client.ProcessInstance.Create().SetProcessInstanceID(key).SetProcessDefinitionKey(key).SetProcessDefinitionID(definition.ID).SetTenantID(target).SetBusinessID(workItemID).SetBusinessType("incident").SaveX(ctx)
-	ctx = context.WithValue(ctx, callbackActorKey{}, callbackActor{actor.ID, actor.TenantID, target, "bpmn_start"})
-	tx, err := client.Tx(ctx)
-	require.NoError(t, err)
-	_, err = newBPMNCallbackOutboxForTest(client, nil, time.Now()).enqueue(ctx, tx.Client(), bpmnCallbackEnqueueRequest{ExecutionKey: key, TenantID: target, ProcessInstanceID: instance.ID, CallbackKind: "service_task", HandlerID: "test", TaskType: "test", ElementID: "assign", Action: "assign_incident"}, tx)
-	require.NoError(t, err)
-	require.NoError(t, tx.Commit())
-	return bpmn.WithBPMNCallbackExecutionKey(context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, target), key)
 }

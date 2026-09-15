@@ -7,11 +7,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/lib/pq"
+	"github.com/lib/pq/pqerror"
 	"github.com/stretchr/testify/require"
 )
 
 func TestIncidentMutationSerializationConflictIsRetryableAndSanitized(t *testing.T) {
-	for _, code := range []pq.ErrorCode{"40001"} {
+	for _, code := range []pqerror.Code{"40001"} {
 		recorder := httptest.NewRecorder()
 		ctx, _ := gin.CreateTestContext(recorder)
 		respondIncidentMutationError(ctx, fmt.Errorf("assign: %w", &pq.Error{Code: code, Message: "private database detail"}))
