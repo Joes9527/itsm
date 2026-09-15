@@ -751,7 +751,14 @@ class Evidence:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m pytest scripts/__tests__/test_migration_report_privacy.py -q`
-Expected: `5 passed`
+Expected: `8 passed`
+
+Notes recorded while executing this task:
+1. `EntityCheck` must be decorated `@runtime_checkable`, otherwise the registry test
+   (`isinstance(REGISTRY['departments'], EntityCheck)`) raises instead of asserting.
+2. `DepartmentsCheck.fetch_target` does not need a `parent_lookup` argument: the query already
+   returns the parent code, so the call is `query_rows(sql, ('code', 'name', 'parent_id'))`.
+3. Root and unresolved samples are sorted before slicing so the evidence is stable between runs.
 
 - [ ] **Step 5: Commit**
 
