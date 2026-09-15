@@ -99,6 +99,23 @@ npm run theme:check      # 检查已提交的生成 CSS 是否与 token 源一�
 
 主题的权威源是 `itsm-frontend/src/design-system/theme-tokens.json`，展开逻辑位于 `itsm-frontend/src/design-system/expand-theme-tokens.mjs`，生成产物是 `itsm-frontend/src/styles/generated-theme-tokens.css`。不要直接编辑生成 CSS；修改权威源或展开逻辑后运行 `npm run theme:generate`，并把源文件与生成产物一同提交。`theme:check` 会检测漂移，并已接入前端类型检查前置步骤；开发与生产构建使用现有 npm pre-hook 自动重新生成。
 
+### 迁移数据验证（工具包）
+
+```bash
+# 离线自检与单元测试（不连库、不联网；CI 跑这些）
+python3 -m pytest scripts/__tests__ -q
+python3 -m scripts.migration self-test
+
+# 真实校验（需要导出文件与目标库，按 runbook 手工执行）
+python3 -m scripts.migration verify         --profile scripts/migration/profiles/legacy-itsm-2026-08.yaml --evidence-out e.json
+python3 -m scripts.migration verify-profile --profile scripts/migration/profiles/legacy-itsm-2026-08.yaml
+python3 -m scripts.migration backfill       --profile scripts/migration/profiles/legacy-itsm-2026-08.yaml --entity users
+```
+
+`--apply` 才会写入，且需要 `write.enabled: true` 与环境变量；退出码
+`1 运行错误 > 2 预检阻塞 > 4 规则漂移 > 3 未归因差异`。详见
+[docs/migrations/runbook-data-migration-validation.md](migrations/runbook-data-migration-validation.md)。
+
 ### 后端 (itsm-backend)
 
 ```bash

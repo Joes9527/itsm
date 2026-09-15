@@ -61,7 +61,7 @@ context** 上、由 `database/rls.AcquireConn` 读取。
 
 ## 4. 旧主数据迁移验证结论
 
-真值 = SOP 指定的导出文件；口径 = 逐项差异归因；工具 = `scripts/verify_itsm_migration_data.py`
+真值 = SOP 指定的导出文件；口径 = 逐项差异归因；工具 = `scripts/migration（工具包）`
 （只读、可自检）；报告 = `docs/migrations/2026-09-15-legacy-migration-validation-report.md`。
 
 - **血统**：四个库（运行环境、专用迁移库、DEV、baseline）携带**同一批 2026-08-19** 迁移数据

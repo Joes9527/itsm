@@ -42,7 +42,7 @@ SOP《ITSM_Legacy_Master_Data_Migration_SOP.md》§3/§4 引用 `itsm-backend/cm
 | 仓库判定 | `org_type=warehouse` **按名称**（含"库/仓/物流"） | 737 中 728 命中；非仓库行 0 命中 |
 | 部门集合 | 库内 7,975 = 与导出 id 精确匹配 4,975 + 仅导出 297 + **仅库中 3,000** | 见 §4 |
 
-补充用工具：`scripts/verify_itsm_migration_data.py`（只读，可重复，`--self-test` 不连库）。
+补充用工具：`scripts/migration（工具包）`（只读，可重复，`--self-test` 不连库）。
 
 ## 4. 部门是树：库内多出的 3,000 个部门基本已解释
 
@@ -83,7 +83,7 @@ SOP《ITSM_Legacy_Master_Data_Migration_SOP.md》§3/§4 引用 `itsm-backend/cm
 - 私有归档目录：`/home/administrator/.local/state/itsm-migration-archive-20260915/`
   （4 个文件，均已校验与源文件 sha256 一致；不属于本仓库，不进版本控制）
 - 源位置：`/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main/data/`（Synology 挂载，可能变动）
-- 复现校验：`python3 scripts/verify_itsm_migration_data.py --evidence-out <path>`
+- 复现校验：`python3 scripts/migration（工具包） --evidence-out <path>`
 
 ## 6. 后续动作（本次未做，按用户裁定）
 

@@ -2479,6 +2479,16 @@ grep -n "scripts/migration" docs/DEVELOPMENT_GUIDE.md | head -3 || true
 Then add to `docs/DEVELOPMENT_GUIDE.md`, in the command/reference section, the same three lines that
 the runbook gives in §2, plus the offline test command. Use the file's existing heading depth.
 
+Notes recorded while executing this task:
+1. Removing the scripts left stale `scripts/__pycache__/*.pyc` for them, which still matched a grep for
+   the old names; the bytecode is cleaned as part of the removal.
+2. Because Task 10 regenerated the evidence in the toolkit's shape, swapping the script path in the
+   2026-08 report was not enough: the report now documents the new evidence keys, the re-run numbers
+   (4,975 / 297 / 3,000, exit code 3) and the fact that the lineage databases agree, so a reader is
+   not left looking for keys that no longer exist.
+3. The development guide gained a "迁移数据验证（工具包）" subsection under its command section, with the
+   offline commands (what CI runs) and the live commands.
+
 - [ ] **Step 5: Commit**
 
 ```bash

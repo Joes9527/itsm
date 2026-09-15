@@ -10,7 +10,7 @@
   - `itsm_users.json` sha256 `fe794d35abcbffb9…`（14,393 条，文件时间 2026-08-19）
 - **验收口径**：逐项差异归因——每个差异桶要么有可信解释与证据，要么列入"待裁定"
 - **证据**：`docs/migrations/2026-09-15-legacy-migration-validation-evidence.json`（由
-  `scripts/verify_itsm_migration_data.py` 生成，全程只读）
+  `scripts/migration（工具包）` 生成，全程只读）
 - **说明**：本次**未修改任何数据**；修复迁移属于另一个任务
 
 ## 1. 血统：只有一批迁移，没有重复执行
@@ -108,8 +108,8 @@ H84946 H84947 D33743 D44967 D50002 D52745`
 ## 4. 复现方式
 
 ```bash
-python3 scripts/verify_itsm_migration_data.py --self-test          # 不连库的自检
-python3 scripts/verify_itsm_migration_data.py \
+python3 scripts/migration（工具包） --self-test          # 不连库的自检
+python3 scripts/migration（工具包） \
   --evidence-out docs/migrations/2026-09-15-legacy-migration-validation-evidence.json
 ```
 
@@ -129,7 +129,7 @@ DEV 库对比使用 SOP 中已记录的开发口令。
 - **可用性**：抽样登录 `D78089` / `D84725` / `H84410` 经 3010 全部 **200**
 - **校验回归**：`only_export_active` **1,261 → 1,243**，`matched` 7,816 → 7,834，`db_rows` 7,862 → 7,880
 - **回滚**：新建 id 已记录，可用 `PUT /api/v1/users/:id/status` 停用，或按证据文件中的 SQL 删除
-- **工具与证据**：`scripts/backfill_legacy_users.py`（默认 dry-run、幂等、预检阻塞即拒写）；
+- **工具与证据**：`scripts/migration（工具包补建命令）`（默认 dry-run、幂等、预检阻塞即拒写）；
   证据见本次提交的 backfill 记录
 
 ## 5. 输入与规则归档
@@ -137,3 +137,16 @@ DEV 库对比使用 SOP 中已记录的开发口令。
 导出文件身份、CLI 缺席证据与重建出的迁移规则见
 [`2026-09-15-legacy-migration-input-and-rule-archive.md`](2026-09-15-legacy-migration-input-and-rule-archive.md)
 与同名 manifest（仓库只存哈希与条数，个人数据不入库；原始文件已复制到受控私有归档目录）。
+
+## 6. 工具与证据（2026-09-15 更新：已并入工具包）
+
+本报告的工具已从一次性脚本迁移为**工具包**：`scripts/migration/`（入口见
+[`runbook-data-migration-validation.md`](runbook-data-migration-validation.md)）。旧脚本已删除。
+
+- 入口：`python3 -m scripts.migration verify --profile scripts/migration/profiles/legacy-itsm-2026-08.yaml`
+- 证据文件已由工具包**重生成**（[`2026-09-15-legacy-migration-validation-evidence.json`](2026-09-15-legacy-migration-validation-evidence.json)），
+  键形如 `entities.<name>.{matched, only_source, only_target, field_checks, structure}`，
+  另含 `lineage`、`record_drift`、`exit_code`；**本报告 §2 的数值结论未变**
+- 复跑结果（2026-09-15）：部门 `matched 4,975 / only_source 297 / only_target 3,000`，
+  退出码 `3`（有未归因差异，即那 3,000 个）；lineage 中 DEV 与 baseline 库与克隆库**完全一致**
+- 证据经隐私守卫自检：**无邮箱、无明文工号**
