@@ -261,3 +261,7 @@ API已部署71bcb0bae2d81d9908a36d88cc79feef09ccea9e（Cookie+通知上下文窄
 R1 readyz、C3七条SLA空字符串绑定/19补班、C4专业流程配置与消费者停用边界保持原裁定。此次没有重跑五批、seed或迁移，没有清库，没有迁移旧ticket。源码尚未推送或合并本轮修复。
 
 端口17:12复核：3010 ITSM Next、8080 ITSM API；3000由acp-langfuse容器占用，是Langfuse，不是第二个ITSM；3001及8090无监听。不要为“统一ITSM端口”停止另有用途的Langfuse。
+
+### 实时通知端口收口完成
+
+WS纯配置经独立复审：构建时NEXT_PUBLIC_WS_URL=ws://192.168.31.66:3010/api/v1/ws/notifications，ITSM_BACKEND_URL=http://127.0.0.1:8080；后端仅新增WEBSOCKET_ALLOWED_ORIGINS=http://192.168.31.66:3010，无通配来源。相同f1eda552源码重新构建，Build ID Ic9uWpAfDlAOyWQpwA25S。正常停止/启动完成后，真实LAN浏览器刷新，观察连接路径3010/api/v1/ws/notifications且握手101；未将短期票据写入本清单。通知列表HTTP200和实时WS101分别通过。

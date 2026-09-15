@@ -105,11 +105,14 @@ npm run theme:check      # 检查已提交的生成 CSS 是否与 token 源一�
 ```bash
 # 在 itsm-frontend 中执行；API 代理目标必须在构建时提供。
 npm ci
-ITSM_BACKEND_URL=http://127.0.0.1:8080 NEXT_PUBLIC_API_URL='' npm run build
+ITSM_BACKEND_URL=http://127.0.0.1:8080 NEXT_PUBLIC_API_URL='' \
+  NEXT_PUBLIC_WS_URL=ws://192.168.31.66:3010/api/v1/ws/notifications npm run build
 NODE_ENV=production HOSTNAME=127.0.0.1 PORT=3301 npm start
 ```
 
 `npm run build` 会准备 `.next/standalone`，包含 `server.js`、依赖、静态资源和 `public`。发布可复制该完整目录并执行 `NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3010 node server.js`；不要只复制 `server.js`。保留启动描述和上一发布目录，切换后验证登录、同源 `/api/v1/health`、静态资源及已登录业务页面。本机固定路径与启动描述见[本机开发环境](development-environment.md)。
+
+WSL 通知连接同样走 3010 → 8080。`NEXT_PUBLIC_WS_URL` 必须在构建时指定为实际浏览器入口，不能只在运行时设置，否则旧默认可能连接 localhost:8090。上例是当前 WSL LAN HTTP 地址；其它环境按真实入口使用 ws/wss。后端 `WEBSOCKET_ALLOWED_ORIGINS` 明确列出该浏览器来源（当前为 `http://192.168.31.66:3010`），不使用通配。发布后分别确认通知列表 HTTP 200 与浏览器 WebSocket 101，避免只验证普通 API。
 
 工作流分组使用 `/workflow`，该页面跳转 `/admin/workflows`。三个默认子入口为工作流管理、流程设计器和流程实例。审批链规则使用已有页面 `/admin/approval-chains`，旧 `/workflow/approval-chains` 跳转到该页面；`workflow` 菜单修复会同步迁移旧菜单地址，保留已有分组、权限和可见性配置。动态菜单仍由后端按租户、角色和权限过滤。升级已有租户的旧菜单时，使用定向命令，而非全量初始化：
 
