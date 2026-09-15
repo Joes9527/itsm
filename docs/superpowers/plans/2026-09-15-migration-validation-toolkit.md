@@ -1036,8 +1036,9 @@ def source(rows):
                        by_key={r['userName']: r for r in rows})
 
 
-def test_rewrite_email_keeps_local_part_and_handles_the_suffix_rule():
-    assert rewrite_email('Someone@kerryeas.com', 'keas.kln.comm') == 'someone@keas.kln.comm'
+def test_rewrite_email_keeps_the_local_part_verbatim():
+    # the 2026-08 batch preserved case (a migrated account reads WangQing@keas.kln.comm)
+    assert rewrite_email('Someone@kerryeas.com', 'keas.kln.comm') == 'Someone@keas.kln.comm'
     assert rewrite_email('dup+2@kerryeas.com', 'keas.kln.comm') == 'dup+2@keas.kln.comm'
 
 
@@ -1207,7 +1208,8 @@ class UsersCheck:
             usernames[row['username']] = usernames.get(row['username'], 0) + 1
             if str(row.get('tenant_id')) != '1':
                 foreign += 1
-            if not str(row.get('hash_prefix', '')).startswith('$2'):
+            stored = str(row.get('password_hash') or row.get('hash_prefix') or '')
+            if not stored.startswith('$2'):
                 non_bcrypt += 1
         return {
             'duplicate_usernames': sum(1 for count in usernames.values() if count > 1),
@@ -1255,7 +1257,15 @@ REGISTRY = {'departments': DepartmentsCheck(), 'users': UsersCheck()}
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m pytest scripts/__tests__/test_migration_checks_users.py -q`
-Expected: `9 passed`
+Expected: `12 passed`
+
+Notes recorded while executing this task:
+1. The planned email assertion expected a lower-cased local part, but the 2026-08 batch preserved
+   case (`WangQing@keas.kln.comm` is a real account), so the rule keeps the local part verbatim.
+2. `check_structure` must read `password_hash` from the real query as well as the `hash_prefix`
+   alias that `fetch_target` selects, otherwise every row looks like a non-bcrypt row.
+3. Extra tests cover the `present` filter operator, the full field-check report and the guarantee
+   that a write plan never carries a password.
 
 - [ ] **Step 5: Commit**
 
