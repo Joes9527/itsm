@@ -1,10 +1,11 @@
 package config
 
 import (
-	"github.com/spf13/viper"
-	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
+
+	"github.com/spf13/viper"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCookieSecureConfiguration(t *testing.T) {
@@ -63,7 +64,7 @@ func TestLoadConfigPreservesCookieSecurePresence(t *testing.T) {
 			if tc.env == "" {
 				require.NoError(t, os.Unsetenv("ITSM_COOKIE_SECURE"))
 			}
-			require.NoError(t, os.WriteFile("config.yaml", []byte(tc.yaml), 0600))
+			require.NoError(t, os.WriteFile("config.yaml", []byte(tc.yaml), 0o600))
 			cfg, err := LoadConfig()
 			require.NoError(t, err)
 			if !tc.present {
