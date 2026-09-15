@@ -95,3 +95,12 @@
 - 可筛选 CSV：`/home/administrator/.local/state/itsm-database-register-20260914/database-register.csv`。
 - 已有迁移、角色、备份范围：[G-A 交接](2026-09-14-database-reconciliation-handoff.md)。
 - 本次 inventory.json SHA256：`7b14465c4b12a6a0c8e3f39907526bea662ec7b6968329148826ed8d08865c4f`。
+
+
+### 2026-09-15 09:50 CST 增量
+
+| 实例 | 逻辑库 | 用途/边界 | 状态 |
+| --- | --- | --- | --- |
+| gb-remediation-test-pg-20260914 | ga_acl_rehearsal_20260915 | 本批itsm_ga_ready备份恢复与最小运行ACL/真实账号准入演练；仅测试，不是应用目标 | 已恢复、演练通过，原三个测试库保留 |
+
+业务目标 `ga-itsm-20260914 / itsm_ga_ready` 当前12个产品类型、0工单；必要运行权限与standard角色绑定已准入，尚未应用切换或E2E验收。原DEV数据未清理。状态与操作证据见开发环境文档2026-09-15增量及受保护目录 `itsm-backend-switch-20260915`。
