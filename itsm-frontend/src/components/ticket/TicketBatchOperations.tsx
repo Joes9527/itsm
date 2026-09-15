@@ -195,6 +195,7 @@ const TicketBatchOperationsContent: React.FC<TicketBatchOperationsProps> = ({
               default:
                 throw new Error(`不支持的操作: ${operation}`);
             }
+            editIntents.current.delete(`${operation}:${ticket.id}`);
             successCount++;
           } catch (error) {
             if (isTicketEditConflict(error)) editIntents.current.delete(`${operation}:${ticket.id}`);

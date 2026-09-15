@@ -54,3 +54,10 @@ test.each(['acknowledgeIncident','startIncident','reopenIncident'] as const)('%s
   await expect(IncidentAPI[method](7, {operationId:'intent'} as never)).rejects.toThrow();
   expect(httpClient.post).not.toHaveBeenCalled();
 });
+
+test('batch command forwards the submission context check to the HTTP boundary', async () => {
+  const options={assertSubmissionContext:jest.fn()};
+  const body={...meta,reason:'Confirmed restoration'};
+  await IncidentAPI.closeIncident(7,body,options);
+  expect(httpClient.post).toHaveBeenCalledWith('/api/v1/incidents/7/close',body,options);
+});

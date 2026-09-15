@@ -5,6 +5,7 @@ import type { ListQueryParams, PaginationResponse } from './types';
 import { API_URLS } from './types';
 import type { WorkItemActionState } from '@/components/work-item/WorkItemTypes';
 
+export interface IncidentCommandOptions { assertSubmissionContext: () => void; }
 export interface IncidentCommandMeta { version: number; operationId: string; }
 export interface IncidentCommandResult { workItemId: number; version: number; status: string; replayed: boolean; }
 
@@ -413,18 +414,21 @@ export class IncidentAPI {
       version: number;
       operationId: string;
       resolution: string;
-    }
+    },
+    options?: IncidentCommandOptions
   ): Promise<IncidentCommandResult> {
     ticketEditVersion(data.version);
     ticketEditOperation(data.operationId);
+    if (options) return httpClient.post<IncidentCommandResult>(`/api/v1/incidents/${id}/resolve`, data, options);
     const response = await httpClient.post<IncidentCommandResult>(`/api/v1/incidents/${id}/resolve`, data);
     return response;
   }
 
   // 分配事件
-  static async assignIncident(id: number, data: IncidentCommandMeta & { assigneeId: number; reason?: string }): Promise<IncidentCommandResult> {
+  static async assignIncident(id: number, data: IncidentCommandMeta & { assigneeId: number; reason?: string }, options?: IncidentCommandOptions): Promise<IncidentCommandResult> {
     ticketEditVersion(data.version);
     ticketEditOperation(data.operationId);
+    if (options) return httpClient.post<IncidentCommandResult>(`/api/v1/incidents/${id}/assign`, data, options);
     const response = await httpClient.post<IncidentCommandResult>(`/api/v1/incidents/${id}/assign`, data);
     return response;
   }
@@ -481,10 +485,12 @@ export class IncidentAPI {
    */
   static async closeIncident(
     id: number,
-    data: IncidentCommandMeta & { reason: string }
+    data: IncidentCommandMeta & { reason: string },
+    options?: IncidentCommandOptions
   ): Promise<IncidentCommandResult> {
     ticketEditVersion(data.version);
     ticketEditOperation(data.operationId);
+    if (options) return httpClient.post<IncidentCommandResult>(`/api/v1/incidents/${id}/close`, data, options);
     const response = await httpClient.post<IncidentCommandResult>(
       `/api/v1/incidents/${id}/close`,
       data

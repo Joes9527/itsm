@@ -1,5 +1,6 @@
 'use client';
 import { prepareTicketEdit, isTicketEditConflict, type TicketEditIntent } from '@/lib/api/ticket-edit';
+import { useAuthStore } from '@/lib/store/auth-store';
 import { useDetailIdentity } from '@/components/business/detail-tabs/useDetailResource';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -53,6 +54,26 @@ function IncidentsPageContent() {
   const router = useRouter();
   const { t } = useI18n();
   const batchAttempts = useRef(new Map<string, TicketEditIntent<Record<string, unknown>>>());
+  const confirmations = useRef<Array<{destroy: () => void}>>([]);
+  const mounted = useRef(true);
+  const initialSession = useRef(useAuthStore.getState());
+  const assertSubmissionContext = useCallback(() => {
+    const before = initialSession.current;
+    const current = useAuthStore.getState();
+    if (!mounted.current || before.user?.id !== current.user?.id ||
+        before.user?.tenantId !== current.user?.tenantId ||
+        before.currentTenant?.id !== current.currentTenant?.id ||
+        before.isAuthenticated !== current.isAuthenticated) {
+      throw new Error('会话已变化，请重新确认操作');
+    }
+  }, []);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      confirmations.current.forEach(dialog => dialog.destroy());
+    };
+  }, []);
 
   // ====== 状态管理 ======
   const [loading, setLoading] = useState(false);
@@ -217,7 +238,7 @@ function IncidentsPageContent() {
       if (ids.length === 0) return;
       setBatchLoading(true);
       try {
-        const results = await Promise.allSettled(ids.map(async (id) => handler(Number(id))));
+        const results = await Promise.allSettled(ids.map(async (id) => { assertSubmissionContext(); return handler(Number(id)); }));
         const failCount = results.filter((r) => r.status === 'rejected').length;
         if (failCount === 0) {
           message.success(`${successMsg}：${ids.length} 项`);
@@ -230,7 +251,7 @@ function IncidentsPageContent() {
         setBatchLoading(false);
       }
     },
-    [fetchIncidents],
+    [fetchIncidents, assertSubmissionContext],
   );
 
   const openAssignModal = useCallback(async () => {
@@ -259,7 +280,7 @@ function IncidentsPageContent() {
         const key = `${id}:assign`;
         const intent = prepareTicketEdit(batchAttempts.current.get(key), { assigneeId: values.assigneeId, reason }, version);
         batchAttempts.current.set(key, intent);
-        return IncidentAPI.assignIncident(id, { ...intent.payload, assigneeId: values.assigneeId, reason }).then(result => {
+        return IncidentAPI.assignIncident(id, { ...intent.payload, assigneeId: values.assigneeId, reason }, { assertSubmissionContext }).then(result => {
           batchAttempts.current.delete(key); return result;
         }).catch(error => {
           if (isTicketEditConflict(error)) batchAttempts.current.delete(key);
@@ -268,45 +289,47 @@ function IncidentsPageContent() {
       },
       '批量分派成功',
     );
-  }, [assignForm, selectedRowKeys, runIncidentBatch, incidents]);
+  }, [assignForm, selectedRowKeys, runIncidentBatch, incidents, assertSubmissionContext]);
 
   const handleBatchResolve = useCallback(async () => {
     let resolution = '';
-    Modal.confirm({ title: '批量解决事件', content: <Input.TextArea aria-label='恢复验证说明' onChange={event => { resolution = event.target.value; }} />, onOk: async () => {
+    confirmations.current.push(Modal.confirm({ title: '批量解决事件', content: <Input.TextArea aria-label='恢复验证说明' onChange={event => { resolution = event.target.value; }} />, onOk: async () => {
+      assertSubmissionContext();
       if (!resolution.trim()) throw new Error('请填写恢复验证说明');
       await runIncidentBatch(selectedRowKeys, id => {
         const version = incidents.find(item => item.id === id)?.version;
         const key = `${id}:resolve`;
         const intent = prepareTicketEdit(batchAttempts.current.get(key), { resolution: resolution.trim() }, version);
         batchAttempts.current.set(key, intent);
-        return IncidentAPI.resolveIncident(id, { ...intent.payload, resolution: resolution.trim() }).then(result => {
+        return IncidentAPI.resolveIncident(id, { ...intent.payload, resolution: resolution.trim() }, { assertSubmissionContext }).then(result => {
           batchAttempts.current.delete(key); return result;
         }).catch(error => {
           if (isTicketEditConflict(error)) batchAttempts.current.delete(key);
           throw error;
         });
       }, '批量解决成功');
-    } });
-  }, [selectedRowKeys, runIncidentBatch, incidents]);
+    } }));
+  }, [selectedRowKeys, runIncidentBatch, incidents, assertSubmissionContext]);
 
   const handleBatchClose = useCallback(async () => {
     let reason = '';
-    Modal.confirm({ title: '批量关闭事件', content: <Input.TextArea aria-label='关闭说明' onChange={event => { reason = event.target.value; }} />, onOk: async () => {
+    confirmations.current.push(Modal.confirm({ title: '批量关闭事件', content: <Input.TextArea aria-label='关闭说明' onChange={event => { reason = event.target.value; }} />, onOk: async () => {
+      assertSubmissionContext();
       if (!reason.trim()) throw new Error('请填写关闭说明');
       await runIncidentBatch(selectedRowKeys, id => {
         const version = incidents.find(item => item.id === id)?.version;
         const key = `${id}:close`;
         const intent = prepareTicketEdit(batchAttempts.current.get(key), { reason: reason.trim() }, version);
         batchAttempts.current.set(key, intent);
-        return IncidentAPI.closeIncident(id, { ...intent.payload, reason: reason.trim() }).then(result => {
+        return IncidentAPI.closeIncident(id, { ...intent.payload, reason: reason.trim() }, { assertSubmissionContext }).then(result => {
           batchAttempts.current.delete(key); return result;
         }).catch(error => {
           if (isTicketEditConflict(error)) batchAttempts.current.delete(key);
           throw error;
         });
       }, '批量关闭成功');
-    } });
-  }, [selectedRowKeys, runIncidentBatch, incidents]);
+    } }));
+  }, [selectedRowKeys, runIncidentBatch, incidents, assertSubmissionContext]);
 
   const handleBatchDelete = useCallback(async () => {
     await runIncidentBatch(

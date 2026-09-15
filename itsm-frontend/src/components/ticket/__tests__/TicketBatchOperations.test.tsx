@@ -1,0 +1,30 @@
+import React from 'react';
+import {fireEvent,render,screen,waitFor,within} from '@/lib/test-utils';
+import userEvent from '@testing-library/user-event';
+import TicketBatchOperations from '../TicketBatchOperations';
+import {TicketAPI} from '@/lib/api/ticket-api';
+import type {Ticket} from '@/lib/api/types';
+jest.mock('@/lib/api/ticket-api',()=>({TicketAPI:{updateTicket:jest.fn()}}));
+
+test('a confirmed success is not reused as an old receipt after a partial batch failure',async()=>{
+  const update=TicketAPI.updateTicket as jest.Mock;
+  update.mockResolvedValueOnce({workItemId:1,version:4,replayed:false}).mockRejectedValueOnce(new Error('connection lost')).mockResolvedValue({workItemId:1,version:6,replayed:false});
+  let key=0;
+  Object.defineProperty(crypto,'randomUUID',{configurable:true,value:()=>`intent-${++key}`});
+  const done=jest.fn();
+  const tickets=[{id:1,ticketNumber:'T1',priority:'medium',version:3},{id:2,ticketNumber:'T2',priority:'medium',version:3}] as Ticket[];
+  const view=render(<TicketBatchOperations selectedTickets={tickets} onOperationComplete={done}/>);
+  const user=userEvent.setup();
+  await user.hover(await screen.findByRole('button',{name:'批量操作'}));
+  fireEvent.click(await screen.findByText('批量设置优先级'));
+  const dialog=await screen.findByRole('dialog',{name:'批量设置优先级'});
+  fireEvent.mouseDown(within(dialog).getByRole('combobox'));
+  fireEvent.click(await screen.findByText('高'));
+  fireEvent.click(within(dialog).getByRole('button',{name:'确认操作'}));
+  await waitFor(()=>expect(update).toHaveBeenCalledTimes(2));
+  await waitFor(()=>expect(done).toHaveBeenCalledTimes(1),{timeout:4000});
+  view.rerender(<TicketBatchOperations selectedTickets={[{...tickets[0],version:5}]} onOperationComplete={done}/>);
+  fireEvent.click(within(dialog).getByRole('button',{name:'确认操作'}));
+  await waitFor(()=>expect(update).toHaveBeenCalledTimes(3));
+  expect(update.mock.calls[2][1]).toEqual({priority:'high',version:5,operationId:'intent-3'});
+});

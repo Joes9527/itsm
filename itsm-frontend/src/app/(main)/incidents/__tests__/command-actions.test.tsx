@@ -1,5 +1,6 @@
+import {useAuthStore} from '@/lib/store/auth-store';
 import React from 'react';
-import {fireEvent, render, screen, waitFor, within} from '@/lib/test-utils';
+import {act, fireEvent, render, screen, waitFor, within} from '@/lib/test-utils';
 import IncidentsPage from '../page';
 import {IncidentAPI} from '@/lib/api/incident-api';
 
@@ -42,7 +43,25 @@ test('list closure reuses the original version after an uncertain response and r
   await confirmClose();
   await waitFor(()=>expect(IncidentAPI.closeIncident).toHaveBeenCalledTimes(2));
   const calls=(IncidentAPI.closeIncident as jest.Mock).mock.calls;
-  expect(calls[0]).toEqual([7,{version:3,operationId:'first-close',reason:'Requester verified'}]);
+  expect(calls[0]).toEqual([7,{version:3,operationId:'first-close',reason:'Requester verified'},{assertSubmissionContext:expect.any(Function)}]);
   expect(calls[1]).toEqual(calls[0]);
-  await waitFor(()=>expect(IncidentAPI.listIncidents).toHaveBeenCalledTimes(3));
+  const previous=useAuthStore.getState().currentTenant;
+  act(()=>useAuthStore.setState({currentTenant:{id:999} as never}));
+  expect(()=>calls[0][2].assertSubmissionContext()).toThrow('会话');
+  act(()=>useAuthStore.setState({currentTenant:previous}));
+});
+
+test('destroys the pending batch confirmation when the tenant changes', async () => {
+  render(<IncidentsPage />);
+  await waitFor(()=>expect(IncidentAPI.listIncidents).toHaveBeenCalledTimes(1));
+  await screen.findByRole('button',{name:'批量关闭'});
+  fireEvent.click(await screen.findByRole('button',{name:'Select incidents'}));
+  fireEvent.click(screen.getByRole('button',{name:'批量关闭'}));
+  const dialog=await screen.findByRole('dialog');
+  fireEvent.change(within(dialog).getByLabelText('关闭说明'),{target:{value:'Old tenant reason'}});
+  const previous=useAuthStore.getState().currentTenant;
+  act(()=>useAuthStore.setState({currentTenant:{id:888} as never}));
+  await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(IncidentAPI.closeIncident).not.toHaveBeenCalled();
+  act(()=>useAuthStore.setState({currentTenant:previous}));
 });

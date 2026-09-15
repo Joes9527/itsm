@@ -18,12 +18,12 @@
 
 ## Verification
 
-The original focused API/task baseline passed 112 tests. New contract tests first failed on missing ticket edit metadata, incident acknowledgment metadata, assignment body shape, and canonical process task identity. Final focused suite: 7 suites / 153 tests passed, covering API payloads, task actions, current workbench regression cases, receipt refresh, and uncertain retry behavior in detail/list flows.
+The original focused API/task baseline passed 112 tests. New contract tests first failed on missing ticket edit metadata, incident acknowledgment metadata, assignment body shape, and canonical process task identity. Final focused suite after independent review fixes: 8 suites / 156 tests passed, covering API payloads, task actions, current workbench regression cases, receipt refresh, and uncertain retry behavior in detail/list flows.
 
 Run from `itsm-frontend`:
 
 ```sh
-node node_modules/jest/bin/jest.js --runInBand --coverage=false --silent --reporters=default --runTestsByPath src/lib/api/__tests__/ga-command-contract.test.ts src/lib/api/__tests__/ticket-api.test.ts src/lib/api/__tests__/incident-api.test.ts src/components/ticket/__tests__/TicketProcessTasks.test.tsx src/components/ticket/__tests__/TicketDetail.test.tsx src/components/incident/__tests__/IncidentDetail.test.tsx 'src/app/(main)/incidents/__tests__/command-actions.test.tsx'
+node node_modules/jest/bin/jest.js --runInBand --coverage=false --silent --reporters=default --runTestsByPath src/lib/api/__tests__/ga-command-contract.test.ts src/lib/api/__tests__/ticket-api.test.ts src/lib/api/__tests__/incident-api.test.ts src/components/ticket/__tests__/TicketProcessTasks.test.tsx src/components/ticket/__tests__/TicketDetail.test.tsx src/components/ticket/__tests__/TicketBatchOperations.test.tsx src/components/incident/__tests__/IncidentDetail.test.tsx 'src/app/(main)/incidents/__tests__/command-actions.test.tsx'
 node node_modules/typescript/bin/tsc --noEmit --pretty false
 ```
 
@@ -36,3 +36,9 @@ These are offline component/API contract checks, not browser-to-backend E2E evid
 - `TicketKanban` is reachable from the ticket page, but its `handleStatusChange` is declared without any JSX/drag-and-drop caller. The visible edit/view menu navigates to `/tickets/:id`, covered by TicketDetail. The unconsumed `useTicketsQuery` update mutation and unused Kanban status callback remain outside this change; no professional state transitions are inferred for them.
 - Existing Change/Problem retired API actions are not restored or admitted by this patch.
 - Cross-origin creation still uses `Idempotency-Key`; backend CORS allow-header correction is coordinated separately. Creation behavior is not changed here.
+
+## Independent review corrections
+
+Two reproduced issues were corrected in the follow-up: static incident batch confirmations are destroyed when their owning page unmounts, and commands verify the captured actor/tenant session both on confirmation and at the existing HTTP submission boundary; ticket batch successes discard their operation intent individually so a later edit cannot replay an already completed command after a partially failed batch. Failed/uncertain attempts continue to retain their original identity.
+
+An initial review claim that generic ticket edits ignored status was withdrawn after checking fixed backend DTO and owning service. `TicketEditFields.Status` is supported; `ticket_service.go` validates transitions and writes it, while rejecting professional record mutations. No status functionality is removed or reinterpreted.
