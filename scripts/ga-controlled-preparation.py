@@ -86,6 +86,8 @@ def isolated_config(source, project, public, passwords):
             env['ITSM_MIGRATION_CONTROL_FILE'] = '/ga/control.json'
             env['LLM_PROVIDER'] = 'local'
             if name == 'itsm-backend':
+                # minio-go takes host:port; the base config selects non-TLS.
+                env['MINIO_ENDPOINT'] = 'minio:9000'
                 env.update(DB_USER='ga_app', DB_PASSWORD=passwords['app'],
                            DATABASE_URL='postgresql://ga_app:' + passwords['app'] + '@postgres:5432/itsm?sslmode=disable',
                            DB_SYSTEM_ROLE_USER='ga_system', DB_SYSTEM_ROLE_PASSWORD=passwords['system'], RLS_MODE='enforce',
@@ -164,6 +166,8 @@ class ComposeFixture:
         env = dict(os.environ, CGO_ENABLED='0', GOOS='linux', GOARCH='amd64')
         self.command(['go', 'build', '-tags', 'migrate', '-o', str(self.public / 'migrate'), './cmd/migrate'], cwd=self.repo / 'itsm-backend', env=env)
         (self.public / 'migrate').chmod(0o755)
+        self.command(['go', 'build', '-o', str(self.public / 'provision-minio'), str(self.repo / 'scripts/fixtures/ga-minio-provision/main.go')], cwd=self.repo / 'itsm-backend', env=env)
+        (self.public / 'provision-minio').chmod(0o755)
         self.compose('build', 'itsm-init', 'itsm-backend', 'itsm-frontend')
         self.compose('up', '-d', '--wait', 'postgres', 'redis', 'minio')
         # Refuse a nonempty target before the initializer can write anything.
@@ -248,6 +252,10 @@ VALUES ('ga_app','%s','standard');
 REVOKE ALL ON work_item_migration_evidence FROM ga_app;
 REVOKE INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER ON schema_migrations FROM ga_app;""" % self.project)
 
+    def provision_storage(self):
+        # Reuse the owned service network and private runtime storage settings.
+        self.compose('run', '--rm', '--no-deps', '-T', '--entrypoint', '/ga/provision-minio', 'itsm-backend')
+
     def verify_prepared(self):
         result = self.sql("SELECT count(*) FILTER (WHERE version='037_work_item_structure_preparation'),count(*) FILTER (WHERE version='038_work_item_controlled_retirement') FROM schema_migrations;")
         if result.strip() != b'1|0':
@@ -316,6 +324,7 @@ def main():
             output.write('GA_PREPARATION_CONFIG=' + str(fixture.config) + '\nGA_PREPARATION_PROJECT=' + project + '\n')
         fixture.create()
         summary = prepare_database(fixture, project)
+        fixture.provision_storage()
         # Compose dependencies still require the final initializer to succeed.
         fixture.compose('up', '-d', 'itsm-init', 'itsm-backend', 'itsm-frontend')
         (repo / 'ga-gate-preparation-summary.json').write_text(json.dumps(summary, indent=2) + '\n')

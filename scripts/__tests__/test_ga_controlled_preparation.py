@@ -128,6 +128,15 @@ class IsolationTests(unittest.TestCase):
         for name in ('postgres', 'redis', 'minio', 'itsm-init'):
             self.assertEqual(config['services'][name]['ports'], [])
 
+    def test_attachment_storage_uses_private_minio_sdk_endpoint(self):
+        source = self.source()
+        source['services']['itsm-backend']['environment']['MINIO_ENDPOINT'] = 'http://minio:9000'
+        config = ga.isolated_config(source, 'ga-preparation-test', Path('/private'),
+                                    dict(app='a', system='b', inspect='c'))
+        self.assertEqual(config['services']['itsm-backend']['environment']['MINIO_ENDPOINT'], 'minio:9000')
+        self.assertIn('minio', config['services'])
+        self.assertIn('  use_ssl: false', (MODULE.parents[1] / 'itsm-backend' / 'config.yaml').read_text())
+
     def test_external_resource_rejected_before_creation_and_cleanup(self):
         for kind in ('volumes', 'networks'):
             source = self.source()
@@ -175,6 +184,9 @@ class SummaryPublicationTests(unittest.TestCase):
                     self.config = folder / 'compose.json'
 
                 def create(self):
+                    pass
+
+                def provision_storage(self):
                     pass
 
                 def compose(self, *args):
@@ -226,6 +238,35 @@ class RuntimeGrantTests(unittest.TestCase):
             config = ga.isolated_config(IsolationTests().source(), fixture.project, fixture.public, fixture.passwords)
             for name in ('itsm-init', 'itsm-backend'):
                 self.assertIn({'type': 'bind', 'source': str(fixture.public / 'config.yaml'), 'target': '/app/config.yaml', 'read_only': True}, config['services'][name]['volumes'])
+
+class StorageProvisioningTests(unittest.TestCase):
+    def test_failed_bucket_provisioning_never_starts_runtime_or_publishes_summary(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            private = root / 'private'
+            private.mkdir()
+            with patch.object(ga, '__file__', str(root / 'scripts' / 'ga-controlled-preparation.py')), \
+                    patch.object(ga, 'ComposeFixture') as fixture_type, \
+                    patch.object(ga, 'prepare_database', return_value={'finalInitializerSucceeded': True}), \
+                    patch.object(ga.tempfile, 'mkdtemp', return_value=str(private)), \
+                    patch.dict(ga.os.environ, {'GITHUB_ACTIONS': 'true', 'GITHUB_ENV': str(root / 'github-env')}), \
+                    patch.object(ga.sys, 'argv', ['ga-controlled-preparation.py', 'prepare']):
+                fixture_type.return_value.config = private / 'compose.json'
+                fixture_type.return_value.provision_storage.side_effect = RuntimeError('bucket denied')
+                with self.assertRaisesRegex(RuntimeError, 'bucket denied'):
+                    ga.main()
+                fixture_type.return_value.compose.assert_not_called()
+            self.assertFalse((root / 'ga-gate-preparation-summary.json').exists())
+
+    def test_provisioning_reuses_owned_runtime_configuration_and_fails_closed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            fixture = ga.ComposeFixture(folder, folder, 'ga-preparation-test')
+            with patch.object(fixture, 'compose', side_effect=RuntimeError('bucket denied')) as compose:
+                with self.assertRaisesRegex(RuntimeError, 'bucket denied'):
+                    fixture.provision_storage()
+            fixture.log.close()
+            compose.assert_called_once_with('run', '--rm', '--no-deps', '-T', '--entrypoint', '/ga/provision-minio', 'itsm-backend')
 
 class FailureDiagnosticsTests(unittest.TestCase):
     def test_removed_initializer_stderr_is_redacted_and_stdout_never_published(self):
