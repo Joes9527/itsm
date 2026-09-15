@@ -459,12 +459,25 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 						builder.SetExecutionWorkItemID(fresh.WorkItemID)
 					}
 					instance := builder.SaveX(ctx)
-					taskBuilder := owner.ProcessTask.Create().SetTaskID(key).SetProcessInstanceID(instance.ID).SetProcessDefinitionKey(key).SetTaskDefinitionKey("Current").SetTaskName("Waiting").SetTaskType("userTask").SetTenantID(tenant.ID).SetStatus("assigned").SetAssignee(strconv.Itoa(actor.ID))
+					taskBuilder := owner.ProcessTask.Create().SetTaskID(key).SetProcessInstanceID(instance.ID).SetProcessDefinitionKey(key).SetTaskDefinitionKey("Current").SetTaskName("Waiting").SetTaskType("user_task").SetTenantID(tenant.ID).SetStatus("assigned").SetAssignee(strconv.Itoa(actor.ID)).SetCandidateUsers(actor.Email)
 					if action == "claim" {
 						taskBuilder.SetStatus("created").SetAssignee("")
 					}
 					task := taskBuilder.SaveX(ctx)
 					before := snapshotCandidateTables(t, ctx, ownerDB)
+					views, total, err := engine.TaskService().ListUserTaskViews(actionCtx, &service.ListUserTasksRequest{ProcessInstanceID: instance.ID})
+					require.NoError(t, err)
+					require.Equal(t, 1, total)
+					require.Len(t, views, 1)
+					require.Equal(t, kind == "member" && action == "claim", views[0].UIActions.Claim)
+					require.Equal(t, kind == "member", views[0].UIActions.Complete, "projection must use the real candidate membership and directory snapshot")
+					participantCtx := service.WithBPMNAccessScope(ctx, service.BPMNAccessScope{UserID: actor.ID, TenantID: tenant.ID})
+					participantViews, participantTotal, err := engine.TaskService().ListUserTaskViews(participantCtx, &service.ListUserTasksRequest{ProcessInstanceID: instance.ID})
+					require.NoError(t, err)
+					require.Equal(t, 1, participantTotal)
+					require.Len(t, participantViews, 1)
+					require.Equal(t, views[0].UIActions, participantViews[0].UIActions, "actual directory participant receives the same admitted commands")
+					require.Equal(t, before, snapshotCandidateTables(t, ctx, ownerDB), "task projection must not write state or enroll historical work")
 					var mutationErr error
 					switch action {
 					case "claim":

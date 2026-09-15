@@ -1808,7 +1808,9 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 				// 都没声明：解析申请人自己所在部门的负责人（这次会话早前已经做的部分）
 				assignee = e.resolveApprovalAssignee(ctx, instance, approvalRequester)
 			}
-		} else {
+		} else if strings.TrimSpace(task.CandidateUsers) == "" && strings.TrimSpace(task.CandidateGroups) == "" {
+			// Explicit candidates remain unassigned until claimed, including
+			// unresolved configured groups. Do not route them to the requester.
 			// 优先使用 requester_id（工单申请人）
 			assignee = getUserID("requester_id")
 			// 其次使用 triggered_by（触发者）
@@ -3663,6 +3665,18 @@ func (s *bpmnTaskService) ListUserTasks(ctx context.Context, req *ListUserTasksR
 // ListUserTaskViews 「我的待办」视图：任务列表附带所属实例的 businessKey 等业务上下文，
 // 供审批中心跳转业务单据使用。返回 DTO 而非 Ent 模型。
 func (s *bpmnTaskService) ListUserTaskViews(ctx context.Context, req *ListUserTasksRequest) ([]*dto.BPMNTaskResponse, int, error) {
+	// Read membership, lifecycle and execution scope at one owning snapshot.
+	// No projected authority is retained by the engine used for write commands.
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
+		return nil, 0, fmt.Errorf("开启任务视图事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	txEngine := s.engine.forClient(tx.Client(), nil, tx)
+	return txEngine.taskService.listUserTaskViews(ctx, req)
+}
+
+func (s *bpmnTaskService) listUserTaskViews(ctx context.Context, req *ListUserTasksRequest) ([]*dto.BPMNTaskResponse, int, error) {
 	tasks, total, err := s.ListUserTasks(ctx, req)
 	if err != nil {
 		return nil, 0, err
@@ -3690,7 +3704,11 @@ func (s *bpmnTaskService) ListUserTaskViews(ctx context.Context, req *ListUserTa
 		}
 	}
 
-	return dto.ToBPMNTaskResponseList(tasks, instanceMap), total, nil
+	views := dto.ToBPMNTaskResponseList(tasks, instanceMap)
+	for i, task := range tasks {
+		views[i].UIActions = s.engine.taskUIActions(ctx, task)
+	}
+	return views, total, nil
 }
 
 func (s *bpmnTaskService) ListApprovalDecisions(ctx context.Context, processInstanceKey string) ([]*ent.ProcessApprovalDecision, error) {
