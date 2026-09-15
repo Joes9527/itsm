@@ -2,7 +2,7 @@
 
 ## 当前控制入口：准备 P、普通迁移、退役 R
 
-历史 022/027 的 SQL 与 checksum 仅用于识别已执行历史，普通 up 不再执行它们。当前阶段顺序由唯一目录确定：普通至 021 → 手工 037 P → 普通 023–036（排除旧 027）→ 手工 038 R。最大版本号不是就绪证明；status/dry-run 分别显示 executable 与 pending_manual。down/rollback-to 使用阶段依赖顺序；reset/P/R 不提供重建空表式恢复。
+历史 022/027 的 SQL 与 checksum 仅用于识别已执行历史，普通 up 不再执行它们。当前阶段顺序由唯一目录确定：普通至 021 → 手工 037 P → 当前目录中的后继普通迁移（2026-09-15 为 023–036、039–047，排除旧 027）→ 独立手工 038 R。历史已执行到 031 的目标在 P 后只执行尚缺的普通迁移；R 不是恢复日常开发的前置条件。最大版本号不是就绪证明；status/dry-run 分别显示 executable 与 pending_manual。down/rollback-to 使用阶段依赖顺序；reset/P/R 不提供重建空表式恢复。
 
 先由部署运维设置只读、不可被 group/world 写入的 JSON 文件，并通过 `ITSM_MIGRATION_CONTROL_FILE` 指向它。字段来自 `migration.MigrationControlConfig`：DeploymentID、InspectionRole、ReviewedGrants、RetirementPublicKeys、HistoricalRetirementPublicKeys。公钥为独立固定的 Ed25519 公钥，JSON byte slice 使用 base64；不得从提交的 evidence 中建立 trust root。CLI Operator 始终来自实际 OS 用户。业务运行另用 `ITSM_MIGRATION_INSPECTION_DSN`（PostgreSQL URL、显式 schema、专用 inspection 用户）；它不替代业务数据库配置，连接目标必须一致。
 

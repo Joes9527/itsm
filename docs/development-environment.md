@@ -2,6 +2,23 @@
 
 Status: maintained operational contract, updated 2026-09-15. The maintainer selected **3010 as the ITSM frontend port**. Deployment filenames containing `ga`, `candidate`, or `prod` do not establish environment identity or release acceptance. This environment is named **WSL development**.
 
+## Selected schema target: 047
+
+**Current development and migration-validation target, confirmed 2026-09-15: `047_bpmn_assignment_source`.** Both Dev and the migration-validation database must support this selected current-code schema. Do not choose an older backend to accommodate a database at 031 or 046. This is the target contract, not a statement that either live database has already been upgraded.
+
+| Decision | Authority for the current task |
+| --- | --- |
+| Schema target for both database roles | **047_bpmn_assignment_source**, with the complete required canonical dependency chain and actual receipts |
+| Existing Dev upgrade path from its verified 031 baseline | Read-only classification and backup/restore verification → controlled P037 → ordinary032–036 and039–047 → matching runtime/system/inspection configuration and acceptance |
+| Existing validation target at046 | Verify its existing P receipt, dependencies and actual structure, then plan047; do not rerun P or clone another database merely to change its version label |
+| Migration tool prerequisite for the old Dev ledger | Use the merged PR38 atomic ledger preparation fix (`0e1afe997`, merged in `32c39dda3`) or a reviewed descendant |
+| R038 retirement | Remains a separate manual stage; **not required to restore Dev** and not implicitly included by saying “upgrade to047” |
+| Actual destination and progress | Read the [dated target-status table and single ledger](superpowers/plans/2026-09-15-migration-validation-ledger.md#schema-target-status); inspect the live recipe/database before acting |
+
+047 adds the persisted, immutable `process_tasks.assignee_source` contract for explicitly bound WorkItem-assignee tasks. It does not turn historical tasks into bound tasks, repair process routing configuration, import legacy data, or establish business acceptance. The canonical [migration registry](../itsm-backend/migration/migrations.go) and [047 SQL](../itsm-backend/migrations/047_bpmn_assignment_source.sql) define the structure; the [assignment report](review/2026-09-15-work-item-task-assignment-report.md) defines the associated behavior and evidence.
+
+For coding agents: start from this selected target and the current source registry. Treat later sections describing earlier port/candidate work and older migration numbers as historical or feature-specific evidence. If a later task intentionally advances beyond047, update this target and its linked execution ledger together; do not silently freeze development at047 or silently deploy a newer schema. Matching the maximum receipt number alone does not prove that required migrations, privileges, configuration and UI paths are valid.
+
 ## Endpoint ownership
 
 | Service | Windows/LAN host port | Authority |
