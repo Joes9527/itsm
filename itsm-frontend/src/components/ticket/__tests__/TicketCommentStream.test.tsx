@@ -109,3 +109,22 @@ it('ignores a late successful write after the same ticket loses authorization', 
   expect(screen.queryByText('现有内容')).not.toBeInTheDocument();
   expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
 });
+
+it('reads fresh comments after posting during a pending background read and ignores the late old list', async () => {
+  const user = userEvent.setup();
+  const onCountChange = jest.fn();
+  (ticketCommentAdapter.create as jest.Mock).mockResolvedValue(entry);
+  render(<App><TicketCommentStream ticketId={101} onCountChange={onCountChange} /></App>);
+  await screen.findByText('现有内容');
+  let finish!: (value: { comments: typeof entry[]; total: number }) => void;
+  list.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  await user.click(screen.getByRole('button', { name: '刷新' }));
+  list.mockResolvedValue({ comments: [entry, { ...entry, id: 2, content: '已持久化评论' }], total: 2 });
+  await user.type(screen.getByRole('textbox'), '已持久化评论');
+  await user.click(screen.getByRole('button', { name: /发送评论/ }));
+  try { await waitFor(() => expect(onCountChange).toHaveBeenLastCalledWith(2)); }
+  finally { await act(async () => finish({ comments: [entry], total: 1 })); }
+  expect(screen.getByText('已持久化评论', { exact: true })).toBeVisible();
+  expect(onCountChange).toHaveBeenLastCalledWith(2);
+  expect(list).toHaveBeenCalledTimes(3);
+});

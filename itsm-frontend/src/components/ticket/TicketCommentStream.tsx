@@ -78,7 +78,7 @@ const TicketCommentStreamContent: React.FC<TicketCommentStreamProps> = ({
       if (!current()) return;
       reset?.();
       message.success(success);
-      await resource.reload();
+      await resource.reload({ afterWrite: true });
     } catch (error) {
       if (!current()) return;
       resource.deny(error);

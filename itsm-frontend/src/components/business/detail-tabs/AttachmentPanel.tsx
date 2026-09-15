@@ -153,7 +153,7 @@ const AttachmentPanelContent: React.FC<AttachmentPanelProps> = ({
       if (!current()) return;
       options.onSuccess?.({});
       message.success(`${file.name} 上传成功`);
-      await resource.reload();
+      await resource.reload({ afterWrite: true });
     } catch (e) {
       if (!current()) return;
       resource.deny(e);
@@ -185,7 +185,7 @@ const AttachmentPanelContent: React.FC<AttachmentPanelProps> = ({
           });
           if (!current()) return;
           message.success('删除成功');
-          await resource.reload();
+          await resource.reload({ afterWrite: true });
         } catch (e) {
           if (current()) {
             resource.deny(e);

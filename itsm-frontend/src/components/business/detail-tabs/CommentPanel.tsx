@@ -94,7 +94,7 @@ const CommentPanelContent: React.FC<CommentPanelProps> = ({
       if (!current()) return;
       reset?.();
       message.success('评论操作成功');
-      await resource.reload();
+      await resource.reload({ afterWrite: true });
     } catch (error) {
       if (!current()) return;
       resource.deny(error);
