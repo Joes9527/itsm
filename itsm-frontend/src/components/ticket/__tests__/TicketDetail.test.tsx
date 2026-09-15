@@ -68,10 +68,10 @@ jest.mock('@/lib/store/auth-store', () => {
   };
 });
 
-jest.mock('@/lib/hooks/useErrorHandler', () => {
-  const handleError = jest.fn();
-  return { useErrorHandler: () => ({ handleError }) };
-});
+const mockHandleError = jest.fn();
+jest.mock('@/lib/hooks/useErrorHandler', () => ({
+  useErrorHandler: () => ({ handleError: mockHandleError }),
+}));
 
 jest.mock('@/components/business/AISuggestionPanel', () => ({
   AISuggestionPanel: () => null,
@@ -314,6 +314,7 @@ describe('TicketDetail', () => {
       await user.click(within(dialog).getByText('保存修改').closest('button')!);
       await waitFor(() => expect(mockGetTicket).toHaveBeenCalledTimes(2));
       expect(update).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(mockHandleError).toHaveBeenCalledWith(expect.any(Error), 'updateTicket', '工单已被更新，请重新打开编辑后重试'));
       await user.click((await screen.findByText('编辑', { selector: 'span' })).closest('button')!);
       dialog = (await screen.findByText('编辑工单')).closest('[role="dialog"]')! as HTMLElement;
       await user.clear(within(dialog).getByLabelText('工单标题'));

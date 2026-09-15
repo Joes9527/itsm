@@ -321,7 +321,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
         setEditModalVisible(false);
         await fetchTicket();
       }
-      handleError(error, 'updateTicket', '更新失败');
+      handleError(error, 'updateTicket', isTicketEditConflict(error) ? '工单已被更新，请重新打开编辑后重试' : '更新失败');
     } finally {
       writing.current = false;
       setUpdating(false);

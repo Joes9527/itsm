@@ -1,16 +1,6 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { loginAndReturn, DEFAULT_LOGIN } from '../auth-utils';
-
-export async function guardBusinessWrites(page: Page) {
-  await page.route('**/api/v1/**', async route => {
-    const request = route.request();
-    if (['GET', 'HEAD', 'OPTIONS'].includes(request.method()) || new URL(request.url()).pathname.startsWith('/api/v1/auth/')) {
-      await route.continue();
-    } else {
-      await route.abort('blockedbyclient');
-    }
-  });
-}
+import { guardBusinessWrites, routeRead } from '../utils/read-only-routes';
 
 const id = process.env.PLAYWRIGHT_TICKET_DETAIL_ID;
 test.beforeEach(async ({ page }) => {
@@ -76,13 +66,14 @@ test('failed comments retry locally and denied detail clears protected editors',
   let deny = false;
   let detailReads = 0;
   await page.route(`**/api/v1/tickets/${id}`, async route => {
+    if (route.request().method() !== 'GET') { await route.fallback(); return; }
     detailReads++;
     if (deny) await route.fulfill({ status: 403, json: { code: 403, message: '验收权限已撤销' } });
-    else await route.continue();
+    else await route.fallback();
   });
-  await page.route(`**/api/v1/tickets/${id}/comments`, async route => {
+  await routeRead(page, `**/api/v1/tickets/${id}/comments`, async route => {
     if (fail) await route.fulfill({ status: 500, json: { code: 500, message: '验收评论读取失败' } });
-    else await route.continue();
+    else await route.fallback();
   });
   await loginAndReturn(page, DEFAULT_LOGIN, `/tickets/${id}`);
   const draft = page.getByPlaceholder('输入您的评论或内部评估记录...');
@@ -132,6 +123,7 @@ test('open edit keeps its command version across refresh and handles isolated co
   await expect(page.getByRole('button', { name: '刷新工单详情' })).not.toHaveClass(/ant-btn-loading/);
   await expect(title).toHaveValue('隔离验收编辑草稿');
   await page.getByRole('button', { name: '保存修改' }).click();
+  await expect(page.getByText('工单已被更新，请重新打开编辑后重试', { exact: true })).toBeVisible();
   await expect(title).not.toBeVisible();
   expect(writes).toBe(1);
 });
@@ -152,4 +144,30 @@ test('server read-only actions remain disabled', async ({ page }) => {
   await page.keyboard.press('Alt+e');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '刷新工单详情' })).toBeEnabled();
+});
+
+
+test('read fixtures preserve the write guard for matching and unmatched requests', async ({ page }) => {
+  await page.unrouteAll();
+  const downstream: string[] = [];
+  // Final synthetic sink: even a broken guard cannot send this test to the backend.
+  await page.route('**/api/v1/**', async route => {
+    downstream.push(route.request().method());
+    await route.fulfill({ json: { synthetic: true } });
+  });
+  await guardBusinessWrites(page);
+  for (const pattern of ['**/api/v1/tickets/999991', '**/api/v1/tickets/999991/comments', '**/api/v1/bpmn/tasks?**']) {
+    await routeRead(page, pattern, async route => { await route.fallback(); });
+  }
+  await page.goto('/login');
+  for (const path of ['/api/v1/tickets/999991', '/api/v1/tickets/999991/comments', '/api/v1/bpmn/tasks?businessId=999991', '/api/v1/bpmn/tasks?businessId=999992', '/api/v1/unmatched-safety-probe']) {
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+      const result = await page.evaluate(async ({ path, method }) => {
+        try { await fetch(path, { method }); return 'forwarded'; } catch { return 'blocked'; }
+      }, { path, method });
+      expect(result, `${method} ${path}`).toBe('blocked');
+    }
+    expect(await page.evaluate(async path => (await fetch(path)).json(), path)).toEqual({ synthetic: true });
+  }
+  expect(downstream).toEqual(Array(5).fill('GET'));
 });

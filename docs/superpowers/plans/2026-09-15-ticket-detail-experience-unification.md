@@ -234,8 +234,10 @@ Tasks 1–5 的勾选依据为逐项实现、失败后修复及独立复审记�
 Task 6 使用当前 worktree 的 standalone 生产构建，专用端口 3012，同源代理到既有后端 8080。隔离安装按 CI 执行 `npm ci --legacy-peer-deps --ignore-scripts`；Next 15.5.25、React 19.2.8、Ant Design 6.3.1、Playwright 1.58.2 与锁文件一致。未修改依赖清单或锁文件。
 
 - `npm run type-check`、`npm run lint:check`、`ITSM_BACKEND_URL=http://127.0.0.1:8080 npm run build` 通过。Lint 保留 BPMNDesigner:348 的既有 unused-disable 警告；构建保留既有 ESLint Next 插件提示。
-- 两个目标 Playwright 文件：Chromium、单 worker、真实 cookie 登录及既有 generic 工单 10 读取，**6/6 通过，无跳过**。环境：`PLAYWRIGHT_EXTERNAL_SERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3012 PLAYWRIGHT_TICKET_DETAIL_ID=10 PLAYWRIGHT_PROCESS_TASK_TICKET_ID=10 PLAYWRIGHT_SKIP_CHANNELS=1 PLAYWRIGHT_BROWSERS_PATH=/home/administrator/.cache/ms-playwright`。
+- 两个目标 Playwright 文件：Chromium、单 worker、真实 cookie 登录及既有 generic 工单 10 读取，**7/7 通过，无跳过**。环境：`PLAYWRIGHT_EXTERNAL_SERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3012 PLAYWRIGHT_TICKET_DETAIL_ID=10 PLAYWRIGHT_PROCESS_TASK_TICKET_ID=10 PLAYWRIGHT_SKIP_CHANNELS=1 PLAYWRIGHT_BROWSERS_PATH=/home/administrator/.cache/ms-playwright`。
 - 覆盖评论草稿、单次主体/评论/任务读取、其他 API 每批不重复、AI 不随刷新重发、Alt+R、原编辑版本冲突、局部重试、最终拒绝清理、服务端只读动作、任务领取/完成及历史折叠。1440/390 亮暗主题无 body 横向溢出，并保存菜单与任务状态截图于 `/tmp`。
 - 共享组件回归初次最终依赖运行 179/180 通过；唯一失败为旧 ServiceRequestPanel 把读取失败当空状态的断言。改为成功 null 与失败后局部重试的独立断言，聚焦重跑 **12/12 通过**。WorkItemShell、审批页及 useApprovalTasks 兼容集 **39/39 通过**。未反复运行未改动的全套测试。
 - 浏览器错误、AI 建议、只读权限、版本冲突与任务命令均为 route 隔离数据；兜底 abort 所有非认证业务写请求。真实共享环境仅登录/读取；未运行真实工单、评论、任务命令或 KAF/外部授权。未以模拟响应证明真实后端命令成功。
 - 截图和详细命令日志仅留 `/tmp` 与本地忽略产物。最终控制器独立审查、设计 implemented 状态和 PR 创建仍待完成；未推送、部署或合并。
+
+Task 6 复审修复：后注册的读取 fixture 改为 method gate + `route.fallback()`，复用 `read-only-routes.ts`，不再绕过业务写入兜底拦截。新增纯模拟下游测试证明 20 个匹配／不匹配 POST/PUT/PATCH/DELETE 请求被拒绝，5 个 GET 仅到达模拟响应，任何失败均不会访问真实写接口。版本冲突新增可见解释断言后发现既有“更新失败”覆盖了具体原因；仅将该既有错误分支文案改为“工单已被更新，请重新打开编辑后重试”，保留原版本、幂等、关闭和读取行为。新生产构建通过；TicketDetail 21/21、浏览器 7/7、改动文件 lint 与 type-check 均通过。最终独立审查与 PR 仍待完成。

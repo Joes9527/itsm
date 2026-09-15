@@ -1,21 +1,16 @@
 import { test, expect } from '@playwright/test';
 import { loginAndReturn, DEFAULT_LOGIN } from '../auth-utils';
+import { guardBusinessWrites, routeRead } from '../utils/read-only-routes';
 
-test.beforeEach(async ({ page }) => {
-  await page.route('**/api/v1/**', async route => {
-    const request = route.request();
-    if (['GET', 'HEAD', 'OPTIONS'].includes(request.method()) || new URL(request.url()).pathname.startsWith('/api/v1/auth/')) await route.continue();
-    else await route.abort('blockedbyclient');
-  });
-});
+test.beforeEach(async ({ page }) => { await guardBusinessWrites(page); });
 
 test('ticket shows scoped process tasks with isolated read responses', async ({ page }, testInfo) => {
   const id = process.env.PLAYWRIGHT_PROCESS_TASK_TICKET_ID;
   test.skip(!id, 'Requires an existing readable generic ticket');
   let fail = true;
-  await page.route('**/api/v1/bpmn/tasks?**', async route => {
+  await routeRead(page, '**/api/v1/bpmn/tasks?**', async route => {
     const url = new URL(route.request().url());
-    if (url.searchParams.get('businessId') !== id) { await route.continue(); return; }
+    if (url.searchParams.get('businessId') !== id) { await route.fallback(); return; }
     expect(route.request().method()).toBe('GET');
     expect(url.searchParams.get('businessType')).toBe('generic');
     await route.fulfill(fail ? { status: 500, json: { code: 500, message: '任务读取暂时失败' } } : {
@@ -57,7 +52,7 @@ test('claims and completes a simple task with isolated mutations', async ({ page
       await route.fulfill({ json: { code: 0, data: {} } }); return;
     }
     if (request.method() !== 'GET') { await route.abort(); return; }
-    if (url.searchParams.get('businessId') !== id) { await route.continue(); return; }
+    if (url.searchParams.get('businessId') !== id) { await route.fallback(); return; }
     const tasks = [{ id: 999001, businessType: 'generic', businessId: Number(id), taskName: '请求受理', taskType: 'user_task', taskPurpose: '', status: completed ? 'completed' : claimed ? 'assigned' : 'created', assignee: claimed ? 'Helpdesk A' : '', uiActions: { claim: !claimed && !completed, complete: claimed && !completed } }];
     await route.fulfill({ json: { code: 0, data: { data: tasks, pagination: { page: 1, pageSize: 100, total: tasks.length } } } });
   });
