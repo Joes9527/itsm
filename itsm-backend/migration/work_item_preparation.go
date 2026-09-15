@@ -234,6 +234,9 @@ func (m *Migrator) ApplyPreparation(ctx context.Context, e MigrationEvidence) er
 		if err = validatePreparationShape(ctx, tx, inv.Target.Schema, false, m.controlConfig.ReviewedGrants); err != nil {
 			return err
 		}
+		if err = ensureMigrationLedgerColumns(ctx, tx); err != nil {
+			return fmt.Errorf("prepare migration ledger: %w", err)
+		}
 		if _, err = tx.ExecContext(ctx, workItemPreparationSQL); err != nil {
 			return fmt.Errorf("prepare structure: %w", err)
 		}
