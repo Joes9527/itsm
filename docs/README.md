@@ -1,5 +1,7 @@
 # ITSM 文档中心
 
+- [Ticket 详情体验统一设计（draft，待文档审阅）](./superpowers/specs/2026-09-15-ticket-detail-experience-unification-design.md)：统一刷新、局部恢复、编辑保护和当前／历史任务展示。
+
 - [WorkItem 任务分配：实现决策、验证证据与后续顺序](./review/2026-09-15-work-item-task-assignment-report.md)
 
 - [KAF / ITSM 本机 WSL 开发环境](development-environment.md)：当前源码入口、运行关联、启动来源、共享基础设施和回滚材料。
