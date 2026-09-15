@@ -80,6 +80,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  line-height: 1;
+}
+
+.mobileOverflowItem {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .searchInput {
