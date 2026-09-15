@@ -22,6 +22,9 @@ profile 即可完成「口径确认 → 集合匹配 → 差异归因 → 字段
 - 声明式 profile（YAML）驱动：源文件与哈希、目标库/接口坐标、过滤口径、字段规则、结构检查、写操作
 - 三个分析模式：`derive-map`（从已迁移行反推映射）、`tree`（层级/前缀/路径分段归因）、
   `discriminate`（已迁 vs 未迁的判别字段）
+- `verify-profile`：把 **profile 声明的规则**与 `derive-map` 的**实测命中率**对比，
+  声明与数据不符即失败/告警（防"口径悄悄变了却照旧执行"）
+- **证据隐私策略**（§8）：证据默认只含聚合计数、结构与脱敏标识，禁止邮箱/姓名明文入仓
 - **补建**写操作（受 profile 驱动，默认关闭）：dry-run → 预检 → 执行 → 验收 → 证据与回滚
 - 统一证据 JSON + 文本摘要；离线自检；离线单元测试；runbook 与开发文档收录
 
@@ -47,7 +50,7 @@ profile 即可完成「口径确认 → 集合匹配 → 差异归因 → 字段
 
 ```
 scripts/
-  __init__.py                 # 使 scripts 成为可导入包（新增，空文件）
+  __init__.py                 # 使 scripts 成为可导入包（新增，空文件；仅供 python3 -m 导入，不影响既有 JS 脚本）
   migration/
     __init__.py
     profile.py                # 载入并校验 profile；未识别规则/实体 → 加载即失败
@@ -71,7 +74,7 @@ scripts/
 - `profile`：把 YAML 变成校验过的不可变配置；未知键/未知规则/哈希不符 → 报错退出
 - `sources`：把导出文件变成「按源键索引的记录字典」并核对哈希与条数
 - `target`：只读取数；写操作时提供产品 API 客户端（登录、CSRF、POST）
-- `checks/*`：一个实体一个模块，实现 §6 接口
+- `checks/*`：一个实体一个模块，实现 §6 实体插件接口
 - `analyze`：三个可独立运行的归因分析
 - `backfill`：唯一允许写库（实际是写产品接口）的模块，实现五步纪律
 - `report`：统一输出形状，供人读与机读
@@ -150,6 +153,13 @@ entities:
 `"department_by:<源字段>"`（用该源字段的 code 查目标部门 id）｜`<字面量>`（如 `end_user`、`1`）。
 不支持的写法在加载时报错。
 
+**`records` 的语义**：它是**基线断言**（用于发现"手上的文件不是当初那份"）。批次合法演进时用
+`--allow-record-drift` 放宽；放宽后必须在证据里记 `record_drift: {declared, actual}`，不得静默通过。
+
+**profile 版本策略**：v1 **故意**对未知顶层键、未知规则、未知实体报错（防止拼写错误被静默忽略）。
+未来新增字段/规则时递增 `version`，并在加载器内实现"旧版本 → 当前版本"的显式升级函数；
+不提供"默默忽略未知键"的兼容模式。
+
 **校验规则（加载时执行，任一失败即退出并说明原因）**
 1. `version` 必须为已支持版本；未知顶层键报错（防止拼写错误被静默忽略）
 2. `source.files` 中声明的文件必须存在；`sha256` 声明则**强校验**；`records` 声明则核对条数
@@ -189,6 +199,7 @@ python3 -m scripts.migration verify        --profile p.yaml [--evidence-out e.js
 python3 -m scripts.migration derive-map    --profile p.yaml [--entity users]
 python3 -m scripts.migration tree          --profile p.yaml --entity departments
 python3 -m scripts.migration discriminate  --profile p.yaml --entity users
+python3 -m scripts.migration verify-profile --profile p.yaml [--entity users]   # 声明规则 vs 实测命中率
 python3 -m scripts.migration backfill      --profile p.yaml [--entity users] [--apply]
 python3 -m scripts.migration self-test
 ```
@@ -198,11 +209,33 @@ python3 -m scripts.migration self-test
 - `tree` 输出：根/深度分布/深度与键长对应关系/前缀闭包覆盖/路径分段归因
 - `discriminate` 输出：区分"已迁 vs 未迁"的字段及其分布（本次据此定位到 `HR_USERID` 口径）
 - `self-test`：合成 fixture 跑通纯函数路径，**不连库、不联网**
-- **退出码**：`0` 通过 ｜ `1` 运行错误 ｜ `2` 预检阻塞（拒写） ｜ `3` 存在未归因差异
+- `verify-profile` 命中率阈值来自 profile（`rule_assertions[].min_match_rate`，默认 0.95）；
+  低于阈值 → 退出码 4（规则漂移），并在证据中列出实测值与声明值
+- **退出码**：`0` 通过 ｜ `1` 运行错误 ｜ `2` 预检阻塞（拒写） ｜ `3` 存在未归因差异 ｜ `4` 规则漂移
+- **退出码优先级**：`1 > 2 > 4 > 3`（先报最需要人工介入的）。
+  即使返回 3，预检仍照常执行（校验与写入预检不互相阻塞）
 - `--allow-unattributed` **只把退出码 3 降为 0**；未归因差异仍**完整写入证据 JSON**
   （不得隐藏），并在文本摘要里以 `WARN` 列出——用于"差异已记录并接受"的场景
 
-## 8. 写操作五步纪律（v1 仅 `create_missing`）
+## 8. 证据与隐私策略
+
+同批交付曾把 54 个真实邮箱与工号明文写入仓库文档（已通过改写分支历史 + 前进式脱敏修正），
+因此 v1 把隐私写成**产出契约**而不是注意事项：
+
+1. **机器可读证据（JSON）**：只包含聚合计数、结构信息与**确定性标识**——
+   邮箱/工号一律替换为 `sha256:<前8位>`（同一值在同一批次内稳定，便于两次运行比对）；
+   不写姓名、不写原始邮箱、不写电话
+2. **人读文档（Markdown）**：不得出现 `sha256:` token 当作可执行示例；需要指明对象时用占位符
+   （如 `‹迁移用户›`、`‹部门 code›`），并声明"示例已按隐私策略脱敏"
+3. **行级明细**（如逐条差异清单）写到**私有目录**（如 `~/.local/state/`），不入仓；
+   仓库只保留聚合结果与私有目录路径
+4. **凭据**：一律 `from_env` / `from_file` 解析，任何日志、证据、报错都不得包含凭据值
+5. **租户边界**：校验读数用 `ga_owner` 一类可绕过 RLS 的账号时，必须在 profile 里显式声明
+   `scope: full-database`；否则按 `tenant_filter` 限租户。无论哪种，证据都不得含行级明细（第 3 条）
+6. **产出前自动检查**：`report.py` 写入前扫描自身输出，命中邮箱/手机号/工号明文即**拒绝写出**
+   （退出码 1），并把命中位置打印出来
+
+## 9. 写操作五步纪律（v1 仅 `create_missing`）
 
 1. **预检（只读）**：逐条核验 `preflight` 声明的条件（键不存在、邮箱不冲突、部门可解析…），
    任一失败 → 退出码 2 并列出阻塞项，**不执行任何写操作**
@@ -213,7 +246,7 @@ python3 -m scripts.migration self-test
 5. **证据与回滚**：证据 JSON 记录 payload（不含口令）、结果、`created_id`、回滚命令
    （产品侧停用 + SQL 删除），并写入 `docs/migrations/` 归档
 
-## 9. 测试与 CI
+## 10. 测试与 CI
 
 - **离线单元测试**：`scripts/__tests__/test_migration_*.py`（pytest）
   - profile 校验：未知键/未知规则/哈希不符/缺凭据 → 必须报错
@@ -221,19 +254,23 @@ python3 -m scripts.migration self-test
   - `discriminate` 的判别逻辑、`tree` 的前缀/路径分段归因、写计划生成（不执行）
 - **`self-test`**：合成 fixture 覆盖 verify（users+departments）、derive-map、tree、discriminate 的纯函数路径
 - **CI**：只跑 `self-test` 与上述单元测试（离线）。真实校验不进 CI，按 runbook 手工执行
-- **回归锚点**：用 2026-08 的真实 profile 运行 `verify`，关键数值与
-  `docs/migrations/2026-09-15-legacy-migration-validation-evidence.json` 逐项一致
-  （差集、绑定命中、bcrypt 计数、结构检查）；该比对作为验收脚本的一部分运行一次并留证
+- **回归锚点**：用 2026-08 的真实 profile 运行 `verify`，与
+  `docs/migrations/2026-09-15-legacy-migration-validation-evidence.json` 的**已脱敏**数值逐项比对：
+  **所有计数字段必须严格相等**（差异集合大小、绑定命中、bcrypt 计数、结构检查结果）；
+  样本字段按 `sha256:` token 比对（同一值 token 必须相同）。
+  比对写成脚本 `scripts/__tests__/test_migration_regression_anchor.py`，运行一次并留证；
+  因目标库会继续变化（例如又补建了数据），脚本支持 `--update-anchor` 重设基线**并要求写明原因**
 
-## 10. 迁移路径与文档
+## 11. 迁移路径与文档
 
 - 把 `scripts/verify_itsm_migration_data.py`、`scripts/backfill_legacy_users.py` 的已验证逻辑
   **迁入包内并删除旧脚本**（AGENTS.md：新路径取代旧路径须同批移除），同步更新引用
 - 新增 `docs/migrations/runbook-data-migration-validation.md`：profile 怎么写、五步怎么写、
-  CI 跑什么、退出码含义、常见差异的处置口径
+  CI 跑什么、退出码含义（含优先级与 4 号"规则漂移"）、常见差异的处置口径、隐私策略（§8）
+- 新增 `scripts/requirements.txt` 记录脚本依赖（当前仅 PyYAML）
 - 更新 `docs/DEVELOPMENT_GUIDE.md`（及命令参考）收录命令入口
 
-## 11. 风险与未决
+## 12. 风险与未决
 
 | 风险/未决 | 处置 |
 | --- | --- |
@@ -243,12 +280,18 @@ python3 -m scripts.migration self-test
 | 补建误用（未预检就写） | 默认 dry-run；`--apply` 需 `write.enabled: true` + 环境变量；预检阻塞即拒写 |
 | v1 只覆盖两个实体 | profile 与注册表已留扩展位；新增实体=新增模块，不改核心 |
 | 真实校验无法进 CI | 以 runbook + 回归锚点替代；CI 只保证离线部分 |
+| 证据再次泄漏个人信息 | §8 六条产出契约 + `report.py` 写出前自检（命中即拒写）；验收第 7 条专门检查 |
+| 声明规则与数据脱节 | `verify-profile`（退出码 4）把"口径漂移"变成显式失败 |
 
-## 12. 验收标准
+## 13. 验收标准
 
 1. `self-test` 在无数据库、无网络环境下通过，并可被 CI 执行
 2. 上述离线单元测试全部通过
-3. 以 2026-08 的真实 profile 运行 `verify`，关键数值与既有证据逐项一致（见 §9 回归锚点）
+3. 以 2026-08 的真实 profile 运行 `verify`，关键数值与既有证据逐项一致（见 §10 回归锚点）
 4. `backfill --apply` 在缺少环境变量口令时**拒绝执行**；在数据已补全时 dry-run 报告"0 条待建"
 5. 旧脚本已删除，代码与 runbook 中不再出现旧路径（历史报告保留引用并加一行指向新入口）
-6. runbook 与开发文档已收录命令入口
+6. runbook 与开发文档已收录命令入口（含 `scripts/requirements.txt`）
+7. **隐私**：证据 JSON 与文档中不存在邮箱/姓名/电话明文（自动扫描断言），
+   且文档中的示例不含 `sha256:` token 充当可执行参数
+8. `verify-profile` 能检出人为制造的规则漂移（把 profile 的 `filter.value` 改成不存在的值后，
+   命令必须以退出码 4 失败）
