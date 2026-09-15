@@ -884,6 +884,10 @@ func NewApplication() *Application {
 		gin.SetMode(gin.TestMode)
 	}
 	r := gin.Default()
+	r.Use(func(c *gin.Context) {
+		c.Request = authentication.WithCookieTransportPolicy(c.Request, cfg.Server.CookieSecure, gin.Mode() == gin.ReleaseMode)
+		c.Next()
+	})
 	if err := r.SetTrustedProxies([]string{"127.0.0.1"}); err != nil {
 		sugar.Warnw("failed to set trusted proxies, falling back to default", "error", err)
 	}
