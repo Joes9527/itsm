@@ -148,6 +148,17 @@ ITSM_ALLOW_DESTRUCTIVE_FRESH=true ITSM_FRESH_HOST="$DB_HOST" \
 go run -tags create_user main.go
 ```
 
+WSL 嵌套 worktree 的发布构建应显式绑定 Git 来源：Go 的自动 VCS 探测可能取到父仓库，导致嵌入的提交与当前 worktree 不一致。先提交并验证工作树干净，在 `itsm-backend` 目录执行：
+
+```bash
+task_git_dir="$(git rev-parse --absolute-git-dir)"
+task_source_root="$(git rev-parse --show-toplevel)"
+GIT_DIR="$task_git_dir" GIT_WORK_TREE="$task_source_root" go build -buildvcs=true -o /tmp/itsm-api-candidate .
+go version -m /tmp/itsm-api-candidate
+```
+
+发布前核对 `vcs.revision` 等于受审提交且 `vcs.modified=false`，再记录二进制 SHA256、私有启动描述和实际运行 PID。不能仅凭二进制文件名或启动描述中的版本标签认定构建来源；旧制品内嵌父仓库信息也不能单独证明实际编译的是父仓库代码。前端另行记录源码提交、Build ID 和发布目录。
+
 ### BPMN instance authorization
 
 Trusted BPMN scope is built only from authenticated `tenant_id`, `user_id`, role, and RBAC state. Elevated permissions are `process_instance:read`, `process_instance:update`, `task:read`, and `task:update`; request parameters never grant scope.

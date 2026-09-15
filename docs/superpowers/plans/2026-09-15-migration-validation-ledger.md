@@ -188,10 +188,76 @@ C3 的 SLA 业务覆盖、C4 的主管审批是否保留，在既有交接中未
 
 维护者对§10下一步回复go ahead，按现有方案执行，不重新扩展迁移范围。
 
-- [ ] F1/F2：generic_ui_fixes 在独立分支统一修改 TicketDetail 人员搜索和过期状态阻断；先失败回归、再实现、再最小测试/类型检查。返回提交供独立复审。
-- [ ] R5：cookie_transport_fix 在独立分支实现可区分未指定/显式值的Cookie传输策略，保留HTTPS安全优先和默认生产安全，验证session/refresh/logout/OAuth/CSRF一致性；不修改ENV以绕过启动约束。
-- [ ] C5：menu_target_plan 只读检查新模型菜单来源与租户/权限/路由，准备具名对象定向事务与回滚；主agent审核后唯一写入。不是全量初始化，不能以菜单数据补齐推断RBAC或baseline已通过。
-- [ ] 集成：独立复核各提交；以实际前端24fe8546、后端c3c880df构造仅本批必要变化的候选，不部署主干的047或其它迁移。保存旧制品、recipe与配置哈希，预构建完成后分别短暂停启itsm/itsm-web；其它服务保持原状态。
+- [x] F1/F2：generic_ui_fixes 在独立分支统一修改 TicketDetail 人员搜索和过期状态阻断；先失败回归、再实现、再最小测试/类型检查。返回提交供独立复审。
+- [x] R5：cookie_transport_fix 在独立分支实现可区分未指定/显式值的Cookie传输策略，保留HTTPS安全优先和默认生产安全，验证session/refresh/logout/OAuth/CSRF一致性；不修改ENV以绕过启动约束。
+- [x] C5：menu_target_plan 只读检查新模型菜单来源与租户/权限/路由，准备具名对象定向事务与回滚；主agent审核后唯一写入。不是全量初始化，不能以菜单数据补齐推断RBAC或baseline已通过。
+- [x] 集成：独立复核各提交；以实际前端24fe8546、后端c3c880df构造仅本批必要变化的候选，不部署主干的047或其它迁移。保存旧制品、recipe与配置哈希，预构建完成后分别短暂停启itsm/itsm-web；其它服务保持原状态。
 - [ ] 验收：首先LAN HTTP 3010真实登录/刷新/退出；随后菜单、搜索首100外admin、generic处理/评论/附件/解决关闭。只使用合成验收记录，失败如实记录，不用DB改状态替代UI。
 
 共享变更仅由主agent执行：目标itsm_ga_ready，保持Dev PG、Redis DB11不变。菜单定向写入前核验现态与备份，限定tenant和具名对象；运行切换失败恢复旧recipe/制品，菜单回滚只移除本次插入且未被其它对象引用的记录。源码提交、构建来源、部署制品和UI验收分别记录。
+
+
+## 12. 修复执行证据（2026-09-15，进行中）
+
+### 已执行与实际候选
+
+- 主干基线a59d0516a；独立实现提交：F1/F2 dabab849b94f7e451acf0b7a81cde90ce33f06a3，Cookie 3e64fb4ba627a5e0900da2a0da07a50d88bae5f9。menu_target_plan独立复审源码及实际WSL窄移植，无P0/P1/P2。
+- 实际API由c3c880df窄移植为b226142642b6bf3289102cb2548345e7369675f3；五个受影响Go包测试及二进制构建通过。ENV仍production，仅私有启动环境增加ITSM_COOKIE_SECURE=false；server.cookie_secure为实际既有字段（更正此前Auth.CookieSecure描述）。
+- 实际前端先由24fe8546窄移植为5a71ae3316eb478ed4fc1643e0d107f93d07d846，Build ID qS3HboSDPngQi-Wq9cvHE；全新锁文件安装，26组件测试、类型检查、生产构建通过。未带入SLA或047代码。
+- LAN登录后access/refresh/CSRF cookie均HttpOnly，HTTP明确配置下Secure=false；浏览器进入管理页、整页刷新保留登录、UI退出HTTP200且两枚会话cookie清除，再登录成功。无需localhost隧道。
+- 从真实“工单管理”菜单进入ID8，搜索admin出现首100之外账号，UI分派成功且刷新后处理人为admin；该操作将new变为open，版本升2。未向真实业务处理人派单。
+
+### C5定向菜单配置 completed
+
+仅tenant1新增6个菜单：/dashboard、/tickets、/service-catalog、/approvals、/admin/ticket-categories、/admin/service-catalogs。沿用新模型规范权限与既有service→service_catalog权限别名；无角色/授权变更。主agent唯一写入，原配置设计与SQL经不同agent复审，修复JSON缺字段、回执作用域、跨actor、跨租户依赖及重放检查后执行。
+
+- 前置完整备份：WSL私有目录 ~/.local/state/itsm-migration-ui-fixes-20260915/before-menu-and-cookie-20260915.dump，1491911字节，SHA256 185bb641db5f9dd06a5147925445fff7e23a123e43d60c981da800e66ba769d6。archive list通过，本轮未做全量恢复。
+- 首次写入6条，第二次执行仍6条；审计ID50、operation_id=menu-core-tenant1-20260915-c5。用户/角色/权限/工单计数与身份、权限摘要前后一致。
+- 同目录保存6项manifest、事务SQL、精确回滚SQL和原recipe/config，权限0600；回滚仅允许原回执ID/全列未变且无任何租户依赖的菜单，不删除审计，不重置序列。
+- UI显示4主导航+2管理入口；页面可见不是对应全部业务功能验收。
+
+### R6新增：重启暴露原有权限漂移，已恢复
+
+16:29新候选和回退旧c3二进制均因execution runtime admission失败退出，API短暂停止；恢复后PID2341946。不是Cookie失败：变更前备份已明确保存ga_runtime对execution_tool_invocations的SELECT/INSERT/UPDATE/DELETE授权。
+
+c3 ValidateExecutionRuntime要求该表只读，041迁移由ga_owner SECURITY DEFINER触发器登记。独立审查核实目标函数与触发器实际一致后，仅REVOKE INSERT/UPDATE/DELETE，保留SELECT与原trigger。有效表/列权限、直接函数权限检查通过；追加operation_id=runtime-scope-readonly-20260915审计。未执行迁移、未扩权或关闭检查。不能恢复该错误写权限来“回滚”代码；旧c3同样不能以该权限启动。
+
+### R7新增：LAN HTTP操作编号
+
+F2过期状态判断已删除，但LAN浏览器实际报告crypto.randomUUID不可用，编辑请求未发出；创建入口随后复现同根因，也未发POST、未创建第二条验收记录。追加修复由generic_ui_fixes实现，使用既有getRandomValues加密随机，不取消幂等键、不用弱随机。add1d7d57为第一版编辑修复，WSL ffedb688经独立复审与84相关测试；创建和编辑统一入口版本正在完成，不把中间修复宣称完整验收。
+
+### R8待办：通知读取租户上下文
+
+重启后的页面GET notifications返回500，错误为“rls: no tenant_id in context and system bypass not set”。本轮尚未修复，不通过扩权/system bypass掩盖。该报错与菜单是否可见、F1搜索结果和Cookie是否保留分开记录。
+
+
+R7最终代码：f994a93e937c1d857d53fcef1d47c5150ea04a79，将创建/编辑收敛到既有sessionSecurity.generateOperationId；仅使用randomUUID或128位getRandomValues，无加密能力时明确拒绝。独立复审通过。WSL最终候选c642bbf441faf29d8ea3ac90628cc6d54844f9e1，99项组件/API/创建hook测试通过，类型检查通过，生产构建执行中。前端尚未更新到此最终候选，等待构建后真实LAN复测；不以测试通过代替部署结果。
+
+
+### 版本证据的进一步更正
+
+旧API文件名/recipe标c3c880df，其内嵌VCS为66008779 modified=true。本轮在干净b226工作树复现同样的父仓库标记，说明Go在嵌套worktree的自动VCS探测会误取父仓库；不能据此单独断言旧binary实际源码是660或私有改动。显式GIT_DIR/GIT_WORK_TREE构建后，内嵌b226且modified=false。该操作已写入Development Guide；最终发布使用准确嵌入来源的构建。
+
+R8进一步定位：c3与660通知代码一致，Gin Context不转发typed tenant key；Request.Context中租户未被Cookie策略删除。已找到现成窄修复f3844a19569a8e51637be2f56def6978ff1eb4e7，只将8处通知持久化调用改为Request.Context，准备复用并回归测试。尽管不是Cookie逻辑因果关系，通知500仍按本次部署后观察到的运行回归处理，不能忽略。
+
+R9新增：ID9真实LAN创建201，new→in_progress更新200/version2。解决操作请求已发送但返回500/code5001“解决工单时必须填写解决方案”；编辑UI缺输入项已证实。dde9c46898704a3d9feedad65e3f7eca42051635仅为generic新增/回显解决方案并做required提示，不修改后端规则或专业生命周期；独立及WSL 33组件tests均通过，构建后续测。
+
+
+### 17:08 最终候选实测与余项更新（取代上方构建中/尚未部署描述）
+
+API已部署71bcb0bae2d81d9908a36d88cc79feef09ccea9e（Cookie+通知上下文窄修复）；内嵌VCS相同、modified=false，二进制SHA256 b50e4364673709afa48832d7e0cd26902080dc908b8c2976bd1988bfd80aea24。前端已部署f1eda552ce5a3de3cc5323e02f4bc6b26129afdf（人员搜索、状态提交、HTTP操作编号、解决方案），Build ID S3pYCsKOf4K1LI-9qlAiA。最终33组件tests、类型检查及生产构建通过，之前统一操作编号99项回归通过。通知实现56ffd35d0与解决方案dde9c468经独立复审。
+
+- R7已验收：LAN创建ID9 HTTP201；new→in_progress HTTP200/version2。
+- R8通知列表读取已验收：刷新真实3010页面观察GET /api/v1/notifications HTTP200。
+- R9解决方案已验收：填写合成解决方案并提交HTTP200；刷新显示已解决，目标数据库只读核实ID9 resolved/version3。
+- 前端旧进程2370235两次SIGTERM仍残留且3010已关闭；对照管理器PID/start_ticks/cwd身份，在生命周期锁内仅结束该残留进程后正常启动新制品。当前前后端运行，KAF和两worker仍停止。
+- Dev只读复核itsm_config_baseline_20260908：tickets26、menus71、users7869，保持变更前数量。目标menus6；ID8 open/version2，ID9 resolved/version3。
+
+新增收口项：
+
+1. 实时通知WS仍用旧默认localhost:8090。与通知列表200区分；使用构建时NEXT_PUBLIC_WS_URL指向LAN3010的/api/v1/ws/notifications，3010既有代理转8080，并限定后端允许该LAN Origin。正在构建验证。
+2. resolved后actions.edit=false由后端终态规则产生，不是单纯前端旧判断。批准独立关闭按钮及actions.close能力投影，复用版本化UpdateTicket，仅generic resolved→closed纯状态命令；不开放普通编辑、不改变专业生命周期、不使用旧无可靠幂等关闭端点。实现与独立复审中，V2关闭仍未通过。
+
+R1 readyz、C3七条SLA空字符串绑定/19补班、C4专业流程配置与消费者停用边界保持原裁定。此次没有重跑五批、seed或迁移，没有清库，没有迁移旧ticket。源码尚未推送或合并本轮修复。
+
+端口17:12复核：3010 ITSM Next、8080 ITSM API；3000由acp-langfuse容器占用，是Langfuse，不是第二个ITSM；3001及8090无监听。不要为“统一ITSM端口”停止另有用途的Langfuse。
