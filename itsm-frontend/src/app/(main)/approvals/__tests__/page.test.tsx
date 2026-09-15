@@ -100,3 +100,30 @@ it.each(['service_request','ticket','change'])('rejects retired %s identity', as
  expect(await screen.findByRole('link', { name: '流程实例 #12' })).toHaveAttribute('href', '/workflow/instances?instanceId=12');
  expect(screen.queryByRole('link', { name: 'TKT-retired' })).not.toBeInTheDocument();
 });
+
+it.each(['claim', 'decision'])('reads after confirmed %s even while a manual refresh is pending', async command => {
+  let finishCommand!: () => void;
+  const api = command === 'claim' ? BPMNWorkflowApi.claimTask : BPMNWorkflowApi.submitApprovalDecision;
+  (api as jest.Mock).mockImplementationOnce(() => new Promise<void>(resolve => { finishCommand = resolve; }));
+  render(<ApprovalsCenterPage />);
+  if (command === 'claim') fireEvent.click(await screen.findByRole('button', { name: '领取' }));
+  else {
+    fireEvent.click(await screen.findByRole('button', { name: '批准' }));
+    fireEvent.click(screen.getByRole('button', { name: '确认批准' }));
+  }
+  await waitFor(() => expect(api).toHaveBeenCalledTimes(1));
+  let rejectOld!: (error: unknown) => void;
+  list.mockImplementation(params => params?.status === 'created'
+    ? new Promise((_, reject) => { rejectOld = reject; }) as never
+    : Promise.resolve({ items: [], total: 0 }) as never);
+  fireEvent.click(screen.getByRole('button', { name: '刷新' }));
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(8));
+  rows([]);
+  await act(async () => finishCommand());
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(12));
+  expect(screen.queryByText('经理审批')).not.toBeInTheDocument();
+  await act(async () => rejectOld(new ApiError('旧读取拒绝', 403)));
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByText(/当前授权范围内的审批待办：0 项/)).toBeInTheDocument();
+  expect(api).toHaveBeenCalledTimes(1);
+});

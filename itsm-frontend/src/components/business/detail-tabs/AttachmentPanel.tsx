@@ -1,4 +1,5 @@
 'use client';
+import { useDetailRefreshEntry } from '@/components/business/detail-tabs/DetailRefreshContext';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Upload, Button, App, Typography, Progress, Modal, Space, Empty, Spin, Alert } from 'antd';
@@ -78,6 +79,7 @@ const AttachmentPanelContent: React.FC<AttachmentPanelProps> = ({
     permissions.canRead
   );
   const items = resource.data || [];
+  useDetailRefreshEntry(permissions.canRead ? { key: 'attachments', label: '附件', reload: resource.reload, isWriting: () => busy.current } : undefined);
   const access = useRef(permissions);
   access.current = permissions;
   const confirmation = useRef<ReturnType<typeof modal.confirm> | null>(null);
@@ -153,7 +155,7 @@ const AttachmentPanelContent: React.FC<AttachmentPanelProps> = ({
       if (!current()) return;
       options.onSuccess?.({});
       message.success(`${file.name} 上传成功`);
-      await resource.reload();
+      await resource.reload({ afterWrite: true });
     } catch (e) {
       if (!current()) return;
       resource.deny(e);
@@ -185,7 +187,7 @@ const AttachmentPanelContent: React.FC<AttachmentPanelProps> = ({
           });
           if (!current()) return;
           message.success('删除成功');
-          await resource.reload();
+          await resource.reload({ afterWrite: true });
         } catch (e) {
           if (current()) {
             resource.deny(e);

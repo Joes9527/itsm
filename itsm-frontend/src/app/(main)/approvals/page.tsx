@@ -120,7 +120,7 @@ export default function ApprovalsCenterPage() {
       await BPMNWorkflowApi.claimTask(task.id, assertContext);
       if (!current()) return;
       message.success('任务已领取');
-      await resource.reload();
+      await resource.reload({ afterWrite: true });
     } catch (error) {
       if (!current()) return;
       if (resource.deny(error)) { busy.current = false; setClaiming(null); setDecision(null); }
@@ -158,7 +158,7 @@ export default function ApprovalsCenterPage() {
       if (!current()) return;
       message.success(decision.action === 'approve' ? '已批准' : '已拒绝');
       setDecision(null);
-      await resource.reload();
+      await resource.reload({ afterWrite: true });
     } catch (e) {
       if (!current()) return;
       if (resource.deny(e)) { busy.current = false; setSubmitting(false); setDecision(null); }

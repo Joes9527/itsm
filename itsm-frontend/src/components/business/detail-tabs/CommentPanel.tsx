@@ -1,4 +1,5 @@
 'use client';
+import { useDetailRefreshEntry } from '@/components/business/detail-tabs/DetailRefreshContext';
 
 import React, { useEffect, useState, useRef } from 'react';
 import { Send, Edit, Trash2, MessageSquare, AtSign, User } from 'lucide-react';
@@ -57,6 +58,7 @@ const CommentPanelContent: React.FC<CommentPanelProps> = ({
     data => data.total
   );
   const comments = resource.data?.comments || [];
+  useDetailRefreshEntry({ key: 'comments', label: '评论', reload: resource.reload, isWriting: () => busy.current });
   const [newComment, setNewComment] = useState('');
   const [isInternal, setIsInternal] = useState(false);
   const [mentionedUsers, setMentionedUsers] = useState<number[]>([]);
@@ -94,7 +96,7 @@ const CommentPanelContent: React.FC<CommentPanelProps> = ({
       if (!current()) return;
       reset?.();
       message.success('评论操作成功');
-      await resource.reload();
+      await resource.reload({ afterWrite: true });
     } catch (error) {
       if (!current()) return;
       resource.deny(error);

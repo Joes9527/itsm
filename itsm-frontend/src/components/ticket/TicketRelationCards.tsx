@@ -1,4 +1,5 @@
 'use client';
+import { useDetailRefreshEntry } from '@/components/business/detail-tabs/DetailRefreshContext';
 
 import React from 'react';
 import { useDetailResource } from '@/components/business/detail-tabs/useDetailResource';
@@ -72,6 +73,7 @@ export const TicketRelationCards: React.FC<TicketRelationCardsProps> = ({
     onCountChange
   );
   const relations = resource.data || [];
+  useDetailRefreshEntry({ key: 'relations', label: '关联关系', reload: resource.reload, isWriting: () => false });
   const feedback = (
     <DetailReadState error={resource.error} loading={resource.loading} reload={resource.reload} />
   );

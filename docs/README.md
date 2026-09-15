@@ -1,5 +1,9 @@
 # ITSM 文档中心
 
+- [Ticket 详情体验统一实施计划](./superpowers/plans/2026-09-15-ticket-detail-experience-unification.md)：六项任务及最终复审完成；浏览器 7/7、最终并发回归 98/98，已提交 PR #35。
+
+- [Ticket 详情体验统一设计（implemented）](./superpowers/specs/2026-09-15-ticket-detail-experience-unification-design.md)：统一刷新、局部恢复、编辑保护和当前／历史任务展示。
+
 - [WorkItem 任务分配：实现决策、验证证据与后续顺序](./review/2026-09-15-work-item-task-assignment-report.md)
 
 - [旧 ITSM 主数据迁移与当前目标验证：唯一续办清单](superpowers/plans/2026-09-15-migration-validation-ledger.md)：已完成、待补配置、运行阻塞、待验收及数据库清理边界。

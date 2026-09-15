@@ -1,17 +1,20 @@
 import { test, expect } from '@playwright/test';
 import { loginAndReturn, DEFAULT_LOGIN } from '../auth-utils';
+import { guardBusinessWrites, routeRead } from '../utils/read-only-routes';
+
+test.beforeEach(async ({ page }) => { await guardBusinessWrites(page); });
 
 test('ticket shows scoped process tasks with isolated read responses', async ({ page }, testInfo) => {
   const id = process.env.PLAYWRIGHT_PROCESS_TASK_TICKET_ID;
   test.skip(!id, 'Requires an existing readable generic ticket');
   let fail = true;
-  await page.route('**/api/v1/bpmn/tasks?**', async route => {
+  await routeRead(page, '**/api/v1/bpmn/tasks?**', async route => {
     const url = new URL(route.request().url());
-    if (url.searchParams.get('businessId') !== id) { await route.continue(); return; }
+    if (url.searchParams.get('businessId') !== id) { await route.fallback(); return; }
     expect(route.request().method()).toBe('GET');
-    expect(url.searchParams.get('businessType')).toBe('ticket');
+    expect(url.searchParams.get('businessType')).toBe('generic');
     await route.fulfill(fail ? { status: 500, json: { code: 500, message: '任务读取暂时失败' } } : {
-      json: { code: 0, data: { data: [{ id: 999001, businessType: 'ticket', businessId: Number(id), taskName: '请求受理', status: 'created', assignee: 'Helpdesk A', taskPurpose: '' }], pagination: { page: 1, pageSize: 100, total: 1 } } },
+      json: { code: 0, data: { data: [{ id: 999001, businessType: 'generic', businessId: Number(id), taskName: '请求受理', status: 'created', assignee: 'Helpdesk A', taskPurpose: '' }], pagination: { page: 1, pageSize: 100, total: 1 } } },
     });
   });
   await loginAndReturn(page, DEFAULT_LOGIN, `/tickets/${id}`);
@@ -19,6 +22,8 @@ test('ticket shows scoped process tasks with isolated read responses', async ({ 
   await expect(panel.getByRole('alert')).toBeVisible();
   fail = false;
   await panel.getByRole('button', { name: '重试' }).click();
+  await panel.getByRole('button', { name: /当前任务/ }).click();
+  await expect(panel.getByRole('button', { name: '领取任务' })).toHaveCount(0);
   await expect(panel.getByText('请求受理', { exact: true })).toBeVisible();
   await expect(panel.getByText('Helpdesk A', { exact: true })).toBeVisible();
   for (const width of [390, 1440]) {
@@ -29,7 +34,7 @@ test('ticket shows scoped process tasks with isolated read responses', async ({ 
 });
 
 
-test('claims and completes a simple task with isolated mutations', async ({ page }) => {
+test('claims and completes a simple task with isolated mutations', async ({ page }, testInfo) => {
   const id = process.env.PLAYWRIGHT_PROCESS_TASK_TICKET_ID;
   test.skip(!id, 'Requires an existing readable generic ticket');
   let claimed = false;
@@ -47,8 +52,8 @@ test('claims and completes a simple task with isolated mutations', async ({ page
       await route.fulfill({ json: { code: 0, data: {} } }); return;
     }
     if (request.method() !== 'GET') { await route.abort(); return; }
-    if (url.searchParams.get('businessId') !== id) { await route.continue(); return; }
-    const tasks = completed ? [] : [{ id: 999001, businessType: 'ticket', businessId: Number(id), taskName: '请求受理', taskType: 'user_task', taskPurpose: '', status: claimed ? 'assigned' : 'created', assignee: claimed ? 'Helpdesk A' : '', uiActions: { claim: !claimed, complete: claimed } }];
+    if (url.searchParams.get('businessId') !== id) { await route.fallback(); return; }
+    const tasks = [{ id: 999001, businessType: 'generic', businessId: Number(id), taskName: '请求受理', taskType: 'user_task', taskPurpose: '', status: completed ? 'completed' : claimed ? 'assigned' : 'created', assignee: claimed ? 'Helpdesk A' : '', uiActions: { claim: !claimed && !completed, complete: claimed && !completed } }];
     await route.fulfill({ json: { code: 0, data: { data: tasks, pagination: { page: 1, pageSize: 100, total: tasks.length } } } });
   });
   await loginAndReturn(page, DEFAULT_LOGIN, `/tickets/${id}`);
@@ -60,4 +65,11 @@ test('claims and completes a simple task with isolated mutations', async ({ page
   await page.getByRole('button', { name: '确认完成' }).click();
   await expect(panel.getByText('当前账号暂无可见的活动任务')).toBeVisible();
   expect(writes).toBe(2);
+  const history = panel.getByRole('button', { name: /历史任务/ });
+  await expect(history).toHaveAttribute('aria-expanded', 'false');
+  await expect(panel.getByText('请求受理', { exact: true })).toHaveCount(0);
+  await history.click();
+  await expect(panel.getByText('请求受理', { exact: true })).toBeVisible();
+  await expect(panel.getByRole('button', { name: '完成任务' })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('task-history-expanded.png'), fullPage: true });
 });

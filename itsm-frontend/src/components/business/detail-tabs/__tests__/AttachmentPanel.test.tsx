@@ -210,3 +210,28 @@ it('does not allocate an image URL for a preview that was closed while loading',
   await act(async () => finish({ type: 'image/png' }));
   expect(createURL).not.toHaveBeenCalled();
 });
+it.each(['upload', 'delete'])('refreshes after %s while a pre-write read is pending and rejects its late list', async operation => {
+  const user = userEvent.setup();
+  const onCountChange = jest.fn();
+  (adapter.list as jest.Mock).mockResolvedValue([attachment]);
+  const { container } = render(<App><AttachmentPanel targetType='ticket' targetId={101} adapter={adapter} permissions={permissions} onCountChange={onCountChange} /></App>);
+  await screen.findByText('diagnostic.txt', { exact: true });
+  let finish!: (value: typeof attachment[]) => void;
+  (adapter.list as jest.Mock).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  await user.click(screen.getByRole('button', { name: '刷新' }));
+  const uploaded = { ...attachment, id: 18, fileName: 'uploaded.txt' };
+  (adapter.list as jest.Mock).mockResolvedValue(operation === 'upload' ? [attachment, uploaded] : []);
+  if (operation === 'upload') {
+    await user.upload(container.querySelector('input[type=file]') as HTMLInputElement, new File(['log'], 'uploaded.txt', { type: 'text/plain' }));
+  } else {
+    await user.click(screen.getByRole('button', { name: '删除' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /删\s*除/ }));
+  }
+  try {
+    await waitFor(() => expect(adapter.list).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(onCountChange).toHaveBeenLastCalledWith(operation === 'upload' ? 2 : 0));
+  } finally { await act(async () => finish([attachment])); }
+  if (operation === 'upload') expect(screen.getByText('uploaded.txt', { exact: true })).toBeVisible();
+  else expect(screen.queryByText('diagnostic.txt', { exact: true })).not.toBeInTheDocument();
+  expect(onCountChange).toHaveBeenLastCalledWith(operation === 'upload' ? 2 : 0);
+});

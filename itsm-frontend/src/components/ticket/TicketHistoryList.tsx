@@ -1,11 +1,16 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React from 'react';
+import { useDetailResource } from '@/components/business/detail-tabs/useDetailResource';
+import { useDetailRefreshEntry } from '@/components/business/detail-tabs/DetailRefreshContext';
+import { DetailReadState } from '@/components/business/detail-tabs/DetailReadState';
+
 import { History as HistoryIcon } from 'lucide-react';
 import { TicketApi } from '@/lib/api/ticket-api';
 
 interface TicketHistoryListProps {
   ticketId: number;
+  onCountChange?: (count: number | undefined) => void;
   formatDateTime?: (s: string) => string;
 }
 
@@ -45,36 +50,19 @@ function mapHistory(raw: unknown): HistoryRow[] {
  */
 export const TicketHistoryList: React.FC<TicketHistoryListProps> = ({
   ticketId,
+  onCountChange,
   formatDateTime = defaultFormat,
 }) => {
-  const [rows, setRows] = useState<HistoryRow[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchHistory = useCallback(async () => {
-    setLoading(true);
-    try {
-      const raw = await TicketApi.getTicketHistory(ticketId);
-      setRows(mapHistory(raw));
-    } catch {
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [ticketId]);
-
-  useEffect(() => {
-    void fetchHistory();
-  }, [fetchHistory]);
-
-  if (loading) {
-    return (
-      <div className="p-6 text-center text-[12px] text-muted">历史加载中...</div>
-    );
-  }
+  const resource = useDetailResource(ticketId, async () => mapHistory(await TicketApi.getTicketHistory(ticketId)), rows => rows.length, onCountChange);
+  useDetailRefreshEntry({ key: 'history', label: '历史流转', reload: resource.reload, isWriting: () => false });
+  const rows = resource.data || [];
+  const feedback = <DetailReadState error={resource.error} loading={resource.loading} reload={resource.reload} />;
+  if (!resource.ready) return <div>{feedback}{resource.loading && <p>历史加载中...</p>}</div>;
 
   if (rows.length === 0) {
     return (
       <div className="text-center py-6 text-muted">
+        {feedback}
         <HistoryIcon className="w-8 h-8 mx-auto mb-2 text-muted" />
         <span className="text-[12px]">暂无流转历史</span>
       </div>
@@ -83,6 +71,7 @@ export const TicketHistoryList: React.FC<TicketHistoryListProps> = ({
 
   return (
     <div className="space-y-2.5 pt-2 text-[12px]">
+      {feedback}
       {rows.map(row => {
         const userName = row.user?.name || row.user?.username || '系统';
         const detail =
