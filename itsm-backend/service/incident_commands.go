@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	assignment "itsm-backend/handlers/common/workitemassignment"
+
 	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/common/executionscope"
@@ -126,6 +128,9 @@ func (s *IncidentService) applyIncidentCommandTx(ctx context.Context, tx *ent.Tx
 	target := ""
 	switch cmd.Action {
 	case "assign":
+		if cmd.AssigneeID <= 0 {
+			return empty, common.NewValidationError("assignee must be a positive user ID", nil)
+		}
 		if !canAssignIncidentStatus(item.Status) {
 			return empty, common.NewValidationError("incidents in the current status cannot be reassigned", nil)
 		}
@@ -139,9 +144,7 @@ func (s *IncidentService) applyIncidentCommandTx(ctx context.Context, tx *ent.Tx
 		if item.Status == common.IncidentStatusNew && item.AssigneeID == 0 {
 			target = common.IncidentStatusAssigned
 		}
-		if err := NewIncidentService(tx.Client(), s.logger, s.execution).validateIncidentAssignee(ctx, cmd.AssigneeID, m.TenantID); err != nil {
-			return empty, err
-		}
+
 	case "escalate":
 		target = common.IncidentStatusEscalated
 		if cmd.EscalationLevel <= current.EscalationLevel {
@@ -189,13 +192,23 @@ func (s *IncidentService) applyIncidentCommandTx(ctx context.Context, tx *ent.Tx
 	if err := s.execution.RequireEntMembers(ctx, tx, m.TenantID, item.ID); err != nil {
 		return empty, incidentExecutionFailure(err)
 	}
+	writeVersion := m.ExpectedVersion
+	if cmd.Action == "assign" {
+		err = assignment.WithLifecycleWriter(ctx, tx, s.directory, m.ActorID, m.TenantID, EnqueueWorkItemAssignment, func(writer *assignment.Writer, actor *ent.User) error {
+			assigned, err := writer.Apply(ctx, tx.Client(), assignment.Command{WorkItemID: item.ID, TenantID: m.TenantID, ActorID: actor.ID, ActorTenantID: actor.TenantID, AssigneeID: cmd.AssigneeID, ExpectedVersion: m.ExpectedVersion, Source: m.Source, Reason: cmd.Reason})
+			if err == nil {
+				writeVersion = assigned.Version
+			}
+			return err
+		})
+		if err != nil {
+			return empty, err
+		}
+	}
 	now := time.Now().UTC()
-	update := tx.Ticket.UpdateOneID(item.ID).Where(ticket.TenantID(m.TenantID), ticket.DeletedAtIsNil(), ticket.Version(m.ExpectedVersion)).SetVersion(m.ExpectedVersion + 1).SetUpdatedAt(now)
+	update := tx.Ticket.UpdateOneID(item.ID).Where(ticket.TenantID(m.TenantID), ticket.DeletedAtIsNil(), ticket.Version(writeVersion)).SetVersion(m.ExpectedVersion + 1).SetUpdatedAt(now)
 	if statusChanged {
 		update.SetStatus(target)
-	}
-	if cmd.Action == "assign" {
-		update.SetAssigneeID(cmd.AssigneeID)
 	}
 	switch cmd.Action {
 	case "acknowledge":

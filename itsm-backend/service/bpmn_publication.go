@@ -93,10 +93,13 @@ func (e *CustomProcessEngine) ValidateDefinitionForPublication(ctx context.Conte
 			return fmt.Errorf("process is not executable")
 		}
 		for _, t := range p.UserTasks {
+			if err := validateBPMNAssigneeSource(t); err != nil {
+				return err
+			}
 			if t.TaskPurpose == "approval" {
 				approvals++
 			}
-			if strings.TrimSpace(t.Assignee) == "" && strings.TrimSpace(t.CandidateUsers) == "" && strings.TrimSpace(t.CandidateGroups) == "" && strings.TrimSpace(t.AssigneeRole) == "" && !t.AssigneeGmChain && t.AssigneeDeptId <= 0 && t.AssigneeTeamId <= 0 && t.AssigneeProjectId <= 0 && t.AssigneeTempTeamId <= 0 {
+			if t.AssigneeSource == "" && strings.TrimSpace(t.Assignee) == "" && strings.TrimSpace(t.CandidateUsers) == "" && strings.TrimSpace(t.CandidateGroups) == "" && strings.TrimSpace(t.AssigneeRole) == "" && !t.AssigneeGmChain && t.AssigneeDeptId <= 0 && t.AssigneeTeamId <= 0 && t.AssigneeProjectId <= 0 && t.AssigneeTempTeamId <= 0 {
 				return &bpmn.PublicationConfigurationError{Message: fmt.Sprintf("task %q requires candidate resolution configuration", t.ID)}
 			}
 			for _, source := range fixedScopeApproverSources(t, tenantID) {

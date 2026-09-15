@@ -7,6 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
+
 	relationmetadata "itsm-backend/common/workitemrelation"
 	"itsm-backend/ent/application"
 	"itsm-backend/ent/approvalchain"
@@ -136,8 +139,6 @@ import (
 	"itsm-backend/handlers/common/accessgrant"
 	"itsm-backend/handlers/shared/slacontract"
 	"itsm-backend/internal/jsonvalue"
-	"sync"
-	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -98557,6 +98558,7 @@ type ProcessTaskMutation struct {
 	task_name               *string
 	task_type               *string
 	assignee                *string
+	assignee_source         *string
 	candidate_users         *string
 	candidate_groups        *string
 	status                  *string
@@ -98951,6 +98953,42 @@ func (m *ProcessTaskMutation) AssigneeCleared() bool {
 func (m *ProcessTaskMutation) ResetAssignee() {
 	m.assignee = nil
 	delete(m.clearedFields, processtask.FieldAssignee)
+}
+
+// SetAssigneeSource sets the "assignee_source" field.
+func (m *ProcessTaskMutation) SetAssigneeSource(s string) {
+	m.assignee_source = &s
+}
+
+// AssigneeSource returns the value of the "assignee_source" field in the mutation.
+func (m *ProcessTaskMutation) AssigneeSource() (r string, exists bool) {
+	v := m.assignee_source
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAssigneeSource returns the old "assignee_source" field's value of the ProcessTask entity.
+// If the ProcessTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessTaskMutation) OldAssigneeSource(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAssigneeSource is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAssigneeSource requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAssigneeSource: %w", err)
+	}
+	return oldValue.AssigneeSource, nil
+}
+
+// ResetAssigneeSource resets all changes to the "assignee_source" field.
+func (m *ProcessTaskMutation) ResetAssigneeSource() {
+	m.assignee_source = nil
 }
 
 // SetCandidateUsers sets the "candidate_users" field.
@@ -100090,7 +100128,7 @@ func (m *ProcessTaskMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProcessTaskMutation) Fields() []string {
-	fields := make([]string, 0, 30)
+	fields := make([]string, 0, 31)
 	if m.task_id != nil {
 		fields = append(fields, processtask.FieldTaskID)
 	}
@@ -100111,6 +100149,9 @@ func (m *ProcessTaskMutation) Fields() []string {
 	}
 	if m.assignee != nil {
 		fields = append(fields, processtask.FieldAssignee)
+	}
+	if m.assignee_source != nil {
+		fields = append(fields, processtask.FieldAssigneeSource)
 	}
 	if m.candidate_users != nil {
 		fields = append(fields, processtask.FieldCandidateUsers)
@@ -100203,6 +100244,8 @@ func (m *ProcessTaskMutation) Field(name string) (ent.Value, bool) {
 		return m.TaskType()
 	case processtask.FieldAssignee:
 		return m.Assignee()
+	case processtask.FieldAssigneeSource:
+		return m.AssigneeSource()
 	case processtask.FieldCandidateUsers:
 		return m.CandidateUsers()
 	case processtask.FieldCandidateGroups:
@@ -100272,6 +100315,8 @@ func (m *ProcessTaskMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldTaskType(ctx)
 	case processtask.FieldAssignee:
 		return m.OldAssignee(ctx)
+	case processtask.FieldAssigneeSource:
+		return m.OldAssigneeSource(ctx)
 	case processtask.FieldCandidateUsers:
 		return m.OldCandidateUsers(ctx)
 	case processtask.FieldCandidateGroups:
@@ -100375,6 +100420,13 @@ func (m *ProcessTaskMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAssignee(v)
+		return nil
+	case processtask.FieldAssigneeSource:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAssigneeSource(v)
 		return nil
 	case processtask.FieldCandidateUsers:
 		v, ok := value.(string)
@@ -100738,6 +100790,9 @@ func (m *ProcessTaskMutation) ResetField(name string) error {
 		return nil
 	case processtask.FieldAssignee:
 		m.ResetAssignee()
+		return nil
+	case processtask.FieldAssigneeSource:
+		m.ResetAssigneeSource()
 		return nil
 	case processtask.FieldCandidateUsers:
 		m.ResetCandidateUsers()

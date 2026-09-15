@@ -150,6 +150,7 @@ func TestIncidentService_AssignIncident_ValidatesAssigneeAndReturnsUpdatedIncide
 	require.NoError(t, err)
 	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-reporter")
 	require.NoError(t, err)
+	require.NoError(t, reporter.Update().SetRole("super_admin").Exec(ctx))
 	assignee, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-agent")
 	require.NoError(t, err)
 	workItem := createIncidentTestWorkItem(t, ctx, client, tenant.ID, reporter.ID, "Assign incident", common.IncidentStatusNew, "high")
@@ -174,14 +175,16 @@ func TestIncidentService_AssignIncident_ValidatesAssigneeAndReturnsUpdatedIncide
 	otherUser, err := createIncidentTestUser(ctx, client, otherTenant.ID, "assign-other")
 	require.NoError(t, err)
 	_, err = assignIncidentForTest(t, incidentService, ctx, incidentEntity.ID, otherUser.ID, tenant.ID)
-	require.ErrorContains(t, err, "assignee not found or inactive")
+	require.Error(t, err)
+	require.Equal(t, assignee.ID, client.Ticket.GetX(ctx, workItem.ID).AssigneeID)
 
 	inactive, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-inactive")
 	require.NoError(t, err)
 	_, err = inactive.Update().SetActive(false).Save(ctx)
 	require.NoError(t, err)
 	_, err = assignIncidentForTest(t, incidentService, ctx, incidentEntity.ID, inactive.ID, tenant.ID)
-	require.ErrorContains(t, err, "assignee not found or inactive")
+	require.Error(t, err)
+	require.Equal(t, assignee.ID, client.Ticket.GetX(ctx, workItem.ID).AssigneeID)
 }
 
 func TestAssignIncidentRejectsTerminalStatuses(t *testing.T) {
@@ -193,6 +196,7 @@ func TestAssignIncidentRejectsTerminalStatuses(t *testing.T) {
 			require.NoError(t, err)
 			reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-reporter-"+status)
 			require.NoError(t, err)
+			require.NoError(t, reporter.Update().SetRole("super_admin").Exec(ctx))
 			assignee, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-target-"+status)
 			require.NoError(t, err)
 			workItem := createIncidentTestWorkItem(t, ctx, client, tenant.ID, reporter.ID, "Lifecycle guarded assignment", status, "medium")
@@ -240,8 +244,7 @@ func TestAssignIncidentRejectsStaleSnapshot(t *testing.T) {
 				return racer.Ticket.UpdateOneID(entity.WorkItemID).AddVersion(1).Exec(ctx)
 			},
 			assertErr: func(t *testing.T, err error) {
-				var conflict *common.VersionConflictError
-				require.ErrorAs(t, err, &conflict)
+				require.True(t, common.IsVersionConflictError(err), "stale observed version must remain a conflict: %v", err)
 			},
 		},
 	} {
@@ -257,6 +260,7 @@ func TestAssignIncidentRejectsStaleSnapshot(t *testing.T) {
 			require.NoError(t, err)
 			reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-race-reporter-"+testCase.name)
 			require.NoError(t, err)
+			require.NoError(t, reporter.Update().SetRole("super_admin").Exec(ctx))
 			assignee, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-race-target-"+testCase.name)
 			require.NoError(t, err)
 			workItem := createIncidentTestWorkItem(t, ctx, client, tenant.ID, reporter.ID, "Concurrent assignment", common.IncidentStatusNew, "medium")

@@ -70,6 +70,7 @@ func TestBPMNTaskUIProjectionPreservesDirectoryAuthority(t *testing.T) {
 	defer tx.Rollback()
 	f.engine.participationResolver.directory = directory
 	f.engine.participationResolver.owningTx = tx
+	f.engine.participationResolver.client = tx.Client()
 	_, err = f.engine.taskUIReadProjection(f.typedTaskScopeOnlyCtx(f.actor, false))
 	require.Error(t, err, "UI projection must not bypass an unavailable authoritative directory")
 	require.Greater(t, directory.calls, 0)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"itsm-backend/handlers/shared/workflowcallback"
+
 	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/database"
@@ -14,12 +16,13 @@ import (
 )
 
 type Service struct {
-	execution     *database.ExecutionPolicy
-	directory     database.DirectorySnapshot
-	repo          Repository
-	client        *ent.Client
-	logger        *zap.SugaredLogger
-	chainResolver *service.ApprovalChainResolver
+	workflowAssignment workflowcallback.AssignmentBoundary
+	execution          *database.ExecutionPolicy
+	directory          database.DirectorySnapshot
+	repo               Repository
+	client             *ent.Client
+	logger             *zap.SugaredLogger
+	chainResolver      *service.ApprovalChainResolver
 }
 
 func NewService(repo Repository, client *ent.Client, logger *zap.SugaredLogger, chainResolver *service.ApprovalChainResolver, execution *database.ExecutionPolicy) *Service {
@@ -113,4 +116,8 @@ func (s *Service) Update(ctx context.Context, id, tenantID, actorID int, actorRo
 // canManageServiceRequest 判断角色是否有 service_request:write 权限（按权限而非角色名判断）。
 func (s *Service) canManageServiceRequest(ctx context.Context, role string, tenantID int) bool {
 	return authorization.HasResourcePermission(s.client, role, "service_request", "write", tenantID)
+}
+
+func (s *Service) SetWorkflowAssignmentBoundary(boundary workflowcallback.AssignmentBoundary) {
+	s.workflowAssignment = boundary
 }

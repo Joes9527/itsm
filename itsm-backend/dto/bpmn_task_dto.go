@@ -17,6 +17,10 @@ type BPMNTaskUIActions struct {
 }
 
 type BPMNTaskResponse struct {
+	AssigneeSource       string                 `json:"assigneeSource"`
+	AssignmentState      string                 `json:"assignmentState"`
+	ResponsibleUserID    int                    `json:"responsibleUserId"`
+	ActorID              int                    `json:"actorId"`
 	UIActions            BPMNTaskUIActions      `json:"uiActions"`
 	ID                   int                    `json:"id"`
 	TaskID               string                 `json:"taskId"`
@@ -64,6 +68,7 @@ func parseBusinessKey(businessKey string) (businessType string, businessID int) 
 // ToBPMNTaskResponse 转换任务实体；instance 允许为 nil（历史数据缺实例时业务上下文留空）
 func ToBPMNTaskResponse(task *ent.ProcessTask, instance *ent.ProcessInstance) *BPMNTaskResponse {
 	resp := &BPMNTaskResponse{
+		AssigneeSource:       task.AssigneeSource,
 		ID:                   task.ID,
 		TaskID:               task.TaskID,
 		TaskDefinitionKey:    task.TaskDefinitionKey,
@@ -91,7 +96,11 @@ func ToBPMNTaskResponse(task *ent.ProcessTask, instance *ent.ProcessInstance) *B
 		resp.ProcessInstanceKey = instance.ProcessInstanceID
 		resp.BusinessKey = instance.BusinessKey
 		resp.WorkItemNumber, _ = instance.Variables["ticket_number"].(string)
-		resp.BusinessType, resp.BusinessID = parseBusinessKey(instance.BusinessKey)
+		if task.AssigneeSource != "" {
+			resp.BusinessType, resp.BusinessID = instance.BusinessType, instance.BusinessID
+		} else {
+			resp.BusinessType, resp.BusinessID = parseBusinessKey(instance.BusinessKey)
+		}
 	}
 	return resp
 }

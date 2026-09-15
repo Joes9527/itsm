@@ -1,15 +1,22 @@
 package change
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
+	"itsm-backend/ent"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
 	"itsm-backend/ent/auditlog"
+	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/processtask"
+	"itsm-backend/ent/ticketworkflowrecord"
+	assignment "itsm-backend/handlers/common/workitemassignment"
 )
 
 func reassignmentPatch(t *testing.T, target int, reason string) dto.UpdateChangeRequest {
@@ -70,6 +77,11 @@ func TestChangeReassignmentPreservesApproval(t *testing.T) {
 			require.Equal(t, before.Status, after.Status)
 			require.Equal(t, f.approver, after.AssigneeID)
 			require.Equal(t, before.Version+1, result.Version)
+			assignmentEvent := f.client.OutboxEvent.Query().Where(outboxevent.EventType("work_item.assigned")).OnlyX(f.ctx)
+			var payload assignment.Event
+			require.NoError(t, json.Unmarshal(assignmentEvent.Payload, &payload))
+			require.Equal(t, result.Version, payload.Version)
+			require.Equal(t, 1, f.client.TicketWorkflowRecord.Query().Where(ticketworkflowrecord.Action("assign")).CountX(f.ctx))
 			current := f.client.Change.GetX(f.ctx, f.record.ID)
 			require.Equal(t, assessed.AssessmentDigest, current.AssessmentDigest)
 			require.Equal(t, assessed.AssessmentEvidence, current.AssessmentEvidence)
@@ -90,6 +102,7 @@ func TestChangeReassignmentPreservesApproval(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, replay.Replayed)
 			require.Equal(t, result.Version, replay.Version)
+			require.Equal(t, 1, f.client.OutboxEvent.Query().Where(outboxevent.EventType("work_item.assigned")).CountX(f.ctx))
 			cmd.Patch = reassignmentPatch(t, f.approver, "different intent")
 			_, err = f.svc.ApplyMetadata(f.ctx, cmd)
 			require.Error(t, err)
@@ -180,6 +193,61 @@ func TestChangeReassignmentHTTP(t *testing.T) {
 			wrongVersion := fmt.Sprintf(`{"version":2,"operationId":"wrong-version-field","assigneeId":%d,"assignmentReason":"handover"}`, f.requester)
 			w = governedHTTP(r, method, endpoint, wrongVersion, nil)
 			require.Equal(t, 400, w.Code, w.Body.String())
+		})
+	}
+}
+
+func TestChangeAssignmentMetadataAtomicVersion(t *testing.T) {
+	for _, mode := range []string{"changed", "same", "outbox_failure", "metadata_failure", "receipt_failure", "replay_inactive_target"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newGovernedChangeFixture(t, "normal")
+			before := f.client.Ticket.UpdateOneID(f.record.WorkItemID).SetAssigneeID(f.requester).SaveX(f.ctx)
+			target := f.approver
+			if mode == "same" {
+				target = f.requester
+			}
+			title := "metadata and owner atomic"
+			cmd := MetadataCommand{Meta: f.command("metadata", f.requester).Meta, ChangeID: f.record.ID, Patch: reassignmentPatch(t, target, "handover")}
+			cmd.Patch.Title = &title
+			if mode == "outbox_failure" || mode == "metadata_failure" || mode == "receipt_failure" {
+				f.client.Use(func(next ent.Mutator) ent.Mutator {
+					return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+						if mode == "outbox_failure" && mutation.Type() == "OutboxEvent" || mode == "metadata_failure" && mutation.Type() == "Change" || mode == "receipt_failure" && mutation.Type() == "AuditLog" {
+							return nil, errors.New("injected metadata failure")
+						}
+						return next.Mutate(ctx, mutation)
+					})
+				})
+			}
+			result, err := f.svc.ApplyMetadata(f.ctx, cmd)
+			after := f.client.Ticket.GetX(f.ctx, before.ID)
+			events := f.client.OutboxEvent.Query().Where(outboxevent.EventType("work_item.assigned")).CountX(f.ctx)
+			if mode == "outbox_failure" || mode == "metadata_failure" || mode == "receipt_failure" {
+				require.Error(t, err)
+				require.Equal(t, before.Version, after.Version)
+				require.Equal(t, before.AssigneeID, after.AssigneeID)
+				require.Equal(t, before.Title, after.Title)
+				require.Zero(t, events)
+				require.Zero(t, f.client.TicketWorkflowRecord.Query().Where(ticketworkflowrecord.Action("assign")).CountX(f.ctx))
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, before.Version+1, result.Version)
+			require.Equal(t, result.Version, after.Version)
+			require.Equal(t, title, after.Title)
+			if mode == "same" {
+				require.Zero(t, events)
+			} else {
+				require.Equal(t, 1, events)
+			}
+			if mode == "replay_inactive_target" {
+				f.client.User.UpdateOneID(target).SetActive(false).ExecX(f.ctx)
+			}
+			replay, err := f.svc.ApplyMetadata(f.ctx, cmd)
+			require.NoError(t, err)
+			require.True(t, replay.Replayed)
+			require.Equal(t, result.Version, replay.Version)
+			require.Equal(t, events, f.client.OutboxEvent.Query().Where(outboxevent.EventType("work_item.assigned")).CountX(f.ctx))
 		})
 	}
 }

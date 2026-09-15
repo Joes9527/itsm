@@ -123,6 +123,11 @@ func (e *CustomProcessEngine) CompleteKafDelegatedTask(ctx context.Context, ledg
 	if err := requireKafExecutionTx(ctx, tx, e.execution, task.TenantID, task.TaskID); err != nil {
 		return err
 	}
+	task, err = lockBPMNTaskLifecycle(ctx, tx.Client(), task)
+	if err != nil {
+		return err
+	}
+
 	if task.CallbackAction == accessgrant.Capability {
 		if e.accessCompletionContributor == nil {
 			return fmt.Errorf("verified access completion owner unavailable")

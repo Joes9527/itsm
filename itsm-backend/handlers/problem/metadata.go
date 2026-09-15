@@ -13,8 +13,9 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcategory"
-	"itsm-backend/ent/user"
+	assignment "itsm-backend/handlers/common/workitemassignment"
 	"itsm-backend/handlers/shared/workitemmutation"
+	"itsm-backend/service"
 )
 
 type MetadataCommand struct {
@@ -163,12 +164,8 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 		return empty, common.NewValidationError("invalid problem priority", nil)
 	}
 	if p.AssigneeID != nil {
-		eligible, err := tx.User.Query().Where(user.ID(*p.AssigneeID), user.TenantID(m.TenantID), user.Active(true)).Exist(ctx)
-		if err != nil {
-			return empty, err
-		}
-		if *p.AssigneeID <= 0 || !eligible {
-			return empty, common.NewValidationError("assignee must be an active target-tenant user", nil)
+		if *p.AssigneeID <= 0 {
+			return empty, common.NewValidationError("assignee must be a positive user ID", nil)
 		}
 		if *p.AssigneeID != item.AssigneeID {
 			changed = true
@@ -198,7 +195,30 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 	if err := s.requireExecutionTx(ctx, tx, m.TenantID, item.ID); err != nil {
 		return empty, err
 	}
-	update := tx.Ticket.UpdateOneID(item.ID).Where(ticket.TenantID(m.TenantID), ticket.DeletedAtIsNil(), ticket.Version(m.ExpectedVersion)).SetVersion(m.ExpectedVersion + 1).SetUpdatedAt(time.Now().UTC())
+	// Assignment owns the aggregate increment when the owner changes. The
+	// remaining metadata and operation receipt use that exact resulting version.
+	expected, version := m.ExpectedVersion, m.ExpectedVersion+1
+	if p.AssigneeID != nil {
+		attempted = true
+		err = assignment.WithLifecycleWriter(ctx, tx, s.directory, m.ActorID, m.TenantID, service.EnqueueWorkItemAssignment, func(writer *assignment.Writer, actor *ent.User) error {
+			assigned, writeErr := writer.Apply(ctx, tx.Client(), assignment.Command{
+				WorkItemID: item.ID, TenantID: m.TenantID, ActorID: actor.ID,
+				ActorTenantID: actor.TenantID, AssigneeID: *p.AssigneeID,
+				ExpectedVersion: m.ExpectedVersion, Source: m.Source, Reason: p.AssignmentReason,
+			})
+			if writeErr == nil {
+				expected = assigned.Version
+				if assigned.Version != m.ExpectedVersion {
+					version = assigned.Version
+				}
+			}
+			return writeErr
+		})
+		if err != nil {
+			return empty, err
+		}
+	}
+	update := tx.Ticket.UpdateOneID(item.ID).Where(ticket.TenantID(m.TenantID), ticket.DeletedAtIsNil(), ticket.Version(expected)).SetVersion(version).SetUpdatedAt(time.Now().UTC())
 	if p.Title != nil {
 		update.SetTitle(*p.Title)
 	}
@@ -207,9 +227,6 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 	}
 	if p.Priority != nil {
 		update.SetPriority(*p.Priority)
-	}
-	if p.AssigneeID != nil {
-		update.SetAssigneeID(*p.AssigneeID)
 	}
 	if p.CategoryID != nil {
 		if *p.CategoryID == 0 {

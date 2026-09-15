@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"itsm-backend/handlers/shared/workflowcallback"
+
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
@@ -21,6 +23,21 @@ import (
 // 真正的状态机校验/通知/飞书同步行为由 TicketService.UpdateTicketStatus 自己的测试覆盖。
 type ticketStatusServiceEntStub struct {
 	client *ent.Client
+}
+
+type assignmentServiceStub struct{ id, target, tenant int }
+
+func (s *assignmentServiceStub) UpdateTicketStatusForWorkflow(context.Context, int, string, int, int) error {
+	return nil
+}
+
+func (s *assignmentServiceStub) AssignTicketForWorkflow(_ context.Context, id, target, tenant int) (workflowcallback.Result, error) {
+	s.id, s.target, s.tenant = id, target, tenant
+	return workflowcallback.Result{Status: workflowcallback.StatusApplied}, nil
+}
+
+func (s *ticketStatusServiceEntStub) AssignTicketForWorkflow(context.Context, int, int, int) (workflowcallback.Result, error) {
+	return workflowcallback.Result{Status: workflowcallback.StatusApplied}, nil
 }
 
 type ticketNotificationStub struct{}
@@ -256,6 +273,8 @@ func TestTicketServiceTaskHandler_AssignTicket(t *testing.T) {
 	handler := NewTicketServiceTaskHandler(client, logger)
 	handler.SetNotificationService(&ticketNotificationStub{})
 
+	assignmentService := &assignmentServiceStub{}
+	handler.SetTicketService(assignmentService)
 	ctx := context.Background()
 
 	// 创建测试数据
@@ -360,10 +379,11 @@ func TestTicketServiceTaskHandler_AssignTicket(t *testing.T) {
 				assert.NotNil(t, result)
 				assert.Contains(t, []CallbackEffectStatus{CallbackEffectApplied, CallbackEffectIdempotent}, result.Status)
 
-				// 验证工单已被分配
-				updatedTicket, err := client.Ticket.Get(ctx, tt.ticketID)
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedAssigneeID, updatedTicket.AssigneeID)
+				// Handler binds commands; owning service integration verifies persistence.
+				assert.Equal(t, tt.ticketID, assignmentService.id)
+				assert.Equal(t, tt.expectedAssigneeID, assignmentService.target)
+				assert.Equal(t, testTenant.ID, assignmentService.tenant)
+				assert.Zero(t, client.Ticket.GetX(ctx, tt.ticketID).AssigneeID)
 			}
 		})
 	}

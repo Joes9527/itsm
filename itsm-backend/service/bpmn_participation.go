@@ -67,7 +67,8 @@ func (r *bpmnParticipationResolver) resolveActor(ctx context.Context, scope BPMN
 			clone.owningTx = tx
 			return clone.resolveActor(ctx, scope)
 		}
-		actor, err := authorization.ResolveLifecycleActor(ctx, r.owningTx, r.directory, scope.UserID, scope.TenantID)
+		engine := &CustomProcessEngine{client: r.client, directory: r.directory, owningTx: r.owningTx}
+		actor, err := engine.resolveAssignmentUser(ctx, r.client, scope.UserID, scope.TenantID)
 		if err != nil {
 			return nil, err
 		}
@@ -88,8 +89,16 @@ func (r *bpmnParticipationResolver) resolveActor(ctx context.Context, scope BPMN
 		}
 		// Group.Members is users.group_members; User.Groups is a distinct
 		// edge and cannot establish this task's configured membership.
-		directory, closeDirectory, err := r.directory.Open(ctx, r.owningTx, scope.TenantID)
-		if err != nil || directory == nil || closeDirectory == nil {
+		var directory *ent.Client
+		var closeDirectory func() error
+		if snapshot := taskReadSnapshot(ctx, r.client); snapshot != nil {
+			// Identity and group membership share the response-owned directory.
+			// It is closed once after projection, with close failures propagated.
+			directory = snapshot.directory
+		} else {
+			directory, closeDirectory, err = r.directory.Open(ctx, r.owningTx, scope.TenantID)
+		}
+		if err != nil || directory == nil || (taskReadSnapshot(ctx, r.client) == nil && closeDirectory == nil) {
 			if closeDirectory != nil {
 				err = errors.Join(err, closeDirectory())
 			}
@@ -99,7 +108,10 @@ func (r *bpmnParticipationResolver) resolveActor(ctx context.Context, scope BPMN
 			GroupID *int `json:"group_members"`
 		}
 		err = directory.User.Query().Where(user.ID(actor.ID)).Select(group.MembersColumn).Scan(tenantctx.SystemContext(ctx, "bpmn:group-membership", "read authorized actor membership at owning snapshot"), &memberships)
-		closeErr := closeDirectory()
+		var closeErr error
+		if closeDirectory != nil {
+			closeErr = closeDirectory()
+		}
 		if err != nil || closeErr != nil {
 			return nil, errors.Join(err, closeErr)
 		}
@@ -171,6 +183,23 @@ func (r *bpmnParticipationResolver) participatingInstanceIDs(ctx context.Context
 	if actor == nil || actor.UserID <= 0 || actor.TenantID <= 0 {
 		return nil, fmt.Errorf("invalid BPMN actor identity")
 	}
+	if taskReadSnapshot(ctx, r.client) == nil && r.owningTx == nil {
+		var ids []int
+		err := withBPMNTaskReadSnapshot(ctx, r.client, func(ctx context.Context, tx *ent.Tx) error {
+			resolver := r.forClient(tx.Client())
+			resolver.owningTx = tx
+			current, err := resolver.resolveActor(ctx, BPMNAccessScope{UserID: actor.UserID, TenantID: actor.TenantID})
+			if err != nil {
+				return err
+			}
+			ids, err = resolver.participatingInstanceIDs(ctx, current)
+			return err
+		})
+		if err != nil {
+			return nil, err
+		}
+		return ids, nil
+	}
 
 	prefilter := make([]predicate.ProcessTask, 0, len(actor.UserTokens)*2+len(actor.GroupTokens))
 	for token := range actor.UserTokens {
@@ -183,28 +212,50 @@ func (r *bpmnParticipationResolver) participatingInstanceIDs(ctx context.Context
 		prefilter = append(prefilter, processtask.CandidateGroupsContainsFold(token))
 	}
 
-	tasks, err := r.client.ProcessTask.Query().
-		Where(
-			processtask.TenantID(actor.TenantID),
-			processtask.Or(prefilter...),
-		).
-		Order(ent.Asc(processtask.FieldID)).
-		All(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("query BPMN participant tasks: %w", err)
-	}
+	prefilter = append(prefilter, processtask.AssigneeSourceNEQ(""))
 
-	seen := make(map[int]struct{}, len(tasks))
-	instanceIDs := make([]int, 0, len(tasks))
-	for _, task := range tasks {
-		if !r.matchesTask(task, actor) {
-			continue
+	query := r.client.ProcessTask.Query().Where(processtask.TenantID(actor.TenantID), processtask.Or(prefilter...))
+	seen := make(map[int]struct{})
+	instanceIDs := make([]int, 0)
+	lastID := 0
+	for {
+		tasks, err := query.Clone().Where(processtask.IDGT(lastID)).Order(ent.Asc(processtask.FieldID)).Limit(bpmnTaskReadBatchSize).All(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("query BPMN participant tasks: %w", err)
 		}
-		if _, exists := seen[task.ProcessInstanceID]; exists {
-			continue
+		if len(tasks) == 0 {
+			break
 		}
-		seen[task.ProcessInstanceID] = struct{}{}
-		instanceIDs = append(instanceIDs, task.ProcessInstanceID)
+		if view := taskReadSnapshot(ctx, r.client); view != nil {
+			view.resetChunk()
+			if err := view.loadTerminalAssignments(ctx, tasks); err != nil {
+				return nil, err
+			}
+		}
+		for _, task := range tasks {
+			if task.AssigneeSource != "" {
+				engine := &CustomProcessEngine{client: r.client, directory: r.directory, owningTx: r.owningTx}
+				scope := BPMNAccessScope{UserID: actor.UserID, TenantID: actor.TenantID}
+				if err := engine.authorizeBoundTask(ctx, r.client, task, scope, ""); err != nil {
+					if isBPMNTaskAccessDenial(err) {
+						continue
+					}
+					return nil, err
+				}
+			} else if !r.matchesTask(task, actor) {
+				continue
+			}
+			if _, exists := seen[task.ProcessInstanceID]; exists {
+				continue
+			}
+			seen[task.ProcessInstanceID] = struct{}{}
+			instanceIDs = append(instanceIDs, task.ProcessInstanceID)
+		}
+
+		lastID = tasks[len(tasks)-1].ID
+		if len(tasks) < bpmnTaskReadBatchSize {
+			break
+		}
 	}
 	if len(instanceIDs) == 0 {
 		return nil, nil

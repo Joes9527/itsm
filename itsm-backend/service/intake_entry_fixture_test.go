@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"itsm-backend/authorization"
+
 	"itsm-backend/controller"
 	"itsm-backend/database"
 	"itsm-backend/dto"
@@ -51,7 +53,7 @@ type TicketService struct {
 }
 
 func NewTicketServiceForTest(client *ent.Client, logger *zap.SugaredLogger) *TicketService {
-	owner := domain.NewTicketService(&domain.TicketServiceConfig{Client: client, Repository: ticket.NewEntRepository(client, logger), Logger: logger, Execution: executionfixture.Standard()})
+	owner := domain.NewTicketService(&domain.TicketServiceConfig{Client: client, Repository: ticket.NewEntRepository(client, logger), Logger: logger, Execution: executionfixture.Standard(), Directory: sameTransactionDirectory{}, SessionReader: authorization.NewSessionReader(client, sameTransactionDirectory{})})
 	return &TicketService{owner, client, newEntryApplication(client, owner, domain.NewIncidentService(client, logger, executionfixture.Standard()))}
 }
 

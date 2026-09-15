@@ -92,7 +92,7 @@ func updateTicket(ctx context.Context, client *ent.Client, id int, params *Updat
 		return nil, fmt.Errorf("get ticket: %w", err)
 	}
 
-	coreMutation := params.Title != nil || params.Description != nil || params.Status != nil || params.GenericSubtype != nil || params.Priority != nil || params.AssigneeID != nil || params.CategoryID != nil || params.Resolution != nil
+	coreMutation := params.Title != nil || params.Description != nil || params.Status != nil || params.GenericSubtype != nil || params.Priority != nil || params.CategoryID != nil || params.Resolution != nil
 	if coreMutation {
 		switch current.RecordClass {
 		case dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest:
@@ -108,6 +108,9 @@ func updateTicket(ctx context.Context, client *ent.Client, id int, params *Updat
 	builder := client.Ticket.UpdateOneID(id).
 		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(params.Version)).
 		SetVersion(current.Version + 1) // 版本号递增
+	if params.VersionAlreadyAdvanced {
+		builder.SetVersion(current.Version)
+	}
 
 	if coreMutation {
 		builder.Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest))
@@ -138,9 +141,6 @@ func updateTicket(ctx context.Context, client *ent.Client, id int, params *Updat
 	}
 	if params.Priority != nil {
 		builder.SetPriority(string(*params.Priority))
-	}
-	if params.AssigneeID != nil {
-		builder.SetAssigneeID(*params.AssigneeID)
 	}
 	if params.CategoryID != nil {
 		if *params.CategoryID == 0 {
@@ -394,23 +394,7 @@ func (r *EntRepository) UpdateStatus(ctx context.Context, id int, status Status,
 }
 
 // AssignTicket 分配工单
-func (r *EntRepository) AssignTicket(ctx context.Context, id int, assigneeID int, tenantID int) (*Ticket, error) {
-	current, err := r.GetByID(ctx, id, tenantID)
-	if err != nil {
-		return nil, err
-	}
-	if err := current.Assign(assigneeID); err != nil {
-		return nil, err
-	}
-	status := current.Status
-	return r.Update(ctx, id, &UpdateParams{
-		AssigneeID: &assigneeID,
-		Status:     &status,
-		Version:    current.Version,
-	}, tenantID)
-}
 
-// UpdateSLADeadlines 更新 SLA 截止时间
 func (r *EntRepository) UpdateSLADeadlines(ctx context.Context, id int, responseDeadline, resolutionDeadline *time.Time, slaDefinitionID *int, tenantID int) error {
 	builder := r.Client().Ticket.UpdateOneID(id).
 		Where(ticket.TenantID(tenantID), ticket.DeletedAtIsNil())

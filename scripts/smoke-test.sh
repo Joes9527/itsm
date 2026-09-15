@@ -212,7 +212,7 @@ echo -e "${YELLOW}[阶段 5/5] 前端页面可用性${NC}"
 echo "----------------------------------------"
 
 # 检查前端页面是否能正常加载
-frontend_check=$(curl -sf -o /dev/null -w "%{http_code}" "$FRONTEND_URL" 2>&1 || echo "000")
+frontend_check=$(curl -sf --location --max-redirs 5 --max-time 15 -o /dev/null -w "%{http_code}" "$FRONTEND_URL" 2>&1 || echo "000")
 if [ "$frontend_check" = "200" ] || [ "$frontend_check" = "304" ]; then
     echo -e "${GREEN}  ✓ 前端页面正常加载 (HTTP $frontend_check)${NC}"
     PASSED=$((PASSED + 1))

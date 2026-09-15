@@ -66,6 +66,10 @@ type fakeTaskService struct {
 	statsCtx           context.Context
 }
 
+func (f *fakeTaskService) ProjectTaskView(ctx context.Context, task *ent.ProcessTask) (*dto.BPMNTaskResponse, error) {
+	return dto.ToBPMNTaskResponse(task, nil), nil
+}
+
 func (f *fakeTaskService) GetTask(ctx context.Context, taskID string) (*ent.ProcessTask, error) {
 	return nil, errors.New("not implemented")
 }
@@ -462,4 +466,18 @@ func TestBPMNWorkflowController_SuperAdminPassesRoleGate(t *testing.T) {
 	// Passes the role gate; will fail past it (nil processEngine) but must
 	// not be rejected by RequireRole specifically.
 	assert.NotEqual(t, http.StatusForbidden, w.Code)
+}
+
+func (f *fakeTaskService) GetTaskView(ctx context.Context, reference string) (*dto.BPMNTaskResponse, error) {
+	var task *ent.ProcessTask
+	var err error
+	if id, parseErr := strconv.Atoi(reference); parseErr == nil {
+		task, err = f.GetTaskByID(ctx, id)
+	} else {
+		task, err = f.GetTask(ctx, reference)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return f.ProjectTaskView(ctx, task)
 }
