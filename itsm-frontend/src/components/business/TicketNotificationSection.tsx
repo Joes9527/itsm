@@ -1,6 +1,9 @@
 'use client';
+import { useDetailResource, useDetailIdentity } from './detail-tabs/useDetailResource';
+import { useDetailRefreshEntry } from './detail-tabs/DetailRefreshContext';
+import { DetailReadState } from './detail-tabs/DetailReadState';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Card,
   List,
@@ -30,7 +33,6 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import type {
-  TicketNotification,
   SendTicketNotificationRequest,
 } from '@/lib/api/ticket-notification-api';
 import { TicketNotificationApi } from '@/lib/api/ticket-notification-api';
@@ -49,43 +51,50 @@ interface TicketNotificationSectionProps {
 /**
  * 工单通知管理组件
  */
-export const TicketNotificationSection: React.FC<TicketNotificationSectionProps> = ({
+export const TicketNotificationSection: React.FC<TicketNotificationSectionProps> = props => {
+  const identity = useDetailIdentity(props.ticketId);
+  return <TicketNotificationContent key={identity} {...props} />;
+};
+const TicketNotificationContent: React.FC<TicketNotificationSectionProps> = ({
   ticketId,
   canSend = true,
 }) => {
   const { message: antMessage } = App.useApp();
+  const messages = useRef(antMessage);
+  messages.current = antMessage;
   const { t } = useI18n();
-  const [notifications, setNotifications] = useState<TicketNotification[]>([]);
-  const [loading, setLoading] = useState(false);
+  const busy = useRef(false);
+  const [writing, setWriting] = useState(false);
+  const resource = useDetailResource(ticketId, async () => {
+    const response = await TicketNotificationApi.getTicketNotifications(ticketId);
+    return response.notifications || [];
+  }, rows => rows.length);
+  const notifications = resource.data || [];
+  useDetailRefreshEntry(!resource.denied ? { key: 'notifications', label: '通知', reload: resource.reload, isWriting: () => busy.current } : undefined);
   const [sendModalVisible, setSendModalVisible] = useState(false);
   const [eventTypes, setEventTypes] = useState<Array<{ code: string; name: string }>>([]);
   const [form] = Form.useForm();
 
-  // 加载通知列表
-  const loadNotifications = async () => {
-    setLoading(true);
-    try {
-      const response = await TicketNotificationApi.getTicketNotifications(ticketId);
-      setNotifications(response.notifications || []);
-    } catch (error) {
-      antMessage.error('加载通知列表失败');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    if (ticketId) {
-      loadNotifications();
-    }
-  }, [ticketId]);
-
+    if (!resource.denied) return;
+    busy.current = false;
+    setWriting(false);
+    setSendModalVisible(false);
+    setEventTypes([]);
+    form.resetFields();
+  }, [resource.denied, form]);
+  useEffect(() => {
+    if (!canSend) { setSendModalVisible(false); form.resetFields(); }
+  }, [canSend, form]);
   useEffect(() => {
     if (!sendModalVisible) return;
+    const current = resource.capture();
+    let active = true;
     TicketNotificationApi.getNotificationPreferences()
-      .then(response => setEventTypes(response.eventTypes || []))
-      .catch(() => antMessage.error('加载通知事件类型失败'));
-  }, [sendModalVisible]);
+      .then(response => { if (active && current()) setEventTypes(response.eventTypes || []); })
+      .catch(() => { if (active && current()) messages.current.error('加载通知事件类型失败'); });
+    return () => { active = false; };
+  }, [sendModalVisible, resource.capture]);
 
   // 发送通知
   const handleSendNotification = async (values: {
@@ -93,6 +102,10 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
     eventType: string;
     content: string;
   }) => {
+    if (!canSend || !resource.ready || busy.current) return;
+    const current = resource.capture();
+    busy.current = true;
+    setWriting(true);
     try {
       const request: SendTicketNotificationRequest = {
         userIds: values.userIds,
@@ -100,6 +113,7 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
         content: values.content,
       };
       const result = await TicketNotificationApi.sendTicketNotification(ticketId, request);
+      if (!current()) return;
       antMessage.success(
         result.effect === 'queued'
           ? '已加入发送队列'
@@ -109,20 +123,33 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
       );
       setSendModalVisible(false);
       form.resetFields();
-      await loadNotifications();
+      await resource.reload({ afterWrite: true });
     } catch (error: unknown) {
+      if (!current()) return;
+      resource.deny(error);
       antMessage.error(error instanceof Error ? error.message : '通知发送失败');
+    } finally {
+      if (current()) { busy.current = false; setWriting(false); }
     }
   };
 
   // 标记为已读
   const handleMarkRead = async (notificationId: number) => {
+    if (!resource.ready || busy.current) return;
+    const current = resource.capture();
+    busy.current = true;
+    setWriting(true);
     try {
       await TicketNotificationApi.markTicketNotificationRead(notificationId);
+      if (!current()) return;
       antMessage.success('已标记为已读');
-      await loadNotifications();
+      await resource.reload({ afterWrite: true });
     } catch (error: unknown) {
+      if (!current()) return;
+      resource.deny(error);
       antMessage.error(error instanceof Error ? error.message : '标记失败');
+    } finally {
+      if (current()) { busy.current = false; setWriting(false); }
     }
   };
 
@@ -189,6 +216,7 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
 
   return (
     <div className="space-y-4">
+      <DetailReadState error={resource.error} loading={resource.loading} reload={resource.reload} />
       {/* 操作栏 */}
       <div className="flex justify-between items-center">
         <Space>
@@ -201,17 +229,17 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
             </Badge>
           )}
         </Space>
-        {canSend && (
-          <Button type="primary" icon={<Send />} onClick={() => setSendModalVisible(true)}>
+        {canSend && !resource.denied && (
+          <Button type="primary" icon={<Send />} disabled={!resource.ready || writing} onClick={() => setSendModalVisible(true)}>
             发送通知
           </Button>
         )}
       </div>
 
       {/* 通知列表 */}
-      <Card loading={loading}>
+      <Card loading={resource.loading && !resource.ready}>
         {notifications.length === 0 ? (
-          <Empty description="暂无通知" />
+          resource.ready ? <Empty description="暂无通知" /> : null
         ) : (
           <List
             dataSource={notifications}
@@ -227,7 +255,7 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
                           type="text"
                           size="small"
                           icon={<Eye />}
-                          onClick={() => handleMarkRead(notification.id)}
+                          disabled={writing} onClick={() => handleMarkRead(notification.id)}
                         >
                           标记已读
                         </Button>
@@ -303,6 +331,7 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
       <Modal
         title="发送通知"
         open={sendModalVisible}
+        confirmLoading={writing}
         onOk={() => form.submit()}
         onCancel={() => {
           setSendModalVisible(false);

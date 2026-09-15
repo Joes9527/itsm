@@ -12,7 +12,6 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { TicketProcessTasks } from './TicketProcessTasks';
 import { useParams } from 'next/navigation';
 import { TicketApi, type TicketSLAInfo } from '@/lib/api/ticket-api';
-import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 import { UserApi } from '@/lib/api/user-api';
 import type { Ticket } from '@/lib/api/api-config';
 import type { User } from '@/lib/api/user-api';
@@ -109,12 +108,17 @@ const formatHours = (minutes: number): string => (minutes / 60).toFixed(1);
 
 const DISABLED_ACTION_CLASS = 'opacity-40 cursor-not-allowed pointer-events-auto';
 
-import { useDetailIdentity } from '@/components/business/detail-tabs/useDetailResource';
+import { useTicketDetailResource } from './useTicketDetailResource';
+import { DetailRefreshProvider, useDetailRefresh, useDetailRefreshEntry } from '@/components/business/detail-tabs/DetailRefreshContext';
+import { DetailReadState } from '@/components/business/detail-tabs/DetailReadState';
+import { useDetailIdentity, useDetailResource } from '@/components/business/detail-tabs/useDetailResource';
 
 export const TicketDetail: React.FC<{ id?: string }> = props => {
   const params = useParams();
-  const identity = useDetailIdentity(props.id ?? (params?.ticketId as string) ?? '');
-  return <TicketDetailContent key={identity} {...props} />;
+  const scope = useDetailIdentity(props.id ?? (params?.ticketId as string) ?? '');
+  const authorization = useAuthStore(state => JSON.stringify([state.isAuthenticated, state.currentTenant?.status, state.user?.permissions]));
+  const identity = `${scope}:${authorization}`;
+  return <DetailRefreshProvider identity={identity}><TicketDetailContent key={identity} {...props} /></DetailRefreshProvider>;
 };
 const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
   const params = useParams();
@@ -125,9 +129,12 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
   const { message: antMessage } = App.useApp();
   const { handleError } = useErrorHandler();
 
-  const [ticket, setTicket] = useState<Ticket | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const writing = useRef(false);
+  const resource = useTicketDetailResource(ticketId, () => writing.current);
+  const { data: ticket, initialLoading: loading, error } = resource;
+  const refresh = useDetailRefresh()!;
+  const refreshDetail = useCallback(() => { void refresh.refresh(); }, [refresh.refresh]);
+  const fetchTicket = useCallback(async () => { await resource.reload({ afterWrite: true }); }, [resource.reload]);
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const editIntent = useRef<TicketEditIntent<Partial<Ticket>> | undefined>(undefined);
@@ -147,7 +154,9 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
   const [updating, setUpdating] = useState(false);
   const [ccing, setCCing] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [slaInfo, setSlaInfo] = useState<TicketSLAInfo | null>(null);
+  const sla = useDetailResource<TicketSLAInfo | null>(ticketId, () => TicketApi.getTicketSLA(ticketId), () => 0);
+  const slaInfo = sla.data;
+  useDetailRefreshEntry(!sla.denied && !resource.denied ? { key: 'sla', label: 'SLA', reload: sla.reload, isWriting: () => writing.current } : undefined);
   const [tabCounts, setTabCounts] = useState<{
     comments?: number;
     attachments?: number;
@@ -156,7 +165,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
     relations?: number;
   }>({});
 
-  const updateCount = useCallback((tab: 'comments' | 'attachments' | 'relations', count: number | undefined) => {
+  const updateCount = useCallback((tab: 'comments' | 'attachments' | 'relations' | 'history', count: number | undefined) => {
     setTabCounts(previous => ({ ...previous, [tab]: count }));
   }, []);
 
@@ -164,27 +173,21 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
   const [editForm] = Form.useForm();
   const [ccForm] = Form.useForm();
 
-  // Get ticket details
-  const fetchTicket = useCallback(async () => {
-    // Skip if ticketId is not a valid number
-    if (!ticketId || isNaN(ticketId) || ticketId <= 0) {
-      setError('无效的工单ID');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await TicketApi.getTicket(ticketId);
-      setTicket(data);
-    } catch (error) {
-      handleError(error, 'fetchTicket', '获取工单详情失败');
-      setError(error instanceof Error ? error.message : 'Network error');
-    } finally {
-      setLoading(false);
-    }
-  }, [ticketId, handleError]);
+  useEffect(() => {
+    if (!resource.denied) return;
+    writing.current = false;
+    editIntent.current = undefined;
+    aiEditIntent.current = undefined;
+    editSnapshot.current = undefined;
+    setAssignModalVisible(false);
+    setEditModalVisible(false);
+    setCCModalVisible(false);
+    setDeleteModalVisible(false);
+    setUsers([]);
+    assignForm.resetFields();
+    editForm.resetFields();
+    ccForm.resetFields();
+  }, [resource.denied, assignForm, editForm, ccForm]);
 
   // Get users for assignment
   const fetchUsers = useCallback(async () => {
@@ -206,65 +209,6 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
     }
   }, [hasPermission]);
 
-  // Get ticket SLA info
-  const fetchSLAInfo = useCallback(async () => {
-    try {
-      const data = await TicketApi.getTicketSLA(ticketId);
-      setSlaInfo(data);
-    } catch (error) {
-      setSlaInfo(null);
-    }
-  }, [ticketId]);
-
-  useEffect(() => {
-    if (ticketId) {
-      fetchTicket();
-    }
-  }, [ticketId, fetchTicket]);
-
-  useEffect(() => {
-    if (ticketId) {
-      fetchSLAInfo();
-    }
-  }, [ticketId, fetchSLAInfo]);
-
-  // 详情 Tabs 的数量角标（失败静默，不阻塞详情页主流程）
-  useEffect(() => {
-    if (!ticketId) return;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const [approvals, history] = await Promise.allSettled([
-          BPMNWorkflowApi.getTicketApprovalDecisions(ticketId),
-          TicketApi.getTicketHistory(ticketId),
-        ]);
-        if (cancelled) return;
-
-        const next: {
-          comments?: number;
-          attachments?: number;
-          approvals?: number;
-          history?: number;
-          relations?: number;
-        } = {};
-        if (approvals.status === 'fulfilled' && Array.isArray(approvals.value)) {
-          next.approvals = approvals.value.length;
-        }
-        if (history.status === 'fulfilled' && Array.isArray(history.value)) {
-          next.history = history.value.length;
-        }
-        setTabCounts(previous => ({ ...previous, ...next }));
-      } catch {
-        // 任一数据源异常都静默处理，不阻塞详情页
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ticketId]);
-
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
@@ -274,7 +218,10 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
     comment?: string;
     notifyChannels?: string[];
   }) => {
+    if (writing.current || !resource.ready) return;
+    const current = resource.capture();
     try {
+      writing.current = true;
       setCCing(true);
       await TicketApi.ccTicket(
         ticketId,
@@ -282,13 +229,17 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
         values.comment,
         values.notifyChannels || ['in_app']
       );
+      if (!current()) return;
       antMessage.success('抄送成功');
       setCCModalVisible(false);
       ccForm.resetFields();
       fetchTicket();
     } catch (error) {
+      if (!current()) return;
+      resource.deny(error);
       handleError(error, 'ccTicket', '抄送失败');
     } finally {
+      writing.current = false;
       setCCing(false);
     }
   };
@@ -300,16 +251,23 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   // Handle assignment submit
   const handleAssignSubmit = async (values: { assigneeId: number; comment?: string }) => {
+    if (writing.current || !resource.ready) return;
+    const current = resource.capture();
     try {
+      writing.current = true;
       setAssigning(true);
       await TicketApi.assignTicket(ticketId, values);
+      if (!current()) return;
       antMessage.success('工单分配成功');
       setAssignModalVisible(false);
       assignForm.resetFields();
       fetchTicket();
     } catch (error) {
+      if (!current()) return;
+      resource.deny(error);
       handleError(error, 'assignTicket', '分配失败');
     } finally {
+      writing.current = false;
       setAssigning(false);
     }
   };
@@ -331,7 +289,10 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   // Handle edit submit
   const handleEditSubmit = async (values: Partial<Ticket>) => {
+    if (writing.current || !resource.ready) return;
+    const current = resource.capture();
     try {
+      writing.current = true;
       setUpdating(true);
       // 状态转换验证
       if (values.status && editSnapshot.current?.status && values.status !== editSnapshot.current.status) {
@@ -346,10 +307,13 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
       editIntent.current = prepareTicketEdit(editIntent.current, values, editSnapshot.current?.version);
       await TicketApi.updateTicket(ticketId, editIntent.current.payload);
       editIntent.current = undefined;
+      if (!current()) return;
       antMessage.success('工单更新成功');
       setEditModalVisible(false);
       fetchTicket();
     } catch (error) {
+      if (!current()) return;
+      resource.deny(error);
       if (isTicketEditConflict(error)) {
         editIntent.current = undefined;
         editSnapshot.current = undefined;
@@ -358,6 +322,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
       }
       handleError(error, 'updateTicket', '更新失败');
     } finally {
+      writing.current = false;
       setUpdating(false);
     }
   };
@@ -369,16 +334,23 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   // Handle delete confirm
   const handleDeleteConfirm = async () => {
+    if (writing.current || !resource.ready) return;
+    const current = resource.capture();
     try {
+      writing.current = true;
       setDeleting(true);
       await TicketApi.deleteTicket(ticketId);
+      if (!current()) return;
       antMessage.success('工单删除成功');
       setDeleteModalVisible(false);
       // Navigate back to ticket list
       window.location.href = '/tickets';
     } catch (error) {
+      if (!current()) return;
+      resource.deny(error);
       handleError(error, 'deleteTicket', '删除失败');
     } finally {
+      writing.current = false;
       setDeleting(false);
     }
   };
@@ -399,7 +371,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
       if (!event.altKey) return;
       if (event.key.toLowerCase() === 'r') {
         event.preventDefault();
-        fetchTicket();
+        refreshDetail();
       } else if (event.key.toLowerCase() === 'e' && ticket && ticket.actions?.edit?.allowed) {
         event.preventDefault();
         editForm.setFieldsValue({
@@ -416,7 +388,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
 
     window.addEventListener('keydown', handleShortcut);
     return () => window.removeEventListener('keydown', handleShortcut);
-  }, [editForm, fetchTicket, ticket]);
+  }, [editForm, refreshDetail, ticket]);
 
   if (loading) {
     return (
@@ -428,7 +400,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
     );
   }
 
-  if (error) {
+  if (error && !ticket) {
     return (
       <div className='p-6'>
         <Card>
@@ -439,7 +411,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
             </Title>
             <Text type='secondary'>{error}</Text>
             <div className='mt-4'>
-              <Button type='primary' onClick={fetchTicket}>
+              <Button type='primary' onClick={() => void resource.reload()}>
                 重试
               </Button>
             </div>
@@ -474,6 +446,10 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   return (
     <div className="w-full space-y-4 pt-4 text-foreground font-sans antialiased">
+      {error && <DetailReadState error={error} loading={resource.loading} reload={resource.reload} />}
+      {sla.error && <DetailReadState error={`SLA：${sla.error}`} loading={sla.loading} reload={sla.reload} />}
+      {!!refresh.report?.failed.length && <Alert type='warning' showIcon title='部分区域更新失败' description={refresh.report.failed.map(item => `${item.label}：${item.message}`).join('；')} />}
+      {!!refresh.report?.skipped.length && <p role='status'>部分区域正在操作或已离开，未刷新。</p>}
       {/* ================= 工单主 Header & 规范动作控制台 ================= */}
       <div className="w-full bg-surface rounded-[8px] border border-border p-[16px] shadow-none">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -523,6 +499,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
 
           {/* 右侧：规范动作按钮控制台 */}
           <div className='flex flex-wrap items-center gap-2 self-start lg:self-center shrink-0'>
+            <Button aria-label='刷新工单详情' loading={refresh.busy} onClick={refreshDetail}>刷新</Button>
             <button
               type='button'
               onClick={handleAssign}
@@ -698,6 +675,8 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
             title={ticket.title}
             description={ticket.description}
             onAccept={async suggestion => {
+              if (writing.current || !resource.ready) return;
+              const current = resource.capture();
               if (
                 suggestion.priority === ticket.priority &&
                 suggestion.category === ticket.category
@@ -705,21 +684,27 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
                 antMessage.info('AI建议与当前分类/优先级一致，无需更新');
                 return;
               }
+              writing.current = true;
               try {
                 aiEditIntent.current = prepareTicketEdit(aiEditIntent.current, {
                   category: suggestion.category,
                   priority: toTicketPriority(suggestion.priority),
                 }, ticket.version);
                 await TicketApi.updateTicket(ticketId, aiEditIntent.current.payload);
+                if (!current()) return;
                 aiEditIntent.current = undefined;
                 antMessage.success(`已采纳AI建议：分类 ${suggestion.category}，优先级 ${suggestion.priority}`);
                 await fetchTicket();
               } catch (err) {
+                if (!current()) return;
+                resource.deny(err);
                 if (isTicketEditConflict(err)) {
                   aiEditIntent.current = undefined;
                   await fetchTicket();
                 }
                 handleError(err, 'applyAISuggestion', '采纳建议失败');
+              } finally {
+                writing.current = false;
               }
             }}
           />
@@ -1185,7 +1170,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
 // ==================== 详情 Tabs 子组件 ====================
 
 interface TicketDetailTabsProps {
-  updateCount: (tab: 'comments' | 'attachments' | 'relations', count: number | undefined) => void;
+  updateCount: (tab: 'comments' | 'attachments' | 'relations' | 'history', count: number | undefined) => void;
   ticketId: number;
   recordClass?: string;
   currentUserId?: number;
@@ -1214,6 +1199,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
   const hasPermission = useAuthStore(state => state.hasPermission);
   const commentsCount = useCallback((count: number | undefined) => updateCount('comments', count), [updateCount]);
   const attachmentsCount = useCallback((count: number | undefined) => updateCount('attachments', count), [updateCount]);
+  const historyCount = useCallback((count: number | undefined) => updateCount('history', count), [updateCount]);
   const relationsCount = useCallback((count: number | undefined) => updateCount('relations', count), [updateCount]);
   const countSuffix = (count?: number) => (count !== undefined ? ` (${count})` : '');
 
@@ -1277,7 +1263,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
           历史流转{countSuffix(tabCounts?.history)}
         </span>
       ),
-      children: <TicketHistoryList ticketId={ticketId} formatDateTime={formatDateTime} />,
+      children: <TicketHistoryList onCountChange={historyCount} ticketId={ticketId} formatDateTime={formatDateTime} />,
     },
     {
       key: 'relations',

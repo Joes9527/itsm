@@ -1,4 +1,5 @@
 'use client';
+import { useDetailRefreshEntry } from '@/components/business/detail-tabs/DetailRefreshContext';
 
 import React, { useRef, useState } from 'react';
 import { Alert, Button, Modal } from 'antd';
@@ -63,6 +64,7 @@ function ProcessTasksPanel({ ticketId, recordClass, onTaskChange, session }: {
   const resource = useDetailResource(`${recordClass}:${ticketId}`, () => readTasks(ticketId, recordClass), tasks => tasks.length);
   const [busy, setBusy] = useState(false);
   const locked = useRef(false);
+  useDetailRefreshEntry(!resource.denied ? { key: 'process-tasks', label: '流程任务', reload: resource.reload, isWriting: () => locked.current } : undefined);
   const [selected, setSelected] = useState<UserTask | null>(null);
   const [mutationError, setMutationError] = useState<string>();
   const [submitted, setSubmitted] = useState(false);

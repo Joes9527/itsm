@@ -1,6 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useDetailResource, useDetailIdentity } from '@/components/business/detail-tabs/useDetailResource';
+import { useDetailRefreshEntry } from '@/components/business/detail-tabs/DetailRefreshContext';
+import { DetailReadState } from '@/components/business/detail-tabs/DetailReadState';
+
 import { useRouter } from 'next/navigation';
 import { Button, Empty, message } from 'antd';
 import { PlayCircle, ExternalLink } from 'lucide-react';
@@ -14,50 +18,43 @@ interface ServiceRequestPanelProps {
 
 // 服务目录来源的工单，在工单详情页里额外展示的补充信息面板。
 // 样式对齐 prototype：规格字段网格 + 头部常驻「开始交付」+ 交付任务状态动效。
-export default function ServiceRequestPanel({ ticketId }: ServiceRequestPanelProps) {
+export default function ServiceRequestPanel(props: ServiceRequestPanelProps) {
+  const identity = useDetailIdentity(props.ticketId);
+  return <ServiceRequestPanelContent key={identity} {...props} />;
+}
+function ServiceRequestPanelContent({ ticketId }: ServiceRequestPanelProps) {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [request, setRequest] = useState<any>(null);
-  const [tasks, setTasks] = useState<ProvisioningTask[]>([]);
   const [starting, setStarting] = useState(false);
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const data = await ServiceCatalogApi.getServiceRequestByTicketId(ticketId);
-      setRequest(data);
-      if (data?.id) {
-        const taskList = await serviceRequestAPI.listProvisioningTasks(data.id);
-        setTasks(taskList || []);
-      }
-    } catch {
-      // 这个 ticket 不是服务目录来源，或者查询失败——不渲染面板即可，不当错误处理
-      setRequest(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load();
-  }, [ticketId]);
-
+  const busy = useRef(false);
+  const resource = useDetailResource(ticketId, async () => {
+    const request = await ServiceCatalogApi.getServiceRequestByTicketId(ticketId);
+    const tasks = request?.id ? await serviceRequestAPI.listProvisioningTasks(request.id) : [];
+    return { request, tasks: tasks || [] };
+  }, data => data.tasks.length);
+  useDetailRefreshEntry(!resource.denied ? { key: 'service-request', label: '服务申请', reload: resource.reload, isWriting: () => busy.current } : undefined);
+  const request = resource.data?.request;
+  const tasks = resource.data?.tasks || [];
+  useEffect(() => { if (resource.denied) { busy.current = false; setStarting(false); } }, [resource.denied]);
   const handleStartProvisioning = async () => {
-    if (!request?.id) return;
+    if (!resource.ready || !request?.id || !request.actions?.provision?.allowed || busy.current) return;
+    const current = resource.capture();
+    busy.current = true;
     setStarting(true);
     try {
       await serviceRequestAPI.startProvisioning(request.id);
+      if (!current()) return;
       message.success('已开始交付');
-      load();
-    } catch (e: any) {
-      message.error(e?.message || '启动交付失败');
+      await resource.reload({ afterWrite: true });
+    } catch (error) {
+      if (!current()) return;
+      resource.deny(error);
+      message.error(error instanceof Error ? error.message : '启动交付失败');
     } finally {
-      setStarting(false);
+      if (current()) { busy.current = false; setStarting(false); }
     }
   };
-
-  if (loading) return null;
-  if (!request) return null;
+  const feedback = <DetailReadState error={resource.error} loading={resource.loading} reload={resource.reload} />;
+  if (!request) return resource.error ? feedback : null;
 
   const fulfillmentLabels: Record<string, string> = {
     awaiting_approval: '待审批',
@@ -114,6 +111,7 @@ export default function ServiceRequestPanel({ ticketId }: ServiceRequestPanelPro
 
   return (
     <div className="space-y-4">
+      {feedback}
       {/* 面板头部：标题 + 服务项名 + 常驻开始交付按钮 */}
       <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
         <div className="flex items-center gap-2 min-w-0">

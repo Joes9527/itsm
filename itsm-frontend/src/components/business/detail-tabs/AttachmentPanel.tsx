@@ -1,4 +1,5 @@
 'use client';
+import { useDetailRefreshEntry } from '@/components/business/detail-tabs/DetailRefreshContext';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Upload, Button, App, Typography, Progress, Modal, Space, Empty, Spin, Alert } from 'antd';
@@ -78,6 +79,7 @@ const AttachmentPanelContent: React.FC<AttachmentPanelProps> = ({
     permissions.canRead
   );
   const items = resource.data || [];
+  useDetailRefreshEntry(!resource.denied ? { key: 'attachments', label: '附件', reload: resource.reload, isWriting: () => busy.current } : undefined);
   const access = useRef(permissions);
   access.current = permissions;
   const confirmation = useRef<ReturnType<typeof modal.confirm> | null>(null);

@@ -1,4 +1,5 @@
 'use client';
+import { useDetailRefreshEntry } from '@/components/business/detail-tabs/DetailRefreshContext';
 
 import React, { useEffect, useRef, useState } from 'react';
 import { App, Input } from 'antd';
@@ -49,6 +50,7 @@ const TicketCommentStreamContent: React.FC<TicketCommentStreamProps> = ({
   );
   const comments = resource.data?.comments || [];
   const busy = useRef(false);
+  useDetailRefreshEntry(!resource.denied ? { key: 'comments', label: '评论', reload: resource.reload, isWriting: () => busy.current } : undefined);
 
   const [replyText, setReplyText] = useState('');
   const [isInternalComment, setIsInternalComment] = useState(false);
@@ -190,7 +192,7 @@ const TicketCommentStreamContent: React.FC<TicketCommentStreamProps> = ({
 
                   {editingId === comment.id ? (
                     <div className='space-y-2'>
-                      <TextArea
+                      <TextArea aria-label="编辑评论"
                         value={editingContent}
                         onChange={e => setEditingContent(e.target.value)}
                         rows={3}
@@ -292,7 +294,7 @@ const TicketCommentStreamContent: React.FC<TicketCommentStreamProps> = ({
           />
         </div>
 
-        <TextArea
+        <TextArea aria-label="评论"
           rows={4}
           placeholder='输入您的评论或内部评估记录...'
           value={replyText}

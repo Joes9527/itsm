@@ -1,6 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import { useDetailResource } from '@/components/business/detail-tabs/useDetailResource';
+import { useDetailRefreshEntry } from '@/components/business/detail-tabs/DetailRefreshContext';
+import { DetailReadState } from '@/components/business/detail-tabs/DetailReadState';
+
 import { Card, Tag, Typography } from 'antd';
 import { GitBranch } from 'lucide-react';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
@@ -16,24 +20,15 @@ interface ServiceCatalogApprovalChainProps {
  * 显示在 TicketDetail 的「审批链」Tab 中。
  */
 export default function ServiceCatalogApprovalChain({ ticketId }: ServiceCatalogApprovalChainProps) {
-  const [steps, setSteps] = useState<any[] | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    ServiceCatalogApi.getServiceRequestByTicketId(ticketId)
-      .then((sr) => {
-        if (cancelled) return;
-        // http-client 的 toCamelCase 会把 _approval_chain 转为 ApprovalChain
-        const chain = sr?.formData?.ApprovalChain || sr?.formData?._approval_chain;
-        if (Array.isArray(chain) && chain.length > 0) {
-          setSteps(chain);
-        }
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [ticketId]);
-
-  if (!steps || steps.length === 0) return null;
+  const resource = useDetailResource(ticketId, async () => {
+    const sr = await ServiceCatalogApi.getServiceRequestByTicketId(ticketId);
+    const chain = sr?.formData?.ApprovalChain || sr?.formData?._approval_chain;
+    return Array.isArray(chain) ? chain : [];
+  }, steps => steps.length);
+  useDetailRefreshEntry(!resource.denied ? { key: 'catalog-approval-chain', label: '目录审批链', reload: resource.reload, isWriting: () => false } : undefined);
+  const steps = resource.data || [];
+  const feedback = <DetailReadState error={resource.error} loading={resource.loading} reload={resource.reload} />;
+  if (!steps.length) return feedback;
 
   return (
     <Card
@@ -46,6 +41,7 @@ export default function ServiceCatalogApprovalChain({ ticketId }: ServiceCatalog
       }
       style={{ marginBottom: 16 }}
     >
+      {feedback}
       <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
         {steps.map((step: any, idx: number) => (
           <React.Fragment key={idx}>

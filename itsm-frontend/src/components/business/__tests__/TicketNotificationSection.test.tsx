@@ -22,6 +22,7 @@ jest.mock('@/components/common/UserSelect', () => ({
 jest.mock('@/lib/store/auth-store', () => ({ useAuthStore: () => ({ user: { id: 1 } }) }));
 jest.mock('@/lib/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 jest.mock('@/lib/api/http-client', () => ({
+  ...jest.requireActual('@/lib/api/http-client'),
   httpClient: { get: jest.fn(), post: jest.fn(), put: jest.fn(), delete: jest.fn() },
 }));
 
@@ -224,4 +225,16 @@ describe('TicketNotificationSection', () => {
     expect(await screen.findByText('服务端投递')).toBeInTheDocument();
     expect(mockGet).toHaveBeenCalledTimes(3);
   });
+});
+import { DetailRefreshProvider, useDetailRefresh } from '@/components/business/detail-tabs/DetailRefreshContext';
+function RefreshNotifications() { const refresh = useDetailRefresh()!; return <button onClick={() => void refresh.refresh()}>页面刷新</button>; }
+it('registers notification list refresh and preserves prior content on failure', async () => {
+  mockGet.mockResolvedValue({ notifications: [{id: 8, content: '保留通知', type:'assigned', channel:'in_app', readAt:'2026-09-15'}], total:1 });
+  render(<DetailRefreshProvider identity='notification-test'><RefreshNotifications/><TicketNotificationSection ticketId={10}/></DetailRefreshProvider>);
+  await screen.findByText('保留通知');
+  mockGet.mockRejectedValueOnce(new Error('通知离线'));
+  await userEvent.click(screen.getByText('页面刷新'));
+  expect(await screen.findByRole('alert')).toHaveTextContent('通知离线');
+  expect(screen.getByText('保留通知')).toBeInTheDocument();
+  expect(mockGet).not.toHaveBeenCalledWith('/api/v1/notifications/preferences');
 });
