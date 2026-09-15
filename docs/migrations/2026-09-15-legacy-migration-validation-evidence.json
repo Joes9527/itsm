@@ -1,0 +1,306 @@
+{
+  "generated_at": "2026-09-15T06:49:27.746236+00:00",
+  "source_of_truth": {
+    "dir": "/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main/data",
+    "itsm_departments.json": {
+      "sha256": "f8b3fbdaa12176724ee6d346d51dc1b74bde112142eeb82616b4c2d57af9283f",
+      "mtime": 1785802903.5916562
+    },
+    "itsm_users.json": {
+      "sha256": "fe794d35abcbffb90a4d5af999fbebb5a295b5cde6791681f1365209466007a6",
+      "mtime": 1787109665.5271876
+    }
+  },
+  "export_stats": {
+    "departments_total": 5272,
+    "departments_by_type": {
+      "1": 5270,
+      "0": 2
+    },
+    "departments_duplicate_ids": 0,
+    "departments_duplicate_names": 573,
+    "users_total": 14393,
+    "users_by_status": {
+      "userstatus01": 9014,
+      "userstatus04": 5379
+    },
+    "users_active": 9014,
+    "users_inactive": 5379,
+    "users_duplicate_usernames": 4,
+    "users_duplicate_emails": 69,
+    "users_with_department": 14392,
+    "users_with_leader": 9485
+  },
+  "target": {
+    "container": "ga-itsm-20260914",
+    "user": "ga_owner",
+    "database": "itsm_ga_ready"
+  },
+  "reconciliation": {
+    "departments": {
+      "export": 5272,
+      "db_rows": 7975,
+      "matched": 4975,
+      "only_export": 297,
+      "only_db": 3000,
+      "duplicate_codes_in_db": {},
+      "only_export_sample": [
+        "02e19d218692418eb321c920d0794db5",
+        "03136262a05d41358be813c09ec93b1d",
+        "0505b91386824bc4865e9384faa620c2",
+        "09e4ae0a74224396809e43980b320158",
+        "0b2ff3b7b73f4e9983674de777f40ad4",
+        "10827077726440549217613d2a28bf59",
+        "1082a98651634896b5ac68a4f9f09026",
+        "10b3cff751e54f218b7d19aa7b8da32c",
+        "11D0301050409",
+        "11D030105040901"
+      ],
+      "only_db_by_org_type": {
+        "department": 2767,
+        "warehouse": 233
+      },
+      "only_db_parent_linkage": {
+        "parent missing": 23,
+        "parent present in db": 2977
+      }
+    },
+    "users": {
+      "export_total": 14388,
+      "export_active": 9011,
+      "db_rows": 7862,
+      "matched": 7816,
+      "only_export_active": 1261,
+      "only_export_inactive": 5311,
+      "only_export_active_sample": [
+        "10207-0988",
+        "1440350194",
+        "15917437390",
+        "1823783767",
+        "20923659",
+        "214731855",
+        "Abner.YC.Gan",
+        "AiQiong.Li",
+        "Alex.Huang",
+        "Allan.Wan"
+      ],
+      "only_db": 46,
+      "only_db_attribution": {
+        "non-legacy username pattern": 8,
+        "unexplained legacy-looking": 2,
+        "created after the migration batch": 35,
+        "other tenant": 1
+      },
+      "only_db_sample": [
+        "79586",
+        "sha256:d934efe3",
+        "sha256:24b09808",
+        "sha256:0d197174",
+        "sha256:9239529c",
+        "sha256:483b35d3",
+        "sha256:213a8694",
+        "sha256:68e9f29d",
+        "sha256:748eb7db",
+        "sha256:5ab9014a"
+      ]
+    }
+  },
+  "alternative_key_checks": {
+    "users_missing_active": 1261,
+    "users_missing_active_found_by_email": 0,
+    "users_missing_active_under_different_username": 0,
+    "users_missing_active_no_email_match": 1261,
+    "users_missing_active_sample": [
+      {
+        "username": "10207-0988",
+        "email": "sha256:fa379ea4",
+        "db_username_for_email": ""
+      },
+      {
+        "username": "1440350194",
+        "email": "sha256:64665ccb",
+        "db_username_for_email": ""
+      },
+      {
+        "username": "15917437390",
+        "email": "sha256:cb3601d7",
+        "db_username_for_email": ""
+      },
+      {
+        "username": "1823783767",
+        "email": "sha256:da0a071f",
+        "db_username_for_email": ""
+      },
+      {
+        "username": "20923659",
+        "email": "sha256:bcf5c94e",
+        "db_username_for_email": ""
+      },
+      {
+        "username": "214731855",
+        "email": "sha256:892290ad",
+        "db_username_for_email": ""
+      },
+      {
+        "username": "Abner.YC.Gan",
+        "email": "sha256:6dc2b62a",
+        "db_username_for_email": ""
+      },
+      {
+        "username": "AiQiong.Li",
+        "email": "sha256:0aae6d84",
+        "db_username_for_email": ""
+      }
+    ],
+    "departments_missing_total": 297,
+    "departments_missing_name_present_in_db": 236,
+    "departments_missing_uuid_style_ids": 185,
+    "departments_missing_code_style_ids": 112,
+    "departments_missing_sample": [
+      {
+        "id": "11H0101030403010304",
+        "name": "BASF驻厂",
+        "name_in_db": true
+      },
+      {
+        "id": "b9f696a38a894a35b3423f146cd71c36",
+        "name": "CHC-嘉里震威",
+        "name_in_db": false
+      },
+      {
+        "id": "11D030105040901",
+        "name": "G7系统管理",
+        "name_in_db": true
+      },
+      {
+        "id": "11D030106040901",
+        "name": "G7系统管理",
+        "name_in_db": true
+      },
+      {
+        "id": "11D03010504090101",
+        "name": "G7系统管理组",
+        "name_in_db": true
+      },
+      {
+        "id": "11D03010604090101",
+        "name": "G7系统管理组",
+        "name_in_db": true
+      },
+      {
+        "id": "11H010103040201",
+        "name": "HSSEQ组",
+        "name_in_db": true
+      },
+      {
+        "id": "11H0101030402",
+        "name": "HSSEQ部",
+        "name_in_db": true
+      }
+    ]
+  },
+  "field_checks": {
+    "matched_users_checked": 7816,
+    "name_matches": 7815,
+    "email_exact_matches": 0,
+    "email_matches_after_suffix_rule": 0,
+    "email_mismatch_sample": [
+      [
+        "36313",
+        "sha256:d764994f",
+        "sha256:4a2bf0c5"
+      ],
+      [
+        "39070",
+        "sha256:1efac411",
+        "sha256:79a3e6d3"
+      ],
+      [
+        "39330",
+        "sha256:1efac411",
+        "sha256:d530b004"
+      ],
+      [
+        "43850",
+        "@kerryeas.com",
+        "sha256:94c2940b"
+      ],
+      [
+        "45104",
+        "sha256:dbaf5bf7",
+        "sha256:7a1da4dc"
+      ]
+    ],
+    "active_flag_matches": 7750,
+    "department_binding_matches": 0,
+    "department_binding_absent": 316,
+    "department_mismatch_sample": [
+      [
+        "39070",
+        "15D06010203020303",
+        "15D060102"
+      ],
+      [
+        "43850",
+        "11D010G010901",
+        "11D010G01"
+      ],
+      [
+        "45104",
+        "15D060102040102",
+        "15D060102"
+      ],
+      [
+        "sha256:02d61585",
+        "11D010G010104",
+        "11D010G01"
+      ],
+      [
+        "sha256:007b8940",
+        "11D030106040306",
+        "11D030106"
+      ]
+    ],
+    "password_hash_bcrypt": 7861,
+    "password_hash_legacy_reuse": 0,
+    "password_hash_non_bcrypt_sample": [
+      "kaf_closeout_t2_20260831"
+    ],
+    "duplicate_usernames_in_db": 0,
+    "duplicate_emails_in_db": 17
+  },
+  "structure": {
+    "departments_with_resolvable_parent": 7975,
+    "department_roots": 25,
+    "department_cycles": 0,
+    "user_tenants": {
+      "1": 7861,
+      "2": 1
+    },
+    "users_without_department": 353,
+    "users_with_manager": 7076
+  },
+  "lineage": {
+    "itsm_migration_20260914": {
+      "departments": "7975",
+      "departments_created": "2026-08-19",
+      "users": "7834",
+      "users_active": "7834",
+      "legacy_users": "5537"
+    },
+    "itsm (DEV)": {
+      "departments": "7975",
+      "departments_created": "2026-08-19",
+      "users": "7834",
+      "users_active": "7834",
+      "legacy_users": "5537"
+    },
+    "itsm_baseline_20260908": {
+      "departments": "7975",
+      "departments_created": "2026-08-19",
+      "users": "7834",
+      "users_active": "7834",
+      "legacy_users": "5537"
+    }
+  }
+}
