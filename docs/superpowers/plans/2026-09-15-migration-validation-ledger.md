@@ -142,3 +142,56 @@ C3 的 SLA 业务覆盖、C4 的主管审批是否保留，在既有交接中未
 - 报告包含：五批矩阵、执行时刻及指纹、检查方法、每批差异、证据路径、限制、按优先级的精确下一动作，以及未做任何数据库变更的声明。
 - 主agent复核关键摘要/查询及至少一个一致和一个差异例（如有），再更新本清单C1及相关C/R/V状态。没有独立核验的历史结论不升级为当前PASS。
 - 一个批次或证据链超过合理查找范围时提交准确缺口；最多60分钟交付本轮结果，不无限追查不影响五批的其他库或历史任务。
+
+
+## 10. 2026-09-15 当前候选 UI 验证与定向修复任务
+
+本节为本清单最新增量，取代上文 V1–V3 的未执行状态；不改写五批迁移对账结论。主 agent 执行真实浏览器，readiness_path_audit 执行独立只读代码/目标配置核验。未部署、切库、迁移、seed、扩权或删除数据库。
+
+### 固定测试对象
+
+- API：c3c880df，8080；前端：24fe8546f9c0d40778e25f276f6307907ab19318，3010，Build ID fJAS7iqLTOgz4cevkG_pZ。
+- 目标：itsm_ga_ready；runtime/system/inspection 均指向隔离目标。Redis DB12、独立附件桶 itsm-ga-e2e-20260915；Dev 保留，后台消费者仍按原范围禁用。
+- LAN HTTP 登录：HTTP 200 后 auth/me 401。运行 ENV=production 令 access/refresh cookie 带 Secure，浏览器在 LAN HTTP 不保留。通过本机 SSH 转发 localhost:3010 访问同一 WSL 前端后登录成功，用于继续诊断；该转发不是 LAN 登录问题的修复。
+- 测试账号：tenant=default 的既有 admin / super_admin。菜单为空，创建使用直接页面地址；没有把直接地址访问计作菜单导航通过。
+- 唯一新建验收记录：ID 8，TKT-202609-000004，标题“迁移验收-GENERIC-20260915-1605”，recordClass=generic。创建后只读确认 status=new、version=1、自动 assignee_id=2。它是合成验收记录，不是旧票据迁移。
+
+### 实际结果（16:05–16:14 CST）
+
+| 路径 | 状态 | 证据与边界 |
+| --- | --- | --- |
+| V1 创建、详情、刷新 | 部分 PASS | UI POST 创建201/code0，详情与多次整页刷新保持；LAN 登录 FAIL、菜单导航 BLOCKED、重复提交未测，故 V1 整项未通过 |
+| V2 评论 | PASS | UI 发布1条合成评论，POST200；整页刷新后仍可读 |
+| V2 附件上传/下载 | PASS | UI上传合成73字节文本，POST200；列表显示1附件并通过下载按钮取回，两文件SHA256均 dfad74271555543bec60aae386c1e54e268a642b9680ebc46769e73e7f312b12 |
+| V2 分派 | BLOCKED | 只加载首100用户后本地搜索；admin搜索无结果，未随意分派给真实人员、未提交分派请求 |
+| V2 开始处理 | FAIL | 编辑下拉可选“处理中”，保存提示“不允许从新建转换到处理中”，前端拦截，未发更新请求 |
+| V2 流程任务 | NOT ACCEPTED | 当前管理员显示无可见活动任务；不能据此证明流程不存在或完成，未启动停用消费者 |
+| V3 解决/关闭/重新打开 | BLOCKED | 在开始处理失败后停止依赖步骤；未用API或数据库绕过UI |
+| V4/V5 | NOT RUN | 未切角色、重启或执行专业流程/SLA验收 |
+
+浏览器证据保存在本地忽略目录 output/playwright/.playwright-cli/，主要快照 page-2026-09-15T08-12-32-197Z.yml（状态拒绝）、page-2026-09-15T08-13-34-191Z.yml（附件成功）、page-2026-09-15T08-13-50-266Z.yml（下载）；临时产物不提交。附件内容为合成英文验证文本，无企业数据。
+
+### 已证实缺口和下一批执行顺序
+
+| ID | 根因与任务 | 完成条件 |
+| --- | --- | --- |
+| R5 | LAN HTTP 与 Secure session cookie 不匹配。authentication/cookie.go 的生产环境策略生效，Auth.CookieSecure 字段未被消费；不可直接改 ENV=development 掩盖其它启动约束 | 设计明确传输配置，生产默认安全、HTTPS始终Secure，统一登录/刷新/退出及OAuth state属性策略；真实 LAN 3010 登录和刷新通过，不泄露令牌、不退回localStorage |
+| C5 | 目标 menus 总数=0，菜单API200空树。menu_service.go:232查询租户可见菜单；menu_controller.go:250–274 的init只返回提示，不创建菜单 | 从现有新模型菜单定义生成租户明确、permissionCode及路由一致的最小配置变更；审查后定向应用，禁止全量seed或静态菜单绕过权限 |
+| F1 | 部署 TicketDetail.tsx:202仅取100人，:899–909本地filterOption无服务端搜索。目标租户7879用户，admin存在但首100匹配0；后端 user_service.go:149–170已支持搜索分页 | 接入既有服务端search、防抖/迟到响应保护、保留选中值及权限租户边界；证明首100之外的admin可选，不全量拉人 |
+| F2 | 部署 workflow-state-machine.ts:13仅允许new→open/cancelled；TicketDetail.tsx:340–346提前拒绝。但实际c3 UpdateTicket :514–520调用repository/ticket/model.go:81–83，允许new→in_progress | 移除过期前端权威阻断，让既有版本化命令由后端裁定；保留expectedVersion/operationId、后端错误、冲突刷新及专业命令边界；验证合法提交和非法拒绝，再续测V2/V3 |
+| R1细化 | readyz将业务RawDB用于账本检查且选最后注册038；启动迁移检查已有独立inspection连接并排除retire。另有平台scope0初始化六组件收据缺失，与五批配置不能等同 | 修复检查身份与阶段选择后，独立报告真实baseline状态；不GRANT业务账本权限、不执行038、不补造初始化收据或强行返回200 |
+
+执行安排：先分别实现/评审 F1、F2 的小范围代码变更，同时准备 C5 定向配置与 R5 传输方案；固定候选组合并记录部署来源后复测。R1 的baseline合同另行明确，不以重跑五批或整套初始化替代。C3 SLA空绑定和19补班仍待补，五批384对象对账通过不覆盖菜单和端到端可用性。
+
+
+## 11. 已批准修复的执行约束（2026-09-15）
+
+维护者对§10下一步回复go ahead，按现有方案执行，不重新扩展迁移范围。
+
+- [ ] F1/F2：generic_ui_fixes 在独立分支统一修改 TicketDetail 人员搜索和过期状态阻断；先失败回归、再实现、再最小测试/类型检查。返回提交供独立复审。
+- [ ] R5：cookie_transport_fix 在独立分支实现可区分未指定/显式值的Cookie传输策略，保留HTTPS安全优先和默认生产安全，验证session/refresh/logout/OAuth/CSRF一致性；不修改ENV以绕过启动约束。
+- [ ] C5：menu_target_plan 只读检查新模型菜单来源与租户/权限/路由，准备具名对象定向事务与回滚；主agent审核后唯一写入。不是全量初始化，不能以菜单数据补齐推断RBAC或baseline已通过。
+- [ ] 集成：独立复核各提交；以实际前端24fe8546、后端c3c880df构造仅本批必要变化的候选，不部署主干的047或其它迁移。保存旧制品、recipe与配置哈希，预构建完成后分别短暂停启itsm/itsm-web；其它服务保持原状态。
+- [ ] 验收：首先LAN HTTP 3010真实登录/刷新/退出；随后菜单、搜索首100外admin、generic处理/评论/附件/解决关闭。只使用合成验收记录，失败如实记录，不用DB改状态替代UI。
+
+共享变更仅由主agent执行：目标itsm_ga_ready，保持Dev PG、Redis DB11不变。菜单定向写入前核验现态与备份，限定tenant和具名对象；运行切换失败恢复旧recipe/制品，菜单回滚只移除本次插入且未被其它对象引用的记录。源码提交、构建来源、部署制品和UI验收分别记录。
