@@ -112,6 +112,33 @@ NODE_ENV=production HOSTNAME=127.0.0.1 PORT=3301 npm start
 
 `npm run build` 会准备 `.next/standalone`，包含 `server.js`、依赖、静态资源和 `public`。发布可复制该完整目录并执行 `NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3010 node server.js`；不要只复制 `server.js`。保留启动描述和上一发布目录，切换后验证登录、同源 `/api/v1/health`、静态资源及已登录业务页面。本机固定路径与启动描述见[本机开发环境](development-environment.md)。
 
+#### Cookie transport for private HTTP environments
+
+Session, refresh, logout, OAuth state and CSRF cookies share the backend transport
+policy. `server.cookie_secure` is optional: omission keeps cookies Secure when
+`ENV=production`, `GIN_MODE=release`, or `server.mode=release`. Explicit `true`
+requires Secure even on HTTP; explicit `false` permits a deliberately configured
+HTTP deployment without changing production authorization/runtime mode.
+`ITSM_COOKIE_SECURE=true|false` overrides YAML; empty or invalid values fail startup.
+Do not put an empty placeholder or a default `false` in a general-purpose recipe.
+
+Direct TLS and `X-Forwarded-Proto: https` always force Secure, including with an
+explicit `false`. The forwarding header only strengthens this policy; a claimed
+`http` cannot weaken the default or an explicit `true`. This is not proxy-based
+authorization: the current Gin client-IP trust list remains `127.0.0.1`. The
+reverse proxy must replace inbound forwarding headers with the transport it
+observes. TLS termination elsewhere requires forwarding HTTPS correctly.
+
+For an authorized LAN HTTP deployment such as WSL `http://192.168.31.66:3010`,
+set only `ITSM_COOKIE_SECURE=false` in the backend's private launch environment
+and keep existing `ENV`, server mode, CSRF and authorization settings. Deploy the
+reviewed backend change and update its recipe/artifact evidence together before
+expecting this setting to work. For HTTPS, remove the override or set it to `true`.
+Verification must use the LAN browser: login retains both HttpOnly cookies,
+authenticated reads succeed, refresh renews the session, CSRF-protected writes
+retain their token check, and logout clears the session. Unit tests do not prove
+that target deployment or browser acceptance has occurred.
+
 WSL 通知连接同样走 3010 → 8080。`NEXT_PUBLIC_WS_URL` 必须在构建时指定为实际浏览器入口，不能只在运行时设置，否则旧默认可能连接 localhost:8090。上例是当前 WSL LAN HTTP 地址；其它环境按真实入口使用 ws/wss。后端 `WEBSOCKET_ALLOWED_ORIGINS` 明确列出该浏览器来源（当前为 `http://192.168.31.66:3010`），不使用通配。发布后分别确认通知列表 HTTP 200 与浏览器 WebSocket 101，避免只验证普通 API。
 
 工作流分组使用 `/workflow`，该页面跳转 `/admin/workflows`。三个默认子入口为工作流管理、流程设计器和流程实例。审批链规则使用已有页面 `/admin/approval-chains`，旧 `/workflow/approval-chains` 跳转到该页面；`workflow` 菜单修复会同步迁移旧菜单地址，保留已有分组、权限和可见性配置。动态菜单仍由后端按租户、角色和权限过滤。升级已有租户的旧菜单时，使用定向命令，而非全量初始化：

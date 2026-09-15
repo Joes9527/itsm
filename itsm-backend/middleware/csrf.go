@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/authentication"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -28,7 +30,6 @@ type CSRFConfig struct {
 	HeaderName     string   // Header 名称
 	FormName       string   // Form 字段名称
 	CookieMaxAge   int      // Cookie 最大年龄（秒），默认 86400 (24小时)
-	Secure         bool     // Cookie 是否仅 HTTPS
 	Domain         string   // Cookie Domain
 	SkipPaths      []string // 跳过 CSRF 验证的路径
 	AllowedMethods []string // 需要验证的 HTTP 方法
@@ -42,7 +43,6 @@ func DefaultCSRFConfig() *CSRFConfig {
 		HeaderName:   CSRFTokenHeaderName,
 		FormName:     CSRFTokenFormName,
 		CookieMaxAge: 86400,
-		Secure:       gin.Mode() == gin.ReleaseMode, // 生产环境启用 Secure
 		SkipPaths: []string{
 			"/api/v1/auth/login",
 			"/api/v1/auth/refresh",
@@ -61,16 +61,6 @@ func CSRFTokenGenerator(length int) string {
 	return base64.URLEncoding.EncodeToString(uid[:])
 }
 
-func shouldSetSecureCSRFCookie(c *gin.Context, config *CSRFConfig) bool {
-	if config == nil || !config.Secure {
-		return false
-	}
-	if c.Request != nil && c.Request.TLS != nil {
-		return true
-	}
-	return strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https")
-}
-
 // GenerateCSRFToken 生成 CSRF token 并设置到 cookie
 func GenerateCSRFToken(c *gin.Context, config *CSRFConfig) string {
 	token := CSRFTokenGenerator(config.TokenLength)
@@ -81,7 +71,7 @@ func GenerateCSRFToken(c *gin.Context, config *CSRFConfig) string {
 		config.CookieMaxAge,
 		"/",
 		config.Domain,
-		shouldSetSecureCSRFCookie(c, config),
+		authentication.ShouldUseSecureCookies(c.Request),
 		true, // HttpOnly - 前端 JS 无法读取
 	)
 
