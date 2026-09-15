@@ -73,7 +73,7 @@ export const TicketRelationCards: React.FC<TicketRelationCardsProps> = ({
     onCountChange
   );
   const relations = resource.data || [];
-  useDetailRefreshEntry(!resource.denied ? { key: 'relations', label: '关联关系', reload: resource.reload, isWriting: () => false } : undefined);
+  useDetailRefreshEntry({ key: 'relations', label: '关联关系', reload: resource.reload, isWriting: () => false });
   const feedback = (
     <DetailReadState error={resource.error} loading={resource.loading} reload={resource.reload} />
   );

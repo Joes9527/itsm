@@ -12,10 +12,7 @@ export function useTicketDetailResource(ticketId: number, isWriting: () => boole
     },
     () => 0
   );
-  useDetailRefreshEntry(
-    !resource.denied
-      ? { key: 'ticket', label: '工单详情', reload: resource.reload, isWriting }
-      : undefined
-  );
+  // A read denial is a batch failure; only eligibility or unmount ends registration.
+  useDetailRefreshEntry({ key: 'ticket', label: '工单详情', reload: resource.reload, isWriting });
   return { ...resource, initialLoading: resource.loading && !resource.data };
 }

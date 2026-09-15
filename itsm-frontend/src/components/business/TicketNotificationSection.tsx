@@ -70,7 +70,7 @@ const TicketNotificationContent: React.FC<TicketNotificationSectionProps> = ({
     return response.notifications || [];
   }, rows => rows.length);
   const notifications = resource.data || [];
-  useDetailRefreshEntry(!resource.denied ? { key: 'notifications', label: '通知', reload: resource.reload, isWriting: () => busy.current } : undefined);
+  useDetailRefreshEntry({ key: 'notifications', label: '通知', reload: resource.reload, isWriting: () => busy.current });
   const [sendModalVisible, setSendModalVisible] = useState(false);
   const [eventTypes, setEventTypes] = useState<Array<{ code: string; name: string }>>([]);
   const [form] = Form.useForm();

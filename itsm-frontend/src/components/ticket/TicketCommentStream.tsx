@@ -50,7 +50,7 @@ const TicketCommentStreamContent: React.FC<TicketCommentStreamProps> = ({
   );
   const comments = resource.data?.comments || [];
   const busy = useRef(false);
-  useDetailRefreshEntry(!resource.denied ? { key: 'comments', label: '评论', reload: resource.reload, isWriting: () => busy.current } : undefined);
+  useDetailRefreshEntry({ key: 'comments', label: '评论', reload: resource.reload, isWriting: () => busy.current });
 
   const [replyText, setReplyText] = useState('');
   const [isInternalComment, setIsInternalComment] = useState(false);

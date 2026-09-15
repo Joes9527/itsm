@@ -31,7 +31,7 @@ function ServiceRequestPanelContent({ ticketId }: ServiceRequestPanelProps) {
     const tasks = request?.id ? await serviceRequestAPI.listProvisioningTasks(request.id) : [];
     return { request, tasks: tasks || [] };
   }, data => data.tasks.length);
-  useDetailRefreshEntry(!resource.denied ? { key: 'service-request', label: '服务申请', reload: resource.reload, isWriting: () => busy.current } : undefined);
+  useDetailRefreshEntry({ key: 'service-request', label: '服务申请', reload: resource.reload, isWriting: () => busy.current });
   const request = resource.data?.request;
   const tasks = resource.data?.tasks || [];
   useEffect(() => { if (resource.denied) { busy.current = false; setStarting(false); } }, [resource.denied]);

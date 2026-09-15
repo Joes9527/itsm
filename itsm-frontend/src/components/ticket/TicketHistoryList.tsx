@@ -54,7 +54,7 @@ export const TicketHistoryList: React.FC<TicketHistoryListProps> = ({
   formatDateTime = defaultFormat,
 }) => {
   const resource = useDetailResource(ticketId, async () => mapHistory(await TicketApi.getTicketHistory(ticketId)), rows => rows.length, onCountChange);
-  useDetailRefreshEntry(!resource.denied ? { key: 'history', label: '历史流转', reload: resource.reload, isWriting: () => false } : undefined);
+  useDetailRefreshEntry({ key: 'history', label: '历史流转', reload: resource.reload, isWriting: () => false });
   const rows = resource.data || [];
   const feedback = <DetailReadState error={resource.error} loading={resource.loading} reload={resource.reload} />;
   if (!resource.ready) return <div>{feedback}{resource.loading && <p>历史加载中...</p>}</div>;

@@ -156,7 +156,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
   const [deleting, setDeleting] = useState(false);
   const sla = useDetailResource<TicketSLAInfo | null>(ticketId, () => TicketApi.getTicketSLA(ticketId), () => 0);
   const slaInfo = sla.data;
-  useDetailRefreshEntry(!sla.denied && !resource.denied ? { key: 'sla', label: 'SLA', reload: sla.reload, isWriting: () => writing.current } : undefined);
+  useDetailRefreshEntry({ key: 'sla', label: 'SLA', reload: sla.reload, isWriting: () => writing.current });
   const [tabCounts, setTabCounts] = useState<{
     comments?: number;
     attachments?: number;

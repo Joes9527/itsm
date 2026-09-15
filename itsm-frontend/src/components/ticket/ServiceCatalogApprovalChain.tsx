@@ -25,7 +25,7 @@ export default function ServiceCatalogApprovalChain({ ticketId }: ServiceCatalog
     const chain = sr?.formData?.ApprovalChain || sr?.formData?._approval_chain;
     return Array.isArray(chain) ? chain : [];
   }, steps => steps.length);
-  useDetailRefreshEntry(!resource.denied ? { key: 'catalog-approval-chain', label: '目录审批链', reload: resource.reload, isWriting: () => false } : undefined);
+  useDetailRefreshEntry({ key: 'catalog-approval-chain', label: '目录审批链', reload: resource.reload, isWriting: () => false });
   const steps = resource.data || [];
   const feedback = <DetailReadState error={resource.error} loading={resource.loading} reload={resource.reload} />;
   if (!steps.length) return feedback;

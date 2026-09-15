@@ -58,7 +58,7 @@ const CommentPanelContent: React.FC<CommentPanelProps> = ({
     data => data.total
   );
   const comments = resource.data?.comments || [];
-  useDetailRefreshEntry(!resource.denied ? { key: 'comments', label: '评论', reload: resource.reload, isWriting: () => busy.current } : undefined);
+  useDetailRefreshEntry({ key: 'comments', label: '评论', reload: resource.reload, isWriting: () => busy.current });
   const [newComment, setNewComment] = useState('');
   const [isInternal, setIsInternal] = useState(false);
   const [mentionedUsers, setMentionedUsers] = useState<number[]>([]);
