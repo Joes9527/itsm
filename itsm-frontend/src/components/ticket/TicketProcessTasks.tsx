@@ -1,5 +1,5 @@
 'use client';
-import { useDetailRefreshEntry } from '@/components/business/detail-tabs/DetailRefreshContext';
+import { useDetailRefresh, useDetailRefreshEntry } from '@/components/business/detail-tabs/DetailRefreshContext';
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Modal } from 'antd';
@@ -114,10 +114,13 @@ function ProcessTasksPanel({ ticketId, recordClass, onTaskChange, session }: {
   const resource = useDetailResource(`${recordClass}:${ticketId}`, () => readTasks(ticketId, recordClass), tasks => tasks.length);
   const [busy, setBusy] = useState(false);
   const locked = useRef(false);
-  useDetailRefreshEntry({ key: 'process-tasks', label: '流程任务', reload: resource.reload, isWriting: () => locked.current });
+  const commandPending = useRef(false);
+  const refresh = useDetailRefresh();
+  useDetailRefreshEntry({ key: 'process-tasks', label: '流程任务', reload: resource.reload, isWriting: () => commandPending.current });
   const [selected, setSelected] = useState<UserTask | null>(null);
   const [mutationError, setMutationError] = useState<string>();
   const [submitted, setSubmitted] = useState(false);
+  const [updateFailed, setUpdateFailed] = useState(false);
   const [activeExpanded, setActiveExpanded] = useState(false);
   const [activeExpansionInitialized, setActiveExpansionInitialized] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
@@ -128,24 +131,46 @@ function ProcessTasksPanel({ ticketId, recordClass, onTaskChange, session }: {
       if (!current() || taskSession() !== session) throw new Error('会话或工单已变化，请重新打开任务');
     };
     locked.current = true;
+    commandPending.current = true;
     setBusy(true);
     setMutationError(undefined);
     setSubmitted(false);
+    setUpdateFailed(false);
     try {
-      assertContext();
-      if (action === 'claim') await BPMNWorkflowApi.claimTask(task.id, assertContext);
-      else await BPMNWorkflowApi.completeTask(task.id, {}, assertContext);
-      assertContext();
+      try {
+        assertContext();
+        if (action === 'claim') await BPMNWorkflowApi.claimTask(task.id, assertContext);
+        else await BPMNWorkflowApi.completeTask(task.id, {}, assertContext);
+        assertContext();
+      } catch (error) {
+        if (!current() || taskSession() !== session) return;
+        if (resource.deny(error)) setSelected(null);
+        setMutationError(error instanceof Error ? error.message : '任务操作失败，请重试');
+        return;
+      }
+      // The command is confirmed. Keep the UI locked until its reads settle,
+      // while allowing the coordinator to read this resource after the write.
+      commandPending.current = false;
       setSelected(null);
       setSubmitted(true);
-      await resource.reload();
-      assertContext();
-      await onTaskChange?.();
-    } catch (error) {
-      if (!current() || taskSession() !== session) return;
-      if (resource.deny(error)) setSelected(null);
-      setMutationError(error instanceof Error ? error.message : '任务操作失败，请重试');
+      try {
+        if (refresh) {
+          const report = await refresh.refresh(['process-tasks', 'ticket', 'approval-decisions'], { afterWrite: true });
+          if (current() && taskSession() === session) setUpdateFailed(report.failed.length > 0);
+        } else {
+          const result = await resource.reload({ afterWrite: true });
+          assertContext();
+          setUpdateFailed(result.status === 'error');
+          await onTaskChange?.();
+        }
+      } catch (error) {
+        if (current() && taskSession() === session) {
+          if (resource.deny(error)) setSelected(null);
+          setUpdateFailed(true);
+        }
+      }
     } finally {
+      commandPending.current = false;
       locked.current = false; setBusy(false);
     }
   };
@@ -154,6 +179,10 @@ function ProcessTasksPanel({ ticketId, recordClass, onTaskChange, session }: {
   const historyTasks = tasks.filter(task => terminal.has(task.status));
   const initiallyExpanded = activeTasks.some(task => task.uiActions?.claim || task.uiActions?.complete);
   const shownActiveExpanded = activeExpansionInitialized ? activeExpanded : initiallyExpanded;
+
+  useEffect(() => {
+    if (resource.denied) setSelected(null);
+  }, [resource.denied]);
 
   useEffect(() => {
     if (!activeExpansionInitialized && resource.ready && !resource.error) {
@@ -169,6 +198,7 @@ function ProcessTasksPanel({ ticketId, recordClass, onTaskChange, session }: {
       <DetailReadState error={resource.error} loading={resource.loading || busy} reload={async () => { if (!locked.current) await resource.reload(); }} />
       {mutationError && !selected && <Alert type="error" showIcon title={mutationError} />}
       {submitted && <p role="status">任务操作已提交，请以刷新后的状态为准。</p>}
+      {updateFailed && <Alert type="warning" showIcon title="操作已完成，部分数据更新失败" />}
       {resource.loading && !resource.ready && <p role="status">流程任务加载中...</p>}
       {resource.ready && !resource.loading && !resource.error && activeTasks.length === 0 && (
         <p className="text-sm text-muted">当前账号暂无可见的活动任务</p>

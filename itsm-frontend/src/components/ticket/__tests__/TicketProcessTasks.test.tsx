@@ -17,6 +17,46 @@ async function openHistoryTasks() {
   if (toggle.getAttribute('aria-expanded') === 'false') fireEvent.click(toggle);
 }
 beforeEach(() => { jest.clearAllMocks(); read.mockReset(); });
+
+it('preserves standalone callback after a confirmed command even when task refresh fails', async () => {
+  read.mockResolvedValueOnce(page([{ ...task, taskPurpose: '', uiActions: { claim: true } }]))
+    .mockRejectedValueOnce(new Error('任务离线')).mockResolvedValue(page([]));
+  (BPMNWorkflowApi.claimTask as jest.Mock).mockResolvedValue(undefined);
+  const onTaskChange = jest.fn().mockRejectedValue(new Error('主体离线'));
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" onTaskChange={onTaskChange} />);
+  fireEvent.click(await screen.findByRole('button', { name: '领取任务' }));
+  expect(await screen.findByText('操作已完成，部分数据更新失败')).toBeInTheDocument();
+  expect(onTaskChange).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole('button', { name: '领取任务' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: '重试' }));
+  await screen.findByText('当前账号暂无可见的活动任务');
+  expect(BPMNWorkflowApi.claimTask).toHaveBeenCalledTimes(1);
+  expect(onTaskChange).toHaveBeenCalledTimes(1);
+});
+
+it('closes a completion dialog on final read denial', async () => {
+  read.mockResolvedValueOnce(page([{ ...task, taskPurpose: '', uiActions: { complete: true } }]))
+    .mockRejectedValueOnce(new ApiError('任务已撤权', 403));
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+  fireEvent.click(await screen.findByRole('button', { name: '完成任务' }));
+  await screen.findByRole('dialog');
+  fireEvent.click(screen.getByRole('button', { name: '刷新' }));
+  await screen.findByText('任务已撤权');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '完成任务' })).not.toBeInTheDocument();
+  expect(BPMNWorkflowApi.completeTask).not.toHaveBeenCalled();
+});
+
+it('clears tasks when the standalone parent refresh reports final denial after a confirmed command', async () => {
+  read.mockResolvedValue(page([{ ...task, taskPurpose: '', uiActions: { claim: true } }]));
+  (BPMNWorkflowApi.claimTask as jest.Mock).mockResolvedValue(undefined);
+  const onTaskChange = jest.fn().mockRejectedValue(new ApiError('工单已撤权', 403));
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" onTaskChange={onTaskChange} />);
+  fireEvent.click(await screen.findByRole('button', { name: '领取任务' }));
+  await screen.findByText('操作已完成，部分数据更新失败');
+  expect(screen.queryByRole('button', { name: '领取任务' })).not.toBeInTheDocument();
+  expect(BPMNWorkflowApi.claimTask).toHaveBeenCalledTimes(1);
+});
 it('reads scoped tasks and links approvals without using the ticket assignee', async () => {
   read.mockResolvedValue(page([task]));
   render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);

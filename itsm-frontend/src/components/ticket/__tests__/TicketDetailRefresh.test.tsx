@@ -60,6 +60,65 @@ const mount = () =>
       <TicketDetail id='101' />
     </App>
   );
+
+it.each(['claim', 'complete'])('refreshes directed outcomes after %s and retries only the failed read', async action => {
+  const task = { id: 8, businessType: 'generic', businessId: 101, taskName: '交付设备', status: 'created',
+    taskPurpose: 'fulfillment', uiActions: { claim: action === 'claim', complete: action === 'complete' } };
+  (BPMNWorkflowApi.listUserTasks as jest.Mock).mockResolvedValueOnce({ items: [task], total: 1, page: 1, pageSize: 100 });
+  const command = action === 'claim' ? BPMNWorkflowApi.claimTask : BPMNWorkflowApi.completeTask;
+  (command as jest.Mock).mockResolvedValue(undefined);
+  mount();
+  fireEvent.click(await screen.findByText(action === 'claim' ? '领取任务' : '完成任务'));
+  if (action === 'complete') {
+    (BPMNWorkflowApi.getTicketApprovalDecisions as jest.Mock).mockRejectedValueOnce(new Error('审批离线'));
+    fireEvent.click(await screen.findByText('确认完成'));
+  } else {
+    (TicketApi.getTicket as jest.Mock).mockRejectedValueOnce(new Error('主体离线'));
+  }
+  expect(await screen.findByText('操作已完成，部分数据更新失败')).toBeInTheDocument();
+  expect(command).toHaveBeenCalledTimes(1);
+  expect(TicketApi.getTicket).toHaveBeenCalledTimes(2);
+  expect(BPMNWorkflowApi.getTicketApprovalDecisions).toHaveBeenCalledTimes(2);
+  expect(BPMNWorkflowApi.listUserTasks).toHaveBeenCalledTimes(2);
+  expect(TicketCommentApi.getComments).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByLabelText('重试'));
+  await waitFor(() => expect(action === 'claim' ? TicketApi.getTicket : BPMNWorkflowApi.getTicketApprovalDecisions).toHaveBeenCalledTimes(3));
+  expect(command).toHaveBeenCalledTimes(1);
+});
+
+it.each(['success', 'denial'])('skips tasks during a command and supersedes late pre-write %s while locking commands until all outcomes settle', async staleOutcome => {
+  let finishCommand!: () => void;
+  let finishOldTicket!: (value: unknown) => void;
+  let denyOldTicket!: (reason: unknown) => void;
+  let finishApproval!: (value: unknown) => void;
+  const task = { id: 8, businessType: 'generic', businessId: 101, taskName: '交付设备', status: 'created',
+    taskPurpose: 'fulfillment', uiActions: { claim: true } };
+  (BPMNWorkflowApi.listUserTasks as jest.Mock).mockResolvedValue({ items: [task], total: 1, page: 1, pageSize: 100 });
+  (BPMNWorkflowApi.claimTask as jest.Mock).mockImplementationOnce(() => new Promise<void>(done => { finishCommand = done; }));
+  mount();
+  fireEvent.click(await screen.findByText('领取任务'));
+  (TicketApi.getTicket as jest.Mock).mockImplementationOnce(() => new Promise((done, reject) => { finishOldTicket = done; denyOldTicket = reject; }));
+  fireEvent.click(screen.getByLabelText('刷新工单详情'));
+  await waitFor(() => expect(TicketApi.getTicket).toHaveBeenCalledTimes(2));
+  expect(BPMNWorkflowApi.listUserTasks).toHaveBeenCalledTimes(1);
+  (TicketApi.getTicket as jest.Mock).mockResolvedValue({ ...ticket, title: '完成后的工单', version: 2 });
+  (BPMNWorkflowApi.getTicketApprovalDecisions as jest.Mock).mockImplementationOnce(() => new Promise(done => { finishApproval = done; }));
+  await act(async () => finishCommand());
+  await screen.findByText('#101 完成后的工单');
+  expect(BPMNWorkflowApi.listUserTasks).toHaveBeenCalledTimes(2);
+  expect(screen.getByText('领取任务').closest('button')).toBeDisabled();
+  fireEvent.click(screen.getByText('领取任务'));
+  expect(BPMNWorkflowApi.claimTask).toHaveBeenCalledTimes(1);
+  await act(async () => staleOutcome === 'success'
+    ? finishOldTicket({ ...ticket, title: '过时工单' })
+    : denyOldTicket(new ApiError('过时拒绝', 403)));
+  expect(screen.queryByText('#101 过时工单')).not.toBeInTheDocument();
+  expect(screen.getByText('#101 完成后的工单')).toBeInTheDocument();
+  await act(async () => finishApproval([]));
+  await waitFor(() => expect(screen.getByText('领取任务').closest('button')).not.toBeDisabled());
+  expect(TicketApi.getTicket).toHaveBeenCalledTimes(3);
+  expect(BPMNWorkflowApi.claimTask).toHaveBeenCalledTimes(1);
+});
 it('preserves the real comment editor through header and keyboard refresh and retains background failures', async () => {
   const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
   mount();

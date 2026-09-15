@@ -216,6 +216,9 @@ it.each(cases)('attributes denied $key while a slower sibling is pending', async
       </DetailRefreshProvider>
     </App>
   );
+  if (testCase.key === 'process-tasks') {
+    fireEvent.click(await screen.findByRole('button', { name: '当前任务（1）' }));
+  }
   await screen.findByText(testCase.text);
   if (testCase.count) expect(count).toHaveBeenLastCalledWith(1);
   testCase.read.mockRejectedValueOnce(new ApiError('read forbidden', 403));
