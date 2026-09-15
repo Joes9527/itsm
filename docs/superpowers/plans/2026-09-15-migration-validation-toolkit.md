@@ -2350,6 +2350,17 @@ PII-free by construction (the guard refuses anything else).
 Run: `python3 -m pytest scripts/__tests__ -q`
 Expected: all migration tests pass; the anchor test is skipped when the environment is absent.
 
+Notes recorded while executing this task:
+1. `lineage` (spec section 5) was declared in the profile but not implemented anywhere, so the CLI now
+   compares each entity against every lineage database and records counts, or `unavailable` with the
+   reason. `--no-lineage` skips it; the anchor test uses that flag.
+2. The live run reproduced the earlier findings exactly: departments matched 4,975, only source 297,
+   only target 3,000, exit code 3, and the DEV and baseline databases agree with the clone.
+3. The regenerated evidence uses the toolkit's own shape
+   (`entities.<name>.{matched,only_source,only_target,field_checks,structure}` plus `lineage`), so the
+   2026-08 report's references to the one-off tool's keys are updated in Task 11.
+4. With the environment present the anchor runs for real: 75 tests pass.
+
 - [ ] **Step 5: Commit**
 
 ```bash

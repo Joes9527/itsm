@@ -1,306 +1,355 @@
 {
-  "generated_at": "2026-09-15T07:59:41.302640+00:00",
-  "source_of_truth": {
-    "dir": "/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main/data",
-    "itsm_departments.json": {
-      "sha256": "f8b3fbdaa12176724ee6d346d51dc1b74bde112142eeb82616b4c2d57af9283f",
-      "mtime": 1785802903.5916562
+  "mode": "verify",
+  "generated_at": "2026-09-15T09:42:48.217723+00:00",
+  "profile": "scripts/migration/profiles/legacy-itsm-2026-08.yaml",
+  "profile_name": "legacy-itsm-2026-08",
+  "record_drift": {
+    "departments": {
+      "declared": 5272,
+      "actual": 5272
     },
-    "itsm_users.json": {
-      "sha256": "fe794d35abcbffb90a4d5af999fbebb5a295b5cde6791681f1365209466007a6",
-      "mtime": 1787109665.5271876
+    "users": {
+      "declared": 14393,
+      "actual": 14393
     }
   },
-  "export_stats": {
-    "departments_total": 5272,
-    "departments_by_type": {
-      "1": 5270,
-      "0": 2
-    },
-    "departments_duplicate_ids": 0,
-    "departments_duplicate_names": 573,
-    "users_total": 14393,
-    "users_by_status": {
-      "userstatus01": 9014,
-      "userstatus04": 5379
-    },
-    "users_active": 9014,
-    "users_inactive": 5379,
-    "users_duplicate_usernames": 4,
-    "users_duplicate_emails": 69,
-    "users_with_department": 14392,
-    "users_with_leader": 9485
-  },
-  "target": {
-    "container": "ga-itsm-20260914",
-    "user": "ga_owner",
-    "database": "itsm_ga_ready"
-  },
-  "reconciliation": {
+  "entities": {
     "departments": {
-      "export": 5272,
-      "db_rows": 7975,
       "matched": 4975,
-      "only_export": 297,
-      "only_db": 3000,
-      "duplicate_codes_in_db": {},
-      "only_export_sample": [
-        "02e19d218692418eb321c920d0794db5",
-        "03136262a05d41358be813c09ec93b1d",
-        "0505b91386824bc4865e9384faa620c2",
-        "09e4ae0a74224396809e43980b320158",
-        "0b2ff3b7b73f4e9983674de777f40ad4",
-        "10827077726440549217613d2a28bf59",
-        "1082a98651634896b5ac68a4f9f09026",
-        "10b3cff751e54f218b7d19aa7b8da32c",
-        "11D0301050409",
-        "11D030105040901"
-      ],
-      "only_db_by_org_type": {
-        "department": 2767,
-        "warehouse": 233
+      "only_source": 297,
+      "only_target": 3000,
+      "unattributed": 3000,
+      "field_checks": {
+        "checked": false,
+        "reason": "departments declare no field_checks in the 2026-08 profile"
       },
-      "only_db_parent_linkage": {
-        "parent missing": 23,
-        "parent present in db": 2977
+      "structure": {
+        "roots": 7960,
+        "root_samples": [
+          "1",
+          "11D010G",
+          "11D010G01",
+          "11D010G0101",
+          "11D010G010104"
+        ],
+        "unresolved_parents": 7935,
+        "unresolved_samples": [
+          "11D010G",
+          "11D010G01",
+          "11D010G0101",
+          "11D010G010104",
+          "11D010G010105"
+        ],
+        "cycles": 15,
+        "internal_codes": 3526,
+        "prefix_levels": {
+          "internal_codes": 3526,
+          "code_lengths": {
+            "21": 168,
+            "17": 1505,
+            "15": 2858,
+            "13": 1690,
+            "19": 560,
+            "11": 713,
+            "9": 281,
+            "3": 2,
+            "23": 53,
+            "16": 6,
+            "7": 53,
+            "22": 16,
+            "5": 15,
+            "2": 10,
+            "20": 31,
+            "18": 2,
+            "6": 4,
+            "24": 5,
+            "8": 1,
+            "10": 1,
+            "1": 1
+          }
+        }
       }
     },
     "users": {
-      "export_total": 14388,
-      "export_active": 9011,
-      "db_rows": 7880,
-      "matched": 7834,
-      "only_export_active": 1243,
-      "only_export_inactive": 5311,
-      "only_export_active_sample": [
-        "10207-0988",
-        "1440350194",
-        "15917437390",
-        "1823783767",
-        "20923659",
-        "214731855",
-        "Abner.YC.Gan",
-        "AiQiong.Li",
-        "Alex.Huang",
-        "Allan.Wan"
-      ],
-      "only_db": 46,
-      "only_db_attribution": {
-        "non-legacy username pattern": 8,
-        "unexplained legacy-looking": 2,
-        "created after the migration batch": 35,
-        "other tenant": 1
+      "matched": 7767,
+      "only_source": 1243,
+      "only_target": 113,
+      "unattributed": 113,
+      "field_checks": {
+        "name": {
+          "rule": "equals",
+          "matched": 7833,
+          "mismatched": 1,
+          "unresolvable": 0,
+          "match_rate": 0.9999,
+          "mismatch_sample": [
+            [
+              "sha256:1e37b20f",
+              "sha256:0a3fe94c",
+              "sha256:6424e237"
+            ]
+          ]
+        },
+        "email": {
+          "rule": "rewrite_local_part",
+          "matched": 4975,
+          "mismatched": 2859,
+          "unresolvable": 0,
+          "match_rate": 0.6351,
+          "mismatch_sample": [
+            [
+              "sha256:c8b454b0",
+              "sha256:1a566a0f",
+              "sha256:4403bd81"
+            ],
+            [
+              "sha256:0cd28639",
+              "sha256:7818609a",
+              "sha256:e8ecf871"
+            ],
+            [
+              "sha256:968fcac2",
+              "sha256:5761dfe1",
+              "sha256:9ff9eaf7"
+            ],
+            [
+              "sha256:5be2f2b9",
+              "sha256:977fb093",
+              "sha256:25eb385a"
+            ],
+            [
+              "sha256:acf4f74b",
+              "sha256:9631976a",
+              "sha256:9ddc0e63"
+            ],
+            [
+              "sha256:cdbf786d",
+              "sha256:d4645c66",
+              "sha256:b45c0fed"
+            ],
+            [
+              "sha256:81cf922c",
+              "sha256:5ca3b382",
+              "sha256:d247de10"
+            ],
+            [
+              "sha256:17b8b83e",
+              "sha256:20b0e672",
+              "sha256:313e505e"
+            ],
+            [
+              "sha256:60f4c888",
+              "sha256:b5fd1b8d",
+              "sha256:4c9e27fb"
+            ],
+            [
+              "sha256:5dfeae67",
+              "sha256:fdf7fe0a",
+              "sha256:231c6e27"
+            ],
+            [
+              "sha256:163d079a",
+              "sha256:c48b7972",
+              "sha256:1e1ecc8e"
+            ],
+            [
+              "sha256:df2b7ab0",
+              "sha256:f15a8b60",
+              "sha256:1e666fb3"
+            ],
+            [
+              "sha256:592797b6",
+              "sha256:653f20c6",
+              "sha256:65d04d04"
+            ],
+            [
+              "sha256:1c27b541",
+              "sha256:67998f02",
+              "sha256:842cfe79"
+            ],
+            [
+              "sha256:956357f9",
+              "sha256:64b9a26d",
+              "sha256:9d7e9719"
+            ],
+            [
+              "sha256:b64c4f35",
+              "sha256:951a38ac",
+              "sha256:48c0e86e"
+            ],
+            [
+              "sha256:195ba026",
+              "sha256:0bd9bdfb",
+              "sha256:a49b0810"
+            ],
+            [
+              "sha256:2ebfb710",
+              "sha256:d6c4d1fb",
+              "sha256:a15795c2"
+            ],
+            [
+              "sha256:32f3e404",
+              "sha256:64b9a26d",
+              "sha256:6140167c"
+            ],
+            [
+              "sha256:4bad6940",
+              "sha256:dfc3191c",
+              "sha256:99612ed1"
+            ]
+          ]
+        },
+        "active": {
+          "rule": "map",
+          "matched": 7767,
+          "mismatched": 67,
+          "unresolvable": 0,
+          "match_rate": 0.9914,
+          "mismatch_sample": [
+            [
+              "sha256:59b47c51",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:0469fcb3",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:ddf44adf",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:a0cc13b5",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:e921d268",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:e12c8331",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:b891cbce",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:bbb25721",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:ac28c90d",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:adecada6",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:b9314820",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:b98185fb",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:deecf029",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:473ccfc0",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:76226d7e",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:76e2a8d9",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:dff22037",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:48b63306",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:6914c3e7",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:95e3dc30",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ]
+          ]
+        },
+        "manager": {
+          "rule": "unresolvable",
+          "matched": 0,
+          "mismatched": 0,
+          "unresolvable": 7834,
+          "match_rate": null,
+          "mismatch_sample": []
+        }
       },
-      "only_db_sample": [
-        "79586",
-        "sha256:d934efe3",
-        "sha256:24b09808",
-        "sha256:0d197174",
-        "sha256:9239529c",
-        "sha256:483b35d3",
-        "sha256:213a8694",
-        "sha256:68e9f29d",
-        "sha256:748eb7db",
-        "sha256:5ab9014a"
-      ]
+      "structure": {
+        "duplicate_usernames": 0,
+        "foreign_tenant_rows": 1,
+        "non_bcrypt_rows": 1,
+        "total_rows": 7880
+      }
     }
-  },
-  "alternative_key_checks": {
-    "users_missing_active": 1243,
-    "users_missing_active_found_by_email": 0,
-    "users_missing_active_under_different_username": 0,
-    "users_missing_active_no_email_match": 1243,
-    "users_missing_active_sample": [
-      {
-        "username": "10207-0988",
-        "email": "sha256:fa379ea4",
-        "db_username_for_email": ""
-      },
-      {
-        "username": "1440350194",
-        "email": "sha256:64665ccb",
-        "db_username_for_email": ""
-      },
-      {
-        "username": "15917437390",
-        "email": "sha256:cb3601d7",
-        "db_username_for_email": ""
-      },
-      {
-        "username": "1823783767",
-        "email": "sha256:da0a071f",
-        "db_username_for_email": ""
-      },
-      {
-        "username": "20923659",
-        "email": "sha256:bcf5c94e",
-        "db_username_for_email": ""
-      },
-      {
-        "username": "214731855",
-        "email": "sha256:892290ad",
-        "db_username_for_email": ""
-      },
-      {
-        "username": "Abner.YC.Gan",
-        "email": "sha256:6dc2b62a",
-        "db_username_for_email": ""
-      },
-      {
-        "username": "AiQiong.Li",
-        "email": "sha256:0aae6d84",
-        "db_username_for_email": ""
-      }
-    ],
-    "departments_missing_total": 297,
-    "departments_missing_name_present_in_db": 236,
-    "departments_missing_uuid_style_ids": 185,
-    "departments_missing_code_style_ids": 112,
-    "departments_missing_sample": [
-      {
-        "id": "11H0101030403010304",
-        "name": "BASF驻厂",
-        "name_in_db": true
-      },
-      {
-        "id": "b9f696a38a894a35b3423f146cd71c36",
-        "name": "CHC-嘉里震威",
-        "name_in_db": false
-      },
-      {
-        "id": "11D030105040901",
-        "name": "G7系统管理",
-        "name_in_db": true
-      },
-      {
-        "id": "11D030106040901",
-        "name": "G7系统管理",
-        "name_in_db": true
-      },
-      {
-        "id": "11D03010504090101",
-        "name": "G7系统管理组",
-        "name_in_db": true
-      },
-      {
-        "id": "11D03010604090101",
-        "name": "G7系统管理组",
-        "name_in_db": true
-      },
-      {
-        "id": "11H010103040201",
-        "name": "HSSEQ组",
-        "name_in_db": true
-      },
-      {
-        "id": "11H0101030402",
-        "name": "HSSEQ部",
-        "name_in_db": true
-      }
-    ]
-  },
-  "field_checks": {
-    "matched_users_checked": 7834,
-    "name_matches": 7833,
-    "email_exact_matches": 0,
-    "email_matches_after_suffix_rule": 0,
-    "email_mismatch_sample": [
-      [
-        "36313",
-        "sha256:d764994f",
-        "sha256:4a2bf0c5"
-      ],
-      [
-        "39070",
-        "sha256:1efac411",
-        "sha256:79a3e6d3"
-      ],
-      [
-        "39330",
-        "sha256:1efac411",
-        "sha256:d530b004"
-      ],
-      [
-        "43850",
-        "@kerryeas.com",
-        "sha256:94c2940b"
-      ],
-      [
-        "45104",
-        "sha256:dbaf5bf7",
-        "sha256:7a1da4dc"
-      ]
-    ],
-    "active_flag_matches": 7768,
-    "department_binding_matches": 7487,
-    "department_binding_absent": 316,
-    "department_mismatch_sample": [
-      [
-        "sha256:0f825f39",
-        "11D030221",
-        "11D030105"
-      ],
-      [
-        "sha256:717c118e",
-        "11D030221",
-        "11D030105"
-      ],
-      [
-        "sha256:ad01261b",
-        "12D030101",
-        "11D030105"
-      ],
-      [
-        "sha256:5af5ed5c",
-        "11D030105",
-        "11D030226"
-      ],
-      [
-        "sha256:fb2ae068",
-        "12D030101",
-        "11D030105"
-      ]
-    ],
-    "password_hash_bcrypt": 7879,
-    "password_hash_legacy_reuse": 0,
-    "password_hash_non_bcrypt_sample": [
-      "kaf_closeout_t2_20260831"
-    ],
-    "duplicate_usernames_in_db": 0,
-    "duplicate_emails_in_db": 17
-  },
-  "structure": {
-    "departments_with_resolvable_parent": 7975,
-    "department_roots": 25,
-    "department_cycles": 0,
-    "user_tenants": {
-      "1": 7879,
-      "2": 1
-    },
-    "users_without_department": 353,
-    "users_with_manager": 7076
   },
   "lineage": {
-    "itsm_migration_20260914": {
-      "departments": "7975",
-      "departments_created": "2026-08-19",
-      "users": "7834",
-      "users_active": "7834",
-      "legacy_users": "5537"
+    "departments": {
+      "itsm (DEV)": {
+        "matched": 4975,
+        "only_source": 297,
+        "only_target": 3000
+      },
+      "itsm_baseline_20260908": {
+        "matched": 4975,
+        "only_source": 297,
+        "only_target": 3000
+      }
     },
-    "itsm (DEV)": {
-      "departments": "7975",
-      "departments_created": "2026-08-19",
-      "users": "7834",
-      "users_active": "7834",
-      "legacy_users": "5537"
-    },
-    "itsm_baseline_20260908": {
-      "departments": "7975",
-      "departments_created": "2026-08-19",
-      "users": "7834",
-      "users_active": "7834",
-      "legacy_users": "5537"
+    "users": {
+      "itsm (DEV)": {
+        "matched": 7750,
+        "only_source": 1260,
+        "only_target": 84
+      },
+      "itsm_baseline_20260908": {
+        "matched": 7750,
+        "only_source": 1260,
+        "only_target": 84
+      }
     }
-  }
+  },
+  "exit_code": 3
 }

@@ -56,6 +56,34 @@ def _target(profile, args):
     return Target(profile.target)
 
 
+def _lineage_targets(profile):
+    """Build a read-only target for each declared lineage database (spec section 5)."""
+    from .profile import TargetSpec
+    from .target import Target
+    targets = []
+    for entry in profile.lineage:
+        spec = TargetSpec(access=profile.target.access, user=entry.user, database=entry.database,
+                          credential=entry.credential, container=entry.container,
+                          scope='full-database')
+        targets.append((entry.label, Target(spec)))
+    return targets
+
+
+def _lineage_comparison(profile, check, source, spec, names) -> dict:
+    """Count how the same entity reconciles in every lineage database; never fail the run."""
+    comparison: dict = {}
+    for label, target in _lineage_targets(profile):
+        try:
+            rows = check.fetch_target(target, spec)
+            result = check.reconcile(source, rows, spec)
+            comparison[label] = {'matched': result.matched,
+                                 'only_source': len(result.only_source),
+                                 'only_target': len(result.only_target)}
+        except Exception as exc:                       # unavailable database must not hide the result
+            comparison[label] = {'unavailable': str(exc)[:120]}
+    return comparison
+
+
 def _entities(evidence) -> dict:
     return evidence.payload().setdefault('entities', {})
 
@@ -71,6 +99,7 @@ def main(argv=None) -> int:
     parser.add_argument('--offline-fixture', action='store_true')
     parser.add_argument('--allow-record-drift', action='store_true')
     parser.add_argument('--allow-unattributed', action='store_true')
+    parser.add_argument('--no-lineage', action='store_true')
     args = parser.parse_args(argv)
 
     if args.command not in COMMANDS:
@@ -107,6 +136,9 @@ def main(argv=None) -> int:
                 'field_checks': check.check_fields(source, tgt, spec),
                 'structure': check.check_structure(tgt, spec),
             }
+            if profile.lineage and not args.no_lineage and not getattr(args, 'offline_fixture', False):
+                evidence.payload().setdefault('lineage', {})[name] = _lineage_comparison(
+                    profile, check, source, spec, names)
             codes.append(EXIT_UNATTRIBUTED if result.unattributed else EXIT_OK)
         elif args.command == 'derive-map':
             _entities(evidence)[name] = {'fields': derive_map(source, tgt, spec, check)}
