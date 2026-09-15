@@ -1,0 +1,65 @@
+# 旧 ITSM 迁移输入与规则归档（2026-09-15）
+
+本文件归档 2026-08-19 那次旧主数据迁移的**输入身份**与**重建出的规则**，使后续任何人不必依赖
+Synology 挂载或已消失的 CLI 就能理解当时发生了什么。机器可读版本见
+[`2026-09-15-legacy-migration-input-manifest.json`](2026-09-15-legacy-migration-input-manifest.json)。
+
+**个人数据不入仓**：导出文件包含约 1.4 万人的姓名/邮箱/手机/工号，仓库只保存**路径、sha256、条数、
+时间戳**；原始文件已复制到受控私有归档目录（见 §3）。
+
+## 1. 输入身份
+
+| 文件 | 条数 | sha256（前 16 位） | 文件时间 | 本次是否被迁移 |
+| --- | --- | --- | --- | --- |
+| `kaf-main/data/itsm_departments.json` | 5,272 | `f8b3fbdaa1217672` | 2026-08-04 08:21 | 组织架构（部分） |
+| `kaf-main/data/itsm_users.json` | 14,393 | `fe794d35abcbffb9` | 2026-08-19 11:21 | 用户主数据 |
+| `kaf-main/data/itsm_categories.json` | 96 | `4edd98ce0f49cf8b` | 2026-08-04 08:21 | 否（新库分类为产品自带 185 条） |
+| `kaf-main/data/itsm_categories_tree.json` | 1（整棵树） | `9ae056adf92b91e8` | 2026-08-04 08:21 | 否 |
+
+同一部门文件在 KAF 包内另有 4 份副本：3 份与上表同哈希，2 份（`kaf-main.worktrees/*`，2026-09-01）
+哈希为 `6ba5cda2f506` —— **条数与 id 集合完全一致**（5,272 个 departmentId 全同），仅字段内容不同。
+
+## 2. CLI 缺席（SOP 引用的迁移工具已不存在）
+
+SOP《ITSM_Legacy_Master_Data_Migration_SOP.md》§3/§4 引用 `itsm-backend/cmd/migrate_legacy_itsm/main.go`
+与 `cmd/migrate_legacy_users/main.go`。归档时核实：
+
+- 两个目录**均不存在**（本日早些时候还只是空目录）；
+- `git log --all -- itsm-backend/cmd/migrate_legacy_*` **无任何历史**（即从未提交）；
+- 因此 CLI 的实现与其精确规则**不可复现**，只能用数据反推（§3）。
+
+## 3. 重建出的规则（由数据反推，附推导依据）
+
+| 环节 | 规则 | 依据 |
+| --- | --- | --- |
+| 用户范围 | 仅 `status == userstatus01`（活跃） | 导出活跃唯一用户名 9,011；库内活跃 7,834 |
+| 用户筛选 | 仅迁移 **有 `HR_USERID`** 的账号 | 已迁移 7,749/7,750 有；未迁移 1,243/1,261 无 |
+| 部门绑定 | 用户绑定到 `departments.code == 导出 departmentUnit` 的部门（**不是叶子 `departmentId`**） | 7,470/7,816 命中；按叶子 id 比对得 0 |
+| 角色 | 一律 `end_user` | 库内 7,812/7,816 |
+| 邮箱 | 域名统一改写为 `keas.kln.comm`（**有意为之**：防开发环境向真实地址发信） | 三库一致；用户 2026-09-15 确认 |
+| 口令 | SOP 默认口令（文档内记载，仓库不存该值） | SOP §1.2 |
+| 未映射字段 | `gender`、`is_leader`、`function_line`、`manager_id`、`phone` 均**留空** | 库内 gender 全空、is_leader 全 false；导出 `leaderId` 是 HR 标识（如 `532D0ACE…`）无法解析为产品用户 |
+| 仓库判定 | `org_type=warehouse` **按名称**（含"库/仓/物流"） | 737 中 728 命中；非仓库行 0 命中 |
+| 部门集合 | 库内 7,975 = 与导出 id 精确匹配 4,975 + 仅导出 297 + **仅库中 3,000** | 见 §4 |
+
+补充用工具：`scripts/verify_itsm_migration_data.py`（只读，可重复，`--self-test` 不连库）。
+
+## 4. 仍不可复现的部分（如实记录）
+
+1. **部门集合中 3,000 个库内 code 在所有可用导出里都不存在**；其名称有 1,986 个能在导出里找到，
+   说明是"同一组织、不同 id"。09-01 副本与 08-04 的 id 集合完全相同，**无法解释该差额**。
+   可能的解释（迁移当次用了更晚/其它来源的快照，或迁移过程另建了节点）**都无法证实**。
+2. **`function_line` 的取值约定**（形如 `IFF_空运进口部_操作`）在导出里找不到对应字段，来源不明。
+3. 导出 id 中 **297 个在库内不存在**（其中 236 个名称能在库内找到）。
+
+## 5. 归档位置与校验
+
+- 私有归档目录：`/home/administrator/.local/state/itsm-migration-archive-20260915/`
+  （4 个文件，均已校验与源文件 sha256 一致；不属于本仓库，不进版本控制）
+- 源位置：`/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main/data/`（Synology 挂载，可能变动）
+- 复现校验：`python3 scripts/verify_itsm_migration_data.py --evidence-out <path>`
+
+## 6. 后续动作（本次未做，按用户裁定）
+
+- 第 3 类差异（66 条 `active`、17 条库内重复邮箱、316 条无部门归属）用户裁定为"**记录即可，不处理**"，
+  已记录在迁移验证报告与收尾文档，不再修改数据。
