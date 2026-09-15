@@ -362,6 +362,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
         description: ticket.description,
         priority: ticket.priority,
         status: ticket.status,
+        ...(ticket.recordClass === 'generic' ? { resolution: ticket.resolution } : {}),
       });
       editSnapshot.current = { version: ticketEditVersion(ticket.version), status: ticket.status };
       editIntent.current = undefined;
@@ -1062,6 +1063,22 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
               />
             </Form.Item>
           </div>
+          {ticket.recordClass === 'generic' && (
+            <Form.Item
+              label='解决方案'
+              name='resolution'
+              dependencies={['status']}
+              rules={[
+                ({ getFieldValue }) => ({
+                  required: getFieldValue('status') === 'resolved',
+                  whitespace: true,
+                  message: '请填写解决方案',
+                }),
+              ]}
+            >
+              <TextArea rows={4} placeholder='请描述解决方案和验证结果' />
+            </Form.Item>
+          )}
           <Form.Item className='mb-0'>
             <Space className='w-full justify-end'>
               <Button

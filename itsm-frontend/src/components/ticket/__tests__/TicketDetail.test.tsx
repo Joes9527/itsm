@@ -310,6 +310,45 @@ describe('TicketDetail', () => {
       expect(mockGetTicket).toHaveBeenCalledTimes(1);
     });
 
+    it('requires a generic resolution and preserves the confirmed solution on an uncertain retry', async () => {
+      mockGetTicket.mockResolvedValue({ ...baseTicket, recordClass: 'generic', status: 'in_progress' });
+      update.mockRejectedValueOnce(new Error('response lost')).mockResolvedValueOnce({ workItemId: 101, version: 2, status: 'resolved', replayed: true });
+      const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+      render(<TicketDetail />);
+      await user.click((await screen.findByText('编辑', { selector: 'span' })).closest('button')!);
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByLabelText('状态'));
+      await user.click(await screen.findByText('已解决', { selector: '.ant-select-item-option-content' }));
+      await user.click(within(dialog).getByText('保存修改').closest('button')!);
+      expect(await within(dialog).findByText('请填写解决方案')).toBeInTheDocument();
+      expect(update).not.toHaveBeenCalled();
+      await user.type(within(dialog).getByLabelText('解决方案'), '已恢复 VPN 配置并验证连接');
+      await user.click(within(dialog).getByText('保存修改').closest('button')!);
+      await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+      const confirmed = update.mock.calls[0][1];
+      expect(confirmed).toMatchObject({ status: 'resolved', resolution: '已恢复 VPN 配置并验证连接', version: 1, operationId: 'confirmed-edit-1' });
+      await waitFor(() => expect(within(dialog).getByText('保存修改').closest('button')).not.toHaveClass('ant-btn-loading'));
+      await user.click(within(dialog).getByText('保存修改').closest('button')!);
+      await waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+      expect(update.mock.calls[1][1]).toEqual(confirmed);
+    });
+
+    it('loads the existing generic resolution for editing', async () => {
+      mockGetTicket.mockResolvedValue({ ...baseTicket, recordClass: 'generic', status: 'in_progress', resolution: '已有解决记录' });
+      const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+      render(<TicketDetail />);
+      await user.click((await screen.findByText('编辑', { selector: 'span' })).closest('button')!);
+      expect(within(await screen.findByRole('dialog')).getByLabelText('解决方案')).toHaveValue('已有解决记录');
+    });
+
+    it.each(['incident', 'problem', 'change_request', 'service_request_item', 'catalog_task'])('does not expose generic resolution editing for %s', async recordClass => {
+      mockGetTicket.mockResolvedValue({ ...baseTicket, recordClass, status: 'in_progress' });
+      const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+      render(<TicketDetail />);
+      await user.click((await screen.findByText('编辑', { selector: 'span' })).closest('button')!);
+      expect(within(await screen.findByRole('dialog')).queryByLabelText('解决方案')).not.toBeInTheDocument();
+    });
+
     it('keeps the form opening version across refresh and reuses the full uncertain request', async () => {
       update.mockRejectedValueOnce(new Error('connection lost after submission')).mockResolvedValueOnce({ workItemId: 101, version: 2, status: 'open', replayed: true });
       const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
