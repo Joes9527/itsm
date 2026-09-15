@@ -13,8 +13,9 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/user"
+	assignment "itsm-backend/handlers/common/workitemassignment"
 	"itsm-backend/handlers/shared/workitemmutation"
+	"itsm-backend/service"
 )
 
 // MetadataCommand accepts editable professional facts and an explicitly observed version.
@@ -127,16 +128,8 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 			return empty, err
 		}
 	}
-	if p.AssigneeID != nil {
-		// The existing Change assign route requires change:write, already
-		// checked by authorizeCommand. Recipients remain active target-tenant users.
-		eligible, err := tx.User.Query().Where(user.ID(*p.AssigneeID), user.TenantID(m.TenantID), user.Active(true)).Exist(ctx)
-		if err != nil {
-			return empty, err
-		}
-		if *p.AssigneeID <= 0 || !eligible {
-			return empty, common.NewValidationError("assignee must be an active target-tenant user", nil)
-		}
+	if p.AssigneeID != nil && *p.AssigneeID <= 0 {
+		return empty, common.NewValidationError("assignee must be a positive user ID", nil)
 	}
 	// Assessment advances to CAB without changing submitted status. Its
 	// persisted evidence freezes the covered facts; there is no reassessment task.
@@ -159,11 +152,31 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 	if err := s.requireExecutionTx(ctx, tx, m.TenantID, item.ID); err != nil {
 		return empty, err
 	}
-	update := tx.Ticket.UpdateOneID(item.ID).Where(ticket.TenantID(m.TenantID), ticket.DeletedAtIsNil(), ticket.Version(m.ExpectedVersion)).SetVersion(m.ExpectedVersion + 1).SetUpdatedAt(time.Now())
-	professional := tx.Change.UpdateOneID(current.ID)
+	// Assignment owns the aggregate increment when the owner changes. The
+	// remaining metadata and operation receipt use that exact resulting version.
+	expected, version := m.ExpectedVersion, m.ExpectedVersion+1
 	if p.AssigneeID != nil {
-		update.SetAssigneeID(*p.AssigneeID)
+		attempted = true
+		err = assignment.WithLifecycleWriter(ctx, tx, s.directory, m.ActorID, m.TenantID, service.EnqueueWorkItemAssignment, func(writer *assignment.Writer, actor *ent.User) error {
+			assigned, writeErr := writer.Apply(ctx, tx.Client(), assignment.Command{
+				WorkItemID: item.ID, TenantID: m.TenantID, ActorID: actor.ID,
+				ActorTenantID: actor.TenantID, AssigneeID: *p.AssigneeID,
+				ExpectedVersion: m.ExpectedVersion, Source: m.Source, Reason: p.AssignmentReason,
+			})
+			if writeErr == nil {
+				expected = assigned.Version
+				if assigned.Version != m.ExpectedVersion {
+					version = assigned.Version
+				}
+			}
+			return writeErr
+		})
+		if err != nil {
+			return empty, err
+		}
 	}
+	update := tx.Ticket.UpdateOneID(item.ID).Where(ticket.TenantID(m.TenantID), ticket.DeletedAtIsNil(), ticket.Version(expected)).SetVersion(version).SetUpdatedAt(time.Now().UTC())
+	professional := tx.Change.UpdateOneID(current.ID)
 	if p.Title != nil {
 		if strings.TrimSpace(*p.Title) == "" {
 			return empty, common.NewValidationError("title required", nil)

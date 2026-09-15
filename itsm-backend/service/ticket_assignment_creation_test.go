@@ -13,6 +13,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/ent"
+	"itsm-backend/ent/outboxevent"
+	"itsm-backend/ent/processauditlog"
+	ticketrepo "itsm-backend/repository/ticket"
 	"itsm-backend/service/bpmn"
 )
 
@@ -68,20 +71,28 @@ func TestWorkflowStartFrozenNumericFirstGateway(t *testing.T) {
 func TestWorkflowStartFrozenNumericAssignmentCallback(t *testing.T) {
 	xml := strings.Replace(string(startProcessServiceTaskXML("ticket_task")), `</bpmn:extensionElements>`, `<bpmn:metaData name="action">assign</bpmn:metaData></bpmn:extensionElements>`, 1)
 	f, event := workflowStartFixture(t, []byte(xml))
+	grantBoundPermissions(t, f, f.actor, "ticket", "assign", "ticket", "read")
 	ctx := context.Background()
 	assigneeID := f.outsider.ID
 	handler := f.engine.CallbackRegistry().GetHandler("ticket_service_handler").(*bpmn.TicketServiceTaskHandler)
 	handler.SetNotificationService(NewTicketNotificationService(f.client, zap.NewNop().Sugar(), executionfixture.Standard()))
+	owner := NewTicketService(&TicketServiceConfig{Client: f.client, Repository: ticketrepo.NewEntRepository(f.client, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: executionfixture.Standard()})
+	owner.SetWorkflowAssignmentBoundary(NewWorkflowAssignmentBoundary(callbackFixtureDirectory{}))
+	handler.SetTicketService(owner)
 	event = withFrozenStartVariables(t, event, map[string]any{"assignee_id": json.Number(fmt.Sprint(assigneeID))})
 	deliver := NewWorkflowStartOutboxHandler(f.client, f.engine, f.client)
 	require.NoError(t, deliver.Deliver(ctx, event))
 	callback := f.client.ProcessCallbackOutbox.Query().OnlyX(ctx)
 	require.Equal(t, bpmnCallbackStatusCompleted, callback.Status, "%s", callback.LastErrorClass)
+	evidence := f.client.ProcessAuditLog.Query().Where(processauditlog.ActionEQ(callbackProvenanceAction)).OnlyX(ctx)
+	require.Equal(t, f.actor.ID, evidence.UserID, "durable receipt actor, not requested-for or assignee, produces callback provenance")
+	require.Equal(t, callback.ExecutionKey, evidence.Metadata["execution_key"])
 	item := f.client.Ticket.Query().OnlyX(ctx)
 	require.Equal(t, assigneeID, item.AssigneeID)
 	require.Equal(t, "assigned", item.Status)
 	notifications := f.client.Notification.Query().CountX(ctx)
-	require.Positive(t, notifications)
+	require.Zero(t, notifications, "assignment notification is materialized from durable assignment event")
+	require.Equal(t, 1, f.client.OutboxEvent.Query().Where(outboxevent.EventTypeEQ("work_item.assigned")).CountX(ctx))
 	require.NoError(t, deliver.Deliver(ctx, event))
 	require.Equal(t, notifications, f.client.Notification.Query().CountX(ctx))
 	require.Equal(t, item.UpdatedAt, f.client.Ticket.GetX(ctx, item.ID).UpdatedAt)

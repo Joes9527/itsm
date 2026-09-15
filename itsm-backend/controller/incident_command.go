@@ -42,6 +42,9 @@ func (c *IncidentController) applyIncidentCommand(ctx *gin.Context, action strin
 }
 
 func respondIncidentMutationError(ctx *gin.Context, err error) {
+	if common.RespondSerializationConflict(ctx, err) {
+		return
+	}
 	var operationConflict *workitemmutation.OperationConflictError
 	if common.IsVersionConflictError(err) || errors.As(err, &operationConflict) {
 		common.Conflict(ctx, err.Error(), nil)

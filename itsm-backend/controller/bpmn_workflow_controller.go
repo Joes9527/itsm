@@ -74,6 +74,9 @@ func getBPMNTenantContext(ctx *gin.Context) (context.Context, int, bool) {
 }
 
 func respondBPMNError(ctx *gin.Context, err error, fallback string) {
+	if common.RespondSerializationConflict(ctx, err) {
+		return
+	}
 	var appErr *common.AppError
 	errorClass := "internal"
 	if errors.As(err, &appErr) {
@@ -709,22 +712,12 @@ func (c *BPMNWorkflowController) GetTask(ctx *gin.Context) {
 		return
 	}
 
-	// 先尝试解析为数字ID（数据库自增ID）
-	id, err := strconv.Atoi(taskID)
-	var task interface{}
-	if err == nil {
-		// 数字ID，使用GetTaskByID
-		task, err = c.processEngine.TaskService().GetTaskByID(workflowCtx, id)
-	} else {
-		// 字符串ID（BPMN标准task_id），使用GetTask
-		task, err = c.processEngine.TaskService().GetTask(workflowCtx, taskID)
-	}
+	view, err := c.processEngine.TaskService().GetTaskView(workflowCtx, taskID)
 	if err != nil {
-		respondBPMNError(ctx, err, "任务不存在")
+		respondBPMNError(ctx, err, "读取任务视图失败")
 		return
 	}
-
-	common.Success(ctx, task)
+	common.Success(ctx, view)
 }
 
 // AssignTask 分配任务

@@ -45,6 +45,10 @@ func (e *CustomProcessEngine) TerminateProcessTx(ctx context.Context, tx *ent.Tx
 	if err != nil {
 		return err
 	}
+	instance, err = lockBPMNInstanceLifecycle(ctx, tx.Client(), instance)
+	if err != nil {
+		return err
+	}
 	if err := requireBPMNExecution(ctx, tx, e.execution, instance.TenantID, instance.ExecutionWorkItemID); err != nil {
 		return err
 	}
@@ -88,12 +92,21 @@ func (e *CustomProcessEngine) TerminateProcessTx(ctx context.Context, tx *ent.Tx
 	}
 	activeTasks, err := tx.Client().ProcessTask.Query().Where(
 		processtask.ProcessInstanceID(instance.ID), processtask.TenantID(scope.TenantID),
-		processtask.StatusIn(activeStatuses...),
-	).All(ctx)
+		processtask.StatusIn(activeStatuses...), bpmnLifecycleLock,
+	).Order(ent.Asc(processtask.FieldID)).All(ctx)
 	if err != nil {
 		return fmt.Errorf("加载待取消流程任务失败: %w", err)
 	}
 	for _, task := range activeTasks {
+		responsibleID, err := boundTaskResponsibleID(ctx, tx.Client(), task)
+		if err != nil {
+			return err
+		}
+		if task.AssigneeSource != "" {
+			if err := txEngine.authorizeBoundTask(ctx, tx.Client(), task, scope, BPMNTaskCommandCancel); err != nil {
+				return err
+			}
+		}
 		taskPredicate, predicateErr := bpmnTaskLifecyclePredicate(BPMNTaskCommandCancel, task.AggregationVersion)
 		if predicateErr != nil {
 			return predicateErr
@@ -109,6 +122,13 @@ func (e *CustomProcessEngine) TerminateProcessTx(ctx context.Context, tx *ent.Tx
 		}
 		if cancelled != 1 {
 			return bpmnTaskLifecycleConflict(BPMNTaskCommandCancel)
+		}
+		if task.AssigneeSource != "" {
+			task.Status = common.ProcessTaskStatusCancelled
+			task.AggregationVersion++
+			if err := txEngine.auditService.recordBoundTaskTerminal(ctx, task, responsibleID, actor.ID, actor.Name, "bpmn_process_terminate", reason, nil, nil, nil); err != nil {
+				return err
+			}
 		}
 	}
 	if err := e.auditService.ForClient(tx.Client()).RecordAudit(ctx, &AuditContext{

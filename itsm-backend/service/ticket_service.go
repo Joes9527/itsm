@@ -11,6 +11,9 @@ import (
 	"strings"
 	"time"
 
+	assignment "itsm-backend/handlers/common/workitemassignment"
+	"itsm-backend/handlers/shared/workflowcallback"
+
 	"itsm-backend/handlers/shared/workitemmutation"
 
 	"itsm-backend/authorization"
@@ -28,7 +31,6 @@ import (
 	entTicket "itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcategory"
 	entTicketComment "itsm-backend/ent/ticketcomment"
-	"itsm-backend/ent/user"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/repository/base"
 	"itsm-backend/repository/ticket"
@@ -39,6 +41,8 @@ import (
 // TicketService 改进版的工单服务
 // 使用构造函数注入和 Repository 模式
 type TicketService struct {
+	sessions               *authorization.SessionReader
+	workflowAssignment     workflowcallback.AssignmentBoundary
 	execution              *database.ExecutionPolicy
 	directory              database.DirectorySnapshot
 	repo                   ticket.Repository
@@ -57,6 +61,7 @@ type TicketService struct {
 // TicketServiceConfig 工单服务配置
 // 所有依赖都在配置中明确声明
 type TicketServiceConfig struct {
+	SessionReader         *authorization.SessionReader
 	Execution             *database.ExecutionPolicy
 	Directory             database.DirectorySnapshot
 	ProcessTriggerService ProcessTriggerServiceInterface
@@ -81,6 +86,7 @@ func NewTicketService(cfg *TicketServiceConfig) *TicketService {
 
 	s := &TicketService{
 		execution:         cfg.Execution,
+		sessions:          cfg.SessionReader,
 		directory:         cfg.Directory,
 		processTriggerSvc: cfg.ProcessTriggerService,
 		repo:              cfg.Repository,
@@ -343,6 +349,11 @@ func (s *TicketService) UpdateTicket(ctx context.Context, cmd dto.TicketEditComm
 			return empty, err
 		}
 	}
+	if req.AssigneeID != nil {
+		if _, err := authorization.AuthorizeWorkItemAssignment(ctx, tx, identity, id); err != nil {
+			return empty, err
+		}
+	}
 	digest, err := workitemmutation.Digest(struct {
 		Action                                        string
 		WorkItemID, ExpectedParentID, ExpectedVersion int
@@ -366,7 +377,7 @@ func (s *TicketService) UpdateTicket(ctx context.Context, cmd dto.TicketEditComm
 	if req.Status == "approved" || req.Status == "rejected" {
 		return empty, fmt.Errorf("审批状态只能由 BPMN 任务命令推进")
 	}
-	if req.Title != "" || req.Description != "" || req.Priority != "" || req.Status != "" || req.Type != "" || req.Category != "" || req.CategoryID != nil || req.AssigneeID != 0 || req.RequesterID != 0 || req.Resolution != "" || req.FormFields != nil {
+	if req.Title != "" || req.Description != "" || req.Priority != "" || req.Status != "" || req.Type != "" || req.Category != "" || req.CategoryID != nil || req.AssigneeID != nil || req.RequesterID != 0 || req.Resolution != "" || req.FormFields != nil {
 		if err := rejectProfessionalTicketMutation(current.RecordClass); err != nil {
 			return empty, err
 		}
@@ -447,23 +458,6 @@ func (s *TicketService) UpdateTicket(ctx context.Context, cmd dto.TicketEditComm
 		priority := ticket.Priority(req.Priority)
 		params.Priority = &priority
 	}
-	if req.AssigneeID != 0 {
-		if err := rejectProfessionalTicketMutation(current.RecordClass); err != nil {
-			return empty, err
-		}
-		if s.client != nil {
-			assigneeExists, err := client.User.Query().
-				Where(user.IDEQ(req.AssigneeID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).
-				Exist(ctx)
-			if err != nil {
-				return empty, fmt.Errorf("验证处理人失败: %w", err)
-			}
-			if !assigneeExists {
-				return empty, fmt.Errorf("处理人不存在或不可用")
-			}
-		}
-		params.AssigneeID = &req.AssigneeID
-	}
 	categoryID := req.CategoryID
 	if categoryID == nil && strings.TrimSpace(req.Category) != "" {
 		if s.client == nil {
@@ -508,7 +502,20 @@ func (s *TicketService) UpdateTicket(ctx context.Context, cmd dto.TicketEditComm
 		params.Resolution = &req.Resolution
 	}
 
-	// 更新工单
+	if req.AssigneeID != nil {
+		err = assignment.WithLifecycleWriter(ctx, tx, s.directory, m.ActorID, tenantID, EnqueueWorkItemAssignment, func(writer *assignment.Writer, actor *ent.User) error {
+			assigned, err := writer.Apply(ctx, client, assignment.Command{WorkItemID: id, TenantID: tenantID, ActorID: actor.ID, ActorTenantID: actor.TenantID, AssigneeID: *req.AssigneeID, ExpectedVersion: m.ExpectedVersion, Source: m.Source})
+			if err == nil {
+				params.VersionAlreadyAdvanced = assigned.Version != m.ExpectedVersion
+				params.Version = assigned.Version
+			}
+			return err
+		})
+		if err != nil {
+			return empty, err
+		}
+	}
+	// Shared assignment already advances the same aggregate once when changed.
 	updated, err := s.repo.UpdateTx(ctx, tx, id, params, tenantID)
 	if err != nil {
 		s.logger.Errorw("Failed to update ticket", "error", err)
@@ -637,88 +644,50 @@ func (s *TicketService) ListTickets(ctx context.Context, req *dto.ListTicketsReq
 }
 
 // AssignTicket 分配工单
-func (s *TicketService) AssignTicket(ctx context.Context, ticketID int, assigneeID int, tenantID int) (*ticket.Ticket, error) {
-	s.logger.Infow("Assigning ticket", "ticket_id", ticketID, "assignee_id", assigneeID)
-	current, err := s.repo.GetByID(ctx, ticketID, tenantID)
-	if err != nil {
-		return nil, err
+func (s *TicketService) AssignTicket(ctx context.Context, ticketID int, assigneeID int, tenantID int, identity creation.Identity) (*ticket.Ticket, error) {
+	if s.sessions == nil || identity.TenantID != tenantID {
+		return nil, fmt.Errorf("verified assignment session is required")
 	}
-
-	if err := rejectProfessionalTicketMutation(current.RecordClass); err != nil {
-		return nil, err
-	}
-	if err := current.Assign(assigneeID); err != nil {
-		return nil, err
-	}
-	if s.client != nil {
-		exists, err := s.client.User.Query().
-			Where(user.IDEQ(assigneeID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).
-			Exist(ctx)
+	var result *ticket.Ticket
+	err := s.sessions.Write(ctx, identity, func(session *authorization.SessionSnapshot) error {
+		item, err := session.AuthorizeWorkItemAssignment(ctx, ticketID)
 		if err != nil {
-			return nil, fmt.Errorf("验证处理人失败: %w", err)
+			return err
 		}
-		if !exists {
-			return nil, fmt.Errorf("处理人不存在或不可用")
+		current := s.entToDomain(item)
+		if err := rejectProfessionalTicketMutation(item.RecordClass); err != nil {
+			return err
 		}
-	}
-	status := current.Status
-	updated, err := s.repo.Update(ctx, ticketID, &ticket.UpdateParams{
-		AssigneeID: &assigneeID,
-		Status:     &status,
-		Version:    current.Version,
-	}, tenantID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 发送通知
-	if s.notificationSvc != nil {
-		go func() {
-			ctx2, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			if err := s.notificationSvc.NotifyTicketAssigned(ctx2, ticketID, assigneeID, tenantID); err != nil {
-				s.logger.Warnw("Assignment notification failed", "error", err)
+		if s.execution == nil {
+			return fmt.Errorf("assignment execution policy required")
+		}
+		if err := s.execution.BindEnt(ctx, session.Tx, tenantID); err != nil {
+			return err
+		}
+		if err := s.execution.RequireEntMembers(ctx, session.Tx, tenantID, item.ID); err != nil {
+			return err
+		}
+		if err := current.Assign(assigneeID); err != nil {
+			return err
+		}
+		updated, err := NewWorkItemAssignmentWriter(session).Apply(ctx, session.Tx.Client(), assignment.Command{WorkItemID: ticketID, TenantID: tenantID, ActorID: session.Actor.ID, ActorTenantID: session.Actor.TenantID, AssigneeID: assigneeID, ExpectedVersion: item.Version, Source: identity.Channel + ".ticket.assign"})
+		if err != nil {
+			return err
+		}
+		if string(current.Status) != updated.Status {
+			mutation := session.Tx.Ticket.UpdateOneID(item.ID).SetStatus(string(current.Status))
+			if updated.Version == item.Version {
+				mutation.AddVersion(1)
 			}
-		}()
-	}
-
-	// 异步同步工单到飞书
-	if s.connectorManager != nil {
-		go func() {
-			ctx2, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			// 获取Feishu连接器
-			conn, ok := s.connectorManager.Get(tenantID, "feishu")
-			if !ok {
-				// 飞书连接器未配置，忽略
-				return
-			}
-			feishuConn, ok := conn.(*feishuConnector.Feishu)
-			if !ok {
-				return
-			}
-			// 开启事务
-			tx, err := s.client.Tx(ctx2)
+			updated, err = mutation.Save(ctx)
 			if err != nil {
-				s.logger.Warnw("Failed to start transaction for feishu sync", "error", err, "ticket_id", updated.ID)
-				return
+				return err
 			}
-			defer tx.Rollback()
-			// 同步工单到飞书
-			_, err = feishuConn.UpdateExistingTicketTask(ctx2, tx, s.toEntTicket(updated))
-			if err != nil {
-				s.logger.Warnw("Failed to sync ticket to feishu", "error", err, "ticket_id", updated.ID)
-				return
-			}
-			// 提交事务
-			if err := tx.Commit(); err != nil {
-				s.logger.Warnw("Failed to commit transaction for feishu sync", "error", err, "ticket_id", updated.ID)
-				return
-			}
-		}()
-	}
-
-	return updated, nil
+		}
+		result = s.entToDomain(updated)
+		return nil
+	})
+	return result, err
 }
 
 // ResolveTicket 解决工单
@@ -1409,19 +1378,16 @@ func (s *TicketService) ExportTickets(ctx context.Context, tenantID int, filters
 }
 
 // AssignTickets 批量分配工单
-func (s *TicketService) AssignTickets(ctx context.Context, tenantID int, ticketIDs []int, assigneeID int) error {
-	if s.client == nil {
-		return fmt.Errorf("ent client not available for assign")
-	}
-	if _, err := s.client.User.Get(ctx, assigneeID); err != nil {
-		return fmt.Errorf("分配者不存在: %v", err)
+func (s *TicketService) AssignTickets(ctx context.Context, tenantID int, ticketIDs []int, assigneeID int, identity creation.Identity) error {
+	if s == nil || s.client == nil {
+		return fmt.Errorf("assignment client required")
 	}
 	if err := validateTicketMutationClasses(ctx, s.client, tenantID, ticketIDs); err != nil {
 		return err
 	}
-	for _, ticketID := range ticketIDs {
-		if _, err := s.repo.AssignTicket(ctx, ticketID, assigneeID, tenantID); err != nil {
-			return fmt.Errorf("分配工单 %d 失败: %v", ticketID, err)
+	for _, id := range ticketIDs {
+		if _, err := s.AssignTicket(ctx, id, assigneeID, tenantID, identity); err != nil {
+			return fmt.Errorf("assign ticket %d: %w", id, err)
 		}
 	}
 	return nil
@@ -1837,69 +1803,8 @@ func (s *TicketService) GetCustomerTicketsForMSP(ctx context.Context, userID, cu
 }
 
 // AssignMSPTechnician 为工单分配 MSP 技术员
-func (s *TicketService) AssignMSPTechnician(ctx context.Context, ticketID, customerTenantID, assignerID int) (*ticket.Ticket, error) {
-	if s.client == nil {
-		return nil, fmt.Errorf("ent client not available for MSP assign")
-	}
-	t, err := s.client.Ticket.Get(ctx, ticketID)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("工单不存在")
-		}
-		return nil, err
-	}
-	if t.TenantID != customerTenantID {
-		return nil, fmt.Errorf("工单不属于指定客户租户")
-	}
-	if err := rejectProfessionalTicketMutation(t.RecordClass); err != nil {
-		return nil, err
-	}
-	// 分配给 MSP 技术员（这里 assignerID 作为目标处理人；可后续扩展为查表分配）
-	if _, err := s.repo.AssignTicket(ctx, ticketID, assignerID, customerTenantID); err != nil {
-		return nil, fmt.Errorf("failed to assign MSP technician: %w", err)
-	}
-	updated, err := s.repo.GetByID(ctx, ticketID, customerTenantID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 异步同步工单到飞书
-	if s.connectorManager != nil {
-		go func() {
-			ctx2, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			// 获取Feishu连接器
-			conn, ok := s.connectorManager.Get(customerTenantID, "feishu")
-			if !ok {
-				// 飞书连接器未配置，忽略
-				return
-			}
-			feishuConn, ok := conn.(*feishuConnector.Feishu)
-			if !ok {
-				return
-			}
-			// 开启事务
-			tx, err := s.client.Tx(ctx2)
-			if err != nil {
-				s.logger.Warnw("Failed to start transaction for feishu sync", "error", err, "ticket_id", updated.ID)
-				return
-			}
-			defer tx.Rollback()
-			// 同步工单到飞书
-			_, err = feishuConn.UpdateExistingTicketTask(ctx2, tx, s.toEntTicket(updated))
-			if err != nil {
-				s.logger.Warnw("Failed to sync ticket to feishu", "error", err, "ticket_id", updated.ID)
-				return
-			}
-			// 提交事务
-			if err := tx.Commit(); err != nil {
-				s.logger.Warnw("Failed to commit transaction for feishu sync", "error", err, "ticket_id", updated.ID)
-				return
-			}
-		}()
-	}
-
-	return updated, nil
+func (s *TicketService) AssignMSPTechnician(ctx context.Context, ticketID, customerTenantID, assigneeID int, identity creation.Identity) (*ticket.Ticket, error) {
+	return s.AssignTicket(ctx, ticketID, assigneeID, customerTenantID, identity)
 }
 
 // GetMSPCustomerReports 获取 MSP 客户报告

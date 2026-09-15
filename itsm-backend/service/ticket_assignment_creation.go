@@ -13,28 +13,9 @@ func (s *TicketAssignmentSmartService) prepareCreation(ctx context.Context, tx *
 	if s == nil || s.assignmentService == nil || s.ruleService == nil {
 		return nil, fmt.Errorf("ticket assignment owner is required")
 	}
-	rules, err := tx.TicketAssignmentRule.Query().Where(ticketassignmentrule.TenantIDEQ(item.TenantID), ticketassignmentrule.IsActiveEQ(true)).Order(ent.Desc(ticketassignmentrule.FieldPriority), ent.Asc(ticketassignmentrule.FieldID)).All(ctx)
-	if err != nil {
-		return nil, err
-	}
-	ruleOwner := *s.ruleService
-	ruleOwner.client = tx.Client()
-	for _, rule := range rules {
-		matched, err := evaluateTicketRuleConditions(rule.Conditions, item)
-		if err != nil {
-			return nil, err
-		}
-		if !matched {
-			continue
-		}
-		target, _, err := ruleOwner.executeRuleAction(ctx, rule, item)
-		if err != nil {
-			return nil, err
-		}
-		if err := tx.TicketAssignmentRule.UpdateOneID(rule.ID).AddExecutionCount(1).SetLastExecutedAt(time.Now()).Exec(ctx); err != nil {
-			return nil, err
-		}
-		return target, nil
+	target, matched, err := s.prepareConfiguredAssignment(ctx, tx, item)
+	if err != nil || matched {
+		return target, err
 	}
 	assignment := *s.assignmentService
 	assignment.client = tx.Client()
@@ -47,4 +28,34 @@ func (s *TicketAssignmentSmartService) prepareCreation(ctx context.Context, tx *
 		return nil, err
 	}
 	return result.AssignedTo, nil
+}
+
+func (s *TicketAssignmentSmartService) prepareConfiguredAssignment(ctx context.Context, tx *ent.Tx, item *ent.Ticket) (*int, bool, error) {
+	if s == nil || s.ruleService == nil {
+		return nil, false, fmt.Errorf("configured assignment owner is required")
+	}
+	rules, err := tx.TicketAssignmentRule.Query().Where(ticketassignmentrule.TenantIDEQ(item.TenantID), ticketassignmentrule.IsActiveEQ(true)).Order(ent.Desc(ticketassignmentrule.FieldPriority), ent.Asc(ticketassignmentrule.FieldID)).All(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	ruleOwner := *s.ruleService
+	ruleOwner.client = tx.Client()
+	for _, rule := range rules {
+		matched, err := evaluateTicketRuleConditions(rule.Conditions, item)
+		if err != nil {
+			return nil, false, err
+		}
+		if !matched {
+			continue
+		}
+		target, _, err := ruleOwner.executeRuleAction(ctx, rule, item)
+		if err != nil {
+			return nil, false, err
+		}
+		if err := tx.TicketAssignmentRule.UpdateOneID(rule.ID).AddExecutionCount(1).SetLastExecutedAt(time.Now()).Exec(ctx); err != nil {
+			return nil, false, err
+		}
+		return target, true, nil
+	}
+	return nil, false, nil
 }

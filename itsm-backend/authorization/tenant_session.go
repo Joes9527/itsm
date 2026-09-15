@@ -111,3 +111,17 @@ func resolveCurrentSessionActor(ctx context.Context, directory *ent.Client, acto
 	}
 	return actor, nil
 }
+
+// ResolveCurrentTenantUser validates a directory identity against the existing
+// tenant-session policy without treating the supplied ID as actor provenance.
+func ResolveCurrentTenantUser(ctx context.Context, directory *ent.Client, id, targetTenantID int, now time.Time) (*ent.User, error) {
+	if directory == nil {
+		return nil, creation.NewInfrastructureUnavailable("session directory is required", nil)
+	}
+	lookup := tenantctx.SystemContext(ctx, "session:current", "resolve current user eligibility for selected tenant")
+	candidate, err := directory.User.Get(lookup, id)
+	if err != nil {
+		return nil, err
+	}
+	return resolveCurrentSessionActor(lookup, directory, id, targetTenantID, EffectiveSessionRole(candidate), now)
+}

@@ -82,6 +82,10 @@ export interface StartProcessRequest {
 
 export interface UserTask {
   uiActions?: { claim: boolean; complete: boolean; reason?: string };
+  assigneeSource: string;
+  assignmentState: 'assigned' | 'unassigned' | 'unavailable' | 'terminal';
+  responsibleUserId: number;
+  actorId: number;
   id: number;
   taskId: string;
   taskDefinitionKey: string;

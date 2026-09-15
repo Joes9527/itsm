@@ -483,3 +483,9 @@ func TestSetupRoutes_DoesNotExposeRetiredWorkflowAliases(t *testing.T) {
 		assert.False(t, retired[key], "retired workflow alias remains registered: %s", key)
 	}
 }
+
+type assignmentRouteDirectory struct{}
+
+func (assignmentRouteDirectory) Open(_ context.Context, tx *ent.Tx, _ int) (*ent.Client, func() error, error) {
+	return tx.Client(), func() error { return nil }, nil
+}

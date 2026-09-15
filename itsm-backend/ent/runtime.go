@@ -3,6 +3,8 @@
 package ent
 
 import (
+	"time"
+
 	"itsm-backend/ent/application"
 	"itsm-backend/ent/approvalchain"
 	"itsm-backend/ent/asset"
@@ -126,7 +128,6 @@ import (
 	"itsm-backend/ent/workitemnumbersequence"
 	"itsm-backend/ent/workitemrelation"
 	"itsm-backend/internal/jsonvalue"
-	"time"
 )
 
 // The init function reads all schema descriptors with runtime code
@@ -2705,34 +2706,38 @@ func init() {
 	processtaskDescTaskType := processtaskFields[5].Descriptor()
 	// processtask.DefaultTaskType holds the default value on creation for the task_type field.
 	processtask.DefaultTaskType = processtaskDescTaskType.Default.(string)
+	// processtaskDescAssigneeSource is the schema descriptor for assignee_source field.
+	processtaskDescAssigneeSource := processtaskFields[7].Descriptor()
+	// processtask.DefaultAssigneeSource holds the default value on creation for the assignee_source field.
+	processtask.DefaultAssigneeSource = processtaskDescAssigneeSource.Default.(string)
 	// processtaskDescStatus is the schema descriptor for status field.
-	processtaskDescStatus := processtaskFields[9].Descriptor()
+	processtaskDescStatus := processtaskFields[10].Descriptor()
 	// processtask.DefaultStatus holds the default value on creation for the status field.
 	processtask.DefaultStatus = processtaskDescStatus.Default.(string)
 	// processtaskDescPriority is the schema descriptor for priority field.
-	processtaskDescPriority := processtaskFields[10].Descriptor()
+	processtaskDescPriority := processtaskFields[11].Descriptor()
 	// processtask.DefaultPriority holds the default value on creation for the priority field.
 	processtask.DefaultPriority = processtaskDescPriority.Default.(string)
 	// processtaskDescCreatedTime is the schema descriptor for created_time field.
-	processtaskDescCreatedTime := processtaskFields[12].Descriptor()
+	processtaskDescCreatedTime := processtaskFields[13].Descriptor()
 	// processtask.DefaultCreatedTime holds the default value on creation for the created_time field.
 	processtask.DefaultCreatedTime = processtaskDescCreatedTime.Default.(func() time.Time)
 	// processtaskDescAggregationVersion is the schema descriptor for aggregation_version field.
-	processtaskDescAggregationVersion := processtaskFields[22].Descriptor()
+	processtaskDescAggregationVersion := processtaskFields[23].Descriptor()
 	// processtask.DefaultAggregationVersion holds the default value on creation for the aggregation_version field.
 	processtask.DefaultAggregationVersion = processtaskDescAggregationVersion.Default.(int)
 	// processtask.AggregationVersionValidator is a validator for the "aggregation_version" field. It is called by the builders before save.
 	processtask.AggregationVersionValidator = processtaskDescAggregationVersion.Validators[0].(func(int) error)
 	// processtaskDescTenantID is the schema descriptor for tenant_id field.
-	processtaskDescTenantID := processtaskFields[27].Descriptor()
+	processtaskDescTenantID := processtaskFields[28].Descriptor()
 	// processtask.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	processtask.TenantIDValidator = processtaskDescTenantID.Validators[0].(func(int) error)
 	// processtaskDescCreatedAt is the schema descriptor for created_at field.
-	processtaskDescCreatedAt := processtaskFields[28].Descriptor()
+	processtaskDescCreatedAt := processtaskFields[29].Descriptor()
 	// processtask.DefaultCreatedAt holds the default value on creation for the created_at field.
 	processtask.DefaultCreatedAt = processtaskDescCreatedAt.Default.(func() time.Time)
 	// processtaskDescUpdatedAt is the schema descriptor for updated_at field.
-	processtaskDescUpdatedAt := processtaskFields[29].Descriptor()
+	processtaskDescUpdatedAt := processtaskFields[30].Descriptor()
 	// processtask.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	processtask.DefaultUpdatedAt = processtaskDescUpdatedAt.Default.(func() time.Time)
 	// processtask.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

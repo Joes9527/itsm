@@ -159,3 +159,64 @@ it.each(['generic','service_request_item','incident','problem','change_request',
  expect(await screen.findByText('主管审批')).toBeInTheDocument();
  expect(read).toHaveBeenCalledWith(expect.objectContaining({ businessType: recordClass, businessId: 42 }));
 });
+
+it('shows a bound task waiting for WorkItem assignment without actions', async () => {
+  read.mockResolvedValue(page([{ ...task, taskPurpose: '', assignee: '', assigneeSource: 'work_item_assignee',
+    assignmentState: 'unassigned', responsibleUserId: 0, actorId: 0,
+    uiActions: { claim: false, complete: false } }]));
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+
+  expect(await screen.findByText('等待工单分配处理人')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '领取任务' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '完成任务' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/用户 ID/)).not.toBeInTheDocument();
+});
+
+it('renders the backend owner projection and offered completion for a bound task', async () => {
+  read.mockResolvedValue(page([{ ...task, taskPurpose: '', assignee: '17', assigneeSource: 'work_item_assignee',
+    assignmentState: 'assigned', responsibleUserId: 17, actorId: 0,
+    uiActions: { claim: false, complete: true } }]));
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+
+  expect(await screen.findByText('处理人用户 ID：17')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '完成任务' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '领取任务' })).not.toBeInTheDocument();
+});
+
+it('shows unavailable bound assignment without guessing a user', async () => {
+  read.mockResolvedValue(page([{ ...task, taskPurpose: '', assignee: '', assigneeSource: 'work_item_assignee',
+    assignmentState: 'unavailable', responsibleUserId: 0, actorId: 0,
+    uiActions: { claim: false, complete: false } }]));
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+
+  expect(await screen.findByText('处理人当前不可用')).toBeInTheDocument();
+  expect(screen.queryByText(/用户 ID/)).not.toBeInTheDocument();
+});
+
+it('renders frozen terminal responsibility and actual actor separately', async () => {
+  read.mockResolvedValue(page([{ ...task, taskPurpose: '', status: 'cancelled', assignee: '',
+    assigneeSource: 'work_item_assignee', assignmentState: 'terminal', responsibleUserId: 0, actorId: 23,
+    uiActions: { claim: false, complete: false } }]));
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+
+  expect(await screen.findByText('历史处理记录')).toBeInTheDocument();
+  expect(screen.getByText('实际操作人用户 ID：23')).toBeInTheDocument();
+  expect(screen.queryByText('处理人用户 ID：23')).not.toBeInTheDocument();
+});
+
+it.each([['completed', '已完成'], ['cancelled', '已取消']])('shows bound terminal status %s and unavailable history', async (status, label) => {
+  read.mockResolvedValue(page([{ ...task, taskPurpose: 'fulfillment', assigneeSource: 'work_item_assignee', assignmentState: 'unavailable', status, responsibleUserId: 0, uiActions: { claim: false, complete: false } }]));
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+  expect(await screen.findByText(`状态：${label}`)).toBeInTheDocument();
+  expect(screen.getByText('历史处理人记录不可用')).toBeInTheDocument();
+  expect(screen.queryByText('处理人当前不可用')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '完成任务' })).not.toBeInTheDocument();
+});
+it('shows the backend execution denial for an assigned bound task', async () => {
+  const reason = '当前账号无权执行此任务，请联系管理员核验任务及业务权限';
+  read.mockResolvedValue(page([{ ...task, taskPurpose: 'fulfillment', assigneeSource: 'work_item_assignee', assignmentState: 'assigned', responsibleUserId: 7, uiActions: { claim: false, complete: false, reason } }]));
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+  expect(await screen.findByText(reason)).toBeInTheDocument();
+  expect(screen.getByText('已由工单分配')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '完成任务' })).not.toBeInTheDocument();
+});

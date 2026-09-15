@@ -4,6 +4,9 @@ import (
 	"context"
 	"time"
 
+	"itsm-backend/ent"
+	assignment "itsm-backend/handlers/common/workitemassignment"
+
 	"itsm-backend/handlers/shared/workitemmutation"
 )
 
@@ -62,3 +65,6 @@ type ServiceRequestService interface {
 type ChangeService interface {
 	ApplyChangeWorkflowCallback(ctx context.Context, command ChangeCommand) (Result, error)
 }
+
+// AssignmentBoundary resolves trusted execution provenance inside the owning transaction.
+type AssignmentBoundary func(context.Context, *ent.Tx, int) (*assignment.Writer, assignment.Command, error)

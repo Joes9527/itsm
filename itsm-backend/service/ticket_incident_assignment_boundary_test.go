@@ -1,11 +1,15 @@
 package service
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"itsm-backend/authorization"
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/shared/workitemmutation"
 	ticketrepo "itsm-backend/repository/ticket"
 	executionfixture "itsm-backend/tests/fixtures/execution"
@@ -14,7 +18,7 @@ import (
 func TestTicketAssignmentRejectsProfessionalClasses(t *testing.T) {
 	for _, class := range []string{"incident", "problem", "change_request"} {
 		t.Run(class, func(t *testing.T) {
-			for _, action := range []string{"msp", "edit", "service_escalate", "assign", "batch", "policy", "smart", "reassign", "policy_batch", "accept", "forward"} {
+			for _, action := range []string{"msp", "edit", "service_escalate", "assign", "batch", "smart", "accept", "forward"} {
 				t.Run(action, func(t *testing.T) {
 					client, owner, ctx := setupIncidentTest(t)
 					defer client.Close()
@@ -24,6 +28,7 @@ func TestTicketAssignmentRejectsProfessionalClasses(t *testing.T) {
 					require.NoError(t, err)
 					next, err := createIncidentTestUser(ctx, client, tenant.ID, "next")
 					require.NoError(t, err)
+					grantAssignmentBoundaryRole(t, client, tenant.ID, actor.Role)
 					before := client.Ticket.Create().SetTitle("professional boundary").SetTicketNumber("PRO-B").SetRequesterID(actor.ID).SetTenantID(tenant.ID).SetRecordClass(class).SetStatus("new").SetAssigneeID(actor.ID).SaveX(ctx)
 					switch class {
 					case "incident":
@@ -33,38 +38,41 @@ func TestTicketAssignmentRejectsProfessionalClasses(t *testing.T) {
 					case "change_request":
 						client.Change.Create().SetWorkItemID(before.ID).SaveX(ctx)
 					}
-					ticketSvc := NewTicketService(&TicketServiceConfig{Client: client, Repository: ticketrepo.NewEntRepository(client, owner.logger), Logger: owner.logger, Execution: executionfixture.Standard()})
+					ticketSvc := NewTicketService(&TicketServiceConfig{Client: client, Repository: ticketrepo.NewEntRepository(client, owner.logger), Logger: owner.logger, Execution: executionfixture.Standard(), SessionReader: authorization.NewSessionReader(client, callbackFixtureDirectory{})})
+					ctx = tenantctx.WithTenantID(ctx, tenant.ID)
 					ticketSvc.execution = executionfixture.Standard()
 					assignment := NewTicketAssignmentService(client, owner.logger)
 					workflow := NewTicketWorkflowService(client, owner.logger)
+					workflow.SetSessionReader(authorization.NewSessionReader(client, callbackFixtureDirectory{}))
+					workflow.SetExecutionPolicy(executionfixture.Standard())
+					smart := NewTicketAssignmentSmartService(client, owner.logger, assignment, NewTicketAssignmentRuleService(client, owner.logger))
+					smart.SetSessionReader(authorization.NewSessionReader(client, callbackFixtureDirectory{}))
+					smart.SetExecutionPolicy(executionfixture.Standard())
 					switch action {
 					case "msp":
-						_, err = ticketSvc.AssignMSPTechnician(ctx, before.ID, tenant.ID, next.ID)
+						_, err = ticketSvc.AssignMSPTechnician(ctx, before.ID, tenant.ID, next.ID, creation.Identity{ActorID: actor.ID, TenantID: tenant.ID, Role: actor.Role})
 					case "edit":
-						role := client.Role.Create().SetTenantID(tenant.ID).SetCode(actor.Role).SetName("Edit boundary fixture").SetIsActive(true).SaveX(ctx)
-						permission := client.Permission.Create().SetTenantID(tenant.ID).SetCode("edit-boundary").SetName("Edit boundary").SetResource("*").SetAction("*").SaveX(ctx)
-						client.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).ExecX(ctx)
-						_, err = ticketSvc.UpdateTicket(ctx, editCommandForTest(before.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{AssigneeID: next.ID}, Meta: workitemmutation.Meta{ActorID: actor.ID, ExpectedVersion: before.Version}}, tenant.ID))
+						_, err = ticketSvc.UpdateTicket(ctx, editCommandForTest(before.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{AssigneeID: &next.ID}, Meta: workitemmutation.Meta{ActorID: actor.ID, ExpectedVersion: before.Version}}, tenant.ID))
 					case "service_escalate":
 						_, err = ticketSvc.EscalateTicket(ctx, dto.TicketEscalationCommand{WorkItemID: before.ID, Reason: "handover", Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: before.Version, Source: "http", OperationID: "test"}})
 					case "assign":
-						_, err = ticketSvc.AssignTicket(ctx, before.ID, next.ID, tenant.ID)
+						_, err = ticketSvc.AssignTicket(ctx, before.ID, next.ID, tenant.ID, creation.Identity{ActorID: actor.ID, TenantID: tenant.ID, Role: actor.Role})
 					case "batch":
-						err = ticketSvc.AssignTickets(ctx, tenant.ID, []int{before.ID}, next.ID)
-					case "policy":
-						_, err = assignment.AssignTicket(ctx, &AssignmentRequest{TicketID: before.ID, TenantID: tenant.ID, PreferredUser: &next.ID})
+						err = ticketSvc.AssignTickets(ctx, tenant.ID, []int{before.ID}, next.ID, creation.Identity{ActorID: actor.ID, TenantID: tenant.ID, Role: actor.Role})
 					case "smart":
-						_, err = NewTicketAssignmentSmartService(client, owner.logger, assignment, NewTicketAssignmentRuleService(client, owner.logger)).AutoAssign(ctx, before.ID, tenant.ID)
-					case "reassign":
-						err = assignment.ReassignTicket(ctx, before.ID, next.ID, "handover")
-					case "policy_batch":
-						err = assignment.AssignTickets(ctx, tenant.ID, []int{before.ID}, next.ID)
+						_, err = smart.AutoAssign(ctx, before.ID, tenant.ID, creation.Identity{ActorID: actor.ID, TenantID: tenant.ID, Role: actor.Role})
 					case "accept":
-						err = workflow.AcceptTicket(ctx, &dto.AcceptTicketRequest{TicketID: before.ID}, next.ID, tenant.ID)
+						err = workflow.AcceptTicket(ctx, &dto.AcceptTicketRequest{TicketID: before.ID}, actor.ID, tenant.ID, creation.Identity{ActorID: actor.ID, TenantID: tenant.ID, Role: actor.Role})
 					case "forward":
-						err = workflow.ForwardTicket(ctx, &dto.ForwardTicketRequest{TicketID: before.ID, ToUserID: next.ID, TransferOwnership: true}, actor.ID, tenant.ID)
+						err = workflow.ForwardTicket(ctx, &dto.ForwardTicketRequest{TicketID: before.ID, ToUserID: next.ID, TransferOwnership: true}, actor.ID, tenant.ID, creation.Identity{ActorID: actor.ID, TenantID: tenant.ID, Role: actor.Role})
 					}
-					require.ErrorContains(t, err, "owning domain command")
+					if action == "accept" {
+						require.ErrorContains(t, err, "does not permit acceptance")
+					} else if action == "smart" || action == "forward" {
+						require.ErrorContains(t, err, "eligible")
+					} else {
+						require.ErrorContains(t, err, "owning domain command")
+					}
 					after := client.Ticket.GetX(ctx, before.ID)
 					require.Equal(t, before.AssigneeID, after.AssigneeID)
 					require.Equal(t, before.Version, after.Version)
@@ -89,7 +97,10 @@ func TestTicketAssignmentPreservesOtherClasses(t *testing.T) {
 			next, err := createIncidentTestUser(ctx, client, tenant.ID, "next")
 			require.NoError(t, err)
 			before := client.Ticket.Create().SetTitle("unchanged class behavior").SetTicketNumber("WI-B").SetRequesterID(actor.ID).SetTenantID(tenant.ID).SetRecordClass(class).SetStatus("new").SetPriority("medium").SaveX(ctx)
-			_, err = NewTicketAssignmentService(client, owner.logger).AssignTicket(ctx, &AssignmentRequest{TicketID: before.ID, TenantID: tenant.ID, PreferredUser: &next.ID})
+			grantAssignmentBoundaryRole(t, client, tenant.ID, actor.Role)
+			ctx = tenantctx.WithTenantID(ctx, tenant.ID)
+			svc := NewTicketService(&TicketServiceConfig{Client: client, Repository: ticketrepo.NewEntRepository(client, owner.logger), Logger: owner.logger, Execution: executionfixture.Standard(), SessionReader: authorization.NewSessionReader(client, callbackFixtureDirectory{})})
+			_, err = svc.AssignTicket(ctx, before.ID, next.ID, tenant.ID, creation.Identity{ActorID: actor.ID, TenantID: tenant.ID, Role: actor.Role})
 			require.NoError(t, err)
 			require.Equal(t, next.ID, client.Ticket.GetX(ctx, before.ID).AssigneeID)
 		})
@@ -98,7 +109,7 @@ func TestTicketAssignmentPreservesOtherClasses(t *testing.T) {
 
 func TestTicketAssignmentMixedBatchRejectsBeforeWrites(t *testing.T) {
 	for _, class := range []string{"incident", "problem", "change_request"} {
-		for _, action := range []string{"assignment", "policy", "close", "priority"} {
+		for _, action := range []string{"assignment", "close", "priority"} {
 			t.Run(class+"/"+action, func(t *testing.T) {
 				client, owner, ctx := setupIncidentTest(t)
 				defer client.Close()
@@ -106,15 +117,15 @@ func TestTicketAssignmentMixedBatchRejectsBeforeWrites(t *testing.T) {
 				require.NoError(t, err)
 				actor, err := createIncidentTestUser(ctx, client, tenant.ID, "owner")
 				require.NoError(t, err)
+				grantAssignmentBoundaryRole(t, client, tenant.ID, actor.Role)
 				professional := client.Ticket.Create().SetTitle("professional").SetTicketNumber("PRO-B").SetRequesterID(actor.ID).SetTenantID(tenant.ID).SetRecordClass(class).SetStatus("resolved").SaveX(ctx)
 				generic := client.Ticket.Create().SetTitle("generic").SetTicketNumber("GEN-B").SetRequesterID(actor.ID).SetTenantID(tenant.ID).SetRecordClass("generic").SetStatus("resolved").SetPriority("medium").SaveX(ctx)
 				ids := []int{generic.ID, professional.ID}
-				svc := NewTicketService(&TicketServiceConfig{Client: client, Repository: ticketrepo.NewEntRepository(client, owner.logger), Logger: owner.logger, Execution: executionfixture.Standard()})
+				svc := NewTicketService(&TicketServiceConfig{Client: client, Repository: ticketrepo.NewEntRepository(client, owner.logger), Logger: owner.logger, Execution: executionfixture.Standard(), SessionReader: authorization.NewSessionReader(client, callbackFixtureDirectory{})})
+				ctx = tenantctx.WithTenantID(ctx, tenant.ID)
 				switch action {
 				case "assignment":
-					err = svc.AssignTickets(ctx, tenant.ID, ids, actor.ID)
-				case "policy":
-					err = NewTicketAssignmentService(client, owner.logger).AssignTickets(ctx, tenant.ID, ids, actor.ID)
+					err = svc.AssignTickets(ctx, tenant.ID, ids, actor.ID, creation.Identity{ActorID: actor.ID, TenantID: tenant.ID, Role: actor.Role})
 				case "close":
 					err = svc.BatchCloseTickets(ctx, ids, tenant.ID, "closed")
 				case "priority":
@@ -134,4 +145,13 @@ func TestTicketAssignmentMixedBatchRejectsBeforeWrites(t *testing.T) {
 			})
 		}
 	}
+}
+
+func grantAssignmentBoundaryRole(t *testing.T, client *ent.Client, tenantID int, code string) {
+	t.Helper()
+	ctx := context.Background()
+	role := client.Role.Create().SetTenantID(tenantID).SetCode(code).SetName("Boundary fixture").SetIsActive(true).SaveX(ctx)
+	permission := client.Permission.Create().SetTenantID(tenantID).SetCode("assignment-boundary").SetName("Boundary fixture").SetResource("*").SetAction("*").SaveX(ctx)
+	client.RolePermission.Create().SetTenantID(tenantID).SetRoleID(role.ID).SetPermissionID(permission.ID).ExecX(ctx)
+	authorization.InvalidateAllPermissionCaches()
 }

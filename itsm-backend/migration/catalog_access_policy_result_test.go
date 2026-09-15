@@ -25,3 +25,14 @@ func TestKafAccessRequestDigestMigrationRegistered(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(asset), strings.TrimSpace(GetMigrationSQL(version)))
 }
+
+func migrationVersionIndex(t *testing.T, version string) int {
+	t.Helper()
+	for index := range RegisteredMigrations {
+		if RegisteredMigrations[index].Version == version {
+			return index
+		}
+	}
+	require.FailNow(t, "migration version is not registered", version)
+	return -1
+}

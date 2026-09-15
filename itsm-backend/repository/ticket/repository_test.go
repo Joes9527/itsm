@@ -501,36 +501,6 @@ func TestRepository_UpdateStatus_NotFound(t *testing.T) {
 // AssignTicket
 // =====================================================================
 
-func TestRepository_AssignTicket(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	created, _ := fx.createTicket(fx.ctx, &CreateParams{
-		Title:       "Assign Test",
-		Description: "",
-		Priority:    PriorityMedium,
-		RecordClass: "generic",
-		RequesterID: fx.user.ID,
-	}, fx.tenant.ID)
-
-	updated, err := fx.repo.AssignTicket(fx.ctx, created.ID, fx.user.ID, fx.tenant.ID)
-	require.NoError(t, err)
-	assert.NotNil(t, updated.AssigneeID)
-	assert.Equal(t, fx.user.ID, *updated.AssigneeID)
-}
-
-func TestRepository_AssignTicket_NotFound(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	_, err := fx.repo.AssignTicket(fx.ctx, 99999, fx.user.ID, fx.tenant.ID)
-	assert.Error(t, err)
-}
-
-// =====================================================================
-// CountByStatus / CountByPriority
-// =====================================================================
-
 func TestRepository_CountByStatus(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
@@ -592,7 +562,7 @@ func TestRepository_FindByAssignee(t *testing.T) {
 		RecordClass: "generic",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
-	fx.repo.AssignTicket(fx.ctx, tkt.ID, fx.user.ID, fx.tenant.ID)
+	fx.client.Ticket.UpdateOneID(tkt.ID).SetAssigneeID(fx.user.ID).Save(fx.ctx)
 
 	tickets, err := fx.repo.FindByAssignee(fx.ctx, fx.user.ID, fx.tenant.ID)
 	require.NoError(t, err)

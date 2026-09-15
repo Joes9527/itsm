@@ -6,10 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/internal/jsonvalue"
-	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -78,6 +79,20 @@ func (_c *ProcessTaskCreate) SetAssignee(v string) *ProcessTaskCreate {
 func (_c *ProcessTaskCreate) SetNillableAssignee(v *string) *ProcessTaskCreate {
 	if v != nil {
 		_c.SetAssignee(*v)
+	}
+	return _c
+}
+
+// SetAssigneeSource sets the "assignee_source" field.
+func (_c *ProcessTaskCreate) SetAssigneeSource(v string) *ProcessTaskCreate {
+	_c.mutation.SetAssigneeSource(v)
+	return _c
+}
+
+// SetNillableAssigneeSource sets the "assignee_source" field if the given value is not nil.
+func (_c *ProcessTaskCreate) SetNillableAssigneeSource(v *string) *ProcessTaskCreate {
+	if v != nil {
+		_c.SetAssigneeSource(*v)
 	}
 	return _c
 }
@@ -432,6 +447,10 @@ func (_c *ProcessTaskCreate) defaults() {
 		v := processtask.DefaultTaskType
 		_c.mutation.SetTaskType(v)
 	}
+	if _, ok := _c.mutation.AssigneeSource(); !ok {
+		v := processtask.DefaultAssigneeSource
+		_c.mutation.SetAssigneeSource(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := processtask.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -502,6 +521,9 @@ func (_c *ProcessTaskCreate) check() error {
 	}
 	if _, ok := _c.mutation.TaskType(); !ok {
 		return &ValidationError{Name: "task_type", err: errors.New(`ent: missing required field "ProcessTask.task_type"`)}
+	}
+	if _, ok := _c.mutation.AssigneeSource(); !ok {
+		return &ValidationError{Name: "assignee_source", err: errors.New(`ent: missing required field "ProcessTask.assignee_source"`)}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "ProcessTask.status"`)}
@@ -587,6 +609,10 @@ func (_c *ProcessTaskCreate) createSpec() (*ProcessTask, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Assignee(); ok {
 		_spec.SetField(processtask.FieldAssignee, field.TypeString, value)
 		_node.Assignee = value
+	}
+	if value, ok := _c.mutation.AssigneeSource(); ok {
+		_spec.SetField(processtask.FieldAssigneeSource, field.TypeString, value)
+		_node.AssigneeSource = value
 	}
 	if value, ok := _c.mutation.CandidateUsers(); ok {
 		_spec.SetField(processtask.FieldCandidateUsers, field.TypeString, value)
@@ -1233,6 +1259,11 @@ func (u *ProcessTaskUpsert) UpdateUpdatedAt() *ProcessTaskUpsert {
 //		Exec(ctx)
 func (u *ProcessTaskUpsertOne) UpdateNewValues() *ProcessTaskUpsertOne {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.AssigneeSource(); exists {
+			s.SetIgnore(processtask.FieldAssigneeSource)
+		}
+	}))
 	return u
 }
 
@@ -1990,6 +2021,13 @@ type ProcessTaskUpsertBulk struct {
 //		Exec(ctx)
 func (u *ProcessTaskUpsertBulk) UpdateNewValues() *ProcessTaskUpsertBulk {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		for _, b := range u.create.builders {
+			if _, exists := b.mutation.AssigneeSource(); exists {
+				s.SetIgnore(processtask.FieldAssigneeSource)
+			}
+		}
+	}))
 	return u
 }
 

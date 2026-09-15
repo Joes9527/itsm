@@ -3,9 +3,10 @@ package bpmn
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"itsm-backend/common"
+	"itsm-backend/handlers/shared/workflowcallback"
+
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
@@ -24,6 +25,10 @@ type TicketNotificationServiceInterface interface {
 // TicketService.UpdateTicketStatusForWorkflow 的注释）
 type TicketStatusServiceInterface interface {
 	UpdateTicketStatusForWorkflow(ctx context.Context, ticketID int, status string, tenantID int, operatorID int) error
+}
+
+type TicketAssignmentServiceInterface interface {
+	AssignTicketForWorkflow(context.Context, int, int, int) (workflowcallback.Result, error)
 }
 
 // TicketServiceTaskHandler 工单服务任务处理器
@@ -320,57 +325,36 @@ func (h *TicketServiceTaskHandler) assignTicket(ctx context.Context, ticketID in
 		return nil, fmt.Errorf("分配失败: 处理人ID必须是有效正整数")
 	}
 
-	// 获取工单信息
 	tenantID, err := h.getTenantID(ctx, variables)
 	if err != nil {
 		return nil, err
 	}
-	ticketEntity, err := h.getTicket(ctx, ticketID, tenantID)
+	current, err := h.getTicket(ctx, ticketID, tenantID)
 	if err != nil {
-		return nil, fmt.Errorf("工单不存在: %w", err)
-	}
-
-	if err := rejectProfessionalTicketTaskMutation(ticketEntity.RecordClass); err != nil {
 		return nil, err
 	}
-
-	if ticketEntity.AssigneeID == assigneeID && ticketEntity.Status == common.TicketStatusAssigned {
-		return IdempotentEffect(fmt.Sprintf("工单 %d 已分配给用户 %d", ticketID, assigneeID), nil), nil
+	if err := rejectProfessionalTicketTaskMutation(current.RecordClass); err != nil {
+		return nil, err
 	}
-
-	// 发送通知给新的处理人
-	notifyContent, _ := variables["notify_content"].(string)
-	if notifyContent == "" {
-		notifyContent = fmt.Sprintf("您被分配了一个新工单：%s (#%s)", ticketEntity.Title, ticketEntity.TicketNumber)
+	if h.statusService == nil {
+		return nil, fmt.Errorf("ticket assignment service is unavailable")
 	}
-	effect, err := h.sendNotification(ctx, ticketID, &dto.SendTicketNotificationRequest{
-		UserIDs:   []int{assigneeID},
-		EventType: "ticket_assigned",
-		Content:   notifyContent,
-	}, ticketEntity.TenantID)
+	assignmentService, ok := h.statusService.(TicketAssignmentServiceInterface)
+	if !ok {
+		return nil, fmt.Errorf("ticket assignment service is unavailable")
+	}
+	result, err := assignmentService.AssignTicketForWorkflow(ctx, ticketID, assigneeID, tenantID)
 	if err != nil {
-		h.logger.Warnw("failed to send assignment notification", "error_class", "notification_delivery", "ticket_id", ticketID, "assignee_id", assigneeID)
-		return nil, fmt.Errorf("分配通知失败")
+		return nil, err
 	}
-	if effect.Status == CallbackEffectBlocked {
-		return effect, nil
+	switch result.Status {
+	case workflowcallback.StatusApplied:
+		return AppliedEffect(result.Message, result.Output), nil
+	case workflowcallback.StatusIdempotent:
+		return IdempotentEffect(result.Message, result.Output), nil
+	default:
+		return BlockedEffect(CallbackBlockHandlerContract, result.Message), nil
 	}
-
-	_, err = h.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).Where(ticket.TenantID(tenantID)).
-		SetAssigneeID(assigneeID).
-		SetStatus(common.TicketStatusAssigned).
-		SetUpdatedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("分配工单失败: %w", err)
-	}
-
-	h.logger.Infow("Ticket assigned via BPMN", "ticket_id", ticketID, "assignee_id", assigneeID)
-
-	return &CallbackEffect{
-		Status:  CallbackEffectApplied,
-		Message: fmt.Sprintf("工单 %d 已分配给用户 %d", ticketID, assigneeID),
-	}, nil
 }
 
 // 确保 TicketServiceTaskHandler 实现了 ServiceTaskHandlerInterface

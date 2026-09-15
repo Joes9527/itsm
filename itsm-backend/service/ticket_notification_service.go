@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/mail"
@@ -35,16 +36,17 @@ func ticketNotificationStringPtr(s string) *string {
 }
 
 type TicketNotificationService struct {
-	queueClient      *ent.Client
-	execution        *database.ExecutionPolicy
-	client           *ent.Client
-	logger           *zap.SugaredLogger
-	connectorManager *connector.Manager
-	emailService     *EmailService
-	smsService       *SMSService
-	prefService      *NotificationPreferenceService // 按 event_type 查偏好
-	wsService        *WebSocketService              // push 渠道（WebSocket）
-	now              func() time.Time
+	assignmentDirectory database.DirectorySnapshot
+	queueClient         *ent.Client
+	execution           *database.ExecutionPolicy
+	client              *ent.Client
+	logger              *zap.SugaredLogger
+	connectorManager    *connector.Manager
+	emailService        *EmailService
+	smsService          *SMSService
+	prefService         *NotificationPreferenceService // 按 event_type 查偏好
+	wsService           *WebSocketService              // push 渠道（WebSocket）
+	now                 func() time.Time
 }
 
 // NewTicketNotificationService 创建通知服务
@@ -55,6 +57,12 @@ func NewTicketNotificationService(client *ent.Client, logger *zap.SugaredLogger,
 		logger:    logger,
 		now:       time.Now,
 	}
+}
+
+// SetAssignmentDirectory injects the existing restricted directory snapshot for
+// assignment recipients, including allocated MSP technicians.
+func (s *TicketNotificationService) SetAssignmentDirectory(directory database.DirectorySnapshot) {
+	s.assignmentDirectory = directory
 }
 
 // SetConnectorManager injects the connector runtime used by durable external deliveries.
@@ -353,7 +361,20 @@ func (s *TicketNotificationService) dispatchClaimedDelivery(ctx context.Context,
 	if err != nil {
 		return "delivery_target_invalid", nil
 	}
-	userEntity, err := s.client.User.Query().Where(user.ID(row.UserID), user.TenantID(row.TenantID), user.Active(true)).Only(ctx)
+	var userEntity *ent.User
+	// Persisted recipient identity was authorized when the intent was written.
+	// Recheck its current native/directory allocation in one read snapshot; owner
+	// changes do not rewrite the recipient of an already materialized intent.
+	tx, openErr := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if openErr != nil {
+		return "delivery_target_invalid", openErr
+	}
+	userEntity, err = s.currentNotificationRecipient(ctx, tx, row.UserID, row.TenantID)
+	if err == nil {
+		err = tx.Commit()
+	} else {
+		_ = tx.Rollback()
+	}
 	if err != nil {
 		return "delivery_target_invalid", nil
 	}
@@ -541,7 +562,7 @@ func (s *TicketNotificationService) SendNotification(
 		return nil, fmt.Errorf("ticket notification transaction begin failed: %w", err)
 	}
 	defer tx.Rollback()
-	result, err := s.enqueueNotificationResultTx(ctx, tx, ticketID, tenantID, &request, nil)
+	result, err := s.enqueueNotificationResultTx(ctx, tx, ticketID, tenantID, &request, nil, 0)
 	if errors.Is(err, errNotificationRecipientMissing) {
 		return blockedTicketNotificationResult(len(request.UserIDs), bpmn.CallbackBlockRecipientMissing), nil
 	}

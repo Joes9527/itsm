@@ -22,7 +22,7 @@
   ],
   "itsm-backend/service/bpmn_access_scope.go": [
     "itsm-backend/service/bpmn_authorization_test.go",
-    "itsm-backend/service/bpmn_usertask_callback_test.go"
+    "itsm-backend/service/ticket_assignment_callback_test.go"
   ],
   "itsm-backend/service/bpmn_actor_snapshot.go": [
     "itsm-backend/service/bpmn_authorization_test.go",
@@ -46,7 +46,7 @@
     "itsm-backend/handlers/service_request/access_fulfillment_test.go"
   ],
   "itsm-backend/service/bpmn_kaf_completion.go": [
-    "itsm-backend/service/bpmn_kaf_completion_integration_test.go",
+    "itsm-backend/service/bpmn_kaf_completion_test.go",
     "itsm-backend/service/bpmn_process_engine_ext_test.go"
   ],
   "itsm-backend/service/bpmn_participation.go": [
@@ -59,7 +59,7 @@
   ],
   "itsm-backend/service/bpmn_publication.go": [
     "itsm-backend/handlers/service_request/access_policy_publication_test.go",
-    "itsm-backend/service/bpmn_publication_version_test.go"
+    "itsm-backend/service/bpmn_publication_test.go"
   ],
   "itsm-backend/service/bpmn_submitted_workitem_start.go": [
     "itsm-backend/tests/integration/workitem_change_start_postgres_test.go"
@@ -101,7 +101,7 @@
     "itsm-backend/service/incident_alert_delivery_worker_test.go"
   ],
   "itsm-backend/service/incident_created_effects.go": [
-    "itsm-backend/service/incident_effects_test.go"
+    "itsm-backend/service/incident_created_effects_test.go"
   ],
   "itsm-backend/service/incident_creation.go": [
     "itsm-backend/service/incident_creation_entry_test.go"
@@ -112,7 +112,7 @@
   ],
   "itsm-backend/service/incident_rule_action_transaction.go": [
     "itsm-backend/tests/integration/workitem_incident_rule_snapshot_postgres_test.go",
-    "itsm-backend/service/incident_effects_test.go"
+    "itsm-backend/service/incident_created_effects_test.go"
   ],
   "itsm-backend/service/incident_rule_engine.go": [
     "itsm-backend/tests/integration/workitem_incident_rule_snapshot_postgres_test.go",
@@ -120,7 +120,7 @@
   ],
   "itsm-backend/service/incident_work_item_authority.go": [
     "itsm-backend/service/incident_service_test.go",
-    "itsm-backend/service/incident_classification_contract_test.go"
+    "itsm-backend/service/incident_work_item_authority_test.go"
   ],
   "itsm-backend/service/intake_actor.go": [
     "itsm-backend/tests/integration/intake_start_actor_test.go"

@@ -122,8 +122,16 @@ test('PIR creation refetches actual detail after immutable receipt; later edit u
   await screen.findByText('当前变更版本 7；实施结果：failed');
   await user.click(screen.getByLabelText('总体结果'));
   await user.click(screen.getByText('失败 - 变更未能达到预期目标或需要回滚'));
-  await user.click(screen.getByRole('button', { name: '创建 PIR' }));
+  // Target the visible action first: a page-wide role/name query computes styles for every button.
+  const createButton = screen.getByText('创建 PIR').closest('button')!;
+  expect(createButton).toHaveAccessibleName('创建 PIR');
+  expect(createButton).toBeVisible();
+  expect(createButton).toBeEnabled();
+  await user.click(createButton);
   expect(await screen.findByText('Actual reviewer')).toBeInTheDocument();
+  expect(ChangeApi.getPIR).toHaveBeenCalledTimes(2);
+  expect(ChangeApi.getChange).toHaveBeenCalledTimes(2);
+  expect(screen.getByText('当前变更版本 8；实施结果：failed')).toBeInTheDocument();
   expect(ChangeApi.createPIR).toHaveBeenCalledWith(
     1,
     expect.objectContaining({
@@ -132,7 +140,11 @@ test('PIR creation refetches actual detail after immutable receipt; later edit u
       overallResult: 'failed',
     })
   );
-  await user.click(screen.getByRole('button', { name: '更新 PIR' }));
+  const updateButton = screen.getByText('更新 PIR').closest('button')!;
+  expect(updateButton).toHaveAccessibleName('更新 PIR');
+  expect(updateButton).toBeVisible();
+  expect(updateButton).toBeEnabled();
+  await user.click(updateButton);
   await waitFor(() =>
     expect(ChangeApi.updatePIR).toHaveBeenCalledWith(
       4,

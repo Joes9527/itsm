@@ -468,6 +468,7 @@ var RegisteredMigrations = []Migration{
 	{Version: NotificationConnectorTargetVersion, Description: "Freeze connector notification target identity without binding historical intents"},
 	{Version: NotificationEmailTargetVersion, Description: "Freeze email notification transport and identity without rebinding history"},
 	{Version: AuthTokenStateVersion, Description: "Persist append-only token revocation and refresh consumption authority"},
+	{Version: "047_bpmn_assignment_source", Description: "Persist immutable BPMN WorkItem assignment source"},
 	{Version: WorkItemRetireVersion, Description: "Retire WorkItem legacy structures with controlled evidence"},
 }
 
@@ -1145,6 +1146,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number
 		return migrations.WorkItemSLACycleSQL
 	case "031_kaf_action_request_digest":
 		return kafActionRequestDigestSQL
+	case "047_bpmn_assignment_source":
+		return bpmnAssignmentSourceSQL
 	case "030_catalog_access_policy_result":
 		return catalogAccessPolicyResultSQL
 	case "029_catalog_target_class_authority":

@@ -2,10 +2,15 @@ package service
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
+
+	"itsm-backend/authorization"
+	"itsm-backend/common/tenantctx"
 
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/shared/workitemmutation"
 	ticketrepo "itsm-backend/repository/ticket"
 	executionfixture "itsm-backend/tests/fixtures/execution"
@@ -13,7 +18,7 @@ import (
 
 func TestTicketCoreMutationsRejectProfessionalClasses(t *testing.T) {
 	for _, class := range []string{"incident", "problem", "change_request"} {
-		for _, action := range []string{"title", "description", "priority", "category", "resolution", "status", "service_status", "workflow_status", "service_resolve", "service_close", "lifecycle_status", "lifecycle_resolve", "lifecycle_close", "workflow_resolve", "workflow_close", "workflow_reopen", "workflow_withdraw", "repo_update", "repo_status", "repo_assign", "service_sync", "lifecycle_sync"} {
+		for _, action := range []string{"title", "description", "priority", "category", "resolution", "status", "service_status", "workflow_status", "service_resolve", "service_close", "lifecycle_status", "lifecycle_resolve", "lifecycle_close", "workflow_resolve", "workflow_close", "workflow_reopen", "workflow_withdraw", "repo_update", "repo_status", "service_sync", "lifecycle_sync"} {
 			t.Run(class+"/"+action, func(t *testing.T) {
 				client, owner, ctx := setupIncidentTest(t)
 				defer client.Close()
@@ -36,6 +41,7 @@ func TestTicketCoreMutationsRejectProfessionalClasses(t *testing.T) {
 				}
 				svc := NewTicketService(&TicketServiceConfig{Client: client, Repository: ticketrepo.NewEntRepository(client, owner.logger), Logger: owner.logger, Execution: executionfixture.Standard()})
 				lifecycle := NewTicketLifecycleService(client, owner.logger)
+				ctx = tenantctx.WithTenantID(ctx, tenant.ID)
 				workflow := NewTicketWorkflowService(client, owner.logger)
 				patch := &dto.TicketEditCommand{Fields: dto.TicketEditFields{}, Meta: workitemmutation.Meta{ActorID: actor.ID, ExpectedVersion: before.Version}}
 				switch action {
@@ -44,8 +50,6 @@ func TestTicketCoreMutationsRejectProfessionalClasses(t *testing.T) {
 					_, err = svc.repo.Update(ctx, before.ID, &ticketrepo.UpdateParams{Title: &title, Version: before.Version}, tenant.ID)
 				case "repo_status":
 					_, err = svc.repo.UpdateStatus(ctx, before.ID, ticketrepo.StatusPending, tenant.ID)
-				case "repo_assign":
-					_, err = svc.repo.AssignTicket(ctx, before.ID, actor.ID, tenant.ID)
 				case "service_sync":
 					err = svc.SyncTicketStatusWithWorkflow(ctx, before.ID, tenant.ID)
 				case "lifecycle_sync":
@@ -128,7 +132,11 @@ func TestTicketCoreBoundaryPreservesSharedOperations(t *testing.T) {
 			svc := NewTicketService(&TicketServiceConfig{Client: client, Repository: ticketrepo.NewEntRepository(client, owner.logger), Logger: owner.logger, Execution: executionfixture.Standard()})
 			_, err = svc.UpdateTicket(ctx, editCommandForTest(item.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{Tags: []string{}}, Meta: workitemmutation.Meta{ActorID: actor.ID, ExpectedVersion: item.Version}}, tenant.ID))
 			require.NoError(t, err)
-			err = NewTicketWorkflowService(client, owner.logger).ForwardTicket(ctx, &dto.ForwardTicketRequest{TicketID: item.ID, ToUserID: next.ID, TransferOwnership: false, Comment: "collaborate"}, actor.ID, tenant.ID)
+			ctx = tenantctx.WithTenantID(ctx, tenant.ID)
+			workflow := NewTicketWorkflowService(client, owner.logger)
+			workflow.SetSessionReader(authorization.NewSessionReader(client, callbackFixtureDirectory{}))
+			workflow.SetExecutionPolicy(executionfixture.Standard())
+			err = workflow.ForwardTicket(ctx, &dto.ForwardTicketRequest{TicketID: item.ID, ToUserID: next.ID, TransferOwnership: false, Comment: "collaborate"}, actor.ID, tenant.ID, creation.Identity{ActorID: actor.ID, TenantID: tenant.ID, Role: actor.Role, Channel: "http"})
 			require.NoError(t, err)
 			after := client.Ticket.GetX(ctx, item.ID)
 			require.Equal(t, item.AssigneeID, after.AssigneeID)
@@ -152,4 +160,11 @@ func editCommandForTest(id int, input *dto.TicketEditCommand, tenantID int) dto.
 		cmd.Meta.OperationID = fmt.Sprintf("test-edit:%d:%d", id, cmd.Meta.ExpectedVersion)
 	}
 	return cmd
+}
+
+func TestTicketRepositoryHasNoAssignmentWriteAPI(t *testing.T) {
+	_, methodExists := reflect.TypeOf((*ticketrepo.Repository)(nil)).Elem().MethodByName("AssignTicket")
+	require.False(t, methodExists, "repository assignment must stay retired; shared writer owns assignment")
+	_, fieldExists := reflect.TypeOf(ticketrepo.UpdateParams{}).FieldByName("AssigneeID")
+	require.False(t, fieldExists, "generic repository metadata must not bypass assignment writer")
 }
