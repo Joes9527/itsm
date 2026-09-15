@@ -47,6 +47,8 @@ export default function IncidentsPage() {
   const router = useRouter();
   const { t } = useI18n();
   const batchAttempts = useRef(new Map<string, string>());
+  const mounted = useRef(true);
+  const retainedConfirms = useRef<Array<{ destroy: () => void }>>([]);
 
   // ====== 状态管理 ======
   const [loading, setLoading] = useState(false);
@@ -147,6 +149,14 @@ export default function IncidentsPage() {
     fetchIncidents();
     fetchStats();
   }, [fetchIncidents, fetchStats]);
+
+  // 静态 Modal.confirm 渲染在 body 上，不随组件卸载而销毁。页面退役后必须回收它们，
+  // 否则用户仍能点到残留的"确定"，让已离开的页面真实提交写请求。
+  useEffect(() => () => {
+    mounted.current = false;
+    retainedConfirms.current.forEach(instance => instance.destroy());
+    retainedConfirms.current = [];
+  }, []);
 
   // ====== 事件处理 ======
   const handleSearch = useCallback((value: string) => {
@@ -262,7 +272,8 @@ export default function IncidentsPage() {
 
   const handleBatchResolve = useCallback(async () => {
     let resolution = '';
-    Modal.confirm({ title: '批量解决事件', content: <Input.TextArea aria-label='恢复验证说明' onChange={event => { resolution = event.target.value; }} />, onOk: async () => {
+    const instance = Modal.confirm({ title: '批量解决事件', content: <Input.TextArea aria-label='恢复验证说明' onChange={event => { resolution = event.target.value; }} />, onOk: async () => {
+      if (!mounted.current) return;
       if (!resolution.trim()) throw new Error('请填写恢复验证说明');
       await runIncidentBatch(selectedRowKeys, id => {
         const version = incidents.find(item => item.id === id)?.version;
@@ -273,11 +284,13 @@ export default function IncidentsPage() {
         return IncidentAPI.resolveIncident(id, { version, operationId, resolution: resolution.trim() });
       }, '批量解决成功');
     } });
+    retainedConfirms.current.push(instance);
   }, [selectedRowKeys, runIncidentBatch, incidents]);
 
   const handleBatchClose = useCallback(async () => {
     let reason = '';
-    Modal.confirm({ title: '批量关闭事件', content: <Input.TextArea aria-label='关闭说明' onChange={event => { reason = event.target.value; }} />, onOk: async () => {
+    const instance = Modal.confirm({ title: '批量关闭事件', content: <Input.TextArea aria-label='关闭说明' onChange={event => { reason = event.target.value; }} />, onOk: async () => {
+      if (!mounted.current) return;
       if (!reason.trim()) throw new Error('请填写关闭说明');
       await runIncidentBatch(selectedRowKeys, id => {
         const version = incidents.find(item => item.id === id)?.version;
@@ -288,6 +301,7 @@ export default function IncidentsPage() {
         return IncidentAPI.closeIncident(id, { version, operationId, reason: reason.trim() });
       }, '批量关闭成功');
     } });
+    retainedConfirms.current.push(instance);
   }, [selectedRowKeys, runIncidentBatch, incidents]);
 
   const handleBatchDelete = useCallback(async () => {
