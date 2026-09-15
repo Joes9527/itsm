@@ -116,7 +116,7 @@ export const ManagerPendingApprovals: React.FC = () => {
       message.success(action === 'approve' ? '审批决定已提交' : '驳回决定已提交');
       setRejectingTaskId(null);
       setRejectComment('');
-      await resource.reload();
+      await resource.reload({ afterWrite: true });
     } catch (err) {
       if (!current()) return;
       if (resource.deny(err)) { pending.current.clear(); setActionLoading({}); setRejectingTaskId(null); }

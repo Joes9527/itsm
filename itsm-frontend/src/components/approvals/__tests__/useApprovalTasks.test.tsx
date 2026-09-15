@@ -34,12 +34,12 @@ it('clears prior rows when a delayed 403 follows a transient error from another 
   expect(result.current.data).toBeUndefined();
 });
 
-it('does not let an old refresh denial clear a newer successful result', async () => {
+it('does not let a pre-write read denial clear a newer successful post-write result', async () => {
   let rejectOld!: (error: unknown) => void;
   list.mockImplementation(p => p?.status === 'created' ? new Promise((_, reject) => { rejectOld = reject; }) : Promise.resolve({ items: [], total: 0 }) as never);
   const { result } = renderHook(() => useApprovalTasks());
   list.mockImplementation(async p => ({ items: p?.status === 'created' ? [task] : [], total: p?.status === 'created' ? 1 : 0 }) as never);
-  await act(async () => { await result.current.reload(); });
+  await act(async () => { await result.current.reload({ afterWrite: true }); });
   await act(async () => { rejectOld(new ApiError('old denial', 403)); });
   expect(result.current.ready).toBe(true);
   expect(result.current.denied).toBe(false);
