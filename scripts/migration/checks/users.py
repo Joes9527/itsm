@@ -1,10 +1,10 @@
 """Users: reconciled by username with the field rules derived from the 2026-08 batch."""
 from __future__ import annotations
 
-from migration.checks.base import ReconcileResult, WriteIntent
-from migration.profile import EntitySpec
-from migration.report import tokenise
-from migration.sources import SourceIndex
+from .base import ReconcileResult, WriteIntent
+from ..profile import EntitySpec
+from ..report import tokenise
+from ..sources import SourceIndex
 
 
 def rewrite_email(value: str, domain: str) -> str:

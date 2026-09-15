@@ -4,8 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
-from migration.profile import EntitySpec
-from migration.sources import SourceIndex
+from ..profile import EntitySpec
+from ..sources import SourceIndex
 
 
 @dataclass

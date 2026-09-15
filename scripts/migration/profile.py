@@ -212,7 +212,7 @@ def load_profile(path: Path, allow_record_drift: bool = False) -> MigrationProfi
                                    database=entry['database'],
                                    credential=_credential(entry.get('credential'), 'lineage.credential')))
 
-    from migration.checks import REGISTRY
+    from .checks import REGISTRY
     entities: dict[str, EntitySpec] = {}
     for entry in raw.get('entities') or []:
         _unknown('entity', entry, ENTITY_KEYS)

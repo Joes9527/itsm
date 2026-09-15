@@ -1,8 +1,8 @@
 """Rule derivation, tree attribution and rule-drift verification."""
 from __future__ import annotations
 
-from migration.profile import EntitySpec, MigrationProfile
-from migration.sources import SourceIndex
+from .profile import EntitySpec, MigrationProfile
+from .sources import SourceIndex
 
 DEFAULT_MIN_MATCH_RATE = 0.95
 DISCRIMINATE_CANDIDATES = ('HR_USERID', 'departmentId', 'departmentUnit', 'status',

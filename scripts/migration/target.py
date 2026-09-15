@@ -7,7 +7,7 @@ import subprocess
 import urllib.error
 import urllib.request
 
-from migration.profile import Credential, TargetSpec
+from .profile import Credential, TargetSpec
 
 LOGIN_PATH = '/api/v1/auth/login'
 CSRF_PATH = '/api/v1/csrf-token'

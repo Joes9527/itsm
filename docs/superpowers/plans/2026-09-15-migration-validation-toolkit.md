@@ -19,6 +19,10 @@
 - Unknown profile keys, rules, entities, structure checks, preflight checks and write actions are load-time errors (fail closed).
 - Exit codes: `0` ok, `1` runtime error, `2` preflight blocked, `3` unattributed differences, `4` rule drift. Precedence when several apply: `1 > 2 > 4 > 3`.
 - Tests live in `scripts/__tests__/test_migration_*.py` and run with `python3 -m pytest scripts/__tests__ -q`; they must pass offline (no database, no network).
+- Inside the package use **relative imports** (`from .profile import X`, `from ..report import Y`). The
+  snippets in the early tasks show `from migration.x import y`, which only works in tests because
+  `conftest.py` puts `scripts/` on `sys.path`; the documented entry point
+  `python3 -m scripts.migration` fails with `ModuleNotFoundError` under that form.
 - Commit after every task with the message given in that task.
 
 ---
@@ -2187,7 +2191,19 @@ entities:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m pytest scripts/__tests__/test_migration_cli.py -q`
-Expected: `4 passed`
+Expected: `7 passed`
+
+Notes recorded while executing this task:
+1. **The documented entry point did not work.** The package used absolute imports, so
+   `python3 -m scripts.migration` died with `ModuleNotFoundError: No module named 'migration'` while
+   the tests stayed green (conftest.py injects `scripts/` into `sys.path`). All internal imports are
+   now relative, which works both as `scripts.migration` and as `migration` in tests. Always run the
+   real entry point once per task, not only the test suite.
+2. `argparse` with `choices=` calls `sys.exit` instead of returning a code, so the command is
+   validated explicitly and an unknown name prints the available commands.
+3. The offline target is a fixture-backed stub honouring `query_rows(sql, columns, parent_lookup=None)`.
+4. `self_test` asserts the privacy contract for every entity, so the self-test is also a guard, not
+   just a smoke test; extra tests cover the three analysis commands and a backfill dry run.
 
 - [ ] **Step 5: Commit**
 

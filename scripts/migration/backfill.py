@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import json
 
-from migration.checks.base import WriteIntent
-from migration.profile import EntitySpec
+from .checks.base import WriteIntent
+from .profile import EntitySpec
 
 
 def preflight(intents: list[WriteIntent], spec: EntitySpec, target_rows: list[dict]

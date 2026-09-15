@@ -1,9 +1,9 @@
 """Departments: reconciled by code, with the tree facts the migration needed."""
 from __future__ import annotations
 
-from migration.checks.base import ReconcileResult, WriteIntent
-from migration.profile import EntitySpec
-from migration.sources import SourceIndex
+from .base import ReconcileResult, WriteIntent
+from ..profile import EntitySpec
+from ..sources import SourceIndex
 
 
 class DepartmentsCheck:

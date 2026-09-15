@@ -1,0 +1,25 @@
+version: 1
+name: self-test
+source:
+  dir: scripts/migration/fixtures
+  files:
+    departments: {file: departments.json, records: 2, id_field: departmentId}
+    users: {file: users.json, records: 2, id_field: userName}
+target:
+  access: docker
+  container: self-test
+  user: self-test
+  database: self-test
+  credential: {from_env: SELF_TEST_PASSWORD}
+entities:
+  - name: departments
+    source: departments
+    target_table: departments
+    keys: {source: departmentId, target: code}
+    structure_checks: [tree_single_root, parents_resolvable]
+  - name: users
+    source: users
+    target_table: users
+    keys: {source: userName, target: username}
+    filter: {source_field: status, op: equals, value: userstatus01}
+    structure_checks: [unique_username, password_is_bcrypt]
