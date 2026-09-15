@@ -349,6 +349,44 @@ describe('TicketDetail', () => {
       expect(within(await screen.findByRole('dialog')).queryByLabelText('解决方案')).not.toBeInTheDocument();
     });
 
+    it('closes through a separate pure status command and preserves an uncertain retry', async () => {
+      mockGetTicket.mockResolvedValue({ ...baseTicket, recordClass: 'generic', status: 'resolved', resolution: '保留解决方案',
+        actions: { ...baseTicket.actions, edit: { allowed: false }, close: { allowed: true } } });
+      update.mockRejectedValueOnce(new Error('response lost')).mockResolvedValueOnce({ workItemId: 101, version: 2, status: 'closed', replayed: true });
+      const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+      render(<TicketDetail />);
+      await user.click((await screen.findByText('关闭工单', { selector: 'span' })).closest('button')!);
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: '确认关闭' }));
+      await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+      expect(update.mock.calls[0]).toEqual([101, { status: 'closed', version: 1, operationId: 'confirmed-edit-1' }]);
+      await waitFor(() => expect(within(dialog).getByRole('button', { name: '确认关闭' })).not.toHaveClass('ant-btn-loading'));
+      mockGetTicket.mockResolvedValue({ ...baseTicket, recordClass: 'generic', status: 'closed', version: 2, actions: { ...baseTicket.actions, edit: { allowed: false }, close: { allowed: false } } });
+      await user.click(within(dialog).getByRole('button', { name: '确认关闭' }));
+      await waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+      expect(update.mock.calls[1]).toEqual(update.mock.calls[0]);
+      await waitFor(() => expect(mockGetTicket).toHaveBeenCalledTimes(2));
+      expect(screen.queryByText('关闭工单', { selector: 'button span' })).not.toBeInTheDocument();
+    });
+
+    it('discards close confirmation when the displayed ticket changes', async () => {
+      mockGetTicket.mockImplementation(async (id: number) => ({ ...baseTicket, id, recordClass: 'generic', status: 'resolved', actions: { ...baseTicket.actions, close: { allowed: true } } }));
+      const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+      const view = render(<TicketDetail id='101' />);
+      await user.click((await screen.findByText('关闭工单', { selector: 'span' })).closest('button')!);
+      view.rerender(<TicketDetail id='102' />);
+      await screen.findByText('#102 VPN 无法连接');
+      expect(screen.queryByText('确认关闭')).not.toBeInTheDocument();
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it.each(['generic', 'incident'])('does not offer a close command without backend capability for %s', async recordClass => {
+      mockGetTicket.mockResolvedValue({ ...baseTicket, recordClass, status: 'resolved', actions: { ...baseTicket.actions, close: { allowed: false } } });
+      render(<TicketDetail />);
+      await screen.findByText('工单诉求与业务描述');
+      expect(screen.queryByText('关闭工单')).not.toBeInTheDocument();
+    });
+
     it('keeps the form opening version across refresh and reuses the full uncertain request', async () => {
       update.mockRejectedValueOnce(new Error('connection lost after submission')).mockResolvedValueOnce({ workItemId: 101, version: 2, status: 'open', replayed: true });
       const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });

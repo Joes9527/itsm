@@ -138,6 +138,11 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
     aiEditIntent.current = undefined;
     editSnapshot.current = undefined;
   }, [ticketId]);
+  const [closeModalVisible, setCloseModalVisible] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const closeIntent = useRef<TicketEditIntent<{ status: 'closed' }> | undefined>(undefined);
+  const closeVersion = useRef<number | undefined>(undefined);
+  const closeInFlight = useRef(false);
   const [ccModalVisible, setCCModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [users, setUsers] = useState<Array<Pick<User, 'id' | 'name'> & { username?: string; department?: string }>>([]);
@@ -394,6 +399,31 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
     }
   };
 
+  const handleCloseSubmit = async () => {
+    if (closeInFlight.current) return;
+    closeInFlight.current = true;
+    setClosing(true);
+    try {
+      closeIntent.current = prepareTicketEdit(closeIntent.current, { status: 'closed' }, closeVersion.current);
+      await TicketApi.updateTicket(ticketId, closeIntent.current.payload);
+      closeIntent.current = undefined;
+      setCloseModalVisible(false);
+      antMessage.success('工单已关闭');
+      await fetchTicket();
+    } catch (error) {
+      if (isTicketEditConflict(error)) {
+        closeIntent.current = undefined;
+        closeVersion.current = undefined;
+        setCloseModalVisible(false);
+        await fetchTicket();
+      }
+      handleError(error, 'closeTicket', '关闭失败');
+    } finally {
+      closeInFlight.current = false;
+      setClosing(false);
+    }
+  };
+
   // Handle delete click
   const handleDeleteClick = () => {
     setDeleteModalVisible(true);
@@ -580,6 +610,16 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
               <Edit size={13} className="text-muted" />
               <span>编辑</span>
             </button>
+
+            {ticket.recordClass === 'generic' && ticket.actions?.close?.allowed && (
+              <Button onClick={() => {
+                closeVersion.current = ticketEditVersion(ticket.version);
+                closeIntent.current = undefined;
+                setCloseModalVisible(true);
+              }}>
+                关闭工单
+              </Button>
+            )}
 
             <button
               type='button'
@@ -912,6 +952,18 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
 
       {/* ================= 业务操作弹窗集群（零丢失） ================= */}
       {/* 1. Assignment Modal */}
+      <Modal
+        title='关闭工单'
+        open={closeModalVisible}
+        confirmLoading={closing}
+        okText='确认关闭'
+        cancelText='取消'
+        onOk={() => void handleCloseSubmit()}
+        onCancel={() => { if (!closeInFlight.current) setCloseModalVisible(false); }}
+      >
+        确认关闭此工单？已有解决方案将保留，关闭后不可编辑。
+      </Modal>
+
       <Modal
         title={
           <Space>
