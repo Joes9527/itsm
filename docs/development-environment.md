@@ -66,3 +66,11 @@ Preserve existing PostgreSQL, Redis, MinIO, Qdrant, Langfuse and Ollama containe
 Before changing a runtime, save private launch recipes, exact PID identities, executable hashes, frontend build ID and relevant configuration. The 3010 task's pre-change backup is `/home/administrator/.local/state/itsm-wsl-3010-20260915T035625Z` (private). Record any later supplemental backups alongside it. Restore only the identified affected service and configuration; verify no concurrent operator replaced its process. Rollback is an explicit operation, not a second normal startup path.
 
 Development repositories remain `/home/administrator/project/itsm` and `/home/administrator/project/kaf`, with task worktrees. Retain linked-worktree Git metadata, uncommitted work, `.superpowers/sdd` ledgers and archived source copies. Do not delete or reorganize another agent's work as part of port/version maintenance.
+
+## Ticket detail experience deployment (2026-09-15)
+
+PR #35 unifies the existing detail-page refresh, preserves editing context, and separates current tasks from collapsed task history. The maintainer authorized merging this PR and applying its frontend to local WSL development on 3010. Build from the branch after integrating current main; rerun affected frontend tests before switching the canonical `itsm-web` recipe.
+
+This release changes the frontend only. Preserve the existing 8080 executable, backend configuration, databases, workers and KAF services. Back up the old frontend recipe and `active-release.json`, retain the previous standalone directory, and record the new source revision/build ID in the canonical recipe and sanitized snapshot. Validate actual 3010 login/detail behavior with the repository's guarded Playwright tests. Failed verification requires restoring the saved frontend recipe and starting the previous release through `stack`.
+
+The exact applied revision, build ID and verification outcome belong to the local `active-release.json`; a merged PR alone is not proof that the running frontend was switched.
