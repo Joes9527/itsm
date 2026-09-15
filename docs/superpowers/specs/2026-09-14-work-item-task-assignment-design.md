@@ -1,9 +1,9 @@
 # 执行任务绑定当前工单处理人
 
 - 日期：2026-09-14
-- 状态：accepted；业务分工及三项审查修订已确认，用户已选择 subagent-driven-development，实施进行中。
+- 状态：implemented（源码）；独立复审完成，共享迁移/部署与真实验收待执行。交接见[实现决策与证据](../../review/2026-09-15-work-item-task-assignment-report.md)。
 - 负责人：维护者确认业务契约，Coding Agent 实现，独立审查者复核。
-- 依赖：`codex/fix/bpmn-human-task-routing` 的 e5f9b318；生产修复为 7ed97de4，已部署并完成真实领取验证。本分支只提交设计，不混入上游 PR。
+- 依赖：`codex/fix/bpmn-human-task-routing` 的 e5f9b318；生产修复为 7ed97de4，已部署并完成真实领取验证。设计阶段以该依赖为基线；后续源码实现及主干集成状态见交接记录。
 - 上游：[现有目录与 Helpdesk 生命周期验收](../plans/2026-09-14-catalog-lifecycle-validation.md)。本文只补充该计划第 3 节的参与人契约，不取代 UI 核心路径计划或专业生命周期设计。
 
 - 权威依据：[统一 WorkItem 设计](2026-08-26-unified-work-item-model-design.md)第 13.2、15.3、16 节及 [AGENTS.md](../../../AGENTS.md) 的领域、授权、单一来源与事务边界。本文落实这些既有约束，不以当前代码中的缺口替代权威契约。
@@ -14,7 +14,7 @@
 
 只对流程显式声明“绑定工单处理人”的人工执行节点生效。审批节点、申请人确认节点、固定人员任务、候选领取任务和外部委派保持各自职责。已经完成或取消的任务不重新分配；新配置只用于新实例，不修改历史流程定义或批量修复旧任务。
 
-## 2. 核验背景
+## 2. 实施前核验背景（历史，非当前缺口清单）
 
 - `service/bpmn_types.go` 的 BPMNUserTask 只有字面量 assignee 和候选配置，没有可用的动态 assignee 来源契约；不能直接写 `${assignee_id}`。
 - `service/bpmn_process_engine.go` 的 createUserTask 把参与人落到 ProcessTask。候选路由回退问题已修复，动态工单负责人解析尚未实现。

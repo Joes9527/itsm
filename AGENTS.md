@@ -132,6 +132,12 @@ The unified Work Item model is the shared business language for Ticket, Service 
 - Known Error and Catalog Item remain separate concepts: knowledge record and service definition respectively, not WorkItems.
 - One authoritative field has one write location. Do not maintain duplicate public fields, long-term dual writes, or JSON relationship fields alongside structured relations.
 
+### WorkItem-Bound BPMN Task Assignment
+
+For explicitly bound fulfillment tasks (`assigneeSource=work_item_assignee`), the current WorkItem assignee is authoritative; do not persist a second mutable task owner. Approval, requester confirmation and candidate tasks retain their own participation rules. Terminal history preserves the responsible person and actual actor at transition time; missing evidence must not fall back to today's assignee. Reuse existing professional authorization, tenant/MSP scope, transactional assignment and audit/Outbox boundaries. Do not rewrite old runs or create a parallel assignment/approval implementation.
+
+The authoritative details are in [WorkItem task assignment design](docs/superpowers/specs/2026-09-14-work-item-task-assignment-design.md); [implementation decisions and evidence](docs/review/2026-09-15-work-item-task-assignment-report.md) distinguish source completion from pending runtime acceptance.
+
 ### Professional Lifecycle Ownership
 
 - WorkItem provides shared operations such as assignment, comments, attachments, followers, SLA projection, workflow references, activity timeline, and audit.

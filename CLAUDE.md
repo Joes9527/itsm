@@ -146,6 +146,12 @@ Full contract: [AGENTS.md § Unified Work Item Domain Contract](AGENTS.md). Core
 - A relationship is not a lifecycle conversion — Incident does not become Problem by changing a type; create the target WorkItem and an explicit relation instead, preserving the source record and history.
 - Shared operations (assignment, comments, attachments, SLA projection, audit) live on WorkItem; `IncidentService`/`ProblemService`/`ChangeService`/`ServiceRequestService` own their own professional transitions — do not build a generic `switch recordClass` state machine.
 
+### WorkItem-Bound BPMN Task Assignment
+
+For explicitly bound fulfillment tasks (`assigneeSource=work_item_assignee`), the current WorkItem assignee is authoritative; do not persist a second mutable task owner. Approval, requester confirmation and candidate tasks retain their own participation rules. Terminal history preserves the responsible person and actual actor at transition time; missing evidence must not fall back to today's assignee. Reuse existing professional authorization, tenant/MSP scope, transactional assignment and audit/Outbox boundaries. Do not rewrite old runs or create a parallel assignment/approval implementation.
+
+The authoritative details are in [WorkItem task assignment design](docs/superpowers/specs/2026-09-14-work-item-task-assignment-design.md); [implementation decisions and evidence](docs/review/2026-09-15-work-item-task-assignment-report.md) distinguish source completion from pending runtime acceptance.
+
 ## Important Patterns
 
 ### Backend

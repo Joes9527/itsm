@@ -10,7 +10,7 @@
 
 **Spec:** [Accepted execution scope](../specs/2026-09-14-work-item-task-assignment-design.md), revision ec1901f8.
 
-**Status:** accepted for sequential execution by the user's subagent-driven-development request; implementation in progress.
+**Status:** implemented for source Tasks 1–6 and Task 7 preparation; shared runtime acceptance remains pending. See [durable handoff](../../review/2026-09-15-work-item-task-assignment-report.md). Historical task checkboxes below are execution instructions, not a current completion ledger.
 
 **Branch/base:** codex/feat/work-item-task-assignment, ec1901f8. This branch stacks on PR #24 and the runtime prerequisites; do not merge upstream branches or main while tasks run.
 

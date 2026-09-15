@@ -31,6 +31,8 @@
 
 ## 产品与架构
 
+- [WorkItem 任务分配：实现决策、验证证据与后续顺序](./review/2026-09-15-work-item-task-assignment-report.md)
+
 - [UI 核心路径复核与后续修复顺序（accepted）](./superpowers/plans/2026-09-14-ui-core-journey-recovery.md)
 - [UI 工作台 1A 回归修复实施计划](./superpowers/plans/2026-09-14-ui-workbench-1a-recovery.md)
 
