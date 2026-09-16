@@ -16,7 +16,7 @@
 | 对象 | 最后核验结构 | 目标／状态 |
 | --- | --- | --- |
 | 实际Dev：`itsm_config_baseline_20260908` | 047、39条真实回执 | 已升级，R038未执行；3010→8080已指向Dev，登录成功，readiness200、普通工单创建/评论/转派通过；任务回调推进失败，UI验收未完成 |
-| 长期验证克隆（原建议名`itsm_migration_validation`，部署方式待定） | 尚未创建 | 原同实例异库名方案需准入能力；独立PG保留逻辑身份的较小替代待维护者选择，禁止改原P回执 |
+| 长期验证克隆（同ITSM数据库、独立schema） | 尚未创建 | 维护者已否决新增PG容器；schema克隆准入及权限隔离待实现，禁止改原P回执 |
 | 旧对照库：`itsm_migration_20260914` | 09-16执行前账本最高019、14条 | 不等同当时031 Dev完整克隆；仍保留，待成果及备份门槛满足后清理 |
 | 前次8080目标：`itsm_ga_ready` | 046（09-15历史核验） | 所属容器已停止，保留成果；不是当前在线目标 |
 | 本次Dev升级预演副本 | 047 | 152张原表字段/数据比对一致；临时恢复容器尚未退出。此前09-15副本已归档移除，与本次副本不同 |
@@ -492,9 +492,9 @@ WSL最终副本与角色已归档到既有私有证据目录，最终副本dump 
 
 **状态：执行中（2026-09-16）。原 Dev 已完成 P037 与普通迁移至047；3010→8080 已连接 Dev，尚未完成 UI 验收与两库清理。** 本节取代此前续办顺序，沿用U1–U4、C1/C3/C4、R1/V4/V5作为证据索引，不另建平行任务表。
 
-**Goal：** 恢复当前新代码的日常Dev，建立可追溯验证克隆，保全身份、业务配置及迁移成果，最终只保留两个长期ITSM业务库。
+**Goal：** 恢复当前新代码的日常Dev，建立可追溯验证克隆，保全身份、业务配置及迁移成果，最终只保留Dev与验证两个长期ITSM数据目标，按最新指示使用同库不同schema。
 
-**Architecture：** 原Dev前向升级，验证库从验收Dev克隆；3010→8080一次只使用一个完整profile。数据库写入串行，角色/缓存/存储/会话/消费者按目标隔离。
+**Architecture：** 原Dev前向升级，验证schema从验收Dev克隆；3010→8080一次只使用一个完整profile。数据库写入串行，角色/缓存/存储/会话/消费者按目标隔离。
 
 **Tech stack：** 现有Go规范Migrator、领域服务、PostgreSQL、WSL stack管理器、Python迁移Toolkit、Next.js UI。
 
@@ -502,7 +502,7 @@ WSL最终副本与角色已归档到既有私有证据目录，最终副本dump 
 
 ### 全局约束与文件职责
 
-- Dev：`itsm-postgres-dev / itsm_config_baseline_20260908`；验证克隆尚未创建。原批准方案为同实例独立库`itsm_migration_validation`，当前受准入约束阻塞；独立PG方案仅为待确认建议，见[设计调整说明](../specs/2026-09-16-dev-restoration-two-database-design.md#克隆部署调整建议proposed尚未执行)。不得把任一建议名当实际运行目标，也不得以改库名代替来源核验。
+- Dev：`itsm-postgres-dev / itsm_config_baseline_20260908 / public`；验证克隆按维护者最新指示使用同一数据库内独立schema（未创建）。不新增PG容器，不再采用原异库名方案；具体准入及权限隔离方案见[更新后的设计](../specs/2026-09-16-dev-restoration-two-database-design.md)。
 - 所选代码结构目标047；P037及尚缺普通032–036、039–047按规范依赖执行，R038排除；旧SQL/校验和/真实回执不改，禁止Ent叠加补表和应用owner权限。
 - 身份、组织、权限、密码及业务配置保留；测试数据先分类；824与6条cloud绑定保留停用；旧ITSM ticket及历史流程不迁。
 - 后端工具：`itsm-backend/cmd/migrate/main.go`、`migration/work_item_preparation.go`、`cmd/check_workitem_cutover/main.go`只复用；领域操作复用现有服务。发现代码缺口才建独立修复并测试，不直接改库绕过。
@@ -540,6 +540,8 @@ WSL最终副本与角色已归档到既有私有证据目录，最终副本dump 
 
 ### 阶段3：建立克隆并复用迁移成果（U4、C1/C3/C4、R1/V4/V5）
 
+**最新方向：** 本阶段及阶段4原有“验证库/两个库”用语按同库内Dev/验证两个schema数据目标理解；原独立库名只是历史提议。具体实施步骤须先补齐schema克隆准入与隔离设计，不直接照旧步骤恢复或删除。
+
 输入：阶段2验收基线、现有源manifest/工具/成果。输出：唯一可用验证库与可重复验证过程。
 
 - [x] 核验Toolkit实际分支与主干差异；未集成则单独评审集成，运行既有离线测试`python3 -m pytest scripts/__tests__ -q`及`python3 -m scripts.migration self-test`，不让离线检查连接共享库。
@@ -572,7 +574,7 @@ WSL最终副本与角色已归档到既有私有证据目录，最终副本dump 
 - **测试流程处置：** 实例7、8、9、10经现有领域API逐条终止，全部读取验证为terminated；保留历史与领域审计。执行前锁定3010/8080实际PID、启动时间、制品、配置、上游及Dev身份，并核对无未决callback。私有 `domain-termination-before.json` 和四份 `domain-termination-after-*.json` 保存结果。没有删除工单/历史数据。
 - **配置已处理与待适配：** 19条旧绑定已通过具备CAS与审计的领域API逐条停用并保留；7条generic/change替代已创建，完整字段及定义摘要回读核验通过（`binding-apply-journal.jsonl`）。源16的自动任务不受支持；服务请求源5/13/687/823存在专业完成及分支配置缺口，连同824和6条cloud保留停用待适配，不能报告为业务验收成功。
 - **工具：** PR43已修复实体选择、租户范围与失败退出码问题并合并；91项离线测试通过、1项live anchor跳过，独立复审无剩余阻塞；未运行真实数据回填。`--apply`尚不满足API/数据库目标绑定，不宣称可直接回填。
-- **克隆拓扑待决：** 现有P证据绑定原库名、deployment、inspection及授权摘要，同实例更名克隆不能直接准入；原回执不可改写。追加准入能力是一种方案。进一步只读复审确认P没有固定原PG实例，较小替代为独立PG恢复、保留原库名/角色名/逻辑deployment、独立密码及附属状态；仍须核验原证据/ACL/角色策略OID及当前business-inspection同实例。已向维护者提出拓扑选择，未得到答复前不执行依赖步骤。验证库尚未创建，旧成果库与临时恢复容器尚未删除，不能声称只剩两个库。
+- **克隆方向已纠正、实现仍阻塞：** 维护者否决新增PG容器，指定同ITSM数据库、不同schema；独立PG建议撤回，不再等待其选择。长期ITSM/KAF单实例双逻辑库整合计划继续有效。源码`verifyPreparationReceipt`同时校验database/schema，现有`DB_SCHEMA`配置不能代替schema克隆准入；需保留原回执并补齐可审计的来源/目标证明及跨schema隔离验证。验证schema尚未创建，旧成果库和临时恢复容器未清理，不能声称已收敛到两个数据目标。
 - **创建阻塞及配置修复：** 普通工单UI最初返回500且事务回滚；默认Graph目标被停用，无法冻结邮件通知目标。配置Dev专用本地SMTP接收器后，同一表单成功创建工单29。`itsm-dev-mailpit`仅发布127.0.0.1:1025/8025，无relay；镜像固定`axllent/mailpit@sha256:df6c2541907e1be6fac21f509927cf6ed771617a1f4b361ef66d97bd05593d2d`。合成邮件接收验证通过；应用notification仍disabled，工单29邮件intent待处理且attempt0，站内通知已落地。原用户偏好与企业connector不改；这不是外部邮件发送验收。
 - **UI实际边界：** 工单29（`DEV-RESTORE-20260916-GENERIC-01`）已通过创建、详情、评论、带原因转派至验收人、刷新及合成附件上传/下载；下载文件逐字节比对一致，SHA-256 `5e65df006000f6ed998847c0931fd0c1b76c8ca5fe849a2e60c9dcf35109f0a3`。流程27使用`generic:29`。UI完成任务33后，任务记录completed，但callback2仍pending/handler_error，流程未推进。本条记FAIL，不将任务提交/完成当流程成功。已定位：definition65的Activity_Assign回调要求assignee_id，但任务完成UI没有该输入，契约只标正整数未标required，导致空payload被接受后反复失败。只读纯handler复现一致；instance旧快照assignee2不能替代当前工单owner1，更不能补写冻结回调伪造用户选择。Activity_Resolve另需验证new_status输入。现有API没有带修正输入的callback恢复入口，实例终止也拒绝未决callback；保留实例27/任务33/回调2，不手改payload或重置任务。配置候选是新定义版本使用现有无handler fulfillment + work_item_assignee模式；若继续保留assign回调则需补UI/API必填表单契约，两者尚未取代已接受设计。当前数据恢复另需受审计方案。
 
