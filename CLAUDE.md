@@ -6,6 +6,8 @@ Read [AGENTS.md](AGENTS.md) before making repository changes. It is the authorit
 
 Also read [agent engineering governance](docs/agent-engineering-governance.md) and the documents required for the task in AGENTS.md's reading map. API/DTO, TypeScript/Ant Design, and file naming rules are shared in [engineering conventions](docs/engineering-conventions.md). Commands, testing procedures, migrations, and Docker operations are in [the development guide](docs/DEVELOPMENT_GUIDE.md) and [command reference](docs/dev-commands-reference.md). For maintained Windows/WSL instances, read [local environment](docs/development-environment.md) before operating services or data.
 
+For Dev workflow recovery or schema-based migration validation, follow the [AGENTS.md task reading map](AGENTS.md#required-reading-by-task), including the restoration design, both task packages and the single execution ledger. Accepted direction does not imply that draft implementation gates or shared-environment acceptance have passed.
+
 When architecture/domain constraints change, update AGENTS.md first and this summary in the same change. Update detailed engineering/operational rules in their shared source and link them; do not copy command tables, port defaults, release snapshots, or historical verification claims here.
 
 ## Architecture and design summary
