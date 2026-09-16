@@ -10,7 +10,7 @@ Status: maintained operational contract, updated 2026-09-15. The maintainer sele
 | --- | --- |
 | Schema target for both database roles | **047_bpmn_assignment_source**, with the complete required canonical dependency chain and actual receipts |
 | Existing Dev upgrade path from its verified 031 baseline | Read-only classification and backup/restore verification → controlled P037 → ordinary032–036 and039–047 → matching runtime/system/inspection configuration and acceptance |
-| Existing validation target at046 | Verify its existing P receipt, dependencies and actual structure, then plan047; do not rerun P or clone another database merely to change its version label |
+| Maintained validation clone | Proposed sequence: restore and accept Dev at047, then create a traceable Dev snapshot clone. The former isolated046 target is a preserved evidence/difference source; this table does not authorize upgrading it. Follow the [two-role convergence plan](superpowers/plans/2026-09-15-migration-validation-ledger.md#dev-clone-alignment) |
 | Migration tool prerequisite for the old Dev ledger | Use the merged PR38 atomic ledger preparation fix (`0e1afe997`, merged in `32c39dda3`) or a reviewed descendant |
 | R038 retirement | Remains a separate manual stage; **not required to restore Dev** and not implicitly included by saying “upgrade to047” |
 | Actual destination and progress | Read the [dated target-status table and single ledger](superpowers/plans/2026-09-15-migration-validation-ledger.md#schema-target-status); inspect the live recipe/database before acting |
@@ -39,7 +39,7 @@ Windows host: `192.168.31.66`. SSH reaches Ubuntu WSL as `administrator`, port `
 | Dimension | Daily development | Migration validation |
 | --- | --- | --- |
 | Application | Current selected, reviewed frontend/backend release | The same selected frontend/backend release for comparative acceptance |
-| Database purpose | Dev database for ongoing development and development test records | Separate clone/isolated target for cleaned legacy data and acceptance records |
+| Database purpose | Dev database for ongoing development and development test records | A traceable clone of Dev for cleaned legacy data and acceptance records |
 | Schema | Canonical migrations required by the selected code | The same required schema contract; verify migration receipts and structure independently |
 | Data/configuration | Development fixtures and configuration | Approved source mappings, transformed data and target business configuration |
 | Shared entry | 3010 → 8080 targets Dev for daily work | Temporarily switch the same entry to the validation profile for a scheduled validation window |
@@ -68,7 +68,7 @@ Windows host: `192.168.31.66`. SSH reaches Ubuntu WSL as `administrator`, port `
 
 One shared 8080 serves one target at a time. This topology does not provide simultaneous access to both databases; coordinate the validation window with development. Any future concurrent topology needs an explicit operational decision and documented port ownership, not ad hoc use of 3000/3001.
 
-Database labels describe roles, not lineage: `itsm_ga_ready` was prepared as an isolated new-model target, not a full Dev clone or a GA release. The intended validation role can use a verified clone or a deliberately prepared isolated target, with provenance and omissions recorded. Dated observations and the ordered recovery tasks belong in the [single ledger](superpowers/plans/2026-09-15-migration-validation-ledger.md#development-restoration-update); this contract is not a live deployment report.
+Database labels describe roles, not lineage: `itsm_ga_ready` was prepared as an isolated new-model target, not a full Dev clone or a GA release. The maintainer reaffirmed on 2026-09-16 that the maintained validation role must use a verified Dev clone. Existing isolated targets retain their prior evidence and serve as transition sources; they are not interchangeable with that clone. See the [two-database convergence proposal and current observations](superpowers/plans/2026-09-15-migration-validation-ledger.md#dev-clone-alignment). Dated observations and the ordered recovery tasks belong in the [single ledger](superpowers/plans/2026-09-15-migration-validation-ledger.md#development-restoration-update); this contract is not a live deployment report.
 
 ## One startup authority
 
