@@ -29,9 +29,11 @@ func (readinessDriver) Open(name string) (driver.Conn, error) { return &readines
 func (*readinessConn) Prepare(string) (driver.Stmt, error) {
 	return nil, errors.New("unexpected prepare")
 }
+
 func (*readinessConn) Close() error {
 	return nil
 }
+
 func (*readinessConn) Begin() (driver.Tx, error) { return nil, errors.New("unexpected transaction") }
 
 func (c *readinessConn) QueryContext(_ context.Context, q string, _ []driver.NamedValue) (driver.Rows, error) {
