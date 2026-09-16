@@ -10,7 +10,7 @@ Status: maintained operational contract, updated 2026-09-15. The maintainer sele
 | --- | --- |
 | Schema target for both database roles | **047_bpmn_assignment_source**, with the complete required canonical dependency chain and actual receipts |
 | Existing Dev upgrade path from its verified 031 baseline | Read-only classification and backup/restore verification → controlled P037 → ordinary032–036 and039–047 → matching runtime/system/inspection configuration and acceptance |
-| Existing validation target at046 | Verify its existing P receipt, dependencies and actual structure, then plan047; do not rerun P or clone another database merely to change its version label |
+| Maintained validation clone | Proposed sequence: restore and accept Dev at047, then create a traceable Dev snapshot clone. The former isolated046 target is a preserved evidence/difference source; this table does not authorize upgrading it. Follow the [two-role convergence plan](superpowers/plans/2026-09-15-migration-validation-ledger.md#dev-clone-alignment) |
 | Migration tool prerequisite for the old Dev ledger | Use the merged PR38 atomic ledger preparation fix (`0e1afe997`, merged in `32c39dda3`) or a reviewed descendant |
 | R038 retirement | Remains a separate manual stage; **not required to restore Dev** and not implicitly included by saying “upgrade to047” |
 | Actual destination and progress | Read the [dated target-status table and single ledger](superpowers/plans/2026-09-15-migration-validation-ledger.md#schema-target-status); inspect the live recipe/database before acting |
