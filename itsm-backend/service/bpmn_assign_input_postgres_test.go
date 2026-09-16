@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -64,12 +65,21 @@ func newA1PostgresClient(t *testing.T) *ent.Client {
 	return client
 }
 
-// TestActorCompletionRejectsMissingAssignInputPostgres is the real-transaction
-// proof for A1: the actor completion of a ticket_task/assign node without the
-// value the contract binds must fail inside the completion transaction, leaving
-// the task, the callback outbox and the process instance exactly as they were.
-// It uses the production entry point (engine.CompleteTask), not a helper.
-func TestActorCompletionRejectsMissingAssignInputPostgres(t *testing.T) {
+// a1AssignFixture drives the production start path into a pending
+// ticket_task/assign UserTask and returns the actor scope plus the identifiers
+// the assertions need.
+type a1AssignFixture struct {
+	client   *ent.Client
+	engine   *CustomProcessEngine
+	fixture  *bpmnAuthorizationFixture
+	actorCtx context.Context
+	instance *ent.ProcessInstance
+	task     *ent.ProcessTask
+	item     *ent.Ticket
+}
+
+func newA1AssignFixture(t *testing.T) *a1AssignFixture {
+	t.Helper()
 	client := newA1PostgresClient(t)
 	f := newBPMNAuthorizationFixtureWithClient(t, client)
 	ctx := context.Background()
@@ -87,25 +97,99 @@ func TestActorCompletionRejectsMissingAssignInputPostgres(t *testing.T) {
 		SetRequesterID(requester.ID).SetOpenedByID(f.actor.ID).SetTenantID(f.tenant.ID).SaveX(ctx)
 
 	actorCtx := WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: f.actor.ID, TenantID: f.tenant.ID, CanUpdateAllTasks: true})
-
 	instance, err := f.engine.StartProcess(actorCtx, f.definition.Key, fmt.Sprintf("generic:%d", item.ID), "generic", item.ID,
 		map[string]interface{}{"business_id": item.ID})
 	require.NoError(t, err)
-
 	task := findTaskByDefinitionKey(t, client, actorCtx, instance.ID, "Activity_Assign")
-	taskStatusBefore, instanceStatusBefore := task.Status, instance.Status
 	require.Zero(t, client.ProcessCallbackOutbox.Query().CountX(actorCtx), "the fixture starts with no callback")
 
-	// The observed Dev failure: the actor completes the assign node with no target.
-	err = f.engine.CompleteTask(actorCtx, task.TaskID, map[string]interface{}{"business_id": item.ID})
+	return &a1AssignFixture{
+		client: client, engine: f.engine, fixture: f, actorCtx: actorCtx,
+		instance: instance, task: task, item: item,
+	}
+}
+
+// assertNoPartialEffect proves a rejected completion left no trace at all.
+func (fx *a1AssignFixture) assertNoPartialEffect(t *testing.T, taskStatus, instanceStatus string) {
+	t.Helper()
+	require.Equal(t, taskStatus, fx.client.ProcessTask.GetX(fx.actorCtx, fx.task.ID).Status,
+		"a rejected completion must leave the task in its original state")
+	require.Zero(t, fx.client.ProcessCallbackOutbox.Query().CountX(fx.actorCtx),
+		"a rejected completion must not persist a durable callback")
+	require.Equal(t, instanceStatus, fx.client.ProcessInstance.GetX(fx.actorCtx, fx.instance.ID).Status,
+		"a rejected completion must not advance the process instance")
+	require.Equal(t, "open", fx.client.Ticket.GetX(fx.actorCtx, fx.item.ID).Status,
+		"a rejected completion must not change business state")
+}
+
+// TestActorCompletionRejectsMissingAssignInputPostgres is the real-transaction
+// proof for A1: the actor completion of a ticket_task/assign node without the
+// value the contract binds must fail inside the completion transaction, leaving
+// the task, the callback outbox and the process instance exactly as they were.
+// It uses the production entry point (engine.CompleteTask), not a helper.
+func TestActorCompletionRejectsMissingAssignInputPostgres(t *testing.T) {
+	fx := newA1AssignFixture(t)
+	taskStatusBefore := fx.task.Status
+	instanceStatusBefore := fx.instance.Status
+
+	err := fx.engine.CompleteTask(fx.actorCtx, fx.task.TaskID, map[string]interface{}{"business_id": fx.item.ID})
 	require.Error(t, err, "a completion without assignee_id must be rejected instead of enqueueing")
 
-	require.Equal(t, taskStatusBefore, client.ProcessTask.GetX(actorCtx, task.ID).Status,
-		"a rejected completion must leave the task in its original state")
-	require.Zero(t, client.ProcessCallbackOutbox.Query().CountX(actorCtx),
-		"a rejected completion must not persist a durable callback")
-	require.Equal(t, instanceStatusBefore, client.ProcessInstance.GetX(actorCtx, instance.ID).Status,
-		"a rejected completion must not advance the process instance")
-	require.Equal(t, "open", client.Ticket.GetX(actorCtx, item.ID).Status,
-		"a rejected completion must not change business state")
+	fx.assertNoPartialEffect(t, taskStatusBefore, instanceStatusBefore)
+}
+
+// Repeating a rejected completion must stay free of side effects, so a retrying
+// client cannot accumulate callbacks or advance the instance.
+func TestActorCompletionRepeatedRejectionHasNoEffectPostgres(t *testing.T) {
+	fx := newA1AssignFixture(t)
+	taskStatusBefore := fx.task.Status
+	instanceStatusBefore := fx.instance.Status
+
+	for attempt := 1; attempt <= 3; attempt++ {
+		require.Error(t, fx.engine.CompleteTask(fx.actorCtx, fx.task.TaskID, map[string]interface{}{"business_id": fx.item.ID}),
+			"attempt %d must be rejected", attempt)
+	}
+
+	fx.assertNoPartialEffect(t, taskStatusBefore, instanceStatusBefore)
+}
+
+// Concurrent rejected completions of the same task must not interleave into a
+// partial write: either effect must be absent entirely.
+func TestActorCompletionConcurrentRejectionHasNoEffectPostgres(t *testing.T) {
+	fx := newA1AssignFixture(t)
+	taskStatusBefore := fx.task.Status
+	instanceStatusBefore := fx.instance.Status
+
+	var wg sync.WaitGroup
+	errs := make([]error, 2)
+	for i := range errs {
+		wg.Add(1)
+		go func(slot int) {
+			defer wg.Done()
+			errs[slot] = fx.engine.CompleteTask(fx.actorCtx, fx.task.TaskID, map[string]interface{}{"business_id": fx.item.ID})
+		}(i)
+	}
+	wg.Wait()
+
+	for slot, err := range errs {
+		require.Error(t, err, "concurrent completion %d must be rejected", slot)
+	}
+	fx.assertNoPartialEffect(t, taskStatusBefore, instanceStatusBefore)
+}
+
+// A tenant that does not own the task must not be able to complete it, and the
+// isolation failure must fail closed without touching the owner's rows.
+func TestActorCompletionCrossTenantIsRejectedPostgres(t *testing.T) {
+	fx := newA1AssignFixture(t)
+	taskStatusBefore := fx.task.Status
+	instanceStatusBefore := fx.instance.Status
+
+	otherTenantCtx := WithBPMNAccessScope(context.Background(), BPMNAccessScope{
+		UserID: fx.fixture.otherActor.ID, TenantID: fx.fixture.otherTenant.ID, CanUpdateAllTasks: true,
+	})
+
+	err := fx.engine.CompleteTask(otherTenantCtx, fx.task.TaskID, map[string]interface{}{"business_id": fx.item.ID})
+	require.Error(t, err, "a foreign tenant must not complete another tenant's task")
+
+	fx.assertNoPartialEffect(t, taskStatusBefore, instanceStatusBefore)
 }
