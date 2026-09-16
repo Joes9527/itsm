@@ -23,9 +23,11 @@ For coding agents: start from this selected target and the current source regist
 
 ## Current execution status (2026-09-16)
 
-3010 → 8080 currently targets `itsm-postgres-dev / itsm_config_baseline_20260908 / public`, with39 actual migration receipts through047 and no R038. Login passes. Restoration remains in progress: readiness repair, binding adaptation and representative UI acceptance are outstanding; background workflow consumers remain disabled. Do not infer unrestricted development readiness from login alone.
+3010 → 8080 currently targets `itsm-postgres-dev / itsm_config_baseline_20260908 / public`, with39 actual migration receipts through047 and no R038. Readiness returns200. Browser login, generic creation, comments and reassignment pass; task callback advancement currently fails. Restoration and full UI acceptance remain in progress. Core outbox/callback/audit consumers run; notification delivery and external workers remain disabled.
 
-The traceable validation clone has not been created. Existing canonical preparation evidence is bound to its original target, so a controlled clone admission capability is required before an independently named/credentialed clone can run. Historical comparison databases remain preserved until the approved cleanup gates pass. Exact artifacts, completed actions and remaining gates are maintained only in the [execution ledger](superpowers/plans/2026-09-15-migration-validation-ledger.md#two-database-execution).
+The Dev email profile explicitly targets loopback-only SMTP capture (1025, with local capture UI8025); this is a test dependency, not another ITSM application environment. No enterprise connector or user notification preference was changed. Pending delivery intents remain recorded; enabling notification delivery requires its own explicit scope and acceptance.
+
+The traceable validation clone has not been created. A differently named database requires a controlled admission extension; an independently hosted restore preserving the existing logical identity is a smaller alternative pending the maintainer's topology choice. Historical comparison databases remain until cleanup gates pass. Exact artifacts, actions and remaining gates are maintained only in the [execution ledger](superpowers/plans/2026-09-15-migration-validation-ledger.md#two-database-execution).
 
 ## Endpoint ownership
 

@@ -15,8 +15,8 @@
 
 | 对象 | 最后核验结构 | 目标／状态 |
 | --- | --- | --- |
-| 实际Dev：`itsm_config_baseline_20260908` | 047、39条真实回执 | 已升级，R038未执行；3010→8080已指向Dev，登录成功，readiness修复及UI验收尚未完成 |
-| 长期验证克隆：`itsm_migration_validation` | 尚未创建 | 需受控克隆准入支持；不得修改继承的原P回执绕过目标绑定 |
+| 实际Dev：`itsm_config_baseline_20260908` | 047、39条真实回执 | 已升级，R038未执行；3010→8080已指向Dev，登录成功，readiness200、普通工单创建/评论/转派通过；任务回调推进失败，UI验收未完成 |
+| 长期验证克隆：`itsm_migration_validation` | 尚未创建 | 原同实例异库名方案需准入能力；独立PG保留逻辑身份的较小替代待维护者选择，禁止改原P回执 |
 | 旧对照库：`itsm_migration_20260914` | 09-16执行前账本最高019、14条 | 不等同当时031 Dev完整克隆；仍保留，待成果及备份门槛满足后清理 |
 | 前次8080目标：`itsm_ga_ready` | 046（09-15历史核验） | 所属容器已停止，保留成果；不是当前在线目标 |
 | 本次Dev升级预演副本 | 047 | 152张原表字段/数据比对一致；临时恢复容器尚未退出。此前09-15副本已归档移除，与本次副本不同 |
@@ -531,7 +531,7 @@ WSL最终副本与角色已归档到既有私有证据目录，最终副本dump 
 - [ ] 复用已验证迁移路径，在副本补验本次配置、测试数据及角色差异；运行结构、保留基线、绑定路由与领域终止检查。不得把一次性且锁定旧容器的终止预演程序改目标用于真实Dev。
 - [x] 建立维护窗口，停止相关写入/消费者；再次核对Dev身份与备份一致性。范围或源状态变化时补验受影响项。
 - [x] 执行已审P证据提交和规范普通升级；仅使用此次真实目标证据，日志记录返回码/回执，不自动执行R038或重放已执行022/027。
-- [ ] 通过领域路径终止已确认废弃活动流程，按验证方案整理测试关联；应用已审绑定适配/停用并记录前后状态。保留自定义定义，未知类型不得继续可调度。
+- [x] 通过领域路径终止已确认废弃活动流程，按验证方案整理测试关联；应用已审绑定适配/停用并记录前后状态。保留自定义定义，未知类型不得继续可调度。
 - [x] 配置匹配的runtime/system/inspection身份及执行绑定，撤销临时权限；使用完整Dev profile启动当前新代码，校验实际连接而非仅recipe。
 - [ ] 验证迁移/结构、角色隔离、身份及配置保全、readiness、登录与代表性通用工单/变更/服务请求UI；检查旧绑定不能错误竞争路由，待适配能力显式列出。
 - [ ] 记录已恢复Dev制品与profile、允许重新开放开发写入的时间，更新环境入口。失败按设计的开放前/开放后恢复规则处理，不长期退回旧代码。
@@ -567,12 +567,14 @@ WSL最终副本与角色已归档到既有私有证据目录，最终副本dump 
 
 - **恢复基线：** 私有证据目录 `/home/administrator/.local/state/itsm-dev-restoration-20260916`。`dev-before.dump` SHA-256 `53c9864ef99d3e08ed073264e2bc5b81eb4a31ca45d77c52d56d08343ee67c5e`。隔离恢复核对152张原表及身份/配置；副本升级后再核对原字段/行一致。附件9个物理文件恢复比对一致，但尚无MinIO API恢复验收，不扩大证明范围。
 - **真实Dev升级：** `itsm-postgres-dev / itsm_config_baseline_20260908 / public` 已有39条真实回执，最高047；P037及14条普通迁移成功，R038未执行。原24条回执及152张原表字段/数据核对一致；临时owner权限已撤销。见 `actual-upgrade-result.json`、`actual-*` 与 `rehearsal-independent-review.json`。
-- **运行入口：** 3010前端源 `2988819c94cfcfb69cee5b0d1dfbe69ee0fb8c9b`、build `c5cr4SsMT8auCLmrGlF-6`；8080源 `c465b6bee75fd1d7820d26a78243d73490abb795`，制品SHA-256 `52cdecc10000fe9677e708fc5915711bc895218701bbe39b62c5d6bb61dd20e4`，含已合并PR44。实际连接为Dev app/system及独立inspection `itsm_dev_inspection_20260916`；Redis DB11、附件桶 `itsm-uploads`。使用development模式，未配置LLM不等于AI已可用。消费者暂只启用event audit，日常写入尚未宣布开放。
-- **登录与阻塞：** 3010登录成功；readiness仍错误要求手工R038，修复PR45已完成独立审查，CI lint失败待修，尚未部署。不通过重跑退休、造基线回执或放宽权限解决。
+- **运行入口：** 3010前端源 `2988819c94cfcfb69cee5b0d1dfbe69ee0fb8c9b`、build `DNEHNrmCuLdDvWw3kgnCI`（显式构建WSL8080通知地址）；8080源 `fc8de9d3626bd61e9f046085e4cde8c43d6432e4`，制品SHA-256 `1fc38aaa0bcfd62361c0bf9fa5d30ecf2f8ea758246755c0e845f991a8e7b6af`，含已合并PR44/45。实际连接为Dev app/system及独立inspection `itsm_dev_inspection_20260916`；Redis DB11、附件桶 `itsm-uploads`。使用development模式，未配置LLM不等于AI已可用。消费者启用outbox、callback与event audit；notification及外部能力仍关闭，日常完整流程尚未宣布验收通过。
+- **登录与准入：** 3010浏览器登录成功；PR45经独立审查、CI和部署后，readiness返回200，schema047、baseline1.0.0，单次观测约0.27秒。R038仍未执行，未伪造回执或扩大权限。
 - **测试流程处置：** 实例7、8、9、10经现有领域API逐条终止，全部读取验证为terminated；保留历史与领域审计。执行前锁定3010/8080实际PID、启动时间、制品、配置、上游及Dev身份，并核对无未决callback。私有 `domain-termination-before.json` 和四份 `domain-termination-after-*.json` 保存结果。没有删除工单/历史数据。
-- **配置待处理：** 19条旧绑定尚未停用；7条generic/change替代方案已列明。源16的自动任务不受支持；服务请求源5/13/687/823存在专业完成及分支配置缺口，连同824和6条cloud保留停用待适配，不能报告为业务验收成功。
-- **工具：** PR43正在修复独立审查发现的实体选择、租户范围与失败退出码问题；未运行真实数据回填。`--apply`尚不满足API/数据库目标绑定，不宣称可直接回填。
-- **克隆准入缺口：** 现有P证据绑定原库名、deployment、inspection及授权摘要，直接更名克隆会被canonical准入拒绝。原回执不可改写；需追加真实克隆来源/目标准入能力并审查。验证库尚未创建，旧成果库与临时恢复容器尚未删除，不能声称只剩两个库。
+- **配置已处理与待适配：** 19条旧绑定已通过具备CAS与审计的领域API逐条停用并保留；7条generic/change替代已创建，完整字段及定义摘要回读核验通过（`binding-apply-journal.jsonl`）。源16的自动任务不受支持；服务请求源5/13/687/823存在专业完成及分支配置缺口，连同824和6条cloud保留停用待适配，不能报告为业务验收成功。
+- **工具：** PR43已修复实体选择、租户范围与失败退出码问题并合并；91项离线测试通过、1项live anchor跳过，独立复审无剩余阻塞；未运行真实数据回填。`--apply`尚不满足API/数据库目标绑定，不宣称可直接回填。
+- **克隆拓扑待决：** 现有P证据绑定原库名、deployment、inspection及授权摘要，同实例更名克隆不能直接准入；原回执不可改写。追加准入能力是一种方案。进一步只读复审确认P没有固定原PG实例，较小替代为独立PG恢复、保留原库名/角色名/逻辑deployment、独立密码及附属状态；仍须核验原证据/ACL/角色策略OID及当前business-inspection同实例。已向维护者提出拓扑选择，未得到答复前不执行依赖步骤。验证库尚未创建，旧成果库与临时恢复容器尚未删除，不能声称只剩两个库。
+- **创建阻塞及配置修复：** 普通工单UI最初返回500且事务回滚；默认Graph目标被停用，无法冻结邮件通知目标。配置Dev专用本地SMTP接收器后，同一表单成功创建工单29。`itsm-dev-mailpit`仅发布127.0.0.1:1025/8025，无relay；镜像固定`axllent/mailpit@sha256:df6c2541907e1be6fac21f509927cf6ed771617a1f4b361ef66d97bd05593d2d`。合成邮件接收验证通过；应用notification仍disabled，工单29邮件intent待处理且attempt0，站内通知已落地。原用户偏好与企业connector不改；这不是外部邮件发送验收。
+- **UI实际边界：** 工单29（`DEV-RESTORE-20260916-GENERIC-01`）已通过创建、详情、评论、带原因转派至验收人、刷新及合成附件上传；流程27使用`generic:29`。UI完成任务33后，任务记录completed，但callback2仍pending/handler_error，流程未推进。本条记FAIL，不将任务提交/完成当流程成功。已定位：definition65的Activity_Assign回调要求assignee_id，但任务完成UI没有该输入，契约只标正整数未标required，导致空payload被接受后反复失败。只读纯handler复现一致；instance旧快照assignee2不能替代当前工单owner1，更不能补写冻结回调伪造用户选择。Activity_Resolve另需验证new_status输入。现有API没有带修正输入的callback恢复入口，实例终止也拒绝未决callback；保留实例27/任务33/回调2，不手改payload或重置任务。配置候选是新定义版本使用现有无handler fulfillment + work_item_assignee模式；若继续保留assign回调则需补UI/API必填表单契约，两者尚未取代已接受设计。当前数据恢复另需受审计方案。
 
 ### 验证、审查与汇报纪律
 
