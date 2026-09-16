@@ -6,6 +6,8 @@
 
 - [Ticket 详情体验统一设计（implemented）](./superpowers/specs/2026-09-15-ticket-detail-experience-unification-design.md)：统一刷新、局部恢复、编辑保护和当前／历史任务展示。
 
+- [Dev恢复与schema克隆完整实施合同](superpowers/specs/2026-09-16-dev-schema-execution-contract.md)：设计负责人冻结流程图、历史回调blocked处置、准入生命周期、恢复算法、消费者和Toolkit目标绑定；执行Agent按合同实现。
+
 - [执行Agent任务包A：Dev流程恢复](superpowers/plans/2026-09-16-dev-workflow-recovery.md)：输入契约、简单任务UI、新流程验收和旧失败实例处置边界。
 - [执行Agent任务包B：同库schema验证克隆](superpowers/plans/2026-09-16-schema-validation-clone.md)：克隆准入、隔离、Toolkit目标绑定、验证回切和清理交接。
 

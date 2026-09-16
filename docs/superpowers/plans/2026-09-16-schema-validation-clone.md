@@ -5,7 +5,7 @@
 **Goal:** 在现有ITSM数据库中建立可追溯验证schema，与Dev隔离，复用迁移工具，最终退出无依赖的历史ITSM目标。
 **Architecture:** 一个PG实例中的ITSM数据库使用Dev public和验证migration_validation两个schema；原历史回执保留，新目标通过独立克隆准入证明接受。长期KAF保持自身逻辑数据库，沿用任务三合并实例。
 **Tech Stack:** 现有Go Migrator/runtime inspection、PostgreSQL、Python migration Toolkit、WSL stack profile。
-**Status:** draft（详细准入/恢复实现设计待补齐）；同库不同schema总体方向已确认。现在可执行B1与B2/B3设计验证；通过下述设计门槛后才开始相应生产实现，共享执行再过B5门槛。
+**Status:** accepted（总体方向）；详细设计已完成并独立复核，按[完整实施合同](../specs/2026-09-16-dev-schema-execution-contract.md)实施并独立审查；不再把准入生命周期/恢复算法/消费者隔离交给执行Agent设计。共享执行仍须通过B5证据门槛。
 
 ## 全局约束与依赖
 
@@ -62,24 +62,26 @@
 - 修改既有`migration/control_config.go`、`migration/runtime_inspection.go`、`migration/work_item_preparation.go`、`migration/migrator.go`及`cmd/migrate/main.go`，共用同一克隆证据验证入口。
 - 修改AGENTS.md及CLAUDE.md的controlled-migration摘要，链接本设计；更新环境结构目标和命令说明。
 
-### B2/B3实现前的设计审查门槛
+### B2/B3已冻结设计与实现顺序
 
-当前表名及新增文件是候选落点，不是已经审定的DDL/CLI接口。Agent先在关联设计§7补齐以下内容，独立审查者确认后再编码；本文件明确承认这些尚未完成，不能由实现者自行猜测：
+[完整实施合同](../specs/2026-09-16-dev-schema-execution-contract.md)§3–6是唯一详细设计。执行人按以下确定裁定实现，不再选择架构：
 
-1. 新表字段/主键/唯一约束/不可变策略；作为部署级受限证据表的tenant/MSP边界；稳定操作ID、source与target角色映射及精确CLI入参/退出码，明确runtime不具备写准入能力。
-2. 状态与事务：目标未获准→封存验收→可启动；写入失败、连接中断、重复提交、撤销及重建的状态转移；可信配置摘要发布与DB事务不原子时如何失败关闭。
-3. 升级/回滚：准入时结构摘要是快照证据，后续规范迁移如何推导当前结构；不能每次普通升级后永久失配，也不能忽略差异。覆盖source先升级、target滞后再升级、允许的rollback及不可回滚承载表；reset若删除证据必须拒绝或采用已审完整重建路径。R仍禁止。
-4. 验证模式：source原P按源身份验证；target通过不可变来源证据加当前目标准入验证。建立有限角色/schema映射，不把信任配置的自声明摘要当成实际恢复证明；无源在线连接时runtime仍能验证已封存证据，不能依赖长期读Dev。
-5. 恢复算法和支持对象清单：选定实际工具及版本；明确schema/role映射、SECURITY DEFINER、函数体字符串、序列/视图/RLS处理。先对代表性复杂对象做技术验证；若必须新增通用SQL解析平台或无法安全转换，报告设计阻塞，不默认开发大框架。
-6. 消费者隔离：具体哪些现有scope/角色/运行配置可让新验收记录执行而历史pending不执行；旧记录不能事后加入candidate scope。若现有能力不满足，必须先设计最小可靠方案，否则B5业务验收保持阻塞。
+| 原设计缺口 | 确定方案 |
+| --- | --- |
+| 记录/CLI/可信配置 | §3.1–3.2给出字段、约束、admit/revoke追加事件、pin、CLI参数及退出码 |
+| 普通升级与结构摘要 | source P不变；target固定P-owned guard；初始全结构摘要仅作恢复证据；普通Up追加真实回执并校验当前canonical结构 |
+| 回滚/撤销/刷新 | clone R/down/reset明确拒绝；停目标并join→写revoke→清pin；归档后具名重建、新generation |
+| 恢复算法 | §4使用现有演练资源，恢复public→PG改schema名→有限hash模板重建文本定义→目标schema归档原样恢复；无新容器/通用SQL改写器 |
+| 消费者 | §5修复execution硬编码public，target新deployment/roles/scopes；只新建记录原子入scope，历史pending不可消费 |
+| Toolkit目标绑定 | §6短期受限目标token、实际SQL/API身份一致、每次写入服务端核对、profile锁及重启token失效 |
 
-设计复核需覆盖上述六项并引用实际源码/测试，不只审批一段文字。源Dev增加承载表之前，还须列出新版本号、源角色ACL变化和只影响该范围的验收；不因需要克隆隐式升级Dev。
+具体代码/DDL/流程制品由独立审查者检查是否符合这些设计；审查不替代设计，也不授权实现人自行放宽边界。源码变化影响裁定时回报设计负责人。
 
-**候选接口与记录要求（以上门槛通过后冻结）：**
+**接口与记录要求：**
 - 原schema_migrations仍是唯一迁移执行账本；新表仅记录克隆准入，不能伪装P已在目标重新执行。
 - 一次准入记录绑定source/target三元身份、源快照/备份/账本/P摘要、目标结构及ACL摘要、明确角色映射、版本、操作人/时间和验证结果。记录不可被普通运行账号改写。
-- control配置必须从受保护文件指定精确目标、预期准入摘要；调用参数中的自声明成功/签名不可信。新增参数名称由实现PR固定并同步CLI help/文档，不发明未实现的运行命令。
-- 记录校验共用于runtime、普通迁移、rollback/reset入口；R对克隆目标拒绝。原非克隆路径的检查与负例保持不变。
+- control配置必须从受保护文件指定精确目标、预期准入摘要；调用参数中的自声明成功/签名不可信。参数采用完整合同§3.2并同步CLI help/文档；实现前不得把新命令当已存在能力执行。
+- 记录校验共用于runtime与普通Up；clone的rollback/reset/R在计划和事务入口均拒绝。原非克隆路径的检查与负例保持不变。
 
 - [ ] 写失败测试：原P复制到异schema仍拒绝；任意clone布尔值不能放行；缺源证明、目标不符、摘要损坏、inspection错配、超权ACL都拒绝。
 - [ ] 实现来源正常升级→一致快照恢复→目标离线验证/写入准入→只读启动检查顺序。新迁移首先在来源按正常规则执行，避免目标在获准前依赖普通迁移自我授权。
@@ -91,10 +93,10 @@
 
 ## B3：受控快照恢复和schema映射工具
 
-**Files:** 若B3技术验证证明可复用现有工具，优先复用；确需编排入口时新增 `scripts/migration/clone.py` 及 `scripts/__tests__/test_migration_clone.py`，复用现有profile/CLI结构；更新`docs/migrations/runbook-data-migration-validation.md`。
+**Files:** 复用pg_dump/pg_restore和现有Migrator，新增 `scripts/migration/clone.py` 及 `scripts/__tests__/test_migration_clone.py`，复用现有profile/CLI结构；更新`docs/migrations/runbook-data-migration-validation.md`。
 
 - [ ] 工具先输出只读plan：来源、目标、快照边界、角色映射、对象清单、数据摘要、消费者状态及拒绝条件；凭据通过受保护文件传入。
-- [ ] 保留原备份，生成独立转换产物及摘要。选择能解析对象标识的恢复方式，拒绝简单替换SQL中的public文本。覆盖函数内字符串、默认序列、外键、视图、RLS、触发器和扩展依赖；不能证明的对象阻塞。
+- [ ] 保留原备份，生成独立转换产物及摘要。严格使用完整合同§4的演练rename+有限模板算法，拒绝简单替换SQL中的public文本。覆盖函数内字符串、默认序列、外键、视图、RLS、触发器和扩展依赖；不能证明的对象阻塞。
 - [ ] 在已有获准隔离PG资源建立source/target测试schema，验证一致性快照、完整数据/关联/序列、回执逐字节保留；新增目标记录单独比较。
 - [ ] 验证目标runtime/system显式SELECT/INSERT/UPDATE/DELETE Dev对象均拒绝，反向亦然；缺schema、错误schema、错误role及inspection连接不一致全部拒绝。
 - [ ] 验证目标更新/迁移只影响target，Dev原数据/结构摘要不变；失败恢复只处理工具拥有的目标对象，不使用未审查DROP CASCADE。
@@ -107,7 +109,7 @@
 
 - [ ] profile增加明确schema，SQL使用安全标识符引用和只读事务；禁止字符串插值search_path，禁止public回退。
 - [ ] 每次写入前核对API与SQL指向相同database/schema/deployment、选定制品及可信tenant/actor；不得只比较HTTP地址或只在批次开始核对一次。
-- [ ] 防止检查后切库：执行批次期间锁定profile切换，服务端写命令核对绑定的目标身份；缺少端到端绑定时--apply继续拒绝。
+- [ ] 防止检查后切库：执行批次期间锁定profile切换，按完整合同§6服务端token核对实际连接与启动身份；缺少端到端绑定时--apply继续拒绝。
 - [ ] 复用现有实体选择、稳定业务键、tenant scope、失败非零退出及脱敏报告，不另建导入器。
 - [ ] 执行 `python3 -m pytest scripts/__tests__ -q` 与 `python3 -m scripts.migration self-test`；测试覆盖SQL指验证/API指Dev时零写入、运行中profile变化拒绝、重试不重复创建。
 - [ ] 真实写入之前只做verify/dry-run；关闭apply的保护只能在独立审查和目标绑定验证后移除。
