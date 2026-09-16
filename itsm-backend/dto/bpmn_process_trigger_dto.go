@@ -120,6 +120,12 @@ type ProcessBinding struct {
 	UpdatedAt            time.Time              `json:"updatedAt"`
 }
 
+// DeactivateProcessBindingRequest cannot rewrite identity or routing configuration.
+type DeactivateProcessBindingRequest struct {
+	Reason            string    `json:"reason" binding:"required,max=4000"`
+	ExpectedUpdatedAt time.Time `json:"expectedUpdatedAt" binding:"required"`
+}
+
 // ProcessBindingQueryRequest 查询流程绑定配置请求
 type ProcessBindingQueryRequest struct {
 	BusinessType    BusinessType `form:"business_type" json:"businessType,omitempty"`
