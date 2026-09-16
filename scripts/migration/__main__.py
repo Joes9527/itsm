@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 from .analyze import derive_map, discriminate, drifted, tree_analysis
@@ -67,7 +68,7 @@ def _lineage_targets(profile):
     for entry in profile.lineage:
         spec = TargetSpec(access=profile.target.access, user=entry.user, database=entry.database,
                           credential=entry.credential, container=entry.container,
-                          scope='full-database')
+                          scope=profile.target.scope, tenant_filter=profile.target.tenant_filter)
         targets.append((entry.label, Target(spec)))
     return targets
 
@@ -89,6 +90,34 @@ def _lineage_comparison(profile, check, source, spec, names) -> dict:
 
 def _entities(evidence) -> dict:
     return evidence.payload().setdefault('entities', {})
+
+
+def validation_failures(spec, fields, structure) -> list[str]:
+    """Evaluate declared invariants; explicit unresolvable fields remain non-assertions."""
+    failures = []
+    for check in spec.field_checks:
+        if check.rule == 'unresolvable':
+            continue
+        outcome = fields.get(check.name)
+        if (not isinstance(outcome, dict) or outcome.get('mismatched', 0) > 0
+                or outcome.get('unresolvable', 0) > 0):
+            failures.append('field:' + check.name)
+    invariants = {
+        'tree_single_root': ('roots', 1),
+        'no_cycles': ('cycles', 0),
+        'parents_resolvable': ('unresolved_parents', 0),
+        'unique_username': ('duplicate_usernames', 0),
+        'no_cross_tenant': ('foreign_tenant_rows', 0),
+        'password_is_bcrypt': ('non_bcrypt_rows', 0),
+    }
+    for check in spec.structure_checks:
+        if check == 'prefix_levels':
+            # The profile declares no accepted prefix/depth pattern; report facts only.
+            continue
+        metric, expected = invariants[check]
+        if structure.get(metric) != expected:
+            failures.append(check)
+    return failures
 
 
 def main(argv=None) -> int:
@@ -120,6 +149,7 @@ def main(argv=None) -> int:
     names = [args.entity] if args.entity else sorted(profile.entities)
     evidence = Evidence(mode=args.command, profile=profile)
     codes = []
+    measurements = {}
     for name in names:
         spec = profile.entities[name]
         check = REGISTRY[name]
@@ -139,10 +169,14 @@ def main(argv=None) -> int:
                 'field_checks': check.check_fields(source, tgt, spec),
                 'structure': check.check_structure(tgt, spec),
             }
+            report = _entities(evidence)[name]
+            report['failures'] = validation_failures(spec, report['field_checks'], report['structure'])
+            if report['failures']:
+                codes.append(EXIT_PREFLIGHT)
             if profile.lineage and not args.no_lineage and not getattr(args, 'offline_fixture', False):
                 evidence.payload().setdefault('lineage', {})[name] = _lineage_comparison(
                     profile, check, source, spec, names)
-            codes.append(EXIT_UNATTRIBUTED if result.unattributed else EXIT_OK)
+            codes.append(EXIT_UNATTRIBUTED if result.unattributed or result.only_source else EXIT_OK)
         elif args.command == 'derive-map':
             _entities(evidence)[name] = {'fields': derive_map(source, tgt, spec, check)}
         elif args.command == 'tree':
@@ -153,14 +187,18 @@ def main(argv=None) -> int:
             result = check.reconcile(source, tgt, spec)
             denominator = result.matched + len(result.only_source)
             measured = round(result.matched / denominator, 4) if denominator else 1.0
-            measurements = {name: {'filter': {'declared': (spec.filter or {}).get('value'),
-                                              'measured_match_rate': measured}}}
-            outcome = drifted(measurements, profile)
-            evidence.add('drift', outcome)
-            codes.append(EXIT_DRIFT if outcome else EXIT_OK)
+            measurements[name] = {'filter': {'declared': (spec.filter or {}).get('value'),
+                                              'measured_match_rate': measured}}
         elif args.command == 'backfill':
             codes.append(run_backfill(profile, name, args.apply, target, check, source, tgt,
                                       evidence, spec))
+
+    if args.command == 'verify-profile':
+        selected = replace(profile, entities={name: profile.entities[name] for name in names})
+        outcome = drifted(measurements, selected)
+        evidence.add('measurements', measurements)
+        evidence.add('drift', outcome)
+        codes.append(EXIT_DRIFT if outcome else EXIT_OK)
 
     code = combine_exit_codes(codes)
     if args.allow_unattributed and code == EXIT_UNATTRIBUTED:

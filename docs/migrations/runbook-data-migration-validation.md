@@ -39,13 +39,17 @@
 | ④ 补建 | `backfill --profile p.yaml --entity users`（仅 dry-run，`--apply` 阻塞） | 0 完成；2 预检阻塞（拒写） |
 | ⑤ 归档 | 把 `e.json` 与结论写入 `docs/migrations/` | — |
 
+verify的已声明字段不一致、未获准的不可解析值或结构不变量失败返回2，并写入各实体failures；`--allow-unattributed`不能覆盖这类失败。明确声明`rule: unresolvable`的字段是非断言，保留数量但不误判失败。`prefix_levels`只有统计口径，尚无预期层级规则，因此是观察项，不表示层级验收通过。源侧缺失也保留差异退出码3。
+
+verify-profile先汇总本次选中实体的测量再统一裁定，`--entity`不检查未选实体。
+
 **退出码优先级：`1 运行错误 > 2 预检阻塞 > 4 规则漂移 > 3 未归因差异`**。
 `3` 表示"有差异且未归因"；差异已记录并接受时用 `--allow-unattributed` 把退出码降为 0，
 **但差异仍完整写入证据并以 WARN 列出**，不会被隐藏。
 
 `verify` 默认还会对 profile 里 `lineage` 声明的每个库做同一实体的集合对比（用于判断克隆是否忠实、
 是否单批迁移）；某个库不可达或凭据缺失时该项记为 `unavailable` + 原因，不让整次校验失败。
-用 `--no-lineage` 跳过。
+用 `--no-lineage` 跳过。lineage继承当前目标的scope和tenant_filter，不自动扩大到全库。
 
 ## 3. 补建当前限制
 
