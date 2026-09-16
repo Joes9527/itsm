@@ -6,6 +6,10 @@
 
 - [Ticket 详情体验统一设计（implemented）](./superpowers/specs/2026-09-15-ticket-detail-experience-unification-design.md)：统一刷新、局部恢复、编辑保护和当前／历史任务展示。
 
+- [原Dev恢复与双数据库收敛设计（accepted）](superpowers/specs/2026-09-16-dev-restoration-two-database-design.md)：四阶段交付、保留边界、最终两个业务库与恢复规则。
+
+- [Dev031与主干047分离原因及Agent接续指引](review/2026-09-16-dev-schema-divergence-report.md)：双重核验结论；解决路径待设计讨论，不代表迁移授权。
+
 - [WorkItem 任务分配：实现决策、验证证据与后续顺序](./review/2026-09-15-work-item-task-assignment-report.md)
 
 - [旧 ITSM 主数据迁移与当前目标验证：唯一续办清单](superpowers/plans/2026-09-15-migration-validation-ledger.md)：已完成、待补配置、运行阻塞、待验收及数据库清理边界。

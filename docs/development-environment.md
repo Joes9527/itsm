@@ -2,6 +2,8 @@
 
 Status: maintained operational contract, updated 2026-09-15. The maintainer selected **3010 as the ITSM frontend port**. Deployment filenames containing `ga`, `candidate`, or `prod` do not establish environment identity or release acceptance. This environment is named **WSL development**.
 
+> Before changing Dev, read the [verified Dev031/main047 divergence analysis](review/2026-09-16-dev-schema-divergence-report.md). The maintainer accepted the [restoration design](superpowers/specs/2026-09-16-dev-restoration-two-database-design.md); use the [four-stage execution checklist](superpowers/plans/2026-09-15-migration-validation-ledger.md#two-database-execution) and its evidence gates instead of historical proposals. The selected code/schema compatibility target remains047.
+
 ## Selected schema target: 047
 
 **Current development and migration-validation target, confirmed 2026-09-15: `047_bpmn_assignment_source`.** Both Dev and the migration-validation database must support this selected current-code schema. Do not choose an older backend to accommodate a database at 031 or 046. This is the target contract, not a statement that either live database has already been upgraded.
