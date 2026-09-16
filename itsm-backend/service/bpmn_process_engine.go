@@ -645,7 +645,10 @@ func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Conte
 			if handler.GetTaskType() == "cc_task" {
 				action = ""
 			}
-			callbackPlan, err = BuildCallbackEnqueuePlan(CallbackDescriptor{
+			// Actor-completion entry point: a declared user input error must fail
+			// here, before the instance variables and the completed task are
+			// written, instead of persisting a callback that can never succeed.
+			callbackPlan, err = BuildCallbackEnqueuePlanForActorCompletion(CallbackDescriptor{
 				HandlerID: descriptor.HandlerID, TaskType: descriptor.TaskType, Action: action, ConfigRef: descriptor.ConfigRef,
 			}, variables, optionalDeclared, e.callbackRegistry)
 			if err != nil {

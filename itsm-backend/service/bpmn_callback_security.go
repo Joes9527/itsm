@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -236,7 +237,10 @@ func validateBPMNCallbackActionContract(contract bpmn.CallbackActionContract) er
 	if err != nil {
 		return err
 	}
-	for _, field := range append(append([]string(nil), contract.RequiredFields...), contract.PositiveIntegerFields...) {
+	declared := append([]string(nil), contract.RequiredFields...)
+	declared = append(declared, contract.PositiveIntegerFields...)
+	declared = append(declared, contract.NonEmptyStringFields...)
+	for _, field := range declared {
 		if _, ok := allowed[field]; !ok {
 			return fmt.Errorf("回调必填字段未在负载契约中声明")
 		}
@@ -277,6 +281,26 @@ func isBPMNCallbackConfigRef(configRef string) bool {
 	return true
 }
 
+// bpmnCallbackUserInputError marks a callback payload violation the acting user
+// can correct, such as a missing or unusable required value. Definition defects
+// keep their existing visible blocked-plan treatment; this marker exists only so
+// the task-completion command can reject fixable input before it writes the task
+// or a durable callback.
+type bpmnCallbackUserInputError struct {
+	reason string
+}
+
+func (e *bpmnCallbackUserInputError) Error() string { return e.reason }
+
+func newBPMNCallbackUserInputError(format string, args ...any) error {
+	return &bpmnCallbackUserInputError{reason: fmt.Sprintf(format, args...)}
+}
+
+func isBPMNCallbackUserInputError(err error) bool {
+	var target *bpmnCallbackUserInputError
+	return errors.As(err, &target)
+}
+
 func normalizeBPMNCallbackContractPayload(contract bpmn.CallbackActionContract, payload map[string]interface{}) (map[string]interface{}, error) {
 	allowed, err := bpmnCallbackContractFieldSet(contract.PayloadFields)
 	if err != nil {
@@ -302,13 +326,26 @@ func normalizeBPMNCallbackContractPayload(contract bpmn.CallbackActionContract, 
 		}
 		integer, err := bpmn.CallbackInteger(value)
 		if err != nil || integer <= 0 {
-			return nil, fmt.Errorf("回调字段 %q 必须是有效正整数", field)
+			return nil, newBPMNCallbackUserInputError("回调字段 %q 必须是有效正整数", field)
 		}
 		normalized[field] = strconv.Itoa(integer)
 	}
+	// RequiredFields below only proves key presence, so a declared non-empty
+	// string field additionally proves the value the actor supplied is usable.
+	for _, field := range contract.NonEmptyStringFields {
+		value, exists := normalized[field]
+		if !exists {
+			continue
+		}
+		text, isText := value.(string)
+		if !isText || strings.TrimSpace(text) == "" {
+			return nil, newBPMNCallbackUserInputError("回调字段 %q 必须是非空字符串", field)
+		}
+		normalized[field] = text
+	}
 	for _, field := range contract.RequiredFields {
 		if _, exists := normalized[field]; !exists {
-			return nil, fmt.Errorf("回调必填字段缺失")
+			return nil, newBPMNCallbackUserInputError("回调必填字段缺失")
 		}
 	}
 	return normalized, nil
