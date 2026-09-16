@@ -63,6 +63,10 @@
 - 示例：`codex/fix/rbac-cross-tenant-access`、`codex/docs/agent-engineering-governance`。
 - 一个分支只解决一个可审查目标；不得混入无关格式化、清理或其他 Agent 的修改。
 - 最终提交遵循 Conventional Commits；PR 必须说明目标、影响范围、验证证据、风险和未验证项。
+- Worktree 的清理、分层判定与分支保全流程见
+  [Worktree 卫生与安全清理运行手册](./runbooks/worktree-hygiene-and-cleanup.md)。
+  删除工作区前必须保留分支 ref、建立并验证 bundle 备份、归档被忽略的证据文件；
+  运行副本与 `.claude/worktrees/` 下的 harness 管理项不在清理范围内。
 
 ## 6. Agent 交付门禁
 
