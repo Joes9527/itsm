@@ -36,6 +36,7 @@
 - [开发指南](./development.md): 本地开发、前后端命令、调试和常见问题。
 - [数据库说明](./database.md): 数据库迁移、备份和模型说明。
 - [运维手册](./operations.md): 日志、健康检查、备份、恢复和故障排查。
+- [Worktree 卫生与安全清理运行手册](./runbooks/worktree-hygiene-and-cleanup.md): worktree 分层判定、分支安全不变式、作废判据取数命令、标准清理流程与已知陷阱；含 2026-09-16 执行记录。
 - [v1.0 GA 收口验收指南](./v1-ga-readiness.md): 默认能力、连接器、AI 审计和部署模式检查。
 - [文档命名与维护规范](./documentation-style-guide.md): 目录分层、命名规则和归档标准。
 
