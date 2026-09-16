@@ -16,7 +16,7 @@
 | 对象 | 最后核验结构 | 目标／状态 |
 | --- | --- | --- |
 | 实际Dev：`itsm_config_baseline_20260908` | 047、39条真实回执 | 已升级，R038未执行；3010→8080已指向Dev，登录成功，readiness200、普通工单创建/评论/转派通过；任务回调推进失败，UI验收未完成 |
-| 长期验证克隆：`itsm_migration_validation` | 尚未创建 | 原同实例异库名方案需准入能力；独立PG保留逻辑身份的较小替代待维护者选择，禁止改原P回执 |
+| 长期验证克隆（原建议名`itsm_migration_validation`，部署方式待定） | 尚未创建 | 原同实例异库名方案需准入能力；独立PG保留逻辑身份的较小替代待维护者选择，禁止改原P回执 |
 | 旧对照库：`itsm_migration_20260914` | 09-16执行前账本最高019、14条 | 不等同当时031 Dev完整克隆；仍保留，待成果及备份门槛满足后清理 |
 | 前次8080目标：`itsm_ga_ready` | 046（09-15历史核验） | 所属容器已停止，保留成果；不是当前在线目标 |
 | 本次Dev升级预演副本 | 047 | 152张原表字段/数据比对一致；临时恢复容器尚未退出。此前09-15副本已归档移除，与本次副本不同 |
@@ -502,7 +502,7 @@ WSL最终副本与角色已归档到既有私有证据目录，最终副本dump 
 
 ### 全局约束与文件职责
 
-- Dev：`itsm-postgres-dev / itsm_config_baseline_20260908`；验证克隆：同实例独立库`itsm_migration_validation`（未创建）。不得以改库名代替来源核验。
+- Dev：`itsm-postgres-dev / itsm_config_baseline_20260908`；验证克隆尚未创建。原批准方案为同实例独立库`itsm_migration_validation`，当前受准入约束阻塞；独立PG方案仅为待确认建议，见[设计调整说明](../specs/2026-09-16-dev-restoration-two-database-design.md#克隆部署调整建议proposed尚未执行)。不得把任一建议名当实际运行目标，也不得以改库名代替来源核验。
 - 所选代码结构目标047；P037及尚缺普通032–036、039–047按规范依赖执行，R038排除；旧SQL/校验和/真实回执不改，禁止Ent叠加补表和应用owner权限。
 - 身份、组织、权限、密码及业务配置保留；测试数据先分类；824与6条cloud绑定保留停用；旧ITSM ticket及历史流程不迁。
 - 后端工具：`itsm-backend/cmd/migrate/main.go`、`migration/work_item_preparation.go`、`cmd/check_workitem_cutover/main.go`只复用；领域操作复用现有服务。发现代码缺口才建独立修复并测试，不直接改库绕过。
