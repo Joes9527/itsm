@@ -1,0 +1,54 @@
+# Historical rule example, not an executable environment profile. Supply an explicit reviewed copy.
+version: 1
+name: legacy-itsm-2026-08
+description: 旧 ITSM 主数据 → 新 ITSM（克隆库）迁移校验；凭据一律来自环境变量
+source:
+  dir: /mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main/data
+  files:
+    departments: {file: itsm_departments.json, sha256: f8b3fbdaa12176724ee6d346, records: 5272, id_field: departmentId}
+    users: {file: itsm_users.json, sha256: fe794d35abcbffb9, records: 14393, id_field: userName}
+target:
+  access: docker
+  container: REPLACE_WITH_VALIDATION_CONTAINER
+  user: REPLACE_WITH_READONLY_ROLE
+  database: REPLACE_WITH_VALIDATION_DATABASE
+  credential: {from_env: ITSM_TARGET_DB_PASSWORD}
+  api_base: http://localhost:3010
+  api_user_env: ITSM_ADMIN_USER
+  api_credential: {from_env: ITSM_ADMIN_PASSWORD}
+  scope: full-database
+lineage: []
+entities:
+  - name: users
+    source: users
+    target_table: users
+    keys: {source: userName, target: username}
+    filter: {source_field: status, op: equals, value: userstatus01}
+    field_checks:
+      - {name: name, source: realName, target: name}
+      - {name: email, source: email, target: email, rule: rewrite_local_part, domain: keas.kln.comm}
+      - {name: active, source: status, target: active, rule: map,
+         map: {userstatus01: true, userstatus04: false}}
+      - {name: manager, source: leaderId, target: manager_id, rule: unresolvable}
+    structure_checks: [unique_username, no_cross_tenant, password_is_bcrypt]
+    rule_assertions: [{name: filter, min_match_rate: 0.95}]
+    write:
+      enabled: false
+      action: create_missing
+      endpoint: POST /api/v1/users
+      fields:
+        username: userName
+        name: realName
+        email: "rewrite:keas.kln.comm"
+        departmentId: "department_by:departmentUnit"
+        role: end_user
+        tenantId: 1
+      password: {from_env: MIGRATED_DEFAULT_PASSWORD}
+      preflight: [username_absent, email_absent, department_resolves]
+      rollback: {disable: "PUT /api/v1/users/:id/status"}
+  - name: departments
+    source: departments
+    target_table: departments
+    keys: {source: departmentId, target: code}
+    structure_checks: [tree_single_root, no_cycles, parents_resolvable, prefix_levels]
+    analysis: [tree, prefix_closure, path_segment_attribution]
