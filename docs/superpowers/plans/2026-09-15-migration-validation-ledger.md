@@ -542,7 +542,7 @@ WSL最终副本与角色已归档到既有私有证据目录，最终副本dump 
 
 输入：阶段2验收基线、现有源manifest/工具/成果。输出：唯一可用验证库与可重复验证过程。
 
-- [ ] 核验Toolkit实际分支与主干差异；未集成则单独评审集成，运行既有离线测试`python3 -m pytest scripts/__tests__ -q`及`python3 -m scripts.migration self-test`，不让离线检查连接共享库。
+- [x] 核验Toolkit实际分支与主干差异；未集成则单独评审集成，运行既有离线测试`python3 -m pytest scripts/__tests__ -q`及`python3 -m scripts.migration self-test`，不让离线检查连接共享库。
 - [ ] 从已验收Dev一致性快照恢复具名验证库；保存来源/时间/摘要，校验迁移结构、身份及关联。建立独立profile，阻止复制过来的凭据/绑定意外连回Dev，禁用未获准后台外发。
 - [ ] 保全原ga/replay五批映射、制品、真实收据和身份工具结果；按稳定业务键比较新克隆，列出一致、缺失、冲突及排除对象。
 - [ ] 用户/组织先执行现有`verify`与`verify-profile`；需补建时先dry-run。配置用既有适用批次工具生成差异方案，不盲跑全量seed、不复制旧收据、不默认补示例对象。
@@ -574,7 +574,7 @@ WSL最终副本与角色已归档到既有私有证据目录，最终副本dump 
 - **工具：** PR43已修复实体选择、租户范围与失败退出码问题并合并；91项离线测试通过、1项live anchor跳过，独立复审无剩余阻塞；未运行真实数据回填。`--apply`尚不满足API/数据库目标绑定，不宣称可直接回填。
 - **克隆拓扑待决：** 现有P证据绑定原库名、deployment、inspection及授权摘要，同实例更名克隆不能直接准入；原回执不可改写。追加准入能力是一种方案。进一步只读复审确认P没有固定原PG实例，较小替代为独立PG恢复、保留原库名/角色名/逻辑deployment、独立密码及附属状态；仍须核验原证据/ACL/角色策略OID及当前business-inspection同实例。已向维护者提出拓扑选择，未得到答复前不执行依赖步骤。验证库尚未创建，旧成果库与临时恢复容器尚未删除，不能声称只剩两个库。
 - **创建阻塞及配置修复：** 普通工单UI最初返回500且事务回滚；默认Graph目标被停用，无法冻结邮件通知目标。配置Dev专用本地SMTP接收器后，同一表单成功创建工单29。`itsm-dev-mailpit`仅发布127.0.0.1:1025/8025，无relay；镜像固定`axllent/mailpit@sha256:df6c2541907e1be6fac21f509927cf6ed771617a1f4b361ef66d97bd05593d2d`。合成邮件接收验证通过；应用notification仍disabled，工单29邮件intent待处理且attempt0，站内通知已落地。原用户偏好与企业connector不改；这不是外部邮件发送验收。
-- **UI实际边界：** 工单29（`DEV-RESTORE-20260916-GENERIC-01`）已通过创建、详情、评论、带原因转派至验收人、刷新及合成附件上传；流程27使用`generic:29`。UI完成任务33后，任务记录completed，但callback2仍pending/handler_error，流程未推进。本条记FAIL，不将任务提交/完成当流程成功。已定位：definition65的Activity_Assign回调要求assignee_id，但任务完成UI没有该输入，契约只标正整数未标required，导致空payload被接受后反复失败。只读纯handler复现一致；instance旧快照assignee2不能替代当前工单owner1，更不能补写冻结回调伪造用户选择。Activity_Resolve另需验证new_status输入。现有API没有带修正输入的callback恢复入口，实例终止也拒绝未决callback；保留实例27/任务33/回调2，不手改payload或重置任务。配置候选是新定义版本使用现有无handler fulfillment + work_item_assignee模式；若继续保留assign回调则需补UI/API必填表单契约，两者尚未取代已接受设计。当前数据恢复另需受审计方案。
+- **UI实际边界：** 工单29（`DEV-RESTORE-20260916-GENERIC-01`）已通过创建、详情、评论、带原因转派至验收人、刷新及合成附件上传/下载；下载文件逐字节比对一致，SHA-256 `5e65df006000f6ed998847c0931fd0c1b76c8ca5fe849a2e60c9dcf35109f0a3`。流程27使用`generic:29`。UI完成任务33后，任务记录completed，但callback2仍pending/handler_error，流程未推进。本条记FAIL，不将任务提交/完成当流程成功。已定位：definition65的Activity_Assign回调要求assignee_id，但任务完成UI没有该输入，契约只标正整数未标required，导致空payload被接受后反复失败。只读纯handler复现一致；instance旧快照assignee2不能替代当前工单owner1，更不能补写冻结回调伪造用户选择。Activity_Resolve另需验证new_status输入。现有API没有带修正输入的callback恢复入口，实例终止也拒绝未决callback；保留实例27/任务33/回调2，不手改payload或重置任务。配置候选是新定义版本使用现有无handler fulfillment + work_item_assignee模式；若继续保留assign回调则需补UI/API必填表单契约，两者尚未取代已接受设计。当前数据恢复另需受审计方案。
 
 ### 验证、审查与汇报纪律
 
