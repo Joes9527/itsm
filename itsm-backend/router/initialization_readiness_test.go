@@ -5,28 +5,33 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
-	"github.com/stretchr/testify/require"
 	"io"
-	"itsm-backend/pkg/seeder"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"itsm-backend/pkg/seeder"
 )
 
 // The fake SQL transport exercises the real baseline query and its refusal paths.
 // Any attempted schema-ledger query through the business pool fails.
-type readinessDriver struct{}
-type readinessConn struct{ mode string }
-type readinessRows struct {
-	values []driver.Value
-	read   bool
-}
+type (
+	readinessDriver struct{}
+	readinessConn   struct{ mode string }
+	readinessRows   struct {
+		values []driver.Value
+		read   bool
+	}
+)
 
 func (readinessDriver) Open(name string) (driver.Conn, error) { return &readinessConn{name}, nil }
 func (*readinessConn) Prepare(string) (driver.Stmt, error) {
 	return nil, errors.New("unexpected prepare")
 }
-func (*readinessConn) Close() error              { return nil }
+func (*readinessConn) Close() error { return nil }
 func (*readinessConn) Begin() (driver.Tx, error) { return nil, errors.New("unexpected transaction") }
+
 func (c *readinessConn) QueryContext(_ context.Context, q string, _ []driver.NamedValue) (driver.Rows, error) {
 	if !strings.Contains(q, "FROM initialization_installations") {
 		return nil, errors.New("business pool must not inspect migration evidence")
