@@ -39,7 +39,7 @@ Windows host: `192.168.31.66`. SSH reaches Ubuntu WSL as `administrator`, port `
 | Dimension | Daily development | Migration validation |
 | --- | --- | --- |
 | Application | Current selected, reviewed frontend/backend release | The same selected frontend/backend release for comparative acceptance |
-| Database purpose | Dev database for ongoing development and development test records | Separate clone/isolated target for cleaned legacy data and acceptance records |
+| Database purpose | Dev database for ongoing development and development test records | A traceable clone of Dev for cleaned legacy data and acceptance records |
 | Schema | Canonical migrations required by the selected code | The same required schema contract; verify migration receipts and structure independently |
 | Data/configuration | Development fixtures and configuration | Approved source mappings, transformed data and target business configuration |
 | Shared entry | 3010 → 8080 targets Dev for daily work | Temporarily switch the same entry to the validation profile for a scheduled validation window |
@@ -68,7 +68,7 @@ Windows host: `192.168.31.66`. SSH reaches Ubuntu WSL as `administrator`, port `
 
 One shared 8080 serves one target at a time. This topology does not provide simultaneous access to both databases; coordinate the validation window with development. Any future concurrent topology needs an explicit operational decision and documented port ownership, not ad hoc use of 3000/3001.
 
-Database labels describe roles, not lineage: `itsm_ga_ready` was prepared as an isolated new-model target, not a full Dev clone or a GA release. The intended validation role can use a verified clone or a deliberately prepared isolated target, with provenance and omissions recorded. Dated observations and the ordered recovery tasks belong in the [single ledger](superpowers/plans/2026-09-15-migration-validation-ledger.md#development-restoration-update); this contract is not a live deployment report.
+Database labels describe roles, not lineage: `itsm_ga_ready` was prepared as an isolated new-model target, not a full Dev clone or a GA release. The maintainer reaffirmed on 2026-09-16 that the maintained validation role must use a verified Dev clone. Existing isolated targets retain their prior evidence and serve as transition sources; they are not interchangeable with that clone. See the [two-database convergence proposal and current observations](superpowers/plans/2026-09-15-migration-validation-ledger.md#dev-clone-alignment). Dated observations and the ordered recovery tasks belong in the [single ledger](superpowers/plans/2026-09-15-migration-validation-ledger.md#development-restoration-update); this contract is not a live deployment report.
 
 ## One startup authority
 
