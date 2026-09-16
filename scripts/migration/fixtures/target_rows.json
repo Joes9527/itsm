@@ -1,0 +1,10 @@
+{
+  "departments": [
+    {"code": "ROOT", "name": "Root", "parent_id": ""},
+    {"code": "CHILD", "name": "Child", "parent_id": "ROOT"}
+  ],
+  "users": [
+    {"username": "U1", "name": "One", "email": "one@keas.kln.comm", "active": "true",
+     "role": "end_user", "tenant_id": "1", "hash_prefix": "$2a$"}
+  ]
+}

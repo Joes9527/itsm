@@ -1,0 +1,4 @@
+[
+  {"departmentId": "ROOT", "parentId": "root", "departmentName": "Root"},
+  {"departmentId": "CHILD", "parentId": "ROOT", "departmentName": "Child"}
+]
