@@ -151,10 +151,10 @@ func TestSetupRoutes_ReadinessFailsClosedWithoutInitializationLedger(t *testing.
 	assert.Contains(t, w.Body.String(), `"ready":false`)
 }
 
-func TestInitializationReadinessRequiresLatestRegisteredMigration(t *testing.T) {
-	readiness := checkInitializationReadiness(context.Background(), nil)
+func TestInitializationReadinessDoesNotRequireManualRetirement(t *testing.T) {
+	readiness := checkInitializationReadiness(context.Background(), nil, nil)
 	require.NotEmpty(t, migration.RegisteredMigrations)
-	assert.Equal(t, migration.RegisteredMigrations[len(migration.RegisteredMigrations)-1].Version, readiness.RequiredSchemaVersion)
+	assert.NotEqual(t, migration.WorkItemRetireVersion, readiness.RequiredSchemaVersion)
 }
 
 func TestSetupRoutes_VersionEndpoint(t *testing.T) {

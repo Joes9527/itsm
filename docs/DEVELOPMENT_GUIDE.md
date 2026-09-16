@@ -542,3 +542,7 @@ Jest ignores `.next` build copies. Only `theme-preference.ts` is excluded from c
 ```bash
 python3 -m unittest discover -s scripts/__tests__ -p test_ga_controlled_preparation.py
 ```
+
+### 主数据迁移验证工具包
+
+使用显式审核后的profile运行 `python3 -m scripts.migration verify --profile <path>`。离线检查：`python3 -m pytest scripts/__tests__/test_migration_*.py -q` 及 `python3 -m scripts.migration self-test`。真实 `backfill --apply` 尚未准入，返回阻塞；范围和证据要求见[迁移验证Runbook](migrations/runbook-data-migration-validation.md)。

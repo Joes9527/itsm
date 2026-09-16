@@ -20,8 +20,13 @@ type initializationReadiness struct {
 	Reason                  string `json:"reason,omitempty"`
 }
 
-func checkInitializationReadiness(ctx context.Context, db *sql.DB) initializationReadiness {
-	requiredSchemaVersion := migration.RegisteredMigrations[len(migration.RegisteredMigrations)-1].Version
+func checkInitializationReadiness(ctx context.Context, db *sql.DB, inspectSchema func(context.Context) error) initializationReadiness {
+	var requiredSchemaVersion string
+	for _, entry := range migration.ControlledMigrationCatalog() {
+		if entry.Stage != migration.StageRetire {
+			requiredSchemaVersion = entry.Migration.Version
+		}
+	}
 	result := initializationReadiness{
 		RequiredSchemaVersion:   requiredSchemaVersion,
 		RequiredBaselineVersion: seeder.CurrentTenantTemplateVersion,
@@ -30,12 +35,15 @@ func checkInitializationReadiness(ctx context.Context, db *sql.DB) initializatio
 		result.Reason = "database connection unavailable"
 		return result
 	}
-	if err := db.QueryRowContext(ctx, `
-		SELECT version FROM schema_migrations WHERE version = $1
-	`, result.RequiredSchemaVersion).Scan(&result.SchemaVersion); err != nil {
-		result.Reason = fmt.Sprintf("required schema migration missing: %v", err)
+	if inspectSchema == nil {
+		result.Reason = "canonical schema inspection unavailable"
 		return result
 	}
+	if err := inspectSchema(ctx); err != nil {
+		result.Reason = "canonical schema admission failed"
+		return result
+	}
+	result.SchemaVersion = requiredSchemaVersion
 	var readyComponents int
 	componentNames := seeder.ProductionComponentNames
 	if err := db.QueryRowContext(ctx, `

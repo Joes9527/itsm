@@ -128,3 +128,5 @@ CI 按后端、前端、契约、集成、安全和发布分层。`ga-gate` 只�
 - 仍有长期参考价值的评审、测试方案保留在 `docs/review/`、`docs/testing/` 等目录。
 - 新增长期有效文档时，优先补到本页索引；临时报告使用日期命名，避免和正式指南混淆。
 - 历史 bug 报告、过期计划和阶段性复盘统一放入 [archive](./archive/README.md)，避免干扰当前用户路径。
+
+- [迁移验证工具包：users/departments只读核验与补建限制](migrations/runbook-data-migration-validation.md)
