@@ -58,6 +58,7 @@ func (c *BPMNProcessTriggerController) RegisterRoutes(r *gin.RouterGroup) {
 		bindings.GET("", c.QueryBindings)
 		bindings.GET("/by-type/:business_type", c.GetBindingsByBusinessType)
 		bindings.GET("/:id", c.GetBinding)
+		bindings.POST("/:id/deactivate", middleware.RequireRole("super_admin"), c.DeactivateBinding)
 		bindings.PUT("/:id", middleware.RequireRole("super_admin"), c.UpdateBinding)
 		bindings.DELETE("/:id", middleware.RequireRole("super_admin"), c.DeleteBinding)
 	}

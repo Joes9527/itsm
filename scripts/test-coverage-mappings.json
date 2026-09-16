@@ -1,4 +1,11 @@
 {
+  "itsm-backend/service/bpmn_binding_deactivation.go": [
+    "itsm-backend/controller/bpmn_binding_deactivation_test.go",
+    "itsm-backend/tests/integration/bpmn_binding_deactivation_postgres_test.go"
+  ],
+  "itsm-backend/dto/bpmn_process_trigger_dto.go": [
+    "itsm-backend/controller/bpmn_binding_deactivation_test.go"
+  ],
   "itsm-backend/controller/feishu_controller.go": [
     "itsm-backend/controller/feishu_oauth_management_test.go",
     "itsm-backend/controller/feishu_webhook_test.go"
