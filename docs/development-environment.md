@@ -1,12 +1,12 @@
 # KAF / ITSM maintained WSL development environment
 
-Status: maintained operational contract, updated 2026-09-15. The maintainer selected **3010 as the ITSM frontend port**. Deployment filenames containing `ga`, `candidate`, or `prod` do not establish environment identity or release acceptance. This environment is named **WSL development**.
+Status: maintained operational contract, updated 2026-09-16. The maintainer selected **3010 as the ITSM frontend port**. Deployment filenames containing `ga`, `candidate`, or `prod` do not establish environment identity or release acceptance. This environment is named **WSL development**.
 
 > Before changing Dev, read the [verified Dev031/main047 divergence analysis](review/2026-09-16-dev-schema-divergence-report.md). The maintainer accepted the [restoration design](superpowers/specs/2026-09-16-dev-restoration-two-database-design.md); use the [four-stage execution checklist](superpowers/plans/2026-09-15-migration-validation-ledger.md#two-database-execution) and its evidence gates instead of historical proposals. The selected code/schema compatibility target remains047.
 
 ## Selected schema target: 047
 
-**Current development and migration-validation target, confirmed 2026-09-15: `047_bpmn_assignment_source`.** Both Dev and the migration-validation database must support this selected current-code schema. Do not choose an older backend to accommodate a database at 031 or 046. This is the target contract, not a statement that either live database has already been upgraded.
+**Current development and migration-validation target, confirmed 2026-09-15: `047_bpmn_assignment_source`.** Both Dev and the migration-validation database must support this selected current-code schema. Do not choose an older backend to accommodate a database at 031 or 046. The original Dev completed its canonical upgrade on 2026-09-16. The validation clone has not been created; see the current execution evidence below.
 
 | Decision | Authority for the current task |
 | --- | --- |
@@ -20,6 +20,12 @@ Status: maintained operational contract, updated 2026-09-15. The maintainer sele
 047 adds the persisted, immutable `process_tasks.assignee_source` contract for explicitly bound WorkItem-assignee tasks. It does not turn historical tasks into bound tasks, repair process routing configuration, import legacy data, or establish business acceptance. The canonical [migration registry](../itsm-backend/migration/migrations.go) and [047 SQL](../itsm-backend/migrations/047_bpmn_assignment_source.sql) define the structure; the [assignment report](review/2026-09-15-work-item-task-assignment-report.md) defines the associated behavior and evidence.
 
 For coding agents: start from this selected target and the current source registry. Treat later sections describing earlier port/candidate work and older migration numbers as historical or feature-specific evidence. If a later task intentionally advances beyond047, update this target and its linked execution ledger together; do not silently freeze development at047 or silently deploy a newer schema. Matching the maximum receipt number alone does not prove that required migrations, privileges, configuration and UI paths are valid.
+
+## Current execution status (2026-09-16)
+
+3010 → 8080 currently targets `itsm-postgres-dev / itsm_config_baseline_20260908 / public`, with39 actual migration receipts through047 and no R038. Login passes. Restoration remains in progress: readiness repair, binding adaptation and representative UI acceptance are outstanding; background workflow consumers remain disabled. Do not infer unrestricted development readiness from login alone.
+
+The traceable validation clone has not been created. Existing canonical preparation evidence is bound to its original target, so a controlled clone admission capability is required before an independently named/credentialed clone can run. Historical comparison databases remain preserved until the approved cleanup gates pass. Exact artifacts, completed actions and remaining gates are maintained only in the [execution ledger](superpowers/plans/2026-09-15-migration-validation-ledger.md#two-database-execution).
 
 ## Endpoint ownership
 
