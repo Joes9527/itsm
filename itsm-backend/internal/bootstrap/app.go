@@ -935,7 +935,14 @@ func NewApplication() *Application {
 	intakeReaders.SetFulfillmentReader(srService)
 	intakeHandler.SetReaders(intakeReaders)
 	intakeHandler.SetMappings(intake.NewIdentityMappingService(sessionReader, identityProviders))
+	readinessControl, err := migration.LoadControlConfiguration()
+	if err != nil {
+		sugar.Fatalw("readiness migration control configuration rejected", "error", err)
+	}
 	routerConfig := &router.RouterConfig{
+		InspectSchema: func(ctx context.Context) error {
+			return migration.InspectRuntimeDatabase(ctx, database.GetRawDB(), readinessControl)
+		},
 		IntakeHandler:                   intakeHandler,
 		JWTSecret:                       cfg.JWT.Secret,
 		Logger:                          sugar,

@@ -190,6 +190,7 @@ type RouterConfig struct {
 	Logger                     *zap.SugaredLogger
 	Client                     *ent.Client
 	RawDB                      *sql.DB
+	InspectSchema              func(context.Context) error
 
 	// CSRF configuration
 	CSRFEnabled bool
@@ -382,7 +383,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 			c.JSON(200, gin.H{"status": "ok", "timestamp": time.Now()})
 		})
 		public.GET("/readyz", func(c *gin.Context) {
-			readiness := checkInitializationReadiness(c.Request.Context(), config.RawDB)
+			readiness := checkInitializationReadiness(c.Request.Context(), config.RawDB, config.InspectSchema)
 			status := 200
 			if !readiness.Ready {
 				status = 503
