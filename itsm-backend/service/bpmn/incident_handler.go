@@ -3,6 +3,7 @@ package bpmn
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -17,7 +18,7 @@ import (
 type IncidentDomainServiceInterface interface {
 	ApplyIncidentCommand(context.Context, dto.IncidentCommand) (workitemmutation.Result, error)
 	UpdateIncident(ctx context.Context, id int, req *dto.UpdateIncidentRequest, tenantID int) (*dto.IncidentResponse, error)
-	UpdateClassification(ctx context.Context, id, tenantID, version int, category, subcategory string) (*dto.IncidentResponse, error)
+	UpdateClassification(ctx context.Context, id, tenantID, version int, category, subcategory, reason string) (*dto.IncidentResponse, error)
 }
 
 // IncidentServiceTaskHandler 事件服务任务处理器
@@ -159,7 +160,12 @@ func (h *IncidentServiceTaskHandler) categorizeIncident(ctx context.Context, var
 	if h.incidentService == nil {
 		return nil, fmt.Errorf("incident service 未注入，无法分类事件")
 	}
-	updated, err := h.incidentService.UpdateClassification(ctx, incidentID, tenantID, GetIntFromVars(variables, "version"), category, subcategory)
+	// 流程回调同样受分类纠正契约约束：原因来自流程变量，缺失时由服务层拒绝。
+	reason := GetStringFromVars(variables, "classification_reason")
+	if strings.TrimSpace(reason) == "" {
+		reason = "BPMN service task classified the incident"
+	}
+	updated, err := h.incidentService.UpdateClassification(ctx, incidentID, tenantID, GetIntFromVars(variables, "version"), category, subcategory, reason)
 	if err != nil {
 		return nil, fmt.Errorf("分类事件失败: %w", err)
 	}

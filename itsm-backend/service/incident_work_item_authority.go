@@ -68,7 +68,10 @@ func resolveIncidentCategory(ctx context.Context, client *ent.Client, tenantID i
 
 // UpdateClassification owns the existing name-based classification endpoint.
 // General incident edits use CategoryID directly and never resolve display labels.
-func (s *IncidentService) UpdateClassification(ctx context.Context, id, tenantID, version int, category, subcategory string) (*dto.IncidentResponse, error) {
+//
+// 分类纠正契约（B1）：原因必填（由 updateIncident 在“确实变化”时再次校验），
+// 目标必须解析为同租户、启用且父链连续的路径；前后路径快照写入事件时间线。
+func (s *IncidentService) UpdateClassification(ctx context.Context, id, tenantID, version int, category, subcategory, reason string) (*dto.IncidentResponse, error) {
 	categoryID, err := resolveIncidentCategory(ctx, s.client, tenantID, category, subcategory)
 	if err != nil {
 		return nil, err
@@ -77,5 +80,9 @@ func (s *IncidentService) UpdateClassification(ctx context.Context, id, tenantID
 		zero := 0
 		categoryID = &zero
 	}
-	return s.UpdateIncident(ctx, id, &dto.UpdateIncidentRequest{CategoryID: categoryID, Version: version}, tenantID)
+	return s.UpdateIncident(ctx, id, &dto.UpdateIncidentRequest{
+		CategoryID:           categoryID,
+		Version:              version,
+		ClassificationReason: reason,
+	}, tenantID)
 }

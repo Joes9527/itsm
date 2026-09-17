@@ -78,6 +78,8 @@ type UpdateIncidentRequest struct {
 	Impact          *string                `json:"impact,omitempty" binding:"omitempty,oneof=low medium high critical"`
 	Urgency         *string                `json:"urgency,omitempty" binding:"omitempty,oneof=low medium high critical"`
 	CategoryID      *int                   `json:"categoryId,omitempty" binding:"omitempty,gte=0"`
+	// ClassificationReason 是分类纠正原因：分类确实变化时必填（B1 治理契约）。
+	ClassificationReason string `json:"classificationReason,omitempty" binding:"omitempty,max=500"`
 	AssigneeID      *int                   `json:"assigneeId,omitempty"`
 	RelatedCIIDs    []int                  `json:"relatedCIIds,omitempty"`
 	ImpactAnalysis  *ImpactAnalysis        `json:"impactAnalysis,omitempty"`

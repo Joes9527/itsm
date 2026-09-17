@@ -1213,6 +1213,8 @@ func (c *IncidentController) UpdateClassification(ctx *gin.Context) {
 		Category    string `json:"category"`
 		Subcategory string `json:"subcategory"`
 		Version     int    `json:"version" binding:"required,gt=0"`
+		// reason 必填：分类纠正必须说明原因（B1 治理契约）。
+		Reason string `json:"reason" binding:"required,max=500"`
 	}
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		c.logger.Errorw("Invalid request body", "error", err)
@@ -1225,7 +1227,7 @@ func (c *IncidentController) UpdateClassification(ctx *gin.Context) {
 		return
 	}
 
-	_, err = c.incidentService.UpdateClassification(ctx.Request.Context(), id, tenantID, req.Version, req.Category, req.Subcategory)
+	_, err = c.incidentService.UpdateClassification(ctx.Request.Context(), id, tenantID, req.Version, req.Category, req.Subcategory, req.Reason)
 	if err != nil {
 		respondIncidentMutationError(ctx, err)
 		return

@@ -304,10 +304,20 @@ func (s *IncidentService) updateIncident(ctx context.Context, tx *ent.Tx, id int
 	if req.AssigneeID != nil {
 		return nil, common.NewValidationError("assignment requires an Incident assign command", nil)
 	}
-	if req.CategoryID != nil && *req.CategoryID != 0 {
-		_, err = s.client.TicketCategory.Query().Where(ticketcategory.IDEQ(*req.CategoryID), ticketcategory.TenantIDEQ(tenantID), ticketcategory.IsActiveEQ(true)).Only(ctx)
+	var classificationBefore, classificationAfter []CTINode
+	if req.CategoryID != nil {
+		// 分类纠正契约：目标必须是同租户、启用且父链连续的路径，且分类确实变化时必须给出原因。
+		classificationChanged := *req.CategoryID != currentIncident.Edges.WorkItem.CategoryID
+		if err := RequireCTICorrectionReason(req.ClassificationReason, classificationChanged); err != nil {
+			return nil, err
+		}
+		classificationBefore, err = CTICorrectionBeforePathTx(ctx, tx, tenantID, currentIncident.Edges.WorkItem.CategoryID)
 		if err != nil {
-			return nil, fmt.Errorf("active ticket category not found in tenant: %w", err)
+			return nil, err
+		}
+		classificationAfter, err = ValidateCTICorrectionTargetTx(ctx, tx, tenantID, *req.CategoryID, CTICorrectionTargetPolicy{AllowClear: true})
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -404,8 +414,9 @@ func (s *IncidentService) updateIncident(ctx context.Context, tx *ent.Tx, id int
 	}
 	incidentEntity.Edges.WorkItem = workItem
 
-	// 记录事件更新活动
-	_, err = s.CreateIncidentEventTx(ctx, tx, &dto.CreateIncidentEventRequest{
+	// 记录事件更新活动；分类变化时把「原因 + 前后完整路径快照」作为本域时间线证据写入
+	// （与状态/字段写入同一事务，写入失败即整笔回滚）。请求级 actor/来源由既有审计中间件留痕。
+	event := &dto.CreateIncidentEventRequest{
 		IncidentID:  id,
 		EventType:   "update",
 		EventName:   "事件更新",
@@ -413,7 +424,15 @@ func (s *IncidentService) updateIncident(ctx context.Context, tx *ent.Tx, id int
 		Status:      "active",
 		Severity:    "info",
 		Source:      "system",
-	}, tenantID)
+	}
+	if classificationBefore != nil || classificationAfter != nil {
+		event.EventType = "classification_change"
+		event.EventName = "分类调整"
+		event.Description = "事件分类已调整：" + strings.TrimSpace(req.ClassificationReason)
+		event.Source = "incident.classification"
+		event.Metadata = CTICorrectionEvidence{Before: classificationBefore, After: classificationAfter}.Metadata(req.ClassificationReason)
+	}
+	_, err = s.CreateIncidentEventTx(ctx, tx, event, tenantID)
 	if err != nil {
 		return nil, err
 	}

@@ -20,7 +20,10 @@ it('reconstructs edit selection by ID and distinguishes omission from clearing',
   const nodes = [{id:1,name:'same',isActive:true,parentId:null,children:[{id:2,name:'same',isActive:true,parentId:1}]}] as TicketCategory[];
   expect(classificationPath(2,nodes)).toEqual([1,2]);
   expect(classificationPath(99,nodes)).toBeUndefined();
+  // 未触碰分类时不携带任何分类字段（既不省略也不清空语义混淆）。
   expect(classificationUpdate(undefined,false)).toEqual({});
-  expect(classificationUpdate([],true)).toEqual({categoryId:0});
-  expect(classificationUpdate([1,2],true)).toEqual({categoryId:2});
+  // 触碰后必须同时携带最深节点与必填原因（B1 治理契约）。
+  expect(classificationUpdate([],true,'明确清空分类')).toEqual({categoryId:0,classificationReason:'明确清空分类'});
+  expect(classificationUpdate([1,2],true,'  选错了类型  ')).toEqual({categoryId:2,classificationReason:'选错了类型'});
+  expect(classificationUpdate([1,2],true)).toEqual({categoryId:2,classificationReason:''});
 });

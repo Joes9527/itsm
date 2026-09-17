@@ -623,3 +623,50 @@ go test ./... -count=1             -> 无 FAIL
 5. `tests/integration/cti_correction_postgres_test.go`：完整→空/部分拒绝、完整→完整成功、
    resolved 未 closed 可纠正、closed/cancelled 无新通道、跨租户/无权/过期版本失败、原因空失败，
    并断言 `assignee_id`/SLA 时间/周期/BPMN 实例数/目录默认 ID 不变与并发纠正只有一个预期版本成功。
+
+### 执行记录（B1 增量二：Incident + 前端）
+
+**后端（Incident 拥有者）**
+
+- `service/incident_service.go` `updateIncident`：`req.CategoryID` 分支改为
+  「原因规则（仅变化时必填）+ 目标路径校验（`AllowClear: true`，保留既有清空语义）+ 前后路径证据」；
+  **无需新建事务边界**——该路径本来就运行在 `UpdateIncident`/`UpdateIncidentTx` 的事务中。
+- 证据落点：分类变化时把既有 `incident_events` 时间线事件升级为 `classification_change`，
+  `Description` 记录原因，`Metadata` 写入 `classificationReason/classificationBefore/classificationAfter`
+  （与 Problem 使用同一 `CTICorrectionEvidence.Metadata` 形状）；写入失败与状态/字段写入一起回滚。
+  请求级 actor/来源由既有审计中间件留痕，不再重复写第二行 `audit_logs`
+  （该表有 `(tenant_id,user_id,operation_id)` 操作回执唯一索引）。
+- 既有专业分类入口 `IncidentService.UpdateClassification` 增加必填 `reason` 参数，
+  HTTP 端点 `/incidents/:id/classification`（及 `/incidents/classification`）绑定 `reason`（required, max=500），
+  BPMN 服务任务改为从流程变量 `classification_reason` 取值、缺失时使用明确的系统来源原因。
+- 测试：`TestIncidentUpdateClassificationIDContract` 扩展为「缺原因拒绝且零副作用 + 事件证据结构化断言
+  （事件类型/原因/前后路径 ID 与名称）+ 既有停用/跨租户/不存在/回滚断言保持」；
+  `incident_service_test.go` 跨租户用例同步传原因。
+
+**前端**（4 个入口：事件编辑页、问题编辑页、事件详情内联分类、事件管理弹窗）
+
+- `classificationUpdate(path, touched, reason)` 现在同时返回 `categoryId` 与 `classificationReason`（trim 后）。
+- 每个入口在提交前做同一校验：分类被触碰但原因为空 → 阻断并提示「调整分类时必须填写原因」，
+  避免「界面显示成功、后端 400」的错位；仅在编辑态渲染「分类调整原因」输入（新建态不渲染）。
+- 测试：`classification-edit.test.tsx` 的两条变更用例补充原因并断言载荷，
+  新增 incident/problem 两条「无原因被阻断且不发请求」用例；`incident-classification.test.ts`
+  `classificationUpdate` 形状断言更新。
+
+验证证据：
+
+```text
+itsm-backend:  go test ./... -count=1                                  -> 无 FAIL
+itsm-backend:  go test ./service -run TestIncidentUpdateClassificationIDContract -count=1 -> ok
+itsm-frontend: npm run type-check                                      -> 通过
+itsm-frontend: npx jest classification-edit.test.tsx incident-classification.test.ts -> 13/13
+itsm-frontend: npx jest "src/app/(main)/incidents" "src/app/(main)/problems" "src/components/incident" -> 8/8
+itsm-frontend: npx jest src/components/work-item/__tests__             -> 71/71
+itsm-frontend: npx eslint <changed files>                              -> 无输出
+```
+
+顺带发现（未处理，留待 B4 清理清单）：`src/lib/api/incident-api.ts` 的
+`getIncidentClassification/createIncidentClassification/updateIncidentClassification` 三个 helper
+**没有任何调用方**，且其路径与现有路由不一致（GET 不存在的 `/incidents/:id/classification`、
+PUT 使用 `/incidents/classification/:id`）。它们在本改动前就已失效，属于独立清理项，不纳入本次提交以免混入无关改动。
+
+**B1 剩余**：Change 与 ServiceRequest 拥有者接入；`tests/integration/cti_correction_postgres_test.go`。
