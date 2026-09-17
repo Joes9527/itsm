@@ -964,3 +964,67 @@ repo:          git diff --check -> 干净
 - 启用清单中的目标列填写与执行（需目标写入授权）
 - `docs/development.md`/`docs/operations.md` 中若出现 CTI 描述需一并核对（本轮已核对 DEVELOPMENT_GUIDE）
 - 独立代码 review：PR #48 已开放评审；我这侧等待反馈并处理重要问题
+
+### 执行记录（B4 增量二：隔离环境搭建尝试与浏览器验收阻塞点）
+
+**目标**：在隔离全栈上真实执行 `tests/e2e/flows/cti-governance.spec.ts`（36 项）。
+
+**已搭建（全部自建、一次性、tmpfs；共享 3010/8080/5432 未触碰）**
+
+```text
+postgres   codex-cti-e2e-pg-20260917    pgvector/pgvector:pg17   127.0.0.1:36445  tmpfs
+redis      codex-cti-e2e-redis-20260917 redis:7-alpine           127.0.0.1:6399   tmpfs
+backend    /tmp/cti-itsm-backend（本分支构建，SERVER_PORT=8090，空闲端口）
+migrate    /tmp/cti-itsm-migrate（-tags migrate）
+config     临时工作目录内的 config.yaml 副本（仅改 database 段指向 36445；仓库文件未改）
+```
+
+**失败链（真实输出，逐步排除）**
+
+1. 仅用环境变量启动时，应用仍按**仓库 `config.yaml` 的 `database.port: 5432`** 连接（该键无环境变量覆盖，
+   只有带 `${VAR:default}` 占位符的键才受环境变量控制）。
+   - 后果：连接打到**共享 5432**，以 `cti_test` 认证被拒（`28P01`）。
+   - **重要安全结论**：该失败是"失败关闭"——错配不会写入共享库，而是认证失败。
+     本次尝试**未对共享库产生任何写入**（仅一次被拒绝的认证）。
+   - 因此改用"临时工作目录内的 config 副本"，仓库 `config.yaml` 保持不变。
+2. 空库 canonical bootstrap 要求 **pgvector**（`extension "vector" is not available`）→ 改用 `pgvector/pgvector:pg17`。
+3. 首次部分失败后重跑命中 `NeedsSchemaBootstrap=false` → 直接 DROP/CREATE 数据库，保证空目标。
+4. `migrate -fresh`（开发专用破坏性入口）要求 `deployment.mode=development`
+   （`-fresh is development-only; deployment mode "private" is not allowed`）与显式目标绑定
+   （`ITSM_ALLOW_DESTRUCTIVE_FRESH`/`ITSM_FRESH_HOST|PORT|DATABASE`），均已按要求提供。
+5. **最终阻塞点**：`-fresh` 与常规 bootstrap 都在最后一步被**受控迁移准入**拦下：
+
+```text
+Canonical fresh bootstrap failed: runtime migration admission:
+runtime requires migration 037_work_item_structure_preparation
+```
+
+即：运行时要求受控 WorkItem 准备（P 阶段）已带**受审证据回执**落账；该阶段需要
+`MigrationEvidence`（目标、catalog 修订、ledger/库存/应用摘要、备份与恢复报告摘要、
+journey/observation 报告摘要、Operator、变更单号）。**凭空构造这些摘要与证据正是受控退役设计
+明令禁止的行为**（"不能省略证据文件另执行一次 P"），因此我**没有**为了跑通验收而伪造证据。
+
+**结论（诚实口径）**
+
+- 本分支与隔离目标上的**后端/数据库层证据完整**（8 套真实 PG 用例全部通过，见前述执行记录）。
+- **浏览器端到端验收仍为 NOT RUN**：需要一个"已按受控流程准备好"的目标
+  （含两租户夹具与可用账号）或环境负责人提供的专用 E2E 目标；仅靠自建空库无法达到运行时准入。
+- 已就绪、随时可跑：脚本、隔离部署方式（上述清单）、以及所需目标指纹格式。
+
+**清理**
+
+```text
+docker rm -f codex-cti-e2e-pg-20260917 codex-cti-e2e-redis-20260917 codex-cti-governance-pg-20260917
+rm -rf /tmp/cti-e2e-run /tmp/cti-itsm-backend /tmp/cti-itsm-migrate /tmp/cti-pg-password /tmp/cti-*.log
+验证：无 codex-cti* 容器残留；/tmp 无 CTI 相关文件；共享 3010/8080 仍在监听（未受影响）
+```
+
+**如需复跑后端 PG 证据**（容器已按用户要求回收），按同一指纹重建即可：
+
+```bash
+docker run -d --name <name> --label com.itsm.test.owner=cti-governance --label com.itsm.test.disposable=true \
+  -p 127.0.0.1:36444:5432 --tmpfs /var/lib/postgresql/data \
+  -e POSTGRES_USER=cti_test -e POSTGRES_DB=sslvpn_test postgres:17
+INTAKE_POSTGRES_TEST_DSN="postgres://cti_test:<pw>@127.0.0.1:36444/sslvpn_test?sslmode=disable" \
+  go test -tags integration_postgres ./tests/integration -run 'TestCTI' -count=1 -v
+```
