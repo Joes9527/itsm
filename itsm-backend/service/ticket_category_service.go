@@ -89,6 +89,18 @@ func (s *TicketCategoryService) ResolveCTIPath(ctx context.Context, tx *ent.Tx, 
 
 // GetCategoryPath 是只读投影：给读接口回显“完整路径”，不做任何写入或加锁。
 // 需要与调用方同事务时使用 ProjectCTIPath，避免嵌套事务。
+// ResolveRuleMatchPath 在调用方事务内解析工单分类的完整根路径，供规则条件求值使用。
+// 未分类返回空路径（不报错）；分类存在但解析失败必须返回错误，调用方据此失败关闭。
+func ResolveRuleMatchPath(ctx context.Context, tx *ent.Tx, tenantID, categoryID int) ([]CTINode, error) {
+	if tx == nil {
+		return nil, errors.New("classification path resolution requires the owning transaction")
+	}
+	if categoryID <= 0 {
+		return nil, nil
+	}
+	return NewTicketCategoryService(tx.Client()).ProjectCTIPath(ctx, tx, tenantID, categoryID)
+}
+
 func (s *TicketCategoryService) GetCategoryPath(ctx context.Context, tenantID, selectedID int) ([]CTINode, error) {
 	if s.client == nil {
 		return nil, errors.New("CTI projection requires a client")

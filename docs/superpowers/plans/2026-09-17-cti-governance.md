@@ -289,7 +289,7 @@ func TestCTICutoffIncludesExactInstant(t *testing.T) {
 
 **Files:** 修改 `service/ticket_assignment_rule_service.go`、`service/ticket_sla_service.go`、对应规则DTO/schema及API管理界面；扩展A2的分类引用服务/controller，新增 `service/ticket_category_policy_test.go`、`tests/integration/cti_rule_scope_postgres_test.go`。新增scope持久化用后续canonical迁移，不改A2已落库SQL。
 
-- [ ] 写纯函数红测：精确只匹配selectedID；subtree匹配完整路径任一祖先；未知scope拒绝。写PG回归覆盖旧规则的实际命中集合，不能先假设旧规则全部exact。
+- [x] 写纯函数红测：精确只匹配selectedID；subtree匹配完整路径任一祖先；未知scope拒绝。写PG回归覆盖旧规则的实际命中集合，不能先假设旧规则全部exact。
 
 ```go
 func TestCTIScopeDistinguishesAncestor(t *testing.T) {
@@ -301,11 +301,11 @@ func TestCTIScopeDistinguishesAncestor(t *testing.T) {
 }
 ```
 
-- [ ] 运行 `go test ./service -run 'TestCTIScope' -count=1`；实现只处理分类条件，规则优先级由原所有者保留。
-- [ ] 审核SLA分类匹配是否扫描正确候选（当前代码先取活跃候选再判断category，不能以注释证明正确）；修复本任务必要命中缺口并测试多候选/优先级。旧字符串分类条件保留其实际语义，歧义对象阻止迁移，不静默转ID/扩大集合。
+- [x] 运行 `go test ./service -run 'TestCTIScope' -count=1`；实现只处理分类条件，规则优先级由原所有者保留。
+- [x] 审核SLA分类匹配并修复命中缺口：**确认存在真实缺陷**（先取一条无排序的活跃定义再判断分类，会漏掉真正持有该分类的定义并静默退化到通用SLA）。已改为扫描全部活跃候选 + 确定性顺序 + 共享 MatchCTI（精确语义保持不变），并测试多候选/停用/未分类/解析失败失败关闭。旧字符串分类条件保留其实际语义。
 - [ ] 分类详情引用接口返回授权可见目录/规则列表、分页和总数；所有者提供查询契约，聚合层不跨域调用repository。内部维护引用保护须覆盖所有真实引用，即使当前actor无权查看，返回通用“存在引用”而不泄露对象名称/计数。
-- [ ] 规则编辑明确“仅当前/包含下级”，分类详情提供管理链接。引用查询失败明确报错；disabled/default_resolver等历史描述字段不伪装成已生效规则。
-- [ ] 验证跨租户与RBAC、旧规则命中集一致、新范围命中、改分类无自动再执行；提交 `feat: expose CTI rule scope and authorized references`。
+- [~] 规则编辑明确“仅当前/包含下级”（**后端语义与校验已完成**，界面选择器待做）；分类详情提供管理链接（待做）。引用查询失败明确报错；disabled/default_resolver等历史描述字段不伪装成已生效规则（待做）。
+- [~] 验证旧规则命中集一致、新范围命中、改分类无自动再执行（**PG 已完成**）；跨租户与RBAC、授权引用接口与界面待做。
 
 ## Task B4：全链路验收、文档与受控启用准备
 
@@ -774,3 +774,58 @@ go test ./... -count=1 -> 无 FAIL
 **明确未做**：变更前端仍未展示/编辑分类。变更 UI 从来只有类型/影响/风险/计划等字段，
 没有"分类"字段，因此这属于**新增界面能力**（需要产品确认变更单是否要在界面展示分类），
 而不是"既有纠正入口的授权门控"，故不在本轮擅自添加。
+
+### 执行记录（B3 增量一：规则精确/子树语义 + SLA 候选扫描修复）
+
+**规则分类条件的作用域**
+
+- `service/ticket_rule_conditions.go`：条件新增可选 `scope`（缺省 `exact`，可选 `subtree`），
+  求值改为调用共享 `MatchCTI`，不再各自实现一套分类比较：
+  - `exact` 只命中工单**最深节点**（与既有 `item.CategoryID` 比较完全等价 → 旧规则命中集不变）；
+  - `subtree` 命中完整路径上的任一祖先；
+  - 未知 scope（含非字符串）→ `ErrCTIUnknownMatchScope`（失败关闭，不静默按精确处理）；
+  - 分类条件只接受 `equals/not_equals/in/not_in`，其它算子失败关闭；取值必须是数字或数字数组；
+  - **未分类工单不命中分类条件且不是错误**（否则任何带分类条件的规则都会让未分类工单的创建/分派整体失败——这一点由红测发现）；
+  - 有分类却解析不出路径 → 错误（失败关闭），由入口的 `ResolveRuleMatchPath` 判定。
+- 求值入口改为显式 `EvaluateTicketRuleConditions(TicketRuleMatch{Item, CategoryPath}, conditions)`，
+  四个拥有者（智能分派、创建期分派、创建期自动化、自动化规则试跑）都在**自己的事务内**解析路径，
+  规则优先级仍由原拥有者保留。
+
+**SLA 分类匹配（真实缺陷，已修）**
+
+既有实现：`categoryID > 0` 时取一条**无排序**的活跃 SLA 定义，判断它是否含该分类；不含就直接退化到
+type/priority 匹配 —— 真正持有该分类的定义会被漏掉，SLA 结果取决于数据库返回顺序。
+
+修复：扫描**全部**活跃候选（`Order(ent.Asc(id))` 确定性顺序），用共享 `MatchCTI(..., CTIExact)` 判断
+`category_ids` 是否命中工单最深节点（精确语义保持不变）；分类存在却解析不出路径时**明确报错**，
+不再静默用通用 SLA 顶替。
+
+**红→绿证据（证明缺陷真实存在）**
+
+临时把候选扫描回退为既有实现后运行新用例：
+
+```text
+--- FAIL: TestTicketSLACategoryMatchScansAllActiveCandidates
+    expected: 2   actual: 1
+    Messages: the SLA that actually holds the classification must win
+```
+
+恢复修复后：`ok  itsm-backend/service`。
+
+**验证**
+
+```text
+go test ./service -run 'TestCTIRuleCondition|TestTicketSLACategory|TestCategoryMatchesPath|TestCTIScope' -count=1 -> ok
+go test ./... -count=1 -> 无 FAIL
+隔离 PostgreSQL：TestCTIRuleScopePostgres -> PASS 5 子项
+  legacy_exact_conditions_keep_their_hit_set（祖先/成员集合都不会静默扩大）
+  subtree_scope_matches_ancestors_only_when_declared（含无关分支不命中）
+  unknown_scope_fails_closed
+  unclassified_item_matches_no_classification_condition（不是错误）
+  moving_a_category_recomputes_hits_without_rewriting_rules（被引用子树按既有引用保护不可移动；
+    未引用子树移动后子树命中随新路径重算，规则定义未被改写、无自动再执行）
+go test -tags integration_postgres ./tests/integration -run TestCTI -count=1 -> 7 套全 PASS，无 schema 残留
+```
+
+**B3 仍待完成**：授权引用查询接口（分页/总数/RBAC 过滤、无权时只返回通用"存在引用"）与
+前端规则编辑"仅当前/包含下级"选择器、分类详情引用页签与管理链接；跨租户/RBAC 用例。
