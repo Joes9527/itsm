@@ -11,7 +11,7 @@ import (
 )
 
 func TestCallbackBlockProjection(t *testing.T) {
-	for _, scenario := range []string{"blocked", "absent", "other_tenant", "other_instance", "other_task", "optional", "pending"} {
+	for _, scenario := range []string{"blocked", "handler_contract", "target_missing", "absent", "other_tenant", "other_instance", "other_task", "optional", "pending"} {
 		t.Run(scenario, func(t *testing.T) {
 			f := newBPMNAuthorizationFixture(t)
 			_, task := seedBoundAssignment(t, f, "callback-block")
@@ -32,7 +32,17 @@ func TestCallbackBlockProjection(t *testing.T) {
 				if scenario == "pending" {
 					status = "pending"
 				}
-				f.client.ProcessCallbackOutbox.Create().SetExecutionKey("block").SetTenantID(tenantID).SetProcessInstanceID(instanceID).SetProcessTaskID(taskID).SetCallbackKind("user_task").SetHandlerID("ticket_handler").SetTaskType("ticket_task").SetElementID(task.TaskDefinitionKey).SetStatus(status).SetOptionalDeclared(scenario == "optional").SetLastErrorClass("SECRET must never appear").SaveX(f.userCtx)
+				f.client.ProcessCallbackOutbox.Create().SetExecutionKey("block").SetTenantID(tenantID).SetProcessInstanceID(instanceID).SetProcessTaskID(taskID).SetCallbackKind("user_task").SetHandlerID("ticket_handler").SetTaskType("ticket_task").SetElementID(task.TaskDefinitionKey).SetStatus(status).SetOptionalDeclared(scenario == "optional").SetLastErrorClass(func() string {
+					if scenario == "handler_contract" || scenario == "target_missing" {
+						return scenario
+					}
+					return "SECRET must never appear"
+				}()).SaveX(f.userCtx)
+			}
+			if scenario == "handler_contract" {
+				for _, rawCode := range []string{"SECRET private callback detail", "target_missing"} {
+					f.client.ProcessCallbackOutbox.Create().SetExecutionKey(rawCode).SetTenantID(task.TenantID).SetProcessInstanceID(task.ProcessInstanceID).SetProcessTaskID(task.ID).SetCallbackKind("user_task").SetHandlerID("ticket_handler").SetTaskType("ticket_task").SetElementID(task.TaskDefinitionKey).SetStatus("blocked").SetLastErrorClass(rawCode).SaveX(f.userCtx)
+				}
 			}
 			before := f.client.ProcessTask.GetX(f.userCtx, task.ID)
 			mutations := 0
@@ -46,8 +56,18 @@ func TestCallbackBlockProjection(t *testing.T) {
 			require.NoError(t, err)
 			var fields map[string]interface{}
 			require.NoError(t, json.Unmarshal(raw, &fields))
-			if scenario == "blocked" {
+			if scenario == "blocked" || scenario == "handler_contract" || scenario == "target_missing" {
 				require.NotNil(t, fields["callbackBlock"])
+				block := fields["callbackBlock"].(map[string]interface{})
+				if scenario == "handler_contract" {
+					require.Equal(t, "handler_contract", block["code"])
+					require.Contains(t, block["reason"], "参数")
+				} else if scenario == "target_missing" {
+					require.Equal(t, "target_missing", block["code"])
+					require.Contains(t, block["reason"], "目标")
+				} else {
+					require.Equal(t, "required_callback_blocked", block["code"])
+				}
 			} else {
 				require.NotContains(t, fields, "callbackBlock")
 			}

@@ -197,7 +197,7 @@ function ProcessTasksPanel({ ticketId, recordClass, onTaskChange, session }: {
       <h2 className="text-sm font-bold text-foreground">当前流程任务</h2>
       <p className="text-xs text-muted">显示当前账号有权查看的任务，任务处理人由流程配置决定。</p>
       <DetailReadState error={resource.error} loading={resource.loading || busy} reload={async () => { if (!locked.current) await resource.reload(); }} />
-      {resource.ready && tasks.some(task => task.callbackBlock) && <Alert type="warning" showIcon title="流程执行已阻塞" description="任务记录保持原状态，必要流程操作尚未完成，请联系管理员处理。" />}
+      {resource.ready && tasks.some(task => task.callbackBlock) && <Alert type="warning" showIcon title="流程执行已阻塞" description={<ul>{Array.from(new Set(tasks.flatMap(task => task.callbackBlock ? [task.callbackBlock.reason] : []))).map(reason => <li key={reason}>{reason}</li>)}</ul>} />}
       {mutationError && !selected && <Alert type="error" showIcon title={mutationError} />}
       {submitted && <p role="status">任务操作已提交，请以刷新后的状态为准。</p>}
       {updateFailed && <Alert type="warning" showIcon title="操作已完成，首次更新时部分数据读取失败" />}
