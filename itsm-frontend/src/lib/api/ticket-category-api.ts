@@ -65,6 +65,29 @@ export interface UpdateCategoryRequest {
   departmentId?: number;
 }
 
+/**
+ * CTIReferenceGroup 是某一引用类型的授权可见结果。
+ * visible=false 表示当前账号无权查看该类型明细：此时不返回 total/items，
+ * 界面只能显示"存在引用"，不得展示名称或数量。
+ */
+export interface CTIReferenceGroup {
+  kind: string;
+  referenced: boolean;
+  visible: boolean;
+  total?: number;
+  items?: { id: number; name: string }[];
+}
+
+export interface CTIReferenceView {
+  categoryId: number;
+  categoryPath: CTIPathNode[];
+  /** blocking 来自不受 RBAC 影响的安全扫描：为真表示不可删除/移动。 */
+  blocking: boolean;
+  page: number;
+  pageSize: number;
+  groups: CTIReferenceGroup[];
+}
+
 export class TicketCategoryApi {
   // 获取分类列表 - 支持两种后端响应格式
   static async getCategories(params?: {
@@ -103,6 +126,11 @@ export class TicketCategoryApi {
   // 更新分类
   static async updateCategory(id: number, data: UpdateCategoryRequest): Promise<TicketCategory> {
     return httpClient.put(`/api/v1/ticket-categories/${id}`, data);
+  }
+
+  // 获取分类（含子树）的真实引用；明细按当前账号 RBAC 过滤。
+  static async getCategoryReferences(id: number, params?: { page?: number; pageSize?: number }): Promise<CTIReferenceView> {
+    return httpClient.get(`/api/v1/ticket-categories/${id}/references`, params);
   }
 
   // 删除分类

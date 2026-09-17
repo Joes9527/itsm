@@ -1,10 +1,11 @@
 'use client';
 
 import React from 'react';
-import { Button, Descriptions, Empty, Space, Switch, Tag, Typography } from 'antd';
+import { Button, Descriptions, Empty, Space, Switch, Tabs, Tag, Typography } from 'antd';
 import { Copy, Delete, Edit, Plus } from 'lucide-react';
 import type { TicketCategory } from '@/lib/api/ticket-category-api';
 import { canAddChild, flattenCategoryTree } from './categoryTreeUtils';
+import { CategoryReferencesPanel } from './CategoryReferencesPanel';
 
 interface DepartmentOption {
   id: number;
@@ -121,6 +122,18 @@ export function CategoryDetailsPanel({
           </Typography.Paragraph>
         </Descriptions.Item>
       </Descriptions>
+
+      {/* 关联与引用分区：真实引用来自后端安全扫描，明细按当前账号权限过滤。 */}
+      <Tabs
+        defaultActiveKey="references"
+        items={[
+          {
+            key: 'references',
+            label: '关联与引用',
+            children: <CategoryReferencesPanel key={category.id} categoryId={category.id} />,
+          },
+        ]}
+      />
     </div>
   );
 }

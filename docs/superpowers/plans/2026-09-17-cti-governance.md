@@ -881,3 +881,39 @@ itsm-frontend: npx jest --testPathPattern '(RuleConditionRow|AssignmentRule|Auto
 
 **B3 剩余**：分类详情页的"引用"页签与管理链接（消费本接口；A4 已刻意不放置假计数），
 以及"disabled/default_resolver 等历史描述字段不伪装成已生效规则"的界面收敛。
+
+### 执行记录（B3 增量三：分类详情引用页签）
+
+**前端**
+
+- `src/app/(main)/admin/ticket-categories/CategoryReferencesPanel.tsx`（新）：
+  - 组合视图：`blocking` 来自后端**不受 RBAC 影响**的真实扫描 → 为真时显示"已被引用，不可删除或移动"；
+  - 有权查看的类型列出名称与"共 N 项引用"；**无权查看的类型只显示"存在引用（无权查看明细）"**，
+    不显示数量与名称（后端在无权时根本不返回 `total/items`，界面也不伪造 0）；
+  - 超出权限的类型数量单独提示，指引联系对应模块管理员；
+  - 工单引用只显示计数并说明"明细请到工单列表按分类筛选"，不放工单内容；
+  - 历史字符串引用（事件升级规则）明确标注"以字符串匹配，无法映射为 ID，需迁移到结构化引用"，
+    不伪装成已生效的结构化规则；
+  - 查询失败显示可重试的错误态并**清空**旧结果，绝不复用陈旧数据或渲染成"无引用"；
+  - 每类型给出"前往管理"链接，8 条链接逐一核对为前端真实存在的路由
+    （`/admin/service-catalogs`、`/admin/sla-definitions`、`/admin/tickets/assignment-rules`、
+    `/admin/tickets/automation-rules`、`/tickets/templates`、`/admin/process-routing`、
+    `/admin/escalation-rules`、`/tickets`）；
+  - 超过一页时按后端 `page/pageSize` 分页，每类总数使用后端真实 `total`。
+- `CategoryDetailsPanel.tsx`：新增"关联与引用"页签，按 `category.id` 重新挂载（切换分类不残留旧结果）。
+- `src/lib/api/ticket-category-api.ts`：`getCategoryReferences(id, {page,pageSize})` 与类型
+  `CTIReferenceView`/`CTIReferenceGroup`（`visible=false` 时 `total/items` 为可选，界面据此判定）。
+
+**验证**
+
+```text
+itsm-frontend: npm run type-check -> 通过；eslint 变更文件 -> 无输出
+itsm-frontend: npx jest --testPathPattern '(ticket-categories|CategoryReferences|RuleConditionRow|classification|ticket-category-api)'
+  -> 10 suites / 101 tests 全通过
+     新增 5 项引用页签用例：可见名称+计数+管理链接（链接指向真实路由）/ 无权只报告存在性且无计数无名称 /
+     空态 / 失败显式报错且不伪装空结果 / 分页使用后端 total
+     既有分类维护 11 项与工具 12 项用例无回归
+```
+
+**B3 仅剩**：`disabled`/`default_resolver` 等历史描述字段不伪装成已生效规则的界面收敛（属独立小项）。
+随后进入 **B4**：全链路验收、文档与受控启用准备。
