@@ -420,6 +420,10 @@ func (e *CustomProcessEngine) startResolvedProcess(ctx context.Context, definiti
 	if err := lockBPMNBusinessItem(ctx, e.client, definition.TenantID, businessID, businessType); err != nil {
 		return nil, err
 	}
+	variables, err = admitGenericWorkflowStart(ctx, e.client, definition, bpmnDefinitions, businessType, businessID, variables, instanceIdentity, startDigest)
+	if err != nil {
+		return nil, err
+	}
 	boundProcess := false
 	for _, node := range process.UserTasks {
 		if node.AssigneeSource != "" {
