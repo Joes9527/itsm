@@ -690,3 +690,49 @@ go test ./... -count=1                                                          
 因此驱动的是**真实专业命令**（`ApplyMetadata`）而非直写数据库。
 两处夹具自身的问题也在真实目标上暴露并修正：
 基线目标与当前分类相同会被既有"必须产生新事实"规则拒绝；完全相同重试必须复用同一 `expectedVersion`+patch 才走既有幂等回执。
+
+### 执行记录（B1 增量四：Requested Item 分类纠正）
+
+**后端**
+
+- `handlers/service_request/classification.go`（新）：本域拥有的纠正命令
+  `Service.CorrectClassification(ctx, ClassificationCorrection)`：
+  - 前置：客户端可用、tenant/actor/SR 必须齐全、显式预期版本必填、租户上下文一致
+    （不一致按 `Forbidden` 拒绝）、**按权限判定**而非角色名（`service_request:write`，
+    与既有 `Update`/路由中间件同一规则）；
+  - 事务：`BeginTx(RepeatableRead)` + `requestScope` 租户作用域读取 + 执行范围校验
+    （`requireRequestExecutionTx`，与 `Delete` 一致）+ 版本 CAS；
+  - 契约：原因仅在分类确实变化时必填；目标必须是**完整且启用**的三级路径，
+    **不允许清空**（`CTICorrectionTargetPolicy{RequireComplete: true}`，`AllowClear` 未开）；
+  - 证据：`RecordCTICorrectionAuditTx` 写入本域既有证据通道（`audit_logs`，
+    与 `access_completion.go` 同风格），含原因、前后完整路径、来源与可选的 correlationId；
+    审计失败整笔回滚。
+- `dto/service_dto.go`：`CorrectServiceRequestClassificationRequest`（version>0、categoryId>0、reason 必填≤500）。
+- `handlers/service_request/handler.go` + `router/router.go`：
+  `PUT /api/v1/service-requests/:id/classification`（`service_request:write`）——
+  独立于通用 `PUT /:id`，因为申请项的完整度要求与普通工单不同。
+
+**测试与证据**
+
+```text
+go test ./handlers/service_request -run 'TestRequestedItemClassification' -count=1 -> ok
+  完整→完整（版本+1、回执含原因与前后路径 ID）
+  完整→部分 / 完整→空：拒绝且不变更
+  缺原因：拒绝且不改分类、不写回执、不动版本
+  无 service_request:write 的角色：Forbidden
+  缺少预期版本：Validation；过期版本：版本冲突且不写入
+  停用/未知/跨租户目标：拒绝且不落库
+  审计写入失败：整笔回滚（分类与版本均不变）
+  纠正只动分类：归属/状态/优先级/解决时间不变
+
+隔离 PostgreSQL（127.0.0.1:36444/sslvpn_test）：
+go test -tags integration_postgres ./tests/integration -run 'TestCTICorrectionServiceRequestPostgres' -count=1 -v
+  -> PASS 5 子项：完整→完整写证据（含归属不变）/ 清空与部分拒绝 / 缺原因零副作用 /
+     停用+未知+跨租户拒绝 / 并发纠正只有一个预期版本成功
+go test -tags integration_postgres ./tests/integration -run 'TestCTI' -count=1
+  -> structure / catalog / completion / correction / correction-service-request 全部 PASS，无 schema 残留
+```
+
+说明：`end_user` 在本仓库的 SR 夹具中被显式授予 `service_request:write`，因此"申请人不能自助改分类"
+这一断言按**权限**边界验证（使用无该权限的 `viewer` 角色），而不是按角色名——与
+`RequirePermission` 中间件和既有 `Update` 的判定保持一致；不按角色名硬编码是刻意的。

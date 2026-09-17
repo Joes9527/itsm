@@ -312,6 +312,46 @@ func (h *Handler) Update(c *gin.Context) {
 	common.Success(c, h.toDTO(fullReq))
 }
 
+// CorrectClassification 处理申请项的分类纠正（PUT /service-requests/:id/classification）。
+//
+// 权限：路由要求 service_request:write，服务层再要求管理侧身份（申请人不能自助改分类）。
+// 目标必须是完整三级且不允许清空，原因必填，证据与写入同事务。
+func (h *Handler) CorrectClassification(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.Fail(c, 1001, "Invalid ID")
+		return
+	}
+	tenantID := c.GetInt("tenant_id")
+	if tenantID == 0 {
+		common.Fail(c, 2001, "Tenant ID missing")
+		return
+	}
+	var req dto.CorrectServiceRequestClassificationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.Fail(c, 1001, "请求参数无效")
+		return
+	}
+	updated, err := h.service.CorrectClassification(c.Request.Context(), ClassificationCorrection{
+		Meta: workitemmutation.Meta{
+			TenantID:        tenantID,
+			ActorID:         c.GetInt("user_id"),
+			Source:          "http",
+			ExpectedVersion: req.Version,
+			CorrelationID:   c.GetHeader("X-Correlation-ID"),
+		},
+		ServiceRequestID: id,
+		TargetCategoryID: req.CategoryID,
+		Reason:           req.Reason,
+		ActorRole:        c.GetString("role"),
+	})
+	if err != nil {
+		failServiceRequest(c, err)
+		return
+	}
+	common.Success(c, map[string]any{"id": id, "categoryId": updated.CategoryID, "version": updated.Version})
+}
+
 func (h *Handler) Delete(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)

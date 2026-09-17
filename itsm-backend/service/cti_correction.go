@@ -2,7 +2,11 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
 	"itsm-backend/common"
@@ -125,4 +129,78 @@ func ctiPathEvidence(path []CTINode) []map[string]any {
 		})
 	}
 	return nodes
+}
+
+// CTICorrectionAudit 是一次纠正的审计输入。
+type CTICorrectionAudit struct {
+	TenantID   int
+	ActorID    int
+	Source     string
+	WorkItemID int
+	Reason     string
+	// CorrelationID 为可选的外部关联号（如流程 correlationId），写入审计正文便于串联。
+	CorrelationID string
+}
+
+// RecordCTICorrectionAuditTx 在同一事务内写入分类纠正审计行。
+//
+// 用于**没有操作回执或时间线**的拥有者（如目录申请项：其既有证据通道就是 audit_logs 行，
+// 见 access_completion.go）。刻意不设置 operation_id：audit_logs 上有
+// (tenant_id, user_id, operation_id) 的操作回执唯一索引，同一请求内已有回执行时
+// 第二行会违反约束；因此这里以 request_digest + 正文关联同一次纠正。
+func RecordCTICorrectionAuditTx(ctx context.Context, tx *ent.Tx, audit CTICorrectionAudit, evidence CTICorrectionEvidence) error {
+	if tx == nil {
+		return errors.New("classification correction audit requires the owning transaction")
+	}
+	if audit.TenantID <= 0 || audit.WorkItemID <= 0 || audit.ActorID <= 0 {
+		return errors.New("classification correction audit requires tenant, actor and work item")
+	}
+	reason := strings.TrimSpace(audit.Reason)
+	if reason == "" {
+		return common.NewValidationError("classification correction reason is required", nil)
+	}
+	source := strings.TrimSpace(audit.Source)
+	if source == "" {
+		source = "unknown"
+	}
+	action := "cti.corrected"
+	if len(evidence.After) == 0 {
+		action = "cti.cleared"
+	}
+	payload := evidence.Metadata(reason)
+	payload["source"] = source
+	if correlation := strings.TrimSpace(audit.CorrelationID); correlation != "" {
+		payload["correlationId"] = correlation
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	digest := sha256.New()
+	fmt.Fprintf(digest, "%d|%d|%s|%s|%s|%v", audit.TenantID, audit.WorkItemID, source, correlationOf(audit), reason, ctiPathIDs(evidence.Before))
+	if _, err := tx.AuditLog.Create().
+		SetTenantID(audit.TenantID).
+		SetUserID(audit.ActorID).
+		SetRequestDigest(hex.EncodeToString(digest.Sum(nil))).
+		SetResultStatus(action).
+		SetResource("work_item_classification").
+		SetAction(action).
+		SetPath(fmt.Sprintf("workitems/%d/classification", audit.WorkItemID)).
+		SetMethod("PATCH").
+		SetStatusCode(200).
+		SetRequestBody(string(body)).
+		Save(ctx); err != nil {
+		return fmt.Errorf("could not record classification correction audit: %w", err)
+	}
+	return nil
+}
+
+func correlationOf(audit CTICorrectionAudit) string { return strings.TrimSpace(audit.CorrelationID) }
+
+func ctiPathIDs(path []CTINode) []int {
+	ids := make([]int, 0, len(path))
+	for _, node := range path {
+		ids = append(ids, node.ID)
+	}
+	return ids
 }

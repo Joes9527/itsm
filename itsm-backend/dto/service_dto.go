@@ -66,6 +66,16 @@ type UpdateServiceRequestRequest struct {
 	ComplianceAck      *bool      `json:"complianceAck"`
 }
 
+// CorrectServiceRequestClassificationRequest 是申请项分类纠正请求。
+//
+// categoryId 必须 > 0：申请项由服务目录声明完整三级默认分类，既不允许清空，
+// 也不接受部分分类（后端会再校验目标是否为完整且启用的三级路径）。
+type CorrectServiceRequestClassificationRequest struct {
+	Version    int    `json:"version" binding:"required,gt=0"`
+	CategoryID int    `json:"categoryId" binding:"required,gt=0"`
+	Reason     string `json:"reason" binding:"required,max=500"`
+}
+
 // GetServiceCatalogsRequest 获取服务目录请求
 type GetServiceCatalogsRequest struct {
 	Page     int    `json:"page" form:"page" binding:"omitempty,min=1"`
