@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -104,4 +105,47 @@ func TestBPMNTaskUIActionsProjectionDoesNotPersistDescriptor(t *testing.T) {
 	require.Equal(t, before.CallbackTaskType, after.CallbackTaskType)
 	require.Equal(t, before.UpdatedAt, after.UpdatedAt, "the projection must not update the task row")
 	require.Equal(t, before.AggregationVersion, after.AggregationVersion)
+}
+
+// Production task creation persists a no-callback descriptor rather than an
+// empty handler ID. It must retain the ordinary command authorization.
+func TestBPMNTaskUIActionsKeepCompletableWithPersistedNoCallback(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	descriptor := f.engine.callbackDescriptor("", "", "")
+	require.Equal(t, bpmnNoUserTaskCallbackHandlerID, descriptor.HandlerID)
+	task, ctx := seedTaskWithDeclaredCallback(t, f, descriptor.HandlerID, descriptor.TaskType, descriptor.Action)
+	before := f.client.ProcessTask.GetX(ctx, task.ID)
+
+	require.True(t, f.engine.taskUIActions(ctx, task).Complete)
+
+	after := f.client.ProcessTask.GetX(ctx, task.ID)
+	require.Equal(t, before.CallbackHandlerID, after.CallbackHandlerID)
+	require.Equal(t, before.UpdatedAt, after.UpdatedAt)
+	require.Equal(t, before.AggregationVersion, after.AggregationVersion)
+}
+
+func TestBPMNTaskUIActionsReadLegacyCallbackWithoutPersisting(t *testing.T) {
+	for _, action := range []string{"assign", "update_status", "unknown_action"} {
+		t.Run(action, func(t *testing.T) {
+			f := newBPMNAuthorizationFixture(t)
+			task, ctx := seedTaskWithDeclaredCallback(t, f, "", "", "")
+			instance := f.client.ProcessInstance.GetX(ctx, task.ProcessInstanceID)
+			definition := f.client.ProcessDefinition.GetX(ctx, instance.ProcessDefinitionID)
+			xml := strings.Replace(string(definition.BpmnXML), `<bpmn:userTask id="approval" name="Approval" />`,
+				`<bpmn:userTask id="approval" name="Approval"><bpmn:extensionElements><bpmn:metaData name="service_task_type">ticket_task</bpmn:metaData><bpmn:metaData name="action">`+action+`</bpmn:metaData></bpmn:extensionElements></bpmn:userTask>`, 1)
+			require.NotEqual(t, string(definition.BpmnXML), xml)
+			// Fixture only: model a historical definition with no persisted descriptor.
+			f.client.ProcessDefinition.UpdateOne(definition).SetBpmnXML([]byte(xml)).SaveX(ctx)
+			before := f.client.ProcessTask.GetX(ctx, task.ID)
+			actions := f.engine.taskUIActions(ctx, task)
+			require.Equal(t, action == "update_status", actions.Complete)
+			if !actions.Complete {
+				require.NotEmpty(t, actions.Reason)
+			}
+			after := f.client.ProcessTask.GetX(ctx, task.ID)
+			require.Empty(t, after.CallbackHandlerID)
+			require.Equal(t, before.UpdatedAt, after.UpdatedAt)
+			require.Equal(t, before.AggregationVersion, after.AggregationVersion)
+		})
+	}
 }
