@@ -35,7 +35,7 @@ func TestCTIGovernanceMigrationPreflightsAndScopesStructure(t *testing.T) {
 		"outside levels 1..3",
 		"missing or cross-tenant parent",
 		"level inconsistent with their parent",
-		"deeper than three levels or form a cycle",
+		"deeper than three levels",
 		"parent cycle",
 		"cti_governance_v1",
 		"DROP INDEX IF EXISTS ticketcategory_code",

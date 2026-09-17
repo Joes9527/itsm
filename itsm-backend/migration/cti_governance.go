@@ -63,36 +63,38 @@ BEGIN
         RAISE EXCEPTION 'CTI preflight: % root ticket_categories row(s) are not level 1; resolve before applying', offenders;
     END IF;
 
-    -- 5) 禁止环：从每个节点向上追踪父链，超过三级深度仍能继续即视为环或超深链。
+    -- 5a) 父链深度：depth 从节点自身算起（=1），因此合法的三级树最深为 3，
+    -- 只有链条超过三级（或 level 列不可信的脏数据）才命中断言。
     WITH RECURSIVE walk AS (
-        SELECT id AS origin, parent_id, level AS depth, ARRAY[id] AS visited
+        SELECT id AS origin, parent_id, 1 AS depth, ARRAY[id] AS visited
         FROM ticket_categories
-        WHERE parent_id IS NOT NULL AND parent_id <> 0
         UNION ALL
         SELECT walk.origin, parent.parent_id, walk.depth + 1, walk.visited || parent.id
         FROM walk
         JOIN ticket_categories parent ON parent.id = walk.parent_id
-        WHERE parent.parent_id IS NOT NULL AND parent.parent_id <> 0
+        WHERE walk.parent_id IS NOT NULL AND walk.parent_id <> 0
           AND NOT parent.id = ANY(walk.visited)
           AND walk.depth < 12
     )
-    SELECT count(DISTINCT origin) INTO offenders FROM walk WHERE depth >= 3;
+    SELECT count(DISTINCT origin) INTO offenders FROM walk WHERE depth > 3;
     IF offenders > 0 THEN
-        RAISE EXCEPTION 'CTI preflight: % ticket_categories row(s) sit deeper than three levels or form a cycle; resolve before applying', offenders;
+        RAISE EXCEPTION 'CTI preflight: % ticket_categories row(s) sit deeper than three levels; resolve before applying', offenders;
     END IF;
 
+    -- 5b) 环：保留“闭合那一跳”的行并标记，才能真的检出 A→B→A 这类链。
     WITH RECURSIVE walk AS (
-        SELECT id AS origin, parent_id, ARRAY[id] AS visited
+        SELECT id AS origin, parent_id, ARRAY[id] AS visited, false AS cycle
         FROM ticket_categories
-        WHERE parent_id IS NOT NULL AND parent_id <> 0
         UNION ALL
-        SELECT walk.origin, parent.parent_id, walk.visited || parent.id
+        SELECT walk.origin, parent.parent_id, walk.visited || parent.id,
+               parent.id = ANY(walk.visited)
         FROM walk
         JOIN ticket_categories parent ON parent.id = walk.parent_id
-        WHERE NOT parent.id = ANY(walk.visited)
+        WHERE NOT walk.cycle
+          AND walk.parent_id IS NOT NULL AND walk.parent_id <> 0
           AND array_length(walk.visited, 1) < 12
     )
-    SELECT count(DISTINCT origin) INTO offenders FROM walk WHERE parent_id = ANY(visited);
+    SELECT count(DISTINCT origin) INTO offenders FROM walk WHERE cycle;
     IF offenders > 0 THEN
         RAISE EXCEPTION 'CTI preflight: % ticket_categories row(s) form a parent cycle; resolve before applying', offenders;
     END IF;

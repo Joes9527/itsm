@@ -168,7 +168,7 @@ go test -tags integration_postgres ./tests/integration -run TestCTIStructurePost
 git diff --check                             -> 无输出
 ```
 
-未执行项：PG 用例实际执行（需授权隔离目标）、迁移在任何目标库的应用、门禁启用。
+PG 用例已执行（见下方 A2/B2 授权后补充证据）。未执行项：迁移在**共享/生产**目标库的应用、门禁启用。
 
 ## Task A3：目录默认分类与统一创建
 
@@ -534,3 +534,46 @@ go vet ./...（仅 3 处与本任务无关的既有告警：service/bpmn/ticket_
 
 未执行项：`tests/integration/cti_completion_postgres_test.go`（需授权隔离目标，NOT RUN）；
 流程回调/自动关闭/工具入口的独立用例；前端启用开关（B4）。
+
+### 授权隔离目标后的补充执行证据（2026-09-17）
+
+隔离目标（自建、一次性、仅本机）：
+
+```text
+container codex-cti-governance-pg-20260917
+labels      com.itsm.test.owner=cti-governance, com.itsm.test.disposable=true
+image       postgres:17（本地既有镜像）  data=tmpfs（停止即丢弃）
+endpoint    127.0.0.1:36444 -> 5432（与文档化 INTAKE_POSTGRES_TEST_DSN 指纹一致）
+database    sslvpn_test
+```
+
+```text
+INTAKE_POSTGRES_TEST_DSN=postgres://cti_test:<本地随机口令>@127.0.0.1:36444/sslvpn_test?sslmode=disable
+ITSM_TEST_DB=<同一 DSN>（部分用例契约使用该变量）
+
+go test -tags integration_postgres ./tests/integration -run 'TestCTI' -count=1 -v
+  -> PASS TestCTICatalogPostgres（2 子项）/ PASS TestCTICompletionPostgres（4 子项）/ PASS TestCTIStructurePostgres（5 子项）
+  -> 每个用例独立 schema 并在结束时 DROP，remaining=0（已用 pg_namespace 复查）
+
+go test -tags integration_postgres ./tests/integration -run 'CTI|Migration|Catalog' -count=1 -p 2 -v
+  -> 22 个顶层用例 PASS、38 个子用例 PASS，1 个 FAIL：TestWorkItemControlledRetirementLaterMigrationsAndExactExecution
+  -> 该 FAIL 发生在应用 **039_candidate_execution_scope** 时（`candidate execution scope requires explicitly selected public schema`），
+     即 048 尚未执行；其夹具 `migrationEntryFixture` 把 search_path 指向新建 schema，而 039/040/044 硬性要求 current_schema()=public，
+     该族按文档需要专属 V2 目标（36542/workitem_v2_task2_test + WORKITEM_V2_POSTGRES_TEST_DSN），
+     在 legacy 36444 目标上结构性不可通过 => 与本任务改动无关（本任务从未修改 039）。
+```
+
+**真实目标发现的缺陷（已修复）：**
+
+1. **产品缺陷（严重）**：`048` 预检规则 5a 的深度 CTE 以节点的 `level` 作为初始 depth 并判定 `depth >= 3`，
+   导致**任何合法的三级分类都会被判为“超三级”并让迁移直接失败**——即 048 在生产库上根本无法应用。
+   已改为按“自身算作第 1 层”计数并判定 `depth > 3`，并同步新增明确的错误文案（`deeper than three levels`）。
+2. **产品缺陷**：规则 5b 的环检测把“闭合那一跳”的行用 WHERE 过滤掉了，实际只能捕获自环；
+   现改为在递归中保留该行并标记 `cycle`，可真正检出 A→B→A 这类父链环。
+3. **PG 夹具缺陷（A2 编写时未执行过）**：`three_level_limit_is_enforced` 把一级节点当作转移父级，
+   实际最深只有 3 层、不该拒绝；已改为“移到二级父级下（4 层）必须拒绝 + 移到一级父级下（3 层）必须成功”双侧断言。
+4. **PG 夹具缺陷**：`migration_preflight_failure_rolls_back_without_touching_ledger` 在已有跨租户同名编码的数据上
+   重建旧的全表唯一索引，导致夹具自身先失败；已在还原旧形态前先消除跨租户重复。
+
+由此，A2 的三级/环与迁移原子性、A3 的目录默认分类租户隔离、B2 的门禁事务内判定与并发启用，
+均获得**真实 PostgreSQL 证据**（此前为 NOT RUN）。

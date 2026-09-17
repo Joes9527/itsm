@@ -122,11 +122,19 @@ func TestCTIStructurePostgres(t *testing.T) {
 		_, err := svc.CreateCategory(f.ctx, &service.CreateCategoryRequest{Name: "l4", Code: "limit-l4", ParentID: l3, TenantID: tenantA})
 		require.ErrorIs(t, err, service.ErrCTIPathTooDeep)
 
+		// 边界两侧都要证明：移到一级父级下（最深 3 级）必须成功，
+		// 移到二级父级下（最深 4 级）必须拒绝。
 		target := f.category(t, svc, tenantA, 0, "limit-target")
+		targetChild := f.category(t, svc, tenantA, target, "limit-target-l2")
 		moving := f.category(t, svc, tenantA, 0, "limit-moving")
 		f.category(t, svc, tenantA, moving, "limit-moving-l2")
-		parent := target
-		_, err = svc.MoveCategory(f.ctx, moving, &service.MoveCategoryRequest{NewParentID: &parent}, tenantA)
+
+		rootParent := target
+		_, err = svc.MoveCategory(f.ctx, moving, &service.MoveCategoryRequest{NewParentID: &rootParent}, tenantA)
+		require.NoError(t, err, "3 levels deep must stay allowed")
+
+		deepParent := targetChild
+		_, err = svc.MoveCategory(f.ctx, moving, &service.MoveCategoryRequest{NewParentID: &deepParent}, tenantA)
 		require.ErrorIs(t, err, service.ErrCTIPathTooDeep)
 	})
 
@@ -190,6 +198,10 @@ func TestCTIStructurePostgres(t *testing.T) {
 	t.Run("migration_preflight_failure_rolls_back_without_touching_ledger", func(t *testing.T) {
 		// 还原 048 之前的形态：旧的全表唯一索引存在、结构列不存在。
 		_, err := f.db.ExecContext(f.ctx, `DROP INDEX IF EXISTS ticketcategory_tenant_id_code`)
+		require.NoError(t, err)
+		// 048 之前 code 是全局唯一，因此要先消除跨租户重复（上个子场景刻意造出的形态），
+		// 否则无法还原旧形态，测试也就无法证明迁移预检失败。
+		_, err = f.db.ExecContext(f.ctx, `DELETE FROM ticket_categories c USING ticket_categories d WHERE c.code = d.code AND c.id > d.id`)
 		require.NoError(t, err)
 		_, err = f.db.ExecContext(f.ctx, `CREATE UNIQUE INDEX IF NOT EXISTS ticketcategory_code ON ticket_categories (code)`)
 		require.NoError(t, err)
