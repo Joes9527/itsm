@@ -109,7 +109,7 @@ go test ./service -run 'TestTicketCategory' -count=1
 
 **Interfaces:** 产出上述 `CTINode`、`ValidateCTIPath`、`ResolveCTIPath`；维护失败映射现有验证/冲突/无权限错误，不泄露跨租户对象。
 
-- [ ] 新增具体红测（测试文件导入现有testify/assert或用标准testing）：
+- [x] 新增具体红测（测试文件导入现有testify/assert或用标准testing）：
 
 ```go
 func TestCTIRejectsIncompleteRequiredPath(t *testing.T) {
@@ -123,12 +123,52 @@ func TestCTIAllowsUnclassifiedReport(t *testing.T) {
 }
 ```
 
-- [ ] 运行 `go test ./service -run 'TestCTI' -count=1`，确认失败来自缺少约束/实现，而非不可用依赖。
-- [ ] 实现根ParentID=0、Level从1连续递增、同租户、最多3、无环、完整/部分及全部祖先启用校验。解析最深节点向上最多3步，异常链返回失败，不能递归无限深。
-- [ ] 在创建/移动/导入/删除/停用入口调用同一维护规则；锁定完整被操作子树及引用检查所需行，移动被引用后代的祖先也拒绝。目录/工单创建与维护按固定锁顺序协调，不能只做preflight。
-- [ ] 迁移增加 `service_catalogs.default_ticket_category_id` 可空结构引用；检查实际PG与Ent的编码唯一性差异，按现有租户契约处理。已有异常只出预检失败，不自动修复。`system_configs` 为保留键建立局部唯一约束，重复行先阻塞；新增列/约束附RLS/租户与回退边界。
-- [ ] PG红绿用例命名为 `TestCTIStructurePostgres`：两个租户同名分类隔离；并发创建vs删除/停用不得产生无效引用；三级子树移动超深拒绝；字符串引用阻止删除；迁移失败原子回滚，不改旧账本。
-- [ ] 运行目标测试、迁移verify及 `git diff --check` 后提交 `feat: enforce CTI hierarchy and reference integrity`。迁移只在隔离目标应用。
+- [x] 运行 `go test ./service -run 'TestCTI' -count=1`，确认失败来自缺少约束/实现，而非不可用依赖。（红：`undefined: CTINode/ValidateCTIPath`；实现后 15 项全绿）
+- [x] 实现根ParentID=0、Level从1连续递增、同租户、最多3、无环、完整/部分及全部祖先启用校验。解析最深节点向上最多3步，异常链返回失败，不能递归无限深。
+- [x] 在创建/移动/导入/删除/停用入口调用同一维护规则；锁定完整被操作子树及引用检查所需行，移动被引用后代的祖先也拒绝。目录/工单创建与维护按固定锁顺序协调，不能只做preflight。
+- [x] 迁移增加 `service_catalogs.default_ticket_category_id` 可空结构引用；检查实际PG与Ent的编码唯一性差异，按现有租户契约处理。已有异常只出预检失败，不自动修复。`system_configs` 为保留键建立局部唯一约束，重复行先阻塞；新增列/约束附RLS/租户与回退边界。
+- [x] PG红绿用例命名为 `TestCTIStructurePostgres`：两个租户同名分类隔离；并发创建vs删除/停用不得产生无效引用；三级子树移动超深拒绝；字符串引用阻止删除；迁移失败原子回滚，不改旧账本。**已编写并通过 `go vet -tags integration_postgres` 编译；未执行（NOT RUN，无授权隔离目标）。**
+- [x] 运行目标测试、迁移verify及 `git diff --check` 后提交 `feat: enforce CTI hierarchy and reference integrity`。迁移只在隔离目标应用。**
+
+### 执行记录（A2）
+
+- 新增 `service/ticket_category_policy.go`（`CTINode`/`CTIMatchScope`/`ValidateCTIPath`/`MatchCTI` 纯语义）与
+  `service/ticket_category_references.go`（在调用方事务内扫描工单、目录默认分类、SLA、分派/自动化规则条件与动作、
+  模板、流程绑定、遗留字符串引用）。
+- `service/ticket_category_service.go` 重写维护路径为事务化实现：三级上限、同租户父链、连续 level、无环、
+  编码租户内唯一且创建后不可变、被引用节点及其祖先不可移动、已发布目录引用时不可停用、
+  无子节点且无引用才可删除、删除/移动/停用在提交事务内重新校验引用并锁定子树（PostgreSQL `FOR UPDATE`，
+  SQLite 无锁子句仅用于单元 fixture）。
+- 路径解析 `ResolveCTIPath(ctx, tx, tenantID, selectedID, requireFull, requireActive)`；`requireActive=false` 使
+  停用前的合法完整路径仍可作为历史质量校验依据（设计 §5.4）。
+- 迁移 `migration/cti_governance.go` = **048_cti_governance**（A1 已确认 047 为最新、048 在所有 ref 上空闲）：
+  预检（租户内重复编码、层级越界、缺失/跨租户父级、level 与父级不一致、根非一级、超三级/环、保留键重复）
+  + `code` 唯一范围全表→租户内 + `service_catalogs.default_ticket_category_id`（FK，`ON DELETE SET NULL`）
+  + `system_configs` 保留键局部唯一索引；verify SQL 断言结构；dev-reset 明确回退并在跨租户重复编码时失败。
+  登记于 `RegisteredMigrations`、`GetMigrationSQL`、受控目录（047 之后、retirement 之前），未改动任何历史 SQL/checksum。
+- Ent：`ticketcategory.go` 的 `code` 由表级唯一改为 `(tenant_id, code)` 唯一索引；`servicecatalog.go` 增加
+  `default_ticket_category_id` 边/字段。生成物由 `go generate ./ent` 产生；无语义变化的 `ent/processtask*`
+  格式漂移已还原，不混入无关改动。
+- 控制器：分类维护错误按 NotFound/Conflict/Param 映射；树支持 `includeInactive`；导入按 `parent_code`
+  重建层级（父行后置时最多重试到最大层级+1 轮，不再把三级文件静默压平成一级）。
+- 迁移计划测试的目录计数属“目录增长”预期，已同步为新值并补 `CTIGovernanceVersion` 的位置断言。
+
+验证证据：
+
+```text
+go generate ./ent                            -> OK（仅目标实体生成物 + 已还原无关漂移）
+go test ./migration/... -count=1             -> ok itsm-backend/migration
+go test ./service -run 'TestCTI|TestCreateCategory|TestUpdateCategory|TestDeleteCategory|TestMoveCategory|TestDisableCategory|TestResolveCTIPath|TestGetCategory|TestSubtreeHeight|TestMaintenance' -count=1
+                                             -> ok itsm-backend/service (0.539s)
+go test ./... -count=1（全量单元/包测试）    -> 无 FAIL
+go vet -tags integration_postgres ./tests/integration/  -> OK（PG 用例可编译）
+go test -tags integration_postgres ./tests/integration -run TestCTIStructurePostgres -count=1
+                                             -> FAIL（目标指纹校验：INTAKE_POSTGRES_TEST_DSN 未指向 127.0.0.1:36444/sslvpn_test）
+                                                => 如实记为 NOT RUN，未以 skip 冒充通过
+git diff --check                             -> 无输出
+```
+
+未执行项：PG 用例实际执行（需授权隔离目标）、迁移在任何目标库的应用、门禁启用。
 
 ## Task A3：目录默认分类与统一创建
 

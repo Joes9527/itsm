@@ -469,6 +469,7 @@ var RegisteredMigrations = []Migration{
 	{Version: NotificationEmailTargetVersion, Description: "Freeze email notification transport and identity without rebinding history"},
 	{Version: AuthTokenStateVersion, Description: "Persist append-only token revocation and refresh consumption authority"},
 	{Version: "047_bpmn_assignment_source", Description: "Persist immutable BPMN WorkItem assignment source"},
+	{Version: CTIGovernanceVersion, Description: "Scope ticket category code uniqueness to the tenant and persist the Service Catalog default CTI reference", RollbackSQL: ctiGovernanceDevelopmentResetSQL},
 	{Version: WorkItemRetireVersion, Description: "Retire WorkItem legacy structures with controlled evidence"},
 }
 
@@ -484,6 +485,8 @@ func GetMigrationSQL(version string) string {
 	switch version {
 	case AuthTokenStateVersion:
 		return authTokenStateSQL
+	case CTIGovernanceVersion:
+		return ctiGovernanceSQL
 	case NotificationEmailTargetVersion:
 		return notificationEmailTargetSQL
 	case NotificationConnectorTargetVersion:

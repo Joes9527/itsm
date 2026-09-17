@@ -3928,12 +3928,21 @@ var (
 		{Name: "sort_order", Type: field.TypeInt, Default: 0},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "default_ticket_category_id", Type: field.TypeInt, Nullable: true},
 	}
 	// ServiceCatalogsTable holds the schema information for the "service_catalogs" table.
 	ServiceCatalogsTable = &schema.Table{
 		Name:       "service_catalogs",
 		Columns:    ServiceCatalogsColumns,
 		PrimaryKey: []*schema.Column{ServiceCatalogsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "service_catalogs_ticket_categories_default_catalogs",
+				Columns:    []*schema.Column{ServiceCatalogsColumns[26]},
+				RefColumns: []*schema.Column{TicketCategoriesColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
 		Indexes: []*schema.Index{
 			{
 				Name:    "servicecatalog_ci_type_id",
@@ -3959,6 +3968,11 @@ var (
 				Name:    "servicecatalog_tenant_id_status",
 				Unique:  false,
 				Columns: []*schema.Column{ServiceCatalogsColumns[21], ServiceCatalogsColumns[20]},
+			},
+			{
+				Name:    "servicecatalog_tenant_id_default_ticket_category_id",
+				Unique:  false,
+				Columns: []*schema.Column{ServiceCatalogsColumns[21], ServiceCatalogsColumns[26]},
 			},
 		},
 	}
@@ -4671,7 +4685,7 @@ var (
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "name", Type: field.TypeString},
 		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
-		{Name: "code", Type: field.TypeString, Unique: true},
+		{Name: "code", Type: field.TypeString},
 		{Name: "level", Type: field.TypeInt, Default: 1},
 		{Name: "sort_order", Type: field.TypeInt, Default: 0},
 		{Name: "is_active", Type: field.TypeBool, Default: true},
@@ -4703,6 +4717,13 @@ var (
 				Columns:    []*schema.Column{TicketCategoriesColumns[16]},
 				RefColumns: []*schema.Column{TicketCategoriesColumns[0]},
 				OnDelete:   schema.SetNull,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "ticketcategory_tenant_id_code",
+				Unique:  true,
+				Columns: []*schema.Column{TicketCategoriesColumns[7], TicketCategoriesColumns[3]},
 			},
 		},
 	}
@@ -5689,6 +5710,7 @@ func init() {
 	SLAMetricsTable.ForeignKeys[0].RefTable = SLADefinitionsTable
 	SLAViolationsTable.ForeignKeys[0].RefTable = SLADefinitionsTable
 	SLAViolationsTable.ForeignKeys[1].RefTable = TicketsTable
+	ServiceCatalogsTable.ForeignKeys[0].RefTable = TicketCategoriesTable
 	ServiceRequestsTable.ForeignKeys[0].RefTable = TicketsTable
 	ServiceRequestAccessResultsTable.ForeignKeys[0].RefTable = TicketsTable
 	ServiceRequestAccessResultsTable.ForeignKeys[1].RefTable = ProcessTasksTable

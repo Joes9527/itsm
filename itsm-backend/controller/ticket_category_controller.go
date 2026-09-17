@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -15,6 +16,33 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
+
+// respondCategoryError 把分类维护的结构化失败映射到既有错误码。
+// 业务拒绝不再统一伪装成 500，也不泄露跨租户对象或引用对象的名称/计数。
+func respondCategoryError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, service.ErrCTICategoryNotFound):
+		common.Fail(c, common.NotFoundCode, "分类不存在")
+	case errors.Is(err, service.ErrCTICategoryHasChildren):
+		common.Fail(c, common.ConflictCode, "请先处理该分类的下级分类")
+	case errors.Is(err, service.ErrCTICategoryReferenced):
+		common.Fail(c, common.ConflictCode, "该分类已被工单或配置引用，无法删除或移动")
+	case errors.Is(err, service.ErrCTICategoryPublishedCatalog):
+		common.Fail(c, common.ConflictCode, "已发布的服务目录正在使用该分类或其下级，请先调整目录")
+	case errors.Is(err, service.ErrCTICategoryCodeImmutable):
+		common.Fail(c, common.ParamErrorCode, "分类代码创建后不可修改")
+	case errors.Is(err, service.ErrCTIPathIncomplete):
+		common.Fail(c, common.ParamErrorCode, "请补齐完整的三级工单分类")
+	case errors.Is(err, service.ErrCTIPathTooDeep):
+		common.Fail(c, common.ParamErrorCode, "工单分类最多三级")
+	case errors.Is(err, service.ErrCTIPathInactive):
+		common.Fail(c, common.ParamErrorCode, "所选分类已停用，请重新选择")
+	case errors.Is(err, service.ErrCTIPathHierarchy), errors.Is(err, service.ErrCTIPathOutsideTenant):
+		common.Fail(c, common.ParamErrorCode, "分类层级或租户不一致")
+	default:
+		common.Fail(c, common.InternalErrorCode, err.Error())
+	}
+}
 
 type TicketCategoryController struct {
 	categoryService *service.TicketCategoryService
@@ -63,7 +91,7 @@ func (tc *TicketCategoryController) CreateCategory(c *gin.Context) {
 	category, err := tc.categoryService.CreateCategory(c.Request.Context(), &req)
 	if err != nil {
 		tc.logger.Errorw("Failed to create ticket category", "error", err, "tenant_id", tenantID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
+		respondCategoryError(c, err)
 		return
 	}
 
@@ -102,7 +130,7 @@ func (tc *TicketCategoryController) UpdateCategory(c *gin.Context) {
 	category, err := tc.categoryService.UpdateCategory(c.Request.Context(), categoryID, &req, tenantID)
 	if err != nil {
 		tc.logger.Errorw("Failed to update ticket category", "error", err, "category_id", categoryID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
+		respondCategoryError(c, err)
 		return
 	}
 
@@ -126,7 +154,7 @@ func (tc *TicketCategoryController) DeleteCategory(c *gin.Context) {
 	err = tc.categoryService.DeleteCategory(c.Request.Context(), categoryID, tenantID)
 	if err != nil {
 		tc.logger.Errorw("Failed to delete ticket category", "error", err, "category_id", categoryID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
+		respondCategoryError(c, err)
 		return
 	}
 
@@ -158,26 +186,68 @@ func (tc *TicketCategoryController) ExecuteImport(c *gin.Context) {
 		return
 	}
 
-	success, failed := 0, 0
+	// 导入按 parent_code 重建层级，并复用与手工创建相同的分类服务校验（三级上限、
+	// 租户内父子关系、编码唯一）。父行可能排在子行之后，因此最多重试到最大层级+1 轮；
+	// 仍无法解析的行才算失败，不会被静默降级成一级分类。
+	type pendingRow struct {
+		row      ticketCategoryImportRow
+		lastErr  error
+		failFast bool
+	}
+	pending := make([]pendingRow, 0, len(rows))
 	for _, row := range rows {
 		if strings.TrimSpace(row.Name) == "" || strings.TrimSpace(row.Code) == "" {
-			failed++
+			pending = append(pending, pendingRow{row: row, lastErr: fmt.Errorf("分类名称和代码不能为空"), failFast: true})
 			continue
 		}
-		_, err := tc.categoryService.CreateCategory(c.Request.Context(), &service.CreateCategoryRequest{
-			Name:        row.Name,
-			Code:        row.Code,
-			Description: row.Description,
-			SortOrder:   row.SortOrder,
-			IsActive:    row.IsActive,
-			TenantID:    tenantID,
-		})
-		if err != nil {
-			tc.logger.Warnw("Failed to import ticket category", "error", err, "code", row.Code, "tenant_id", tenantID)
-			failed++
-			continue
+		pending = append(pending, pendingRow{row: row})
+	}
+
+	success := 0
+	for pass := 0; pass <= service.CTIMaxDepth && len(pending) > 0; pass++ {
+		attempted := pending
+		pending = pending[:0:0]
+		progress := 0
+		for _, item := range attempted {
+			if item.failFast {
+				pending = append(pending, item)
+				continue
+			}
+			parentID := 0
+			if strings.TrimSpace(item.row.ParentCode) != "" {
+				parent, err := tc.categoryService.GetCategoryByCode(c.Request.Context(), tenantID, item.row.ParentCode)
+				if err != nil {
+					item.lastErr = fmt.Errorf("父分类代码不存在: %s", item.row.ParentCode)
+					pending = append(pending, item)
+					continue
+				}
+				parentID = parent.ID
+			}
+			_, err := tc.categoryService.CreateCategory(c.Request.Context(), &service.CreateCategoryRequest{
+				Name:        item.row.Name,
+				Code:        item.row.Code,
+				Description: item.row.Description,
+				SortOrder:   item.row.SortOrder,
+				IsActive:    item.row.IsActive,
+				ParentID:    parentID,
+				TenantID:    tenantID,
+			})
+			if err != nil {
+				item.lastErr = err
+				pending = append(pending, item)
+				continue
+			}
+			success++
+			progress++
 		}
-		success++
+		if progress == 0 {
+			break
+		}
+	}
+	failed := 0
+	for _, item := range pending {
+		failed++
+		tc.logger.Warnw("Failed to import ticket category", "error", item.lastErr, "code", item.row.Code, "tenant_id", tenantID)
 	}
 
 	common.Success(c, gin.H{"success": success, "failed": failed})
@@ -377,11 +447,23 @@ func (tc *TicketCategoryController) ListCategories(c *gin.Context) {
 	})
 }
 
-// GetCategoryTree 获取分类树形结构
+// GetCategoryTree 获取分类树形结构。
+// includeInactive=true 供维护界面使用（显示状态、恢复停用节点）；默认只返回启用节点，
+// 保持选择器/申请入口的既有契约。
 func (tc *TicketCategoryController) GetCategoryTree(c *gin.Context) {
 	tenantID := c.GetInt("tenant_id")
 
-	tree, err := tc.categoryService.GetCategoryTree(c.Request.Context(), tenantID)
+	includeInactive := false
+	if raw := c.Query("includeInactive"); raw != "" {
+		parsed, err := strconv.ParseBool(raw)
+		if err != nil {
+			common.Fail(c, common.ParamErrorCode, "includeInactive 必须是布尔值")
+			return
+		}
+		includeInactive = parsed
+	}
+
+	tree, err := tc.categoryService.GetCategoryTree(c.Request.Context(), tenantID, includeInactive)
 	if err != nil {
 		tc.logger.Errorw("Failed to get category tree", "error", err, "tenant_id", tenantID)
 		common.Fail(c, common.InternalErrorCode, err.Error())
@@ -414,7 +496,7 @@ func (tc *TicketCategoryController) MoveCategory(c *gin.Context) {
 	category, err := tc.categoryService.MoveCategory(c.Request.Context(), categoryID, &req, tenantID)
 	if err != nil {
 		tc.logger.Errorw("Failed to move ticket category", "error", err, "category_id", categoryID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
+		respondCategoryError(c, err)
 		return
 	}
 
