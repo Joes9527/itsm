@@ -606,3 +606,17 @@ WSL最终副本与角色已归档到既有私有证据目录，最终副本dump 
 ### 验证、审查与汇报纪律
 
 每阶段只汇报“完成／验证／阻塞／下一步”，在本节勾选并链接脱敏证据。已有相同源码/目标/条件的证据复用，变更和失败才补验；代码修复按影响范围跑测试。配置清理、真实写入和删除清单在各自门槛进行独立审查，共享操作不并行。文档交付完成不勾选任何环境执行项。
+
+### 2026-09-16 包1 决策记录与 A3 范围评估（对齐后）
+
+- **口径更正：** Dev 当前为 **047**（39 回执，最高 `047_bpmn_assignment_source`），**非 048**；048 既无回执也无对应实例。
+- **库用途（据 PR #46 背景与现有文档）：** `itsm_config_baseline_20260908` = 真实初始 Dev（3010→8080→Dev，身份与业务配置保留）；`itsm_migration_20260914` = 为迁移旧 ITSM 数据做的**同实例克隆**（019 代，**非**当前 Dev 副本）。`docs/migrations/2026-09-14-schema-ledger-reconciliation-plan.md:162` 将其记为"同实例克隆库"先例。该文档的库状态表**已过时**（彼时 Dev 记 24 回执/031；表内 `itsm_candidate` 现已不存在）→ **缺一份现行库用途台账**。
+- **包映射与进度：** PR #46 包1（修复 Dev 流程阻塞）= 本清单的 A1/A2/A3/A4。A1 `c3bcf597`、A2 `6c76881c`、负例 `77300ab7` 已交付并验证（PR #47）。A3（新流程版本+路由切换+UI 验收）与 A4（冻结回调保留式处置）未完成。包1 验收要求"新建普通工单能完成处理、解决、关闭"，**A1/A2 单独不满足该验收**。
+- **破环口径（设计方裁定）：采 (i)。** A3 不以隔离目标演练替代，改为 **Dev 内自证**：新 key 先创建（惰性，无绑定即无路由影响）→ Dev 合成工单走通 → 切 825/827 → 再验证 → 失败用现有领域 API（CAS+审计）切回；判据为"是否优于当前已坏的现状"。依据：定义解析按 `key`+`is_active`（`service/bpmn_version_service.go:690-709`），且 825/827 均为显式 `ver=1`。
+- **已批准：** 允许在 Dev 创建**未绑定**的 `ticket_general_flow_v2` v1.0.0，作为演练与验收输入。
+- **已决策：** 流程级 metaData 保留 `category/description` 并对齐 `version`，**移除**其中误导的 `service_task_type`/`action`（引擎不解析流程级 `extensionElements`，但仓库多个内置模板沿用该写法）。**流程27 保留**为冻结失败样本。
+- **A3 范围评估（显著大于 A1/A2，须分次实现并逐段独立复核）：**
+  - §2.1 新图：`Activity_Assign` 改无handler fulfillment（`assigneeSource=work_item_assignee`，名"确认接单"）；`Gateway_ApprovalResult` 的拒绝分支改指**新增 `EndEvent_Rejected`**（修正原 `Flow_Reject` 直接进处理）；`Activity_Handle`/`Activity_Escalate`/`Activity_Resolve` 改 owner-bound 且需对应领域 receipt/状态；`Activity_NotifyRequester` 移除旧 `ticket_task` 通知回调；**新增 `Activity_Close`**；`EndEvent_1` 更名"流程完成"。
+  - §2.2 门禁：新增定义级 `workItemLifecycleContract=generic_fulfillment_v1` 与任务级 `workItemPrerequisite=assigned|in_progress|escalated|resolved|closed`，**发布期拒绝**未知值/专业class/handler 混用；同一事务纯规则门禁（建议 `service/generic_workflow_gate.go`），BPMN 命令、只读 UI actions 与 Ticket 领域命令共用；锁序 WorkItem→instance→task，CAS/operation receipt 去重；拒绝客户端改写 `approval_required`/`need_escalate`/`approvalResult`；旧定义沿用原逻辑。
+  - **必修缺陷：** 网关条件语法——定义写 `<bpmn:body>${...}</bpmn:body>`，而 `BPMNConditionExpression.Expression` 的 tag 为 `xml:",chardata"`（`service/bpmn_types.go:355-358`），消费点 `bpmn_process_engine.go:1182/2498/2516`，故 definition65 的**三个网关当前均不可用**。
+- **待办：** A3 实现与切换、A4、库用途台账补记、以及三处较早库以 **KAF 命名**迁移为头（`019_kaf_execution_integrity_rls`）的血统确认。
