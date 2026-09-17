@@ -30,6 +30,7 @@ import (
 	"itsm-backend/ent/processexecutionhistory"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
+	"itsm-backend/ent/processversionchangelog"
 	"itsm-backend/ent/role"
 	"itsm-backend/ent/rolepermission"
 	"itsm-backend/ent/ticketassignmentrule"
@@ -3059,19 +3060,46 @@ func (s *bpmnProcessDefinitionService) DeleteProcessDefinition(ctx context.Conte
 		return err
 	}
 
-	// 检查是否有运行中的实例
-	runningCount, err := s.client.ProcessInstance.
+	// Unfinished instances block removal outright; the caller must end them first.
+	unfinishedCount, err := s.client.ProcessInstance.
+		Query().
+		Where(processinstance.ProcessDefinitionID(definition.ID), processinstance.StatusIn("created", "running", "suspended")).
+		Count(ctx)
+	if err != nil {
+		return fmt.Errorf("检查流程实例失败: %w", err)
+	}
+	if unfinishedCount > 0 {
+		return common.NewConflictStateError(fmt.Sprintf("该流程定义有 %d 个未结束的实例，请先结束或终止后再删除", unfinishedCount))
+	}
+	// Finished instances are retained execution history; deleting the definition
+	// would either destroy that history or violate the instance foreign key.
+	instanceCount, err := s.client.ProcessInstance.
 		Query().
 		Where(processinstance.ProcessDefinitionID(definition.ID)).
 		Count(ctx)
 	if err != nil {
 		return fmt.Errorf("检查流程实例失败: %w", err)
 	}
-	if runningCount > 0 {
-		return fmt.Errorf("该流程定义有 %d 个运行中的实例，请先关闭后再删除", runningCount)
+	if instanceCount > 0 {
+		return common.NewConflictStateError(fmt.Sprintf("该流程定义存在 %d 个历史实例，为保留流程执行历史不能删除；可停用该流程定义", instanceCount))
 	}
 
-	return s.client.ProcessDefinition.DeleteOne(definition).Exec(ctx)
+	// Version change-log rows reference the definition and carry no meaning once
+	// it is gone; remove them in the same transaction as the definition.
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ProcessVersionChangelog.Delete().
+		Where(processversionchangelog.ProcessDefinitionIDEQ(definition.ID), processversionchangelog.TenantIDEQ(definition.TenantID)).
+		Exec(ctx); err != nil {
+		return fmt.Errorf("删除流程版本变更日志失败: %w", err)
+	}
+	if err := tx.ProcessDefinition.DeleteOneID(definition.ID).Exec(ctx); err != nil {
+		return fmt.Errorf("删除流程定义失败: %w", err)
+	}
+	return tx.Commit()
 }
 
 func (s *bpmnProcessDefinitionService) ListProcessDefinitions(ctx context.Context, req *ListProcessDefinitionsRequest) ([]*ent.ProcessDefinition, int, error) {

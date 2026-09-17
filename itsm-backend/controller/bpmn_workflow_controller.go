@@ -372,7 +372,7 @@ func (c *BPMNWorkflowController) DeleteProcessDefinition(ctx *gin.Context) {
 
 	err := c.processEngine.ProcessDefinitionService().DeleteProcessDefinition(workflowCtx, key, version)
 	if err != nil {
-		common.InternalError(ctx, "删除流程定义失败: "+err.Error())
+		respondBPMNError(ctx, err, "删除流程定义失败")
 		return
 	}
 

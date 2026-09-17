@@ -124,6 +124,17 @@ func NewConflictError(resource, detail string) *AppError {
 	}
 }
 
+// NewConflictStateError creates a conflict error whose message describes a
+// resource's state (for example, a definition that still owns instances)
+// instead of the "already exists" wording used for duplicate creation.
+func NewConflictStateError(message string) *AppError {
+	return &AppError{
+		Code:       ErrCodeConflict,
+		Message:    message,
+		HTTPStatus: http.StatusConflict,
+	}
+}
+
 // NewInternalError creates an internal server error
 func NewInternalError(message string, err error) *AppError {
 	return &AppError{

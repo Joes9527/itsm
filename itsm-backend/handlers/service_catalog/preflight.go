@@ -68,7 +68,9 @@ func (s *Service) validateForPublicationTx(ctx context.Context, tx *ent.Tx, tena
 	// Catalog Fields describe custom FormValues and must not duplicate typed input.
 	err := service.NewProcessBindingService(tx.Client()).ValidateCreationPublication(ctx, tx, tenantID, catalog.TargetClass, catalog.ProcessDefinitionKey, catalog.RequiresApproval, s.publicationEngine)
 	if err != nil {
-		return creation.NewDomainValidationFailed("catalog publication configuration is incomplete", err)
+		// Surface the deterministic configuration cause so an administrator can
+		// act on it; the generic message alone is not actionable.
+		return creation.NewDomainValidationFailed("catalog publication configuration is incomplete", err, creation.FieldError{Field: "publication", Message: err.Error()})
 	}
 	return nil
 }

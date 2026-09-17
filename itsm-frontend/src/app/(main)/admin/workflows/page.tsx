@@ -42,6 +42,7 @@ import {
   Empty,
 } from 'antd';
 import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
+import { apiErrorMessage } from '@/lib/api/http-client';
 const { Title, Text } = Typography;
 
 // 工作流状态枚举
@@ -271,7 +272,7 @@ const WorkflowManagement = () => {
       loadWorkflows();
     } catch (error) {
       console.error('Failed to delete workflow:', error);
-      message.error('删除工作流失败');
+      message.error(apiErrorMessage(error, '删除工作流失败'));
     } finally {
       setLoading(false);
     }
@@ -293,7 +294,7 @@ const WorkflowManagement = () => {
       loadWorkflows();
     } catch (error) {
       console.error('Failed to batch delete workflows:', error);
-      message.error('批量删除失败');
+      message.error(apiErrorMessage(error, '批量删除失败'));
     } finally {
       setLoading(false);
     }
@@ -515,7 +516,7 @@ const WorkflowManagement = () => {
           </Tooltip>
           <Popconfirm
             title="确定要删除这个工作流吗？"
-            description="删除后无法恢复，相关的实例将被停止。"
+            description="删除后无法恢复；若该流程仍有未结束或历史实例，将无法删除，请先结束实例或改为停用。"
             onConfirm={() => handleDelete(record.id)}
             okText="确定删除"
             cancelText="取消"
