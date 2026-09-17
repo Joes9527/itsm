@@ -24,6 +24,7 @@ type BPMNElement interface {
 
 // BPMNProcess BPMN流程定义
 type BPMNProcess struct {
+	ExtensionElements  *BPMNExtensionElements   `xml:"extensionElements"`
 	ID                 string                   `xml:"id,attr"`
 	Name               string                   `xml:"name,attr"`
 	ProcessType        string                   `xml:"processType,attr"`

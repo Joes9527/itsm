@@ -18,6 +18,9 @@ func NewBPMNParser() *BPMNParser {
 
 // ParseXML 解析BPMN XML文件
 func (p *BPMNParser) ParseXML(xmlData []byte) (*BPMNDefinitions, error) {
+	if err := validateLifecycleMetadataLocations(xmlData); err != nil {
+		return nil, err
+	}
 	var definitions BPMNDefinitions
 	err := xml.Unmarshal(xmlData, &definitions)
 	if err != nil {
@@ -58,6 +61,9 @@ func (p *BPMNParser) validateBPMN(definitions *BPMNDefinitions) error {
 
 // validateProcess 验证单个流程
 func (p *BPMNParser) validateProcess(process *BPMNProcess) error {
+	if err := validateWorkItemLifecycleProcess(process); err != nil {
+		return err
+	}
 	// 检查必要元素
 	if process.ID == "" {
 		return fmt.Errorf("流程ID不能为空")
