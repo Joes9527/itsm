@@ -16,7 +16,13 @@ type BPMNTaskUIActions struct {
 	Reason   string `json:"reason,omitempty"`
 }
 
+type BPMNTaskCallbackBlock struct {
+	Code   string `json:"code"`
+	Reason string `json:"reason"`
+}
+
 type BPMNTaskResponse struct {
+	CallbackBlock        *BPMNTaskCallbackBlock `json:"callbackBlock,omitempty"`
 	AssigneeSource       string                 `json:"assigneeSource"`
 	AssignmentState      string                 `json:"assignmentState"`
 	ResponsibleUserID    int                    `json:"responsibleUserId"`

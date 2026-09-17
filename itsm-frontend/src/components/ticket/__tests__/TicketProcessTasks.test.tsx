@@ -343,3 +343,21 @@ it('initializes current-task expansion again after the ticket identity changes',
   expect(await screen.findByRole('button', { name: '当前任务（1）' })).toHaveAttribute('aria-expanded', 'true');
   expect(screen.getByText('主管审批')).toBeInTheDocument();
 });
+
+it('shows required callback block while completed history stays collapsed', async () => {
+ read.mockResolvedValue(page([{ ...task, status: 'completed', callbackBlock: { code: 'required_callback_blocked', reason: '必要流程操作已阻塞，请联系管理员处理。' } }]));
+ render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+ expect(await screen.findByText('流程执行已阻塞')).toBeInTheDocument();
+ expect(screen.getByRole('button', { name: /历史任务（1）/ })).toHaveAttribute('aria-expanded', 'false');
+ expect(screen.queryByText('主管审批')).not.toBeInTheDocument();
+ await openHistoryTasks();
+ expect(screen.getByText('状态：已完成')).toBeInTheDocument();
+ expect(screen.getAllByText('必要流程操作已阻塞，请联系管理员处理。').length).toBeGreaterThan(0);
+ expect(screen.queryByRole('button', {name: '完成任务'})).not.toBeInTheDocument();
+});
+it('does not show a callback warning without blocked evidence', async () => {
+ read.mockResolvedValue(page([{...task,status:'completed'}]));
+ render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+ await screen.findByRole('button', {name:/历史任务（1）/});
+ expect(screen.queryByText('流程执行已阻塞')).not.toBeInTheDocument();
+});

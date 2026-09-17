@@ -3981,6 +3981,10 @@ func (s *bpmnTaskService) ListUserTaskViews(ctx context.Context, req *ListUserTa
 		}
 	}
 
+	blocks, err := loadTaskCallbackBlocks(ctx, s.client, tasks)
+	if err != nil {
+		return nil, 0, err
+	}
 	views := dto.ToBPMNTaskResponseList(tasks, instanceMap)
 	projection, err := s.engine.taskUIReadProjection(ctx)
 	if err != nil {
@@ -3997,6 +4001,7 @@ func (s *bpmnTaskService) ListUserTaskViews(ctx context.Context, req *ListUserTa
 		views[i].ResponsibleUserID = assignment.ResponsibleUserID
 		views[i].ActorID = assignment.ActorID
 		views[i].UIActions = projection.taskUIActions(ctx, task)
+		views[i].CallbackBlock = blocks[task.ID]
 	}
 	return views, total, nil
 }
