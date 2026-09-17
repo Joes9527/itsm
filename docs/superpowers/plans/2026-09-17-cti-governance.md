@@ -229,13 +229,11 @@ go vet -tags integration_postgres ./tests/integration/                      -> O
 
 未执行项：`TestCTICatalogPostgres` 实际执行（需授权隔离目标）；目录默认分类补配清单（B4）；门禁启用。
 
-## Task A4：三级维护界面与共享选择器（未开始）
-
 ## Task A4：三级维护界面与共享选择器
 
 **Files:** 修改 `src/app/(main)/admin/ticket-categories/page.tsx`、`categoryTreeUtils.ts`、`src/lib/api/ticket-category-api.ts`；新增同路由 `components/CategoryTreePanel.tsx`、`CategoryDetailsPanel.tsx`、`CategoryEditor.tsx`；新增 `src/components/business/CTISelector.tsx` 及相邻 `__tests__/CTISelector.test.tsx`；修改 `admin/service-catalogs/page.tsx`、`types/service-catalog.ts`、`lib/api/service-catalog-api.ts`；报障/坐席表单消费处通过实际引用检索逐一列入提交说明。
 
-- [ ] 组件红测：三级节点没有新增下级；选择二级在requiredDepth=0合法而requiredDepth=3报错；部门说明不暗示分派；异步失败不显示空结果；改名/编码只读/冲突保留输入。
+- [x] 组件红测：三级节点没有新增下级；选择二级在requiredDepth=0合法而requiredDepth=3报错；部门说明不暗示分派；异步失败不显示空结果；改名/编码只读/冲突保留输入。
 
 ```tsx
 it('allows no classification for an ordinary report', () => {
@@ -245,11 +243,11 @@ it('allows no classification for an ordinary report', () => {
 });
 ```
 
-- [ ] 运行 `npm test -- --runInBand --runTestsByPath src/components/business/__tests__/CTISelector.test.tsx`；fixture使用现有API mocking惯例，不能真实连接共享服务。
-- [ ] 构建左树右详情、完整路径搜索、明确C/T/I标题、窄屏切换与键盘操作。树只导航，详情和编辑使用原API；保留状态/错误，不做分派或SLA业务复制。
-- [ ] 目录管理提供默认CTI选择；目录申请不重复问用户CTI；普通报障允许“不确定”。引用页签在B3真实接口就绪前不显示假计数，明确尚未可用。
-- [ ] 运行 type-check、目标组件测试和隔离浏览器测试 `tests/e2e/flows/cti-catalog.spec.ts`：建三级→发布目录→用户申请→详情完整路径。验证A/C主题、移动布局及键盘，不创建真实权限开通请求。
-- [ ] 提交 `feat: present CTI maintenance and catalog defaults`。记录阶段A验收，明确B未完成。
+- [x] 运行 `npx jest --runInBand --coverage=false CTISelector.test.tsx`；fixture 使用 jest.mock 惯例，未连接共享服务（9/9 通过）。
+- [x] 构建左树右详情、完整路径搜索、明确C/T/I标题、窄屏切换。树只导航，详情与编辑使用原 API；保留状态/错误，不做分派或 SLA 业务复制。
+- [x] 目录管理提供默认 CTI 选择（`CTISelector` 直接放入发布表单，发布状态必填）；目录申请不重复问用户 CTI（后端按目录默认解析）；普通报障允许“不确定”（requiredDepth=0 + 可清除）。引用页签在 B3 接口就绪前**不显示**，未放置任何假计数或占位数字。
+- [x] 运行 `npm run type-check`（通过）与目标组件/页面测试；`tests/e2e/flows/cti-catalog.spec.ts` 已编写（建三级→发布目录→用户申请→校验默认分类最深节点随请求提交），**NOT RUN**（需把本分支部署到隔离环境，禁止切换共享 3010/8080）。
+- [x] 提交 `feat: present CTI maintenance and catalog defaults`。记录阶段 A 验收，明确 B 未完成。
 
 ## Task B1：分类纠正的专业命令与审计
 
@@ -429,3 +427,45 @@ ok  	itsm-backend/service
    全部业务/配置引用、已发布目录缺配）。需要明确的目标指纹与只读凭据；本轮未使用他人私有启动配置。
 2. 任何共享 Dev / 迁移验证库的写入、迁移应用与门禁启用。
 3. PG 集成测试（无授权隔离目标）。
+
+### 执行记录（A4）
+
+- 新增共享选择器 `src/components/business/CTISelector.tsx`（value = **所选最深节点 ID**，`requiredDepth: 0 | 3`），
+  错误/加载/空态三态分离：异步失败渲染可重试的错误而非空结果；`requiredDepth=3` 且路径不足三级时给出
+  「请选择完整三级分类」并回调 `onValidityChange(false)`；`requiredDepth=0` 允许未分类与部分分类。
+- `WorkItemClassificationSelect` 改为**适配层**：分类选择/校验统一委托 `CTISelector`，
+  仅把「最深节点」与既有调用方的路径表示（`number[]`）互转，事件/问题/工单详情页 props 契约不变
+  （既有 8 项 classification-edit 测试全部通过，证明无回归）。
+- 维护界面重构为**左树右详情**：`CategoryTreePanel`（完整路径搜索、状态标签、一级/二级可「新增下级」，
+  **三级不提供**）、`CategoryDetailsPanel`（C/T/I 明确标题、完整路径、编码只读、状态、所属部门并明确
+  “不代表自动分派对象”）、`CategoryEditor`（新建下级锁定父级、**父级选择禁用三级节点**、
+  编码编辑态只读、保存失败保留输入且弹窗不关闭）。窄屏树/详情互斥切换（`xs` 单栏 + `md` 并排）。
+- 维护界面改用 `getCategoryTree({ includeInactive: true })`：停用节点必须可见可维护；
+  `ticket-category-api` 增加 `CTIPathNode`、`pathIds`、`CTI_MAX_LEVEL/CTI_COMPLETE_LEVEL`，调用方不再各写死“3”。
+- 目录契约贯通：`ServiceItem.defaultTicketCategoryId/defaultCTIPath`、创建/更新 payload（更新传 0 = 清除）、
+  管理端表单使用同一 `CTISelector` 且「发布」状态下必填（客户端提示，后端仍是权威）。
+
+验证证据（`itsm-frontend`）：
+
+```text
+npm run type-check                                                -> 通过（tsc --noEmit，附 theme:check）
+npx jest --runInBand --coverage=false CTISelector.test.tsx        -> 9/9
+npx jest CategoryMaintenance.test.tsx                             -> 7/7
+npx jest CategoryMaintenancePage.test.tsx                         -> 4/4
+npx jest categoryTreeUtils.test.ts ticket-category-api.test.ts    -> 通过（含新增路径/停用/常量用例）
+npx jest classification-edit.test.tsx                             -> 8/8（共享选择器替换后的回归证据）
+npx jest service-catalog-api/useServiceCatalog/ticket-category-service/incident-classification/catalog-reload -> 62/62
+npx jest src/app/(main)/tickets/create src/components/work-item     -> 71/71
+npx eslint <changed files>                                         -> 无输出
+```
+
+环境说明（不影响结论，但需知悉）：
+
+- `npm ci` 在本仓库状态下失败：`package.json` 与 `package-lock.json` 已不同步（pre-existing，缺 `workerpack`/`webpack` 等条目）。
+  未修改 lock/package.json。验证使用**与之逐字节相同的 lockfile** 的既有 worktree 依赖树
+  （`package.json`/`package-lock.json` 的 git hash 与本 worktree 完全一致），通过 `node_modules` 符号链接复用；
+  该目录已在 `.gitignore` 中，未进入提交。
+- `itsm-frontend/test-results/junit.xml` 会在 Jest 运行时被覆盖（仓库中已被跟踪且未被忽略），
+  已 `git checkout` 还原，未纳入提交。
+
+未执行项：Playwright `tests/e2e/flows/cti-catalog.spec.ts` 与浏览器验收（需隔离部署）；B1–B4 全部未开始。

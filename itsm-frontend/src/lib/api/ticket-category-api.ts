@@ -4,6 +4,24 @@
 
 import { httpClient } from './http-client';
 
+/** CTI 的最大层级（Category → Type → Item）。 */
+export const CTI_MAX_LEVEL = 3;
+/** 完成质量门禁要求的完整层级。 */
+export const CTI_COMPLETE_LEVEL = 3;
+
+/**
+ * CTIPathNode 是分类完整路径的只读投影（根 → 最深节点）。
+ * 工单只保存所选最深节点，绝不保存第二套 C/T/I 文本权威。
+ */
+export interface CTIPathNode {
+  id: number;
+  parentId: number | null;
+  level: number;
+  name: string;
+  code: string;
+  isActive: boolean;
+}
+
 // 工单分类接口
 export interface TicketCategory {
   id: number;
@@ -12,7 +30,10 @@ export interface TicketCategory {
   description: string;
   parentId: number | null;
   level: number;
+  /** 派生的根→自身完整路径（C / T / I 名称），用于维护界面路径搜索与回显。 */
   path?: string;
+  /** 派生路径的节点 ID（根 → 自身）。 */
+  pathIds?: number[];
   sortOrder: number;
   isActive: boolean;
   departmentId?: number | null;
@@ -60,8 +81,12 @@ export class TicketCategoryApi {
     return httpClient.get('/api/v1/ticket-categories', params);
   }
 
-  // 获取分类树形结构
-  static async getCategoryTree(): Promise<TicketCategory[]> {
+  // 获取分类树形结构。
+  // 默认只返回启用节点（选择器/申请入口）；维护界面需要看到停用节点与状态时显式要求。
+  static async getCategoryTree(options?: { includeInactive?: boolean }): Promise<TicketCategory[]> {
+    if (options?.includeInactive) {
+      return httpClient.get('/api/v1/ticket-categories/tree', { includeInactive: true });
+    }
     return httpClient.get('/api/v1/ticket-categories/tree');
   }
 
