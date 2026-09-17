@@ -81,7 +81,7 @@ export interface CTISelectorProps {
 
 **Files:** 修改本计划的执行记录与设计§4证据；读取 `ent/schema/{ticketcategory,servicecatalog,systemconfig}.go`、`migration/`、`migrations/`、`service/system_config_service.go`、`service/ticket_assignment_rule_service.go`、`service/ticket_sla_service.go`、分类控制器及导入路径。不写共享数据库。
 
-- [ ] 获取并记录执行基线、分支、脏文件、最新canonical迁移注册；确认其他数据库恢复任务没有占用目标。
+- [x] 获取并记录执行基线、分支、脏文件、最新canonical迁移注册；确认其他数据库恢复任务没有占用目标。（见「执行记录（A1）」基线/迁移账本/环境边界）
 
 ```bash
 git fetch origin
@@ -91,17 +91,17 @@ rg -n 'Register|047|schemaVersion' itsm-backend/migration
 rg -n 'CategoryID|CategoryIds|category_id|category_ids|default_resolver|sla_tier' itsm-backend/service itsm-backend/handlers itsm-backend/ent/schema
 ```
 
-- [ ] 以真实授权租户上下文只读盘点：三级数量、超深度、根错误、孤儿、环、跨租户父链、错误level、编码冲突、全部业务/配置引用及目录缺配。零行必须同时证明租户上下文和RLS身份，不能当成空库。只记录聚合/ID及错误类型，不导出个人数据。
-- [ ] 在计划记录引用矩阵（所有者、结构引用/遗留字符串、维护/查询入口、删除保护）；覆盖 TicketTemplate、目录、工单、分派、SLA、流程配置及当前代码发现的其他消费者。字符串引用不能因没外键被忽略；不明确的映射阻止受影响维护动作并报可操作错误。
-- [ ] 固定启用记录使用既有 `system_configs`，每租户唯一保留键 `cti_governance_v1`；值含 `catalogEnforced`、`completionEnforced`、`effectiveFrom`（首次启用完成门禁时写入，后续不可改）。禁止通用配置接口随意改此保留键；按既有权限与审计走受控激活路径。读取失败/重复/非法值报错，不默认为关闭；从未配置则为未启用。
-- [ ] 核对基础测试并记录实际命令结果；不因本地Mac CGO问题跳过PG验收，可在获准隔离Linux执行。
+- [ ] 以真实授权租户上下文只读盘点：三级数量、超深度、根错误、孤儿、环、跨租户父链、错误level、编码冲突、全部业务/配置引用及目录缺配。零行必须同时证明租户上下文和RLS身份，不能当成空库。只记录聚合/ID及错误类型，不导出个人数据。**未执行**：共享 Dev／验证库被在途恢复任务占用，且未获得只读目标指纹与凭据授权（见执行记录 A1 未执行项 1）。
+- [x] 在计划记录引用矩阵（所有者、结构引用/遗留字符串、维护/查询入口、删除保护）；覆盖 TicketTemplate、目录、工单、分派、SLA、流程配置及当前代码发现的其他消费者。字符串引用不能因没外键被忽略；不明确的映射阻止受影响维护动作并报可操作错误。（见执行记录 A1 引用矩阵）
+- [x] 固定启用记录使用既有 `system_configs`，每租户唯一保留键 `cti_governance_v1`；值含 `catalogEnforced`、`completionEnforced`、`effectiveFrom`（首次启用完成门禁时写入，后续不可改）。禁止通用配置接口随意改此保留键；按既有权限与审计走受控激活路径。读取失败/重复/非法值报错，不默认为关闭；从未配置则为未启用。（契约已固定；实现与验证在 B2）
+- [x] 核对基础测试并记录实际命令结果；不因本地Mac CGO问题跳过PG验收，可在获准隔离Linux执行。实际用例名为 `TestMoveCategoryUpdatesParentSortOrderAndDescendantLevels` / `TestMoveCategoryRejectsMovingUnderDescendant`，PASS；PG 验收本轮 NOT RUN（无授权隔离目标）。
 
 ```bash
 cd itsm-backend
 go test ./service -run 'TestTicketCategory' -count=1
 ```
 
-- [ ] 提交审计记录：`docs: record CTI implementation baseline and reference ownership`。交付门禁：引用矩阵完整，所有阻塞有明确对象，未经授权无数据修复。
+- [x] 提交审计记录：`docs: record CTI implementation baseline and reference ownership`。交付门禁：引用矩阵完整，所有阻塞有明确对象，未经授权无数据修复。
 
 ## Task A2：分类不变量、路径与受控迁移
 
@@ -272,3 +272,81 @@ npx playwright test tests/e2e/flows/cti-catalog.spec.ts tests/e2e/flows/cti-gove
 ```
 
 PG测试stdout必须证明测试实际运行、RLS身份和隔离target fingerprint匹配；日志不得含密码/连接串。任何红测应先区分基线失败与本任务新增失败。迁移命令使用既有dev-commands-reference与canonical runner，不提供绕过账本的裸SQL执行捷径。
+
+## 执行记录（A1：基线、引用清单与启用契约）
+
+状态：A1 已完成（代码/文档范围）。**未执行**任何共享库写入、迁移应用或门禁启用。
+
+### 基线
+
+| 项 | 值 |
+| --- | --- |
+| 实施 worktree | `.worktrees/cti-governance` |
+| 实施分支 | `codex/feat/cti-governance`（自 `origin/main` 创建） |
+| 代码基线 | `origin/main` = `b8ac9639b4197c9c93ee2e72747e46bf59958664` |
+| 设计/计划提交 | `8ff8aea2`（分支 `origin/codex/docs/cti-governance-design`，相对基线 ahead 3 / behind 0，已快进合入实施分支） |
+| 实施前脏文件 | 仓库根 checkout 的 `itsm-frontend/test-results/junit.xml`（其他任务产物，未触碰） |
+
+`git status --short`（实施 worktree）：干净。
+
+### 迁移账本
+
+- `itsm-backend/migration/migrations.go` 的 `RegisteredMigrations` 最大版本为 `047_bpmn_assignment_source`；
+  045/046 分别为 `045_notification_email_target`、`046_auth_token_state`。
+- 全仓引用与全 ref 校对：`git log --all -- 'itsm-backend/migrations/048*'` 无记录，任何 `origin/*` 或本地分支的
+  `itsm-backend/migration|migrations` 下都不存在 `048`。**下一个可用序号是 048，但本轮未预占、未写入**。
+- 未修改任何历史 SQL 或既有 checksum。
+
+### 环境与授权边界（A1 核对结果）
+
+- 维护启动权威 `/home/administrator/apps/itsm-kaf/stack status`：`itsm` running（PID 256991，source `fc8de9d3`）、
+  `itsm-web` running（3010）、`kaf*`/`itsm-worker-*` stopped（stale 记录）。即共享 Dev 上仍有其他任务的恢复/迁移工作。
+- 仓库根 checkout 处于 `codex/migration-legacy-config-data`；另有 `.worktrees/{database-reconciliation,
+  dev-restoration-20260916,dev-restoration-api-20260916,config-migration-review,workitem-config-migration,…}` 处于在途状态。
+  **结论：共享 Dev / 迁移验证库被他人在途任务占用，本轮不做共享库写入、迁移或修复。**
+- 文档化的隔离 PG 目标（`catalog_reader_postgres_test.go`/`migrationEntryTarget`）要求 `127.0.0.1:36444/sslvpn_test`；
+  本机该端口无监听者，且本机只有 PostgreSQL 客户端工具（无 `initdb`/`postgres` 服务端），
+  授权边界又禁止新建数据库容器。**因此本轮 PG 集成测试为未执行（NOT RUN），不以 skip 记通过。**
+- 未使用私有启动配置/连接串作为测试默认值；未读取或输出凭据。
+
+### 引用矩阵（源码核对，所有者与保护点）
+
+| 消费者 | 引用形态 | 所有者 | 维护/查询入口 | 现有删除/移动保护 |
+| --- | --- | --- | --- | --- |
+| `tickets.category_id` | 真实 FK → `ticket_categories(id)`，`ON DELETE SET NULL` | WorkItem/Ticket 域 | `workitemcreation.NewPlan`（写最深节点）、`service/ticket_category_service.go` | 仅服务层 `DeleteCategory` 先计数工单；FK 是 SET NULL，DB 不阻止删除，存在先查后写竞态 |
+| `SLADefinition.category_ids` | `JSON []int`（无 FK） | SLA 服务 | `service/ticket_sla_service.go` | 无保护；`getSLADefinition` 只取“第一个活跃定义”再判断 category，命中集合不完整 |
+| `TicketAssignmentRule.conditions` | JSON 条件 `field=category_id`（equals/in/not_in → 精确匹配叶节点 ID） | 分派规则服务 | `service/ticket_assignment_rule_service.go`、`ticket_rule_conditions.go` | 无保护 |
+| `TicketAutomationRule.conditions` / `actions` | JSON：条件同上；动作可设 `category_id` | 自动化规则服务 | `service/ticket_automation_rule_service.go`、`ticket_automation_creation.go` | 无保护 |
+| `TicketTemplate.category_ids` | `JSON []int`（无 FK） | 工单模板 | `service/ticket_template_service.go`、前端 `TemplateList` | 无保护 |
+| `ProcessBinding.category_id` + `category` | `int` + 遗留字符串 | BPMN 创建配置 | `service/bpmn_creation_configuration.go` | 无保护 |
+| `IncidentEscalationRule.category_match` | 遗留字符串匹配 | Incident 域 | — | 字符串，无法映射为 ID；歧义对象须阻止受影响维护动作 |
+| `ServiceCatalog.category` | 展示分组字符串 | 服务目录 | `handlers/service_catalog/*` | 展示分组，不自动映射 CTI（设计 §2）；本轮新增独立结构化 `default_ticket_category_id` |
+| `KnowledgeArticle.category` | 展示/检索字符串 | 知识库 | `service/knowledge_integration_service.go` | 遗留字符串，不属 CTI 引用 |
+| 前端 | `TicketCategorySelector`、`WorkItemClassificationSelect`、`admin/ticket-categories`、目录管理页 | 前端 | A4 | — |
+
+字符串/JSON 引用不能因“没有外键”被忽略：A2 的引用检查覆盖上述结构性引用（JSON 中的 ID 列表按租户扫描），
+歧义或不可映射的遗留字符串阻止受影响的维护动作并返回可操作错误。
+
+### 启用契约（固定记录）
+
+- 位置：既有 `system_configs`；保留键 `cti_governance_v1`，每租户唯一。
+- 值（JSON）：`catalogEnforced`、`completionEnforced`、`effectiveFrom`（首次启用完成门禁时写入，此后不可改）。
+- 读取失败 / 重复行 / 非法值 → 报错（**不默认为关闭**）；从未配置 = 未启用。
+- 通用系统配置写入/导入接口须拒绝该保留键；受控激活走独立路径并审计。由 B2 实现并验证。
+
+### 基线测试
+
+```text
+cd itsm-backend && go test ./service -run 'TestMoveCategoryUpdatesParentSortOrderAndDescendantLevels|TestMoveCategoryRejectsMovingUnderDescendant' -count=1
+--- PASS: TestMoveCategoryUpdatesParentSortOrderAndDescendantLevels (0.03s)
+ok  	itsm-backend/service
+```
+
+`go test ./service -run 'TestTicketCategory'` 无匹配测试（既有用例名不含该前缀），已改用实际用例名记录。
+
+### A1 未执行项（需授权或目标）
+
+1. 真实授权租户上下文的只读分类盘点（三级数量、超深度、根错误、孤儿、环、跨租户父链、错误 level、编码冲突、
+   全部业务/配置引用、已发布目录缺配）。需要明确的目标指纹与只读凭据；本轮未使用他人私有启动配置。
+2. 任何共享 Dev / 迁移验证库的写入、迁移应用与门禁启用。
+3. PG 集成测试（无授权隔离目标）。

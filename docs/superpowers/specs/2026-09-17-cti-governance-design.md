@@ -47,6 +47,15 @@
 - 分派路径接收 CategoryID，SLA 服务有分类匹配逻辑；本次源码检查不证明所有规则或页面已形成有效闭环。
 - 本轮没有可信的全租户实时分类行数基线：无租户上下文的 RLS 查询不能作为空库证据。实施前须使用授权租户上下文只读盘点。
 
+实施核对补充（2026-09-17，A1 源码只读，不构成运行时或数据结论）：
+
+- `ent/migrate/schema.go`：`ticket_categories.code` 是**表级全局唯一**，而 `service/ticket_category_service.go` 按租户判重；两者范围不一致，须按租户契约显式处理（放宽为 `(tenant_id, code)`）。
+- `tickets.category_id` 对 `ticket_categories(id)` 的外键是 `ON DELETE SET NULL`，数据库层不阻止删除被引用分类；现有仅服务层先计数再删，存在竞态窗口。
+- `sladefinitions.category_ids` 为 JSON 数组；`TicketSLAService.getSLADefinition` 先取“第一个活跃定义”再判断是否包含分类，命中集合不完整。
+- 分派/自动化规则的 `category_id` 条件只做叶节点精确比较，历史规则的实际匹配集合即“精确”。
+- `service_catalogs.category` 是展示字符串；`default_ticket_category_id` 尚不存在，属本轮 A2 新增结构。
+- 实施期间共享 Dev／迁移验证库被在途恢复任务占用，且无授权隔离 PG 目标，故本设计 §9 的 PG 与 UI 验收在执行记录中单独标注为未执行。
+
 ## 5. 已确认业务契约
 
 ### 5.1 用户提交、目录发布与分类责任
