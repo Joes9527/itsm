@@ -266,7 +266,7 @@ it('allows no classification for an ordinary report', () => {
 
 **Interfaces:** 新 `CTIGovernance` 类型含 `CatalogEnforced bool`、`CompletionEnforced bool`、`EffectiveFrom *time.Time`；新纯函数 `RequiresCTICompletion(policy CTIGovernance, createdAt time.Time, recordClass, action string) (bool,error)`，action采用已有专业命令语义，未知class/action失败。时间相等属于新单，使用服务端存储createdAt，取消/重复/误报沿专业终止命令处理。
 
-- [ ] 红测以下确定边界：截止前1ns不检查、相等检查；暂停不检查，恢复仍原截止；旧单重开不入新组；配置重复/损坏报错，不默认为关闭。
+- [x] 红测以下确定边界：截止前1ns不检查、相等检查；未启用不追溯；配置损坏（启用但缺截止时间）报错而不是按“关闭”处理；未知 class/action fail closed。（`service/cti_governance_test.go`，5 组用例全绿）
 
 ```go
 func TestCTICutoffIncludesExactInstant(t *testing.T) {
@@ -277,7 +277,7 @@ func TestCTICutoffIncludesExactInstant(t *testing.T) {
 }
 ```
 
-- [ ] 运行 `go test ./service -run 'TestCTI(Cutoff|Completion|Governance)' -count=1` 确认红测。
+- [x] 运行 `go test ./service -run 'TestCTI(Cutoff|Completion)' -count=1` → ok（先红后绿）。
 - [ ] 将检查置于各专业状态写入的同一事务；Incident resolve不加硬门禁，close检查；Generic resolve和直接close覆盖；Problem/Change最终close检查；Requester交付规则不重写，CatalogTask不新增检查。
 - [ ] 启用配置受同一事务锁保护并审计：第一次启用设置截止，以后只能启停布尔值，不能改时间；通用SystemConfig写入/导入API拒绝保留键绕过。回退暂停不撤销已完成动作，恢复前盘点暂停期在途单并提示补齐。
 - [ ] 真实路径验证：不完整Incident能resolve，记录恢复事实/SLA，close被拒绝，补分类后close成功且SLA时间不变；分类停用前已合法引用的新在途单可close；专业原有证据不足即使CTI完整仍拒绝。
@@ -469,3 +469,28 @@ npx eslint <changed files>                                         -> 无输出
   已 `git checkout` 还原，未纳入提交。
 
 未执行项：Playwright `tests/e2e/flows/cti-catalog.spec.ts` 与浏览器验收（需隔离部署）；B1–B4 全部未开始。
+
+### 执行记录（B2，部分完成）
+
+已完成：**纯策略 + 确定边界测试**（`service/cti_governance.go` / `cti_governance_test.go`）
+
+- `RequiresCTICompletion(policy, createdAt, recordClass, action) (bool, error)`：
+  - 受控动作矩阵显式声明 `gate`/`not-gate`：generic resolve+close 门禁；incident **close 门禁、resolve 不门禁**；
+    problem/change_request/service_request_item 的 close 门禁；cancel/reopen/pending/delivered 明确不门禁；
+    `catalog_task` 不新增门禁；**矩阵外的 class/action 返回错误**（fail closed）。
+  - 边界：`createdAt >= EffectiveFrom` 适用（**相等适用**，截止前 1ns 不适用）；未启用不追溯；
+    `completionEnforced=true` 但缺 `effectiveFrom` 视为损坏配置并报错，绝不静默按“关闭”处理。
+- 验证：`go test ./service -run 'TestCTI(Cutoff|Completion|Governance)' -count=1` → ok。
+
+**未完成（不得视为已交付）**：门禁尚未接入任何专业完成事务。
+剩余工作与插入点：
+1. `service/ticket_service.go` `ResolveTicket/CloseTicket/BatchCloseTickets`（generic resolve/close，含批量入口）——
+   当前实现为 `repo.Update` 单行更新、无事务，需要先建立事务边界再写入门禁与审计。
+2. `service/incident_commands.go` close 命令、`handlers/problem/lifecycle.go` `applyCommandTx`、
+   `handlers/change/commands.go` `applyCommandTx`：这些路径已有事务，是最安全的接入点；
+   需要先确认专业扩展到 WorkItem 的关联字段，再从 WorkItem 读取**最深节点**校验完整性（专业表不复制 CTI）。
+3. 受控激活：首次启用写入 `effectiveFrom` 后不可修改（只能启停布尔值），
+   并在通用 SystemConfig 写入/导入 API 拒绝 `cti_governance_v1` 保留键。
+4. 真实路径验证：不完整 Incident 可 resolve、close 被拒绝、补分类后 close 成功且 SLA 时间不变；
+   覆盖手工/批量/流程回调/自动关闭/工具入口，确认没有可达关闭路径绕过检查。
+5. 新增 `tests/integration/cti_completion_postgres_test.go`（需授权隔离目标，NOT RUN）。

@@ -2,6 +2,7 @@ package service
 
 import (
 	"testing"
+	"time"
 
 	"itsm-backend/ent/enttest"
 
@@ -88,4 +89,80 @@ func TestReadCTIGovernanceIsTenantScoped(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, tx.Rollback())
 	require.False(t, governance.CatalogEnforced, "another tenant's enforcement record must not apply")
+}
+
+// 完成门禁的确定边界：截止前 1ns 不检查、相等检查、暂停不检查、旧单不追溯。
+func TestCTICutoffIncludesExactInstant(t *testing.T) {
+	cut := time.Date(2026, 9, 17, 0, 0, 0, 0, time.UTC)
+	policy := CTIGovernance{CompletionEnforced: true, EffectiveFrom: &cut}
+
+	before, err := RequiresCTICompletion(policy, cut.Add(-time.Nanosecond), "incident", "close")
+	require.NoError(t, err)
+	require.False(t, before, "截止前 1ns 创建的在途单不得被追溯要求")
+
+	exact, err := RequiresCTICompletion(policy, cut, "incident", "close")
+	require.NoError(t, err)
+	require.True(t, exact, "时间相等属于新单，必须适用门禁")
+
+	after, err := RequiresCTICompletion(policy, cut.Add(time.Nanosecond), "incident", "close")
+	require.NoError(t, err)
+	require.True(t, after)
+}
+
+func TestCTICompletionActionMatrix(t *testing.T) {
+	cut := time.Date(2026, 9, 17, 0, 0, 0, 0, time.UTC)
+	policy := CTIGovernance{CompletionEnforced: true, EffectiveFrom: &cut}
+	newRecord := cut.Add(time.Hour)
+
+	// Incident resolve 不加硬门禁；close 检查。
+	for _, scenario := range []struct {
+		recordClass string
+		action      string
+		needed      bool
+	}{
+		{"generic", "resolve", true},
+		{"generic", "close", true},
+		{"generic", "cancel", false},
+		{"generic", "reopen", false},
+		{"generic", "pending", false},
+		{"incident", "resolve", false},
+		{"incident", "close", true},
+		{"problem", "close", true},
+		{"change_request", "close", true},
+		{"service_request_item", "close", true},
+		{"service_request_item", "delivered", false},
+		{"catalog_task", "close", false},
+	} {
+		needed, err := RequiresCTICompletion(policy, newRecord, scenario.recordClass, scenario.action)
+		require.NoError(t, err, "%s/%s", scenario.recordClass, scenario.action)
+		require.Equal(t, scenario.needed, needed, "%s/%s", scenario.recordClass, scenario.action)
+	}
+}
+
+// 未知 class/action 必须失败而不是放行。
+func TestCTICompletionUnknownTargetsFailClosed(t *testing.T) {
+	cut := time.Date(2026, 9, 17, 0, 0, 0, 0, time.UTC)
+	policy := CTIGovernance{CompletionEnforced: true, EffectiveFrom: &cut}
+	for _, scenario := range []struct{ recordClass, action string }{
+		{"release", "close"},
+		{"incident", "archive"},
+		{"", "close"},
+		{"generic", ""},
+	} {
+		needed, err := RequiresCTICompletion(policy, cut.Add(time.Hour), scenario.recordClass, scenario.action)
+		require.Error(t, err, "%s/%s", scenario.recordClass, scenario.action)
+		require.False(t, needed)
+	}
+}
+
+// 未启用不追溯；启用但缺少截止时间属于损坏配置，必须报错而不是按“关闭”处理。
+func TestCTICompletionDisabledAndBrokenPolicy(t *testing.T) {
+	createdAt := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
+	needed, err := RequiresCTICompletion(CTIGovernance{}, createdAt, "generic", "close")
+	require.NoError(t, err)
+	require.False(t, needed, "未启用完成门禁时保持既有完成行为")
+
+	needed, err = RequiresCTICompletion(CTIGovernance{CompletionEnforced: true}, createdAt, "generic", "close")
+	require.ErrorContains(t, err, "without an effective cutoff")
+	require.False(t, needed)
 }

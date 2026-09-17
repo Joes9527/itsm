@@ -34,6 +34,80 @@ type ctiGovernanceValue struct {
 	EffectiveFrom      *string `json:"effectiveFrom"`
 }
 
+// CTI 完成质量的受控动作矩阵。
+//
+// 语义（设计 §6）：
+//   - true  = 该专业完成动作要求完整三级分类；
+//   - false = 已知动作但刻意不加门禁（Incident resolve、取消/重开、目录任务等）；
+//   - 不在矩阵内的 class/action 一律失败，绝不“默认通过”。
+//
+// 专业完成动作仍由各专业拥有者定义状态与权限；这里只回答“是否需要分类完整”。
+var ctiCompletionActions = map[string]map[string]bool{
+	"generic": {
+		"resolve": true,
+		"close":   true,
+		"cancel":  false, // 取消不是完成，沿专业终止命令处理
+		"reopen":  false, // 重开后回到处理中，恢复事实由专业命令记录
+		"pending": false,
+	},
+	"incident": {
+		"resolve": false, // 恢复服务优先：resolve 不加硬门禁
+		"close":   true,  // 关闭需要完整分类
+		"reopen":  false,
+		"cancel":  false,
+	},
+	"problem": {
+		"close":   true,
+		"resolve": false,
+		"cancel":  false,
+	},
+	"change_request": {
+		"close":  true,
+		"cancel": false,
+	},
+	"service_request_item": {
+		"close":     true,
+		"cancel":    false,
+		"delivered": false, // 交付确认属于申请侧证据，不在此改写
+		"fulfill":   false,
+	},
+	"catalog_task": {
+		// 目录任务不新增完成门禁，保持既有专业语义。
+		"close":  false,
+		"cancel": false,
+	},
+}
+
+// RequiresCTICompletion 判断某个专业完成动作是否需要完整三级分类。
+//
+//   - 未启用完成门禁，或启用但缺少截止时间（损坏配置）=> 明确行为：
+//     未启用返回 false；启用但缺截止时间返回错误，不误判为“关闭”；
+//   - 记录创建时间 >= 截止时间 => 适用（相等也适用，截止前 1ns 不适用）；
+//   - 未知 class/action => 错误（fail closed）。
+//
+// createdAt 必须来自服务端持久化时间戳，避免客户端自报时间绕过门禁。
+func RequiresCTICompletion(policy CTIGovernance, createdAt time.Time, recordClass, action string) (bool, error) {
+	classActions, known := ctiCompletionActions[strings.TrimSpace(recordClass)]
+	if !known {
+		return false, fmt.Errorf("unknown record class %q for CTI completion", recordClass)
+	}
+	gated, knownAction := classActions[strings.TrimSpace(action)]
+	if !knownAction {
+		return false, fmt.Errorf("unknown completion action %q for record class %q", action, recordClass)
+	}
+	if !policy.CompletionEnforced {
+		return false, nil
+	}
+	if policy.EffectiveFrom == nil {
+		return false, errors.New("CTI completion is enforced without an effective cutoff")
+	}
+	if gated {
+		return !createdAt.Before(*policy.EffectiveFrom), nil
+	}
+	// 已知但不门禁的动作不需要截止时间比较。
+	return false, nil
+}
+
 // ReadCTIGovernance 在调用方事务内读取启用记录。
 // catalogEnforced 控制目录发布/申请是否强制完整三级分类；completionEnforced 控制专业完成门禁。
 func ReadCTIGovernance(ctx context.Context, tx *ent.Tx, tenantID int) (CTIGovernance, error) {
