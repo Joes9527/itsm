@@ -640,6 +640,8 @@ func NewApplication() *Application {
 	// Domain: Service Catalog (DDD)
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, sugar, clients.IntakeDirectorySnapshot())
+	// 分类详情的引用清单需要目录名称：由目录所有者把名称契约注册给分类聚合层。
+	service_catalog.RegisterCTIReferenceNameSource()
 	concreteProcessEngine.SetPublicationKAFConfig(cfg)
 	scService.SetPublicationEngine(concreteProcessEngine)
 	scHandler := service_catalog.NewHandler(scService)

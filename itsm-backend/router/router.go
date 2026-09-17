@@ -529,6 +529,8 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				categories.GET("/:id", middleware.RequirePermission("ticket_category", "read"), config.TicketCategoryController.GetCategory)
 				categories.PUT("/:id", middleware.RequirePermission("ticket_category", "update"), config.TicketCategoryController.UpdateCategory)
 				categories.PUT("/:id/move", middleware.RequirePermission("ticket_category", "update"), config.TicketCategoryController.MoveCategory)
+				// 引用清单：明细按调用者的各模块 read 权限过滤，无权时只报告“存在引用”。
+				categories.GET("/:id/references", middleware.RequirePermission("ticket_category", "read"), config.TicketCategoryController.GetCategoryReferences)
 				categories.DELETE("/:id", middleware.RequirePermission("ticket_category", "delete"), config.TicketCategoryController.DeleteCategory)
 			}
 		}

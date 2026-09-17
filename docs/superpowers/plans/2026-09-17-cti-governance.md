@@ -304,7 +304,8 @@ func TestCTIScopeDistinguishesAncestor(t *testing.T) {
 - [x] 运行 `go test ./service -run 'TestCTIScope' -count=1`；实现只处理分类条件，规则优先级由原所有者保留。
 - [x] 审核SLA分类匹配并修复命中缺口：**确认存在真实缺陷**（先取一条无排序的活跃定义再判断分类，会漏掉真正持有该分类的定义并静默退化到通用SLA）。已改为扫描全部活跃候选 + 确定性顺序 + 共享 MatchCTI（精确语义保持不变），并测试多候选/停用/未分类/解析失败失败关闭。旧字符串分类条件保留其实际语义。
 - [ ] 分类详情引用接口返回授权可见目录/规则列表、分页和总数；所有者提供查询契约，聚合层不跨域调用repository。内部维护引用保护须覆盖所有真实引用，即使当前actor无权查看，返回通用“存在引用”而不泄露对象名称/计数。
-- [~] 规则编辑明确“仅当前/包含下级”（**后端语义与校验已完成**，界面选择器待做）；分类详情提供管理链接（待做）。引用查询失败明确报错；disabled/default_resolver等历史描述字段不伪装成已生效规则（待做）。
+- [x] 规则编辑明确“仅当前/包含下级”：两个规则编辑器共用 `RuleConditionRow`，分类条件展示范围选择（默认“仅当前分类”）并复用 `CTISelector`；分类算子收敛到后端支持的四种，字段词汇与后端求值器一致（修正 `requesterId`→`requester_id`、移除后端不支持的 `title`）。
+- [~] 分类详情提供管理链接（待做：引用页签）。引用查询失败明确报错（已：接口错误向上传播）；disabled/default_resolver等历史描述字段不伪装成已生效规则（待做）。
 - [~] 验证旧规则命中集一致、新范围命中、改分类无自动再执行（**PG 已完成**）；跨租户与RBAC、授权引用接口与界面待做。
 
 ## Task B4：全链路验收、文档与受控启用准备
@@ -829,3 +830,54 @@ go test -tags integration_postgres ./tests/integration -run TestCTI -count=1 -> 
 
 **B3 仍待完成**：授权引用查询接口（分页/总数/RBAC 过滤、无权时只返回通用"存在引用"）与
 前端规则编辑"仅当前/包含下级"选择器、分类详情引用页签与管理链接；跨租户/RBAC 用例。
+
+### 执行记录（B3 增量二：授权引用查询 + 规则编辑范围选择器）
+
+**后端：`GET /api/v1/ticket-categories/:id/references`（`ticket_category:read`）**
+
+- `service/ticket_category_reference_view.go`（新）：
+  - `ReferenceView` 先在同一事务内确认分类存在并在租户范围内，再按**子树**扫描真实引用；
+  - `Blocking` 一律来自**未经 RBAC 过滤**的真实扫描（`countCTIReferences`）——
+    维护保护必须看到全部引用，否则无权用户可以通过"看不到"绕过删除/移动保护；
+  - 明细按种类返回名称与总数，**只有**调用者拥有该模块 `read` 权限时才可见；
+    无权时 `Visible=false` 且**不返回** `Total/Items`（不泄露名称、数量与存在性细节）；
+  - 工单引用只给计数（需要 `ticket:read`），不列出工单内容；
+  - 分页为**按种类**分页（`page`/`pageSize`，上限 100，越界页码返回空页而非错误），
+    每类给出真实 `total`；
+  - 跨租户分类与不存在的分类返回**同一个** `ErrCTICategoryNotFound`，不泄露存在性。
+- **所有者提供名称契约（owner-provided port）**：`CTIReferenceNameSource` 接口 + 注册表；
+  服务目录域实现 `handlers/service_catalog/cti_reference_source.go`（`RegisterCTIReferenceNameSource`），
+  在 `internal/bootstrap` 装配时注册。聚合层不直接读取其它域的数据；
+  未注册名称契约的种类（流程绑定、历史字符串引用）只报告"存在引用"。
+- `controller/ticket_category_controller.go` + `router/router.go`：控制器只做绑定/授权/映射，
+  错误经既有 `respondCategoryError` 映射（不把业务拒绝伪装成 500）。
+
+**前端：规则编辑"仅当前/包含下级"**
+
+- 新 `components/business/RuleConditionRow.tsx`：两个规则编辑器（分派规则、自动化规则）此前各自
+  内联渲染同一组条件字段；现共用一行组件，分类条件：
+  - 展示范围选择"仅当前分类 / 包含下级"（默认 exact，与后端缺省一致），切换字段时清理 scope；
+  - 取值改用共享 `CTISelector`（`requiredDepth=0`，可指向任意层级节点）；
+  - 算子收敛为后端支持的四种；字段词汇与后端求值器对齐
+    （修正 `requesterId`→`requester_id`，移除后端不支持的 `title`——此前会让规则运行期失败关闭）；
+  - 保留自动化规则原有的 `greater_than/less_than`（后端支持）。
+
+**验证**
+
+```text
+itsm-backend:  go test ./... -count=1 -> 无 FAIL
+itsm-backend:  go test ./service -run TestCTIReferenceView -count=1 -> ok
+   无权时只有"存在引用"（Blocking 仍为真）且无名称/条数/ID
+   授权后仅本租户目录/SLA/规则/模板/工单计数可见；工单只给计数不给明细
+   按种类分页与真实总数；越界页码空页；pageSize 上限收敛
+   跨租户与不存在分类同一错误；pageSize=0 使用默认值
+隔离 PostgreSQL：TestCTIReferenceViewPostgres -> PASS 3 子项
+   无权限仅报告存在性 / 有权限时明细限本租户 + 分页 / super_admin 可见且跨租户对象不出现
+隔离 PostgreSQL：-run TestCTI -> 8 套全 PASS，无 schema 残留
+itsm-frontend: npm run type-check -> 通过；eslint 变更文件 -> 无输出
+itsm-frontend: npx jest --testPathPattern '(RuleConditionRow|AssignmentRule|AutomationRule|CTISelector|classification)'
+   -> 6 suites / 72 tests 全通过（含新增 5 项范围选择器与词汇一致性用例）
+```
+
+**B3 剩余**：分类详情页的"引用"页签与管理链接（消费本接口；A4 已刻意不放置假计数），
+以及"disabled/default_resolver 等历史描述字段不伪装成已生效规则"的界面收敛。

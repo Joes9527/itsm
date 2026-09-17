@@ -98,6 +98,47 @@ func (tc *TicketCategoryController) CreateCategory(c *gin.Context) {
 	common.Success(c, dto.ToTicketCategoryResponse(category))
 }
 
+// GetCategoryReferences 返回分类（含子树）的真实引用，并按调用者 RBAC 过滤明细。
+//
+// 说明：Referenced 来自不受 RBAC 影响的安全扫描（执行维护操作必须知道"存在引用"），
+// 而无权查看某类对象的调用者不会拿到该类的名称、条数与 ID。
+// @Summary 分类引用清单
+// @Tags 工单分类
+// @Produce json
+// @Param id path int true "分类ID"
+// @Param page query int false "页码"
+// @Param pageSize query int false "每页条数（最大100）"
+// @Success 200 {object} common.Response{data=service.CTIReferenceView}
+// @Router /api/v1/ticket-categories/{id}/references [get]
+func (tc *TicketCategoryController) GetCategoryReferences(c *gin.Context) {
+	categoryID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.Fail(c, common.ParamErrorCode, "无效的分类ID")
+		return
+	}
+	tenantID := c.GetInt("tenant_id")
+	if tenantID == 0 {
+		common.Fail(c, common.AuthFailedCode, "租户信息缺失")
+		return
+	}
+	page, _ := strconv.Atoi(c.Query("page"))
+	pageSize, _ := strconv.Atoi(c.Query("pageSize"))
+	view, err := tc.categoryService.ReferenceView(c.Request.Context(), service.CTIReferenceQuery{
+		TenantID:   tenantID,
+		ActorRole:  c.GetString("role"),
+		CategoryID: categoryID,
+		Page:       page,
+		PageSize:   pageSize,
+		// 工单引用计数按 ticket:read 过滤，避免泄露不可见工单的规模。
+		IncludeWorkItems: true,
+	})
+	if err != nil {
+		respondCategoryError(c, err)
+		return
+	}
+	common.Success(c, view)
+}
+
 // UpdateCategory 更新工单分类
 // @Summary 更新工单分类
 // @Description 更新工单分类信息

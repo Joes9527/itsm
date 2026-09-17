@@ -31,6 +31,7 @@ type CTIReferences struct {
 	WorkItems             int
 	Catalogs              int
 	PublishedCatalogs     int
+	CatalogIDs            []int
 	SLADefinitionIDs      []int
 	AssignmentRuleIDs     []int
 	AutomationRuleIDs     []int
@@ -88,6 +89,7 @@ func countCTIReferences(ctx context.Context, tx *ent.Tx, tenantID int, nodes []C
 	}
 	for _, catalog := range catalogs {
 		references.Catalogs++
+		references.CatalogIDs = append(references.CatalogIDs, catalog.ID)
 		if catalog.IsActive && (catalog.Status == "active" || catalog.Status == "enabled") {
 			references.PublishedCatalogs++
 		}
