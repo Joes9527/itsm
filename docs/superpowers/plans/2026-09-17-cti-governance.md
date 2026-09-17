@@ -670,3 +670,23 @@ itsm-frontend: npx eslint <changed files>                              -> 无输
 PUT 使用 `/incidents/classification/:id`）。它们在本改动前就已失效，属于独立清理项，不纳入本次提交以免混入无关改动。
 
 **B1 剩余**：Change 与 ServiceRequest 拥有者接入；`tests/integration/cti_correction_postgres_test.go`。
+
+### 执行记录（B1 增量三：纠正 PostgreSQL 证据）
+
+```text
+INTAKE_POSTGRES_TEST_DSN=postgres://cti_test:***@127.0.0.1:36444/sslvpn_test?sslmode=disable
+go test -tags integration_postgres ./tests/integration -run 'TestCTICorrectionPostgres' -count=1 -v
+  -> PASS（4 子项）：
+     missing_reason_is_rejected_without_side_effects
+     complete_correction_records_evidence_and_preserves_derived_state
+     unusable_targets_are_rejected（inactive/unknown/foreign 三个子项）
+     concurrent_corrections_allow_exactly_one_version
+go test -tags integration_postgres ./tests/integration -run 'TestCTI' -count=1   -> ok（structure+catalog+completion+correction）
+go test ./... -count=1                                                          -> 无 FAIL
+隔离 schema 清理复查：非系统 schema 计数 = 1（仅 public），无残留
+```
+
+该用例复用 `newProblemLifecycleFixture`（真实 `problem.Service` + RLS + 运行时客户端），
+因此驱动的是**真实专业命令**（`ApplyMetadata`）而非直写数据库。
+两处夹具自身的问题也在真实目标上暴露并修正：
+基线目标与当前分类相同会被既有"必须产生新事实"规则拒绝；完全相同重试必须复用同一 `expectedVersion`+patch 才走既有幂等回执。

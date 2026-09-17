@@ -70,24 +70,24 @@ type CreateIncidentRequest struct {
 }
 
 type UpdateIncidentRequest struct {
-	Title           *string                `json:"title,omitempty"`
-	Description     *string                `json:"description,omitempty"`
-	Status          *string                `json:"status,omitempty" binding:"omitempty,oneof=new assigned in_progress on_hold resolved closed cancelled acknowledged triaged escalated"`
-	Priority        *string                `json:"priority,omitempty" binding:"omitempty,oneof=low medium high critical"`
-	Severity        *string                `json:"severity,omitempty" binding:"omitempty,oneof=low medium high critical"`
-	Impact          *string                `json:"impact,omitempty" binding:"omitempty,oneof=low medium high critical"`
-	Urgency         *string                `json:"urgency,omitempty" binding:"omitempty,oneof=low medium high critical"`
-	CategoryID      *int                   `json:"categoryId,omitempty" binding:"omitempty,gte=0"`
+	Title       *string `json:"title,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Status      *string `json:"status,omitempty" binding:"omitempty,oneof=new assigned in_progress on_hold resolved closed cancelled acknowledged triaged escalated"`
+	Priority    *string `json:"priority,omitempty" binding:"omitempty,oneof=low medium high critical"`
+	Severity    *string `json:"severity,omitempty" binding:"omitempty,oneof=low medium high critical"`
+	Impact      *string `json:"impact,omitempty" binding:"omitempty,oneof=low medium high critical"`
+	Urgency     *string `json:"urgency,omitempty" binding:"omitempty,oneof=low medium high critical"`
+	CategoryID  *int    `json:"categoryId,omitempty" binding:"omitempty,gte=0"`
 	// ClassificationReason 是分类纠正原因：分类确实变化时必填（B1 治理契约）。
-	ClassificationReason string `json:"classificationReason,omitempty" binding:"omitempty,max=500"`
-	AssigneeID      *int                   `json:"assigneeId,omitempty"`
-	RelatedCIIDs    []int                  `json:"relatedCIIds,omitempty"`
-	ImpactAnalysis  *ImpactAnalysis        `json:"impactAnalysis,omitempty"`
-	RootCause       *RootCause             `json:"rootCause,omitempty"`
-	ResolutionSteps []ResolutionStep       `json:"resolutionSteps,omitempty"`
-	Metadata        map[string]interface{} `json:"metadata,omitempty"`
-	Version         int                    `json:"version" binding:"required,gt=0"` // 必填预期版本
-	Force           bool                   `json:"force"`                           // 是否强制更新（忽略版本检查）
+	ClassificationReason string                 `json:"classificationReason,omitempty" binding:"omitempty,max=500"`
+	AssigneeID           *int                   `json:"assigneeId,omitempty"`
+	RelatedCIIDs         []int                  `json:"relatedCIIds,omitempty"`
+	ImpactAnalysis       *ImpactAnalysis        `json:"impactAnalysis,omitempty"`
+	RootCause            *RootCause             `json:"rootCause,omitempty"`
+	ResolutionSteps      []ResolutionStep       `json:"resolutionSteps,omitempty"`
+	Metadata             map[string]interface{} `json:"metadata,omitempty"`
+	Version              int                    `json:"version" binding:"required,gt=0"` // 必填预期版本
+	Force                bool                   `json:"force"`                           // 是否强制更新（忽略版本检查）
 }
 
 // AssignIncidentRequest 分配事件请求
