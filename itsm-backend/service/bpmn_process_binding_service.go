@@ -117,7 +117,10 @@ func (s *ProcessBindingService) UpdateBinding(ctx context.Context, id int, bindi
 	if binding.Overrides != nil {
 		overrides = binding.Overrides
 	}
-	def, err := selectExecutableProcessDefinition(ctx, s.client, entity.TenantID, key, version)
+	// Deactivation/maintenance can inspect an inactive retained definition.
+	// Enabling or changing the target must still resolve an executable version.
+	requireExecutable := binding.IsActive || key != entity.ProcessDefinitionKey || version != entity.ProcessVersion
+	def, err := selectProcessDefinitionVersion(ctx, s.client, entity.TenantID, key, version, requireExecutable)
 	if err != nil {
 		return nil, err
 	}
