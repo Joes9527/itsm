@@ -50,6 +50,9 @@ func (p *BPMNParser) validateBPMN(definitions *BPMNDefinitions) error {
 		return fmt.Errorf("BPMN定义必须包含至少一个流程")
 	}
 
+	if _, err := hasGenericFulfillmentContract(definitions); err != nil {
+		return err
+	}
 	for _, process := range definitions.Processes {
 		if err := p.validateProcess(process); err != nil {
 			return fmt.Errorf("流程验证失败 [%s]: %w", process.ID, err)
@@ -61,9 +64,6 @@ func (p *BPMNParser) validateBPMN(definitions *BPMNDefinitions) error {
 
 // validateProcess 验证单个流程
 func (p *BPMNParser) validateProcess(process *BPMNProcess) error {
-	if err := validateWorkItemLifecycleProcess(process); err != nil {
-		return err
-	}
 	// 检查必要元素
 	if process.ID == "" {
 		return fmt.Errorf("流程ID不能为空")

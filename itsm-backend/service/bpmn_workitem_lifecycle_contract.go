@@ -164,6 +164,9 @@ func hasGenericFulfillmentContract(definitions *BPMNDefinitions) (bool, error) {
 		}
 		enabled = enabled || contract == GenericFulfillmentV1
 	}
+	if enabled && len(definitions.Processes) != 1 {
+		return false, fmt.Errorf("generic_fulfillment_v1 requires a single process")
+	}
 	return enabled, nil
 }
 

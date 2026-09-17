@@ -68,3 +68,16 @@ func TestWorkItemLifecycleContractRejectsUnsupportedExecution(t *testing.T) {
 	_, err := NewBPMNParser().ParseXML(lifecycleXML(contract, "", lifecycleOwnerAttrs, lifecycleMetadata("action", "resolve")))
 	require.Error(t, err)
 }
+func TestWorkItemLifecycleRejectsMultipleProcesses(t *testing.T) {
+	contract := lifecycleMetadata("workItemLifecycleContract", "generic_fulfillment_v1")
+	contracted := strings.TrimSuffix(strings.TrimPrefix(string(lifecycleXML(contract, "", lifecycleOwnerAttrs, "")), "<definitions>"), "</definitions>")
+	legacy := strings.ReplaceAll(strings.TrimSuffix(strings.TrimPrefix(string(lifecycleXML("", "", "", "")), "<definitions>"), "</definitions>"), "contract", "legacy")
+	for name, body := range map[string]string{"first": contracted + legacy, "second": legacy + contracted} {
+		t.Run(name, func(t *testing.T) {
+			_, err := NewBPMNParser().ParseXML([]byte("<definitions>" + body + "</definitions>"))
+			require.ErrorContains(t, err, "single process")
+		})
+	}
+	_, err := NewBPMNParser().ParseXML([]byte("<definitions>" + legacy + legacy + "</definitions>"))
+	require.NoError(t, err)
+}
