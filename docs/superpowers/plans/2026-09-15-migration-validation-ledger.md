@@ -621,3 +621,15 @@ WSL最终副本与角色已归档到既有私有证据目录，最终副本dump 
   - **必修缺陷：** 网关条件语法——定义写 `<bpmn:body>${...}</bpmn:body>`，而 `BPMNConditionExpression.Expression` 的 tag 为 `xml:",chardata"`（`service/bpmn_types.go:355-358`），消费点 `bpmn_process_engine.go:1182/2498/2516`，故 definition65 的**三个网关当前均不可用**。
 - **待办：** A3 实现与切换、A4、库用途台账补记、以及三处较早库以 **KAF 命名**迁移为头（`019_kaf_execution_integrity_rls`）的血统确认。
 - **执行交接：** 包1 的实施交接（背景／基线／进度／环境事实／陷阱／A3 步骤2–8 插入点／阻塞）见 [包1（Dev 流程阻塞修复）实施交接](./2026-09-16-package-a-handoff.md)。该文是执行交接，状态以本台账为准。
+
+
+### 2026-09-17 接手独立复核与 A2 修正
+
+- **实况核验：** 只读核对真实8080配置、二进制摘要、PG活动连接与数据，仍为 Dev public/39条回执/047，运行源 fc8de9d3，接手源427bed03；A1/A2未部署。工单29 open、流程27 running、任务33 completed，callback2 pending/handler_error且缺assignee_id，本次快照attempt286（运行中会继续变化）。实例7–10 terminated；19停用绑定和7个generic/change_request替代一致。
+- **环境边界：** Dev PG仍有6个非系统库，均无migration_validation；三个旧019库的非系统schema数（含public）分别1153/1020/1111。旧恢复演练容器仍运行，旧容器/库并未全部清理；本次未操作共享数据或运行服务。019血统、备份可恢复性与完整消费者清理范围未在此复验。
+- **独立复核发现：** A1未发现阻塞问题；A2误将生产无回调标记 __no_user_task_callback__ 当未知handler（P1），历史空描述符assign仍显示必然失败Complete（P2）。原固定配置assign疑虑未找到支持路径，不能按假设补入owner或旧变量。
+- **修正：** 无回调标记保留正常授权完成；历史空描述符按task tenant→instance→固定definition只读解析，未知/缺失/解析失败显式不授予Complete，不调用会持久化descriptor的命令辅助方法。assign仍需输入，update_status既有默认行为保留。A1代码未更改。
+- **测试证据：** 生产无回调标记测试在修复前失败（Should be true）；历史assign/unknown_action在修复前失败（expected false, actual true）。新增测试核对GET不写描述符、时间及版本。权限测试的简化夹具缺XML节点，已仅调整该用例为生产无回调标记，保留所有权限断言。最终执行 go test ./service ./service/bpmn -count=1 -timeout=180s 全通过（42.019s / 2.527s），使用Go1.25.14；未降低go.mod要求。
+- **独立审查：** 独立审查Agent已复核A1/A2原范围、两项修正及A3承载澄清；测试由执行方实际运行，审查者未重复运行。不能将这项审查扩大为A3/A4实现或UI验收。
+- **A3裁定：** 承载方式及可信变量规则见[实施合同§2.2](../specs/2026-09-16-dev-schema-execution-contract.md#22-单一流程约束和生命周期门禁)，取代交接§7待确认项。采用流程级ExtensionElements和实例固定不可变定义引用，不新增定义快照副本。
+- **仍未完成：** A3合同/门禁/新图/路由/UI、A4冻结回调blocked处置、包2–4。本次未运行真实PG事务测试、浏览器验收、迁移或部署；原A1 PG证据仅作为已有证据保留，不能声称本轮重跑。

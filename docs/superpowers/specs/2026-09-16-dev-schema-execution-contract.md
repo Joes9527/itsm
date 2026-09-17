@@ -40,15 +40,23 @@
 
 新增定义级`workItemLifecycleContract=generic_fulfillment_v1`及任务级枚举`workItemPrerequisite=assigned|in_progress|escalated|resolved|closed`，仅上述新generic定义启用；未知值、专业class、handler与该枚举混用在发布时拒绝。不是任意表达式平台。
 
-解析器将已发布定义的合同固定到现有实例定义快照；不回填旧实例。BPMN命令、只读UI actions与Ticket领域命令使用同一服务内纯规则实现（建议`service/generic_workflow_gate.go`），依赖当前事务client，不能HTTP回调自己或从GET补写descriptor。
+合同通过实例固定的不可变定义版本引用（ProcessDefinitionID + tenant）读取；当前 state_snapshot 不是定义快照，不为本次另建副本，不回填旧实例。现有更新服务禁止修改定义 XML/ProcessVariables，被实例引用的定义不能删除；这是应用服务约束，不宣称数据库防篡改。新版本启用不得改变旧实例的合同。BPMN命令、只读UI actions与Ticket领域命令使用同一服务内纯规则实现（建议`service/generic_workflow_gate.go`），依赖当前事务client，不能HTTP回调自己或从GET补写descriptor。
 
 门禁：进入in_progress须原审批通过/明确无需审批且当前节点为Handle；resolve须Handle已完成、必要升级receipt存在、当前等待Resolve确认；close须Resolve确认完成且当前等待Close。检查权威流程/task/领域receipt，不信任客户端approvalResult或instance旧assignee快照。对于该新合同，公开complete/set_variables等入口拒绝改写approval_required、need_escalate、approvalResult；前两项来源于冻结定义配置，approvalResult只能由现有审批领域结果投影，不能从普通任务变量读取未验证值。拒绝结束的流程不可经直接status/resolve/close/batch接口绕过；取消等既有领域规则不被此处授予额外权限。所有能改变generic状态的领域入口统一经过此门禁，旧定义没有该合同则沿用原逻辑，不全局重写所有业务。
 
 同一事务先按WorkItem ID锁权威WorkItem，再锁关联instance及必要task，所有触及此合同的状态/任务/分派路径统一锁序；并发状态变化或重复完成必须版本/CAS及operation receipt去重。任务完成不自动冒充工单解决/关闭。终态actual actor与responsible user按既有绑定合同冻结。
 
+#### 2026-09-17 承载方式裁定（实现前独立复核）
+
+- 在 BPMNProcess 增加与任务相同的可选 ExtensionElements，流程级 metaData 承载 workItemLifecycleContract；任务级 metaData 承载 workItemPrerequisite。不新增数据库列，不改变条件表达式 chardata 语义，也不开始执行历史流程级 service_task_type/action。
+- 声明读取必须区分缺失、显式空值、重复和未知值；现有 GetMetaData 合并缺失/空值且取首项，不能单独用于严格合同校验。无声明兼容，显式非法声明拒绝。
+- 真实 recordClass 在绑定/启动业务上下文验证，不能用定义 category 推断。实例引用缺失、跨租户或解析失败必须失败关闭，不能退回最新定义或无合同路径。
+- 对新合同，approval_required/need_escalate 的唯一配置来源为实例所引用定义行的 ProcessVariables 同名字段，仅接受 JSON boolean；缺失均按 false，显式 null/字符串/数字在发布及启动校验时拒绝。验收 v2 明确保存两个 false，审批/升级分支测试使用各自不可变测试定义的 true 配置。公开启动、complete、set_variables 输入携带任一保留键（含 approvalResult）即拒绝，即使值与配置相同；不得通过绑定 overrides 或普通输入覆盖。启动服务在同一事务从固定定义规范化配置并写入新实例，后续门禁从同一固定定义取得条件；approvalResult 仅由现有审批结果投影提供。旧定义不改变既有变量规则。
+- 测试覆盖声明边界、新版本启用不影响旧实例、XML/ProcessVariables 更新拒绝、旧实例零回填及启动/后续变量覆盖负例。
+
 ### 2.3 输入校验与历史callback2处置
 
-新任务命令：assign缺少合法正整数assignee_id、update_status缺少非空字符串new_status，在写task完成前按用户输入错误拒绝；未知/非法状态仍由领域规则拒绝。定义缺陷保留既有blocked-plan合同，不能将所有blocked变HTTP错误。简单UI无法提供且固定配置未满足输入时后端complete=false，GET只读。
+新任务命令：assign缺少合法正整数assignee_id，在写task完成前按用户输入错误拒绝；update_status缺失new_status时保留现有in_progress默认，显式提供时必须为非空字符串（对齐A1已裁定兼容边界）；未知/非法状态仍由领域规则拒绝。定义缺陷保留既有blocked-plan合同，不能将所有blocked变HTTP错误。简单UI无法提供且固定配置未满足输入时后端complete=false，GET只读。
 
 已持久化回调：执行器领取后、调用handler前，用同一handler契约验证冻结payload。对已知handler/action且缺失/无效必需参数的持久回调，返回现有`handler_contract`阻塞效果，由现有outbox outcome持久化blocked和审计，停止重试；不填参数、不调用业务handler、不推进process。未知基础设施故障仍按既有重试规则，不能把timeout/未知效果一概blocked成无效果。
 

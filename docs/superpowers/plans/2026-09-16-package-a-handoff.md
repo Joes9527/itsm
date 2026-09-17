@@ -162,9 +162,9 @@ git diff --check                                                            → 
 | 7 | 用现有领域 API（CAS+审计）切 825/827 → 复验 → 回退预案就绪 | — |
 | 8 | **A4**：冻结 callback2 → `handler_contract` blocked，保留 payload/attempt 历史与"任务33 completed"记录 | 领取路径 `bpmn_process_engine.go:1462` 附近已有 `BlockedEffect(CallbackBlockHandlerContract, …)` 范式 |
 
-### 步骤 2 的待确认点（**接手前请先确认**）
+### 步骤 2 的承载裁定（2026-09-17，取代待确认项）
 
-新增定义级合同需要一个承载位置。**建议**沿用仓库内置模板的流程级写法（`<bpmn:process><bpmn:extensionElements><bpmn:metaData name="workItemLifecycleContract">…`），**但当前 `BPMNProcess` 没有 `ExtensionElements` 字段 → 需新增并解析**。该改动是**纯增量**（当前无人读取流程级，不改变既有定义行为），与"改条件表达式 chardata 语义"不同。**需设计方确认是否允许**；若不允，需另选承载方式（如定义行字段）。
+已结合代码并经独立复核，采用 BPMNProcess 的可选 ExtensionElements 承载流程级合同。实例使用固定的不可变定义版本引用，不新增 state_snapshot 副本。声明校验、业务身份与可信变量边界见[实施合同 §2.2](../specs/2026-09-16-dev-schema-execution-contract.md#22-单一流程约束和生命周期门禁)。此裁定不表示 A3 已实现。
 
 ### 步骤 2 的 TDD 断言清单（先写断言，再实现）
 
@@ -177,6 +177,8 @@ git diff --check                                                            → 
 7. 解析：`BPMNProcess.ExtensionElements` 取到流程级 metaData；缺失为 `nil` 且不 panic
 
 ## 8. 阻塞与未验证项（如实保留）
+
+> 以下为原交接状态。2026-09-17 独立复核已完成 A1/A2 检查，并修正 A2 的无回调 sentinel 与历史空描述符问题；I1 未证实为现有支持路径，I2 已补只读解析。当前验证/交付状态以[唯一台账](2026-09-15-migration-validation-ledger.md)的09-17接手复核记录为准。
 
 | 项 | 说明 |
 | --- | --- |

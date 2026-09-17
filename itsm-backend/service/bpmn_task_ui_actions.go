@@ -6,6 +6,8 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/processdefinition"
+	"itsm-backend/ent/processinstance"
 	"itsm-backend/service/bpmn"
 )
 
@@ -28,7 +30,7 @@ func (e *CustomProcessEngine) taskUIActions(ctx context.Context, task *ent.Proce
 	if ValidateBPMNTaskLifecycle(BPMNTaskCommandComplete, task.Status) == nil {
 		err := e.authorizeTaskCommandActorWithClient(ctx, e.client, task, BPMNTaskCommandComplete)
 		if err == nil {
-			if reason, blocked := e.actorInputGateReason(task); blocked {
+			if reason, blocked := e.actorInputGateReason(ctx, task); blocked {
 				// The declared action binds actor input the simple entry cannot
 				// supply, so offering Complete would only produce a rejected
 				// completion. Report why instead of duplicating the rule in UI.
@@ -51,15 +53,38 @@ func (e *CustomProcessEngine) taskUIActions(ctx context.Context, task *ent.Proce
 // payload carries actor-bound input that the simple completion entry cannot
 // supply.
 //
-// It reads only the descriptor already persisted on the task row. Resolving a
-// missing descriptor would persist one (descriptorForProcessTask), and a read
-// projection must never write. When a declared descriptor cannot be resolved
-// against the registry the gate fails closed, because the completion could not
-// be validated either.
-func (e *CustomProcessEngine) actorInputGateReason(task *ent.ProcessTask) (string, bool) {
+// Persisted descriptors are authoritative. Legacy rows are resolved from their
+// pinned definition with reads only; never call descriptorForProcessTask here,
+// because that command helper persists the descriptor.
+func (e *CustomProcessEngine) actorInputGateReason(ctx context.Context, task *ent.ProcessTask) (string, bool) {
 	handlerID := strings.TrimSpace(task.CallbackHandlerID)
+	action := strings.TrimSpace(task.CallbackAction)
 	if handlerID == "" {
-		// No declared callback: nothing about this task needs extra actor input.
+		const unavailable = "暂时无法核验任务配置，请刷新后重试或联系管理员"
+		instance, err := e.client.ProcessInstance.Query().Where(
+			processinstance.ID(task.ProcessInstanceID), processinstance.TenantID(task.TenantID),
+		).Only(ctx)
+		if err != nil {
+			return unavailable, true
+		}
+		definition, err := e.client.ProcessDefinition.Query().Where(
+			processdefinition.ID(instance.ProcessDefinitionID), processdefinition.TenantID(task.TenantID),
+		).Only(ctx)
+		if err != nil {
+			return unavailable, true
+		}
+		parsed, err := e.parser.ParseXML(definition.BpmnXML)
+		if err != nil || len(parsed.Processes) == 0 {
+			return unavailable, true
+		}
+		node := e.findUserTask(parsed.Processes[0], task.TaskDefinitionKey)
+		if node == nil {
+			return unavailable, true
+		}
+		descriptor := e.callbackDescriptor(node.ServiceTaskType(), node.ServiceTaskAction(), node.CallbackConfigRef())
+		handlerID, action = descriptor.HandlerID, descriptor.Action
+	}
+	if handlerID == bpmnNoUserTaskCallbackHandlerID {
 		return "", false
 	}
 	const unresolvable = "此任务声明的处理程序不可用，请联系管理员核验任务配置"
@@ -74,7 +99,7 @@ func (e *CustomProcessEngine) actorInputGateReason(task *ent.ProcessTask) (strin
 	if !ok {
 		return unresolvable, true
 	}
-	contract, ok := provider.CallbackContract(strings.TrimSpace(task.CallbackAction))
+	contract, ok := provider.CallbackContract(action)
 	if !ok {
 		return "此任务声明的处理动作未注册，请联系管理员核验任务配置", true
 	}
