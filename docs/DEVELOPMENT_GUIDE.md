@@ -165,6 +165,8 @@ go build -o /tmp/itsm-reconcile-menus ./cmd/reconcile_menus
 
 产品用词：主导航“服务目录”用于浏览与申请；管理导航“服务目录管理”用于维护目录项、申请字段、流程和服务级别；“目录分类”是目录项的展示分组；“工单分类”是已产生工作的业务分类树。当前 `ServiceCatalog.category` 是字符串，`Ticket.category_id` 关联独立分类树，二者没有自动映射。自定义字段归属于目录项或工单模板，不从分类继承。
 
+CTI 三级约束、目录默认分类与专业完成质量的后续目标见[待书面审阅设计](superpowers/specs/2026-09-17-cti-governance-design.md)。上面的描述仍是当前实现边界；不得将设计目标当成已部署能力。
+
 ### 后端 (itsm-backend)
 
 ```bash

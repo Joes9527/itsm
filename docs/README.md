@@ -1,5 +1,7 @@
 # ITSM 文档中心
 
+- [CTI 三级分类与目录、完成质量设计（draft，书面待审）](superpowers/specs/2026-09-17-cti-governance-design.md)：已确认业务方向、两阶段范围、历史兼容与验收；不是部署证据。
+
 > **开发／迁移任务先读：[当前结构目标047](development-environment.md#selected-schema-target-047)及[实际数据库状态](superpowers/plans/2026-09-15-migration-validation-ledger.md#schema-target-status)。目标版本与已部署状态分开记录。**
 
 - [Ticket 详情体验统一实施计划](./superpowers/plans/2026-09-15-ticket-detail-experience-unification.md)：六项任务及最终复审完成；浏览器 7/7、最终并发回归 98/98，已提交 PR #35。
