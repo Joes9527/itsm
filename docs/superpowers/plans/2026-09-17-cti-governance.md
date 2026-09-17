@@ -1139,3 +1139,46 @@ itsm-frontend: npx jest --testPathPattern '(incident-api|classification)' -> 5 s
 ```
 
 **同批完成**：按用户指示删除 `/tmp/cti-baseline-before-048.sql.gz`（048 前备份）。
+
+### 审计记录（跨域分类入口契约对账，2026-09-17）
+
+问题：incident 分类接口的"名称解析 + 静默成功"缺陷，是否在 SR / Problem / Change 也存在？
+
+结论：**SR / Problem / Change 不需要调整**（B1 即按 ID 契约实现，且各有契约测试与 PG 证据）。
+但审计发现**通用工单（WorkItem 基座）另有同类名称写路径**，以及若干只读的名称过滤。
+
+**一、写路径（分类纠正命令）—— 五域已统一为 ID 契约**
+
+| 域 | 命令入口 | 目标字段 | 原因 | 证据 |
+|---|---|---|---|---|
+| 通用工单 | `PUT /tickets/:id`（`TicketEditCommand`） | `categoryId` | **缺失（见下 P1）** | `dto/ticket_dto.go` |
+| 事件 | `PUT /incidents/:id/classification`、`PUT /incidents/:id` | `categoryId` | `classificationReason` 必填 | `service/incident_classification_command_test.go` |
+| 问题 | `PUT /problems/:id`（metadata patch） | `categoryId *int` | `classificationReason` 必填 | `handlers/problem/classification_contract_test.go` |
+| 变更 | `PUT /changes/:id`（metadata patch） | `categoryId *int` | `classificationReason` 必填 | `handlers/change/classification_test.go` |
+| 目录申请项 | `PUT /service-requests/:id/classification` | `categoryId`（**必须 > 0**，不可清空） | `reason` 必填 | `handlers/service_request/classification_test.go` |
+| 录入（五域创建） | `workitemcreation.CTIInput` | `categoryId/typeId/itemId` | — | `handlers/common/workitemcreation/command.go` |
+
+**二、仍按显示名称解析**（本次审计清单，全部为可定位的代码点）
+
+1. **P1 写路径（同类缺陷）**：`service/ticket_service.go:466-474`
+   —— `TicketService.UpdateTicket` 在只给 `category`（显示名称）时按名称解析成 ID 后**写入分类**；
+   且 `TicketEditCommand` **没有原因字段**，即通用工单改分类目前既不要求原因，也接受名称。
+   风险与 incident 旧实现相同：同名不同分支会落到错误节点；且与其它四域契约不一致。
+2. **P2 创建入口 legacy 名称槽位**：`service/ticket_category_creation.go:40`、`:53`
+   —— 创建时仍可用 `category`/`subcategory` 名称槽位（A3 已标注为 legacy）。
+3. **P3 只读过滤按名称**（不写数据，但同名会误过滤）：
+   - `service/incident_service.go:134`（事件列表）、`:653`（事件监控）
+   - `service/incident_monitoring_service.go:456`
+   - `handlers/problem/repository_impl.go:119`（问题列表）
+   - `service/dashboard_service.go:996`（看板统计）
+   - `dto/ticket_dto.go` 列表请求的 `Category string`（已有 `CategoryID` 且"优先"）
+
+**三、建议顺序**
+
+1. **P1（唯一残留的名称写路径）**：删除 `UpdateTicket` 的名称回退，让通用工单改分类走
+   与其它域相同的 ID 契约，并按 `RequireCTICorrectionReason` 要求原因；
+   需同步核查所有调用方（批量编辑、模板、流程、BPMN）是否携带原因，避免把既有流程打断。
+2. **P2**：退休创建入口的名称槽位，统一 `CTIInput`。
+3. **P3**：读过滤统一 `categoryId`（名称仅保留只读兼容或直接移除）。
+
+P1/P2/P3 均**未实施**（等待确认；P1 触及高频基础编辑路径，需先确认调用方影响面）。
