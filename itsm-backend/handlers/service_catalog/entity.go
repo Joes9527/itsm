@@ -33,8 +33,23 @@ type ServiceCatalog struct {
 	Status               string
 	TenantID             int
 	Fields               []service.FieldDefinitionInput
-	CreatedAt            time.Time
-	UpdatedAt            time.Time
+	// DefaultTicketCategoryID 是目录声明的默认三级工单分类的最深节点（0 表示未配置）。
+	// 它是结构引用，不是展示分组：展示分组仍由 Category 字符串承担。
+	DefaultTicketCategoryID int
+	// DefaultCTIPath 是从 DefaultTicketCategoryID 派生的只读路径投影，供回显与版本指纹使用。
+	DefaultCTIPath []CTIPathNode
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+// CTIPathNode 是目录默认 CTI 的路径投影（根 → 最深节点）。
+type CTIPathNode struct {
+	ID       int
+	ParentID int
+	Level    int
+	Name     string
+	Code     string
+	IsActive bool
 }
 
 // Repository defines the interface for data persistence

@@ -88,18 +88,30 @@ func (s *TicketCategoryService) ResolveCTIPath(ctx context.Context, tx *ent.Tx, 
 }
 
 // GetCategoryPath 是只读投影：给读接口回显“完整路径”，不做任何写入或加锁。
+// 需要与调用方同事务时使用 ProjectCTIPath，避免嵌套事务。
 func (s *TicketCategoryService) GetCategoryPath(ctx context.Context, tenantID, selectedID int) ([]CTINode, error) {
-	if tenantID <= 0 {
-		return nil, ErrCTIPathOutsideTenant
-	}
-	if selectedID <= 0 {
-		return nil, nil
+	if s.client == nil {
+		return nil, errors.New("CTI projection requires a client")
 	}
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	return s.ProjectCTIPath(ctx, tx, tenantID, selectedID)
+}
+
+// ProjectCTIPath 在调用方事务内解析只读路径投影（不加锁、不写入）。
+func (s *TicketCategoryService) ProjectCTIPath(ctx context.Context, tx *ent.Tx, tenantID, selectedID int) ([]CTINode, error) {
+	if tx == nil {
+		return nil, errors.New("CTI projection requires the owning transaction")
+	}
+	if tenantID <= 0 {
+		return nil, ErrCTIPathOutsideTenant
+	}
+	if selectedID <= 0 {
+		return nil, nil
+	}
 	path, err := resolveCTIPathNodes(ctx, tx, tenantID, selectedID, false)
 	if err != nil {
 		return nil, err
@@ -131,7 +143,13 @@ func resolveCTIPathNodes(ctx context.Context, tx *ent.Tx, tenantID, selectedID i
 		}
 		chain = append(chain, ctiNodeOf(node))
 		if node.ParentID == 0 {
-			return reverseCTIChain(chain), nil
+			path := reverseCTIChain(chain)
+			// 层级以真实父链为准：level 列是派生缓存，历史行的陈旧值不能让合法路径
+			// 在创建/质量校验时被误判为不合法（迁移预检单独报告这类脏数据）。
+			for index := range path {
+				path[index].Level = index + 1
+			}
+			return path, nil
 		}
 		current = node.ParentID
 	}
@@ -190,14 +208,16 @@ func (s *TicketCategoryService) CreateCategory(ctx context.Context, req *CreateC
 			if err != nil {
 				return err
 			}
-			if parent.Level >= CTIMaxDepth {
-				return ErrCTIPathTooDeep
-			}
 			// 父链本身必须是合法的同租户连续路径，避免在损坏链上继续加深。
-			if _, err := resolveCTIPathNodes(ctx, tx, req.TenantID, parent.ID, false); err != nil {
+			// 层级取真实链长，不信任可能陈旧或超深的 level 列。
+			parentPath, err := resolveCTIPathNodes(ctx, tx, req.TenantID, parent.ID, false)
+			if err != nil {
 				return err
 			}
-			level = parent.Level + 1
+			if len(parentPath) >= CTIMaxDepth {
+				return ErrCTIPathTooDeep
+			}
+			level = len(parentPath) + 1
 		}
 
 		create := tx.TicketCategory.Create().
@@ -541,8 +561,12 @@ func (s *TicketCategoryService) MoveCategory(ctx context.Context, id int, req *M
 			newParentID = *req.NewParentID
 			newLevel = 1
 			if newParentID > 0 {
-				if _, err := resolveCTIPathNodes(ctx, tx, tenantID, newParentID, false); err != nil {
+				parentPath, err := resolveCTIPathNodes(ctx, tx, tenantID, newParentID, false)
+				if err != nil {
 					return err
+				}
+				if len(parentPath) >= CTIMaxDepth {
+					return ErrCTIPathTooDeep
 				}
 				parent, err := lockTicketCategory(ctx, tx, tenantID, newParentID)
 				if err != nil {
@@ -555,7 +579,7 @@ func (s *TicketCategoryService) MoveCategory(ctx context.Context, id int, req *M
 				if isDescendant {
 					return errors.New("不能将分类移动到其子分类下")
 				}
-				newLevel = parent.Level + 1
+				newLevel = len(parentPath) + 1
 			}
 			if height := subtreeHeight(depths, id); newLevel+height-1 > CTIMaxDepth {
 				return ErrCTIPathTooDeep
@@ -616,8 +640,12 @@ func (s *TicketCategoryService) validateMove(ctx context.Context, tx *ent.Tx, te
 		}
 		return 1, nil
 	}
-	if _, err := resolveCTIPathNodes(ctx, tx, tenantID, newParentID, false); err != nil {
+	parentPath, err := resolveCTIPathNodes(ctx, tx, tenantID, newParentID, false)
+	if err != nil {
 		return 0, err
+	}
+	if len(parentPath) >= CTIMaxDepth {
+		return 0, ErrCTIPathTooDeep
 	}
 	parent, err := lockTicketCategory(ctx, tx, tenantID, newParentID)
 	if err != nil {
@@ -630,7 +658,7 @@ func (s *TicketCategoryService) validateMove(ctx context.Context, tx *ent.Tx, te
 	if isDescendant {
 		return 0, errors.New("不能将分类移动到其子分类下")
 	}
-	newLevel := parent.Level + 1
+	newLevel := len(parentPath) + 1
 	if height := subtreeHeight(depths, category.ID); newLevel+height-1 > CTIMaxDepth {
 		return 0, ErrCTIPathTooDeep
 	}

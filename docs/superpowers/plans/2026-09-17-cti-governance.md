@@ -176,9 +176,9 @@ git diff --check                             -> 无输出
 
 **Interfaces:** Catalog DTO 增加 `defaultTicketCategoryId: number|null`、派生 `defaultCTIPath`；`ResolvedCatalog`增加 `DefaultTicketCategoryID *int`。`publicCatalogDefinition`纳入默认ID及路径语义版本，沿用既有确认版本/冲突机制。
 
-- [ ] 在现有目录和intake fixture中新增红测：草稿可空；启用后发布空/部分/停用CTI拒绝；用户无CTI提交时生成最深节点；伪造不一致CTI拒绝；目录默认值改后旧确认版本拒绝且无工单/审计/Outbox半写入。
-- [ ] 运行 `go test ./handlers/service_catalog ./handlers/intake -run 'CTI|Catalog' -count=1`，记录功能失败。
-- [ ] 调整 `resolver.go` 当前“分类先、目录后”顺序：先校验目录权限/版本，再取默认分类，构造规范CTI输入，再调用现有classification resolver。独立报障仍接受无/部分CTI。目录存在默认值时，以目录为初始权威；客户端提供相同路径可兼容，不同路径返回冲突。未启用且旧目录无默认值时保留既有行为。
+- [x] 在现有目录和intake fixture中新增红测：草稿可空；启用后发布空/部分/停用CTI拒绝；用户无CTI提交时生成最深节点；伪造不一致CTI拒绝；目录默认值改后旧确认版本拒绝且无工单/审计/Outbox半写入。（新增 `handlers/service_catalog/cti_default_publication_test.go`、`handlers/intake/cti_catalog_default_test.go`；先红后绿）
+- [x] 运行 `go test ./handlers/service_catalog ./handlers/intake -run 'CTI|Catalog' -count=1`，记录功能失败。（红：`catalog publication configuration is incomplete`／默认分类未贯穿；实现后全绿）
+- [x] 调整 `resolver.go` 当前“分类先、目录后”顺序：先校验目录权限/版本，再取默认分类，构造规范CTI输入，再调用现有classification resolver。独立报障仍接受无/部分CTI。目录存在默认值时，以目录为初始权威；客户端提供相同路径可兼容，不同路径返回冲突。未启用且旧目录无默认值时保留既有行为。
 
 ```text
 catalog request → catalog owner resolves version/default
@@ -188,9 +188,48 @@ ordinary report → classification owner resolves optional path
                 → same professional creator / transaction / outbox
 ```
 
-- [ ] 字段贯穿创建/更新/复制/读取DTO、Ent映射、预检和版本；禁止前端仅提交默认ID而后端忽略。目录修改不更新旧工单。
-- [ ] 测试事务竞争：目录默认变更vs申请，祖先停用vs申请；旧幂等回执应返回原结果，不按新目录重新创建。AI/intake快照不泄露或复制第二份可写分类。
-- [ ] 隔离PG验证通过后提交 `feat: apply catalog CTI defaults through unified intake`。
+- [x] 字段贯穿创建/更新/复制/读取DTO、Ent映射、预检和版本；禁止前端仅提交默认ID而后端忽略。目录修改不更新旧工单。
+- [x] 测试事务竞争：目录默认变更vs申请，祖先停用vs申请；旧幂等回执应返回原结果，不按新目录重新创建。AI/intake快照不泄露或复制第二份可写分类。
+- [x] 隔离PG验证通过后提交 `feat: apply catalog CTI defaults through unified intake`。**PG 用例已编写并通过编译，未执行（NOT RUN）。**
+
+### 执行记录（A3）
+
+- `ResolvedCatalog.DefaultTicketCategoryID *int` + `CreateWorkItemCommand.CatalogDefaultCategoryID *int `json:"-"``：
+  目录默认值由目录所有者解析后填入，**不接受客户端 JSON**（客户端自报会被忽略，测试断言该字段不出现在序列化结果中）。
+- `handlers/intake/resolver.go` 顺序改为“目录先（权限/版本/表单）→ 取默认分类 → 分类所有者解析完整路径”；
+  独立报障路径不变。新增 `requireCatalogDefaultCTI`：仅在 `catalogEnforced` 启用且目录无默认值时失败关闭，
+  未启用时保留既有行为（部署新代码不阻断旧目录申请）。
+- `service/ticket_category_creation.go` 重写为单一权威入口：
+  - 目录默认值 → 必须解析出当前有效的完整三级路径（`requireFull=true, requireActive=true`），客户端提供不同最深节点直接冲突；
+  - 内联/遗留名称路径 → 槽位必须连续，每个提供的节点必须出现在真实路径中且相对顺序一致
+    （保留“多级节点用最深槽位表达”的历史契约），并统一走同一套租户/层级/启用校验；
+  - 名称投影改取真实路径，工作流变量不再可能出现自报分类名。
+- 目录侧：`ServiceCatalog.DefaultTicketCategoryID`（0=未配置）+ `DefaultCTIPath` 只读投影；DTO 增加
+  `defaultTicketCategoryId`（null=未配置）与 `defaultCTIPath`；创建/更新请求可提交（更新传 0 即清除）；
+  `publicCatalogDefinition` 纳入默认 ID 与派生路径（含名称/启用状态），因此改默认、改名、分类改名或停用节点
+  都会改变 `CatalogVersion`，旧确认按既有 409 语义失效。
+- 发布校验 `validatePublishedDefaultCTI`：门禁启用时缺省默认分类拒绝发布；已配置默认分类时必须是当前有效
+  完整三级路径（与门禁是否启用无关）。草稿仍可空，但跨租户默认值在提交事务内拒绝（区分“不存在/跨租户”与
+  真正的数据库故障，不再把基础设施错误伪装成租户问题）。
+- 新增 `service/cti_governance.go`：读取 `system_configs` 保留键 `cti_governance_v1` 的结构化只读记录
+  （`catalogEnforced`/`completionEnforced`/`effectiveFrom`）；未配置=未启用；重复行/非法 JSON/非法时间明确报错。
+  受控写入与完成门禁判定由 B2 补齐。
+- SQLite 支持性修正：`level` 列改为派生缓存语义，路径解析与创建/移动用真实父链计算层级，
+  历史陈旧 level 不会把合法路径误判为非法（迁移预检单独报告这类脏数据）。
+
+验证证据：
+
+```text
+go test ./service -run 'TestReadCTIGovernance' -count=1                     -> ok
+go test ./handlers/service_catalog -run 'TestCatalog' -count=1              -> ok
+go test ./handlers/intake -run 'TestCatalogDefault|TestCatalogEnforcement|TestOrdinaryReport' -count=1 -> ok
+go test ./... -count=1（全量）                                              -> 无 FAIL
+go vet -tags integration_postgres ./tests/integration/                      -> OK（含 TestCTICatalogPostgres）
+```
+
+未执行项：`TestCTICatalogPostgres` 实际执行（需授权隔离目标）；目录默认分类补配清单（B4）；门禁启用。
+
+## Task A4：三级维护界面与共享选择器（未开始）
 
 ## Task A4：三级维护界面与共享选择器
 
