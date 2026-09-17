@@ -2,6 +2,7 @@ package controller
 
 import (
 	"strconv"
+	"time"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
@@ -228,4 +229,46 @@ func (sc *SystemConfigController) InitDefaultConfigs(c *gin.Context) {
 	}
 
 	common.Success(c, gin.H{"message": "默认配置初始化成功"})
+}
+
+// SetCTIGovernance 受控启用/暂停 CTI 分类门禁。
+//
+// 权限沿用 system_config:update（路由层校验），并且只走受控服务：
+// 第一次启用写入截止时间，之后不可修改，暂停不撤销已完成动作。
+func (sc *SystemConfigController) SetCTIGovernance(c *gin.Context) {
+	tenantID, err := middleware.GetTenantID(c)
+	if err != nil || tenantID == 0 {
+		common.Fail(c, common.UnauthorizedCode, "未授权访问")
+		return
+	}
+	actorID, err := middleware.GetUserID(c)
+	if err != nil || actorID == 0 {
+		common.Fail(c, common.UnauthorizedCode, "未授权访问")
+		return
+	}
+
+	var req dto.SetCTIGovernanceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ParamError(c, "参数错误: "+err.Error())
+		return
+	}
+
+	result, err := sc.configService.SetCTIGovernance(c.Request.Context(), tenantID, actorID, "admin_ui", service.CTIGovernanceUpdate{
+		CatalogEnforced:    req.CatalogEnforced,
+		CompletionEnforced: req.CompletionEnforced,
+	})
+	if err != nil {
+		common.Fail(c, common.InternalErrorCode, "更新分类治理设置失败: "+err.Error())
+		return
+	}
+	response := dto.CTIGovernanceResponse{
+		CatalogEnforced:               result.Governance.CatalogEnforced,
+		CompletionEnforced:            result.Governance.CompletionEnforced,
+		Applied:                       result.Applied,
+		InFlightWithoutClassification: result.InFlightWithoutClassification,
+	}
+	if result.Governance.EffectiveFrom != nil {
+		response.EffectiveFrom = result.Governance.EffectiveFrom.UTC().Format(time.RFC3339)
+	}
+	common.Success(c, response)
 }

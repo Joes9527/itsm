@@ -717,6 +717,8 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				sysConfigs.GET("/init", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.InitDefaultConfigs)
 				sysConfigs.GET("/:id", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.GetConfig)
 				sysConfigs.GET("/key/:key", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.GetConfigByKey)
+				// CTI 分类治理的受控启用：静态路径，避免与 /:id 冲突，且不接受 effectiveFrom。
+				sysConfigs.PUT("/governance/cti", middleware.RequirePermission("system_config", "update"), config.SystemConfigController.SetCTIGovernance)
 				sysConfigs.PUT("/:id", middleware.RequirePermission("system_config", "update"), config.SystemConfigController.UpdateConfig)
 				sysConfigs.PUT("/batch", middleware.RequirePermission("system_config", "update"), config.SystemConfigController.BatchUpdateConfigs)
 

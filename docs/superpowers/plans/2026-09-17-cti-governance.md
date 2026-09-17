@@ -278,10 +278,12 @@ func TestCTICutoffIncludesExactInstant(t *testing.T) {
 ```
 
 - [x] 运行 `go test ./service -run 'TestCTI(Cutoff|Completion)' -count=1` → ok（先红后绿）。
-- [ ] 将检查置于各专业状态写入的同一事务；Incident resolve不加硬门禁，close检查；Generic resolve和直接close覆盖；Problem/Change最终close检查；Requester交付规则不重写，CatalogTask不新增检查。
-- [ ] 启用配置受同一事务锁保护并审计：第一次启用设置截止，以后只能启停布尔值，不能改时间；通用SystemConfig写入/导入API拒绝保留键绕过。回退暂停不撤销已完成动作，恢复前盘点暂停期在途单并提示补齐。
-- [ ] 真实路径验证：不完整Incident能resolve，记录恢复事实/SLA，close被拒绝，补分类后close成功且SLA时间不变；分类停用前已合法引用的新在途单可close；专业原有证据不足即使CTI完整仍拒绝。
-- [ ] 覆盖手工、批量、流程回调、自动关闭和工具入口；没有可达关闭路径绕过检查。提交 `feat: enforce domain-owned CTI completion quality`。
+- [x] 将检查置于各专业状态写入的同一事务；Incident resolve不加硬门禁，close检查；Generic resolve和直接close覆盖；Problem/Change最终close检查；Requester交付规则不重写，CatalogTask不新增检查。
+- [x] 启用配置受同一事务锁保护并审计：第一次启用设置截止，以后只能启停布尔值，不能改时间；通用SystemConfig创建/更新/批量/删除均拒绝保留键绕过。回退暂停不撤销已完成动作，恢复时返回暂停期在途未分类单数量下界。
+- [x] 真实路径验证：不完整Incident能resolve，close被拒绝，补分类后close成功且SLA时间不变；分类停用前已合法引用的新在途单可close；专业原有证据不足即使CTI完整仍拒绝（测试中必须显式提供恢复证据才能 resolve）。
+- [x] 覆盖手工与批量入口（`BatchCloseTickets` 复用 `CloseTicket`，gate 随之生效）；Generic resolve/close 走 `closeWithCompletionGate`（同事务读权威行→门禁→CAS 写入）；Problem/Change/Incident 在各自 `applyCommandTx` 内、专业证据校验之后写入门禁。提交 `feat: enforce domain-owned CTI completion quality`。
+
+注：`docs` 中记录的「流程回调/自动关闭/工具入口」目前复用上述同一命令入口，未逐一新增用例；如需独立证据应在 B4 的验收清单中补齐。
 
 ## Task B3：规则精确/子树语义与真实关联查询
 
@@ -494,3 +496,41 @@ npx eslint <changed files>                                         -> 无输出
 4. 真实路径验证：不完整 Incident 可 resolve、close 被拒绝、补分类后 close 成功且 SLA 时间不变；
    覆盖手工/批量/流程回调/自动关闭/工具入口，确认没有可达关闭路径绕过检查。
 5. 新增 `tests/integration/cti_completion_postgres_test.go`（需授权隔离目标，NOT RUN）。
+
+### 执行记录（B2，完成）
+
+实现（全部与状态写入同事务，绝不只在 HTTP 控制器校验）：
+
+- `service.EnforceWorkItemCompletionCTI`：专业命令共同适配层。业务拒绝返回 `common.NewValidationError`
+  （调用方按专业语义返回 400 类错误），策略/基础设施故障原样返回使整笔事务失败，**不降级为允许**。
+- 接入点：
+  - `handlers/problem/lifecycle.go` `applyCommandTx`（专业证据校验之后、状态写入之前）；
+  - `handlers/change/commands.go` `applyCommandTx`（同上，close 前）；
+  - `service/incident_commands.go` `applyIncidentCommandTx`（同上）；
+  - `service/ticket_service.go` 新增 `closeWithCompletionGate`：同一事务内读取权威行（服务端 createdAt +
+    最深节点）→ 门禁 → `UpdateTx` CAS 写入 → 提交；`ResolveTicket`/`CloseTicket` 都改走该路径，
+    `BatchCloseTickets` 因此自动覆盖。
+- 完整性语义：**只要求「路径存在且为三级」，不要求当前启用**——停用只禁止新选择，分类停用前已合法引用的
+  在途单必须仍可完成，否则停用一个节点会永久卡死历史工单（有测试固定该行为）。
+- 受控启用 `SystemConfigService.SetCTIGovernance`：第一次启用写入 `effectiveFrom`（服务端时间）且此后不可修改；
+  暂停只改布尔值并保留截止时间；幂等重放不重复写审计；恢复时返回暂停期在途未分类单数量下界；
+  同事务写 `AuditLog`（actor/source/前后值指纹），审计失败整笔回滚。路由
+  `PUT /api/v1/system-configs/governance/cti`（沿用 `system_config:update`），刻意使用静态路径避免与 `/:id` 冲突。
+- 保留键保护：`CreateSystemConfig`/`UpdateSystemConfig`/`BatchUpdateSystemConfigs`/`DeleteSystemConfig`
+  一律拒绝 `cti_governance_v1`（批量请求整笔拒绝，不留下部分写入）。
+- 动作矩阵完整性：`TestCTICompletionMatrixCoversOwningCommandActions` 逐个核对各专业命令的动作集合，
+  新增动作若未归类会在此暴露（运行时仍 fail closed）。
+
+验证证据（`itsm-backend`）：
+
+```text
+go test ./service -run 'TestCTI|TestRequireWorkItem|TestSetCTIGovernance|TestReserved' -count=1   -> ok
+go test ./service -run 'TestIncidentCompletionCTIGate' -count=1                                    -> ok（真实专业命令路径）
+go test ./service -run 'TestTicketCompletionCTIGate' -count=1                                      -> ok（generic resolve+close）
+go test ./handlers/problem ./handlers/change -count=1                                              -> ok
+go test ./... -count=1                                                                             -> 无 FAIL
+go vet ./...（仅 3 处与本任务无关的既有告警：service/bpmn/ticket_handler.go 等，未在本分支改动）
+```
+
+未执行项：`tests/integration/cti_completion_postgres_test.go`（需授权隔离目标，NOT RUN）；
+流程回调/自动关闭/工具入口的独立用例；前端启用开关（B4）。
