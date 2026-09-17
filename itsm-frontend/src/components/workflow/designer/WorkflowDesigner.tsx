@@ -937,9 +937,6 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
           visible={showNewWorkflowModal}
           onClose={() => {
             setShowNewWorkflowModal(false);
-            if (!workflow) {
-              router.push('/admin/workflows');
-            }
           }}
           onSelectTemplate={templateWorkflow => {
             setWorkflow(templateWorkflow);
