@@ -736,3 +736,41 @@ go test -tags integration_postgres ./tests/integration -run 'TestCTI' -count=1
 说明：`end_user` 在本仓库的 SR 夹具中被显式授予 `service_request:write`，因此"申请人不能自助改分类"
 这一断言按**权限**边界验证（使用无该权限的 `viewer` 角色），而不是按角色名——与
 `RequirePermission` 中间件和既有 `Update` 的判定保持一致；不按角色名硬编码是刻意的。
+
+### 执行记录（B1 增量五：Change 域接入）
+
+**为何不需要新端点**：变更域已有专业元数据命令 `Service.ApplyMetadata`（`PUT /changes/:id` →
+`/changes` handler 的 `UpdateChange`），与问题域同构。因此按计划"优先复用既有专业修改入口"，
+只在既有命令内加入分类分支，不新增并行接口。
+
+**改动**
+
+- `dto/change_dto.go`：`UpdateChangeRequest` 新增 `categoryId`（0=显式清空）与 `classificationReason`（≤500）。
+- `handlers/change/metadata.go`：
+  - `validateMetadataPatch` 拒绝负分类；
+  - `ApplyMetadata` 内在既有版本 CAS / 终态锁 / 执行范围校验之后加入分类分支：
+    原因仅在分类确实变化时必填、目标必须是同租户启用且父链连续的路径（策略 `AllowClear: true`，
+    与事件/问题一致；完整性由 B2 完成门禁在关闭时要求）、`update.SetCategoryID/ClearCategoryID`，
+    并把 `classificationChanged` 纳入"必须产生新事实"的判断（分类单独变更不再被误判为空操作）；
+  - 证据（原因 + 前后完整路径）合并进既有 `workitemmutation.RecordTx` 回执，与写入同一事务。
+- 终态（completed/cancelled/rejected）沿用既有"terminal change metadata is locked"，分类同样不可改。
+
+**验证**
+
+```text
+go test ./handlers/change -run TestChangeClassificationCorrectionContract -count=1 -> ok
+  完整→完整（版本+1、回执含原因与前后路径、归属不变）
+  缺原因 拒绝且零副作用 · 停用/未知/跨租户 拒绝且不落库
+  过期版本 拒绝且不写入 · 显式清空 需带原因并留痕 · 终态 无分类通道
+go test ./handlers/change -count=1                                        -> ok（既有用例未回归）
+隔离 PostgreSQL：TestCTICorrectionChangePostgres -> PASS 5 子项
+  （纠正写证据且不改归属 / 缺原因零副作用 / 停用+未知+跨租户拒绝 / 终态无通道 / 并发纠正单版本）
+go test -tags integration_postgres ./tests/integration -run TestCTI -count=1
+  -> structure / catalog / completion / correction / correction-service-request /
+     correction-change 六套全部 PASS，无 schema 残留
+go test ./... -count=1 -> 无 FAIL
+```
+
+**明确未做**：变更前端仍未展示/编辑分类。变更 UI 从来只有类型/影响/风险/计划等字段，
+没有"分类"字段，因此这属于**新增界面能力**（需要产品确认变更单是否要在界面展示分类），
+而不是"既有纠正入口的授权门控"，故不在本轮擅自添加。

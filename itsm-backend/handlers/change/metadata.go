@@ -146,7 +146,26 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 		// because the persisted assessment digest binds that array too.
 		p.AffectedCIs = current.AffectedCis
 	}
-	if !metadataChanges(domain, p) {
+	// 分类纠正契约（B1）：原因仅在分类确实变化时必填；目标必须是同租户、启用且父链连续的路径。
+	// 清空保留本域既有语义（完成质量门禁会在关闭时要求完整三级）。
+	var classificationBefore, classificationAfter []service.CTINode
+	var classificationChanged bool
+	if p.CategoryID != nil {
+		classificationChanged = *p.CategoryID != item.CategoryID
+		if err = service.RequireCTICorrectionReason(p.ClassificationReason, classificationChanged); err != nil {
+			return empty, err
+		}
+		classificationBefore, err = service.CTICorrectionBeforePathTx(ctx, tx, m.TenantID, item.CategoryID)
+		if err != nil {
+			return empty, err
+		}
+		classificationAfter, err = service.ValidateCTICorrectionTargetTx(ctx, tx, m.TenantID, *p.CategoryID,
+			service.CTICorrectionTargetPolicy{AllowClear: true})
+		if err != nil {
+			return empty, err
+		}
+	}
+	if !metadataChanges(domain, p) && !classificationChanged {
 		return empty, common.NewValidationError("new metadata facts required", nil)
 	}
 	if err := s.requireExecutionTx(ctx, tx, m.TenantID, item.ID); err != nil {
@@ -188,6 +207,13 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 	}
 	if p.Priority != nil {
 		update.SetPriority(string(*p.Priority))
+	}
+	if p.CategoryID != nil {
+		if *p.CategoryID == 0 {
+			update.ClearCategoryID()
+		} else {
+			update.SetCategoryID(*p.CategoryID)
+		}
 	}
 	if p.Justification != nil {
 		professional.SetJustification(*p.Justification)
@@ -234,7 +260,14 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 		}
 	}
 	result := workitemmutation.Result{WorkItemID: item.ID, Version: saved.Version, Status: saved.Status}
-	if err = workitemmutation.RecordTx(ctx, tx, m, result, "change.metadata", digest, map[string]any{"changeId": current.ID, "patch": p, "previousAssigneeId": item.AssigneeID}); err != nil {
+	receipt := map[string]any{"changeId": current.ID, "patch": p, "previousAssigneeId": item.AssigneeID}
+	// 分类纠正证据写进同一操作回执（原因 + 前后完整路径），与专业写入同一事务。
+	if classificationBefore != nil || classificationAfter != nil {
+		for key, value := range (service.CTICorrectionEvidence{Before: classificationBefore, After: classificationAfter}).Metadata(p.ClassificationReason) {
+			receipt[key] = value
+		}
+	}
+	if err = workitemmutation.RecordTx(ctx, tx, m, result, "change.metadata", digest, receipt); err != nil {
 		return empty, err
 	}
 	if err = tx.Commit(); err != nil {
@@ -321,6 +354,9 @@ func validateMetadataPatch(p dto.UpdateChangeRequest) error {
 	}
 	if p.RiskLevel != nil && !valid(string(*p.RiskLevel), string(dto.ChangeRiskLow), string(dto.ChangeRiskMedium), string(dto.ChangeRiskHigh)) {
 		return common.NewValidationError("invalid change risk", nil)
+	}
+	if p.CategoryID != nil && *p.CategoryID < 0 {
+		return common.NewValidationError("invalid category", nil)
 	}
 	return nil
 }
