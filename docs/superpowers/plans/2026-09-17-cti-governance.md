@@ -1,0 +1,274 @@
+# CTI Governance Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `subagent-driven-development` when delegation is explicitly selected, or `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** 将三级 CTI 的维护、目录默认分类、分类纠正及专业完成检查连成可验证闭环。
+
+**Architecture:** `ticket_categories` 与 WorkItem 最深节点引用为单一权威。既有分类服务提供结构/引用校验，统一创建服务解析目录默认值，各专业服务维护自己的修改和完成事务。分派/SLA/BPMN 保持独立所有者。
+
+**Tech Stack:** Go/Gin/Ent/PostgreSQL，Next.js/TypeScript/Ant Design，现有 Jest、Playwright 及 PG 集成测试设施。
+
+**Status:** draft implementation plan，设计及审查补充已于 2026-09-17 获用户确认；本计划未执行、未授权共享环境写入。
+
+## Global Constraints
+
+- 权威：[已确认设计](../specs/2026-09-17-cti-governance-design.md)、[AGENTS](../../../AGENTS.md)、[CLAUDE](../../../CLAUDE.md)、[工程治理](../../agent-engineering-governance.md)、[工程约定](../../engineering-conventions.md)。运行前读[环境](../../development-environment.md)、[开发指南](../../DEVELOPMENT_GUIDE.md)、[命令参考](../../dev-commands-reference.md)、[E2E指南](../../e2e-testing-guide.md)。
+- 基线是 `b8ac9639b` 的源码，设计分支已另有文档提交。执行者先 fetch；以最新 origin/main 建独立 worktree/分支，将本设计和计划的确切提交带入；出现拥有者路径/迁移账本变化须先更新计划，不覆盖本地工作。
+- 最多三级；单个工单保存所选最深节点；不另加三个权威分类列。
+- 普通报障允许未分类；目录发布/申请在受控启用后要求完整三级。旧在途单只提示，旧单重开不重新入组。
+- 新 Requested Item 主动纠正保持完整三级。Incident 恢复/解决不受阻，正式关闭前检查。Generic 在第一个正常完成动作及直接关闭前检查；Problem/Change 最终关闭检查；Catalog Task 不新增人工要求。
+- 分类变化不得隐式改派、重算 SLA、重启 BPMN。各专业权限、租户、执行范围、版本、事务回执及审计不削弱。
+- 编码稳定；被引用节点/其祖先不可移动；停用保留既有合法完整路径；无子节点且无任何引用才可删除。
+- 不执行旧 ticket 迁移、共享库清理、启动时迁移/seed、新数据库/schema/container创建、历史SLA重算或全域规则重构。
+- 本计划的测试命令只连接显式指定的隔离目标。启动配置不作为测试数据库默认值；不要 source 当前 Mac/WSL 服务环境后运行集成测试。
+- 每项采用红→绿→复审→提交，禁止将“尚未执行”的期望写成 PASS。阶段A通过不等于整个设计完成。
+
+## 交付顺序与公共接口
+
+A1 → A2 → A3 → A4 构成阶段A（基础与创建）；B1 → B2 → B3 → B4 构成阶段B（处理与完成）。A1必须先完成；B3可在A2契约稳定后单独实施，但最终集成依赖全部任务。不要多名Agent同时改迁移登记、统一创建或同一专业命令。
+
+### 文件职责
+
+| 位置 | 责任 |
+| --- | --- |
+| `itsm-backend/service/ticket_category_service.go`、`ticket_category_creation.go` | 复用现有分类维护/创建解析 |
+| 新 `service/ticket_category_policy.go`、`ticket_category_references.go` | 纯三级/匹配语义与调用方事务内引用检查，避免继续扩大维护服务 |
+| 新 `service/cti_governance.go` | 读取受控启用状态、不可变截止时间及专业动作质量判断；不执行专业状态转换 |
+| `handlers/service_catalog/{service,creation,revision,preflight,repository_impl,entity}.go` | 默认分类持久化、版本、发布与创建读取 |
+| `handlers/intake/resolver.go`、`handlers/common/workitemcreation/{command,plan}.go` | 目录先解析，选择权威CTI，再走同一分类校验 |
+| `controller/ticket_category_controller.go`、既有 `router/` 注册 | 树路径、引用读取、维护错误DTO；复用既有权限 |
+| 专业服务/handlers | 各专业动作事务调用共享检查，不能新增第二状态机 |
+| 新 `itsm-frontend/src/components/business/CTISelector.tsx` | 统一值和路径选择；用户/坐席/管理端通过明确props使用 |
+| `admin/ticket-categories` 路由下组件 | 树导航、详情、维护表单和引用列表 |
+
+以下为本计划新增的最小内部契约，放在 `service/ticket_category_policy.go`；函数实现和持久化封装在A2完成，不是假设已有API：
+
+```go
+type CTINode struct {
+    ID, ParentID, Level, TenantID int
+    Name, Code string
+    Active bool
+}
+type CTIMatchScope string
+const (
+    CTIExact CTIMatchScope = "exact"
+    CTISubtree CTIMatchScope = "subtree"
+)
+// nodes 按根到所选节点排序；空路径在 requireFull=false 时合法。
+func ValidateCTIPath(nodes []CTINode, tenantID int, requireFull, requireActive bool) error
+// path 为候选工单完整根路径；未知scope返回错误。
+func MatchCTI(path []CTINode, criterionID int, scope CTIMatchScope) (bool, error)
+```
+
+`TicketCategoryService`新增 `ResolveCTIPath(ctx context.Context, tx *ent.Tx, tenantID, selectedID int, requireFull, requireActive bool) ([]CTINode, error)`，selectedID=0表示无分类，返回结构化现有错误类型。数据库锁在拥有者事务内获取；纯函数不查询数据库。其他领域调用分类服务契约，不直接调用分类repository。
+
+前端统一契约放入现有 `src/lib/api/ticket-category-api.ts`：
+
+```ts
+export interface CTIPathNode {
+  id: number; parentId: number | null; level: 1 | 2 | 3;
+  name: string; code: string; isActive: boolean;
+}
+export interface CTISelectorProps {
+  value: number | null; // 最深节点ID，不存第二套路径
+  onChange: (value: number | null) => void;
+  requiredDepth: 0 | 3;
+  disabled?: boolean;
+}
+```
+
+## Task A1：固定基线、引用清单与启用契约
+
+**Files:** 修改本计划的执行记录与设计§4证据；读取 `ent/schema/{ticketcategory,servicecatalog,systemconfig}.go`、`migration/`、`migrations/`、`service/system_config_service.go`、`service/ticket_assignment_rule_service.go`、`service/ticket_sla_service.go`、分类控制器及导入路径。不写共享数据库。
+
+- [ ] 获取并记录执行基线、分支、脏文件、最新canonical迁移注册；确认其他数据库恢复任务没有占用目标。
+
+```bash
+git fetch origin
+git status --short
+git log -1 --format='%H %s' origin/main
+rg -n 'Register|047|schemaVersion' itsm-backend/migration
+rg -n 'CategoryID|CategoryIds|category_id|category_ids|default_resolver|sla_tier' itsm-backend/service itsm-backend/handlers itsm-backend/ent/schema
+```
+
+- [ ] 以真实授权租户上下文只读盘点：三级数量、超深度、根错误、孤儿、环、跨租户父链、错误level、编码冲突、全部业务/配置引用及目录缺配。零行必须同时证明租户上下文和RLS身份，不能当成空库。只记录聚合/ID及错误类型，不导出个人数据。
+- [ ] 在计划记录引用矩阵（所有者、结构引用/遗留字符串、维护/查询入口、删除保护）；覆盖 TicketTemplate、目录、工单、分派、SLA、流程配置及当前代码发现的其他消费者。字符串引用不能因没外键被忽略；不明确的映射阻止受影响维护动作并报可操作错误。
+- [ ] 固定启用记录使用既有 `system_configs`，每租户唯一保留键 `cti_governance_v1`；值含 `catalogEnforced`、`completionEnforced`、`effectiveFrom`（首次启用完成门禁时写入，后续不可改）。禁止通用配置接口随意改此保留键；按既有权限与审计走受控激活路径。读取失败/重复/非法值报错，不默认为关闭；从未配置则为未启用。
+- [ ] 核对基础测试并记录实际命令结果；不因本地Mac CGO问题跳过PG验收，可在获准隔离Linux执行。
+
+```bash
+cd itsm-backend
+go test ./service -run 'TestTicketCategory' -count=1
+```
+
+- [ ] 提交审计记录：`docs: record CTI implementation baseline and reference ownership`。交付门禁：引用矩阵完整，所有阻塞有明确对象，未经授权无数据修复。
+
+## Task A2：分类不变量、路径与受控迁移
+
+**Files:** 修改 `ent/schema/{ticketcategory,servicecatalog}.go`、现有分类service/controller；新增 `service/ticket_category_policy.go`、`service/ticket_category_references.go`、同目录 `_test.go`，`tests/integration/cti_structure_postgres_test.go`。在现有canonical迁移登记增加一个 `cti_governance` 迁移及verify，序号在A1确认最新账本后取下一号，禁止预占048或修改旧校验和。Ent生成物只通过既有生成命令产生。
+
+**Interfaces:** 产出上述 `CTINode`、`ValidateCTIPath`、`ResolveCTIPath`；维护失败映射现有验证/冲突/无权限错误，不泄露跨租户对象。
+
+- [ ] 新增具体红测（测试文件导入现有testify/assert或用标准testing）：
+
+```go
+func TestCTIRejectsIncompleteRequiredPath(t *testing.T) {
+    path := []CTINode{{ID: 1, TenantID: 7, Level: 1, Active: true}}
+    if ValidateCTIPath(path, 7, true, true) == nil {
+        t.Fatal("required CTI accepted only level 1")
+    }
+}
+func TestCTIAllowsUnclassifiedReport(t *testing.T) {
+    if err := ValidateCTIPath(nil, 7, false, true); err != nil { t.Fatal(err) }
+}
+```
+
+- [ ] 运行 `go test ./service -run 'TestCTI' -count=1`，确认失败来自缺少约束/实现，而非不可用依赖。
+- [ ] 实现根ParentID=0、Level从1连续递增、同租户、最多3、无环、完整/部分及全部祖先启用校验。解析最深节点向上最多3步，异常链返回失败，不能递归无限深。
+- [ ] 在创建/移动/导入/删除/停用入口调用同一维护规则；锁定完整被操作子树及引用检查所需行，移动被引用后代的祖先也拒绝。目录/工单创建与维护按固定锁顺序协调，不能只做preflight。
+- [ ] 迁移增加 `service_catalogs.default_ticket_category_id` 可空结构引用；检查实际PG与Ent的编码唯一性差异，按现有租户契约处理。已有异常只出预检失败，不自动修复。`system_configs` 为保留键建立局部唯一约束，重复行先阻塞；新增列/约束附RLS/租户与回退边界。
+- [ ] PG红绿用例命名为 `TestCTIStructurePostgres`：两个租户同名分类隔离；并发创建vs删除/停用不得产生无效引用；三级子树移动超深拒绝；字符串引用阻止删除；迁移失败原子回滚，不改旧账本。
+- [ ] 运行目标测试、迁移verify及 `git diff --check` 后提交 `feat: enforce CTI hierarchy and reference integrity`。迁移只在隔离目标应用。
+
+## Task A3：目录默认分类与统一创建
+
+**Files:** 修改 `handlers/service_catalog/{entity,service,repository_impl,creation,revision,preflight}.go`，`dto/service_dto.go`、`handlers/intake/resolver.go`、`handlers/common/workitemcreation/command.go`；测试 `handlers/service_catalog/creation_read_test.go`、`handlers/intake/catalog_option_contract_test.go`，新增 `tests/integration/cti_catalog_postgres_test.go`。
+
+**Interfaces:** Catalog DTO 增加 `defaultTicketCategoryId: number|null`、派生 `defaultCTIPath`；`ResolvedCatalog`增加 `DefaultTicketCategoryID *int`。`publicCatalogDefinition`纳入默认ID及路径语义版本，沿用既有确认版本/冲突机制。
+
+- [ ] 在现有目录和intake fixture中新增红测：草稿可空；启用后发布空/部分/停用CTI拒绝；用户无CTI提交时生成最深节点；伪造不一致CTI拒绝；目录默认值改后旧确认版本拒绝且无工单/审计/Outbox半写入。
+- [ ] 运行 `go test ./handlers/service_catalog ./handlers/intake -run 'CTI|Catalog' -count=1`，记录功能失败。
+- [ ] 调整 `resolver.go` 当前“分类先、目录后”顺序：先校验目录权限/版本，再取默认分类，构造规范CTI输入，再调用现有classification resolver。独立报障仍接受无/部分CTI。目录存在默认值时，以目录为初始权威；客户端提供相同路径可兼容，不同路径返回冲突。未启用且旧目录无默认值时保留既有行为。
+
+```text
+catalog request → catalog owner resolves version/default
+                → classification owner resolves full path
+                → existing professional creator prepares WorkItem
+ordinary report → classification owner resolves optional path
+                → same professional creator / transaction / outbox
+```
+
+- [ ] 字段贯穿创建/更新/复制/读取DTO、Ent映射、预检和版本；禁止前端仅提交默认ID而后端忽略。目录修改不更新旧工单。
+- [ ] 测试事务竞争：目录默认变更vs申请，祖先停用vs申请；旧幂等回执应返回原结果，不按新目录重新创建。AI/intake快照不泄露或复制第二份可写分类。
+- [ ] 隔离PG验证通过后提交 `feat: apply catalog CTI defaults through unified intake`。
+
+## Task A4：三级维护界面与共享选择器
+
+**Files:** 修改 `src/app/(main)/admin/ticket-categories/page.tsx`、`categoryTreeUtils.ts`、`src/lib/api/ticket-category-api.ts`；新增同路由 `components/CategoryTreePanel.tsx`、`CategoryDetailsPanel.tsx`、`CategoryEditor.tsx`；新增 `src/components/business/CTISelector.tsx` 及相邻 `__tests__/CTISelector.test.tsx`；修改 `admin/service-catalogs/page.tsx`、`types/service-catalog.ts`、`lib/api/service-catalog-api.ts`；报障/坐席表单消费处通过实际引用检索逐一列入提交说明。
+
+- [ ] 组件红测：三级节点没有新增下级；选择二级在requiredDepth=0合法而requiredDepth=3报错；部门说明不暗示分派；异步失败不显示空结果；改名/编码只读/冲突保留输入。
+
+```tsx
+it('allows no classification for an ordinary report', () => {
+  const onChange = jest.fn();
+  render(<CTISelector value={null} onChange={onChange} requiredDepth={0} />);
+  expect(screen.queryByText('请选择完整三级分类')).not.toBeInTheDocument();
+});
+```
+
+- [ ] 运行 `npm test -- --runInBand --runTestsByPath src/components/business/__tests__/CTISelector.test.tsx`；fixture使用现有API mocking惯例，不能真实连接共享服务。
+- [ ] 构建左树右详情、完整路径搜索、明确C/T/I标题、窄屏切换与键盘操作。树只导航，详情和编辑使用原API；保留状态/错误，不做分派或SLA业务复制。
+- [ ] 目录管理提供默认CTI选择；目录申请不重复问用户CTI；普通报障允许“不确定”。引用页签在B3真实接口就绪前不显示假计数，明确尚未可用。
+- [ ] 运行 type-check、目标组件测试和隔离浏览器测试 `tests/e2e/flows/cti-catalog.spec.ts`：建三级→发布目录→用户申请→详情完整路径。验证A/C主题、移动布局及键盘，不创建真实权限开通请求。
+- [ ] 提交 `feat: present CTI maintenance and catalog defaults`。记录阶段A验收，明确B未完成。
+
+## Task B1：分类纠正的专业命令与审计
+
+**Files:** 修改 `service/incident_service.go`、`service/ticket_service.go`、`handlers/problem/metadata.go`、`handlers/change/metadata.go`、`handlers/service_request/{service,handler}.go` 的专业入口（分类纠正实现放入新增 `handlers/service_request/classification.go`，由该服务拥有，不经generic更新），以及相应DTO/权限动作投影；新增 `tests/integration/cti_correction_postgres_test.go`。不能让专业类通过generic TicketService绕过已有拒绝规则。
+
+- [ ] 写红测 `TestCTICorrectionPostgres`：新Requested Item完整→空/部分拒绝、完整→完整成功；Incident resolved未closed可修正CTI；closed/cancelled不新增修改通道；跨租户/无权/过期版本失败；原因空失败。
+- [ ] 在现有变更回执/专业命令中加入原因与路径验证，优先复用Incident已有专业修改入口（已核实resolved后可更新），不默认新增接口。各专业拥有者仍控制状态和权限。
+- [ ] 原子持久化最深节点、版本及既有审计，记录actor/source/原因/前后路径；同一次重试复用已有幂等语义。审计失败整笔回滚。
+- [ ] 验证分类前后 `assignee_id`、SLA时间/周期、BPMN实例数、目录默认ID不变；并发纠正只有一个预期版本成功。历史在途单不新增完整性阻断。
+- [ ] 前端只有后端授权动作允许时显示纠正入口，复用CTISelector并填写原因；显示停用的既有合法分类但不能重新选为新值。
+- [ ] 运行受影响专业metadata测试及隔离PG测试后提交 `feat: govern WorkItem classification corrections`。
+
+## Task B2：专业完成质量与不可变启用边界
+
+**Files:** 新 `service/cti_governance.go`、`cti_governance_test.go`；复用 `service/system_config_service.go`，修改专业完成拥有者：`service/ticket_service.go`、`service/incident_commands.go` 的close命令、`handlers/problem/lifecycle.go`、`handlers/change/commands.go`；新增 `tests/integration/cti_completion_postgres_test.go`。调用位于专业命令事务内，不能只在HTTP控制器校验。
+
+**Interfaces:** 新 `CTIGovernance` 类型含 `CatalogEnforced bool`、`CompletionEnforced bool`、`EffectiveFrom *time.Time`；新纯函数 `RequiresCTICompletion(policy CTIGovernance, createdAt time.Time, recordClass, action string) (bool,error)`，action采用已有专业命令语义，未知class/action失败。时间相等属于新单，使用服务端存储createdAt，取消/重复/误报沿专业终止命令处理。
+
+- [ ] 红测以下确定边界：截止前1ns不检查、相等检查；暂停不检查，恢复仍原截止；旧单重开不入新组；配置重复/损坏报错，不默认为关闭。
+
+```go
+func TestCTICutoffIncludesExactInstant(t *testing.T) {
+    cut := time.Date(2026, 9, 17, 0, 0, 0, 0, time.UTC)
+    p := CTIGovernance{CompletionEnforced: true, EffectiveFrom: &cut}
+    needed, err := RequiresCTICompletion(p, cut, "incident", "close")
+    if err != nil || !needed { t.Fatalf("exact cutoff must apply: %v %v", needed, err) }
+}
+```
+
+- [ ] 运行 `go test ./service -run 'TestCTI(Cutoff|Completion|Governance)' -count=1` 确认红测。
+- [ ] 将检查置于各专业状态写入的同一事务；Incident resolve不加硬门禁，close检查；Generic resolve和直接close覆盖；Problem/Change最终close检查；Requester交付规则不重写，CatalogTask不新增检查。
+- [ ] 启用配置受同一事务锁保护并审计：第一次启用设置截止，以后只能启停布尔值，不能改时间；通用SystemConfig写入/导入API拒绝保留键绕过。回退暂停不撤销已完成动作，恢复前盘点暂停期在途单并提示补齐。
+- [ ] 真实路径验证：不完整Incident能resolve，记录恢复事实/SLA，close被拒绝，补分类后close成功且SLA时间不变；分类停用前已合法引用的新在途单可close；专业原有证据不足即使CTI完整仍拒绝。
+- [ ] 覆盖手工、批量、流程回调、自动关闭和工具入口；没有可达关闭路径绕过检查。提交 `feat: enforce domain-owned CTI completion quality`。
+
+## Task B3：规则精确/子树语义与真实关联查询
+
+**Files:** 修改 `service/ticket_assignment_rule_service.go`、`service/ticket_sla_service.go`、对应规则DTO/schema及API管理界面；扩展A2的分类引用服务/controller，新增 `service/ticket_category_policy_test.go`、`tests/integration/cti_rule_scope_postgres_test.go`。新增scope持久化用后续canonical迁移，不改A2已落库SQL。
+
+- [ ] 写纯函数红测：精确只匹配selectedID；subtree匹配完整路径任一祖先；未知scope拒绝。写PG回归覆盖旧规则的实际命中集合，不能先假设旧规则全部exact。
+
+```go
+func TestCTIScopeDistinguishesAncestor(t *testing.T) {
+    path := []CTINode{{ID: 1}, {ID: 2}, {ID: 3}}
+    exact, err := MatchCTI(path, 1, CTIExact)
+    if err != nil || exact { t.Fatal("exact matched ancestor") }
+    subtree, err := MatchCTI(path, 1, CTISubtree)
+    if err != nil || !subtree { t.Fatal("subtree missed ancestor") }
+}
+```
+
+- [ ] 运行 `go test ./service -run 'TestCTIScope' -count=1`；实现只处理分类条件，规则优先级由原所有者保留。
+- [ ] 审核SLA分类匹配是否扫描正确候选（当前代码先取活跃候选再判断category，不能以注释证明正确）；修复本任务必要命中缺口并测试多候选/优先级。旧字符串分类条件保留其实际语义，歧义对象阻止迁移，不静默转ID/扩大集合。
+- [ ] 分类详情引用接口返回授权可见目录/规则列表、分页和总数；所有者提供查询契约，聚合层不跨域调用repository。内部维护引用保护须覆盖所有真实引用，即使当前actor无权查看，返回通用“存在引用”而不泄露对象名称/计数。
+- [ ] 规则编辑明确“仅当前/包含下级”，分类详情提供管理链接。引用查询失败明确报错；disabled/default_resolver等历史描述字段不伪装成已生效规则。
+- [ ] 验证跨租户与RBAC、旧规则命中集一致、新范围命中、改分类无自动再执行；提交 `feat: expose CTI rule scope and authorized references`。
+
+## Task B4：全链路验收、文档与受控启用准备
+
+**Files:** 新 `itsm-frontend/tests/e2e/flows/cti-governance.spec.ts`；维护本计划执行表、设计状态、`AGENTS.md`/`CLAUDE.md`、`docs/DEVELOPMENT_GUIDE.md`、`docs/README.md`。共享写入操作清单在本计划执行记录下维护，包含每个target fingerprint，不新建第二份环境权威。
+
+- [ ] 针对两租户隔离fixture执行完整路径；流程只用安全测试履约，不调用真实AD/邮件/权限开通。每步记录账户/菜单/数据/动作/预期/证据。
+- [ ] 必验矩阵：普通用户未分类提交；目录预分类；工程师修正；Incident恢复与关闭；Generic完成；Problem/Change保留专业证据；旧单兼容；RequestedItem分类退化拒绝；分类移动/停用/删除；精确/子树；回退/恢复。
+- [ ] 新e2e应使用实际UI控件，例如：
+
+```ts
+await page.getByRole('button', {name: '关闭工单', exact: true}).click();
+await expect(page.getByText('请补齐三级工单分类', {exact: true})).toBeVisible();
+// 同时通过现有隔离fixture的只读数据库断言核对状态/审计无半写入。
+```
+
+- [ ] 执行受影响Go测试、生成检查、前端type-check与目标Jest/Playwright。浏览器验收失败不得以API成功代替；列出未验证功能。
+- [ ] 交付可审阅启用清单：备份/恢复证据、实例/库/schema/租户、schema迁移及verify、已发布目录补配ID列表、唯一写入者、配置截止时间、分阶段开关、暂停方式和复验。没有目标写入授权只交付清单，不执行。
+- [ ] 按证据更新设计为implemented时必须区分代码交付与目标启用状态；入口文档不写全局“所有环境已升级”。运行 `git diff --check`、请求独立代码review并处理重要问题，提交 `test: verify CTI governance journeys and rollout guide`，提交PR由用户按既有交付授权决定推送/合并。
+
+## 自检覆盖与执行记录
+
+| 设计内容 | 落地任务 |
+| --- | --- |
+| CTI/目录/专业类型边界，旧文档取代 | A1、A4、B4 |
+| 数据结构、路径、三级约束、引用维护 | A2 |
+| 目录默认值、发布、统一创建 | A3、A4 |
+| 纠正/终态/RequestedItem完整性 | B1 |
+| 专业完成时点、新旧、暂停恢复 | B2 |
+| 分派/SLA范围、真实引用 | B3 |
+| 权限、事务竞争、UI验收、部署边界 | A2–B4 |
+
+执行记录初始状态：A1–A4、B1–B4均未开始。本轮仅验证计划引用/格式及设计覆盖，未运行生产代码测试、迁移或业务验收。
+
+
+### 测试命令与目标保护
+
+Go命令在 `itsm-backend` 执行，npm命令在 `itsm-frontend` 执行。新增PG测试沿用 `tests/integration/catalog_reader_postgres_test.go` 的连接、角色及fixture机制，先阅读其环境变量/skip条件再执行；没有隔离目标时必须报告未运行，不能把skip当通过。仅在确认目标允许测试写入后执行：
+
+```bash
+go test ./tests/integration -run 'TestCTI(Structure|Correction|Completion|Scope|Catalog|Rule)' -count=1 -v
+npm run type-check
+npx playwright test tests/e2e/flows/cti-catalog.spec.ts tests/e2e/flows/cti-governance.spec.ts
+```
+
+PG测试stdout必须证明测试实际运行、RLS身份和隔离target fingerprint匹配；日志不得含密码/连接串。任何红测应先区分基线失败与本任务新增失败。迁移命令使用既有dev-commands-reference与canonical runner，不提供绕过账本的裸SQL执行捷径。

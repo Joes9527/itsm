@@ -1,6 +1,8 @@
 # ITSM 文档中心
 
-- [CTI 三级分类与目录、完成质量设计（draft，书面待审）](superpowers/specs/2026-09-17-cti-governance-design.md)：已确认业务方向、两阶段范围、历史兼容与验收；不是部署证据。
+- [CTI 治理实施计划（draft，未执行）](superpowers/plans/2026-09-17-cti-governance.md)：A1–A4 基础/创建，B1–B4 处理/完成，任务依赖与真实验收。
+
+- [CTI 三级分类与目录、完成质量设计（accepted，未实现）](superpowers/specs/2026-09-17-cti-governance-design.md)：已确认业务方向、两阶段范围、历史兼容与验收；不是部署证据。
 
 > **开发／迁移任务先读：[当前结构目标047](development-environment.md#selected-schema-target-047)及[实际数据库状态](superpowers/plans/2026-09-15-migration-validation-ledger.md#schema-target-status)。目标版本与已部署状态分开记录。**
 
