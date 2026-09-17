@@ -1462,6 +1462,11 @@ func (e *CustomProcessEngine) executeClaimedCallback(ctx context.Context, worker
 
 	claimedRow.Variables, err = filterPersistedBPMNCallbackPayload(handler, claimedRow.Action, claimedRow.Variables)
 	if err != nil {
+		if isBPMNCallbackUserInputError(err) {
+			// The frozen input cannot be repaired by retrying. This attempt has
+			// not called the handler; earlier attempts may still have had effects.
+			return bpmnCallbackExecutionResult{Effect: bpmn.BlockedEffect(bpmn.CallbackBlockHandlerContract, "frozen callback input rejected before handler execution")}, nil
+		}
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackHandlerError(err)
 	}
 	claimedRow.Variables["bpmn_callback_execution_key"] = claimedRow.ExecutionKey
