@@ -620,3 +620,4 @@ WSL最终副本与角色已归档到既有私有证据目录，最终副本dump 
   - §2.2 门禁：新增定义级 `workItemLifecycleContract=generic_fulfillment_v1` 与任务级 `workItemPrerequisite=assigned|in_progress|escalated|resolved|closed`，**发布期拒绝**未知值/专业class/handler 混用；同一事务纯规则门禁（建议 `service/generic_workflow_gate.go`），BPMN 命令、只读 UI actions 与 Ticket 领域命令共用；锁序 WorkItem→instance→task，CAS/operation receipt 去重；拒绝客户端改写 `approval_required`/`need_escalate`/`approvalResult`；旧定义沿用原逻辑。
   - **必修缺陷：** 网关条件语法——定义写 `<bpmn:body>${...}</bpmn:body>`，而 `BPMNConditionExpression.Expression` 的 tag 为 `xml:",chardata"`（`service/bpmn_types.go:355-358`），消费点 `bpmn_process_engine.go:1182/2498/2516`，故 definition65 的**三个网关当前均不可用**。
 - **待办：** A3 实现与切换、A4、库用途台账补记、以及三处较早库以 **KAF 命名**迁移为头（`019_kaf_execution_integrity_rls`）的血统确认。
+- **执行交接：** 包1 的实施交接（背景／基线／进度／环境事实／陷阱／A3 步骤2–8 插入点／阻塞）见 [包1（Dev 流程阻塞修复）实施交接](./2026-09-16-package-a-handoff.md)。该文是执行交接，状态以本台账为准。
