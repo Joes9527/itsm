@@ -1,5 +1,9 @@
 # ITSM 文档中心
 
+- [CTI 治理实施计划（draft，未执行）](superpowers/plans/2026-09-17-cti-governance.md)：A1–A4 基础/创建，B1–B4 处理/完成，任务依赖与真实验收。
+
+- [CTI 三级分类与目录、完成质量设计（accepted，未实现）](superpowers/specs/2026-09-17-cti-governance-design.md)：已确认业务方向、两阶段范围、历史兼容与验收；不是部署证据。
+
 > **开发／迁移任务先读：[当前结构目标047](development-environment.md#selected-schema-target-047)及[实际数据库状态](superpowers/plans/2026-09-15-migration-validation-ledger.md#schema-target-status)。目标版本与已部署状态分开记录。**
 
 - [Ticket 详情体验统一实施计划](./superpowers/plans/2026-09-15-ticket-detail-experience-unification.md)：六项任务及最终复审完成；浏览器 7/7、最终并发回归 98/98，已提交 PR #35。
@@ -40,6 +44,7 @@
 - [开发指南](./development.md): 本地开发、前后端命令、调试和常见问题。
 - [数据库说明](./database.md): 数据库迁移、备份和模型说明。
 - [运维手册](./operations.md): 日志、健康检查、备份、恢复和故障排查。
+- [CTI 治理受控启用清单](./operations/cti-governance-rollout-checklist.md): 迁移 048 的前置体检、唯一写入者、已发布目录补配清单、分阶段开关与暂停、回退与复验（**代码已交付、目标未启用**）。
 - [v1.0 GA 收口验收指南](./v1-ga-readiness.md): 默认能力、连接器、AI 审计和部署模式检查。
 - [文档命名与维护规范](./documentation-style-guide.md): 目录分层、命名规则和归档标准。
 

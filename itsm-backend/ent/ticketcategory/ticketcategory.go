@@ -54,6 +54,8 @@ const (
 	EdgeParent = "parent"
 	// EdgeDepartment holds the string denoting the department edge name in mutations.
 	EdgeDepartment = "department"
+	// EdgeDefaultCatalogs holds the string denoting the default_catalogs edge name in mutations.
+	EdgeDefaultCatalogs = "default_catalogs"
 	// Table holds the table name of the ticketcategory in the database.
 	Table = "ticket_categories"
 	// TicketsTable is the table that holds the tickets relation/edge.
@@ -78,6 +80,13 @@ const (
 	DepartmentInverseTable = "departments"
 	// DepartmentColumn is the table column denoting the department relation/edge.
 	DepartmentColumn = "department_id"
+	// DefaultCatalogsTable is the table that holds the default_catalogs relation/edge.
+	DefaultCatalogsTable = "service_catalogs"
+	// DefaultCatalogsInverseTable is the table name for the ServiceCatalog entity.
+	// It exists in this package in order to avoid circular dependency with the "servicecatalog" package.
+	DefaultCatalogsInverseTable = "service_catalogs"
+	// DefaultCatalogsColumn is the table column denoting the default_catalogs relation/edge.
+	DefaultCatalogsColumn = "default_ticket_category_id"
 )
 
 // Columns holds all SQL columns for ticketcategory fields.
@@ -263,6 +272,20 @@ func ByDepartmentField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newDepartmentStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// ByDefaultCatalogsCount orders the results by default_catalogs count.
+func ByDefaultCatalogsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newDefaultCatalogsStep(), opts...)
+	}
+}
+
+// ByDefaultCatalogs orders the results by default_catalogs terms.
+func ByDefaultCatalogs(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newDefaultCatalogsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newTicketsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -289,5 +312,12 @@ func newDepartmentStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(DepartmentInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, DepartmentTable, DepartmentColumn),
+	)
+}
+func newDefaultCatalogsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(DefaultCatalogsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, DefaultCatalogsTable, DefaultCatalogsColumn),
 	)
 }

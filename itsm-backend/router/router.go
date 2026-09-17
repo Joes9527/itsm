@@ -529,6 +529,8 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				categories.GET("/:id", middleware.RequirePermission("ticket_category", "read"), config.TicketCategoryController.GetCategory)
 				categories.PUT("/:id", middleware.RequirePermission("ticket_category", "update"), config.TicketCategoryController.UpdateCategory)
 				categories.PUT("/:id/move", middleware.RequirePermission("ticket_category", "update"), config.TicketCategoryController.MoveCategory)
+				// 引用清单：明细按调用者的各模块 read 权限过滤，无权时只报告“存在引用”。
+				categories.GET("/:id/references", middleware.RequirePermission("ticket_category", "read"), config.TicketCategoryController.GetCategoryReferences)
 				categories.DELETE("/:id", middleware.RequirePermission("ticket_category", "delete"), config.TicketCategoryController.DeleteCategory)
 			}
 		}
@@ -717,6 +719,8 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				sysConfigs.GET("/init", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.InitDefaultConfigs)
 				sysConfigs.GET("/:id", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.GetConfig)
 				sysConfigs.GET("/key/:key", middleware.RequirePermission("system_config", "read"), config.SystemConfigController.GetConfigByKey)
+				// CTI 分类治理的受控启用：静态路径，避免与 /:id 冲突，且不接受 effectiveFrom。
+				sysConfigs.PUT("/governance/cti", middleware.RequirePermission("system_config", "update"), config.SystemConfigController.SetCTIGovernance)
 				sysConfigs.PUT("/:id", middleware.RequirePermission("system_config", "update"), config.SystemConfigController.UpdateConfig)
 				sysConfigs.PUT("/batch", middleware.RequirePermission("system_config", "update"), config.SystemConfigController.BatchUpdateConfigs)
 
@@ -893,6 +897,8 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				sr.GET("/by-ticket/:ticketId", middleware.RequirePermission("service_request", "read"), config.ServiceRequestHandler.GetByTicket)
 				sr.GET("/:id", middleware.RequirePermission("service_request", "read"), config.ServiceRequestHandler.Get)
 				sr.PUT("/:id", middleware.RequirePermission("service_request", "write"), config.ServiceRequestHandler.Update)
+				// 分类纠正：申请项必须保持完整三级，因此独立于通用更新端点。
+				sr.PUT("/:id/classification", middleware.RequirePermission("service_request", "write"), config.ServiceRequestHandler.CorrectClassification)
 				sr.DELETE("/:id", middleware.RequirePermission("service_request", "delete"), config.ServiceRequestHandler.Delete)
 			}
 

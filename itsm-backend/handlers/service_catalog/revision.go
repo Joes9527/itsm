@@ -29,6 +29,20 @@ type publicCatalogDefinition struct {
 	IsActive             bool                    `json:"isActive"`
 	Fields               []publicFieldDefinition `json:"fields"`
 	RoutingRevision      string                  `json:"routingRevision"`
+	// DefaultTicketCategoryID 与派生路径属于公开确认契约：改默认分类、改名、改路径或
+	// 停用节点都会改变 CatalogVersion，从而让旧确认失效，而不是按新目录悄悄创建。
+	DefaultTicketCategoryID *int                `json:"defaultTicketCategoryId"`
+	DefaultCTIPath          []publicCTIPathNode `json:"defaultCTIPath"`
+}
+
+// publicCTIPathNode 是默认分类路径的公开指纹（只含展示与状态，不含写入权威）。
+type publicCTIPathNode struct {
+	ID       int    `json:"id"`
+	ParentID int    `json:"parentId"`
+	Level    int    `json:"level"`
+	Name     string `json:"name"`
+	Code     string `json:"code"`
+	IsActive bool   `json:"isActive"`
 }
 type publicFieldDefinition struct {
 	ID        int               `json:"id"`

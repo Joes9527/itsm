@@ -1,6 +1,9 @@
 import {
   buildCategoryTree,
+  canAddChild,
   collectDescendantIds,
+  filterByPath,
+  flattenCategoryTree,
   type CategoryTreeInput,
 } from '../categoryTreeUtils';
 
@@ -53,5 +56,46 @@ describe('collectDescendantIds', () => {
   it('returns only self for leaf node', () => {
     const ids = collectDescendantIds(flat, 5);
     expect(ids).toEqual(new Set([5]));
+  });
+});
+
+describe('flattenCategoryTree', () => {
+  it('derives root-to-node paths without inventing levels', () => {
+    const rows = flattenCategoryTree(buildCategoryTree(flat));
+    const rack = rows.find(row => row.id === 5)!;
+    expect(rack.pathIds).toEqual([1, 3, 5]);
+    expect(rack.pathLabel).toBe('硬件 / 服务器 / 机架服务器');
+  });
+
+  it('keeps every node (including inactive ones) addressable by id', () => {
+    const rows = flattenCategoryTree(buildCategoryTree(flat));
+    expect(rows.map(row => row.id).sort()).toEqual([1, 2, 3, 4, 5]);
+  });
+});
+
+describe('canAddChild', () => {
+  it('allows children on levels one and two only', () => {
+    expect(canAddChild(1)).toBe(true);
+    expect(canAddChild(2)).toBe(true);
+    expect(canAddChild(3)).toBe(false);
+  });
+
+  it('treats a missing level as level one instead of allowing unlimited depth', () => {
+    expect(canAddChild(undefined)).toBe(true);
+    expect(canAddChild(4)).toBe(false);
+  });
+});
+
+describe('filterByPath', () => {
+  it('matches the full path so duplicate leaf names stay distinguishable', () => {
+    const rows = flattenCategoryTree(buildCategoryTree(flat));
+    const matched = filterByPath(rows, '硬件 / 服务器');
+    expect(matched.map(row => row.id)).toEqual([3, 5]);
+  });
+
+  it('matches code and stays case-insensitive', () => {
+    const rows = flattenCategoryTree(buildCategoryTree(flat));
+    expect(filterByPath(rows, '机架')).toHaveLength(1);
+    expect(filterByPath(rows, '')).toHaveLength(rows.length);
   });
 });

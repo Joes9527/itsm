@@ -521,11 +521,17 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
   // 保存事件分类
   const handleSaveCategory = async (values: any) => {
     if (!data) return;
+    const classificationTouched = categoryForm.isFieldTouched('classification');
+    // 分类调整必须说明原因：与后端同一契约。
+    if (classificationTouched && !String(values.classificationReason ?? '').trim()) {
+      message.error('调整分类时必须填写原因');
+      return;
+    }
     setSavingAnalysis(true);
     try {
       await IncidentAPI.updateIncident(data.id, {
         version: data.version,
-        ...classificationUpdate(values.classification, categoryForm.isFieldTouched('classification')),
+        ...classificationUpdate(values.classification, classificationTouched, values.classificationReason),
         urgency: values.urgency,
         impact: values.impact,
       });
@@ -1287,6 +1293,13 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
         <Form form={categoryForm} layout='vertical' onFinish={handleSaveCategory}>
           <Form.Item name="classification" label="事件分类">
             <WorkItemClassificationSelect initialCategoryId={data?.categoryId} />
+          </Form.Item>
+          <Form.Item
+            name="classificationReason"
+            label="分类调整原因"
+            tooltip="仅在调整分类时必填；后端会连同前后完整路径一起留痕"
+          >
+            <Input placeholder="例如：报障入口选错分类" maxLength={500} />
           </Form.Item>
           <Form.Item name='urgency' label='紧急程度' rules={[{ required: true }]}>
             <Select placeholder='选择紧急程度'>

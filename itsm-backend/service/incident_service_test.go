@@ -719,7 +719,7 @@ func TestIncidentService_WorkflowMethods_CrossTenantFailClosed(t *testing.T) {
 
 	_, err = service.UpdateIncident(ctx, entity.ID, &dto.UpdateIncidentRequest{Version: 1}, other.ID)
 	assert.Error(t, err)
-	_, err = service.UpdateClassification(ctx, entity.ID, other.ID, 1, "x", "y")
+	_, err = service.UpdateClassification(ctx, entity.ID, other.ID, 1, 999999, "cross-tenant correction must fail")
 	assert.Error(t, err)
 
 	after, err := client.Incident.Get(ctx, entity.ID)

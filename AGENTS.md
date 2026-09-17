@@ -92,6 +92,22 @@ These decisions extend the contract above. Read the linked designs before changi
 - **Bound fulfillment tasks:** explicit `assigneeSource=work_item_assignee` uses the current WorkItem owner, with no second mutable task owner. This binding does not replace approval/requester/candidate participation rules. Freeze terminal responsible person and actual actor; missing evidence never falls back to the current owner. Preserve professional command authorization, operation receipts, reason/version and tenant/MSP/execution scope; one transactional owner write, audit and Outbox. Do not rewrite old runs. [Binding design](docs/superpowers/specs/2026-09-14-work-item-task-assignment-design.md), [decisions and evidence](docs/review/2026-09-15-work-item-task-assignment-report.md).
 - **Controlled retirement:** preserve historical SQL/checksums and truthful receipts. Separate transactional structure preparation from full business acceptance and controlled retirement; all migration write paths, including rollback/reset, enforce stage dependencies. Read-only classification precedes bootstrap writes. General pre-preparation active-process retirement remains unaccepted while BL-WI-PROCESS-AUDIT-CONTINUITY is deferred. Successor rereview must not be represented as independent third-party review. Real target deployment/retirement and environment deletion require separate authorization; isolated or dedicated-database evidence does not grant it. [Design](docs/superpowers/specs/2026-09-11-workitem-controlled-retirement-design.md), [plan and validation evidence](docs/superpowers/plans/2026-09-11-workitem-controlled-retirement.md).
 
+## CTI governance contract
+
+The [CTI governance design](docs/superpowers/specs/2026-09-17-cti-governance-design.md) records the accepted direction and review clarifications. Read it before changing classification, catalog defaults or completion gates.
+
+**Code is delivered; no target is enabled.** The implementation exists on the CTI branch (PR #48) with unit, HTTP-contract and isolated-PostgreSQL evidence. Migration `048_cti_governance` has **not** been applied to any shared or production database, and the completion gate is **not** enabled for any tenant. Never describe this as "upgraded everywhere"; separate code delivery from target enablement in status reports and docs.
+
+Contract points that follow from the design and must hold in every change:
+
+- A WorkItem stores only the **deepest selected classification node**; the Category/Type/Item path is a derived projection, never a second written authority.
+- Classification trees are at most three levels, tenant-scoped, with codes unique per tenant and immutable, and nodes that are still referenced cannot be deleted or moved. Deactivation stops new selection without rewriting history.
+- The completion quality gate applies at **completion** time, per tenant, against an immutable first-enable cutoff, and is dispatched by record class plus action with explicit fail-closed handling of unknown combinations. Service recovery actions stay ungated.
+- Completing a professional record requires a complete three-level classification; correcting a classification requires a reason and records the before/after path. Requested Items additionally may not be reclassified to a partial or empty classification.
+- Rule `category_id` conditions are exact by default; subtree matching must be declared explicitly and unknown scopes fail closed. Reference listings expose names and counts only to callers holding that module's read permission, while reference-based maintenance protection always uses the unfiltered scan.
+
+Rollout, backfill, staged switches, pause and re-verification steps live in the [CTI governance rollout checklist](docs/operations/cti-governance-rollout-checklist.md); step-by-step execution evidence lives in the [implementation plan](docs/superpowers/plans/2026-09-17-cti-governance.md).
+
 ## Required reading by task
 
 | Task | Read before acting |

@@ -1074,8 +1074,14 @@ const IncidentFormModal: React.FC<{
     setLoading(true);
     try {
       if (incident) {
-        const { classification, ...payload } = values;
-        await IncidentAPI.updateIncident(incident.id, { ...payload, version: incident.version, ...classificationUpdate(classification, form.isFieldTouched('classification')) });
+        const { classification, classificationReason, ...payload } = values;
+        const classificationTouched = form.isFieldTouched('classification');
+        // 分类调整必须说明原因：与后端同一契约（新建时不适用）。
+        if (classificationTouched && !String(classificationReason ?? '').trim()) {
+          message.error('调整分类时必须填写原因');
+          return;
+        }
+        await IncidentAPI.updateIncident(incident.id, { ...payload, version: incident.version, ...classificationUpdate(classification, classificationTouched, classificationReason) });
       } else {
         const { classification, ...payload } = values;
         await creation.submit({ ...payload, cti: classificationInput(classification), source: 'manual', type: 'incident' }, IncidentAPI.createIncident, onSuccess);
@@ -1141,6 +1147,15 @@ const IncidentFormModal: React.FC<{
             <Form.Item name="classification" label="分类">
               <WorkItemClassificationSelect initialCategoryId={incident?.categoryId} />
             </Form.Item>
+            {incident ? (
+              <Form.Item
+                name="classificationReason"
+                label="分类调整原因"
+                tooltip="仅在调整分类时必填；后端会连同前后完整路径一起留痕"
+              >
+                <Input placeholder="例如：报障入口选错分类" maxLength={500} />
+              </Form.Item>
+            ) : null}
           </Col>
           <Col span={12}>
 

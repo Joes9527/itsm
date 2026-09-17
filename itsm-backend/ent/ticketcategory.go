@@ -22,7 +22,7 @@ type TicketCategory struct {
 	Name string `json:"name,omitempty"`
 	// 分类描述
 	Description string `json:"description,omitempty"`
-	// 分类代码
+	// 分类代码（租户内唯一，创建后不可修改）
 	Code string `json:"code,omitempty"`
 	// 父分类ID
 	ParentID int `json:"parent_id,omitempty"`
@@ -66,9 +66,11 @@ type TicketCategoryEdges struct {
 	Parent *TicketCategory `json:"parent,omitempty"`
 	// 所属部门
 	Department *Department `json:"department,omitempty"`
+	// 把该分类作为默认 CTI 的服务目录项
+	DefaultCatalogs []*ServiceCatalog `json:"default_catalogs,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [4]bool
+	loadedTypes [5]bool
 }
 
 // TicketsOrErr returns the Tickets value or an error if the edge
@@ -109,6 +111,15 @@ func (e TicketCategoryEdges) DepartmentOrErr() (*Department, error) {
 		return nil, &NotFoundError{label: department.Label}
 	}
 	return nil, &NotLoadedError{edge: "department"}
+}
+
+// DefaultCatalogsOrErr returns the DefaultCatalogs value or an error if the edge
+// was not loaded in eager-loading.
+func (e TicketCategoryEdges) DefaultCatalogsOrErr() ([]*ServiceCatalog, error) {
+	if e.loadedTypes[4] {
+		return e.DefaultCatalogs, nil
+	}
+	return nil, &NotLoadedError{edge: "default_catalogs"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -272,6 +283,11 @@ func (_m *TicketCategory) QueryParent() *TicketCategoryQuery {
 // QueryDepartment queries the "department" edge of the TicketCategory entity.
 func (_m *TicketCategory) QueryDepartment() *DepartmentQuery {
 	return NewTicketCategoryClient(_m.config).QueryDepartment(_m)
+}
+
+// QueryDefaultCatalogs queries the "default_catalogs" edge of the TicketCategory entity.
+func (_m *TicketCategory) QueryDefaultCatalogs() *ServiceCatalogQuery {
+	return NewTicketCategoryClient(_m.config).QueryDefaultCatalogs(_m)
 }
 
 // Update returns a builder for updating this TicketCategory.

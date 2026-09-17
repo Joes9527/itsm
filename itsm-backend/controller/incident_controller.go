@@ -1195,7 +1195,7 @@ func (c *IncidentController) GetClassification(ctx *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "事件ID"
-// @Param request body object{category=string,subcategory=string} true "分类信息"
+// @Param request body object{categoryId=int,reason=string,version=int} true "分类纠正（最深节点 ID + 原因）"
 // @Success 200 {object} common.Response
 // @Failure 400 {object} common.Response
 // @Failure 404 {object} common.Response
@@ -1210,9 +1210,12 @@ func (c *IncidentController) UpdateClassification(ctx *gin.Context) {
 	}
 
 	var req struct {
-		Category    string `json:"category"`
-		Subcategory string `json:"subcategory"`
-		Version     int    `json:"version" binding:"required,gt=0"`
+		// categoryId 是三级分类的**最深节点 ID**（0 表示清空分类）；不再接受显示名称，
+		// 避免名称解析歧义与"空载荷静默成功"。
+		CategoryID int `json:"categoryId"`
+		Version    int `json:"version" binding:"required,gt=0"`
+		// reason 必填：分类纠正必须说明原因（B1 治理契约）。
+		Reason string `json:"reason" binding:"required,max=500"`
 	}
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		c.logger.Errorw("Invalid request body", "error", err)
@@ -1225,7 +1228,7 @@ func (c *IncidentController) UpdateClassification(ctx *gin.Context) {
 		return
 	}
 
-	_, err = c.incidentService.UpdateClassification(ctx.Request.Context(), id, tenantID, req.Version, req.Category, req.Subcategory)
+	_, err = c.incidentService.UpdateClassification(ctx.Request.Context(), id, tenantID, req.Version, req.CategoryID, req.Reason)
 	if err != nil {
 		respondIncidentMutationError(ctx, err)
 		return

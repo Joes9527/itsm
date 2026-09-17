@@ -190,11 +190,14 @@ type CreateWorkItemCommand struct {
 	Description       string               `json:"description,omitempty"`
 	CatalogItemID     *int                 `json:"catalogItemId,omitempty"`
 	CTI               *CTIInput            `json:"cti,omitempty"`
-	CIIDs             []int                `json:"ciIds,omitempty"`
-	FormValues        map[string]any       `json:"formValues,omitempty"`
-	SourceReference   *SourceReference     `json:"sourceReference,omitempty"`
-	Incident          *IncidentInput       `json:"incident,omitempty"`
-	Change            *ChangeInput         `json:"change,omitempty"`
+	// CatalogDefaultCategoryID 由目录所有者解析后填入（目录版本的默认三级分类最深节点），
+	// 是分类解析的初始权威。刻意不接受客户端 JSON：客户端不能自报目录默认值绕过校验。
+	CatalogDefaultCategoryID *int             `json:"-"`
+	CIIDs                    []int            `json:"ciIds,omitempty"`
+	FormValues               map[string]any   `json:"formValues,omitempty"`
+	SourceReference          *SourceReference `json:"sourceReference,omitempty"`
+	Incident                 *IncidentInput   `json:"incident,omitempty"`
+	Change                   *ChangeInput     `json:"change,omitempty"`
 }
 
 // Generic creation has no extension: its reference is the zero value {type:"", id:0}.
@@ -235,6 +238,9 @@ type ResolvedCatalog struct {
 	SLADefinitionID         *int
 	ConfigurationItemTypeID *int
 	CloudServiceID          *int
+	// DefaultTicketCategoryID 是目录声明的默认 CTI 最深节点（属于目录版本指纹），
+	// 由分类所有者在创建事务内解析为完整三级路径。
+	DefaultTicketCategoryID *int
 }
 
 type ResolvedCTI struct {

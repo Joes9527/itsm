@@ -7,9 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sync"
-	"time"
-
 	relationmetadata "itsm-backend/common/workitemrelation"
 	"itsm-backend/ent/application"
 	"itsm-backend/ent/approvalchain"
@@ -139,6 +136,8 @@ import (
 	"itsm-backend/handlers/common/accessgrant"
 	"itsm-backend/handlers/shared/slacontract"
 	"itsm-backend/internal/jsonvalue"
+	"sync"
+	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -118068,50 +118067,52 @@ func (m *SLAViolationMutation) ResetEdge(name string) error {
 // ServiceCatalogMutation represents an operation that mutates the ServiceCatalog nodes in the graph.
 type ServiceCatalogMutation struct {
 	config
-	op                      Op
-	typ                     string
-	id                      *int
-	name                    *string
-	description             *string
-	category                *string
-	icon                    *string
-	service_type            *string
-	target_class            *string
-	price                   *float64
-	addprice                *float64
-	delivery_time           *int
-	adddelivery_time        *int
-	unit                    *string
-	requires_approval       *bool
-	approval_level          *int
-	addapproval_level       *int
-	approvers               *[]int
-	appendapprovers         []int
-	process_definition_key  *string
-	sla_response_time       *int
-	addsla_response_time    *int
-	sla_resolution_time     *int
-	addsla_resolution_time  *int
-	ci_type_id              *int
-	addci_type_id           *int
-	cloud_service_id        *int
-	addcloud_service_id     *int
-	available_regions       *[]string
-	appendavailable_regions []string
-	available_specs         *[]string
-	appendavailable_specs   []string
-	status                  *string
-	tenant_id               *int
-	addtenant_id            *int
-	is_active               *bool
-	sort_order              *int
-	addsort_order           *int
-	created_at              *time.Time
-	updated_at              *time.Time
-	clearedFields           map[string]struct{}
-	done                    bool
-	oldValue                func(context.Context) (*ServiceCatalog, error)
-	predicates              []predicate.ServiceCatalog
+	op                             Op
+	typ                            string
+	id                             *int
+	name                           *string
+	description                    *string
+	category                       *string
+	icon                           *string
+	service_type                   *string
+	target_class                   *string
+	price                          *float64
+	addprice                       *float64
+	delivery_time                  *int
+	adddelivery_time               *int
+	unit                           *string
+	requires_approval              *bool
+	approval_level                 *int
+	addapproval_level              *int
+	approvers                      *[]int
+	appendapprovers                []int
+	process_definition_key         *string
+	sla_response_time              *int
+	addsla_response_time           *int
+	sla_resolution_time            *int
+	addsla_resolution_time         *int
+	ci_type_id                     *int
+	addci_type_id                  *int
+	cloud_service_id               *int
+	addcloud_service_id            *int
+	available_regions              *[]string
+	appendavailable_regions        []string
+	available_specs                *[]string
+	appendavailable_specs          []string
+	status                         *string
+	tenant_id                      *int
+	addtenant_id                   *int
+	is_active                      *bool
+	sort_order                     *int
+	addsort_order                  *int
+	created_at                     *time.Time
+	updated_at                     *time.Time
+	clearedFields                  map[string]struct{}
+	default_ticket_category        *int
+	cleareddefault_ticket_category bool
+	done                           bool
+	oldValue                       func(context.Context) (*ServiceCatalog, error)
+	predicates                     []predicate.ServiceCatalog
 }
 
 var _ ent.Mutation = (*ServiceCatalogMutation)(nil)
@@ -119469,6 +119470,55 @@ func (m *ServiceCatalogMutation) ResetSortOrder() {
 	m.addsort_order = nil
 }
 
+// SetDefaultTicketCategoryID sets the "default_ticket_category_id" field.
+func (m *ServiceCatalogMutation) SetDefaultTicketCategoryID(i int) {
+	m.default_ticket_category = &i
+}
+
+// DefaultTicketCategoryID returns the value of the "default_ticket_category_id" field in the mutation.
+func (m *ServiceCatalogMutation) DefaultTicketCategoryID() (r int, exists bool) {
+	v := m.default_ticket_category
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDefaultTicketCategoryID returns the old "default_ticket_category_id" field's value of the ServiceCatalog entity.
+// If the ServiceCatalog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceCatalogMutation) OldDefaultTicketCategoryID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDefaultTicketCategoryID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDefaultTicketCategoryID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDefaultTicketCategoryID: %w", err)
+	}
+	return oldValue.DefaultTicketCategoryID, nil
+}
+
+// ClearDefaultTicketCategoryID clears the value of the "default_ticket_category_id" field.
+func (m *ServiceCatalogMutation) ClearDefaultTicketCategoryID() {
+	m.default_ticket_category = nil
+	m.clearedFields[servicecatalog.FieldDefaultTicketCategoryID] = struct{}{}
+}
+
+// DefaultTicketCategoryIDCleared returns if the "default_ticket_category_id" field was cleared in this mutation.
+func (m *ServiceCatalogMutation) DefaultTicketCategoryIDCleared() bool {
+	_, ok := m.clearedFields[servicecatalog.FieldDefaultTicketCategoryID]
+	return ok
+}
+
+// ResetDefaultTicketCategoryID resets all changes to the "default_ticket_category_id" field.
+func (m *ServiceCatalogMutation) ResetDefaultTicketCategoryID() {
+	m.default_ticket_category = nil
+	delete(m.clearedFields, servicecatalog.FieldDefaultTicketCategoryID)
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *ServiceCatalogMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -119541,6 +119591,33 @@ func (m *ServiceCatalogMutation) ResetUpdatedAt() {
 	m.updated_at = nil
 }
 
+// ClearDefaultTicketCategory clears the "default_ticket_category" edge to the TicketCategory entity.
+func (m *ServiceCatalogMutation) ClearDefaultTicketCategory() {
+	m.cleareddefault_ticket_category = true
+	m.clearedFields[servicecatalog.FieldDefaultTicketCategoryID] = struct{}{}
+}
+
+// DefaultTicketCategoryCleared reports if the "default_ticket_category" edge to the TicketCategory entity was cleared.
+func (m *ServiceCatalogMutation) DefaultTicketCategoryCleared() bool {
+	return m.DefaultTicketCategoryIDCleared() || m.cleareddefault_ticket_category
+}
+
+// DefaultTicketCategoryIDs returns the "default_ticket_category" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// DefaultTicketCategoryID instead. It exists only for internal usage by the builders.
+func (m *ServiceCatalogMutation) DefaultTicketCategoryIDs() (ids []int) {
+	if id := m.default_ticket_category; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetDefaultTicketCategory resets all changes to the "default_ticket_category" edge.
+func (m *ServiceCatalogMutation) ResetDefaultTicketCategory() {
+	m.default_ticket_category = nil
+	m.cleareddefault_ticket_category = false
+}
+
 // Where appends a list predicates to the ServiceCatalogMutation builder.
 func (m *ServiceCatalogMutation) Where(ps ...predicate.ServiceCatalog) {
 	m.predicates = append(m.predicates, ps...)
@@ -119575,7 +119652,7 @@ func (m *ServiceCatalogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ServiceCatalogMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 26)
 	if m.name != nil {
 		fields = append(fields, servicecatalog.FieldName)
 	}
@@ -119645,6 +119722,9 @@ func (m *ServiceCatalogMutation) Fields() []string {
 	if m.sort_order != nil {
 		fields = append(fields, servicecatalog.FieldSortOrder)
 	}
+	if m.default_ticket_category != nil {
+		fields = append(fields, servicecatalog.FieldDefaultTicketCategoryID)
+	}
 	if m.created_at != nil {
 		fields = append(fields, servicecatalog.FieldCreatedAt)
 	}
@@ -119705,6 +119785,8 @@ func (m *ServiceCatalogMutation) Field(name string) (ent.Value, bool) {
 		return m.IsActive()
 	case servicecatalog.FieldSortOrder:
 		return m.SortOrder()
+	case servicecatalog.FieldDefaultTicketCategoryID:
+		return m.DefaultTicketCategoryID()
 	case servicecatalog.FieldCreatedAt:
 		return m.CreatedAt()
 	case servicecatalog.FieldUpdatedAt:
@@ -119764,6 +119846,8 @@ func (m *ServiceCatalogMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldIsActive(ctx)
 	case servicecatalog.FieldSortOrder:
 		return m.OldSortOrder(ctx)
+	case servicecatalog.FieldDefaultTicketCategoryID:
+		return m.OldDefaultTicketCategoryID(ctx)
 	case servicecatalog.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case servicecatalog.FieldUpdatedAt:
@@ -119937,6 +120021,13 @@ func (m *ServiceCatalogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSortOrder(v)
+		return nil
+	case servicecatalog.FieldDefaultTicketCategoryID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDefaultTicketCategoryID(v)
 		return nil
 	case servicecatalog.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -120138,6 +120229,9 @@ func (m *ServiceCatalogMutation) ClearedFields() []string {
 	if m.FieldCleared(servicecatalog.FieldAvailableSpecs) {
 		fields = append(fields, servicecatalog.FieldAvailableSpecs)
 	}
+	if m.FieldCleared(servicecatalog.FieldDefaultTicketCategoryID) {
+		fields = append(fields, servicecatalog.FieldDefaultTicketCategoryID)
+	}
 	return fields
 }
 
@@ -120196,6 +120290,9 @@ func (m *ServiceCatalogMutation) ClearField(name string) error {
 		return nil
 	case servicecatalog.FieldAvailableSpecs:
 		m.ClearAvailableSpecs()
+		return nil
+	case servicecatalog.FieldDefaultTicketCategoryID:
+		m.ClearDefaultTicketCategoryID()
 		return nil
 	}
 	return fmt.Errorf("unknown ServiceCatalog nullable field %s", name)
@@ -120274,6 +120371,9 @@ func (m *ServiceCatalogMutation) ResetField(name string) error {
 	case servicecatalog.FieldSortOrder:
 		m.ResetSortOrder()
 		return nil
+	case servicecatalog.FieldDefaultTicketCategoryID:
+		m.ResetDefaultTicketCategoryID()
+		return nil
 	case servicecatalog.FieldCreatedAt:
 		m.ResetCreatedAt()
 		return nil
@@ -120286,19 +120386,28 @@ func (m *ServiceCatalogMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *ServiceCatalogMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.default_ticket_category != nil {
+		edges = append(edges, servicecatalog.EdgeDefaultTicketCategory)
+	}
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *ServiceCatalogMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case servicecatalog.EdgeDefaultTicketCategory:
+		if id := m.default_ticket_category; id != nil {
+			return []ent.Value{*id}
+		}
+	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *ServiceCatalogMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
 	return edges
 }
 
@@ -120310,25 +120419,42 @@ func (m *ServiceCatalogMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *ServiceCatalogMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.cleareddefault_ticket_category {
+		edges = append(edges, servicecatalog.EdgeDefaultTicketCategory)
+	}
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *ServiceCatalogMutation) EdgeCleared(name string) bool {
+	switch name {
+	case servicecatalog.EdgeDefaultTicketCategory:
+		return m.cleareddefault_ticket_category
+	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *ServiceCatalogMutation) ClearEdge(name string) error {
+	switch name {
+	case servicecatalog.EdgeDefaultTicketCategory:
+		m.ClearDefaultTicketCategory()
+		return nil
+	}
 	return fmt.Errorf("unknown ServiceCatalog unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *ServiceCatalogMutation) ResetEdge(name string) error {
+	switch name {
+	case servicecatalog.EdgeDefaultTicketCategory:
+		m.ResetDefaultTicketCategory()
+		return nil
+	}
 	return fmt.Errorf("unknown ServiceCatalog edge %s", name)
 }
 
@@ -142490,40 +142616,43 @@ func (m *TicketCCMutation) ResetEdge(name string) error {
 // TicketCategoryMutation represents an operation that mutates the TicketCategory nodes in the graph.
 type TicketCategoryMutation struct {
 	config
-	op                Op
-	typ               string
-	id                *int
-	name              *string
-	description       *string
-	code              *string
-	level             *int
-	addlevel          *int
-	sort_order        *int
-	addsort_order     *int
-	is_active         *bool
-	tenant_id         *int
-	addtenant_id      *int
-	itsm_type         *string
-	default_priority  *string
-	sla_tier          *string
-	default_resolver  *string
-	is_user_facing    *bool
-	created_at        *time.Time
-	updated_at        *time.Time
-	clearedFields     map[string]struct{}
-	tickets           map[int]struct{}
-	removedtickets    map[int]struct{}
-	clearedtickets    bool
-	children          map[int]struct{}
-	removedchildren   map[int]struct{}
-	clearedchildren   bool
-	parent            *int
-	clearedparent     bool
-	department        *int
-	cleareddepartment bool
-	done              bool
-	oldValue          func(context.Context) (*TicketCategory, error)
-	predicates        []predicate.TicketCategory
+	op                      Op
+	typ                     string
+	id                      *int
+	name                    *string
+	description             *string
+	code                    *string
+	level                   *int
+	addlevel                *int
+	sort_order              *int
+	addsort_order           *int
+	is_active               *bool
+	tenant_id               *int
+	addtenant_id            *int
+	itsm_type               *string
+	default_priority        *string
+	sla_tier                *string
+	default_resolver        *string
+	is_user_facing          *bool
+	created_at              *time.Time
+	updated_at              *time.Time
+	clearedFields           map[string]struct{}
+	tickets                 map[int]struct{}
+	removedtickets          map[int]struct{}
+	clearedtickets          bool
+	children                map[int]struct{}
+	removedchildren         map[int]struct{}
+	clearedchildren         bool
+	parent                  *int
+	clearedparent           bool
+	department              *int
+	cleareddepartment       bool
+	default_catalogs        map[int]struct{}
+	removeddefault_catalogs map[int]struct{}
+	cleareddefault_catalogs bool
+	done                    bool
+	oldValue                func(context.Context) (*TicketCategory, error)
+	predicates              []predicate.TicketCategory
 }
 
 var _ ent.Mutation = (*TicketCategoryMutation)(nil)
@@ -143513,6 +143642,60 @@ func (m *TicketCategoryMutation) ResetDepartment() {
 	m.cleareddepartment = false
 }
 
+// AddDefaultCatalogIDs adds the "default_catalogs" edge to the ServiceCatalog entity by ids.
+func (m *TicketCategoryMutation) AddDefaultCatalogIDs(ids ...int) {
+	if m.default_catalogs == nil {
+		m.default_catalogs = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.default_catalogs[ids[i]] = struct{}{}
+	}
+}
+
+// ClearDefaultCatalogs clears the "default_catalogs" edge to the ServiceCatalog entity.
+func (m *TicketCategoryMutation) ClearDefaultCatalogs() {
+	m.cleareddefault_catalogs = true
+}
+
+// DefaultCatalogsCleared reports if the "default_catalogs" edge to the ServiceCatalog entity was cleared.
+func (m *TicketCategoryMutation) DefaultCatalogsCleared() bool {
+	return m.cleareddefault_catalogs
+}
+
+// RemoveDefaultCatalogIDs removes the "default_catalogs" edge to the ServiceCatalog entity by IDs.
+func (m *TicketCategoryMutation) RemoveDefaultCatalogIDs(ids ...int) {
+	if m.removeddefault_catalogs == nil {
+		m.removeddefault_catalogs = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.default_catalogs, ids[i])
+		m.removeddefault_catalogs[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedDefaultCatalogs returns the removed IDs of the "default_catalogs" edge to the ServiceCatalog entity.
+func (m *TicketCategoryMutation) RemovedDefaultCatalogsIDs() (ids []int) {
+	for id := range m.removeddefault_catalogs {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// DefaultCatalogsIDs returns the "default_catalogs" edge IDs in the mutation.
+func (m *TicketCategoryMutation) DefaultCatalogsIDs() (ids []int) {
+	for id := range m.default_catalogs {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetDefaultCatalogs resets all changes to the "default_catalogs" edge.
+func (m *TicketCategoryMutation) ResetDefaultCatalogs() {
+	m.default_catalogs = nil
+	m.cleareddefault_catalogs = false
+	m.removeddefault_catalogs = nil
+}
+
 // Where appends a list predicates to the TicketCategoryMutation builder.
 func (m *TicketCategoryMutation) Where(ps ...predicate.TicketCategory) {
 	m.predicates = append(m.predicates, ps...)
@@ -143985,7 +144168,7 @@ func (m *TicketCategoryMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *TicketCategoryMutation) AddedEdges() []string {
-	edges := make([]string, 0, 4)
+	edges := make([]string, 0, 5)
 	if m.tickets != nil {
 		edges = append(edges, ticketcategory.EdgeTickets)
 	}
@@ -143997,6 +144180,9 @@ func (m *TicketCategoryMutation) AddedEdges() []string {
 	}
 	if m.department != nil {
 		edges = append(edges, ticketcategory.EdgeDepartment)
+	}
+	if m.default_catalogs != nil {
+		edges = append(edges, ticketcategory.EdgeDefaultCatalogs)
 	}
 	return edges
 }
@@ -144025,18 +144211,27 @@ func (m *TicketCategoryMutation) AddedIDs(name string) []ent.Value {
 		if id := m.department; id != nil {
 			return []ent.Value{*id}
 		}
+	case ticketcategory.EdgeDefaultCatalogs:
+		ids := make([]ent.Value, 0, len(m.default_catalogs))
+		for id := range m.default_catalogs {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *TicketCategoryMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 4)
+	edges := make([]string, 0, 5)
 	if m.removedtickets != nil {
 		edges = append(edges, ticketcategory.EdgeTickets)
 	}
 	if m.removedchildren != nil {
 		edges = append(edges, ticketcategory.EdgeChildren)
+	}
+	if m.removeddefault_catalogs != nil {
+		edges = append(edges, ticketcategory.EdgeDefaultCatalogs)
 	}
 	return edges
 }
@@ -144057,13 +144252,19 @@ func (m *TicketCategoryMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case ticketcategory.EdgeDefaultCatalogs:
+		ids := make([]ent.Value, 0, len(m.removeddefault_catalogs))
+		for id := range m.removeddefault_catalogs {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *TicketCategoryMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 4)
+	edges := make([]string, 0, 5)
 	if m.clearedtickets {
 		edges = append(edges, ticketcategory.EdgeTickets)
 	}
@@ -144075,6 +144276,9 @@ func (m *TicketCategoryMutation) ClearedEdges() []string {
 	}
 	if m.cleareddepartment {
 		edges = append(edges, ticketcategory.EdgeDepartment)
+	}
+	if m.cleareddefault_catalogs {
+		edges = append(edges, ticketcategory.EdgeDefaultCatalogs)
 	}
 	return edges
 }
@@ -144091,6 +144295,8 @@ func (m *TicketCategoryMutation) EdgeCleared(name string) bool {
 		return m.clearedparent
 	case ticketcategory.EdgeDepartment:
 		return m.cleareddepartment
+	case ticketcategory.EdgeDefaultCatalogs:
+		return m.cleareddefault_catalogs
 	}
 	return false
 }
@@ -144124,6 +144330,9 @@ func (m *TicketCategoryMutation) ResetEdge(name string) error {
 		return nil
 	case ticketcategory.EdgeDepartment:
 		m.ResetDepartment()
+		return nil
+	case ticketcategory.EdgeDefaultCatalogs:
+		m.ResetDefaultCatalogs()
 		return nil
 	}
 	return fmt.Errorf("unknown TicketCategory edge %s", name)

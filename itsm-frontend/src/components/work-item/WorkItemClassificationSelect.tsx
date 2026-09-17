@@ -1,9 +1,9 @@
- 'use client';
-import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Cascader, Space } from 'antd';
-import { useAuthStore } from '@/lib/store/auth-store';
-import { TicketCategoryApi, type TicketCategory } from '@/lib/api/ticket-category-api';
-import { classificationOptions, classificationPath } from './classification';
+'use client';
+import { useState } from 'react';
+import { Alert } from 'antd';
+import { CTISelector } from '@/components/business/CTISelector';
+import type { TicketCategory } from '@/lib/api/ticket-category-api';
+import { classificationPath } from './classification';
 
 interface Props {
   value?: number[];
@@ -11,39 +11,47 @@ interface Props {
   initialCategoryId?: number;
   id?: string;
 }
+
+/**
+ * 工单分类选择的兼容适配层。
+ *
+ * 选择与校验统一由 `CTISelector` 负责（value = 所选最深节点 ID）；
+ * 本组件只把「最深节点」与既有调用方的路径表示（number[]）互相转换，
+ * 保持事件/工单详情页现有的 props 契约不变。
+ */
 export function WorkItemClassificationSelect({ value, onChange, initialCategoryId, id }: Props) {
-  const tenantId = useAuthStore(state => state.currentTenant?.id);
-  const previousTenant = useRef(tenantId);
-  const changeRef = useRef(onChange);
-  changeRef.current = onChange;
   const [categories, setCategories] = useState<TicketCategory[]>([]);
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [revision, setRevision] = useState(0);
-  useEffect(() => {
-    let cancelled = false;
-    if (previousTenant.current !== tenantId) {
-      previousTenant.current = tenantId;
-      changeRef.current?.([]);
-    }
-    setCategories([]);
-    setError('');
-    if (!tenantId) { setLoading(false); return; }
-    setLoading(true);
-    TicketCategoryApi.getCategoryTree()
-      .then(rows => { if (!cancelled) setCategories(rows); })
-      .catch(() => { if (!cancelled) setError('分类加载失败，请重试或检查分类读取权限'); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [tenantId, revision]);
-  const selected = value ?? classificationPath(initialCategoryId, categories);
-  return <Space orientation="vertical" style={{ width: '100%' }}>
-    <Cascader id={id} value={selected} onChange={path => onChange?.(path as number[])}
-      options={classificationOptions(categories)} placeholder="选择分类" changeOnSelect allowClear showSearch
-      style={{ width: '100%' }} loading={loading} disabled={loading || !!error || !tenantId}
-      notFoundContent="暂无可用分类" />
-    {error && <Alert type="error" title={error} action={<Button onClick={() => setRevision(v => v + 1)}>重试</Button>} />}
-    {!loading && !error && initialCategoryId && value === undefined && !selected
-      ? <Alert type="warning" title="原分类已停用或不可见；未重新选择时保留原分类" /> : null}
-  </Space>;
+  const [error, setError] = useState('');
+  const selectedPath = value ?? classificationPath(initialCategoryId, categories);
+  const deepest = selectedPath?.length ? selectedPath[selectedPath.length - 1] : null;
+  const unresolvedInitial = Boolean(initialCategoryId) && value === undefined && !selectedPath;
+
+  return (
+    <>
+      <CTISelector
+        id={id}
+        value={deepest}
+        onChange={next => {
+          if (next === null) {
+            onChange?.([]);
+            return;
+          }
+          onChange?.(classificationPath(next, categories) ?? [next]);
+        }}
+        requiredDepth={0}
+        allowClear
+        onStateChange={state => {
+          setCategories(state.categories);
+          setLoading(state.loading);
+          setError(state.error);
+        }}
+      />
+      {!loading && !error && unresolvedInitial ? (
+        <Alert type="warning" message="原分类已停用或不可见；未重新选择时保留原分类" />
+      ) : null}
+    </>
+  );
 }
+
+export default WorkItemClassificationSelect;

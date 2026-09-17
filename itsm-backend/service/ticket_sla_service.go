@@ -225,13 +225,30 @@ func (s *TicketSLAService) CalculateSLADeadline(ctx context.Context, tenantID in
 
 // getSLADefinition 获取SLA定义。匹配优先级：category_id > type+priority > type-only > default。
 func (s *TicketSLAService) getSLADefinition(ctx context.Context, tenantID int, ticketType, priority string, categoryID int) (*ent.SLADefinition, error) {
-	// 1) 按分类ID精确匹配
+	// 1) 分类优先：必须扫描**全部**活跃候选并按确定性顺序判断分类命中。
+	// 既有实现只取一条无排序的活跃定义再判断它是否含该分类，会漏掉真正持有该分类的定义
+	// 并静默退化到通用 SLA；这里改为完整扫描 + 显式顺序（id 升序，先建先得）。
 	if categoryID > 0 {
-		sla, err := s.matchSLA(ctx, tenantID, func(q *ent.SLADefinitionQuery) {
-			q.Where(sladefinition.IsActive(true))
-		})
-		if err == nil && sla != nil && s.categoryMatches(sla, categoryID) {
-			return sla, nil
+		path, err := NewTicketCategoryService(s.client).GetCategoryPath(ctx, tenantID, categoryID)
+		if err != nil {
+			// 分类存在却解析不出路径：必须报错，不得静默用通用 SLA 顶替。
+			return nil, fmt.Errorf("resolve SLA classification path: %w", err)
+		}
+		candidates, err := s.client.SLADefinition.Query().
+			Where(sladefinition.TenantIDEQ(tenantID), sladefinition.IsActiveEQ(true)).
+			Order(ent.Asc(sladefinition.FieldID)).
+			All(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, candidate := range candidates {
+			matched, err := categoryMatchesPath(candidate.CategoryIds, path)
+			if err != nil {
+				return nil, err
+			}
+			if matched {
+				return candidate, nil
+			}
 		}
 	}
 
@@ -269,14 +286,24 @@ func (s *TicketSLAService) matchSLA(ctx context.Context, tenantID int, apply fun
 	return q.First(ctx)
 }
 
-// categoryMatches 检查 SLA 的 category_ids 是否包含目标分类
-func (s *TicketSLAService) categoryMatches(sla *ent.SLADefinition, categoryID int) bool {
-	for _, id := range sla.CategoryIds {
-		if id == categoryID {
-			return true
+// categoryMatchesPath 判断 SLA 的 category_ids 是否命中工单分类。
+//
+// 保持既有精确语义（只比较工单的最深节点），经由共享的 MatchCTI 实现，
+// 避免 SLA 与规则使用两套分类匹配逻辑。未分类工单不命中，且不是错误。
+func categoryMatchesPath(categoryIDs []int, path []CTINode) (bool, error) {
+	if len(categoryIDs) == 0 || len(path) == 0 {
+		return false, nil
+	}
+	for _, id := range categoryIDs {
+		matched, err := MatchCTI(path, id, CTIExact)
+		if err != nil {
+			return false, err
+		}
+		if matched {
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 // defaultSLADefinition 返回一个内联默认 SLA 定义

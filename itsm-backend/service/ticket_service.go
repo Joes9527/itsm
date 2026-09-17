@@ -719,11 +719,11 @@ func (s *TicketService) ResolveTicket(ctx context.Context, ticketID int, resolut
 	}
 
 	status := ticket.StatusResolved
-	updated, err := s.repo.Update(ctx, ticketID, &ticket.UpdateParams{
+	updated, err := s.closeWithCompletionGate(ctx, ticketID, tenantID, tkt.Version, "resolve", &ticket.UpdateParams{
 		Status:     &status,
 		Resolution: &resolution,
 		Version:    tkt.Version,
-	}, tenantID)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -770,6 +770,42 @@ func (s *TicketService) ResolveTicket(ctx context.Context, ticketID int, resolut
 }
 
 // CloseTicket 关闭工单
+// closeWithCompletionGate 在同一个事务内完成「读取权威行 → 完成质量门禁 → CAS 写入」。
+//
+// 门禁只对通用工单生效：专业类（incident/problem/change）的核心字段写入在本仓库
+// 已由 repository 层拒绝，必须走各自专业命令；这里再读一次权威行，保证 createdAt
+// 与最深分类节点来自服务端，客户端无法自报绕过。
+func (s *TicketService) closeWithCompletionGate(ctx context.Context, ticketID, tenantID, expectedVersion int, action string, params *ticket.UpdateParams) (*ticket.Ticket, error) {
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	row, err := tx.Ticket.Query().
+		Where(entTicket.IDEQ(ticketID), entTicket.TenantIDEQ(tenantID), entTicket.DeletedAtIsNil()).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, common.NewNotFoundError("ticket")
+		}
+		return nil, err
+	}
+	if err := EnforceWorkItemCompletionCTI(ctx, tx, tenantID, row, action); err != nil {
+		return nil, err
+	}
+	if params.Version != row.Version {
+		params.Version = row.Version
+	}
+	updated, err := s.repo.UpdateTx(ctx, tx, ticketID, params, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return updated, nil
+}
+
 func (s *TicketService) CloseTicket(ctx context.Context, ticketID int, tenantID int, feedback string) (*ticket.Ticket, error) {
 	s.logger.Infow("Closing ticket", "ticket_id", ticketID, "tenant_id", tenantID)
 
@@ -796,7 +832,7 @@ func (s *TicketService) CloseTicket(ctx context.Context, ticketID int, tenantID 
 		feedback = strings.TrimSpace(feedback)
 		params.Resolution = &feedback
 	}
-	updated, err := s.repo.Update(ctx, ticketID, params, tenantID)
+	updated, err := s.closeWithCompletionGate(ctx, ticketID, tenantID, tkt.Version, "close", params)
 	if err != nil {
 		return nil, err
 	}

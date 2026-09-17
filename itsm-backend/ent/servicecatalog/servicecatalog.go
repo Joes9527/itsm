@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -59,12 +60,23 @@ const (
 	FieldIsActive = "is_active"
 	// FieldSortOrder holds the string denoting the sort_order field in the database.
 	FieldSortOrder = "sort_order"
+	// FieldDefaultTicketCategoryID holds the string denoting the default_ticket_category_id field in the database.
+	FieldDefaultTicketCategoryID = "default_ticket_category_id"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
+	// EdgeDefaultTicketCategory holds the string denoting the default_ticket_category edge name in mutations.
+	EdgeDefaultTicketCategory = "default_ticket_category"
 	// Table holds the table name of the servicecatalog in the database.
 	Table = "service_catalogs"
+	// DefaultTicketCategoryTable is the table that holds the default_ticket_category relation/edge.
+	DefaultTicketCategoryTable = "service_catalogs"
+	// DefaultTicketCategoryInverseTable is the table name for the TicketCategory entity.
+	// It exists in this package in order to avoid circular dependency with the "ticketcategory" package.
+	DefaultTicketCategoryInverseTable = "ticket_categories"
+	// DefaultTicketCategoryColumn is the table column denoting the default_ticket_category relation/edge.
+	DefaultTicketCategoryColumn = "default_ticket_category_id"
 )
 
 // Columns holds all SQL columns for servicecatalog fields.
@@ -93,6 +105,7 @@ var Columns = []string{
 	FieldTenantID,
 	FieldIsActive,
 	FieldSortOrder,
+	FieldDefaultTicketCategoryID,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -240,6 +253,11 @@ func BySortOrder(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSortOrder, opts...).ToFunc()
 }
 
+// ByDefaultTicketCategoryID orders the results by the default_ticket_category_id field.
+func ByDefaultTicketCategoryID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDefaultTicketCategoryID, opts...).ToFunc()
+}
+
 // ByCreatedAt orders the results by the created_at field.
 func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
@@ -248,4 +266,18 @@ func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByUpdatedAt orders the results by the updated_at field.
 func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
+}
+
+// ByDefaultTicketCategoryField orders the results by default_ticket_category field.
+func ByDefaultTicketCategoryField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newDefaultTicketCategoryStep(), sql.OrderByField(field, opts...))
+	}
+}
+func newDefaultTicketCategoryStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(DefaultTicketCategoryInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, DefaultTicketCategoryTable, DefaultTicketCategoryColumn),
+	)
 }

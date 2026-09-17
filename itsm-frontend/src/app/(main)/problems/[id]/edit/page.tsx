@@ -63,7 +63,14 @@ export default function ProblemEditPage() {
     setLoading(true);
     try {
       const { classification, status: _status, ...payload } = values;
-      const request = { ...payload, version: problemData.version, ...classificationUpdate(classification, form.isFieldTouched('classification')) };
+      const classificationTouched = form.isFieldTouched('classification');
+      // 分类调整必须说明原因：与后端同一契约，避免"界面成功、后端拒绝"。
+      if (classificationTouched && !String(values.classificationReason ?? '').trim()) {
+        message.error('调整分类时必须填写原因');
+        return;
+      }
+      delete payload.classificationReason;
+      const request = { ...payload, version: problemData.version, ...classificationUpdate(classification, classificationTouched, values.classificationReason) };
       const intent = JSON.stringify(request);
       if (pendingOperation.current?.intent !== intent) pendingOperation.current = { intent, key: crypto.randomUUID() };
       await ProblemApi.updateProblem(Number(id), { ...request, operationId: pendingOperation.current.key });
@@ -139,6 +146,14 @@ export default function ProblemEditPage() {
               <Form.Item name="classification" label="分类">
                 <WorkItemClassificationSelect initialCategoryId={problemData?.categoryId} />
               </Form.Item>
+              <Form.Item
+                name="classificationReason"
+                label="分类调整原因"
+                tooltip="仅在调整分类时必填；后端会连同前后完整路径一起留痕"
+              >
+                <Input placeholder="例如：报障入口选错分类" maxLength={500} />
+              </Form.Item>
+
             </Col>
           </Row>
 

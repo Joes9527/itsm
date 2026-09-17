@@ -17,9 +17,10 @@ func TestNotificationTargetMigrationRequiresPriorPreparation(t *testing.T) {
 	}
 	plan, err := PlanMigrations(catalog, controlledReceipts(prefix), OpUp, nil)
 	require.NoError(t, err)
-	require.Len(t, plan.Executable, 4)
+	require.Len(t, plan.Executable, 5)
 	require.Equal(t, AuthTokenStateVersion, plan.Executable[2].Version)
 	require.Equal(t, NotificationConnectorTargetVersion, plan.Executable[0].Version)
+	require.Equal(t, CTIGovernanceVersion, plan.Executable[4].Version)
 	require.NotEmpty(t, GetMigrationSQL(NotificationConnectorTargetVersion))
 	for _, removed := range []string{WorkItemPrepareVersion, CandidateExecutionScopeVersion, SLAAlertNotificationVersion, ToolInvocationExecutionScopeVersion, ToolExecutionAuthorityLockVersion, ToolExecutionAuthorizationLockVersion} {
 		var invalid []Migration

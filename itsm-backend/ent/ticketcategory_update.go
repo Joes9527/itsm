@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"itsm-backend/ent/department"
 	"itsm-backend/ent/predicate"
+	"itsm-backend/ent/servicecatalog"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcategory"
 	"time"
@@ -349,6 +350,21 @@ func (_u *TicketCategoryUpdate) SetDepartment(v *Department) *TicketCategoryUpda
 	return _u.SetDepartmentID(v.ID)
 }
 
+// AddDefaultCatalogIDs adds the "default_catalogs" edge to the ServiceCatalog entity by IDs.
+func (_u *TicketCategoryUpdate) AddDefaultCatalogIDs(ids ...int) *TicketCategoryUpdate {
+	_u.mutation.AddDefaultCatalogIDs(ids...)
+	return _u
+}
+
+// AddDefaultCatalogs adds the "default_catalogs" edges to the ServiceCatalog entity.
+func (_u *TicketCategoryUpdate) AddDefaultCatalogs(v ...*ServiceCatalog) *TicketCategoryUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddDefaultCatalogIDs(ids...)
+}
+
 // Mutation returns the TicketCategoryMutation object of the builder.
 func (_u *TicketCategoryUpdate) Mutation() *TicketCategoryMutation {
 	return _u.mutation
@@ -406,6 +422,27 @@ func (_u *TicketCategoryUpdate) ClearParent() *TicketCategoryUpdate {
 func (_u *TicketCategoryUpdate) ClearDepartment() *TicketCategoryUpdate {
 	_u.mutation.ClearDepartment()
 	return _u
+}
+
+// ClearDefaultCatalogs clears all "default_catalogs" edges to the ServiceCatalog entity.
+func (_u *TicketCategoryUpdate) ClearDefaultCatalogs() *TicketCategoryUpdate {
+	_u.mutation.ClearDefaultCatalogs()
+	return _u
+}
+
+// RemoveDefaultCatalogIDs removes the "default_catalogs" edge to ServiceCatalog entities by IDs.
+func (_u *TicketCategoryUpdate) RemoveDefaultCatalogIDs(ids ...int) *TicketCategoryUpdate {
+	_u.mutation.RemoveDefaultCatalogIDs(ids...)
+	return _u
+}
+
+// RemoveDefaultCatalogs removes "default_catalogs" edges to ServiceCatalog entities.
+func (_u *TicketCategoryUpdate) RemoveDefaultCatalogs(v ...*ServiceCatalog) *TicketCategoryUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveDefaultCatalogIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -683,6 +720,51 @@ func (_u *TicketCategoryUpdate) sqlSave(ctx context.Context) (_node int, err err
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(department.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.DefaultCatalogsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   ticketcategory.DefaultCatalogsTable,
+			Columns: []string{ticketcategory.DefaultCatalogsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(servicecatalog.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedDefaultCatalogsIDs(); len(nodes) > 0 && !_u.mutation.DefaultCatalogsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   ticketcategory.DefaultCatalogsTable,
+			Columns: []string{ticketcategory.DefaultCatalogsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(servicecatalog.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.DefaultCatalogsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   ticketcategory.DefaultCatalogsTable,
+			Columns: []string{ticketcategory.DefaultCatalogsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(servicecatalog.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
@@ -1029,6 +1111,21 @@ func (_u *TicketCategoryUpdateOne) SetDepartment(v *Department) *TicketCategoryU
 	return _u.SetDepartmentID(v.ID)
 }
 
+// AddDefaultCatalogIDs adds the "default_catalogs" edge to the ServiceCatalog entity by IDs.
+func (_u *TicketCategoryUpdateOne) AddDefaultCatalogIDs(ids ...int) *TicketCategoryUpdateOne {
+	_u.mutation.AddDefaultCatalogIDs(ids...)
+	return _u
+}
+
+// AddDefaultCatalogs adds the "default_catalogs" edges to the ServiceCatalog entity.
+func (_u *TicketCategoryUpdateOne) AddDefaultCatalogs(v ...*ServiceCatalog) *TicketCategoryUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddDefaultCatalogIDs(ids...)
+}
+
 // Mutation returns the TicketCategoryMutation object of the builder.
 func (_u *TicketCategoryUpdateOne) Mutation() *TicketCategoryMutation {
 	return _u.mutation
@@ -1086,6 +1183,27 @@ func (_u *TicketCategoryUpdateOne) ClearParent() *TicketCategoryUpdateOne {
 func (_u *TicketCategoryUpdateOne) ClearDepartment() *TicketCategoryUpdateOne {
 	_u.mutation.ClearDepartment()
 	return _u
+}
+
+// ClearDefaultCatalogs clears all "default_catalogs" edges to the ServiceCatalog entity.
+func (_u *TicketCategoryUpdateOne) ClearDefaultCatalogs() *TicketCategoryUpdateOne {
+	_u.mutation.ClearDefaultCatalogs()
+	return _u
+}
+
+// RemoveDefaultCatalogIDs removes the "default_catalogs" edge to ServiceCatalog entities by IDs.
+func (_u *TicketCategoryUpdateOne) RemoveDefaultCatalogIDs(ids ...int) *TicketCategoryUpdateOne {
+	_u.mutation.RemoveDefaultCatalogIDs(ids...)
+	return _u
+}
+
+// RemoveDefaultCatalogs removes "default_catalogs" edges to ServiceCatalog entities.
+func (_u *TicketCategoryUpdateOne) RemoveDefaultCatalogs(v ...*ServiceCatalog) *TicketCategoryUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveDefaultCatalogIDs(ids...)
 }
 
 // Where appends a list predicates to the TicketCategoryUpdate builder.
@@ -1393,6 +1511,51 @@ func (_u *TicketCategoryUpdateOne) sqlSave(ctx context.Context) (_node *TicketCa
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(department.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.DefaultCatalogsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   ticketcategory.DefaultCatalogsTable,
+			Columns: []string{ticketcategory.DefaultCatalogsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(servicecatalog.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedDefaultCatalogsIDs(); len(nodes) > 0 && !_u.mutation.DefaultCatalogsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   ticketcategory.DefaultCatalogsTable,
+			Columns: []string{ticketcategory.DefaultCatalogsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(servicecatalog.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.DefaultCatalogsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   ticketcategory.DefaultCatalogsTable,
+			Columns: []string{ticketcategory.DefaultCatalogsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(servicecatalog.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

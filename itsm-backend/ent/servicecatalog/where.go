@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 // ID filters vertices based on their ID field.
@@ -152,6 +153,11 @@ func IsActive(v bool) predicate.ServiceCatalog {
 // SortOrder applies equality check predicate on the "sort_order" field. It's identical to SortOrderEQ.
 func SortOrder(v int) predicate.ServiceCatalog {
 	return predicate.ServiceCatalog(sql.FieldEQ(FieldSortOrder, v))
+}
+
+// DefaultTicketCategoryID applies equality check predicate on the "default_ticket_category_id" field. It's identical to DefaultTicketCategoryIDEQ.
+func DefaultTicketCategoryID(v int) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldEQ(FieldDefaultTicketCategoryID, v))
 }
 
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
@@ -1279,6 +1285,36 @@ func SortOrderLTE(v int) predicate.ServiceCatalog {
 	return predicate.ServiceCatalog(sql.FieldLTE(FieldSortOrder, v))
 }
 
+// DefaultTicketCategoryIDEQ applies the EQ predicate on the "default_ticket_category_id" field.
+func DefaultTicketCategoryIDEQ(v int) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldEQ(FieldDefaultTicketCategoryID, v))
+}
+
+// DefaultTicketCategoryIDNEQ applies the NEQ predicate on the "default_ticket_category_id" field.
+func DefaultTicketCategoryIDNEQ(v int) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldNEQ(FieldDefaultTicketCategoryID, v))
+}
+
+// DefaultTicketCategoryIDIn applies the In predicate on the "default_ticket_category_id" field.
+func DefaultTicketCategoryIDIn(vs ...int) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldIn(FieldDefaultTicketCategoryID, vs...))
+}
+
+// DefaultTicketCategoryIDNotIn applies the NotIn predicate on the "default_ticket_category_id" field.
+func DefaultTicketCategoryIDNotIn(vs ...int) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldNotIn(FieldDefaultTicketCategoryID, vs...))
+}
+
+// DefaultTicketCategoryIDIsNil applies the IsNil predicate on the "default_ticket_category_id" field.
+func DefaultTicketCategoryIDIsNil() predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldIsNull(FieldDefaultTicketCategoryID))
+}
+
+// DefaultTicketCategoryIDNotNil applies the NotNil predicate on the "default_ticket_category_id" field.
+func DefaultTicketCategoryIDNotNil() predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(sql.FieldNotNull(FieldDefaultTicketCategoryID))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.ServiceCatalog {
 	return predicate.ServiceCatalog(sql.FieldEQ(FieldCreatedAt, v))
@@ -1357,6 +1393,29 @@ func UpdatedAtLT(v time.Time) predicate.ServiceCatalog {
 // UpdatedAtLTE applies the LTE predicate on the "updated_at" field.
 func UpdatedAtLTE(v time.Time) predicate.ServiceCatalog {
 	return predicate.ServiceCatalog(sql.FieldLTE(FieldUpdatedAt, v))
+}
+
+// HasDefaultTicketCategory applies the HasEdge predicate on the "default_ticket_category" edge.
+func HasDefaultTicketCategory() predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, DefaultTicketCategoryTable, DefaultTicketCategoryColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasDefaultTicketCategoryWith applies the HasEdge predicate on the "default_ticket_category" edge with a given conditions (other predicates).
+func HasDefaultTicketCategoryWith(preds ...predicate.TicketCategory) predicate.ServiceCatalog {
+	return predicate.ServiceCatalog(func(s *sql.Selector) {
+		step := newDefaultTicketCategoryStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // And groups predicates with the AND operator between them.

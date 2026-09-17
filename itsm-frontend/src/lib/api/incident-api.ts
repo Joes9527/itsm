@@ -197,17 +197,6 @@ export interface CreateImpactAssessmentRequest {
   assessmentNotes: string;
 }
 
-export interface CreateIncidentClassificationRequest {
-  incidentId: number;
-  category: string;
-  subcategory: string;
-  serviceType: string;
-  failureType: string;
-  urgency: string;
-  impact: string;
-  classificationConfidence?: number;
-  autoClassified?: boolean;
-}
 
 export interface UpdateIncidentRequest {
   urgency?: string;
@@ -640,37 +629,6 @@ export class IncidentAPI {
       return response;
     } catch (error) {
       console.error('IncidentAPI.getIncidentClassification error:', error);
-      throw error;
-    }
-  }
-
-  static async createIncidentClassification(
-    request: CreateIncidentClassificationRequest
-  ): Promise<IncidentClassification> {
-    try {
-      const response = await httpClient.post<IncidentClassification>(
-        '/api/v1/incidents/classification',
-        request
-      );
-      return response;
-    } catch (error) {
-      console.error('IncidentAPI.createIncidentClassification error:', error);
-      throw error;
-    }
-  }
-
-  static async updateIncidentClassification(
-    id: number,
-    request: Partial<CreateIncidentClassificationRequest> & { version: number }
-  ): Promise<IncidentClassification> {
-    try {
-      const response = await httpClient.put<IncidentClassification>(
-        `/api/v1/incidents/classification/${id}`,
-        request
-      );
-      return response;
-    } catch (error) {
-      console.error('IncidentAPI.updateIncidentClassification error:', error);
       throw error;
     }
   }

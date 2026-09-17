@@ -205,6 +205,10 @@ func (s *IncidentService) applyIncidentCommandTx(ctx context.Context, tx *ent.Tx
 			return empty, err
 		}
 	}
+	// 完成质量门禁：与状态写入同一事务。Incident resolve 不加硬门禁（恢复服务优先），close 检查。
+	if err = EnforceWorkItemCompletionCTI(ctx, tx, m.TenantID, item, cmd.Action); err != nil {
+		return empty, err
+	}
 	now := time.Now().UTC()
 	update := tx.Ticket.UpdateOneID(item.ID).Where(ticket.TenantID(m.TenantID), ticket.DeletedAtIsNil(), ticket.Version(writeVersion)).SetVersion(m.ExpectedVersion + 1).SetUpdatedAt(now)
 	if statusChanged {

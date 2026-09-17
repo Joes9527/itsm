@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"itsm-backend/ent/department"
+	"itsm-backend/ent/servicecatalog"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcategory"
 	"time"
@@ -264,6 +265,21 @@ func (_c *TicketCategoryCreate) SetDepartment(v *Department) *TicketCategoryCrea
 	return _c.SetDepartmentID(v.ID)
 }
 
+// AddDefaultCatalogIDs adds the "default_catalogs" edge to the ServiceCatalog entity by IDs.
+func (_c *TicketCategoryCreate) AddDefaultCatalogIDs(ids ...int) *TicketCategoryCreate {
+	_c.mutation.AddDefaultCatalogIDs(ids...)
+	return _c
+}
+
+// AddDefaultCatalogs adds the "default_catalogs" edges to the ServiceCatalog entity.
+func (_c *TicketCategoryCreate) AddDefaultCatalogs(v ...*ServiceCatalog) *TicketCategoryCreate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddDefaultCatalogIDs(ids...)
+}
+
 // Mutation returns the TicketCategoryMutation object of the builder.
 func (_c *TicketCategoryCreate) Mutation() *TicketCategoryMutation {
 	return _c.mutation
@@ -516,6 +532,22 @@ func (_c *TicketCategoryCreate) createSpec() (*TicketCategory, *sqlgraph.CreateS
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.DepartmentID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.DefaultCatalogsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   ticketcategory.DefaultCatalogsTable,
+			Columns: []string{ticketcategory.DefaultCatalogsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(servicecatalog.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

@@ -66,6 +66,16 @@ type UpdateServiceRequestRequest struct {
 	ComplianceAck      *bool      `json:"complianceAck"`
 }
 
+// CorrectServiceRequestClassificationRequest 是申请项分类纠正请求。
+//
+// categoryId 必须 > 0：申请项由服务目录声明完整三级默认分类，既不允许清空，
+// 也不接受部分分类（后端会再校验目标是否为完整且启用的三级路径）。
+type CorrectServiceRequestClassificationRequest struct {
+	Version    int    `json:"version" binding:"required,gt=0"`
+	CategoryID int    `json:"categoryId" binding:"required,gt=0"`
+	Reason     string `json:"reason" binding:"required,max=500"`
+}
+
 // GetServiceCatalogsRequest 获取服务目录请求
 type GetServiceCatalogsRequest struct {
 	Page     int    `json:"page" form:"page" binding:"omitempty,min=1"`
@@ -112,8 +122,22 @@ type ServiceCatalogResponse struct {
 	SLAResolutionTime int                      `json:"slaResolutionTime"`
 	TargetClass       string                   `json:"targetClass,omitempty"`
 	Fields            []map[string]interface{} `json:"fields,omitempty"`
-	CreatedAt         time.Time                `json:"createdAt"`
-	UpdatedAt         time.Time                `json:"updatedAt"`
+	// DefaultTicketCategoryID 是目录默认三级工单分类的最深节点；null 表示未配置。
+	DefaultTicketCategoryID *int `json:"defaultTicketCategoryId"`
+	// DefaultCTIPath 是派生只读路径（根 → 最深节点），供编辑与申请页面回显。
+	DefaultCTIPath []CTIPathNodeResponse `json:"defaultCTIPath,omitempty"`
+	CreatedAt      time.Time             `json:"createdAt"`
+	UpdatedAt      time.Time             `json:"updatedAt"`
+}
+
+// CTIPathNodeResponse 是分类完整路径的只读投影。
+type CTIPathNodeResponse struct {
+	ID       int    `json:"id"`
+	ParentID int    `json:"parentId"`
+	Level    int    `json:"level"`
+	Name     string `json:"name"`
+	Code     string `json:"code"`
+	IsActive bool   `json:"isActive"`
 }
 
 // ServiceRequestResponse 服务请求响应
@@ -194,6 +218,8 @@ type CreateServiceCatalogRequest struct {
 	RequiresApproval     bool                     `json:"requiresApproval"`
 	SLAResponseTime      int                      `json:"slaResponseTime" binding:"min=0"`
 	SLAResolutionTime    int                      `json:"slaResolutionTime" binding:"min=0"`
+	// DefaultTicketCategoryID 是默认三级分类的最深节点；0/null 表示未配置（草稿可空）。
+	DefaultTicketCategoryID *int `json:"defaultTicketCategoryId" binding:"omitempty,min=0"`
 }
 
 // Update is a conditional patch; supplied zero/empty values clear configuration.
@@ -214,4 +240,6 @@ type UpdateServiceCatalogRequest struct {
 	RequiresApproval       *bool                    `json:"requiresApproval"`
 	SLAResponseTime        *int                     `json:"slaResponseTime" binding:"omitempty,min=0"`
 	SLAResolutionTime      *int                     `json:"slaResolutionTime" binding:"omitempty,min=0"`
+	// DefaultTicketCategoryID 是默认三级分类的最深节点；0 表示清除，null 表示不变。
+	DefaultTicketCategoryID *int `json:"defaultTicketCategoryId" binding:"omitempty,min=0"`
 }

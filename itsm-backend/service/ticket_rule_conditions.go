@@ -10,8 +10,26 @@ import (
 	"itsm-backend/ent"
 )
 
+// TicketRuleMatch 是条件求值所需的工单上下文。
+//
+// CategoryPath 是工单分类的完整根路径（含最深节点），由拥有者在**自己的事务内**解析；
+// 分类条件可能要求子树匹配，因此求值器必须拿到完整路径而不是单个最深节点 ID。
+type TicketRuleMatch struct {
+	Item         *ent.Ticket
+	CategoryPath []CTINode
+}
+
 // Both existing ticket rule owners use the same operational field vocabulary.
-func evaluateTicketRuleConditions(conditions []map[string]interface{}, item *ent.Ticket) (bool, error) {
+func EvaluateTicketRuleConditions(match TicketRuleMatch, conditions []map[string]interface{}) (bool, error) {
+	item := match.Item
+	if item == nil {
+		return false, fmt.Errorf("ticket rule evaluation requires a work item")
+	}
+	if len(match.CategoryPath) == 0 && item.CategoryID > 0 {
+		// 有分类却没有解析出路径：这是解析失败而不是"未分类"，必须失败关闭，
+		// 否则子树条件会静默不命中。
+		return false, fmt.Errorf("ticket rule evaluation requires the classification path for category %d", item.CategoryID)
+	}
 	matched := true
 	for _, condition := range conditions {
 		field, ok := condition["field"].(string)
@@ -26,14 +44,22 @@ func evaluateTicketRuleConditions(conditions []map[string]interface{}, item *ent
 		if !ok || value == nil {
 			return false, fmt.Errorf("ticket rule condition value is required")
 		}
+		if field == "category_id" {
+			one, err := evaluateCTICondition(match.CategoryPath, operator, value, condition["scope"])
+			if err != nil {
+				return false, err
+			}
+			if !one {
+				matched = false
+			}
+			continue
+		}
 		var actual interface{}
 		switch field {
 		case "status":
 			actual = item.Status
 		case "priority":
 			actual = item.Priority
-		case "category_id":
-			actual = item.CategoryID
 		case "department_id":
 			actual = item.DepartmentID
 		case "requester_id":
@@ -108,4 +134,99 @@ func ticketRulePositiveID(value interface{}) (int, error) {
 		return 0, fmt.Errorf("rule reference must be a positive integer")
 	}
 	return id, nil
+}
+
+// ctiConditionScope 解析分类条件的作用域；缺省为 exact（与既有行为一致），
+// 未知取值必须失败，不得静默按精确处理。
+func ctiConditionScope(raw interface{}) (CTIMatchScope, error) {
+	if raw == nil {
+		return CTIExact, nil
+	}
+	value, ok := raw.(string)
+	if !ok {
+		return "", ErrCTIUnknownMatchScope
+	}
+	switch strings.TrimSpace(value) {
+	case "", string(CTIExact):
+		return CTIExact, nil
+	case string(CTISubtree):
+		return CTISubtree, nil
+	default:
+		return "", ErrCTIUnknownMatchScope
+	}
+}
+
+// ctiConditionIDs 归一化分类条件的取值，接受数字、字符串或数组。
+func ctiConditionIDs(value interface{}) ([]int, error) {
+	parse := func(raw interface{}) (int, error) {
+		switch typed := raw.(type) {
+		case float64:
+			return int(typed), nil
+		case int:
+			return typed, nil
+		case string:
+			parsed, err := strconv.Atoi(strings.TrimSpace(typed))
+			if err != nil {
+				return 0, fmt.Errorf("ticket rule category condition requires numeric ids")
+			}
+			return parsed, nil
+		default:
+			return 0, fmt.Errorf("ticket rule category condition requires numeric ids")
+		}
+	}
+	if list, ok := value.([]interface{}); ok {
+		ids := make([]int, 0, len(list))
+		for _, raw := range list {
+			id, err := parse(raw)
+			if err != nil {
+				return nil, err
+			}
+			ids = append(ids, id)
+		}
+		return ids, nil
+	}
+	id, err := parse(value)
+	if err != nil {
+		return nil, err
+	}
+	return []int{id}, nil
+}
+
+// evaluateCTICondition 用共享的 MatchCTI 语义评估分类条件：
+// exact 只命中工单的最深节点，subtree 命中完整路径上的任一祖先。
+// 未分类（路径为空）视为不命中；其它算子对分类无定义，失败关闭。
+func evaluateCTICondition(path []CTINode, operator string, value, rawScope interface{}) (bool, error) {
+	scope, err := ctiConditionScope(rawScope)
+	if err != nil {
+		return false, err
+	}
+	switch operator {
+	case "equals", "not_equals", "in", "not_in":
+	default:
+		return false, fmt.Errorf("unsupported category condition operator: %s", operator)
+	}
+	ids, err := ctiConditionIDs(value)
+	if err != nil {
+		return false, err
+	}
+	if len(path) == 0 {
+		// 未分类工单不命中分类条件（与既有行为一致），且**不是**错误：
+		// 若把空路径当作错误，任何带分类条件的规则都会让未分类工单的创建/分派整体失败。
+		// 真正的解析失败由入口处 "有分类却没有路径" 的检查捕获。
+		return operator == "not_equals" || operator == "not_in", nil
+	}
+	match := false
+	for _, id := range ids {
+		hit, err := MatchCTI(path, id, scope)
+		if err != nil {
+			return false, err
+		}
+		if hit {
+			match = true
+		}
+	}
+	if operator == "not_equals" || operator == "not_in" {
+		return !match, nil
+	}
+	return match, nil
 }

@@ -83,6 +83,9 @@ type CreateChangeRequest struct {
 type UpdateChangeRequest struct {
 	AssignmentReason string `json:"assignmentReason"`
 	AssigneeID       *int   `json:"assigneeId"`
+	// CategoryID 是最深分类节点；0 表示显式清空。分类确实变化时 ClassificationReason 必填。
+	CategoryID           *int   `json:"categoryId" binding:"omitempty,gte=0"`
+	ClassificationReason string `json:"classificationReason" binding:"max=500"`
 	ChangeRiskPatch
 	Title              *string         `json:"title"`              // 变更标题
 	Description        *string         `json:"description"`        // 变更描述

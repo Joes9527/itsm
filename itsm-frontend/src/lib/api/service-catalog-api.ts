@@ -75,6 +75,10 @@ export class ServiceCatalogApi {
       shortDescription: String(raw?.description || ''),
       fullDescription: String(raw?.description || ''),
       ciTypeId: typeof raw?.ciTypeId === 'number' ? raw.ciTypeId : undefined,
+      // 目录默认分类是结构引用：原样透传，不在前端推导或复制第二份分类权威。
+      defaultTicketCategoryId:
+        typeof raw?.defaultTicketCategoryId === 'number' ? raw.defaultTicketCategoryId : null,
+      defaultCTIPath: Array.isArray(raw?.defaultCTIPath) ? raw.defaultCTIPath : undefined,
       cloudServiceId: typeof raw?.cloudServiceId === 'number' ? raw.cloudServiceId : undefined,
       tags: [],
       requiresApproval: Boolean(raw?.requiresApproval),
@@ -208,6 +212,7 @@ export class ServiceCatalogApi {
       description: request.shortDescription || request.fullDescription || '',
       ciTypeId: request.ciTypeId,
       cloudServiceId: request.cloudServiceId,
+      defaultTicketCategoryId: request.defaultTicketCategoryId ?? undefined,
       deliveryTime: String(
         request.availability?.responseTime ?? request.availability?.resolutionTime ?? 1
       ),
@@ -242,6 +247,10 @@ export class ServiceCatalogApi {
     }
     if (request.ciTypeId !== undefined) payload.ciTypeId = request.ciTypeId;
     if (request.cloudServiceId !== undefined) payload.cloudServiceId = request.cloudServiceId;
+    if (request.defaultTicketCategoryId !== undefined) {
+      // 0 表示显式清除默认分类（后端 Clear）。
+      payload.defaultTicketCategoryId = request.defaultTicketCategoryId ?? 0;
+    }
     if (request.fields !== undefined) payload.fields = request.fields;
     if (request.accessPolicy !== undefined) payload.accessPolicy = request.accessPolicy;
     if (request.processDefinitionKey !== undefined) {

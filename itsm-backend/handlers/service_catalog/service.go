@@ -10,6 +10,7 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent/servicecatalog"
+	"itsm-backend/ent/ticketcategory"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service/bpmn"
 
@@ -57,6 +58,9 @@ func (s *Service) Create(ctx context.Context, tenantID int, input dto.CreateServ
 		status = "disabled"
 	}
 	catalog := &ServiceCatalog{Name: strings.TrimSpace(input.Name), Category: strings.TrimSpace(input.Category), Description: input.Description, DeliveryTime: delivery, TenantID: tenantID, Status: status, CITypeID: input.CITypeID, CloudServiceID: input.CloudServiceID, ProcessDefinitionKey: strings.TrimSpace(input.ProcessDefinitionKey), ServiceType: input.ServiceType, TargetClass: input.TargetClass, RequiresApproval: input.RequiresApproval, SLAResponseTime: input.SLAResponseTime, SLAResolutionTime: input.SLAResolutionTime, Fields: nil}
+	if input.DefaultTicketCategoryID != nil {
+		catalog.DefaultTicketCategoryID = *input.DefaultTicketCategoryID
+	}
 	fields, err := catalogFieldInputs(input.Fields)
 	if err != nil {
 		return nil, common.NewBadRequestError("invalid fields", err)
@@ -137,6 +141,24 @@ func (s *Service) finishDefinition(ctx context.Context, tx *ent.Tx, tenantID, id
 	result := NewEntRepository(tx.Client()).toDomain(row)
 	result.Fields = toFieldDefinitionInputsFromEnt(defs)
 	result.AccessPolicy = revision.AccessPolicy
+	// 草稿允许不完整分类，但结构引用必须属于本租户：跨租户 ID 在提交事务内拒绝，
+	// 不留给发布阶段才发现。
+	if result.DefaultTicketCategoryID > 0 {
+		exists, err := tx.TicketCategory.Query().
+			Where(ticketcategory.IDEQ(result.DefaultTicketCategoryID), ticketcategory.TenantIDEQ(tenantID)).
+			Exist(ctx)
+		if err != nil {
+			return nil, creation.NewInfrastructureUnavailable("could not verify catalog default classification", err)
+		}
+		if !exists {
+			return nil, creation.NewDomainValidationFailed("catalog default classification is outside the tenant", nil)
+		}
+		path, err := service.NewTicketCategoryService(tx.Client()).ProjectCTIPath(ctx, tx, tenantID, result.DefaultTicketCategoryID)
+		if err != nil {
+			return nil, mapCatalogCTIPathProjectionError(err)
+		}
+		result.DefaultCTIPath = toCatalogCTIPath(path)
+	}
 	if row.IsActive && (row.Status == "enabled" || row.Status == "active") {
 		if err := s.validateForPublicationTx(ctx, tx, tenantID, result); err != nil {
 			return nil, err
@@ -306,6 +328,9 @@ func (s *Service) Update(ctx context.Context, tenantID, id int, input dto.Update
 	if input.SLAResolutionTime != nil {
 		current.SLAResolutionTime = *input.SLAResolutionTime
 	}
+	if input.DefaultTicketCategoryID != nil {
+		current.DefaultTicketCategoryID = *input.DefaultTicketCategoryID
+	}
 	if err := s.validateDefinition(ctx, repo, current); err != nil {
 		return nil, err
 	}
@@ -398,4 +423,28 @@ func catalogMutationError(err error) error {
 		return creation.NewCatalogVersionConflict("catalog changed; reload and reconfirm", err)
 	}
 	return err
+}
+
+// toCatalogCTIPath 把分类服务的路径投影转换为目录只读投影。
+func toCatalogCTIPath(path []service.CTINode) []CTIPathNode {
+	if len(path) == 0 {
+		return nil
+	}
+	projection := make([]CTIPathNode, 0, len(path))
+	for _, node := range path {
+		projection = append(projection, CTIPathNode{ID: node.ID, ParentID: node.ParentID, Level: node.Level, Name: node.Name, Code: node.Code, IsActive: node.Active})
+	}
+	return projection
+}
+
+// mapCatalogCTIPathProjectionError 区分“分类不存在/跨租户”与真实基础设施故障，
+// 不把数据库错误伪装成租户问题。
+func mapCatalogCTIPathProjectionError(err error) error {
+	switch {
+	case errors.Is(err, service.ErrCTICategoryNotFound), errors.Is(err, service.ErrCTIPathOutsideTenant),
+		errors.Is(err, service.ErrCTIPathHierarchy), errors.Is(err, service.ErrCTIPathTooDeep):
+		return creation.NewDomainValidationFailed("catalog default classification is outside the tenant", err)
+	default:
+		return creation.NewInfrastructureUnavailable("could not project catalog default classification", err)
+	}
 }

@@ -217,22 +217,6 @@ describe('IncidentAPI', () => {
     });
   });
 
-  describe('createIncidentClassification', () => {
-    it('should create classification', async () => {
-      mockPost.mockResolvedValue({ id: 1 });
-      await IncidentAPI.createIncidentClassification({ incidentId: 1, category: 'network' } as any);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/classification', expect.any(Object));
-    });
-  });
-
-  describe('updateIncidentClassification', () => {
-    it('should update classification', async () => {
-      mockPut.mockResolvedValue({ id: 1 });
-      await IncidentAPI.updateIncidentClassification(1, { category: 'app' } as any);
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/incidents/classification/1', { category: 'app' });
-    });
-  });
-
   describe('getConfigurationItems', () => {
     it('should get CIs without params', async () => {
       mockGet.mockResolvedValue([{ id: 1, name: 'Server1' }]);

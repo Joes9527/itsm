@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"itsm-backend/ent/servicecatalog"
+	"itsm-backend/ent/ticketcategory"
 	"strings"
 	"time"
 
@@ -64,11 +65,36 @@ type ServiceCatalog struct {
 	IsActive bool `json:"is_active,omitempty"`
 	// 排序
 	SortOrder int `json:"sort_order,omitempty"`
+	// 默认三级工单分类的最深节点ID
+	DefaultTicketCategoryID int `json:"default_ticket_category_id,omitempty"`
 	// 创建时间
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// 更新时间
-	UpdatedAt    time.Time `json:"updated_at,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the ServiceCatalogQuery when eager-loading is set.
+	Edges        ServiceCatalogEdges `json:"edges"`
 	selectValues sql.SelectValues
+}
+
+// ServiceCatalogEdges holds the relations/edges for other nodes in the graph.
+type ServiceCatalogEdges struct {
+	// 默认三级工单分类的最深节点
+	DefaultTicketCategory *TicketCategory `json:"default_ticket_category,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [1]bool
+}
+
+// DefaultTicketCategoryOrErr returns the DefaultTicketCategory value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e ServiceCatalogEdges) DefaultTicketCategoryOrErr() (*TicketCategory, error) {
+	if e.DefaultTicketCategory != nil {
+		return e.DefaultTicketCategory, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: ticketcategory.Label}
+	}
+	return nil, &NotLoadedError{edge: "default_ticket_category"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -82,7 +108,7 @@ func (*ServiceCatalog) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case servicecatalog.FieldPrice:
 			values[i] = new(sql.NullFloat64)
-		case servicecatalog.FieldID, servicecatalog.FieldDeliveryTime, servicecatalog.FieldApprovalLevel, servicecatalog.FieldSLAResponseTime, servicecatalog.FieldSLAResolutionTime, servicecatalog.FieldCiTypeID, servicecatalog.FieldCloudServiceID, servicecatalog.FieldTenantID, servicecatalog.FieldSortOrder:
+		case servicecatalog.FieldID, servicecatalog.FieldDeliveryTime, servicecatalog.FieldApprovalLevel, servicecatalog.FieldSLAResponseTime, servicecatalog.FieldSLAResolutionTime, servicecatalog.FieldCiTypeID, servicecatalog.FieldCloudServiceID, servicecatalog.FieldTenantID, servicecatalog.FieldSortOrder, servicecatalog.FieldDefaultTicketCategoryID:
 			values[i] = new(sql.NullInt64)
 		case servicecatalog.FieldName, servicecatalog.FieldDescription, servicecatalog.FieldCategory, servicecatalog.FieldIcon, servicecatalog.FieldServiceType, servicecatalog.FieldTargetClass, servicecatalog.FieldUnit, servicecatalog.FieldProcessDefinitionKey, servicecatalog.FieldStatus:
 			values[i] = new(sql.NullString)
@@ -253,6 +279,12 @@ func (_m *ServiceCatalog) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.SortOrder = int(value.Int64)
 			}
+		case servicecatalog.FieldDefaultTicketCategoryID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field default_ticket_category_id", values[i])
+			} else if value.Valid {
+				_m.DefaultTicketCategoryID = int(value.Int64)
+			}
 		case servicecatalog.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -276,6 +308,11 @@ func (_m *ServiceCatalog) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (_m *ServiceCatalog) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
+}
+
+// QueryDefaultTicketCategory queries the "default_ticket_category" edge of the ServiceCatalog entity.
+func (_m *ServiceCatalog) QueryDefaultTicketCategory() *TicketCategoryQuery {
+	return NewServiceCatalogClient(_m.config).QueryDefaultTicketCategory(_m)
 }
 
 // Update returns a builder for updating this ServiceCatalog.
@@ -369,6 +406,9 @@ func (_m *ServiceCatalog) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("sort_order=")
 	builder.WriteString(fmt.Sprintf("%v", _m.SortOrder))
+	builder.WriteString(", ")
+	builder.WriteString("default_ticket_category_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.DefaultTicketCategoryID))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

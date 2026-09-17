@@ -202,6 +202,10 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, d
 	if err := s.requireExecutionTx(ctx, tx, m.TenantID, item.ID); err != nil {
 		return empty, err
 	}
+	// 完成质量门禁：与状态写入同一事务，专业证据校验之后、写入之前判定。
+	if err := service.EnforceWorkItemCompletionCTI(ctx, tx, m.TenantID, item, cmd.Action); err != nil {
+		return empty, err
+	}
 	now := time.Now().UTC()
 	update := tx.Ticket.UpdateOneID(item.ID).Where(ticket.TenantID(m.TenantID), ticket.DeletedAtIsNil(), ticket.Version(m.ExpectedVersion)).SetVersion(m.ExpectedVersion + 1).SetUpdatedAt(now).SetStatus(target)
 	if cmd.Action == "resolve" {

@@ -195,13 +195,26 @@ func (s *TicketAssignmentRuleService) TestAssignmentRule(
 	}, nil
 }
 
+// categoryMatchPath 解析工单分类的完整路径：分类条件可能要求子树匹配，
+// 因此求值前必须拿到完整根路径；未分类返回空，解析失败返回错误（调用方失败关闭）。
+func (s *TicketAssignmentRuleService) categoryMatchPath(ctx context.Context, item *ent.Ticket) ([]CTINode, error) {
+	if s == nil || s.client == nil || item == nil || item.CategoryID <= 0 {
+		return nil, nil
+	}
+	return NewTicketCategoryService(s.client).GetCategoryPath(ctx, item.TenantID, item.CategoryID)
+}
+
 // matchRule 检查规则是否匹配工单
 func (s *TicketAssignmentRuleService) matchRule(
 	ctx context.Context,
 	rule *ent.TicketAssignmentRule,
 	ticketEntity *ent.Ticket,
 ) (bool, string) {
-	matched, err := evaluateTicketRuleConditions(rule.Conditions, ticketEntity)
+	categoryPath, err := s.categoryMatchPath(ctx, ticketEntity)
+	if err != nil {
+		return false, err.Error()
+	}
+	matched, err := EvaluateTicketRuleConditions(TicketRuleMatch{Item: ticketEntity, CategoryPath: categoryPath}, rule.Conditions)
 	if err != nil {
 		return false, err.Error()
 	}

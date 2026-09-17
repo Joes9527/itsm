@@ -73,6 +73,16 @@ func (s *Service) projectCreationCatalog(ctx context.Context, tx *ent.Tx, identi
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	path, err := s.projectDefaultCTIPath(ctx, tx, identity.TenantID, catalog)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	var defaultCTIID *int
+	// Ent 用 0 表示该可空结构引用未配置；0 不能写入外键（不存在 id=0 的分类）。
+	if catalog.DefaultTicketCategoryID > 0 {
+		value := catalog.DefaultTicketCategoryID
+		defaultCTIID = &value
+	}
 	version, err := creationRevision(publicCatalogDefinition{
 		AccessPolicy: policy,
 		TargetClass:  catalog.TargetClass, ServiceType: catalog.ServiceType,
@@ -82,11 +92,12 @@ func (s *Service) projectCreationCatalog(ctx context.Context, tx *ent.Tx, identi
 		CITypeID: catalog.CiTypeID, CloudServiceID: catalog.CloudServiceID,
 		ProcessDefinitionKey: catalog.ProcessDefinitionKey, Status: catalog.Status, IsActive: catalog.IsActive,
 		Fields: fieldEvidence, RoutingRevision: routingRevision,
+		DefaultTicketCategoryID: defaultCTIID, DefaultCTIPath: path,
 	})
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	result := &creation.ResolvedCatalog{AccessPolicy: policy, ID: catalog.ID, Version: version, TargetClass: catalog.TargetClass, ServiceType: catalog.ServiceType, DeliveryTime: catalog.DeliveryTime, FormSchemaVersion: formVersion, ProcessDefinitionKey: catalog.ProcessDefinitionKey, RequiresApproval: catalog.RequiresApproval, SLAResponseTime: catalog.SLAResponseTime, SLAResolutionTime: catalog.SLAResolutionTime}
+	result := &creation.ResolvedCatalog{AccessPolicy: policy, ID: catalog.ID, Version: version, TargetClass: catalog.TargetClass, ServiceType: catalog.ServiceType, DeliveryTime: catalog.DeliveryTime, FormSchemaVersion: formVersion, ProcessDefinitionKey: catalog.ProcessDefinitionKey, RequiresApproval: catalog.RequiresApproval, SLAResponseTime: catalog.SLAResponseTime, SLAResolutionTime: catalog.SLAResolutionTime, DefaultTicketCategoryID: defaultCTIID}
 	if catalog.CiTypeID > 0 {
 		result.ConfigurationItemTypeID = &catalog.CiTypeID
 	}
@@ -94,6 +105,25 @@ func (s *Service) projectCreationCatalog(ctx context.Context, tx *ent.Tx, identi
 		result.CloudServiceID = &catalog.CloudServiceID
 	}
 	return result, definitions, fields, nil
+}
+
+// projectDefaultCTIPath 解析默认分类的只读路径投影。草稿可以不完整，因此这里只做
+// 租户归属与结构有效性的读取；发布与申请时由分类服务再校验完整三级与启用状态。
+func (s *Service) projectDefaultCTIPath(ctx context.Context, tx *ent.Tx, tenantID int, catalog *ent.ServiceCatalog) ([]publicCTIPathNode, error) {
+	if catalog.DefaultTicketCategoryID <= 0 {
+		return nil, nil
+	}
+	path, err := service.NewTicketCategoryService(tx.Client()).ProjectCTIPath(ctx, tx, tenantID, catalog.DefaultTicketCategoryID)
+	if err != nil {
+		// 草稿可以指向尚不完整的分类，但绝不跨租户：读取失败不写入指纹，
+		// 由发布校验或目录编辑界面给出可操作错误。
+		return nil, nil
+	}
+	projection := make([]publicCTIPathNode, 0, len(path))
+	for _, node := range path {
+		projection = append(projection, publicCTIPathNode{ID: node.ID, ParentID: node.ParentID, Level: node.Level, Name: node.Name, Code: node.Code, IsActive: node.Active})
+	}
+	return projection, nil
 }
 
 func creationRevision(value any) (string, error) {

@@ -41,6 +41,15 @@ export function classificationPath(categoryId: number | undefined, nodes: Ticket
   return path;
 }
 
-export function classificationUpdate(path: number[] | undefined, touched: boolean) {
-  return touched ? { categoryId: path?.length ? path[path.length - 1] : 0 } : {};
+/**
+ * 分类变更载荷：只在用户确实改过分类时携带 categoryId 与必填原因。
+ * 后端对专业记录执行同一契约（分类变化必须有原因），因此这里同步阻断，
+ * 避免出现"前端显示成功、后端拒绝"的错位。
+ */
+export function classificationUpdate(path: number[] | undefined, touched: boolean, reason?: string) {
+  if (!touched) return {};
+  return {
+    categoryId: path?.length ? path[path.length - 1] : 0,
+    classificationReason: (reason ?? '').trim(),
+  };
 }

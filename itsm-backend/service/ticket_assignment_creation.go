@@ -40,8 +40,12 @@ func (s *TicketAssignmentSmartService) prepareConfiguredAssignment(ctx context.C
 	}
 	ruleOwner := *s.ruleService
 	ruleOwner.client = tx.Client()
+	categoryPath, err := ResolveRuleMatchPath(ctx, tx, item.TenantID, item.CategoryID)
+	if err != nil {
+		return nil, false, err
+	}
 	for _, rule := range rules {
-		matched, err := evaluateTicketRuleConditions(rule.Conditions, item)
+		matched, err := EvaluateTicketRuleConditions(TicketRuleMatch{Item: item, CategoryPath: categoryPath}, rule.Conditions)
 		if err != nil {
 			return nil, false, err
 		}

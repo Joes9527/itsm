@@ -21,19 +21,21 @@ type CreateProblemRequest struct {
 
 // UpdateProblemRequest 更新问题请求
 type UpdateProblemRequest struct {
-	OperationID      string  `json:"operationId" binding:"required,max=200"`
-	AssigneeID       *int    `json:"assigneeId,omitempty" binding:"omitempty,gt=0"`
-	AssignmentReason string  `json:"assignmentReason"`
-	Workaround       *string `json:"workaround"`
-	Resolution       *string `json:"resolution"`
-	Version          int     `json:"version" binding:"required,gt=0"`
-	Title            *string `json:"title" binding:"omitempty,min=2,max=200"`
-	Description      *string `json:"description" binding:"omitempty,min=10,max=5000"`
-	Priority         *string `json:"priority" binding:"omitempty"`
-	Status           *string `json:"status" binding:"omitempty"`
-	CategoryID       *int    `json:"categoryId,omitempty" binding:"omitempty,gte=0"`
-	RootCause        *string `json:"rootCause" binding:"omitempty"`
-	Impact           *string `json:"impact" binding:"omitempty"`
+	OperationID      string `json:"operationId" binding:"required,max=200"`
+	AssigneeID       *int   `json:"assigneeId,omitempty" binding:"omitempty,gt=0"`
+	AssignmentReason string `json:"assignmentReason"`
+	// ClassificationReason 是分类纠正原因：分类确实变化时必填（B1 治理契约）。
+	ClassificationReason string  `json:"classificationReason"`
+	Workaround           *string `json:"workaround"`
+	Resolution           *string `json:"resolution"`
+	Version              int     `json:"version" binding:"required,gt=0"`
+	Title                *string `json:"title" binding:"omitempty,min=2,max=200"`
+	Description          *string `json:"description" binding:"omitempty,min=10,max=5000"`
+	Priority             *string `json:"priority" binding:"omitempty"`
+	Status               *string `json:"status" binding:"omitempty"`
+	CategoryID           *int    `json:"categoryId,omitempty" binding:"omitempty,gte=0"`
+	RootCause            *string `json:"rootCause" binding:"omitempty"`
+	Impact               *string `json:"impact" binding:"omitempty"`
 }
 
 // UpdateProblemRootCauseRequest 记录问题根因。

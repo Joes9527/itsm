@@ -10,7 +10,10 @@ import (
 
 func TestBPMNAssignmentSourceMigrationRegistered(t *testing.T) {
 	const version = "047_bpmn_assignment_source"
-	require.Equal(t, version, RegisteredMigrations[len(RegisteredMigrations)-2].Version)
+	// 047 keeps its place: later ordinary migrations append after it and before retirement.
+	require.Equal(t, version, RegisteredMigrations[len(RegisteredMigrations)-3].Version)
+	require.Equal(t, CTIGovernanceVersion, RegisteredMigrations[len(RegisteredMigrations)-2].Version)
+	require.Equal(t, WorkItemRetireVersion, RegisteredMigrations[len(RegisteredMigrations)-1].Version)
 	asset, err := os.ReadFile("../migrations/" + version + ".sql")
 	require.NoError(t, err)
 	require.Equal(t, strings.TrimSpace(GetMigrationSQL(version)), strings.TrimSpace(string(asset)))
@@ -38,13 +41,14 @@ func TestBPMNAssignmentSourceAppendPreservesExistingRetirementReceipt(t *testing
 	catalog := ControlledMigrationCatalog()
 	var prior []Migration
 	for _, definition := range catalog {
-		if definition.Migration.Version != "047_bpmn_assignment_source" {
+		if definition.Migration.Version != "047_bpmn_assignment_source" && definition.Migration.Version != CTIGovernanceVersion {
 			prior = append(prior, definition.Migration)
 		}
 	}
 	plan, err := PlanMigrations(catalog, controlledReceipts(prior), OpUp, nil)
 	require.NoError(t, err)
-	require.Len(t, plan.Executable, 1)
+	require.Len(t, plan.Executable, 2)
 	require.Equal(t, "047_bpmn_assignment_source", plan.Executable[0].Version)
+	require.Equal(t, CTIGovernanceVersion, plan.Executable[1].Version)
 	require.Empty(t, plan.PendingManual)
 }

@@ -39,6 +39,7 @@ import {
   Tag,
   Divider,
 } from 'antd';
+import { CTISelector } from '@/components/business/CTISelector';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
 import { CMDBApi } from '@/lib/api/cmdb-api';
 import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
@@ -183,6 +184,8 @@ const ServiceCatalogManagement = () => {
         availability: values.deliveryTime ? { responseTime: values.deliveryTime } : undefined,
         ciTypeId: values.ciTypeId ?? 0,
         cloudServiceId: values.cloudServiceId ?? 0,
+        // 目录默认分类：未选择视为未配置；更新时 0 显式清除（后端 Clear）。
+        defaultTicketCategoryId: values.defaultTicketCategoryId ?? 0,
         fields,
         processDefinitionKey: values.processDefinitionKey || '',
         targetClass: values.targetClass || '',
@@ -234,6 +237,7 @@ const ServiceCatalogManagement = () => {
       status: catalog.status,
       ciTypeId: catalog.ciTypeId,
       cloudServiceId: catalog.cloudServiceId,
+      defaultTicketCategoryId: catalog.defaultTicketCategoryId ?? undefined,
       fields: fieldsForForm,
       processDefinitionKey: catalog.processDefinitionKey,
       serviceType: catalog.serviceType,
@@ -940,6 +944,23 @@ const ServiceCatalogManagement = () => {
               </Form.Item>
             </Col>
           </Row>
+
+          <Form.Item
+            name='defaultTicketCategoryId'
+            label='默认工单分类（三级）'
+            tooltip='申请该服务后新工单的分类；发布且启用分类门禁后必填'
+            extra='目录默认分类是初始权威：申请入口不再询问用户分类；独立报障仍可“不确定”。'
+            rules={[
+              ({ getFieldValue }) => ({
+                validator: (_rule, value) =>
+                  getFieldValue('status') === 'enabled' && !value
+                    ? Promise.reject(new Error('发布的服务目录必须选择完整三级默认分类'))
+                    : Promise.resolve(),
+              }),
+            ]}
+          >
+            <CTISelector requiredDepth={3} />
+          </Form.Item>
 
           <Row gutter={16}>
             <Col span={12}>

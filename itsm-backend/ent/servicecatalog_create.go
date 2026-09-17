@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"itsm-backend/ent/servicecatalog"
+	"itsm-backend/ent/ticketcategory"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -304,6 +305,20 @@ func (_c *ServiceCatalogCreate) SetNillableSortOrder(v *int) *ServiceCatalogCrea
 	return _c
 }
 
+// SetDefaultTicketCategoryID sets the "default_ticket_category_id" field.
+func (_c *ServiceCatalogCreate) SetDefaultTicketCategoryID(v int) *ServiceCatalogCreate {
+	_c.mutation.SetDefaultTicketCategoryID(v)
+	return _c
+}
+
+// SetNillableDefaultTicketCategoryID sets the "default_ticket_category_id" field if the given value is not nil.
+func (_c *ServiceCatalogCreate) SetNillableDefaultTicketCategoryID(v *int) *ServiceCatalogCreate {
+	if v != nil {
+		_c.SetDefaultTicketCategoryID(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *ServiceCatalogCreate) SetCreatedAt(v time.Time) *ServiceCatalogCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -330,6 +345,11 @@ func (_c *ServiceCatalogCreate) SetNillableUpdatedAt(v *time.Time) *ServiceCatal
 		_c.SetUpdatedAt(*v)
 	}
 	return _c
+}
+
+// SetDefaultTicketCategory sets the "default_ticket_category" edge to the TicketCategory entity.
+func (_c *ServiceCatalogCreate) SetDefaultTicketCategory(v *TicketCategory) *ServiceCatalogCreate {
+	return _c.SetDefaultTicketCategoryID(v.ID)
 }
 
 // Mutation returns the ServiceCatalogMutation object of the builder.
@@ -569,6 +589,23 @@ func (_c *ServiceCatalogCreate) createSpec() (*ServiceCatalog, *sqlgraph.CreateS
 	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(servicecatalog.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
+	}
+	if nodes := _c.mutation.DefaultTicketCategoryIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   servicecatalog.DefaultTicketCategoryTable,
+			Columns: []string{servicecatalog.DefaultTicketCategoryColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(ticketcategory.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.DefaultTicketCategoryID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }
@@ -1039,6 +1076,24 @@ func (u *ServiceCatalogUpsert) UpdateSortOrder() *ServiceCatalogUpsert {
 // AddSortOrder adds v to the "sort_order" field.
 func (u *ServiceCatalogUpsert) AddSortOrder(v int) *ServiceCatalogUpsert {
 	u.Add(servicecatalog.FieldSortOrder, v)
+	return u
+}
+
+// SetDefaultTicketCategoryID sets the "default_ticket_category_id" field.
+func (u *ServiceCatalogUpsert) SetDefaultTicketCategoryID(v int) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldDefaultTicketCategoryID, v)
+	return u
+}
+
+// UpdateDefaultTicketCategoryID sets the "default_ticket_category_id" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateDefaultTicketCategoryID() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldDefaultTicketCategoryID)
+	return u
+}
+
+// ClearDefaultTicketCategoryID clears the value of the "default_ticket_category_id" field.
+func (u *ServiceCatalogUpsert) ClearDefaultTicketCategoryID() *ServiceCatalogUpsert {
+	u.SetNull(servicecatalog.FieldDefaultTicketCategoryID)
 	return u
 }
 
@@ -1593,6 +1648,27 @@ func (u *ServiceCatalogUpsertOne) AddSortOrder(v int) *ServiceCatalogUpsertOne {
 func (u *ServiceCatalogUpsertOne) UpdateSortOrder() *ServiceCatalogUpsertOne {
 	return u.Update(func(s *ServiceCatalogUpsert) {
 		s.UpdateSortOrder()
+	})
+}
+
+// SetDefaultTicketCategoryID sets the "default_ticket_category_id" field.
+func (u *ServiceCatalogUpsertOne) SetDefaultTicketCategoryID(v int) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetDefaultTicketCategoryID(v)
+	})
+}
+
+// UpdateDefaultTicketCategoryID sets the "default_ticket_category_id" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateDefaultTicketCategoryID() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateDefaultTicketCategoryID()
+	})
+}
+
+// ClearDefaultTicketCategoryID clears the value of the "default_ticket_category_id" field.
+func (u *ServiceCatalogUpsertOne) ClearDefaultTicketCategoryID() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearDefaultTicketCategoryID()
 	})
 }
 
@@ -2315,6 +2391,27 @@ func (u *ServiceCatalogUpsertBulk) AddSortOrder(v int) *ServiceCatalogUpsertBulk
 func (u *ServiceCatalogUpsertBulk) UpdateSortOrder() *ServiceCatalogUpsertBulk {
 	return u.Update(func(s *ServiceCatalogUpsert) {
 		s.UpdateSortOrder()
+	})
+}
+
+// SetDefaultTicketCategoryID sets the "default_ticket_category_id" field.
+func (u *ServiceCatalogUpsertBulk) SetDefaultTicketCategoryID(v int) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetDefaultTicketCategoryID(v)
+	})
+}
+
+// UpdateDefaultTicketCategoryID sets the "default_ticket_category_id" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateDefaultTicketCategoryID() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateDefaultTicketCategoryID()
+	})
+}
+
+// ClearDefaultTicketCategoryID clears the value of the "default_ticket_category_id" field.
+func (u *ServiceCatalogUpsertBulk) ClearDefaultTicketCategoryID() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearDefaultTicketCategoryID()
 	})
 }
 

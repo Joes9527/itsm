@@ -17,9 +17,10 @@ func TestToolAuthorityLockMigrationRequiresPriorPreparation(t *testing.T) {
 	}
 	plan, err := PlanMigrations(catalog, controlledReceipts(prefix), OpUp, nil)
 	require.NoError(t, err)
-	require.Len(t, plan.Executable, 6)
+	require.Len(t, plan.Executable, 7)
 	require.Equal(t, AuthTokenStateVersion, plan.Executable[4].Version)
 	require.Equal(t, ToolExecutionAuthorityLockVersion, plan.Executable[0].Version)
+	require.Equal(t, CTIGovernanceVersion, plan.Executable[6].Version)
 	require.NotEmpty(t, GetMigrationSQL(ToolExecutionAuthorityLockVersion))
 	for _, removed := range []string{WorkItemPrepareVersion, CandidateExecutionScopeVersion, SLAAlertNotificationVersion, ToolInvocationExecutionScopeVersion} {
 		var invalid []Migration

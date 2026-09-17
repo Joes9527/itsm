@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"itsm-backend/ent/department"
 	"itsm-backend/ent/predicate"
+	"itsm-backend/ent/servicecatalog"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcategory"
 	"math"
@@ -21,14 +22,15 @@ import (
 // TicketCategoryQuery is the builder for querying TicketCategory entities.
 type TicketCategoryQuery struct {
 	config
-	ctx            *QueryContext
-	order          []ticketcategory.OrderOption
-	inters         []Interceptor
-	predicates     []predicate.TicketCategory
-	withTickets    *TicketQuery
-	withChildren   *TicketCategoryQuery
-	withParent     *TicketCategoryQuery
-	withDepartment *DepartmentQuery
+	ctx                 *QueryContext
+	order               []ticketcategory.OrderOption
+	inters              []Interceptor
+	predicates          []predicate.TicketCategory
+	withTickets         *TicketQuery
+	withChildren        *TicketCategoryQuery
+	withParent          *TicketCategoryQuery
+	withDepartment      *DepartmentQuery
+	withDefaultCatalogs *ServiceCatalogQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -146,6 +148,28 @@ func (_q *TicketCategoryQuery) QueryDepartment() *DepartmentQuery {
 			sqlgraph.From(ticketcategory.Table, ticketcategory.FieldID, selector),
 			sqlgraph.To(department.Table, department.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, ticketcategory.DepartmentTable, ticketcategory.DepartmentColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryDefaultCatalogs chains the current query on the "default_catalogs" edge.
+func (_q *TicketCategoryQuery) QueryDefaultCatalogs() *ServiceCatalogQuery {
+	query := (&ServiceCatalogClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(ticketcategory.Table, ticketcategory.FieldID, selector),
+			sqlgraph.To(servicecatalog.Table, servicecatalog.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, ticketcategory.DefaultCatalogsTable, ticketcategory.DefaultCatalogsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -340,15 +364,16 @@ func (_q *TicketCategoryQuery) Clone() *TicketCategoryQuery {
 		return nil
 	}
 	return &TicketCategoryQuery{
-		config:         _q.config,
-		ctx:            _q.ctx.Clone(),
-		order:          append([]ticketcategory.OrderOption{}, _q.order...),
-		inters:         append([]Interceptor{}, _q.inters...),
-		predicates:     append([]predicate.TicketCategory{}, _q.predicates...),
-		withTickets:    _q.withTickets.Clone(),
-		withChildren:   _q.withChildren.Clone(),
-		withParent:     _q.withParent.Clone(),
-		withDepartment: _q.withDepartment.Clone(),
+		config:              _q.config,
+		ctx:                 _q.ctx.Clone(),
+		order:               append([]ticketcategory.OrderOption{}, _q.order...),
+		inters:              append([]Interceptor{}, _q.inters...),
+		predicates:          append([]predicate.TicketCategory{}, _q.predicates...),
+		withTickets:         _q.withTickets.Clone(),
+		withChildren:        _q.withChildren.Clone(),
+		withParent:          _q.withParent.Clone(),
+		withDepartment:      _q.withDepartment.Clone(),
+		withDefaultCatalogs: _q.withDefaultCatalogs.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -396,6 +421,17 @@ func (_q *TicketCategoryQuery) WithDepartment(opts ...func(*DepartmentQuery)) *T
 		opt(query)
 	}
 	_q.withDepartment = query
+	return _q
+}
+
+// WithDefaultCatalogs tells the query-builder to eager-load the nodes that are connected to
+// the "default_catalogs" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *TicketCategoryQuery) WithDefaultCatalogs(opts ...func(*ServiceCatalogQuery)) *TicketCategoryQuery {
+	query := (&ServiceCatalogClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withDefaultCatalogs = query
 	return _q
 }
 
@@ -477,11 +513,12 @@ func (_q *TicketCategoryQuery) sqlAll(ctx context.Context, hooks ...queryHook) (
 	var (
 		nodes       = []*TicketCategory{}
 		_spec       = _q.querySpec()
-		loadedTypes = [4]bool{
+		loadedTypes = [5]bool{
 			_q.withTickets != nil,
 			_q.withChildren != nil,
 			_q.withParent != nil,
 			_q.withDepartment != nil,
+			_q.withDefaultCatalogs != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -525,6 +562,15 @@ func (_q *TicketCategoryQuery) sqlAll(ctx context.Context, hooks ...queryHook) (
 	if query := _q.withDepartment; query != nil {
 		if err := _q.loadDepartment(ctx, query, nodes, nil,
 			func(n *TicketCategory, e *Department) { n.Edges.Department = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withDefaultCatalogs; query != nil {
+		if err := _q.loadDefaultCatalogs(ctx, query, nodes,
+			func(n *TicketCategory) { n.Edges.DefaultCatalogs = []*ServiceCatalog{} },
+			func(n *TicketCategory, e *ServiceCatalog) {
+				n.Edges.DefaultCatalogs = append(n.Edges.DefaultCatalogs, e)
+			}); err != nil {
 			return nil, err
 		}
 	}
@@ -647,6 +693,36 @@ func (_q *TicketCategoryQuery) loadDepartment(ctx context.Context, query *Depart
 		for i := range nodes {
 			assign(nodes[i], n)
 		}
+	}
+	return nil
+}
+func (_q *TicketCategoryQuery) loadDefaultCatalogs(ctx context.Context, query *ServiceCatalogQuery, nodes []*TicketCategory, init func(*TicketCategory), assign func(*TicketCategory, *ServiceCatalog)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int]*TicketCategory)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(servicecatalog.FieldDefaultTicketCategoryID)
+	}
+	query.Where(predicate.ServiceCatalog(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(ticketcategory.DefaultCatalogsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.DefaultTicketCategoryID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "default_ticket_category_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
 	}
 	return nil
 }

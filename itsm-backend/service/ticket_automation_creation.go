@@ -34,8 +34,12 @@ func (s *TicketAutomationRuleService) prepareCreationRules(ctx context.Context, 
 	if len(rules) > 0 && s == nil {
 		return nil, creation.NewDomainValidationFailed("configured ticket rules have no owner", nil)
 	}
+	categoryPath, err := ResolveRuleMatchPath(ctx, tx, item.TenantID, item.CategoryID)
+	if err != nil {
+		return nil, creation.NewDomainValidationFailed("classification path unavailable for ticket rules", err)
+	}
 	for _, rule := range rules {
-		matched, err := evaluateTicketRuleConditions(rule.Conditions, item)
+		matched, err := EvaluateTicketRuleConditions(TicketRuleMatch{Item: item, CategoryPath: categoryPath}, rule.Conditions)
 		if err != nil {
 			return nil, creation.NewDomainValidationFailed("malformed ticket rule conditions", err)
 		}

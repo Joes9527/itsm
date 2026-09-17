@@ -13,6 +13,7 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/auditlog"
 	creation "itsm-backend/handlers/common/workitemcreation"
 )
 
@@ -35,7 +36,11 @@ func TestProblemHTTPClassificationIDContract(t *testing.T) {
 	_, err = client.Ticket.UpdateOneID(*p.WorkItemID).SetCategoryID(original.ID).Save(ctx)
 	require.NoError(t, err)
 	path := fmt.Sprintf("/api/v1/problems/%d", p.ID)
+	// B1 契约：分类确实变化时必须给出原因，因此统一在这里补上。
 	update := func(req dto.UpdateProblemRequest, want int) {
+		if req.CategoryID != nil {
+			req.ClassificationReason = "reclassified during triage"
+		}
 		req.Version = client.Ticket.GetX(ctx, *p.WorkItemID).Version
 		w := performProblemRequest(router, http.MethodPut, path, req, tenant.ID, user.ID)
 		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
@@ -49,7 +54,7 @@ func TestProblemHTTPClassificationIDContract(t *testing.T) {
 	for _, id := range []int{inactive.ID, other.ID, -1, 999999} {
 		before, err := client.Ticket.Get(ctx, *p.WorkItemID)
 		require.NoError(t, err)
-		w := performProblemRequest(router, http.MethodPut, path, dto.UpdateProblemRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()), Version: before.Version, CategoryID: &id, Title: strPtr("Must not persist")}, tenant.ID, user.ID)
+		w := performProblemRequest(router, http.MethodPut, path, dto.UpdateProblemRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()), Version: before.Version, CategoryID: &id, ClassificationReason: "reclassified during triage", Title: strPtr("Must not persist")}, tenant.ID, user.ID)
 		var response common.Response
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
 		require.NotZero(t, response.Code)
@@ -59,6 +64,27 @@ func TestProblemHTTPClassificationIDContract(t *testing.T) {
 		require.Equal(t, before.Version, after.Version)
 		require.Equal(t, selected.ID, after.CategoryID)
 	}
+	// 有变化但缺原因：必须拒绝，且不改变分类、不留下纠正审计。
+	beforeReason, err := client.Ticket.Get(ctx, *p.WorkItemID)
+	require.NoError(t, err)
+	reasonRecorder := performProblemRequest(router, http.MethodPut, path, dto.UpdateProblemRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()), Version: beforeReason.Version, CategoryID: &original.ID}, tenant.ID, user.ID)
+	var reasonResponse common.Response
+	require.NoError(t, json.Unmarshal(reasonRecorder.Body.Bytes(), &reasonResponse))
+	require.NotZero(t, reasonResponse.Code)
+	afterReason, err := client.Ticket.Get(ctx, *p.WorkItemID)
+	require.NoError(t, err)
+	require.Equal(t, selected.ID, afterReason.CategoryID)
+	require.Equal(t, beforeReason.Version, afterReason.Version)
+	require.Zero(t, client.AuditLog.Query().Where(auditlog.ResourceEQ("work_item_classification")).CountX(ctx), "rejected correction must not leave audit evidence")
+
+	// 纠正证据必须落在既有操作回执里：原因 + 前后完整路径快照。
+	receipt := client.AuditLog.Query().Where(auditlog.ResourceEQ("work_item")).Order(ent.Desc(auditlog.FieldID)).FirstX(ctx)
+	require.NotNil(t, receipt.RequestBody)
+	require.Contains(t, *receipt.RequestBody, `"classificationReason":"reclassified during triage"`)
+	require.Contains(t, *receipt.RequestBody, `"classificationBefore"`)
+	require.Contains(t, *receipt.RequestBody, `"classificationAfter"`)
+	require.Contains(t, *receipt.RequestBody, fmt.Sprintf(`"id":%d`, selected.ID))
+
 	_, err = client.TicketCategory.UpdateOneID(selected.ID).SetIsActive(false).Save(ctx)
 	require.NoError(t, err)
 	update(dto.UpdateProblemRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()), Title: strPtr("Retain inactive existing classification")}, selected.ID)
@@ -74,7 +100,7 @@ func TestProblemHTTPClassificationIDContract(t *testing.T) {
 	})
 	before, err := client.Ticket.Get(ctx, *p.WorkItemID)
 	require.NoError(t, err)
-	w := performProblemRequest(router, http.MethodPut, path, dto.UpdateProblemRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()), Version: before.Version, CategoryID: &original.ID}, tenant.ID, user.ID)
+	w := performProblemRequest(router, http.MethodPut, path, dto.UpdateProblemRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()), Version: before.Version, CategoryID: &original.ID, ClassificationReason: "reclassified during triage"}, tenant.ID, user.ID)
 	var response common.Response
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
 	require.NotZero(t, response.Code)

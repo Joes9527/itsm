@@ -239,11 +239,23 @@ func (s *TicketAutomationRuleService) TestAutomationRule(
 }
 
 func (s *TicketAutomationRuleService) evaluateConditions(ctx context.Context, conditions []map[string]interface{}, item *ent.Ticket) (bool, string) {
-	matched, err := evaluateTicketRuleConditions(conditions, item)
+	categoryPath, err := s.categoryMatchPath(ctx, item)
+	if err != nil {
+		return false, err.Error()
+	}
+	matched, err := EvaluateTicketRuleConditions(TicketRuleMatch{Item: item, CategoryPath: categoryPath}, conditions)
 	if err != nil {
 		return false, err.Error()
 	}
 	return matched, "条件已评估"
+}
+
+// categoryMatchPath 解析工单分类的完整路径，供分类条件的子树匹配使用。
+func (s *TicketAutomationRuleService) categoryMatchPath(ctx context.Context, item *ent.Ticket) ([]CTINode, error) {
+	if s == nil || s.client == nil || item == nil || item.CategoryID <= 0 {
+		return nil, nil
+	}
+	return NewTicketCategoryService(s.client).GetCategoryPath(ctx, item.TenantID, item.CategoryID)
 }
 
 // getActionDescriptions 获取动作描述
