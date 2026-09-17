@@ -2,15 +2,12 @@ package service
 
 import (
 	"context"
-	"fmt"
-	"strings"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/ticketcategory"
 )
 
 // incidentTenantScope derives tenant and soft-delete visibility exclusively
@@ -27,61 +24,16 @@ func withIncidentWorkItemProjection(query *ent.TicketQuery) {
 	})
 }
 
-// resolveIncidentCategory resolves the existing string API into the one
-// structured WorkItem category relation. A supplied subcategory must be an
-// active child of the supplied category in the same tenant.
-func resolveIncidentCategory(ctx context.Context, client *ent.Client, tenantID int, categoryName, subcategoryName string) (*int, error) {
-	categoryName = strings.TrimSpace(categoryName)
-	subcategoryName = strings.TrimSpace(subcategoryName)
-	if categoryName == "" && subcategoryName == "" {
-		return nil, nil
-	}
-	if categoryName == "" {
-		return nil, fmt.Errorf("category is required when subcategory is supplied")
-	}
-
-	query := client.TicketCategory.Query().Where(
-		ticketcategory.TenantIDEQ(tenantID),
-		ticketcategory.IsActiveEQ(true),
-	)
-	if subcategoryName == "" {
-		query = query.Where(ticketcategory.NameEQ(categoryName))
-	} else {
-		query = query.Where(
-			ticketcategory.NameEQ(subcategoryName),
-			ticketcategory.HasParentWith(
-				ticketcategory.NameEQ(categoryName),
-				ticketcategory.TenantIDEQ(tenantID),
-				ticketcategory.IsActiveEQ(true),
-			),
-		)
-	}
-	category, err := query.Only(ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("ticket category not found in tenant")
-		}
-		return nil, fmt.Errorf("resolve ticket category: %w", err)
-	}
-	return &category.ID, nil
-}
-
-// UpdateClassification owns the existing name-based classification endpoint.
-// General incident edits use CategoryID directly and never resolve display labels.
+// UpdateClassification 是事件分类的**受控纠正入口**（PUT /incidents/:id/classification），
+// 与录入/其它专业域一致地使用分类 ID 契约：只接受最深节点 ID。
 //
-// 分类纠正契约（B1）：原因必填（由 updateIncident 在“确实变化”时再次校验），
-// 目标必须解析为同租户、启用且父链连续的路径；前后路径快照写入事件时间线。
-func (s *IncidentService) UpdateClassification(ctx context.Context, id, tenantID, version int, category, subcategory, reason string) (*dto.IncidentResponse, error) {
-	categoryID, err := resolveIncidentCategory(ctx, s.client, tenantID, category, subcategory)
-	if err != nil {
-		return nil, err
-	}
-	if categoryID == nil {
-		zero := 0
-		categoryID = &zero
-	}
+//   - categoryID > 0：解析为该租户内的路径，校验完整性与启用状态（由 UpdateIncident 内
+//     的共享纠正契约完成），并记录前后路径证据；
+//   - categoryID == 0：清空分类（事件允许清空，但必须给出原因）；
+//   - 任何变化都必须带原因，否则拒绝 —— 不再接受名称解析，避免"空载荷静默成功"。
+func (s *IncidentService) UpdateClassification(ctx context.Context, id, tenantID, version, categoryID int, reason string) (*dto.IncidentResponse, error) {
 	return s.UpdateIncident(ctx, id, &dto.UpdateIncidentRequest{
-		CategoryID:           categoryID,
+		CategoryID:           &categoryID,
 		Version:              version,
 		ClassificationReason: reason,
 	}, tenantID)

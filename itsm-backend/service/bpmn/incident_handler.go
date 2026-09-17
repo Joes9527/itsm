@@ -18,7 +18,7 @@ import (
 type IncidentDomainServiceInterface interface {
 	ApplyIncidentCommand(context.Context, dto.IncidentCommand) (workitemmutation.Result, error)
 	UpdateIncident(ctx context.Context, id int, req *dto.UpdateIncidentRequest, tenantID int) (*dto.IncidentResponse, error)
-	UpdateClassification(ctx context.Context, id, tenantID, version int, category, subcategory, reason string) (*dto.IncidentResponse, error)
+	UpdateClassification(ctx context.Context, id, tenantID, version, categoryID int, reason string) (*dto.IncidentResponse, error)
 }
 
 // IncidentServiceTaskHandler 事件服务任务处理器
@@ -145,8 +145,6 @@ func (h *IncidentServiceTaskHandler) updateIncident(ctx context.Context, variabl
 // categorizeIncident 分类事件
 func (h *IncidentServiceTaskHandler) categorizeIncident(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
 	incidentID := GetIntFromVars(variables, "incident_id")
-	category, _ := variables["category"].(string)
-	subcategory, _ := variables["subcategory"].(string)
 
 	if incidentID <= 0 {
 		return nil, fmt.Errorf("无效的事件ID")
@@ -165,14 +163,16 @@ func (h *IncidentServiceTaskHandler) categorizeIncident(ctx context.Context, var
 	if strings.TrimSpace(reason) == "" {
 		reason = "BPMN service task classified the incident"
 	}
-	updated, err := h.incidentService.UpdateClassification(ctx, incidentID, tenantID, GetIntFromVars(variables, "version"), category, subcategory, reason)
+	// 分类以最深节点 ID 传递（与录入/维护界面同一契约）；流程未提供 ID 时按"清空 + 原因"处理。
+	categoryID := GetIntFromVars(variables, "category_id")
+	updated, err := h.incidentService.UpdateClassification(ctx, incidentID, tenantID, GetIntFromVars(variables, "version"), categoryID, reason)
 	if err != nil {
 		return nil, fmt.Errorf("分类事件失败: %w", err)
 	}
 
-	h.logger.Infow("Incident categorized via BPMN", "incident_id", incidentID, "category", category, "subcategory", subcategory)
+	h.logger.Infow("Incident categorized via BPMN", "incident_id", incidentID, "category_id", categoryID)
 
-	return incidentMutationEffect(&dto.IncidentMutationOutcome{Incident: updated, Applied: true}, fmt.Sprintf("事件 %d 已分类: %s/%s", incidentID, category, subcategory))
+	return incidentMutationEffect(&dto.IncidentMutationOutcome{Incident: updated, Applied: true}, fmt.Sprintf("事件 %d 已分类: category_id=%d", incidentID, categoryID))
 }
 
 func incidentMutationEffect(outcome *dto.IncidentMutationOutcome, message string) (*CallbackEffect, error) {
