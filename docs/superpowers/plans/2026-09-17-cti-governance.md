@@ -8,7 +8,10 @@
 
 **Tech Stack:** Go/Gin/Ent/PostgreSQL，Next.js/TypeScript/Ant Design，现有 Jest、Playwright 及 PG 集成测试设施。
 
-**Status:** draft implementation plan，设计及审查补充已于 2026-09-17 获用户确认；本计划未执行、未授权共享环境写入。
+**Status:** 执行中（阶段 A 完成、B1 后端四域完成、B2 完成、B3 主体完成；B4 进行中）。
+未授权且**未执行**：任何共享/生产库写入、迁移 048 的目标应用、门禁的租户启用、端到端浏览器验收（脚本已交付，NOT RUN）。
+交付物：分支 `codex/feat/cti-governance` / PR #48；受控启用步骤见
+[CTI 治理受控启用清单](../../operations/cti-governance-rollout-checklist.md)。
 
 ## Global Constraints
 
@@ -127,7 +130,7 @@ func TestCTIAllowsUnclassifiedReport(t *testing.T) {
 - [x] 实现根ParentID=0、Level从1连续递增、同租户、最多3、无环、完整/部分及全部祖先启用校验。解析最深节点向上最多3步，异常链返回失败，不能递归无限深。
 - [x] 在创建/移动/导入/删除/停用入口调用同一维护规则；锁定完整被操作子树及引用检查所需行，移动被引用后代的祖先也拒绝。目录/工单创建与维护按固定锁顺序协调，不能只做preflight。
 - [x] 迁移增加 `service_catalogs.default_ticket_category_id` 可空结构引用；检查实际PG与Ent的编码唯一性差异，按现有租户契约处理。已有异常只出预检失败，不自动修复。`system_configs` 为保留键建立局部唯一约束，重复行先阻塞；新增列/约束附RLS/租户与回退边界。
-- [x] PG红绿用例命名为 `TestCTIStructurePostgres`：两个租户同名分类隔离；并发创建vs删除/停用不得产生无效引用；三级子树移动超深拒绝；字符串引用阻止删除；迁移失败原子回滚，不改旧账本。**已编写并通过 `go vet -tags integration_postgres` 编译；未执行（NOT RUN，无授权隔离目标）。**
+- [x] PG红绿用例命名为 `TestCTIStructurePostgres`：两个租户同名分类隔离；并发创建vs删除/停用不得产生无效引用；三级子树移动超深拒绝；字符串引用阻止删除；迁移失败原子回滚，不改旧账本。**已编写；隔离 PG 已执行通过（见下方"授权隔离目标后的补充执行证据"）。**
 - [x] 运行目标测试、迁移verify及 `git diff --check` 后提交 `feat: enforce CTI hierarchy and reference integrity`。迁移只在隔离目标应用。**
 
 ### 执行记录（A2）
@@ -917,3 +920,47 @@ itsm-frontend: npx jest --testPathPattern '(ticket-categories|CategoryReferences
 
 **B3 仅剩**：`disabled`/`default_resolver` 等历史描述字段不伪装成已生效规则的界面收敛（属独立小项）。
 随后进入 **B4**：全链路验收、文档与受控启用准备。
+
+### 执行记录（B4 增量一：验收脚本、启用清单与文档状态）
+
+**已交付**
+
+1. `itsm-frontend/tests/e2e/flows/cti-governance.spec.ts`：B4 必验矩阵的可执行验收脚本
+   （36 项 × chromium/webkit），全部使用**真实 UI 控件**驱动，不以 API 成功代替浏览器验收：
+   目录预分类驱动创建且只提交最深节点 / 普通报障保留"不确定" / 纠正缺原因被客户端阻断 /
+   事件恢复不拦而关闭拦 / 通用工单完成门禁 / 分类维护（三级无下级、编码只读、被引用不可删移、停用保留历史引用）/
+   规则"仅当前/包含下级" / 引用页签无权只报告存在且有权显示真实计数 / 被引用节点移动被拒。
+   **状态：NOT RUN** —— 需要隔离前端+后端部署与两租户夹具；脚本本身已通过
+   `tsc --noEmit`、`eslint` 与 `playwright test --list`（能被运行器发现：1 file / 36 tests）。
+2. `docs/operations/cti-governance-rollout-checklist.md`：可审阅启用清单，含
+   变更影响表、目标与唯一写入者、只读前置体检 SQL（与 048 预检等价）、迁移执行与独立复核、
+   **已发布目录补配默认分类清单**（导出 SQL + 表格模板）、三阶段开关与暂停/恢复演练、
+   回退与回退前导出、启用后 10 项复验清单、**未验证/未完成清单**、证据索引。
+   **本清单未在任何共享/生产库执行**（无目标写入授权，按计划只交付清单）。
+
+**文档状态更新（区分"代码交付"与"目标启用"）**
+
+- 设计文档状态：由"尚未实现"改为 **"代码已交付、目标未启用"**，并列明已交付/未启用/未完成三类；
+- `AGENTS.md`："CTI accepted design boundary" 改为 **"CTI governance contract"**：
+  明确代码已交付而**迁移未应用、门禁未启用**，并把六条必须成立的契约写进入口文档
+  （最深节点唯一权威、三级/租户内编码唯一不可变、被引用不可删移、完成门禁按类与动作失败关闭、
+  纠正原因与前后路径、规则 exact 缺省 + 引用清单按 RBAC 过滤而保护扫描不过滤）；
+- `CLAUDE.md` 同步镜像（AGENTS.md 要求两者不得漂移）；
+- `docs/README.md` 运维区新增启用清单入口；`docs/DEVELOPMENT_GUIDE.md` 更正为
+  "分支已交付、当前部署未启用"，避免把设计目标当成已部署能力；
+- 修正本计划内一处自相矛盾的证据旧注（A2 条目曾写"未执行"，与下方授权后补充证据冲突）。
+
+**验证**
+
+```text
+itsm-frontend: tsc --noEmit（spec 无错误）· eslint spec 无输出
+itsm-frontend: npx playwright test --list tests/e2e/flows/cti-governance.spec.ts -> 1 file / 36 tests（可被运行器发现）
+repo:          git diff --check -> 干净
+```
+
+**B4 剩余**
+
+- 端到端浏览器验收执行（需隔离前端部署授权；当前 NOT RUN）
+- 启用清单中的目标列填写与执行（需目标写入授权）
+- `docs/development.md`/`docs/operations.md` 中若出现 CTI 描述需一并核对（本轮已核对 DEVELOPMENT_GUIDE）
+- 独立代码 review：PR #48 已开放评审；我这侧等待反馈并处理重要问题

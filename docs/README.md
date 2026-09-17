@@ -44,6 +44,7 @@
 - [开发指南](./development.md): 本地开发、前后端命令、调试和常见问题。
 - [数据库说明](./database.md): 数据库迁移、备份和模型说明。
 - [运维手册](./operations.md): 日志、健康检查、备份、恢复和故障排查。
+- [CTI 治理受控启用清单](./operations/cti-governance-rollout-checklist.md): 迁移 048 的前置体检、唯一写入者、已发布目录补配清单、分阶段开关与暂停、回退与复验（**代码已交付、目标未启用**）。
 - [v1.0 GA 收口验收指南](./v1-ga-readiness.md): 默认能力、连接器、AI 审计和部署模式检查。
 - [文档命名与维护规范](./documentation-style-guide.md): 目录分层、命名规则和归档标准。
 
