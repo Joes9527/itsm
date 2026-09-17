@@ -30,7 +30,6 @@ import (
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/slaviolation"
 	entTicket "itsm-backend/ent/ticket"
-	"itsm-backend/ent/ticketcategory"
 	entTicketComment "itsm-backend/ent/ticketcomment"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/repository/base"
@@ -378,7 +377,7 @@ func (s *TicketService) UpdateTicket(ctx context.Context, cmd dto.TicketEditComm
 	if req.Status == "approved" || req.Status == "rejected" {
 		return empty, fmt.Errorf("审批状态只能由 BPMN 任务命令推进")
 	}
-	if req.Title != "" || req.Description != "" || req.Priority != "" || req.Status != "" || req.Type != "" || req.Category != "" || req.CategoryID != nil || req.AssigneeID != nil || req.RequesterID != 0 || req.Resolution != "" || req.FormFields != nil {
+	if req.Title != "" || req.Description != "" || req.Priority != "" || req.Status != "" || req.Type != "" || req.CategoryID != nil || req.AssigneeID != nil || req.RequesterID != 0 || req.Resolution != "" || req.FormFields != nil {
 		if err := rejectProfessionalTicketMutation(current.RecordClass); err != nil {
 			return empty, err
 		}
@@ -461,32 +460,34 @@ func (s *TicketService) UpdateTicket(ctx context.Context, cmd dto.TicketEditComm
 		priority := ticket.Priority(req.Priority)
 		params.Priority = &priority
 	}
-	categoryID := req.CategoryID
-	if categoryID == nil && strings.TrimSpace(req.Category) != "" {
-		if s.client == nil {
-			return empty, fmt.Errorf("无法解析工单分类")
+	// 分类只接受最深节点 ID（CTI 治理契约）：0 = 清空，> 0 = 同租户完整路径目标。
+	// 这里不再按显示名称解析 —— 同名节点会让分类静默落到错误分支，且无法记录完整路径。
+	classificationChanged := false
+	var classificationBefore, classificationAfter []CTINode
+	if req.CategoryID != nil {
+		target := *req.CategoryID
+		currentCategoryID := 0
+		if current.CategoryID != nil {
+			currentCategoryID = *current.CategoryID
 		}
-		category, err := client.TicketCategory.Query().
-			Where(ticketcategory.NameEQ(strings.TrimSpace(req.Category)), ticketcategory.TenantIDEQ(tenantID), ticketcategory.IsActiveEQ(true)).
-			Only(ctx)
+		classificationChanged = target != currentCategoryID
+		if err = RequireCTICorrectionReason(req.ClassificationReason, classificationChanged); err != nil {
+			return empty, err
+		}
+		classificationBefore, err = CTICorrectionBeforePathTx(ctx, tx, tenantID, currentCategoryID)
 		if err != nil {
-			return empty, fmt.Errorf("工单分类不存在或不可用")
+			return empty, err
 		}
-		categoryID = &category.ID
-	}
-	if categoryID != nil {
-		if *categoryID != 0 && s.client != nil {
-			exists, err := client.TicketCategory.Query().
-				Where(ticketcategory.IDEQ(*categoryID), ticketcategory.TenantIDEQ(tenantID), ticketcategory.IsActiveEQ(true)).
-				Exist(ctx)
+		if target == 0 {
+			params.CategoryID = &target
+		} else {
+			// 复用共享纠正契约：同租户、启用、父链连续的完整路径校验（并返回路径供留痕）。
+			classificationAfter, err = ValidateCTICorrectionTargetTx(ctx, tx, tenantID, target, CTICorrectionTargetPolicy{AllowClear: true})
 			if err != nil {
-				return empty, fmt.Errorf("验证工单分类失败: %w", err)
+				return empty, err
 			}
-			if !exists {
-				return empty, fmt.Errorf("工单分类不存在或不可用")
-			}
+			params.CategoryID = &target
 		}
-		params.CategoryID = categoryID
 	}
 	if req.Tags != nil {
 		params.ReplaceTags = true
@@ -553,7 +554,14 @@ func (s *TicketService) UpdateTicket(ctx context.Context, cmd dto.TicketEditComm
 		return empty, err
 	}
 	result := workitemmutation.Result{WorkItemID: id, Version: updated.Version, Status: string(updated.Status)}
-	if err = workitemmutation.RecordTx(ctx, tx, m, result, "work_item.edit", digest, map[string]interface{}{"previousVersion": current.Version, "previousStatus": current.Status, "expectedParentId": cmd.ExpectedParentID, "feishuUpdate": feishuUpdate}); err != nil {
+	receipt := map[string]interface{}{"previousVersion": current.Version, "previousStatus": current.Status, "expectedParentId": cmd.ExpectedParentID, "feishuUpdate": feishuUpdate}
+	// 分类纠正证据并入同一操作回执（原因 + 前后完整路径），与专业写入同事务。
+	if classificationChanged {
+		for key, value := range (CTICorrectionEvidence{Before: classificationBefore, After: classificationAfter}).Metadata(req.ClassificationReason) {
+			receipt[key] = value
+		}
+	}
+	if err = workitemmutation.RecordTx(ctx, tx, m, result, "work_item.edit", digest, receipt); err != nil {
 		return empty, err
 	}
 	if err = tx.Commit(); err != nil {
