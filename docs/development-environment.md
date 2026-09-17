@@ -62,6 +62,27 @@ Windows host: `192.168.31.66`. SSH reaches Ubuntu WSL as `administrator`, port `
 - **Do not restore or retain old application code as the solution for switching back to Dev.** Preserve Dev data and service stability by planning a compatible upgrade. “Keep Dev stable” does not mean freezing its schema indefinitely.
 - A source merge is not a deployment. Select and verify a concrete frontend/backend release together; do not automatically deploy every new main commit or blindly run all migrations.
 
+### Work item definition digest (frozen recipe)
+
+`process_definitions.bpmn_xml` stores the BPMN XML **base64-encoded**. The frozen
+definition digest is `sha256(base64decode(bpmn_xml))`.
+
+The reference implementation is `digest_xml` in
+`/home/administrator/.local/state/itsm-dev-restoration-20260916/itsm-dev-bindings-apply.py`,
+which also asserts `definition hash drift` against the reviewed binding plan.
+
+Do not compute this digest from `bpmn_xml::text` nor from the decoded XML text.
+For tenant1 definition 65 those two encodings yield `9166698a...` and
+`dc01d828...`, while the frozen baseline is `6d7c436b...`. A mismatch caused by
+the wrong encoding is **not** evidence of source drift: re-check with the recipe
+above before reporting a discrepancy.
+
+Verified 2026-09-16 for tenant1 definition 65: `key=ticket_general_flow`,
+`version=1.3.0`, `tenant=1`,
+`sha256=6d7c436bb06acfef500df259d9b82e605b53b08bbf18dc8b33f8e48939d6a893`, matching
+the frozen baseline. Binding IDs must be re-read from `process_bindings` rather
+than assumed from naming.
+
 ### Three separate workstreams
 
 1. **Schema compatibility:** use the existing canonical Migrator, dependency checks and truthful receipts. Separate structural preparation, ordinary migration, business acceptance and controlled retirement. Do not edit historical SQL/checksums, fabricate receipts, use Ent overlays, or enroll historical WorkItems to pass admission. Apply the [controlled retirement contract](../AGENTS.md#accepted-workitem-decisions-and-migration-boundaries).
