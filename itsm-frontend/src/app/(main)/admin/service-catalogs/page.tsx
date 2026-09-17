@@ -42,6 +42,7 @@ import {
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
 import { CMDBApi } from '@/lib/api/cmdb-api';
 import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
+import { apiErrorMessage } from '@/lib/api/http-client';
 import { BatchActionBar, type BatchAction } from '@/components/business/BatchActionBar';
 import { CustomFieldsEditor } from '@/components/common/CustomFieldsEditor';
 import type {
@@ -206,9 +207,7 @@ const ServiceCatalogManagement = () => {
       form.resetFields();
       fetchCatalogs();
     } catch (error) {
-      message.error(
-        error instanceof Error ? error.message : editingCatalog ? '更新失败' : '创建失败'
-      );
+      message.error(apiErrorMessage(error, editingCatalog ? '更新失败' : '创建失败'));
     }
   };
 

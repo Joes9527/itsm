@@ -85,6 +85,29 @@ export class ApiError extends Error {
   }
 }
 
+interface ApiFieldError {
+  field?: string;
+  message?: string;
+}
+
+/**
+ * Builds a user-facing message from a backend error. The backend often returns
+ * an actionable configuration cause in `fieldErrors` while the top-level
+ * message stays generic; surface both so the operator can act on it.
+ */
+export function apiErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof ApiError) {
+    const fieldErrors = Array.isArray(error.fieldErrors) ? (error.fieldErrors as ApiFieldError[]) : [];
+    const detail = fieldErrors
+      .map(field => (field && typeof field.message === 'string' ? field.message.trim() : ''))
+      .filter(Boolean)
+      .join('；');
+    return detail ? `${error.message}：${detail}` : error.message;
+  }
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+}
+
 class HttpClient {
   private baseURL: string;
   private readonly timeout: number;
