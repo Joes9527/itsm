@@ -76,3 +76,18 @@ func TestBPMNTaskUIProjectionPreservesDirectoryAuthority(t *testing.T) {
 	require.Greater(t, directory.calls, 0)
 	require.Nil(t, f.engine.participationResolver.readActor)
 }
+
+func TestBPMNTaskUIActionsProjectGenericHandlingPrerequisite(t *testing.T) {
+	f, item, task := seedGenericGate(t, "in_progress", "in_progress")
+	task = f.client.ProcessTask.UpdateOne(task).SetCandidateUsers(f.actor.Email).SetTaskType("user_task").SetTaskVariables(map[string]interface{}{}).SetStatus(common.ProcessTaskStatusCreated).ClearAssignee().SetCallbackHandlerID(bpmnNoUserTaskCallbackHandlerID).SaveX(f.userCtx)
+	ctx := f.typedTaskScopeOnlyCtx(f.actor, false)
+	actions := f.engine.taskUIActions(ctx, task)
+	require.True(t, actions.Complete)
+	require.True(t, actions.CompletionNoteRequired)
+	require.Empty(t, actions.Reason)
+	f.client.Ticket.UpdateOne(item).SetStatus("open").SaveX(f.userCtx)
+	actions = f.engine.taskUIActions(ctx, task)
+	require.False(t, actions.Complete)
+	require.NotEmpty(t, actions.Reason)
+	require.Empty(t, f.client.ProcessTask.GetX(f.userCtx, task.ID).TaskVariables)
+}

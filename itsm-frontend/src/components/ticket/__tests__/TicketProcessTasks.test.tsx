@@ -362,3 +362,31 @@ it('does not show a callback warning without blocked evidence', async () => {
  await screen.findByRole('button', {name:/历史任务（1）/});
  expect(screen.queryByText('流程执行已阻塞')).not.toBeInTheDocument();
 });
+
+
+it('requires handling evidence in the completion dialog and submits only trimmed task input', async () => {
+  read.mockResolvedValue(page([{ ...task, taskPurpose: 'fulfillment', uiActions: { complete: true, completionNoteRequired: true } }]));
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+  fireEvent.click(await screen.findByRole('button', { name: '完成任务' }));
+  const note = await screen.findByRole('textbox', { name: '处理说明' });
+  fireEvent.click(screen.getByRole('button', { name: '确认完成' }));
+  expect(BPMNWorkflowApi.completeTask).not.toHaveBeenCalled();
+  fireEvent.change(note, { target: { value: '   ' } });
+  fireEvent.click(screen.getByRole('button', { name: '确认完成' }));
+  expect(BPMNWorkflowApi.completeTask).not.toHaveBeenCalled();
+  fireEvent.change(note, { target: { value: '  已核对配置并完成处理  ' } });
+  fireEvent.click(screen.getByRole('button', { name: '确认完成' }));
+  await screen.findByText('任务操作已提交，请以刷新后的状态为准。');
+  expect(BPMNWorkflowApi.completeTask).toHaveBeenCalledWith(8, { variables: { workItemCompletionNote: '已核对配置并完成处理' } }, expect.any(Function));
+});
+
+it('clears an abandoned handling note when the completion dialog is reopened', async () => {
+  read.mockResolvedValue(page([{ ...task, taskPurpose: 'fulfillment', uiActions: { complete: true, completionNoteRequired: true } }]));
+  render(<TicketProcessTasks ticketId={42} recordClass="service_request_item" />);
+  fireEvent.click(await screen.findByRole('button', { name: '完成任务' }));
+  fireEvent.change(await screen.findByRole('textbox', { name: '处理说明' }), { target: { value: '未提交说明' } });
+  fireEvent.click(screen.getByRole('button', { name: /取\s*消/ }));
+  fireEvent.click(screen.getByRole('button', { name: '完成任务' }));
+  expect(await screen.findByRole('textbox', { name: '处理说明' })).toHaveValue('');
+  expect(BPMNWorkflowApi.completeTask).not.toHaveBeenCalled();
+});

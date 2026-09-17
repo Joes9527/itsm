@@ -36,7 +36,14 @@ func (e *CustomProcessEngine) taskUIActions(ctx context.Context, task *ent.Proce
 				// completion. Report why instead of duplicating the rule in UI.
 				result.Reason = reason
 			} else {
-				result.Complete = true
+				reason, noteRequired, gateErr := GenericWorkflowTaskGate(ctx, e.client, task)
+				if gateErr != nil {
+					result.Reason = "暂时无法核验流程阶段，请刷新后重试"
+				} else {
+					result.CompletionNoteRequired = noteRequired
+					result.Reason = reason
+					result.Complete = reason == ""
+				}
 			}
 		} else if task.AssigneeSource == BPMNAssigneeSourceWorkItem {
 			if isBPMNTaskAccessDenial(err) {

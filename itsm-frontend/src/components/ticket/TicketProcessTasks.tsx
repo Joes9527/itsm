@@ -2,7 +2,7 @@
 import { useDetailRefresh, useDetailRefreshEntry } from '@/components/business/detail-tabs/DetailRefreshContext';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Modal } from 'antd';
+import { Alert, Button, Input, Modal } from 'antd';
 import { useAuthStore } from '@/lib/store/auth-store';
 import Link from 'next/link';
 import { BPMNWorkflowApi, type UserTask } from '@/lib/api/bpmn-workflow-api';
@@ -119,6 +119,7 @@ function ProcessTasksPanel({ ticketId, recordClass, onTaskChange, session }: {
   const refresh = useDetailRefresh();
   useDetailRefreshEntry({ key: 'process-tasks', label: '流程任务', reload: resource.reload, isWriting: () => commandPending.current });
   const [selected, setSelected] = useState<UserTask | null>(null);
+  const [completionNote, setCompletionNote] = useState('');
   const [mutationError, setMutationError] = useState<string>();
   const [submitted, setSubmitted] = useState(false);
   const [updateFailed, setUpdateFailed] = useState(false);
@@ -127,6 +128,11 @@ function ProcessTasksPanel({ ticketId, recordClass, onTaskChange, session }: {
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const perform = async (task: UserTask, action: 'claim' | 'complete') => {
     if (locked.current || resource.loading || resource.error || !task.uiActions?.[action]) return;
+    const note = completionNote.trim();
+    if (action === 'complete' && task.uiActions.completionNoteRequired && (!note || Array.from(note).length > 4000)) {
+      setMutationError('请填写 1–4000 字的处理说明');
+      return;
+    }
     const current = resource.capture();
     const assertContext = () => {
       if (!current() || taskSession() !== session) throw new Error('会话或工单已变化，请重新打开任务');
@@ -141,7 +147,7 @@ function ProcessTasksPanel({ ticketId, recordClass, onTaskChange, session }: {
       try {
         assertContext();
         if (action === 'claim') await BPMNWorkflowApi.claimTask(task.id, assertContext);
-        else await BPMNWorkflowApi.completeTask(task.id, {}, assertContext);
+        else await BPMNWorkflowApi.completeTask(task.id, task.uiActions.completionNoteRequired ? { variables: { workItemCompletionNote: note } } : {}, assertContext);
         assertContext();
       } catch (error) {
         if (!current() || taskSession() !== session) return;
@@ -211,7 +217,7 @@ function ProcessTasksPanel({ ticketId, recordClass, onTaskChange, session }: {
             onToggle={() => { setActiveExpansionInitialized(true); setActiveExpanded(!shownActiveExpanded); }} />
           {shownActiveExpanded && <div id="current-process-tasks"><TaskList tasks={activeTasks} busy={busy}
             readLocked={resource.loading || !!resource.error} onClaim={task => void perform(task, 'claim')}
-            onComplete={task => { setMutationError(undefined); setSelected(task); }} /></div>}
+            onComplete={task => { setMutationError(undefined); setCompletionNote(''); setSelected(task); }} /></div>}
         </div>
       )}
       {resource.ready && historyTasks.length > 0 && (
@@ -220,7 +226,7 @@ function ProcessTasksPanel({ ticketId, recordClass, onTaskChange, session }: {
             onToggle={() => setHistoryExpanded(value => !value)} />
           {historyExpanded && <div id="historical-process-tasks"><TaskList tasks={historyTasks} busy={busy}
             readLocked={resource.loading || !!resource.error} onClaim={task => void perform(task, 'claim')}
-            onComplete={task => { setMutationError(undefined); setSelected(task); }} /></div>}
+            onComplete={task => { setMutationError(undefined); setCompletionNote(''); setSelected(task); }} /></div>}
         </div>
       )}
       <Modal title="完成流程任务" open={!!selected} okText="确认完成" cancelText="取消"
@@ -228,6 +234,12 @@ function ProcessTasksPanel({ ticketId, recordClass, onTaskChange, session }: {
         cancelButtonProps={{ disabled: busy }} okButtonProps={{ disabled: resource.loading || !!resource.error }}
         onCancel={() => { if (!locked.current) setSelected(null); }} onOk={() => selected && void perform(selected, 'complete')}>
         <p>确认已完成「{selected?.taskName}」？提交后将按既有流程继续处理。</p>
+        {selected?.uiActions?.completionNoteRequired && <div className="my-3 space-y-2">
+          <label htmlFor="task-completion-note">处理说明</label>
+          <Input.TextArea id="task-completion-note" required rows={4} value={completionNote} disabled={busy}
+            onChange={event => setCompletionNote(event.target.value)} aria-describedby="task-completion-note-help" />
+          <p id="task-completion-note-help" className="text-xs text-muted">请填写 1–4000 字，记录本次处理内容和结果。</p>
+        </div>}
         {mutationError && <Alert type="error" showIcon title={mutationError} />}
       </Modal>
     </section>
