@@ -1109,24 +1109,33 @@ POST /api/v1/incidents/4/close     -> 400 blocked
 
 ### 执行记录（B4 增量四：事件分类纠正改为 ID 契约）
 
-**问题**（共享已准备目标验收实测）：\ 按
-\/\ **显示名称**解析，前端与其它专业域实际发送的是 （最深节点 ID）→ 被当作空值，接口返回分类已更新却什么都没改，随后关闭仍被门禁拦截
-（用户看到成功、单据仍不能完成）。这违反失败关闭、不得静默成功的契约。
+**问题**（共享已准备目标验收实测）：`PUT /api/v1/incidents/:id/classification` 按
+`category` / `subcategory` **显示名称**解析，而前端与其它专业域实际发送的是 `categoryId`
+（最深节点 ID）→ 被当作空值：接口返回"分类已更新"却什么都没改，随后关闭仍被门禁拦截
+（用户看到成功、单据无法完成）。违反"失败关闭、不得静默成功"的契约。
 
 **修复（无兼容层，单一契约）**
 
-- \：  直接以最深节点 ID 调用既有 \（分类校验/原因必填/前后路径证据复用同一实现）；
-  **删除**名称解析函数 \（路由只保留一条权威路径）。
-- \：请求体改为 \，\ 仍由绑定层强制必填。
-- \：流程变量改为读 \（与界面同一语义），
-  移除 name 变量与日志中的名称输出。
-- 前端 \：删除两个指向**不存在路由**的历史方法
-  （\ → POST /incidents/classification、
-  \ → PUT /incidents/classification/:id）及其专用类型与用例；
-  保留在用中的 \（详情页仍在使用）。
+- `service/incident_work_item_authority.go`：`UpdateClassification(ctx, id, tenantID, version, categoryID, reason)`
+  直接以最深节点 ID 调用既有 `UpdateIncident`（分类校验、原因必填、前后路径证据复用同一实现）；
+  **删除**名称解析函数 `resolveIncidentCategory`，路由只保留一条权威路径。
+- `controller/incident_controller.go`：请求体改为 `{categoryId, version, reason}`，`reason` 仍由绑定层强制必填。
+- `service/bpmn/incident_handler.go`：流程变量改读 `category_id`（与界面同一语义），移除 name 变量与名称日志。
+- 前端 `incident-api.ts`：删除两个指向**不存在路由**的历史方法
+  （`createIncidentClassification` → POST /incidents/classification、
+  `updateIncidentClassification` → PUT /incidents/classification/:id）及其专用类型与用例；
+  保留在用的 `getIncidentClassification`（事件详情页仍在使用）。
 
 **验证**
 
+```text
+itsm-backend: go build ./... 通过
+itsm-backend: go test ./service/... ./controller/... ./service/bpmn/... 全 ok
+新增 service/incident_classification_command_test.go：
+  设置必须带原因（无原因拒绝）/ 带原因成功并返回目标 ID / 跨租户节点拒绝且不改现状 /
+  清空必须带原因 / 清空成功返回 0 / 未分类传 0 为幂等空操作（HTTP 层已强制 reason）
+itsm-frontend: npm run type-check 通过；eslint 无输出
+itsm-frontend: npx jest --testPathPattern '(incident-api|classification)' -> 5 suites / 94 tests 全通过
+```
 
-
-**同批完成**：按用户指示删除 \（048 前备份）。
+**同批完成**：按用户指示删除 `/tmp/cti-baseline-before-048.sql.gz`（048 前备份）。
