@@ -85,7 +85,10 @@ SELECT indexname FROM pg_indexes WHERE tablename = 'system_configs' AND indexnam
 SELECT version, checksum FROM schema_migrations WHERE version = '048_cti_governance';
 ```
 
-- ☐ 上述四项全部符合预期
+- ☑ **2026-09-17 共享 dev 已准备目标实测**：`itsm_config_baseline_20260908` 应用 048 成功
+  （预检在真实数据上通过；执行前全量备份 `/tmp/cti-baseline-before-048.sql.gz`）。
+  **生产/其他环境仍为 ☐ 未应用。**
+- ☐ 上述四项全部符合预期（共享 dev 侧索引与列已核对存在）
 - ☐ 分类维护界面：新增/移动/停用/删除各做一次负向验证（被引用必被拒绝）
 - ☐ 目录发布界面：默认分类可选且启用状态必填；旧目录显示"未配置默认分类"
 

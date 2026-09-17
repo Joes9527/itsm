@@ -114,6 +114,10 @@ export function CategoryEditor({
       confirmLoading={saving}
       destroyOnHidden={false}
       width={640}
+      // 表单字段较多：在小屏（如 1280x720 笔记本）上整窗会超出视口，
+      // 导致「保存/取消」不可达。这里让正文独立滚动、按钮固定可达。
+      style={{ top: 24 }}
+      styles={{ body: { maxHeight: 'calc(100vh - 200px)', overflowY: 'auto', paddingRight: 8 } }}
     >
       <Alert
         type="info"

@@ -1028,3 +1028,81 @@ docker run -d --name <name> --label com.itsm.test.owner=cti-governance --label c
 INTAKE_POSTGRES_TEST_DSN="postgres://cti_test:<pw>@127.0.0.1:36444/sslvpn_test?sslmode=disable" \
   go test -tags integration_postgres ./tests/integration -run 'TestCTI' -count=1 -v
 ```
+
+### 执行记录（B4 增量三：在共享已准备目标上执行真实验收）
+
+用户授权："在共享已准备目标（5432 itsm）上跑验收"。以下为真实执行与结果。
+
+**目标与安全边界**
+
+- 共享 dev Postgres `itsm-postgres-dev`（127.0.0.1:5432）上的**已准备**库是
+  `itsm_config_baseline_20260908`（ledger 39 条，含 `037_work_item_structure_preparation`）；
+  运行中的共享 API（PID 256991）即指向该库，属 **2026-09-16 起的恢复演练在途目标**。
+- 库 `itsm`（14 条 ledger、无受控准备）不是已准备目标，无法承载本分支运行时，未使用。
+- 先尝试"克隆库"：`CREATE DATABASE itsm_cti_e2e` + 容器内流式 `pg_dump | psql`（避免版本不匹配与数据落地）。
+  克隆成功（39 条 ledger），但迁移准入按**库名**绑定准备回执
+  （`attachment.Evidence.Target.Database != database`）—— 这正是防漂移设计，故**不绕过**，改为在原库执行。
+- 执行前**全量备份**：`/tmp/cti-baseline-before-048.sql.gz`（948KB，权限 600，由同版本容器 `pg_dump` 产出）。
+
+**已执行（真实输出）**
+
+```text
+migrate -status  ->  [048_cti_governance] Scope ticket category code uniqueness to the tenant ... (pending)
+migrate -up      ->  [048_cti_governance] applied 2026-09-17 15:52:48
+schema 校验       ->  ticketcategory_tenant_id_code（租户内唯一）已建立、旧全局唯一索引已移除、
+                     service_catalogs.default_ticket_category_id 列存在
+预检结论          ->  048 预检在真实数据上通过（无重复编码、无越深、无孤儿/跨租户父链）
+```
+
+- 分支后端（构建自本分支）以**与演练相同的运行配置**起在 8090（仅改 port / frontend_url / redis），
+  复用演练的 app/system 角色与密钥文件、RLS `enforce`、`execution.mode=standard`；
+  `/api/v1/health` ok；`admin/admin123` 登录成功（tenant `default`）。
+- 分支前端（`next dev --port 3011`，`ITSM_BACKEND_URL=127.0.0.1:8090`）与共享 3010 **并存**，共享实例全程未动。
+- 治理启用接口在真实租户生效：
+  `PUT /api/v1/system-configs/governance/cti {"catalogEnforced":true,"completionEnforced":true}`
+  → `applied:true, effectiveFrom:2026-09-17T07:55:46Z, inFlightWithoutClassification:0`。
+
+**浏览器验收结果（`cti-governance.spec.ts` / chromium / 真实 UI）**
+
+```text
+✓ 1+2 目录默认分类驱动创建：三级分类经真实界面创建、第三级无“新增下级”、编码只读、
+      目录发布请求体携带 defaultTicketCategoryId（最深节点）
+✓ 2   普通报障入口“工单分类（可选）”可见、未分类不报完整性错误
+✗ 3-9 其余 7 项：断言定位器与我盲写的 UI 路径不一致，失败原因均为 locator 未找到
+      （列表操作按钮、规则编辑器入口、引用页签等）→ 属**验收脚本待按真实界面校准**，
+      不能据此判定产品失败。
+```
+
+**completion 门禁的真实端到端证据（同一运行栈的 API 驱动，独立于浏览器用例）**
+
+```text
+POST /api/v1/incidents/4/start     -> 200 in_progress
+POST /api/v1/incidents/4/resolve   -> 200 resolved   （按设计：恢复服务不受门禁限制）
+POST /api/v1/incidents/4/close     -> 400 blocked
+     "work item completion requires a complete three-level classification: incident/close has no classification"
+```
+
+**本次发现**
+
+1. **分类维护弹窗在 1280x720 下“保存”不可达**（弹窗高于视口、正文不可滚动）→ 已修复
+   （`CategoryEditor.tsx` 正文 `maxHeight + overflowY:auto`、`top:24`）；分类相关 Jest 38 项通过。
+2. **`PUT /api/v1/incidents/:id/classification` 与 CTI 契约不一致**：它按
+   `category`/`subcategory` **名称**解析，无法表达三级最深节点；前端
+   （`classificationUpdate`）实际发送的是 `categoryId` → 被当作空值**静默清空并返回"分类已更新"**，
+   导致随后关闭仍被门禁拦截。**未修**（需按 ID 契约改造控制器/服务并同步前端与用例），列为下一增量首项。
+3. 验收脚本自身 4 类适配已修正：`/tickets/new`→`/tickets/create` 且需先选目标类型、
+   AntD 两字中文按钮可访问名带空格（"保 存"/"创 建"）、目录表单必填字段、串行模式改为不中止。
+
+**环境恢复（已执行）**
+
+```text
+测试数据：删除本次自建 6 个目录 + 24 个分类（E2E_GOV_*）；软删除验证工单 #36（WorkItem 语义）与 incident 4
+治理状态：删除本次启用产生且 created_at = updated_at 的保留键记录 → cti_governance_v1 记录数 0（回到启用前）
+进程容器：分支后端/前端已停止（共享 8080/3010 未受影响）；一次性 Redis 容器已删除
+临时文件：临时 config（含角色口令）、控制文件、cookie、日志、二进制已删除
+保留：/tmp/cti-baseline-before-048.sql.gz（048 前全量备份，600；待确认后再删）
+```
+
+**结论口径**：048 已在共享 dev 的**已准备目标**上真实应用并校验；门禁在真实租户启用后对未分类事件
+关闭**失败关闭**且恢复动作不受限；浏览器验收中"目录默认分类驱动创建 + 未分类合法"两项通过，
+其余 7 项脚本待校准。**生产与其他环境仍未应用、未启用**。

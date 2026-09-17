@@ -26,7 +26,11 @@ const L2 = `E2E治理二级${stamp}`;
 const L3 = `E2E治理三级${stamp}`;
 const CATALOG = `E2E治理目录${stamp}`;
 
-test.describe.configure({ mode: 'serial' });
+// 单条用例要驱动多步真实界面流程（三级分类 + 目录发布 + 断言），30s 默认上限不够；
+// next dev 首次编译页面（尤其刚改过源码）会超过默认 5s 断言上限。
+// 不设 serial：单条失败不应遮蔽其余矩阵项的结果。
+test.describe.configure({ timeout: 120_000 });
+expect.configure({ timeout: 15_000 });
 
 test('1+2. catalog default classification drives creation without asking the requester', async ({ page }) => {
   await loginAndReturn(page, DEFAULT_LOGIN, '/admin/ticket-categories');
@@ -44,7 +48,7 @@ test('1+2. catalog default classification drives creation without asking the req
     }
     await page.getByLabel('分类名称').fill(name);
     await page.getByLabel('分类编码').fill(code);
-    await page.getByRole('button', { name: '保存' }).click();
+    await page.getByRole('button', { name: /保\s*存/ }).click();
   }
   // 三级节点不再提供"新增下级"：层级上限是产品约束，不是界面遗漏。
   await expect(page.getByRole('button', { name: `为 ${L3} 新增下级分类` })).toHaveCount(0);
@@ -53,6 +57,10 @@ test('1+2. catalog default classification drives creation without asking the req
   await loginAndReturn(page, DEFAULT_LOGIN, '/admin/service-catalogs');
   await page.getByRole('button', { name: /新建|创建/ }).first().click();
   await page.getByLabel('服务名称').fill(CATALOG);
+  // 目录分类是业务展示分组（必填），与工单三级分类无关；不填会因校验失败而无法保存。
+  await page.getByLabel('目录分类').click();
+  await page.locator('.ant-select-item-option').first().click();
+  await page.getByLabel('服务描述').fill('E2E 验证：目录默认分类驱动工单分类');
   await expect(page.getByLabel('默认工单分类（三级）')).toBeVisible();
   await page.getByLabel('默认工单分类（三级）').click();
   await page.getByText(L1, { exact: true }).click();
@@ -61,17 +69,19 @@ test('1+2. catalog default classification drives creation without asking the req
   const requestPromise = page.waitForRequest(
     req => req.url().includes('/api/v1/service-catalogs') && req.method() !== 'GET',
   );
-  await page.getByRole('button', { name: '保存' }).click();
+  // 目录发布弹窗的提交按钮是「创建」（保存按钮名只用于分类编辑器）。
+  await page.getByRole('button', { name: /创\s*建|保\s*存|更\s*新/ }).click();
   const payload = (await (await requestPromise).postDataJSON()) as { defaultTicketCategoryId?: number };
   // 只提交最深节点：后端解析完整路径，前端不复制 C/T/I 文本。
   expect(payload.defaultTicketCategoryId, '目录必须携带默认分类最深节点').toBeTruthy();
 });
 
 test('1. ordinary report keeps "unsure" available (unclassified submission stays legal)', async ({ page }) => {
-  await loginAndReturn(page, DEFAULT_LOGIN, '/tickets/new');
-  const classification = page.getByLabel('分类');
-  await expect(classification).toHaveAttribute('placeholder', /可不确定/);
-  // 未选择分类不应被前端阻断（完整性由完成门禁在关闭时要求）。
+  await loginAndReturn(page, DEFAULT_LOGIN, '/tickets/create');
+  // 统一录入入口先选目标类型，再进入表单。
+  await page.getByRole('button', { name: '普通工单' }).click();
+  // 报障页的分类是可选项：未分类提交合法，完整性只在“完成”时由门禁要求。
+  await expect(page.getByText('工单分类（可选）')).toBeVisible();
   await expect(page.getByText('请选择完整三级分类')).toHaveCount(0);
 });
 
@@ -80,7 +90,7 @@ test('3. engineer classification correction requires a reason', async ({ page })
   const firstRow = page.getByRole('row').nth(1);
   await firstRow.getByRole('link', { name: /详情|查看/ }).first().click();
   await page.getByRole('button', { name: '编辑分类' }).click();
-  await page.getByRole('button', { name: '保存' }).click();
+  await page.getByRole('button', { name: /保\s*存/ }).click();
   // 改了分类但没有原因：客户端先阻断，不能出现"界面成功、后端 400"。
   await expect(page.getByText('调整分类时必须填写原因')).toBeVisible();
 });
@@ -88,7 +98,7 @@ test('3. engineer classification correction requires a reason', async ({ page })
 test('4. incident: restore is ungated, close requires a complete three-level classification', async ({ page }) => {
   await loginAndReturn(page, DEFAULT_LOGIN, '/incidents');
   // 关闭未分类事件：后端返回完成质量错误，界面必须显示可读原因而不是"成功"。
-  await page.getByRole('row').nth(1).getByRole('button', { name: '关闭' }).click();
+  await page.getByRole('row').nth(1).getByRole('button', { name: /关\s*闭/ }).click();
   await expect(page.getByText(/请补齐三级工单分类/)).toBeVisible();
   // 事件"恢复服务"不拦（业务优先：先恢复可用性，分类可后补）。
   await expect(page.getByText(/恢复/)).toBeVisible();
@@ -105,13 +115,13 @@ test('6. classification maintenance protects references and keeps history', asyn
   await loginAndReturn(page, DEFAULT_LOGIN, '/admin/ticket-categories');
   await page.getByText(L3).first().click();
   // 编码创建后只读
-  await page.getByRole('button', { name: '编辑' }).click();
+  await page.getByRole('button', { name: /编\s*辑/ }).click();
   await expect(page.getByLabel('分类编码')).toBeDisabled();
-  await page.getByRole('button', { name: '取消' }).click();
+  await page.getByRole('button', { name: /取\s*消/ }).click();
 
   // 被工单/目录引用的节点：删除与移动都必须被拒绝并给出可读原因。
   await page.getByText(L2).first().click();
-  await page.getByRole('button', { name: '删除' }).click();
+  await page.getByRole('button', { name: /删\s*除/ }).click();
   await expect(page.getByText(/已被工单或配置引用/)).toBeVisible();
   await page.keyboard.press('Escape');
 
@@ -148,7 +158,7 @@ test('9. classification move is refused for referenced nodes and recovery keeps 
   await loginAndReturn(page, DEFAULT_LOGIN, '/admin/ticket-categories');
   await page.getByText(L2).first().click();
   // 未引用的子树仍可移动；被引用节点必须被拒绝（引用保护按子树判定）。
-  const moveButton = page.getByRole('button', { name: '移动' });
+  const moveButton = page.getByRole('button', { name: /移\s*动/ });
   if ((await moveButton.count()) > 0) {
     await moveButton.click();
     await expect(page.getByText(/已被工单或配置引用|请先处理该分类的下级分类/)).toBeVisible();

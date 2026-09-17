@@ -26,28 +26,28 @@ test('catalog default classification drives the created work item classification
   await page.getByRole('button', { name: '创建一级分类' }).click();
   await page.getByLabel('分类名称').fill(L1);
   await page.getByLabel('分类编码').fill(`E2E_L1_${stamp}`);
-  await page.getByRole('button', { name: '保存' }).click();
+  await page.getByRole('button', { name: /保\s*存/ }).click();
   await expect(page.getByRole('button', { name: `为 ${L1} 新增下级分类` })).toBeVisible();
 
   // 二级
   await page.getByRole('button', { name: `为 ${L1} 新增下级分类` }).click();
   await page.getByLabel('分类名称').fill(L2);
   await page.getByLabel('分类编码').fill(`E2E_L2_${stamp}`);
-  await page.getByRole('button', { name: '保存' }).click();
+  await page.getByRole('button', { name: /保\s*存/ }).click();
   await expect(page.getByRole('button', { name: `为 ${L2} 新增下级分类` })).toBeVisible();
 
   // 三级：第三级不再提供“新增下级”
   await page.getByRole('button', { name: `为 ${L2} 新增下级分类` }).click();
   await page.getByLabel('分类名称').fill(L3);
   await page.getByLabel('分类编码').fill(`E2E_L3_${stamp}`);
-  await page.getByRole('button', { name: '保存' }).click();
+  await page.getByRole('button', { name: /保\s*存/ }).click();
   await expect(page.getByRole('button', { name: `为 ${L3} 新增下级分类` })).toHaveCount(0);
 
   // 编码创建后只读
   await page.getByText(L3).first().click();
-  await page.getByRole('button', { name: '编辑' }).click();
+  await page.getByRole('button', { name: /编\s*辑/ }).click();
   await expect(page.getByLabel('分类编码')).toBeDisabled();
-  await page.getByRole('button', { name: '取消' }).click();
+  await page.getByRole('button', { name: /取\s*消/ }).click();
 
   // 目录绑定默认三级分类
   await loginAndReturn(page, DEFAULT_LOGIN, '/admin/service-catalogs');
@@ -63,7 +63,7 @@ test('catalog default classification drives the created work item classification
     page.waitForRequest(
       req => req.url().includes('/api/v1/service-catalogs') && req.method() !== 'GET'
     ),
-    page.getByRole('button', { name: '保存' }).click(),
+    page.getByRole('button', { name: /保\s*存/ }).click(),
   ]);
   const payload = request.postDataJSON() as { defaultTicketCategoryId?: number };
   expect(payload.defaultTicketCategoryId, '保存时必须携带默认分类最深节点').toBeTruthy();
@@ -71,8 +71,8 @@ test('catalog default classification drives the created work item classification
 });
 
 test('ordinary report keeps the "unsure" option available', async ({ page }) => {
-  await loginAndReturn(page, DEFAULT_LOGIN, '/tickets/new');
-  const classification = page.getByLabel('分类');
+  await loginAndReturn(page, DEFAULT_LOGIN, '/tickets/create');
+  const classification = page.getByLabel('工单分类（可选）');
   await expect(classification).toBeVisible();
   await expect(classification).toHaveAttribute('placeholder', /可不确定/);
   await classification.click();
