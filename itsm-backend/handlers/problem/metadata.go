@@ -12,7 +12,6 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/ticketcategory"
 	assignment "itsm-backend/handlers/common/workitemassignment"
 	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/service"
@@ -149,6 +148,7 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 		return empty, common.NewValidationError("terminal or unsupported Problem assignment is locked", nil)
 	}
 	changed := cmd.RootCauseAnalysis != nil || cmd.Evidence != nil
+	var classificationBefore, classificationAfter []service.CTINode
 	for _, pair := range []struct {
 		next *string
 		old  string
@@ -178,16 +178,21 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 		if *p.CategoryID < 0 {
 			return empty, common.NewValidationError("invalid category", nil)
 		}
-		if *p.CategoryID > 0 {
-			exists, err := tx.TicketCategory.Query().Where(ticketcategory.ID(*p.CategoryID), ticketcategory.TenantID(m.TenantID), ticketcategory.IsActive(true)).Exist(ctx)
-			if err != nil {
-				return empty, err
-			}
-			if !exists {
-				return empty, common.NewValidationError("active ticket category not found in tenant", nil)
-			}
+		classificationChanged := *p.CategoryID != item.CategoryID
+		// 分类纠正契约：目标必须是当前有效的完整三级路径（或显式清除），且必须给出原因。
+		if err := service.RequireCTICorrectionReason(p.ClassificationReason, classificationChanged); err != nil {
+			return empty, err
 		}
-		changed = changed || *p.CategoryID != item.CategoryID
+		beforePath, err := service.CTICorrectionBeforePathTx(ctx, tx, m.TenantID, item.CategoryID)
+		if err != nil {
+			return empty, err
+		}
+		targetPath, err := service.ValidateCTICorrectionTargetTx(ctx, tx, m.TenantID, *p.CategoryID, service.CTICorrectionTargetPolicy{AllowClear: true})
+		if err != nil {
+			return empty, err
+		}
+		classificationBefore, classificationAfter = beforePath, targetPath
+		changed = changed || classificationChanged
 	}
 	if !changed {
 		return empty, common.NewValidationError("new metadata facts required", nil)
@@ -278,7 +283,14 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 		return empty, err
 	}
 	result := workitemmutation.Result{WorkItemID: item.ID, Version: saved.Version, Status: saved.Status}
-	if err = workitemmutation.RecordTx(ctx, tx, m, result, "problem.metadata", digest, map[string]any{"problemId": current.ID, "previousAssigneeId": item.AssigneeID, "assigneeId": saved.AssigneeID, "assignmentReason": p.AssignmentReason, "patch": p, "rootCauseAnalysis": cmd.RootCauseAnalysis, "evidence": cmd.Evidence}); err != nil {
+	receipt := map[string]any{"problemId": current.ID, "previousAssigneeId": item.AssigneeID, "assigneeId": saved.AssigneeID, "assignmentReason": p.AssignmentReason, "patch": p, "rootCauseAnalysis": cmd.RootCauseAnalysis, "evidence": cmd.Evidence}
+	// 分类纠正证据写进同一操作回执（原因 + 前后完整路径），与专业写入同一事务。
+	if classificationBefore != nil || classificationAfter != nil {
+		for key, value := range (service.CTICorrectionEvidence{Before: classificationBefore, After: classificationAfter}).Metadata(p.ClassificationReason) {
+			receipt[key] = value
+		}
+	}
+	if err = workitemmutation.RecordTx(ctx, tx, m, result, "problem.metadata", digest, receipt); err != nil {
 		return empty, err
 	}
 	if err = tx.Commit(); err != nil {

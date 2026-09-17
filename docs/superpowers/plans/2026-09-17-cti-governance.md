@@ -254,7 +254,7 @@ it('allows no classification for an ordinary report', () => {
 **Files:** 修改 `service/incident_service.go`、`service/ticket_service.go`、`handlers/problem/metadata.go`、`handlers/change/metadata.go`、`handlers/service_request/{service,handler}.go` 的专业入口（分类纠正实现放入新增 `handlers/service_request/classification.go`，由该服务拥有，不经generic更新），以及相应DTO/权限动作投影；新增 `tests/integration/cti_correction_postgres_test.go`。不能让专业类通过generic TicketService绕过已有拒绝规则。
 
 - [ ] 写红测 `TestCTICorrectionPostgres`：新Requested Item完整→空/部分拒绝、完整→完整成功；Incident resolved未closed可修正CTI；closed/cancelled不新增修改通道；跨租户/无权/过期版本失败；原因空失败。
-- [ ] 在现有变更回执/专业命令中加入原因与路径验证，优先复用Incident已有专业修改入口（已核实resolved后可更新），不默认新增接口。各专业拥有者仍控制状态和权限。
+- [~] 在现有变更回执/专业命令中加入原因与路径验证，优先复用Incident已有专业修改入口（已核实resolved后可更新），不默认新增接口。各专业拥有者仍控制状态和权限。**进行中：Problem 已接入；Incident/Change/ServiceRequest 待接入。**
 - [ ] 原子持久化最深节点、版本及既有审计，记录actor/source/原因/前后路径；同一次重试复用已有幂等语义。审计失败整笔回滚。
 - [ ] 验证分类前后 `assignee_id`、SLA时间/周期、BPMN实例数、目录默认ID不变；并发纠正只有一个预期版本成功。历史在途单不新增完整性阻断。
 - [ ] 前端只有后端授权动作允许时显示纠正入口，复用CTISelector并填写原因；显示停用的既有合法分类但不能重新选为新值。
@@ -577,3 +577,49 @@ go test -tags integration_postgres ./tests/integration -run 'CTI|Migration|Catal
 
 由此，A2 的三级/环与迁移原子性、A3 的目录默认分类租户隔离、B2 的门禁事务内判定与并发启用，
 均获得**真实 PostgreSQL 证据**（此前为 NOT RUN）。
+
+### 执行记录（B1，部分完成）
+
+已交付：**共享纠正契约 + Problem 拥有者接入**
+
+- `service/cti_correction.go`（新）：
+  - `RequireCTICorrectionReason(reason, changed)`：分类**确实变化**时原因必填，未变化时不强迫填原因；
+  - `ValidateCTICorrectionTargetTx` + `CTICorrectionTargetPolicy{AllowClear, RequireComplete}`：
+    目标必须存在、同租户、启用且父链连续；**是否要求完整三级由调用方声明**——
+    目录申请项（Requested Item）`RequireComplete=true`，事件/问题/变更等专业纠正为 `false`，
+    因为完整度是 B2“完成质量门禁”的完成时要求，而不是纠正时的门槛；否则在租户完成分类补配前
+    工程师无法修正任何记录（原实现一度强制三级，已按此理由纠正，并由现有 HTTP 契约测试证明二级目标仍合法）。
+    跨租户与不存在共用同一错误，不泄露其它租户对象是否存在；
+  - `CTICorrectionEvidence.Metadata(reason)`：把「原因 + 前后完整路径快照（ID/名称/编码/层级/启用状态）」
+    写进**拥有者既有的操作回执**，而不是新增第二行审计——
+    `audit_logs` 上有 `(tenant_id,user_id,operation_id)` 的操作回执唯一索引，同一操作插第二行会直接违反约束
+    （这一点是在真实 SQLite 用例上撞到 23505 后修正的）。
+- `handlers/problem/metadata.go`：`p.CategoryID` 分支改为「原因校验 + 目标路径校验 + 前后路径证据写回执」，
+  全部在既有专业事务内；`dto.UpdateProblemRequest` 新增 `classificationReason`。
+- 测试：
+  - 新 `service/cti_correction_test.go`（原因规则、策略矩阵、停用/跨租户/不存在目标、证据形状、非法输入）；
+  - `handlers/problem/classification_contract_test.go` 扩展为三重契约：变化必须有原因（缺原因 → 拒绝且
+    分类/版本不变、无回执）、回执必须含 `classificationReason/classificationBefore/classificationAfter`、
+    既有“非活跃/跨租户/不存在不落库”断言保持。
+
+验证证据：
+
+```text
+go test ./service -run 'TestRequireCTICorrectionReason|TestValidateCTICorrectionTarget|TestCTICorrectionEvidence' -count=1 -> ok
+go test ./handlers/problem -count=1 -> ok
+go test ./... -count=1             -> 无 FAIL
+```
+
+**B1 剩余工作（未交付）**
+
+1. Incident：`service/incident_service.go` `UpdateIncident` 目前非事务（`s.client` 直连），
+   要让「版本 CAS + 分类写入 + 回执/审计」原子化需先建立事务边界；DTO 需新增 `classificationReason`；
+   现有前端 `categoryId: 0` 清空行为需按新契约改造（或显式传原因）。
+2. ServiceRequest：按计划新增 `handlers/service_request/classification.go`，使用 `RequireComplete=true`，
+   配套 DTO/权限动作投影与路由；Requested Item 的引用完整性仍走目录所有者。
+3. Change：`handlers/change/metadata.go` 当前没有分类修改入口，若产品需要纠正能力需新增专业命令。
+4. 前端：仅在“后端授权动作允许”时显示纠正入口，复用 `CTISelector` 并要求填写原因；
+   停用的既有合法分类只展示、不可重新选为新值。
+5. `tests/integration/cti_correction_postgres_test.go`：完整→空/部分拒绝、完整→完整成功、
+   resolved 未 closed 可纠正、closed/cancelled 无新通道、跨租户/无权/过期版本失败、原因空失败，
+   并断言 `assignee_id`/SLA 时间/周期/BPMN 实例数/目录默认 ID 不变与并发纠正只有一个预期版本成功。

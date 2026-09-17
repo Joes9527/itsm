@@ -24,6 +24,8 @@ type UpdateProblemRequest struct {
 	OperationID      string  `json:"operationId" binding:"required,max=200"`
 	AssigneeID       *int    `json:"assigneeId,omitempty" binding:"omitempty,gt=0"`
 	AssignmentReason string  `json:"assignmentReason"`
+	// ClassificationReason 是分类纠正原因：分类确实变化时必填（B1 治理契约）。
+	ClassificationReason string `json:"classificationReason"`
 	Workaround       *string `json:"workaround"`
 	Resolution       *string `json:"resolution"`
 	Version          int     `json:"version" binding:"required,gt=0"`
