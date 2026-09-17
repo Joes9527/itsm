@@ -83,6 +83,32 @@ Verified 2026-09-16 for tenant1 definition 65: `key=ticket_general_flow`,
 the frozen baseline. Binding IDs must be re-read from `process_bindings` rather
 than assumed from naming.
 
+### Database inventory (verified 2026-09-16)
+
+Labels describe purpose, not lineage. Re-read this table against `pg_database`
+rather than trusting a name, and never assume "migration" means "the current Dev
+copy".
+
+| Database | Purpose | Ledger head | defs/bindings/tickets | Notes |
+| --- | --- | --- | --- | --- |
+| `itsm_config_baseline_20260908` | **The real Dev target** (3010 → 8080 → here) | `047_bpmn_assignment_source`, 39 receipts | 75/35/33 | Identity, permissions and business configuration preserved. |
+| `itsm` | Original pre-split database: the shared `public` schema plus a very large number of leftover per-test schemas | `019_kaf_execution_integrity_rls` | 68/28/18 | KAF-named head; lineage unresolved, see open items. |
+| `itsm_baseline_20260908` | Earlier baseline copy of the same generation as `itsm` | `019_kaf_execution_integrity_rls` | 68/28/18 | Created 2026-09-08. |
+| `itsm_migration_20260914` | Same-instance clone made for the legacy ITSM data migration; the documented precedent for "rehearse on a clone" | `019_kaf_execution_integrity_rls`, 14 receipts | 68/28/18 | **Not** a copy of the current Dev (047), so it cannot serve as the "verified Dev clone" the validation role requires. |
+| `itsm_p1_integration_verify_20260901` | Older integration verification target, already cleaned | `022_drop_professional_extension_shared_fields` | 20/9/0 | Not in use. |
+| `itsm_intake_test` | Unversioned intake test database | no `schema_migrations` | 1/1/1 | Documented as a dangerous unversioned state. |
+
+Open items:
+
+- The three databases that share an `019_kaf_execution_integrity_rls` head record
+  their history under **KAF** migration names, while Dev records **ITSM** names.
+  Resolve which product's history each one actually holds before using any of
+  them as a validation or clone source.
+- `itsm_candidate` (38 receipts, `046_auth_token_state`) still appears in the
+  2026-09-14 reconciliation table but no longer exists.
+- No database on this instance has a `migration_validation` schema, so the
+  two-database design's validation area remains uncreated.
+
 ### Three separate workstreams
 
 1. **Schema compatibility:** use the existing canonical Migrator, dependency checks and truthful receipts. Separate structural preparation, ordinary migration, business acceptance and controlled retirement. Do not edit historical SQL/checksums, fabricate receipts, use Ent overlays, or enroll historical WorkItems to pass admission. Apply the [controlled retirement contract](../AGENTS.md#accepted-workitem-decisions-and-migration-boundaries).
