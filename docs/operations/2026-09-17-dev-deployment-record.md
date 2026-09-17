@@ -14,7 +14,7 @@
 | 数据库 | `itsm_config_baseline_20260908`（容器 `itsm-postgres-dev`，PostgreSQL 17） |
 | 变更性质 | **共享环境变更**：制品替换 + 服务重启 + 业务配置写入（无 schema 迁移） |
 
-## 2. 本次部署的制品
+## 2. 本次部署的制品（2026-09-17 09:40Z 这一次）
 
 | 服务 | 制品 | revision | sha256 | 备注 |
 |---|---|---|---|---|
@@ -22,6 +22,8 @@
 | itsm-web (3010) | `/home/administrator/apps/itsm-kaf/releases/itsm-web-5cf884ac-gG8AL4Vu7GgTxL7qAKG9w` | `5cf884ac`（本地构建树 = `6632ae0b` + 前端改动） | `server.js` = `83cf5ea13d3d0cfb2dc194fa22b2b4c9bf6e969fb4e0aea17c9405332c880d7a`，`build_id` = `gG8AL4Vu7GgTxL7qAKG9w` | 前端内容 == `main@4de73348` 的 `itsm-frontend`（`git diff` 为空） |
 
 > `5cf884ac` 是**本地构建集成提交**（因为当时运行基线 `6632ae0b` 尚未进入 `origin/main`）。其前端 diff 与已推送的 `d226c1ce` 前端 diff 逐行一致；该本地分支已在清理阶段删除。
+
+> ⚠️ **本文 §2、§3、§6 描述的是上表这一次部署的当时状态，不是当前状态。** 该次部署之后，环境已被推进到 CTI 版本，见 §10。
 
 ## 3. 运行配置（recipe）变更
 
@@ -87,12 +89,30 @@
 | `main@37471635` 两个守卫为红 | `Lint`（`Run 'gofumpt -w .' to fix formatting`）、`Source/Test Coverage Guard`；PR #48 在红灯状态下被合并 |
 | approvals Jest 偶发超时 | `src/app/(main)/approvals/__tests__/page.test.tsx` 在 CI 负载下触发 10s 默认超时；本地 20/20 通过 |
 
-## 8. 后续（未在本次执行）
+## 8. 后续
 
-1. **把环境推进到 `main@37471635`（含 CTI 治理）**：需要重新构建后端与前端；`048` 已应用，**不需要迁移**，但部署后"分类结构治理"会立即生效（完成门禁默认仍关闭）。执行前建议先全量备份（库仅 28 MB）。
-2. 修 `main@37471635` 上仍红的两个守卫（gofumpt 格式、测试覆盖映射）。
+1. ~~**把环境推进到 `main@37471635`（含 CTI 治理）**~~ → **已由维护者执行**（2026-09-17 13:55Z 左右），实测状态见 §10。当时 `048` 已应用，确认**无需迁移**。
+2. ~~修 `main@37471635` 上仍红的两个守卫（gofumpt 格式、测试覆盖映射）~~ → **已提交 PR #52**（`codex/fix/cti-ci-guards`，补测试而非放宽门禁），待 CI 与合并。
 3. 按 [CTI 治理受控启用清单](../operations/cti-governance-rollout-checklist.md) 分阶段：补配目录默认分类 → 再逐租户启用完成门禁。
 4. 更新 `docs/superpowers/plans/2026-09-15-migration-validation-ledger.md` 的 Dev 行（仍写"031 / 目标 047"，实际已到 048）与 CTI 清单 §9 的自相矛盾（§9 称"未在任何共享库应用"，§4 已记录 dev 应用成功）。
+5. 目录 id 41 的默认分类仍为空；启用完成门禁前需按清单 §5 通过页面补配。
+
+## 10. 后续状态变更（本文写作后，实测）
+
+本文 §2/§3/§6 记录的是 09:40Z 那次部署。此后环境已被**推进到 CTI 版本**（非本文执行，由维护者完成），实测如下：
+
+| 项 | 值（2026-09-17 实测） |
+|---|---|
+| itsm (8080) 制品 | `/home/administrator/.local/state/itsm-dev-restoration-20260916/itsm-api-f0ea1d6ae`（mtime 09-17 21:55 CST），`executable_sha256` = `f0ea1d6aea2805bfa943843d3aad5b7c9690239d64b36bd148d663287daa85b5` |
+| itsm-web (3010) 制品 | `releases/itsm-web-37471635-JZUoWCBSTm110Sm5zuDYP`，`build_id` = `JZUoWCBSTm110Sm5zuDYP`，`server.js` sha256 = `ecd3a867903ccf689e2dd31d3ee466f8085de7b24598875a7d938769dd3ecf6c` |
+| 两条 recipe 的 `source_revision` | `37471635115f0e91471e5edac6362b7c9190cf61`（= `main@37471635`，含 CTI 治理） |
+| `source_root` | 两条 recipe 均为 `null`（与本文 §3 的处理一致，无漂移检查） |
+| 运行 PID | itsm `99006`、itsm-web `112714`（`stack status` 无 drift） |
+| 健康 | 8080 `/api/v1/health` = 200；3010 `/login` = 200 |
+| 迁移 | `schema_migrations` 仍止于 `048_cti_governance`（checksum `d3b309f6…`），**本次推进会未新增迁移**；结构治理随代码生效，完成门禁仍默认关闭 |
+
+**未验证/未记录的部分（不要据此宣称已完成）**：该次推进会不是本文执行，因此**构建命令、构建来源提交、是否全量备份、是否跑过 L1 验证**均无本文档级别证据；其执行者应把 §2 目标行、CTI 清单 §2/§4 的勾选与验证证据补齐。特别是 CTI 清单 §9 与 §4 仍自相矛盾，且 §5 的"已发布目录补配默认分类"尚未开始。
+
 
 ## 9. 证据位置
 
