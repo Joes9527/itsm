@@ -36,6 +36,7 @@ import BpmnModeler from 'bpmn-js/lib/Modeler';
 import itsmModdleDescriptor from './itsm-moddle-descriptor';
 import gridModule from 'diagram-js/lib/features/grid-snapping';
 
+import 'bpmn-js/dist/assets/bpmn-js.css';
 import 'bpmn-js/dist/assets/diagram-js.css';
 import 'bpmn-js/dist/assets/bpmn-font/css/bpmn.css';
 
@@ -154,6 +155,7 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const modelerRef = useRef<BpmnModeler | null>(null);
   const initAttemptedRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [currentXML, setCurrentXML] = useState(xml);
   const [zoom, setZoom] = useState(1);
   const [history, setHistory] = useState<HistoryItem[]>([{ xml, timestamp: Date.now(), description: '初始' }]);
@@ -1185,17 +1187,20 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
         <Tooltip title="导出BPMN" placement="right">
           <Button type="text" icon={<FileJson size={18} />} onClick={handleExportXML} />
         </Tooltip>
-        <label>
-          <input
-            type="file"
-            accept=".bpmn,.xml"
-            style={{ display: 'none' }}
-            onChange={handleImportXML}
+        <Tooltip title="导入BPMN" placement="right">
+          <Button
+            type="text"
+            icon={<Upload size={18} />}
+            onClick={() => fileInputRef.current?.click()}
           />
-          <Tooltip title="导入BPMN" placement="right">
-            <Button type="text" icon={<Upload size={18} />} />
-          </Tooltip>
-        </label>
+        </Tooltip>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".bpmn,.xml"
+          style={{ display: 'none' }}
+          onChange={handleImportXML}
+        />
       </div>
 
       {/* BPMN 图 */}
