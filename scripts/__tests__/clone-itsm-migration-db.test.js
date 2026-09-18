@@ -136,6 +136,17 @@ test('rejects an abnormal target database identifier before invoking docker', ()
   assert.equal(fixture.readLog(), '', 'no docker call may happen before identifier validation');
 });
 
+test('rejects uppercase database aliases before any destructive or read operation', () => {
+  for (const args of [['ITSM', 'itsm'], [TARGET_DB, 'ITSM']]) {
+    const fixture = fakeDockerEnvironment();
+    fixture.mark('target_exists');
+    fixture.mark('incomplete');
+    const result = run(fixture, args, { RECREATE_INCOMPLETE: '1' });
+    assert.equal(result.status, 2, result.stderr || result.stdout);
+    assert.equal(fixture.readLog(), '', 'ambiguous names must never reach docker');
+  }
+});
+
 test('rejects identical source and target database names', () => {
   const fixture = fakeDockerEnvironment();
   const result = run(fixture, [SOURCE_DB, SOURCE_DB]);
