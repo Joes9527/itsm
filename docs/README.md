@@ -10,6 +10,8 @@
 
 - [部门管理单元实施计划（负责人 + 子树人数，draft，未执行）](superpowers/plans/2026-09-18-department-management-unit.md)：5 个任务（记录"停用=删除"的已接受偏离、负责人写入校验、可清空负责人与换父并留痕、有界子树人数、脏负责人值清除）。**Task 5 含数据库写入，需单独授权；本计划不新增 canonical 迁移。**
 
+- [人员与汇报线实施计划（上级校验 + 迁移落位，draft，未执行）](superpowers/plans/2026-09-18-people-reporting-line.md)：6 个任务（上级写入校验：自引用/成环/跨租户/非在职、导入跳过非法值并计数、只读盘点、上级四类处置、员工落位到最细组、KAF 上游字段前置条件）。**Task 4/5 含数据库写入，需单独授权；Task 5 依赖 node_type 已赋值。**
+
 > **开发／迁移任务先读：[当前结构目标047](development-environment.md#selected-schema-target-047)及[实际数据库状态](superpowers/plans/2026-09-15-migration-validation-ledger.md#schema-target-status)。目标版本与已部署状态分开记录。**
 
 - [Ticket 详情体验统一实施计划](./superpowers/plans/2026-09-15-ticket-detail-experience-unification.md)：六项任务及最终复审完成；浏览器 7/7、最终并发回归 98/98，已提交 PR #35。
