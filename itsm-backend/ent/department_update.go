@@ -209,6 +209,26 @@ func (_u *DepartmentUpdate) ClearOrgType() *DepartmentUpdate {
 	return _u
 }
 
+// SetNodeType sets the "node_type" field.
+func (_u *DepartmentUpdate) SetNodeType(v string) *DepartmentUpdate {
+	_u.mutation.SetNodeType(v)
+	return _u
+}
+
+// SetNillableNodeType sets the "node_type" field if the given value is not nil.
+func (_u *DepartmentUpdate) SetNillableNodeType(v *string) *DepartmentUpdate {
+	if v != nil {
+		_u.SetNodeType(*v)
+	}
+	return _u
+}
+
+// ClearNodeType clears the value of the "node_type" field.
+func (_u *DepartmentUpdate) ClearNodeType() *DepartmentUpdate {
+	_u.mutation.ClearNodeType()
+	return _u
+}
+
 // SetDeletedAt sets the "deleted_at" field.
 func (_u *DepartmentUpdate) SetDeletedAt(v time.Time) *DepartmentUpdate {
 	_u.mutation.SetDeletedAt(v)
@@ -573,6 +593,12 @@ func (_u *DepartmentUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	}
 	if _u.mutation.OrgTypeCleared() {
 		_spec.ClearField(department.FieldOrgType, field.TypeString)
+	}
+	if value, ok := _u.mutation.NodeType(); ok {
+		_spec.SetField(department.FieldNodeType, field.TypeString, value)
+	}
+	if _u.mutation.NodeTypeCleared() {
+		_spec.ClearField(department.FieldNodeType, field.TypeString)
 	}
 	if value, ok := _u.mutation.DeletedAt(); ok {
 		_spec.SetField(department.FieldDeletedAt, field.TypeTime, value)
@@ -1075,6 +1101,26 @@ func (_u *DepartmentUpdateOne) ClearOrgType() *DepartmentUpdateOne {
 	return _u
 }
 
+// SetNodeType sets the "node_type" field.
+func (_u *DepartmentUpdateOne) SetNodeType(v string) *DepartmentUpdateOne {
+	_u.mutation.SetNodeType(v)
+	return _u
+}
+
+// SetNillableNodeType sets the "node_type" field if the given value is not nil.
+func (_u *DepartmentUpdateOne) SetNillableNodeType(v *string) *DepartmentUpdateOne {
+	if v != nil {
+		_u.SetNodeType(*v)
+	}
+	return _u
+}
+
+// ClearNodeType clears the value of the "node_type" field.
+func (_u *DepartmentUpdateOne) ClearNodeType() *DepartmentUpdateOne {
+	_u.mutation.ClearNodeType()
+	return _u
+}
+
 // SetDeletedAt sets the "deleted_at" field.
 func (_u *DepartmentUpdateOne) SetDeletedAt(v time.Time) *DepartmentUpdateOne {
 	_u.mutation.SetDeletedAt(v)
@@ -1469,6 +1515,12 @@ func (_u *DepartmentUpdateOne) sqlSave(ctx context.Context) (_node *Department, 
 	}
 	if _u.mutation.OrgTypeCleared() {
 		_spec.ClearField(department.FieldOrgType, field.TypeString)
+	}
+	if value, ok := _u.mutation.NodeType(); ok {
+		_spec.SetField(department.FieldNodeType, field.TypeString, value)
+	}
+	if _u.mutation.NodeTypeCleared() {
+		_spec.ClearField(department.FieldNodeType, field.TypeString)
 	}
 	if value, ok := _u.mutation.DeletedAt(); ok {
 		_spec.SetField(department.FieldDeletedAt, field.TypeTime, value)

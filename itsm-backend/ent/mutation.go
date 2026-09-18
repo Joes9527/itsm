@@ -35430,6 +35430,7 @@ type DepartmentMutation struct {
 	updated_at        *time.Time
 	area_name         *string
 	org_type          *string
+	node_type         *string
 	deleted_at        *time.Time
 	clearedFields     map[string]struct{}
 	parent            *int
@@ -36021,6 +36022,55 @@ func (m *DepartmentMutation) ResetOrgType() {
 	delete(m.clearedFields, department.FieldOrgType)
 }
 
+// SetNodeType sets the "node_type" field.
+func (m *DepartmentMutation) SetNodeType(s string) {
+	m.node_type = &s
+}
+
+// NodeType returns the value of the "node_type" field in the mutation.
+func (m *DepartmentMutation) NodeType() (r string, exists bool) {
+	v := m.node_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNodeType returns the old "node_type" field's value of the Department entity.
+// If the Department object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DepartmentMutation) OldNodeType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNodeType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNodeType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNodeType: %w", err)
+	}
+	return oldValue.NodeType, nil
+}
+
+// ClearNodeType clears the value of the "node_type" field.
+func (m *DepartmentMutation) ClearNodeType() {
+	m.node_type = nil
+	m.clearedFields[department.FieldNodeType] = struct{}{}
+}
+
+// NodeTypeCleared returns if the "node_type" field was cleared in this mutation.
+func (m *DepartmentMutation) NodeTypeCleared() bool {
+	_, ok := m.clearedFields[department.FieldNodeType]
+	return ok
+}
+
+// ResetNodeType resets all changes to the "node_type" field.
+func (m *DepartmentMutation) ResetNodeType() {
+	m.node_type = nil
+	delete(m.clearedFields, department.FieldNodeType)
+}
+
 // SetDeletedAt sets the "deleted_at" field.
 func (m *DepartmentMutation) SetDeletedAt(t time.Time) {
 	m.deleted_at = &t
@@ -36455,7 +36505,7 @@ func (m *DepartmentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *DepartmentMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 12)
 	if m.name != nil {
 		fields = append(fields, department.FieldName)
 	}
@@ -36485,6 +36535,9 @@ func (m *DepartmentMutation) Fields() []string {
 	}
 	if m.org_type != nil {
 		fields = append(fields, department.FieldOrgType)
+	}
+	if m.node_type != nil {
+		fields = append(fields, department.FieldNodeType)
 	}
 	if m.deleted_at != nil {
 		fields = append(fields, department.FieldDeletedAt)
@@ -36517,6 +36570,8 @@ func (m *DepartmentMutation) Field(name string) (ent.Value, bool) {
 		return m.AreaName()
 	case department.FieldOrgType:
 		return m.OrgType()
+	case department.FieldNodeType:
+		return m.NodeType()
 	case department.FieldDeletedAt:
 		return m.DeletedAt()
 	}
@@ -36548,6 +36603,8 @@ func (m *DepartmentMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldAreaName(ctx)
 	case department.FieldOrgType:
 		return m.OldOrgType(ctx)
+	case department.FieldNodeType:
+		return m.OldNodeType(ctx)
 	case department.FieldDeletedAt:
 		return m.OldDeletedAt(ctx)
 	}
@@ -36629,6 +36686,13 @@ func (m *DepartmentMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetOrgType(v)
 		return nil
+	case department.FieldNodeType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNodeType(v)
+		return nil
 	case department.FieldDeletedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -36708,6 +36772,9 @@ func (m *DepartmentMutation) ClearedFields() []string {
 	if m.FieldCleared(department.FieldOrgType) {
 		fields = append(fields, department.FieldOrgType)
 	}
+	if m.FieldCleared(department.FieldNodeType) {
+		fields = append(fields, department.FieldNodeType)
+	}
 	if m.FieldCleared(department.FieldDeletedAt) {
 		fields = append(fields, department.FieldDeletedAt)
 	}
@@ -36739,6 +36806,9 @@ func (m *DepartmentMutation) ClearField(name string) error {
 		return nil
 	case department.FieldOrgType:
 		m.ClearOrgType()
+		return nil
+	case department.FieldNodeType:
+		m.ClearNodeType()
 		return nil
 	case department.FieldDeletedAt:
 		m.ClearDeletedAt()
@@ -36780,6 +36850,9 @@ func (m *DepartmentMutation) ResetField(name string) error {
 		return nil
 	case department.FieldOrgType:
 		m.ResetOrgType()
+		return nil
+	case department.FieldNodeType:
+		m.ResetNodeType()
 		return nil
 	case department.FieldDeletedAt:
 		m.ResetDeletedAt()

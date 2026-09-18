@@ -17,10 +17,11 @@ func TestToolInvocationScopeMigrationRequiresPriorPreparation(t *testing.T) {
 	}
 	plan, err := PlanMigrations(catalog, controlledReceipts(prefix), OpUp, nil)
 	require.NoError(t, err)
-	require.Len(t, plan.Executable, 8)
+	require.Len(t, plan.Executable, 10)
 	require.Equal(t, AuthTokenStateVersion, plan.Executable[5].Version)
 	require.Equal(t, ToolInvocationExecutionScopeVersion, plan.Executable[0].Version)
 	require.Equal(t, CTIGovernanceVersion, plan.Executable[7].Version)
+	require.Equal(t, DepartmentCodeTenantUniqueVersion, plan.Executable[8].Version)
 	require.NotEmpty(t, GetMigrationSQL(ToolInvocationExecutionScopeVersion))
 	require.Equal(t, ToolExecutionAuthorityLockVersion, plan.Executable[1].Version)
 	for _, removed := range []string{WorkItemPrepareVersion, CandidateExecutionScopeVersion, SLAAlertNotificationVersion} {
