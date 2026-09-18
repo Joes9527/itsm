@@ -186,7 +186,12 @@ func (s *bpmnTaskService) ProjectTaskView(ctx context.Context, reference *ent.Pr
 	if err != nil {
 		return nil, err
 	}
+	blocks, err := loadTaskCallbackBlocks(ctx, s.client, []*ent.ProcessTask{task})
+	if err != nil {
+		return nil, err
+	}
 	result := dto.ToBPMNTaskResponse(task, instance)
+	result.CallbackBlock = blocks[task.ID]
 	result.Assignee = assignment.Assignee
 	result.AssigneeSource = assignment.Source
 	result.AssignmentState = assignment.State

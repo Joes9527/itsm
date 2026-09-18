@@ -72,6 +72,9 @@ func (s *TicketService) EscalateTicket(ctx context.Context, cmd dto.TicketEscala
 	if err = s.execution.RequireEntMembers(ctx, tx, m.TenantID, item.ID); err != nil {
 		return empty, err
 	}
+	if err := EnforceGenericWorkflowTransitionTx(ctx, tx.Client(), m.TenantID, item.ID, "manual_escalation"); err != nil {
+		return empty, err
+	}
 	if item.Version != m.ExpectedVersion {
 		return empty, common.NewVersionConflictError("ticket", item.ID, m.ExpectedVersion, item.Version)
 	}

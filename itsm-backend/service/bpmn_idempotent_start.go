@@ -98,6 +98,9 @@ func (e *CustomProcessEngine) StartProcessByDefinitionID(ctx context.Context, de
 		if existing.StartRequestDigest == "" || existing.StartRequestDigest != digest || existing.ProcessDefinitionID != definition.ID || existing.BusinessKey != businessKey || existing.BusinessType != businessType || existing.BusinessID != businessID || existing.Initiator != resolveProcessInitiator(ctx, variables) {
 			return nil, &processStartConflictError{}
 		}
+		if err := validateGenericWorkflowReplay(ctx, tx.Client(), definition, existing, variables); err != nil {
+			return nil, err
+		}
 		existing.Unwrap()
 		return existing, nil
 	}

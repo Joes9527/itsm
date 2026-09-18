@@ -41,6 +41,9 @@ func (s *ProcessBindingService) CreateBinding(ctx context.Context, binding *dto.
 		return nil, fmt.Errorf("流程定义 %s 不存在", binding.ProcessDefinitionKey)
 	}
 
+	if _, err := genericBindingConfig(def, string(binding.BusinessType), binding.Overrides); err != nil {
+		return nil, err
+	}
 	// 如果没有指定版本，使用最新版本
 	if binding.ProcessVersion <= 0 {
 		// 转换版本字符串为整数
@@ -99,6 +102,34 @@ func (s *ProcessBindingService) UpdateBinding(ctx context.Context, id int, bindi
 		return nil, fmt.Errorf("无权操作此流程绑定")
 	}
 
+	// Validate the effective binding before any default/identity mutation.
+	key, version, business := entity.ProcessDefinitionKey, entity.ProcessVersion, entity.BusinessType
+	overrides := entity.Overrides
+	if binding.ProcessDefinitionKey != "" {
+		key = binding.ProcessDefinitionKey
+	}
+	if binding.ProcessVersion > 0 {
+		version = binding.ProcessVersion
+	}
+	if binding.BusinessType != "" {
+		business = string(binding.BusinessType)
+	}
+	if binding.Overrides != nil {
+		overrides = binding.Overrides
+	}
+	// Deactivation/maintenance can inspect an inactive retained definition.
+	// Enabling or changing the target must still resolve an executable version.
+	requireExecutable := binding.IsActive || key != entity.ProcessDefinitionKey || version != entity.ProcessVersion
+	def, err := selectProcessDefinitionVersion(ctx, s.client, entity.TenantID, key, version, requireExecutable)
+	if err != nil {
+		return nil, err
+	}
+	if def == nil {
+		return nil, fmt.Errorf("workflow definition unavailable")
+	}
+	if _, err := genericBindingConfig(def, business, overrides); err != nil {
+		return nil, err
+	}
 	// 如果设置为默认，需要取消同类型其他默认绑定
 	if binding.IsDefault && !entity.IsDefault {
 		_, err := s.client.ProcessBinding.Update().

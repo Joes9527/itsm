@@ -228,6 +228,7 @@ func (c *BPMNWorkflowController) SubmitTaskDecision(ctx *gin.Context) {
 	if !ok {
 		return
 	}
+	workflowCtx = service.WithBPMNApprovalDecisionIntent(workflowCtx, taskID, req.Action, req.Variables)
 	variables := req.Variables
 	if variables == nil {
 		variables = make(map[string]interface{})

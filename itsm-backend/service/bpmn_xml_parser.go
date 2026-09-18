@@ -18,6 +18,9 @@ func NewBPMNParser() *BPMNParser {
 
 // ParseXML 解析BPMN XML文件
 func (p *BPMNParser) ParseXML(xmlData []byte) (*BPMNDefinitions, error) {
+	if err := validateLifecycleMetadataLocations(xmlData); err != nil {
+		return nil, err
+	}
 	var definitions BPMNDefinitions
 	err := xml.Unmarshal(xmlData, &definitions)
 	if err != nil {
@@ -47,6 +50,9 @@ func (p *BPMNParser) validateBPMN(definitions *BPMNDefinitions) error {
 		return fmt.Errorf("BPMN定义必须包含至少一个流程")
 	}
 
+	if _, err := hasGenericFulfillmentContract(definitions); err != nil {
+		return err
+	}
 	for _, process := range definitions.Processes {
 		if err := p.validateProcess(process); err != nil {
 			return fmt.Errorf("流程验证失败 [%s]: %w", process.ID, err)

@@ -58,6 +58,9 @@ func (e *CustomProcessEngine) ValidateDefinitionForPublication(ctx context.Conte
 	if err != nil {
 		return err
 	}
+	if _, err := ReadGenericFulfillmentConfig(parsed, definition.ProcessVariables); err != nil {
+		return err
+	}
 	approvals := 0
 	validateCapability := func(taskType, action, ref string, optional bool) error {
 		handler := e.findHandlerByTaskType(taskType)
