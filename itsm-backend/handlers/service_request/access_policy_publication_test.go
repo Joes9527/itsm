@@ -2,6 +2,10 @@ package service_request_test
 
 import (
 	"fmt"
+	"os"
+	"strings"
+	"testing"
+
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -11,9 +15,7 @@ import (
 	"itsm-backend/handlers/common/accessgrant"
 	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/service"
-	"os"
-	"strings"
-	"testing"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 )
 
 func TestAccessPolicyPublicationRequiresExactDeclaredCapability(t *testing.T) {
@@ -25,7 +27,7 @@ func TestAccessPolicyPublicationRequiresExactDeclaredCapability(t *testing.T) {
 			configureCatalogPublicationForTest(fx.ctx, fx.client, fx.tenant.ID, owner)
 			if kind == "valid" {
 				t.Chdir(t.TempDir())
-				require.NoError(t, os.WriteFile("config.yaml", []byte("{}\n"), 0600))
+				require.NoError(t, os.WriteFile("config.yaml", []byte("{}\n"), 0o600))
 				viper.Reset()
 				t.Cleanup(viper.Reset)
 				t.Setenv("KAF_WEBHOOK_URL", "http://127.0.0.1:1")
@@ -35,7 +37,7 @@ func TestAccessPolicyPublicationRequiresExactDeclaredCapability(t *testing.T) {
 				require.NoError(t, err)
 				require.Empty(t, cfg.KAFOutbox.WebhookSecret)
 				require.ErrorContains(t, config.ValidateKAFWorkerStartupConfig(cfg), "KAF_WEBHOOK_SECRET")
-				engine := service.NewCustomProcessEngine(fx.client, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
+				engine := service.NewCustomProcessEngine(fx.client, zap.NewNop().Sugar(), executionfixture.Standard()).(*service.CustomProcessEngine)
 				engine.SetPublicationKAFConfig(cfg)
 				owner.SetPublicationEngine(engine)
 			}
@@ -63,7 +65,7 @@ func TestAccessPolicyPublicationRequiresExactDeclaredCapability(t *testing.T) {
 				ref = fmt.Sprint(otherPolicy.ID)
 			}
 			if kind == "unverifiable_worker" {
-				owner.SetPublicationEngine(service.NewCustomProcessEngine(fx.client, zap.NewNop().Sugar()).(*service.CustomProcessEngine))
+				owner.SetPublicationEngine(service.NewCustomProcessEngine(fx.client, zap.NewNop().Sugar(), executionfixture.Standard()).(*service.CustomProcessEngine))
 			}
 			action := accessgrant.Capability
 			if kind == "unknown_action" {

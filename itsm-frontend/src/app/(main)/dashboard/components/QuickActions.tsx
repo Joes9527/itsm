@@ -54,7 +54,7 @@ const EnterpriseQuickActionCard: React.FC<{
   return (
     <Col xs={24} sm={12} md={6} lg={6}>
       <Card
-        className='enterprise-action-card h-full cursor-pointer border-0 hover:shadow-2xl transition-all duration-300 group overflow-hidden rounded-xl bg-white shadow-sm'
+        className='enterprise-action-card h-full cursor-pointer border-0 shadow-none transition-all duration-300 group overflow-hidden rounded-[8px] bg-surface shadow-none'
         styles={{
           body: {
             padding: '24px',
@@ -78,7 +78,7 @@ const EnterpriseQuickActionCard: React.FC<{
           {/* 图标区域 */}
           <div className='mb-4'>
             <div
-              className='w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg transition-all duration-300 group-hover:scale-110 group-hover:rotate-6'
+              className='w-14 h-14 rounded-[8px] flex items-center justify-center shadow-none transition-all duration-300 group-hover:scale-110 group-hover:rotate-6'
               style={{
                 background: `linear-gradient(135deg, ${action.color} 0%, ${action.color}dd 100%)`,
                 boxShadow: `0 4px 16px ${action.color}40`,
@@ -90,14 +90,14 @@ const EnterpriseQuickActionCard: React.FC<{
 
           {/* 内容区域 */}
           <div className='flex-1 flex flex-col'>
-            <h3 className='text-base font-bold text-gray-900 mb-2 group-hover:text-gray-700 transition-colors'>
+            <h3 className='text-[15px] font-semibold text-foreground mb-2 group-hover:text-foreground transition-colors'>
               {action.title}
             </h3>
-            <p className='text-sm text-gray-600 mb-4 line-clamp-2 flex-1'>{action.description}</p>
+            <p className='text-[13px] text-muted mb-4 line-clamp-2 flex-1'>{action.description}</p>
           </div>
 
           {/* 操作按钮 */}
-          <div className='mt-auto pt-4 border-t border-gray-100'>
+          <div className='mt-auto pt-4 border-t border-border'>
             <Button
               type='text'
               size='middle'
@@ -149,18 +149,18 @@ export const QuickActions: React.FC<QuickActionsProps> = React.memo(
         <div className={compact ? '' : 'mb-6'}>
           {showTitle && !compact && (
             <div className='mb-4'>
-              <h2 className='text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2'>
-                <Zap className='text-xl text-blue-500' />
+              <h2 className='text-[15px] font-semibold text-foreground mb-1 flex items-center gap-2'>
+                <Zap className='text-[15px] text-blue-500' />
                 快速操作
               </h2>
-              <p className='text-sm text-gray-600'>常用任务和快捷方式</p>
+              <p className='text-[13px] text-muted'>常用任务和快捷方式</p>
             </div>
           )}
 
           <Row gutter={[16, 16]}>
             {Array.from({ length: 4 }).map((_, index) => (
               <Col key={index} xs={24} sm={12} md={6}>
-                <Card className='h-48 border-0 rounded-xl shadow-sm'>
+                <Card className='h-48 border-0 rounded-[8px] shadow-none'>
                   <div className='flex items-center justify-center h-full'>
                     <Spin size='large' />
                   </div>
@@ -177,12 +177,12 @@ export const QuickActions: React.FC<QuickActionsProps> = React.memo(
         <div className={compact ? '' : 'mb-6'}>
           {showTitle && !compact && (
             <div className='mb-4'>
-              <h2 className='text-lg font-semibold text-gray-900 mb-1'>快速操作</h2>
-              <p className='text-sm text-gray-600'>常用任务和快捷方式</p>
+              <h2 className='text-[15px] font-semibold text-foreground mb-1'>快速操作</h2>
+              <p className='text-[13px] text-muted'>常用任务和快捷方式</p>
             </div>
           )}
 
-          <Card className='text-center py-12 border-0 rounded-xl shadow-sm'>
+          <Card className='text-center py-12 border-0 rounded-[8px] shadow-none'>
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description='暂无快速操作' />
           </Card>
         </div>
@@ -193,11 +193,11 @@ export const QuickActions: React.FC<QuickActionsProps> = React.memo(
       <div className={compact ? '' : 'mb-6'}>
         {showTitle && !compact && (
           <div className='mb-4'>
-            <h2 className='text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2'>
-              <Zap className='text-xl text-blue-500' />
+            <h2 className='text-[15px] font-semibold text-foreground mb-1 flex items-center gap-2'>
+              <Zap className='text-[15px] text-blue-500' />
               快速操作
             </h2>
-            <p className='text-sm text-gray-600'>常用任务和快捷方式</p>
+            <p className='text-[13px] text-muted'>常用任务和快捷方式</p>
           </div>
         )}
 

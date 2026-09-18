@@ -44,13 +44,13 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   const getColorClass = () => {
     switch (color) {
       case 'primary':
-        return 'text-blue-600';
+        return 'text-primary-500';
       case 'secondary':
-        return 'text-gray-600';
+        return 'text-muted';
       case 'white':
         return 'text-white';
       default:
-        return 'text-blue-600';
+        return 'text-primary-500';
     }
   };
 
@@ -58,10 +58,7 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
     <span role="status" aria-label={ariaLabel} className="inline-flex items-center">
       <Spin
         indicator={
-          <Loader2
-            size={getSize()}
-            className={cn('animate-spin', getColorClass(), className)}
-          />
+          <Loader2 size={getSize()} className={cn('animate-spin', getColorClass(), className)} />
         }
       />
       {tip ? <span className="ml-2">{tip}</span> : null}
@@ -75,9 +72,9 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
  */
 export const PageLoading: React.FC<{ message?: string }> = ({ message = '加载中...' }) => {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-page">
       <LoadingSpinner size="xl" />
-      <p className="mt-4 text-gray-600">{message}</p>
+      <p className="mt-4 text-muted">{message}</p>
     </div>
   );
 };
@@ -98,7 +95,7 @@ export const CardLoading: React.FC<{ message?: string }> = ({ message = '加载�
   return (
     <div className="flex flex-col items-center justify-center py-12">
       <LoadingSpinner size="lg" />
-      <p className="mt-4 text-gray-600">{message}</p>
+      <p className="mt-4 text-muted">{message}</p>
     </div>
   );
 };

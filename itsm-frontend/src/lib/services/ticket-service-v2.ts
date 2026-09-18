@@ -1,3 +1,4 @@
+import { ticketEditVersion, ticketEditOperation, type TicketEditResult } from '../api/ticket-edit';
 /**
  * TicketService - 工单服务
  *
@@ -27,6 +28,7 @@ export interface CreateTicketParams {
 
 /** 更新工单参数 */
 export interface UpdateTicketParams {
+  operationId: string;
   title?: string;
   description?: string;
   priority?: TicketPriority;
@@ -35,7 +37,7 @@ export interface UpdateTicketParams {
   tags?: string[];
   assigneeId?: number;
   resolution?: string;
-  version?: number; // 乐观锁
+  version: number; // 用户看到的版本，不在执行时重读
 }
 
 /** 工单查询参数 */
@@ -66,15 +68,8 @@ export interface TicketStats {
 }
 
 /** SLA 信息 */
-export interface TicketSLAInfo {
-  ticketId: number;
-  slaName: string;
-  responseDeadline: string | null;
-  resolutionDeadline: string | null;
-  isBreached: boolean;
-  responseTimeRemaining: number | null;
-  resolutionTimeRemaining: number | null;
-}
+export type { TicketSLAInfo } from '@/lib/api/ticket-api';
+import type { TicketSLAInfo } from '@/lib/api/ticket-api';
 
 /** 工单评论 */
 export interface TicketComment {
@@ -156,8 +151,10 @@ export class TicketService extends BaseService<Ticket, CreateTicketParams, Updat
   /**
    * 更新工单
    */
-  async updateTicket(id: number, data: UpdateTicketParams): Promise<Ticket> {
-    return this.update(id, data);
+  async updateTicket(id: number, data: UpdateTicketParams): Promise<TicketEditResult> {
+    ticketEditVersion(data.version);
+    ticketEditOperation(data.operationId);
+    return this.put<TicketEditResult>(`/${id}`, data);
   }
 
   /**

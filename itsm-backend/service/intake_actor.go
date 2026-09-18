@@ -30,8 +30,10 @@ func loadIntakeActor(ctx context.Context, directory *ent.Client, receipt *ent.In
 
 // Private service context is created only after outbox/receipt graph validation.
 // It contains a materialized actor, never an unrestricted directory client.
-type intakeStartActorKey struct{}
-type intakeStartActor struct {
-	actor                                 ent.User
-	targetTenantID, workItemID, receiptID int
-}
+type (
+	intakeStartActorKey struct{}
+	intakeStartActor    struct {
+		actor                                 ent.User
+		targetTenantID, workItemID, receiptID int
+	}
+)

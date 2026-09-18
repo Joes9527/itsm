@@ -4,24 +4,31 @@ import (
 	"context"
 
 	"itsm-backend/authorization"
+	"itsm-backend/common"
+	"itsm-backend/common/workitemidentity"
 	"itsm-backend/dto"
+	"itsm-backend/ent"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/repository/ticket"
-
-	"fmt"
 )
-
-func isRequester(t *ticket.Ticket, actorUserID int) bool {
-	return t.RequesterID == actorUserID
-}
 
 // CanAssign：ticket:assign 权限 + 工单未结束，不排除本人（分配是路由工作，非职责分离场景）。
 func CanAssign(actor ActionActor, t *ticket.Ticket) dto.ActionPermission {
+	if err := rejectProfessionalTicketMutation(t.RecordClass); err != nil {
+		return dto.ActionPermission{Allowed: false, Reason: "请通过专业工单的分配操作处理"}
+	}
+
 	if isFinalStatus(t.Status) {
 		return dto.ActionPermission{Allowed: false, Reason: "工单已结束，无法分配"}
 	}
 	if !authorization.HasResourcePermission(actor.Client, actor.Role, "ticket", "assign", actor.TenantID) {
 		return dto.ActionPermission{Allowed: false, Reason: "无分配权限"}
+	}
+	if t.RecordClass != "generic" {
+		policy, err := authorization.ResolveWorkItemPolicy(t.RecordClass)
+		if err != nil || !authorization.HasResourcePermission(actor.Client, actor.Role, policy.Resource, policy.FulfillmentAction(), actor.TenantID) {
+			return dto.ActionPermission{Allowed: false, Reason: "无专业工单分配权限"}
+		}
 	}
 	return dto.ActionPermission{Allowed: true}
 }
@@ -37,28 +44,54 @@ func CanEdit(actor ActionActor, t *ticket.Ticket) dto.ActionPermission {
 	return dto.ActionPermission{Allowed: true}
 }
 
+// CanClose projects the narrow generic resolved-to-closed command, not edit permission.
+func CanClose(actor ActionActor, t *ticket.Ticket) dto.ActionPermission {
+	if t.RecordClass != "generic" || t.Status != ticket.StatusResolved || t.TenantID != actor.TenantID {
+		return dto.ActionPermission{Allowed: false, Reason: "仅当前租户已解决的通用工单可关闭"}
+	}
+	if !authorization.HasResourcePermission(actor.Client, actor.Role, "ticket", "update", actor.TenantID) {
+		return dto.ActionPermission{Allowed: false, Reason: "无关闭权限"}
+	}
+	return dto.ActionPermission{Allowed: true}
+}
+
 // CanDelete：ticket:delete 权限 + 工单未结束 + 无运行中的 BPMN 流程实例。
 func CanDelete(ctx context.Context, actor ActionActor, t *ticket.Ticket) dto.ActionPermission {
-	if isFinalStatus(t.Status) {
-		return dto.ActionPermission{Allowed: false, Reason: "工单已结束，无法删除"}
-	}
 	if !authorization.HasResourcePermission(actor.Client, actor.Role, "ticket", "delete", actor.TenantID) {
 		return dto.ActionPermission{Allowed: false, Reason: "无删除权限"}
 	}
-	running, err := actor.Client.ProcessInstance.Query().
-		Where(
-			processinstance.BusinessKey(fmt.Sprintf("ticket:%d", t.ID)),
-			processinstance.Status("running"),
-			processinstance.TenantID(actor.TenantID),
-		).
-		Exist(ctx)
-	if err != nil {
+	if err := requireTicketDeletionPrecondition(ctx, actor.Client, t.ID, actor.TenantID, string(t.Status), t.RecordClass); err != nil {
+		if app, ok := common.AsAppError(err); ok {
+			return dto.ActionPermission{Allowed: false, Reason: app.Message}
+		}
 		return dto.ActionPermission{Allowed: false, Reason: "校验流程状态失败"}
 	}
-	if running {
-		return dto.ActionPermission{Allowed: false, Reason: "工单流程流转中，不可删除"}
-	}
 	return dto.ActionPermission{Allowed: true}
+}
+
+// requireTicketDeletionPrecondition preserves the existing Ticket entry policy.
+// C1 converged the legacy ticket:<id> workflow identity onto the canonical
+// Actual deletion calls this with the owning RR transaction after authorization.
+func requireTicketDeletionPrecondition(ctx context.Context, client *ent.Client, id, tenantID int, status, recordClass string) error {
+	if isFinalStatus(ticket.Status(status)) {
+		return common.NewForbiddenError("工单已结束，无法删除")
+	}
+	// 按 WorkItem 的真实 recordClass 组装流程键：硬编码 generic 会漏掉
+	// incident/problem/change/service_request_item 上运行中的流程实例，让带活跃流程的
+	// 工单被删除。未知记录类在此失败关闭（删除是破坏性操作，不能靠猜）。
+	businessKey, identityErr := workitemidentity.BusinessKey(recordClass, id)
+	if identityErr != nil {
+		// Fail closed: an unidentifiable workflow state must not permit deletion.
+		return common.NewInternalError("工单流程身份无效", identityErr)
+	}
+	running, err := client.ProcessInstance.Query().Where(processinstance.BusinessKey(businessKey), processinstance.Status("running"), processinstance.TenantID(tenantID)).Exist(ctx)
+	if err != nil {
+		return common.NewInternalError("校验流程状态失败", err)
+	}
+	if running {
+		return common.NewForbiddenError("工单流程流转中，不可删除")
+	}
+	return nil
 }
 
 // CanCC：复用 TicketWorkflowService.EnsureCanCCTicket 的既有业务规则，不重新实现。
@@ -82,6 +115,7 @@ func BuildTicketActions(ctx context.Context, actor ActionActor, t *ticket.Ticket
 	return map[string]dto.ActionPermission{
 		"assign": CanAssign(actor, t),
 		"edit":   CanEdit(actor, t),
+		"close":  CanClose(actor, t),
 		"cc":     CanCC(ctx, actor, t.ID),
 		"delete": CanDelete(ctx, actor, t),
 	}

@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { AntdRegistry } from '@ant-design/nextjs-registry';
 import { ConfigProvider, App } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
@@ -11,8 +12,8 @@ interface AntdProviderProps {
 
 export const AntdProvider: React.FC<AntdProviderProps> = ({ children }) => {
   const { isDark } = useTheme();
-  const antdTheme = getAntdTheme(isDark);
-  
+  const antdTheme = useMemo(() => getAntdTheme(isDark), [isDark]);
+
   return (
     <AntdRegistry>
       <ConfigProvider theme={antdTheme} locale={zhCN}>

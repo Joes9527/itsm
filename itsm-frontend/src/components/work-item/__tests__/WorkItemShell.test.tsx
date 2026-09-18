@@ -7,10 +7,18 @@ import type { WorkItemCommon } from '../WorkItemTypes';
 // Mock detail-tabs components to prevent real network calls from CommentPanel/AttachmentPanel
 jest.mock('@/components/business/detail-tabs', () => ({
   CommentPanel: ({ targetType, targetId }: { targetType: string; targetId: number }) => (
-    <div data-testid="mocked-comment-panel" data-target-type={targetType} data-target-id={targetId} />
+    <div
+      data-testid='mocked-comment-panel'
+      data-target-type={targetType}
+      data-target-id={targetId}
+    />
   ),
   AttachmentPanel: ({ targetType, targetId }: { targetType: string; targetId: number }) => (
-    <div data-testid="mocked-attachment-panel" data-target-type={targetType} data-target-id={targetId} />
+    <div
+      data-testid='mocked-attachment-panel'
+      data-target-type={targetType}
+      data-target-id={targetId}
+    />
   ),
   ticketCommentAdapter: {},
   ticketAttachmentAdapter: {},
@@ -18,10 +26,13 @@ jest.mock('@/components/business/detail-tabs', () => ({
 
 // Mock auth store to provide user context for WorkItemComments
 jest.mock('@/lib/store/auth-store', () => ({
-  useAuthStore: () => ({ user: { id: 1 } }),
+  useAuthStore: (selector?: (state: unknown) => unknown) => {
+    const state = { user: { id: 1 }, hasPermission: () => false };
+    return selector ? selector(state) : state;
+  },
 }));
 
-// Mock the API modules backing the newly-wired TicketHistoryList/TicketRelationCards
+// Mock the API modules backing the TicketHistoryList and shared WorkItemRelations
 // (Task 4) so their real network calls don't fire during render.
 jest.mock('@/lib/api/ticket-api', () => ({
   TicketApi: {
@@ -29,10 +40,8 @@ jest.mock('@/lib/api/ticket-api', () => ({
   },
 }));
 
-jest.mock('@/lib/api/ticket-relations-api', () => ({
-  TicketRelationsApi: {
-    getTicketRelations: jest.fn().mockResolvedValue([]),
-  },
+jest.mock('../WorkItemRelations', () => ({
+  WorkItemRelations: ({ workItemId }: { workItemId: number }) => <div data-testid="shared-relations" data-work-item-id={workItemId} />,
 }));
 
 // Defensive mocks: CommentPanel/AttachmentPanel are already mocked above (whole
@@ -52,6 +61,7 @@ jest.mock('@/lib/api/ticket-attachment-api', () => ({
 }));
 
 const workItem: WorkItemCommon = {
+  version: 1,
   id: 1,
   number: 'INC-202608-000001',
   recordClass: 'incident',
@@ -72,11 +82,11 @@ const props = {
 function ProbePanel() {
   const { workItem: fromContext, actions } = useWorkItemContext();
   return (
-    <div data-testid="probe">
+    <div data-testid='probe'>
       {fromContext.title}
-      <span data-testid="probe-resolve-allowed">{String(actions.resolve?.allowed)}</span>
-      <span data-testid="probe-close-reason">{actions.close?.reason ?? ''}</span>
-      <span data-testid="probe-action-count">{Object.keys(actions).length}</span>
+      <span data-testid='probe-resolve-allowed'>{String(actions.resolve?.allowed)}</span>
+      <span data-testid='probe-close-reason'>{actions.close?.reason ?? ''}</span>
+      <span data-testid='probe-action-count'>{Object.keys(actions).length}</span>
     </div>
   );
 }
@@ -105,6 +115,7 @@ describe('WorkItemShell', () => {
     );
     expect(screen.getByText(/INC-202608-000001/)).toBeInTheDocument();
     expect(screen.getByTestId('probe')).toHaveTextContent('测试事件');
+    expect(screen.getByTestId('shared-relations')).toHaveAttribute('data-work-item-id', '1');
   });
 
   // 锁定契约：Shell 收下的 actions 必须原样进入 context。Wave 2 的专业 Panel 靠它渲染
@@ -134,7 +145,7 @@ describe('WorkItemShell', () => {
         actions={{}}
         onActionDispatch={jest.fn()}
         professionalPanelSlot={<ProbePanel />}
-        error="加载失败"
+        error='加载失败'
       />
     );
     expect(screen.queryByTestId('probe')).not.toBeInTheDocument();
@@ -174,3 +185,13 @@ describe('WorkItemShell', () => {
     expect(screen.queryByText(/SLA 时效与承诺/)).not.toBeInTheDocument();
   });
 });
+
+ it('routes shared collaboration to WorkItem 91 while retaining professional panel ID 4',()=>{
+ render(<WorkItemShell {...props} workItem={{...workItem,id:91,number:'TKT-0091',version:7}} professionalPanelSlot={<div>Professional 4</div>} assignment={{version:7,allowed:false,disabledReason:'server denied',candidates:[],submit:jest.fn(),refresh:jest.fn()}}/>);
+ expect(screen.getByTestId('mocked-comment-panel')).toHaveAttribute('data-target-id','91');
+ expect(screen.getByTestId('mocked-attachment-panel')).toHaveAttribute('data-target-id','91');
+ expect(screen.getByTestId('shared-relations')).toHaveAttribute('data-work-item-id','91');
+ expect(screen.getByText('Professional 4')).toBeInTheDocument();
+ expect(screen.getByTestId('workitem-assignment-open')).toBeDisabled();
+ expect(screen.getByText('server denied')).toBeInTheDocument();
+ });

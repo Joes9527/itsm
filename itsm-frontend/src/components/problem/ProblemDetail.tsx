@@ -4,14 +4,14 @@
  * 问题详情组件
  */
 
-import React, { useState, useEffect } from 'react';
-import { Card, Tag, Button, Space, Skeleton, message, Typography, Tabs, Modal } from 'antd';
+import React, { useState, useEffect, useRef } from 'react';
+import { App, Card, Tag, Button, Space, Skeleton, Typography, Tabs, Modal, Input } from 'antd';
 import { ArrowLeft, Search, Pencil } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 
 import { ProblemApi } from '@/lib/api/';
 import { ProblemStatus, ProblemStatusLabels } from '@/constants/problem';
-import type { Problem } from '@/lib/api/problem-api';
+import type { Problem, ProblemAction } from '@/lib/api/problem-api';
 import { useOptionalWorkItemContext } from '@/components/work-item/WorkItemContext';
 import type { WorkItemActionState } from '@/components/work-item/WorkItemTypes';
 import { WorkItemActionButton } from '@/components/work-item/WorkItemActionButton';
@@ -34,6 +34,7 @@ const ProblemDetail: React.FC<ProblemDetailProps> = ({
   onProblemLoaded,
 }) => {
   const params = useParams();
+  const { message, modal } = App.useApp();
   const router = useRouter();
   // 支持通过props传入id，或通过useParams获取
   const id = propId || (params?.id as string);
@@ -41,8 +42,11 @@ const ProblemDetail: React.FC<ProblemDetailProps> = ({
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<Problem | null>(null);
   // 状态流转 loading：记录正在提交的目标状态，防止重复点击
-  const [updatingStatus, setUpdatingStatus] = useState<ProblemStatus | null>(null);
-  const actions = workItemContext?.actions ?? fallbackActions ?? EMPTY_ACTIONS;
+  const [updatingStatus, setUpdatingStatus] = useState<ProblemAction | null>(null);
+  const actions = data?.actions ?? workItemContext?.actions ?? fallbackActions ?? EMPTY_ACTIONS;
+  const operations = useRef<Record<string,string>>({});
+  const [verificationOpen, setVerificationOpen] = useState(false);
+  const [verificationNote, setVerificationNote] = useState('');
 
   const loadData = async () => {
     if (!id) return;
@@ -62,11 +66,15 @@ const ProblemDetail: React.FC<ProblemDetailProps> = ({
     loadData();
   }, [id, onProblemLoaded]);
 
-  const handleUpdateStatus = async (status: ProblemStatus) => {
-    if (!id) return;
-    setUpdatingStatus(status);
+  const handleUpdateStatus = async (action: ProblemAction) => {
+    if (!id || !data) return;
+    setUpdatingStatus(action);
     try {
-      await ProblemApi.updateProblem(Number(id), { status });
+      const key = JSON.stringify([id,data.version,action,verificationNote]);
+      const operationId = operations.current[key] ??= crypto.randomUUID();
+      await ProblemApi.command(Number(id), action, { version: data.version, operationId, ...(action === 'verify-resolution' ? { verificationNote } : {}) });
+      delete operations.current[key];
+      if (action === 'verify-resolution') setVerificationOpen(false);
       message.success('状态更新成功');
       loadData();
     } catch (error) {
@@ -76,15 +84,14 @@ const ProblemDetail: React.FC<ProblemDetailProps> = ({
     }
   };
 
-  // 关闭问题为不可逆操作，必须二次确认
   const handleCloseProblem = () => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认关闭问题？',
-      content: '关闭后问题将进入终态，无法再进行处理操作。请确认根因分析与解决方案已记录完整。',
+      content: '请确认永久解决方案已经验证。关闭后如问题再次出现，可以重新打开。',
       okText: '确认关闭',
       okButtonProps: { danger: true },
       cancelText: '取消',
-      onOk: () => handleUpdateStatus(ProblemStatus.CLOSED),
+      onOk: () => handleUpdateStatus('close'),
     });
   };
 
@@ -116,6 +123,9 @@ const ProblemDetail: React.FC<ProblemDetailProps> = ({
       children: (
         <ProblemInvestigationTab
           problemId={data.id}
+          problemVersion={data.version}
+          onProblemChanged={loadData}
+          canEdit={actions.edit?.allowed === true}
           problemTitle={data.title}
           problemDescription={data.description}
         />
@@ -155,21 +165,23 @@ const ProblemDetail: React.FC<ProblemDetailProps> = ({
               actionName='startInvestigation'
               button={{
                 type: 'primary',
-                loading: updatingStatus === ProblemStatus.INVESTIGATING,
+                loading: updatingStatus === 'investigate',
                 disabled: updatingStatus !== null,
-                onClick: () => handleUpdateStatus(ProblemStatus.INVESTIGATING),
+                onClick: () => handleUpdateStatus('investigate'),
               }}
             >
               开始调查
             </WorkItemActionButton>
+            <WorkItemActionButton action={actions.verifyResolution} actionName='verifyResolution' button={{ disabled: updatingStatus !== null, onClick: () => setVerificationOpen(true) }}>验证永久方案</WorkItemActionButton>
+            <WorkItemActionButton action={actions.reopen} actionName='reopen' button={{ disabled: updatingStatus !== null, onClick: () => handleUpdateStatus('reopen') }}>重新打开</WorkItemActionButton>
             <WorkItemActionButton
               action={actions.resolve}
               actionName='resolve'
               button={{
                 type: 'primary',
-                loading: updatingStatus === ProblemStatus.RESOLVED,
+                loading: updatingStatus === 'resolve',
                 disabled: updatingStatus !== null,
-                onClick: () => handleUpdateStatus(ProblemStatus.RESOLVED),
+                onClick: () => handleUpdateStatus('resolve'),
               }}
             >
               标记解决
@@ -178,7 +190,7 @@ const ProblemDetail: React.FC<ProblemDetailProps> = ({
               action={actions.close}
               actionName='close'
               button={{
-                loading: updatingStatus === ProblemStatus.CLOSED,
+                loading: updatingStatus === 'close',
                 disabled: updatingStatus !== null,
                 onClick: handleCloseProblem,
               }}
@@ -189,6 +201,9 @@ const ProblemDetail: React.FC<ProblemDetailProps> = ({
         </div>
       </Card>
 
+      <Modal title='验证永久解决方案' open={verificationOpen} onCancel={() => setVerificationOpen(false)} onOk={() => handleUpdateStatus('verify-resolution')} okButtonProps={{ disabled: !verificationNote.trim(), loading: updatingStatus === 'verify-resolution' }}>
+        <Input.TextArea aria-label='验证说明' value={verificationNote} onChange={e => setVerificationNote(e.target.value)} placeholder='记录回归测试、实施检查等验证证据' />
+      </Modal>
       {/* Tab 内容 */}
       <Card>
         <Tabs items={tabItems} defaultActiveKey='basic' />

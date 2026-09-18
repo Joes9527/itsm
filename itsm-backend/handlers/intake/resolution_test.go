@@ -2,19 +2,20 @@ package intake
 
 import (
 	"context"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/handlers/common/workitemcreation"
 	cataloghandler "itsm-backend/handlers/service_catalog"
 	"itsm-backend/service"
-	"testing"
 )
 
 func TestCreationCatalogRevisionAndWorkflowResolution(t *testing.T) {
 	client, _, identity, _, _, _ := intakeFixture(t)
 	ctx := context.Background()
 	catalog := client.ServiceCatalog.Create().SetTenantID(identity.TenantID).SetName("VPN").SetTargetClass("service_request_item").SaveX(ctx)
-	client.ProcessBinding.Create().SetTenantID(identity.TenantID).SetBusinessType("service_request").SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
+	client.ProcessBinding.Create().SetTenantID(identity.TenantID).SetBusinessType("service_request_item").SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
 	field := client.FieldDefinition.Create().SetTenantID(identity.TenantID).SetEntityType("service_catalog").SetEntityID(catalog.ID).SetName("device_count").SetLabel("Devices").SetFieldType("number").SetRequired(true).SaveX(ctx)
 	owner := cataloghandler.NewService(nil, client, zap.NewNop().Sugar(), nil)
 	port, ok := any(owner).(workitemcreation.CatalogResolver)
@@ -39,6 +40,7 @@ func TestCreationCatalogRevisionAndWorkflowResolution(t *testing.T) {
 	require.NotEqual(t, first.Version, second.Version)
 	require.NotEqual(t, first.FormSchemaVersion, second.FormSchemaVersion)
 }
+
 func TestCreationWorkflowMissingBindingFailsClosed(t *testing.T) {
 	client, _, identity, command, _, _ := intakeFixture(t)
 	owner := service.NewProcessBindingService(client)
@@ -91,7 +93,7 @@ func TestCreationWorkflowResolvesMajorVersionToExactDefinition(t *testing.T) {
 			if tc.newer {
 				client.ProcessDefinition.Create().SetTenantID(identity.TenantID).SetDeploymentID(deployment.ID).SetKey("semantic").SetName("Semantic").SetVersion("2.0.0").SetIsActive(true).SetIsLatest(true).SetBpmnXML([]byte("<definitions/>")).SaveX(ctx)
 			}
-			client.ProcessBinding.Create().SetTenantID(identity.TenantID).SetBusinessType("ticket").SetIsDefault(true).SetProcessDefinitionKey("semantic").SetProcessVersion(1).SaveX(ctx)
+			client.ProcessBinding.Create().SetTenantID(identity.TenantID).SetBusinessType("generic").SetIsDefault(true).SetProcessDefinitionKey("semantic").SetProcessVersion(1).SaveX(ctx)
 			tx, err := client.Tx(ctx)
 			require.NoError(t, err)
 			defer tx.Rollback()

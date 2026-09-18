@@ -2,14 +2,15 @@ package service_catalog
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/dto"
 	"itsm-backend/ent/enttest"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service"
-	"testing"
-	"time"
 )
 
 func TestPublicationFieldFailureRollsBackCatalog(t *testing.T) {

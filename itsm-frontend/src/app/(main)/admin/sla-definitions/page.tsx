@@ -244,12 +244,12 @@ const SLADefinitionManagement = () => {
               {PRIORITY_CONFIG[record.priority]?.label}
             </Tag>
           </div>
-          <Text type="secondary" className="text-sm">
+          <Text type="secondary" className="text-[13px]">
             {record.description}
           </Text>
           <div className="flex items-center gap-4 mt-1">
-            <span className="text-xs text-gray-500">ID: {record.id}</span>
-            <span className="text-xs text-gray-500">类型: {record.serviceType}</span>
+            <span className="text-[12px] text-muted">ID: {record.id}</span>
+            <span className="text-[12px] text-muted">类型: {record.serviceType}</span>
           </div>
         </div>
       ),
@@ -261,19 +261,19 @@ const SLADefinitionManagement = () => {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Timer className="w-3 h-3 text-blue-500" />
-            <span className="text-xs">响应: {record.responseTime}</span>
+            <span className="text-[12px]">响应: {record.responseTime}</span>
           </div>
           <div className="flex items-center gap-2">
             <Target className="w-3 h-3 text-green-500" />
-            <span className="text-xs">解决: {record.resolutionTime}</span>
+            <span className="text-[12px]">解决: {record.resolutionTime}</span>
           </div>
           <div className="flex items-center gap-2">
             <TrendingUp className="w-3 h-3 text-purple-500" />
-            <span className="text-xs">可用性: {record.availability}</span>
+            <span className="text-[12px]">可用性: {record.availability}</span>
           </div>
           <div className="flex items-center gap-2">
             <Clock className="w-3 h-3 text-orange-500" />
-            <span className="text-xs">{record.businessHours}</span>
+            <span className="text-[12px]">{record.businessHours}</span>
           </div>
         </div>
       ),
@@ -288,7 +288,7 @@ const SLADefinitionManagement = () => {
             <Tag key={service}>{service}</Tag>
           ))}
           {services.length > 2 && (
-            <Text type="secondary" className="text-xs">
+            <Text type="secondary" className="text-[12px]">
               +{services.length - 2} 更多
             </Text>
           )}
@@ -315,8 +315,8 @@ const SLADefinitionManagement = () => {
       align: 'center' as const,
       render: (_: unknown, record: SLADefinition) => (
         <div className="text-center">
-          <div className="text-sm">{record.updatedAt}</div>
-          <div className="text-xs text-gray-500">由 {record.createdBy}</div>
+          <div className="text-[13px]">{record.updatedAt}</div>
+          <div className="text-[12px] text-muted">由 {record.createdBy}</div>
         </div>
       ),
     },
@@ -422,7 +422,7 @@ const SLADefinitionManagement = () => {
               value={stats.avgAvailability}
               suffix="%"
               prefix={<TrendingUp className="w-5 h-5" />}
-              styles={{ content: { color: '#722ed1' } }}
+              styles={{ content: { color: 'var(--color-text-primary)' } }}
             />
           </Card>
         </Col>
@@ -434,7 +434,7 @@ const SLADefinitionManagement = () => {
           <Col xs={24} md={8}>
             <Input
               placeholder="搜索SLA定义名称或描述..."
-              prefix={<Search className="w-4 h-4 text-gray-400" />}
+              prefix={<Search className="w-4 h-4 text-muted" />}
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               allowClear
@@ -448,7 +448,10 @@ const SLADefinitionManagement = () => {
               style={{ width: '100%' }}
               options={[
                 { value: 'all', label: '全部优先级' },
-                ...Object.entries(PRIORITY_CONFIG).map(([key, config]) => ({ value: key, label: config.label })),
+                ...Object.entries(PRIORITY_CONFIG).map(([key, config]) => ({
+                  value: key,
+                  label: config.label,
+                })),
               ]}
             />
           </Col>
@@ -460,7 +463,10 @@ const SLADefinitionManagement = () => {
               style={{ width: '100%' }}
               options={[
                 { value: 'all', label: '全部状态' },
-                ...Object.entries(STATUS_CONFIG).map(([key, config]) => ({ value: key, label: config.label })),
+                ...Object.entries(STATUS_CONFIG).map(([key, config]) => ({
+                  value: key,
+                  label: config.label,
+                })),
               ]}
             />
           </Col>
@@ -580,7 +586,12 @@ const SLADefinitionManagement = () => {
                 rules={[{ required: true, message: '请选择优先级' }]}
                 initialValue="P3"
               >
-                <Select options={Object.entries(PRIORITY_CONFIG).map(([key, config]) => ({ value: key, label: config.label }))} />
+                <Select
+                  options={Object.entries(PRIORITY_CONFIG).map(([key, config]) => ({
+                    value: key,
+                    label: config.label,
+                  }))}
+                />
               </Form.Item>
             </Col>
             <Col span={8}>
@@ -620,16 +631,23 @@ const SLADefinitionManagement = () => {
                 name="businessHours"
                 rules={[{ required: true, message: '请输入业务时间' }]}
               >
-                <Select options={[
-                  { value: '7x24', label: '7x24小时' },
-                  { value: '工作时间', label: '工作时间' },
-                  { value: '5x8', label: '5x8小时' },
-                ]} />
+                <Select
+                  options={[
+                    { value: '7x24', label: '7x24小时' },
+                    { value: '工作时间', label: '工作时间' },
+                    { value: '5x8', label: '5x8小时' },
+                  ]}
+                />
               </Form.Item>
             </Col>
             <Col span={8}>
               <Form.Item label="状态" name="status" initialValue="draft">
-                <Select options={Object.entries(STATUS_CONFIG).map(([key, config]) => ({ value: key, label: config.label }))} />
+                <Select
+                  options={Object.entries(STATUS_CONFIG).map(([key, config]) => ({
+                    value: key,
+                    label: config.label,
+                  }))}
+                />
               </Form.Item>
             </Col>
           </Row>
@@ -656,7 +674,9 @@ const SLADefinitionManagement = () => {
         {selectedSLA && (
           <div className="space-y-6">
             <div>
-              <Title level={4}>{selectedSLA.name}</Title>
+              <Title style={{ fontSize: 15, fontWeight: 600 }} level={4}>
+                {selectedSLA.name}
+              </Title>
               <Text type="secondary">{selectedSLA.description}</Text>
             </div>
 
@@ -691,7 +711,9 @@ const SLADefinitionManagement = () => {
             </Row>
 
             <div>
-              <Title level={5}>升级规则</Title>
+              <Title style={{ fontSize: 15, fontWeight: 600 }} level={5}>
+                升级规则
+              </Title>
               <List
                 size="small"
                 dataSource={selectedSLA.escalationRules}
@@ -705,7 +727,9 @@ const SLADefinitionManagement = () => {
             </div>
 
             <div>
-              <Title level={5}>适用服务</Title>
+              <Title style={{ fontSize: 15, fontWeight: 600 }} level={5}>
+                适用服务
+              </Title>
               <div className="flex flex-wrap gap-2">
                 {selectedSLA.applicableServices.map(service => (
                   <Tag key={service} color="blue">

@@ -86,7 +86,7 @@ export default function WorkflowToolbar({
       key: 'validate',
       icon: <Bug />,
       label: (
-        <Space>
+        <Space wrap>
           校验流程
           {validationIssues.length > 0 && (
             <Tag color={validationIssues.some(i => i.type === 'error') ? 'error' : 'warning'}>
@@ -122,8 +122,8 @@ export default function WorkflowToolbar({
   ];
 
   return (
-    <div className="bg-white border-b border-gray-200 px-6 py-3 flex justify-between items-center">
-      <div className="flex items-center gap-4">
+    <div className="bg-surface border-b border-border px-[16px] md:px-[24px] py-[12px] flex flex-wrap gap-[14px] justify-between items-center">
+      <div className="flex flex-wrap min-w-0 items-center gap-[14px]">
         <Breadcrumb
           items={[
             {
@@ -146,7 +146,7 @@ export default function WorkflowToolbar({
         )}
       </div>
 
-      <Space>
+      <Space wrap>
         <Dropdown menu={{ items: aiMenuItems }} placement="bottomRight">
           <Tooltip title="AI辅助功能">
             <Button icon={<Bot />}>

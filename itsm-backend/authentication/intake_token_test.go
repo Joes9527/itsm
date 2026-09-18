@@ -2,10 +2,11 @@ package authentication
 
 import (
 	"context"
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIntakeAudienceScopeAndTokenTypeStaySeparate(t *testing.T) {

@@ -6,22 +6,26 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/database"
 	"itsm-backend/ent"
+	"itsm-backend/ent/change"
 	"itsm-backend/ent/intakerequest"
+	"itsm-backend/ent/intakeresolutionsnapshot"
 	changedomain "itsm-backend/handlers/change"
+	"itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/intake"
 	catalogdomain "itsm-backend/handlers/service_catalog"
-	"itsm-backend/migration"
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
-	"strings"
-	"testing"
-	"time"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 )
 
 // Uses the real Runtime worker, professional creator and imported System snapshot.
@@ -30,10 +34,7 @@ func TestPostgresIntakeMSPCreationCallbacks(t *testing.T) {
 	for _, kind := range []string{"incident", "change"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newIncidentEffectsFixture(t)
-			migrator := migration.NewMigrator(f.db, zap.NewNop().Sugar())
-			require.NoError(t, migrator.EnsureMigrationsTable(f.ctx))
-			_, err := migrator.RunMigrations(f.ctx, migration.PostSchemaMigrations())
-			require.NoError(t, err)
+			prepareCurrentWorkItemFixture(t, f.db, f.ctx)
 			provider := f.client.Tenant.Create().SetCode("provider").SetName("Provider").SetType("msp_provider").SaveX(f.ctx)
 			f.client.Tenant.UpdateOneID(f.tenant.ID).SetType("msp_customer").ExecX(f.ctx)
 			actor := f.client.User.Create().SetTenantID(provider.ID).SetUsername("callback-operator").SetName("Original callback operator").SetEmail("callback@example.test").SetPasswordHash("unused").SetRole("admin").SetMspRole("provider_agent").SaveX(f.ctx)
@@ -47,7 +48,11 @@ func TestPostgresIntakeMSPCreationCallbacks(t *testing.T) {
 					writeGrant = grant
 				}
 			}
-			f.client.ProcessBinding.Create().SetTenantID(f.tenant.ID).SetBusinessType(kind).SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(f.ctx)
+			bindingClass := workitemcreation.RecordClassIncident
+			if kind == "change" {
+				bindingClass = workitemcreation.RecordClassChangeRequest
+			}
+			f.client.ProcessBinding.Create().SetTenantID(f.tenant.ID).SetBusinessType(bindingClass).SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(f.ctx)
 			clients, cfg := runtimeClients(t, f)
 			for _, table := range []string{"changes", "intake_resolution_snapshots", "work_item_number_sequences", "process_bindings", "process_definitions", "process_deployments", "process_instances", "process_tasks", "process_audit_logs", "process_callback_outboxes", "sla_definitions", "field_definitions", "field_values", "service_catalogs", "configuration_items", "groups"} {
 				_, err := f.db.ExecContext(f.ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON "+table+" TO "+cfg.User)
@@ -60,15 +65,15 @@ func TestPostgresIntakeMSPCreationCallbacks(t *testing.T) {
 				}
 			}
 			ctx := service.WithTrustedBPMNTenantContext(tenantctx.WithTenantID(f.ctx, f.tenant.ID), f.tenant.ID)
-			_, err = clients.Tenant.User.Get(ctx, actor.ID)
+			_, err := clients.Tenant.User.Get(ctx, actor.ID)
 			require.True(t, ent.IsNotFound(err))
 			logger := zap.NewNop().Sugar()
 			registry := intake.NewCreatorRegistry()
-			require.NoError(t, registry.Register(service.NewIncidentService(clients.Tenant, logger)))
-			require.NoError(t, registry.Register(changedomain.NewService(nil, clients.Tenant, logger)))
+			require.NoError(t, registry.Register(service.NewIncidentService(clients.Tenant, logger, executionfixture.Standard())))
+			require.NoError(t, registry.Register(changedomain.NewService(nil, clients.Tenant, logger, executionfixture.Standard())))
 			resolver := intake.NewResolver(catalogdomain.NewService(nil, clients.Tenant, logger, nil), service.NewProcessBindingService(clients.Tenant), service.NewConfigurationItemService(clients.Tenant, logger, nil, nil), service.NewTicketCategoryService(clients.Tenant))
-			app := intake.NewService(clients.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), clients.IntakeDirectorySnapshot())
-			engine := service.NewCustomProcessEngine(clients.Tenant, logger).(*service.CustomProcessEngine)
+			app := intake.NewService(clients.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), clients.IntakeDirectorySnapshot(), executionfixture.Standard())
+			engine := service.NewCustomProcessEngine(clients.Tenant, logger, executionfixture.Standard()).(*service.CustomProcessEngine)
 			setDirectory := func(directory *ent.Client) {
 				if kind == "incident" {
 					engine.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler).SetCreationApplication(app, directory)
@@ -128,6 +133,8 @@ func TestPostgresIntakeMSPCreationCallbacks(t *testing.T) {
 						setDirectory(nil)
 					}
 					_, firstErr := engine.ProcessPendingCallbacks(ctx, "msp-callback", 10)
+					observed := clients.Tenant.ProcessCallbackOutbox.GetX(ctx, row.ID)
+					t.Logf("callback after first attempt: status=%s error_class=%s", observed.Status, observed.LastErrorClass)
 					if strings.HasPrefix(stage, "ack_then_") {
 						require.False(t, failAck, "actual callback must reach child commit then acknowledgement failure")
 						require.Error(t, firstErr)
@@ -154,7 +161,19 @@ func TestPostgresIntakeMSPCreationCallbacks(t *testing.T) {
 						require.Equal(t, actor.ID, receipt.ActorID)
 						require.Equal(t, provider.ID, receipt.ActorTenantID)
 						require.Equal(t, f.actor.ID, receipt.RequesterID)
-						require.Equal(t, actor.ID, clients.Tenant.Ticket.GetX(ctx, *receipt.WorkItemID).OpenedByID)
+						require.NotNil(t, receipt.WorkItemID)
+						child := clients.Tenant.Ticket.GetX(ctx, *receipt.WorkItemID)
+						require.Equal(t, actor.ID, child.OpenedByID)
+						require.Equal(t, f.tenant.ID, child.TenantID)
+						require.Equal(t, f.actor.ID, child.RequesterID)
+						require.Equal(t, bindingClass, child.RecordClass)
+						snapshot := clients.Tenant.IntakeResolutionSnapshot.Query().Where(intakeresolutionsnapshot.IntakeRequestID(receipt.ID)).OnlyX(ctx)
+						require.True(t, snapshot.NoProcess)
+						require.Equal(t, child.ID, snapshot.WorkItemID)
+						if kind == "change" {
+							extension := clients.Tenant.Change.Query().Where(change.WorkItemID(child.ID)).OnlyX(ctx)
+							require.Equal(t, child.ID, extension.WorkItemID)
+						}
 					} else {
 						require.Equal(t, before, clients.Tenant.Ticket.Query().CountX(ctx))
 						require.Equal(t, beforeReceipts, clients.Tenant.IntakeRequest.Query().CountX(ctx))

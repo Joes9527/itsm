@@ -10,33 +10,7 @@ import type {
   ChangeRisk,
 } from '@/constants/change';
 
-// 变更实体
-export interface Change {
-  id: number;
-  title: string;
-  description: string;
-  justification: string;
-  type: ChangeType;
-  status: ChangeStatus;
-  priority: ChangePriority;
-  impactScope: ChangeImpact;
-  riskLevel: ChangeRisk;
-  assigneeId?: number;
-  assigneeName?: string;
-  createdBy: number;
-  createdByName: string;
-  tenantId: number;
-  plannedStartDate?: string;
-  plannedEndDate?: string;
-  actualStartDate?: string;
-  actualEndDate?: string;
-  implementationPlan: string;
-  rollbackPlan: string;
-  affectedCis?: string[];
-  relatedTickets?: string[];
-  createdAt: string;
-  updatedAt: string;
-}
+import type { Change } from '@/lib/api/change-api';
 
 // 审批记录
 export interface ApprovalRecord {
@@ -88,7 +62,7 @@ export interface CreateChangeRequest {
   implementationPlan: string;
   rollbackPlan: string;
   affectedCis?: string[];
-  relatedTickets?: string[];
+  relations?: import("@/lib/api/workitem-relations").RelationView[];
 }
 
 // 列表查询参数
@@ -119,3 +93,5 @@ export interface ChangeStats {
   rejected: number;
   cancelled: number;
 }
+
+export type { Change };

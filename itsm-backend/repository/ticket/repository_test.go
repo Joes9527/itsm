@@ -222,7 +222,7 @@ func TestRepository_Update(t *testing.T) {
 		Title:       "Update Me",
 		Description: "Original",
 		Priority:    PriorityLow,
-		RecordClass: "incident",
+		RecordClass: "generic",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -241,6 +241,65 @@ func TestRepository_Update(t *testing.T) {
 	assert.Equal(t, PriorityCritical, updated.Priority)
 }
 
+// UpdateTx must join the caller transaction: a later failure must undo the
+// ticket CAS, newly created tag and replacement of existing tag relations.
+func TestRepository_UpdateTx_CallerOwnsCommit(t *testing.T) {
+	for _, commit := range []bool{false, true} {
+		t.Run(fmt.Sprintf("commit=%t", commit), func(t *testing.T) {
+			fx := newRepoFixture(t)
+			defer fx.client.Close()
+			writer, ok := fx.repo.(interface {
+				UpdateTx(context.Context, *ent.Tx, int, *UpdateParams, int) (*Ticket, error)
+			})
+			require.True(t, ok, "repository must support caller-owned update transactions")
+			created, err := fx.createTicket(fx.ctx, &CreateParams{Title: "Original", RecordClass: "generic", Priority: PriorityLow, RequesterID: fx.user.ID}, fx.tenant.ID)
+			require.NoError(t, err)
+			originalTag, err := fx.client.TicketTag.Create().SetName("original").SetTenantID(fx.tenant.ID).Save(fx.ctx)
+			require.NoError(t, err)
+			require.NoError(t, fx.client.Ticket.UpdateOneID(created.ID).AddTagIDs(originalTag.ID).Exec(fx.ctx))
+			tx, err := fx.client.Tx(fx.ctx)
+			require.NoError(t, err)
+			defer tx.Rollback()
+			addedTag, err := tx.TicketTag.Create().SetName("new").SetTenantID(fx.tenant.ID).Save(fx.ctx)
+			require.NoError(t, err)
+			title := "Updated in caller transaction"
+			updated, err := writer.UpdateTx(fx.ctx, tx, created.ID, &UpdateParams{Title: &title, Version: created.Version, ReplaceTags: true, TagIDs: []int{addedTag.ID}}, fx.tenant.ID)
+			require.NoError(t, err)
+			require.Equal(t, created.Version+1, updated.Version)
+			inside, err := tx.Ticket.Get(fx.ctx, created.ID)
+			require.NoError(t, err)
+			require.Equal(t, title, inside.Title)
+			ids, err := inside.QueryTags().IDs(fx.ctx)
+			require.NoError(t, err)
+			require.Equal(t, []int{addedTag.ID}, ids)
+			if commit {
+				require.NoError(t, tx.Commit())
+			} else {
+				require.NoError(t, tx.Rollback())
+			}
+			outside, err := fx.client.Ticket.Get(fx.ctx, created.ID)
+			require.NoError(t, err)
+			ids, err = outside.QueryTags().IDs(fx.ctx)
+			require.NoError(t, err)
+			count, err := fx.client.TicketTag.Query().Count(fx.ctx)
+			require.NoError(t, err)
+			if commit {
+				assert.Equal(t, title, outside.Title)
+				assert.Equal(t, created.Version+1, outside.Version)
+				assert.Equal(t, []int{addedTag.ID}, ids)
+				assert.Equal(t, 2, count)
+			} else {
+				assert.Equal(t, created.Title, outside.Title)
+				assert.Equal(t, created.Version, outside.Version)
+				assert.Equal(t, []int{originalTag.ID}, ids)
+				assert.Equal(t, 1, count)
+			}
+			_, err = writer.UpdateTx(fx.ctx, nil, created.ID, &UpdateParams{Version: outside.Version}, fx.tenant.ID)
+			require.Error(t, err, "nil transaction must never fall back to autocommit")
+		})
+	}
+}
+
 func TestRepository_Update_NotFound(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
@@ -256,7 +315,7 @@ func TestRepository_Update_RejectsStaleVersion(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 	created, err := fx.createTicket(fx.ctx, &CreateParams{
-		Title: "Original", Priority: PriorityMedium, RecordClass: "incident", RequesterID: fx.user.ID,
+		Title: "Original", Priority: PriorityMedium, RecordClass: "generic", RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 	require.NoError(t, err)
 	title := "Must not overwrite"
@@ -270,45 +329,6 @@ func TestRepository_Update_RejectsStaleVersion(t *testing.T) {
 // =====================================================================
 // Delete
 // =====================================================================
-
-func TestRepository_Delete(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	created, _ := fx.createTicket(fx.ctx, &CreateParams{
-		Title:       "Delete Me",
-		Description: "",
-		Priority:    PriorityLow,
-		RecordClass: "incident",
-		RequesterID: fx.user.ID,
-	}, fx.tenant.ID)
-
-	err := fx.repo.Delete(fx.ctx, created.ID, fx.tenant.ID)
-	require.NoError(t, err)
-
-	_, err = fx.repo.GetByID(fx.ctx, created.ID, fx.tenant.ID)
-	assert.Error(t, err)
-}
-
-func TestRepository_Delete_WrongTenant(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	created, _ := fx.createTicket(fx.ctx, &CreateParams{
-		Title:       "Delete Isolated",
-		Description: "",
-		Priority:    PriorityMedium,
-		RecordClass: "incident",
-		RequesterID: fx.user.ID,
-	}, fx.tenant.ID)
-
-	// Wrong tenant delete: implementation may return nil (no rows matched) or error.
-	// The key invariant is the ticket still exists for the correct tenant.
-	_ = fx.repo.Delete(fx.ctx, created.ID, 99999)
-
-	_, err := fx.repo.GetByID(fx.ctx, created.ID, fx.tenant.ID)
-	require.NoError(t, err)
-}
 
 // =====================================================================
 // List
@@ -406,57 +426,6 @@ func TestRepository_List_ParentTypeAndOverdueFilters(t *testing.T) {
 // BatchDelete
 // =====================================================================
 
-func TestRepository_BatchDelete(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	ids := make([]int, 0, 3)
-	for i := 0; i < 3; i++ {
-		tkt, _ := fx.createTicket(fx.ctx, &CreateParams{
-			Title:       "Batch Delete",
-			Description: "",
-			Priority:    PriorityLow,
-			RecordClass: "incident",
-			RequesterID: fx.user.ID,
-		}, fx.tenant.ID)
-		ids = append(ids, tkt.ID)
-	}
-
-	err := fx.repo.BatchDelete(fx.ctx, ids, fx.tenant.ID)
-	require.NoError(t, err)
-
-	for _, id := range ids {
-		_, err := fx.repo.GetByID(fx.ctx, id, fx.tenant.ID)
-		assert.Error(t, err)
-	}
-}
-
-func TestRepository_BatchDelete_EmptyList(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	err := fx.repo.BatchDelete(fx.ctx, []int{}, fx.tenant.ID)
-	assert.NoError(t, err)
-}
-
-func TestRepository_BatchDelete_TenantIsolation(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	created, _ := fx.createTicket(fx.ctx, &CreateParams{
-		Title:       "Batch Tenant",
-		Description: "",
-		Priority:    PriorityMedium,
-		RecordClass: "incident",
-		RequesterID: fx.user.ID,
-	}, fx.tenant.ID)
-
-	_ = fx.repo.BatchDelete(fx.ctx, []int{created.ID}, 99999)
-
-	_, err := fx.repo.GetByID(fx.ctx, created.ID, fx.tenant.ID)
-	require.NoError(t, err)
-}
-
 // =====================================================================
 // Exists
 // =====================================================================
@@ -511,7 +480,7 @@ func TestRepository_UpdateStatus(t *testing.T) {
 		Title:       "Status Update",
 		Description: "",
 		Priority:    PriorityMedium,
-		RecordClass: "incident",
+		RecordClass: "generic",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -532,36 +501,6 @@ func TestRepository_UpdateStatus_NotFound(t *testing.T) {
 // AssignTicket
 // =====================================================================
 
-func TestRepository_AssignTicket(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	created, _ := fx.createTicket(fx.ctx, &CreateParams{
-		Title:       "Assign Test",
-		Description: "",
-		Priority:    PriorityMedium,
-		RecordClass: "incident",
-		RequesterID: fx.user.ID,
-	}, fx.tenant.ID)
-
-	updated, err := fx.repo.AssignTicket(fx.ctx, created.ID, fx.user.ID, fx.tenant.ID)
-	require.NoError(t, err)
-	assert.NotNil(t, updated.AssigneeID)
-	assert.Equal(t, fx.user.ID, *updated.AssigneeID)
-}
-
-func TestRepository_AssignTicket_NotFound(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	_, err := fx.repo.AssignTicket(fx.ctx, 99999, fx.user.ID, fx.tenant.ID)
-	assert.Error(t, err)
-}
-
-// =====================================================================
-// CountByStatus / CountByPriority
-// =====================================================================
-
 func TestRepository_CountByStatus(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
@@ -571,7 +510,7 @@ func TestRepository_CountByStatus(t *testing.T) {
 			Title:       "Count Status",
 			Description: "",
 			Priority:    PriorityMedium,
-			RecordClass: "incident",
+			RecordClass: "generic",
 			RequesterID: fx.user.ID,
 		}, fx.tenant.ID)
 		fx.repo.UpdateStatus(fx.ctx, tkt.ID, StatusOpen, fx.tenant.ID)
@@ -581,7 +520,7 @@ func TestRepository_CountByStatus(t *testing.T) {
 		Title:       "Count Status New",
 		Description: "",
 		Priority:    PriorityLow,
-		RecordClass: "incident",
+		RecordClass: "generic",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -620,10 +559,10 @@ func TestRepository_FindByAssignee(t *testing.T) {
 		Title:       "Assign Find",
 		Description: "",
 		Priority:    PriorityMedium,
-		RecordClass: "incident",
+		RecordClass: "generic",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
-	fx.repo.AssignTicket(fx.ctx, tkt.ID, fx.user.ID, fx.tenant.ID)
+	fx.client.Ticket.UpdateOneID(tkt.ID).SetAssigneeID(fx.user.ID).Save(fx.ctx)
 
 	tickets, err := fx.repo.FindByAssignee(fx.ctx, fx.user.ID, fx.tenant.ID)
 	require.NoError(t, err)
@@ -734,5 +673,5 @@ func TestRepositoryCanonicalIdentityFilters(t *testing.T) {
 	}
 	subtype := "improvement"
 	_, err = fx.repo.Update(fx.ctx, incident.ID, &UpdateParams{GenericSubtype: &subtype, Version: incident.Version}, fx.tenant.ID)
-	require.ErrorContains(t, err, "cannot mutate professional")
+	require.ErrorContains(t, err, "owning domain command")
 }

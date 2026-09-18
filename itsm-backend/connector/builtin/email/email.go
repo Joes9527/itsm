@@ -16,11 +16,11 @@ import (
 	"net/smtp"
 	"net/textproto"
 	"strings"
-	"sync"
 	"time"
 
-	"go.uber.org/zap"
 	"itsm-backend/connector"
+
+	"go.uber.org/zap"
 )
 
 func init() {
@@ -30,7 +30,6 @@ func init() {
 type EmailConnector struct {
 	cfg       connector.Config
 	logger    *zap.SugaredLogger
-	mu        sync.Mutex
 	cancel    context.CancelFunc
 	lastUID   uint32
 	pollCount int
@@ -40,12 +39,12 @@ func New() *EmailConnector { return &EmailConnector{} }
 
 func (e *EmailConnector) Manifest() connector.Manifest {
 	return connector.Manifest{
-		Name:         "email",
-		Version:      "1.0.0",
-		Title:        "邮件连接器",
-		Provider:     "itsm",
-		Type:         connector.TypeEmail,
-		Description:  "IMAP拉取邮件自动创建工单 + SMTP自动回复",
+		Name:        "email",
+		Version:     "1.0.0",
+		Title:       "邮件连接器",
+		Provider:    "itsm",
+		Type:        connector.TypeEmail,
+		Description: "IMAP拉取邮件自动创建工单 + SMTP自动回复",
 		Capabilities: []connector.Capability{
 			connector.CapSendMessage,
 			connector.CapReceiveMessage,

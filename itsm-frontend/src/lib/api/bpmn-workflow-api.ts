@@ -81,6 +81,11 @@ export interface StartProcessRequest {
 }
 
 export interface UserTask {
+  uiActions?: { claim: boolean; complete: boolean; reason?: string };
+  assigneeSource: string;
+  assignmentState: 'assigned' | 'unassigned' | 'unavailable' | 'terminal';
+  responsibleUserId: number;
+  actorId: number;
   id: number;
   taskId: string;
   taskDefinitionKey: string;
@@ -393,8 +398,8 @@ export class BPMNWorkflowApi {
     return httpClient.get(`${this.baseUrl}/tasks/${encodeURIComponent(String(id))}`);
   }
 
-  static async claimTask(id: string | number): Promise<void> {
-    await httpClient.put(`${this.baseUrl}/tasks/${encodeURIComponent(String(id))}/claim`, {});
+  static async claimTask(id: string | number, assertSubmissionContext?: () => void): Promise<void> {
+    await httpClient.put(`${this.baseUrl}/tasks/${encodeURIComponent(String(id))}/claim`, {}, { assertSubmissionContext });
   }
 
   static async assignTask(id: string | number, assignee: string): Promise<void> {
@@ -403,17 +408,19 @@ export class BPMNWorkflowApi {
     });
   }
 
-  static async completeTask(id: string | number, data: CompleteTaskRequest = {}): Promise<void> {
-    await httpClient.put(`${this.baseUrl}/tasks/${encodeURIComponent(String(id))}/complete`, data);
+  static async completeTask(id: string | number, data: CompleteTaskRequest = {}, assertSubmissionContext?: () => void): Promise<void> {
+    await httpClient.put(`${this.baseUrl}/tasks/${encodeURIComponent(String(id))}/complete`, data, { assertSubmissionContext });
   }
 
   static async submitApprovalDecision(
     id: string | number,
-    data: SubmitApprovalDecisionRequest
+    data: SubmitApprovalDecisionRequest,
+    assertSubmissionContext?: () => void
   ): Promise<void> {
     await httpClient.post(
       `${this.baseUrl}/tasks/${encodeURIComponent(String(id))}/decisions`,
-      data
+      data,
+      { assertSubmissionContext }
     );
   }
 

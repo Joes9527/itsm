@@ -101,12 +101,21 @@ func TestMatchTemplateKeywordMapping(t *testing.T) {
 		// Test the keyword mapping logic
 		type kwEntry struct{ keyword, category string }
 		keywordList := []kwEntry{
-			{"钓鱼", "SEC"}, {"病毒", "SEC"}, {"安全", "SEC"},
-			{"打印机", "EUC"}, {"电脑", "EUC"}, {"开机", "EUC"},
-			{"服务器", "INF"}, {"虚拟机", "INF"},
-			{"AD", "ACC"}, {"密码", "ACC"}, {"账号", "ACC"},
-			{"邮箱", "COL"}, {"邮件", "COL"},
-			{"网络", "NET"}, {"上网", "NET"},
+			{"钓鱼", "SEC"},
+			{"病毒", "SEC"},
+			{"安全", "SEC"},
+			{"打印机", "EUC"},
+			{"电脑", "EUC"},
+			{"开机", "EUC"},
+			{"服务器", "INF"},
+			{"虚拟机", "INF"},
+			{"AD", "ACC"},
+			{"密码", "ACC"},
+			{"账号", "ACC"},
+			{"邮箱", "COL"},
+			{"邮件", "COL"},
+			{"网络", "NET"},
+			{"上网", "NET"},
 		}
 
 		text := strings.ToLower(tt.text)

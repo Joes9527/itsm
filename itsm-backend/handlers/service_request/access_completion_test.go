@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/ent"
@@ -25,7 +27,7 @@ func verifiedAccessFixture(t *testing.T, supplied ...*ent.Client) (*sslvpnDelega
 	security := fx.client.User.Create().SetTenantID(fx.tenant.ID).SetUsername("security").SetEmail("security@example.test").SetName("Security").SetPasswordHash("unused").SetRole("security_approver").SaveX(fx.ctx)
 	deploySSLVPNDefinition(t, fx, "verified_access", fmt.Sprintf(sslvpnApprovalNodes, fx.approver.ID, security.ID), sslvpnApprovalFlows)
 	request := createSSLVPNServiceRequestForDefinition(t, fx, "verified_access")
-	instance := awaitSSLVPNInstance(t, fx, "service_request", request.TicketID)
+	instance := awaitSSLVPNInstance(t, fx, "service_request_item", request.TicketID)
 	// Real ordered BPMN decisions from different assigned actors.
 	require.NoError(t, completeSSLVPNApproval(t, fx, instance, "Approval_1"))
 	assertNoSSLVPNDelegation(t, fx, instance)
@@ -36,7 +38,7 @@ func verifiedAccessFixture(t *testing.T, supplied ...*ent.Client) (*sslvpnDelega
 	policy := fx.client.CatalogAccessPolicy.Create().SetCatalogID(request.CatalogID).SetProvider("graph").SetExternalSystem("directory").SetGroupID("approved-group").SetDurationField("duration").SetDurationOptions([]accessgrant.DurationOption{{Key: "month", Label: "Month", Seconds: 2592000}}).SaveX(fx.ctx)
 	fx.client.ServiceRequestAccessSnapshot.Create().SetWorkItemID(request.TicketID).SetPolicyID(policy.ID).SetPolicyVersion(1).SetProvider("graph").SetExternalSystem("directory").SetSubjectID("approved-subject").SetGroupID("approved-group").SetDurationKey("month").SetDurationSeconds(2592000).SaveX(fx.ctx)
 	task = fx.client.ProcessTask.UpdateOne(task).SetCallbackAction(accessgrant.Capability).SetCallbackConfigRef(fmt.Sprint(policy.ID)).SaveX(fx.ctx)
-	owner := sr.NewService(sr.NewEntRepository(fx.client), fx.client, zap.NewNop().Sugar(), nil)
+	owner := sr.NewService(sr.NewEntRepository(fx.client, executionfixture.Standard()), fx.client, zap.NewNop().Sugar(), nil, executionfixture.Standard())
 	fx.delegation.SetApprovedAccessReader(owner)
 	fx.engine.(*svc.CustomProcessEngine).SetAccessCompletionContributor(owner)
 	projected, err := fx.delegation.GetTaskContext(fx.ctx, task.TaskID)
@@ -59,7 +61,7 @@ func TestKafAccessCompletionAtomicAndImmutableReplay(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, svc.KafActionApplied, result.ResultStatus)
 			saved := fx.client.ServiceRequestAccessResult.Query().OnlyX(fx.ctx)
-			replayOwner := sr.NewService(sr.NewEntRepository(fx.client), fx.client, zap.NewNop().Sugar(), nil)
+			replayOwner := sr.NewService(sr.NewEntRepository(fx.client, executionfixture.Standard()), fx.client, zap.NewNop().Sugar(), nil, executionfixture.Standard())
 			require.NoError(t, replayOwner.ValidateAccessCompletionReplay(fx.ctx, fx.client, fx.client.ProcessTask.GetX(fx.ctx, task.ID), fx.client.KafTaskActionLedger.Query().OnlyX(fx.ctx)))
 			require.Equal(t, task.ID, saved.ProcessTaskID)
 			require.Equal(t, itemID, saved.WorkItemID)
@@ -166,7 +168,7 @@ func TestKafAccessLegacyCompletedTaskCannotInventVerifiedResult(t *testing.T) {
 
 func TestKafAccessManualProvisioningUsesDomainOwner(t *testing.T) {
 	fx, _, itemID, _ := verifiedAccessFixture(t)
-	owner := sr.NewService(sr.NewEntRepository(fx.client), fx.client, zap.NewNop().Sugar(), nil)
+	owner := sr.NewService(sr.NewEntRepository(fx.client, executionfixture.Standard()), fx.client, zap.NewNop().Sugar(), nil, executionfixture.Standard())
 	manual := svc.NewProvisioningService(fx.client, zap.NewNop().Sugar())
 	manual.SetManualProvisioningGuard(owner)
 	request := fx.client.ServiceRequest.Query().OnlyX(fx.ctx)
@@ -254,6 +256,7 @@ type c3FailureAuthorityBarrier struct {
 func (b *c3FailureAuthorityBarrier) ReadApprovedAccess(ctx context.Context, client *ent.Client, tenantID, itemID int, task *ent.ProcessTask) (*accessgrant.ApprovedContext, error) {
 	return b.owner.ReadApprovedAccess(ctx, client, tenantID, itemID, task)
 }
+
 func (b *c3FailureAuthorityBarrier) ValidateAccessFailure(ctx context.Context, client *ent.Client, tenantID, itemID int, task *ent.ProcessTask) error {
 	if err := b.owner.ValidateAccessFailure(ctx, client, tenantID, itemID, task); err != nil {
 		return err
@@ -273,7 +276,7 @@ func assertC3UnknownFailure(t *testing.T, fx *sslvpnDelegationFixture, task *ent
 	failure.Execution.IdempotencyKey = fmt.Sprintf("%d:%s:%s:%s", fx.tenant.ID, task.TaskID, failure.Execution.RunID, failure.Execution.StepID)
 	failure.Payload.AccessResult = nil
 	failure.Payload.FailureSummary = "access_result_unknown_manual_review_required"
-	owner := sr.NewService(sr.NewEntRepository(fx.client), fx.client, zap.NewNop().Sugar(), nil)
+	owner := sr.NewService(sr.NewEntRepository(fx.client, executionfixture.Standard()), fx.client, zap.NewNop().Sugar(), nil, executionfixture.Standard())
 	barrier := &c3FailureAuthorityBarrier{owner: owner}
 	barrier.afterValidation = func() {
 		applied, err := fx.delegation.ExecuteAction(fx.ctx, task.TaskID, failure, fx.engine)

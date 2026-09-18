@@ -2,9 +2,10 @@ package intake
 
 import (
 	"context"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/handlers/common/workitemcreation"
-	"testing"
 )
 
 func TestReceiptScopesAndCrossTenantCompletion(t *testing.T) {
@@ -38,6 +39,7 @@ func TestReceiptScopesAndCrossTenantCompletion(t *testing.T) {
 	require.NoError(t, err)
 	require.ErrorIs(t, repo.Complete(ctx, tx, other.TenantID, claimed.ID, result.WorkItemID), workitemcreation.ErrReferenceNotFound)
 }
+
 func TestSnapshotRejectsCrossTenantAssociationsAndSensitiveEvidence(t *testing.T) {
 	client, s, i, c, _, _ := intakeFixture(t)
 	ctx := context.Background()
@@ -84,6 +86,7 @@ func TestSnapshotRejectsCrossTenantAssociationsAndSensitiveEvidence(t *testing.T
 		})
 	}
 }
+
 func TestBaseWriterRejectsCrossTenantAssignee(t *testing.T) {
 	client, s, i, c, _, p := intakeFixture(t)
 	ctx := context.Background()

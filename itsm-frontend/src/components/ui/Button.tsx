@@ -13,7 +13,18 @@ export const Button = ({ variant, size, className, children, ...props }: ButtonP
   const antSize = size === 'sm' ? 'small' : size === 'lg' ? 'large' : 'middle';
 
   return (
-    <AntButton type={antType} size={antSize} className={className} {...props}>
+    <AntButton
+      type={antType}
+      size={antSize}
+      className={className}
+      {...props}
+      style={{
+        height: size === 'sm' ? 29 : 34,
+        borderRadius: 6,
+        fontSize: size === 'sm' ? 12 : 13,
+        ...props.style,
+      }}
+    >
       {children}
     </AntButton>
   );

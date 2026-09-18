@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"entgo.io/ent"
+	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 )
@@ -49,6 +50,11 @@ func (ServiceCatalog) Fields() []ent.Field {
 		field.Bool("is_active").Comment("是否激活").Default(true),
 		field.Int("sort_order").Comment("排序").Default(0),
 
+		// 默认 CTI：所选三级分类的最深节点；租户与启用校验在服务层和创建事务内完成。
+		field.Int("default_ticket_category_id").
+			Comment("默认三级工单分类的最深节点ID").
+			Optional(),
+
 		// 时间戳
 		field.Time("created_at").Comment("创建时间").Default(time.Now),
 		field.Time("updated_at").Comment("更新时间").Default(time.Now).UpdateDefault(time.Now),
@@ -56,7 +62,15 @@ func (ServiceCatalog) Fields() []ent.Field {
 }
 
 func (ServiceCatalog) Edges() []ent.Edge {
-	return []ent.Edge{}
+	return []ent.Edge{
+		// 默认 CTI 是结构引用（最深节点），不是展示分组：目录发布/申请以它作为
+		// 初始权威分类，分类展示分组仍由 category 字符串承担。
+		edge.From("default_ticket_category", TicketCategory.Type).
+			Ref("default_catalogs").
+			Field("default_ticket_category_id").
+			Unique().
+			Comment("默认三级工单分类的最深节点"),
+	}
 }
 
 func (ServiceCatalog) Indexes() []ent.Index {
@@ -66,5 +80,6 @@ func (ServiceCatalog) Indexes() []ent.Index {
 		index.Fields("service_type"),
 		index.Fields("category"),
 		index.Fields("tenant_id", "status"),
+		index.Fields("tenant_id", "default_ticket_category_id"),
 	}
 }

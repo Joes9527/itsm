@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
 )
 
 // SLAAlertHistory holds the schema definition for the SLAAlertHistory entity.
@@ -16,6 +17,7 @@ type SLAAlertHistory struct {
 // Fields of the SLAAlertHistory.
 func (SLAAlertHistory) Fields() []ent.Field {
 	return []ent.Field{
+		field.Int("notification_tracking_version").Optional().Nillable().Immutable().Positive().Comment("NULL preserves historical notification_sent; version 1 projects linked deliveries"),
 		field.Int("ticket_id").
 			Comment("工单ID").
 			Positive(),
@@ -74,4 +76,8 @@ func (SLAAlertHistory) Edges() []ent.Edge {
 			Required().
 			Comment("关联的预警规则"),
 	}
+}
+
+func (SLAAlertHistory) Indexes() []ent.Index {
+	return []ent.Index{index.Fields("id", "tenant_id", "ticket_id").Unique()}
 }

@@ -5,7 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http/httptest"
+	"testing"
+
+	"itsm-backend/authorization"
+
 	"itsm-backend/controller"
+	"itsm-backend/database"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
@@ -21,8 +27,7 @@ import (
 	"itsm-backend/repository/ticket"
 	"itsm-backend/repository/workitemnumber"
 	domain "itsm-backend/service"
-	"net/http/httptest"
-	"testing"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -32,10 +37,12 @@ import (
 
 type FieldDefinitionInput = domain.FieldDefinitionInput
 
-var NewFieldDefinitionService = domain.NewFieldDefinitionService
-var NewFieldValueService = domain.NewFieldValueService
-var ToTicketResponse = domain.ToTicketResponse
-var ToTicketResponseWithCustomFields = domain.ToTicketResponseWithCustomFields
+var (
+	NewFieldDefinitionService        = domain.NewFieldDefinitionService
+	NewFieldValueService             = domain.NewFieldValueService
+	ToTicketResponse                 = domain.ToTicketResponse
+	ToTicketResponseWithCustomFields = domain.ToTicketResponseWithCustomFields
+)
 
 // External fixtures exercise real HTTP adapters and the shared application;
 // returned detail projections are separate reads solely for lifecycle assertions.
@@ -46,9 +53,31 @@ type TicketService struct {
 }
 
 func NewTicketServiceForTest(client *ent.Client, logger *zap.SugaredLogger) *TicketService {
-	owner := domain.NewTicketServiceForTest(client, logger)
-	return &TicketService{owner, client, newEntryApplication(client, owner, domain.NewIncidentService(client, logger))}
+	owner := domain.NewTicketService(&domain.TicketServiceConfig{Client: client, Repository: ticket.NewEntRepository(client, logger), Logger: logger, Execution: executionfixture.Standard(), Directory: sameTransactionDirectory{}, SessionReader: authorization.NewSessionReader(client, sameTransactionDirectory{})})
+	return &TicketService{owner, client, newEntryApplication(client, owner, domain.NewIncidentService(client, logger, executionfixture.Standard()))}
 }
+
+// Editing tests opt into an explicit current permission; creation fixtures do
+// not silently inherit update access.
+func configureEntryTicketEdit(ctx context.Context, client *ent.Client, tenantID, actorID int) error {
+	if err := configureEntryFixture(ctx, client, tenantID, actorID); err != nil {
+		return err
+	}
+	actor, err := client.User.Get(ctx, actorID)
+	if err != nil {
+		return err
+	}
+	currentRole, err := client.Role.Query().Where(role.TenantIDEQ(tenantID), role.CodeEQ(actor.Role)).Only(ctx)
+	if err != nil {
+		return err
+	}
+	p, err := client.Permission.Create().SetTenantID(tenantID).SetCode("ticket:edit-test").SetName("Edit fixture").SetResource("ticket").SetAction("update").Save(ctx)
+	if err != nil {
+		return err
+	}
+	return client.RolePermission.Create().SetTenantID(tenantID).SetRoleID(currentRole.ID).SetPermissionID(p.ID).Exec(ctx)
+}
+
 func (s *TicketService) SubmitCreation(ctx context.Context, req *dto.CreateTicketRequest, tenantID int) (*ticket.Ticket, error) {
 	return s.SubmitCreationAsActor(ctx, req, tenantID, req.RequesterID)
 }
@@ -81,10 +110,11 @@ type IncidentService struct {
 	app    *intake.Service
 }
 
-func NewIncidentService(client *ent.Client, logger *zap.SugaredLogger) *IncidentService {
-	owner := domain.NewIncidentService(client, logger)
+func NewIncidentService(client *ent.Client, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) *IncidentService {
+	owner := domain.NewIncidentService(client, logger, execution)
 	return &IncidentService{owner, client, newEntryApplication(client, domain.NewTicketServiceForTest(client, logger), owner)}
 }
+
 func (s *IncidentService) SubmitCreation(ctx context.Context, req *dto.CreateIncidentRequest, tenantID, actorID int) (*dto.IncidentResponse, error) {
 	result, err := s.SubmitReceipt(ctx, req, tenantID, actorID)
 	if err != nil {
@@ -92,6 +122,7 @@ func (s *IncidentService) SubmitCreation(ctx context.Context, req *dto.CreateInc
 	}
 	return s.GetIncident(ctx, result.ProfessionalReference.ID, tenantID)
 }
+
 func (s *IncidentService) SubmitReceipt(ctx context.Context, req *dto.CreateIncidentRequest, tenantID, actorID int) (*creation.CreateWorkItemResult, error) {
 	if err := configureEntryFixture(ctx, s.client, tenantID, actorID); err != nil {
 		return nil, err
@@ -104,6 +135,7 @@ func (s *IncidentService) SubmitReceipt(ctx context.Context, req *dto.CreateInci
 	h.SetCreationApplication(s.app)
 	return submitEntryFixture(ctx, h.CreateIncident, tenantID, actor, req)
 }
+
 func newEntryApplication(client *ent.Client, tickets *domain.TicketService, incidents *domain.IncidentService) *intake.Service {
 	registry := intake.NewCreatorRegistry()
 	for _, owner := range []creation.ProfessionalCreator{tickets, incidents} {
@@ -113,8 +145,9 @@ func newEntryApplication(client *ent.Client, tickets *domain.TicketService, inci
 	}
 	logger := zap.NewNop().Sugar()
 	resolver := intake.NewResolver(service_catalog.NewService(nil, client, logger, nil), domain.NewProcessBindingService(client), domain.NewConfigurationItemService(client, logger, nil, nil), domain.NewTicketCategoryService(client))
-	return intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})
+	return intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard())
 }
+
 func submitEntryFixture(ctx context.Context, h gin.HandlerFunc, tenantID int, actor *ent.User, body any) (*creation.CreateWorkItemResult, error) {
 	raw, err := json.Marshal(body)
 	if err != nil {
@@ -143,6 +176,7 @@ func submitEntryFixture(ctx context.Context, h gin.HandlerFunc, tenantID int, ac
 	}
 	return &response.Data, nil
 }
+
 func configureEntryFixture(ctx context.Context, client *ent.Client, tenantID, actorID int) error {
 	actor, err := client.User.Get(ctx, actorID)
 	if err != nil {
@@ -161,7 +195,11 @@ func configureEntryFixture(ctx context.Context, client *ent.Client, tenantID, ac
 		return err
 	}
 	for _, resource := range []string{"ticket", "incident", "service_catalog", "workflow"} {
-		for _, action := range []string{"read", "write"} {
+		creationAction := "write"
+		if resource == "ticket" {
+			creationAction = "create"
+		}
+		for _, action := range []string{"read", creationAction} {
 			p, err := client.Permission.Query().Where(permission.TenantIDEQ(tenantID), permission.CodeEQ(resource+":"+action)).Only(ctx)
 			if ent.IsNotFound(err) {
 				p = client.Permission.Create().SetTenantID(tenantID).SetCode(resource + ":" + action).SetName(resource + action).SetResource(resource).SetAction(action).SaveX(ctx)
@@ -173,27 +211,32 @@ func configureEntryFixture(ctx context.Context, client *ent.Client, tenantID, ac
 			}
 		}
 	}
-	for _, business := range []string{"ticket", "incident"} {
+	for _, business := range []string{"generic", "incident"} {
 		if !client.ProcessBinding.Query().Where(processbinding.TenantIDEQ(tenantID), processbinding.BusinessTypeEQ(business)).ExistX(ctx) {
 			client.ProcessBinding.Create().SetTenantID(tenantID).SetBusinessType(business).SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
 		}
 	}
 	return nil
 }
+
 func testDSN() string { return "file:entry_" + uuid.NewString() + "?mode=memory&cache=shared&_fk=1" }
+
 func setupIncidentTest(t *testing.T) (*ent.Client, *IncidentService, context.Context) {
 	t.Helper()
 	client := enttest.Open(t, "sqlite3", testDSN())
-	svc := NewIncidentService(client, zap.NewNop().Sugar())
+	svc := NewIncidentService(client, zap.NewNop().Sugar(), executionfixture.Standard())
 	svc.RuleEngine().SetActorDirectory(client)
 	return client, svc, context.Background()
 }
+
 func createIncidentTestTenant(ctx context.Context, client *ent.Client, suffix string) (*ent.Tenant, error) {
 	return client.Tenant.Create().SetName("Tenant " + suffix).SetCode(suffix).SetStatus("active").Save(ctx)
 }
+
 func createIncidentTestUser(ctx context.Context, client *ent.Client, tenantID int, suffix string) (*ent.User, error) {
 	return client.User.Create().SetTenantID(tenantID).SetUsername(suffix).SetEmail(suffix + "@example.test").SetName(suffix).SetPasswordHash("unused").SetRole("agent").SetActive(true).Save(ctx)
 }
+
 func deployEntryApproval(t *testing.T, client *ent.Client, tenantID int, key, business string) {
 	t.Helper()
 	ctx := context.Background()

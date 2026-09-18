@@ -87,7 +87,7 @@ make dev-doctor            # 诊断环境问题（端口冲突、Docker 状态�
 
 | 服务 | 地址 |
 |------|------|
-| 前端 | http://localhost:3000 |
+| 前端 | http://localhost:3010 |
 | 后端 API | http://localhost:8090 |
 | Swagger 文档 | http://localhost:8090/swagger |
 | 登录账号 | admin / admin123 |
@@ -180,6 +180,29 @@ npm run test:smoke
 make check-contracts        # 校验 API 路径、部署配置、Docker 配置一致性
 make verify-scripts         # 验证构建/启动脚本语法
 ```
+
+### 2.5.1 WorkItem 流程身份切换预检（只读）
+
+`cmd/check_workitem_cutover` 判断 BPMN 业务流程身份能否从 Wave-1 旧词表
+（`ticket`/`change`/`service_request`）切到规范 recordClass
+（`generic`/`service_request_item`/`incident`/`problem`/`change_request`/`catalog_task`）。
+
+```bash
+cd itsm-backend
+go run ./cmd/check_workitem_cutover                  # 检查所有租户
+go run ./cmd/check_workitem_cutover -tenant-id=7     # 只检查租户 7
+go run ./cmd/check_workitem_cutover -json            # 机器可读输出
+```
+
+- 退出码：`0` 可以切换；`2` 存在依赖阻塞；`1` 工具自身失败（配置/连接）。
+- 全程只读：在只读事务内完成，不做取消、更新、删除或重新触发，也不写任何行。
+- 阻塞项：运行/暂停的旧词表实例、规范实例身份与 WorkItem/专业扩展不一致、
+  旧实例未完成的回调（pending/processing）、仍启用中的旧词表流程绑定。
+- 已结束的旧词表实例属于历史，只做信息性报告，不阻塞。Release 的显式遗留身份
+  `release` 既不是目标也不阻塞。
+- 输出只包含计数、非敏感 ID（实例/回调/binding ID）与阻塞原因。
+
+> 开发环境不迁移历史 ticket；该预检作为切换门禁保留，正常干净库应返回 `exit 0`。
 
 ### 2.6 功能冒烟测试
 
@@ -455,7 +478,7 @@ curl -s http://localhost:8090/swagger/doc.json | jq '.paths | keys'
 
 # 检查端口占用
 lsof -nP -iTCP:8090 -sTCP:LISTEN
-lsof -nP -iTCP:3000 -sTCP:LISTEN
+lsof -nP -iTCP:3010 -sTCP:LISTEN
 ```
 
 ---
@@ -514,7 +537,7 @@ docker stats itsm-backend-dev itsm-frontend-dev
 
 ```bash
 # 检查端口占用
-lsof -nP -iTCP:8090 -iTCP:3000 -iTCP:5432 -iTCP:6379 -iTCP:9001
+lsof -nP -iTCP:8090 -iTCP:3010 -iTCP:5432 -iTCP:6379 -iTCP:9001
 
 # 或一键检查所有开发相关端口
 make dev-doctor

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/service/bpmn"
@@ -106,7 +108,7 @@ func setupTicketCallbackEngine(t *testing.T) (*ent.Client, *CustomProcessEngine,
 	require.NoError(t, err)
 
 	logger := zap.NewNop().Sugar()
-	engine := NewCustomProcessEngine(client, logger).(*CustomProcessEngine)
+	engine := NewCustomProcessEngine(client, logger, executionfixture.Standard()).(*CustomProcessEngine)
 
 	// 用引擎自身的流程定义服务部署夹具（和管理端 /bpmn/process-definitions 走同一条路径），
 	// 而不是手写 ent 插入，保证 definition/deployment 行的形状与生产一致。
@@ -152,8 +154,8 @@ func createRequester(t *testing.T, client *ent.Client, ctx context.Context, tena
 func driveTicketFlowToHandleTask(t *testing.T, client *ent.Client, engine *CustomProcessEngine, ctx context.Context, ticketID int) (*ent.ProcessInstance, *ent.ProcessTask) {
 	t.Helper()
 
-	instance, err := engine.StartProcess(ctx, engineScopeFixtureProcessKey, fmt.Sprintf("ticket:%d", ticketID),
-		"ticket", ticketID, map[string]interface{}{
+	instance, err := engine.StartProcess(ctx, engineScopeFixtureProcessKey, fmt.Sprintf("generic:%d", ticketID),
+		"generic", ticketID, map[string]interface{}{
 			"business_id": ticketID,
 		})
 	require.NoError(t, err)
@@ -242,7 +244,7 @@ func TestTaskService_ReusesEngineInstanceAndRegistry(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	t.Cleanup(func() { _ = client.Close() })
 
-	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar()).(*CustomProcessEngine)
+	engine := NewCustomProcessEngine(client, zap.NewNop().Sugar(), executionfixture.Standard()).(*CustomProcessEngine)
 
 	first := engine.TaskService()
 	second := engine.TaskService()
@@ -256,7 +258,7 @@ func TestTaskService_ReusesEngineInstanceAndRegistry(t *testing.T) {
 	// 注入发生在拿到 TaskService 之后也必须可见（bootstrap 就是这个顺序）。
 	incidentHandler, ok := engine.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler)
 	require.True(t, ok, "incident_service_handler 必须已注册")
-	incidentHandler.SetIncidentService(NewIncidentService(client, zap.NewNop().Sugar()))
+	incidentHandler.SetIncidentService(NewIncidentService(client, zap.NewNop().Sugar(), executionfixture.Standard()))
 
 	reachable, ok := internal.engine.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler)
 	require.True(t, ok)

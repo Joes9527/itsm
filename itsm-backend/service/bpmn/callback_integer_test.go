@@ -2,9 +2,10 @@ package bpmn
 
 import (
 	"encoding/json"
-	"github.com/stretchr/testify/require"
 	"math"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetIntFromVarsRejectsLossyIntegerValues(t *testing.T) {

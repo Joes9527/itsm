@@ -1,3 +1,5 @@
+import tokens from '../theme-tokens.json';
+
 /**
  * Design System Tokens
  * Centralized design constants for consistent styling across the application
@@ -5,19 +7,19 @@
 
 export const colors = {
   /** 品牌主色（与 antd colorPrimary / tailwind primary 对齐） */
-  primary: '#F06820',
+  primary: tokens.brand.palette['500'],
   /** 强调色（与主色一致，保留兼容旧引用） */
-  accent: '#F06820',
+  accent: tokens.brand.palette['500'],
   /** 深色标题/墨色（原误命名为 primary 的 #0f172a） */
-  ink: '#0f172a',
+  ink: 'var(--color-text-primary)',
   success: '#10b981',
   warning: '#f59e0b',
   danger: '#ef4444',
-  surface: '#ffffff',
-  border: '#e2e8f0',
-  text: '#1e293b',
-  textMuted: '#64748b',
-  bgSubtle: '#f8fafc',
+  surface: 'var(--color-bg-primary)',
+  border: 'var(--color-border)',
+  text: 'var(--color-text-primary)',
+  textMuted: 'var(--color-text-secondary)',
+  bgSubtle: 'var(--color-bg-tertiary)',
 } as const;
 
 export const shadows = {
@@ -28,8 +30,8 @@ export const shadows = {
 } as const;
 
 export const radius = {
-  sm: '8px',
-  md: '12px',
+  sm: `${tokens.sizes.buttonRadius}px`,
+  md: `${tokens.sizes.cardRadius}px`,
   lg: '16px',
   full: '9999px',
 } as const;
@@ -44,17 +46,10 @@ export const spacing = {
 
 export const typography = {
   fontFamily: {
-    sans: 'Inter, Noto Sans SC, system-ui, sans-serif',
+    sans: tokens.typography.fontFamily,
     mono: 'JetBrains Mono, Menlo, monospace',
   },
-  fontSize: {
-    xs: '0.75rem',
-    sm: '0.875rem',
-    base: '1rem',
-    lg: '1.125rem',
-    xl: '1.25rem',
-    '2xl': '1.5rem',
-  },
+  fontSize: tokens.typography.fontSize,
 } as const;
 
 export const transitions = {

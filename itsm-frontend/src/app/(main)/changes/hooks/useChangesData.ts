@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import type { Change, ChangeStats} from '@/lib/services/change-service';
+import type { Change, ChangeStats } from '@/lib/services/change-service';
 import { changeService } from '@/lib/services/change-service';
 
 export const useChangesData = () => {
@@ -12,7 +12,14 @@ export const useChangesData = () => {
     draft: 0,
     pending: 0,
     approved: 0,
-    implementing: 0,
+    inProgress: 0,
+    scheduled: 0,
+    failed: 0,
+    rolledBack: 0,
+    rejected: 0,
+    successfulOutcomes: 0,
+    failedOutcomes: 0,
+    rolledBackOutcomes: 0,
     completed: 0,
     cancelled: 0,
   });
@@ -55,7 +62,14 @@ export const useChangesData = () => {
         draft: 0,
         pending: 0,
         approved: 0,
-        implementing: 0,
+        inProgress: 0,
+        scheduled: 0,
+        failed: 0,
+        rolledBack: 0,
+        rejected: 0,
+        successfulOutcomes: 0,
+        failedOutcomes: 0,
+        rolledBackOutcomes: 0,
         completed: 0,
         cancelled: 0,
       });

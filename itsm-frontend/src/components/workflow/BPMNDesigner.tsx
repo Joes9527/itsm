@@ -1,5 +1,6 @@
 'use client';
 
+import styles from './BPMNDesigner.module.css';
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { MenuProps } from 'antd';
 import { Button, Tooltip, App, Input, Space, Dropdown } from 'antd';
@@ -35,6 +36,7 @@ import BpmnModeler from 'bpmn-js/lib/Modeler';
 import itsmModdleDescriptor from './itsm-moddle-descriptor';
 import gridModule from 'diagram-js/lib/features/grid-snapping';
 
+import 'bpmn-js/dist/assets/bpmn-js.css';
 import 'bpmn-js/dist/assets/diagram-js.css';
 import 'bpmn-js/dist/assets/bpmn-font/css/bpmn.css';
 
@@ -153,6 +155,7 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const modelerRef = useRef<BpmnModeler | null>(null);
   const initAttemptedRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [currentXML, setCurrentXML] = useState(xml);
   const [zoom, setZoom] = useState(1);
   const [history, setHistory] = useState<HistoryItem[]>([{ xml, timestamp: Date.now(), description: '初始' }]);
@@ -1078,13 +1081,13 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
   ];
 
   return (
-    <div style={{ display: 'flex', height, border: '1px solid #d9d9d9', borderRadius: '6px', position: 'relative' }}>
+    <div className={styles.host} style={{ display: 'flex', height, border: '1px solid var(--color-border)', borderRadius: '6px', position: 'relative' }}>
       {/* 工具栏 */}
       <div
         style={{
           width: 48,
-          borderRight: '1px solid #d9d9d9',
-          background: '#f5f5f5',
+          borderRight: '1px solid var(--color-border)',
+          background: 'var(--color-bg-tertiary)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -1120,7 +1123,7 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
           />
         </Tooltip>
 
-        <div style={{ height: 1, width: '80%', background: '#e8e8e8', margin: '8px 0' }} />
+        <div style={{ height: 1, width: '80%', background: 'var(--color-border)', margin: '8px 0' }} />
 
         <Tooltip title="复制 (Ctrl+C)" placement="right">
           <Button
@@ -1156,7 +1159,7 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
           />
         </Tooltip>
 
-        <div style={{ height: 1, width: '80%', background: '#e8e8e8', margin: '8px 0' }} />
+        <div style={{ height: 1, width: '80%', background: 'var(--color-border)', margin: '8px 0' }} />
 
         <Dropdown menu={{ items: alignMenuItems }} placement="bottomRight" trigger={['click']}>
           <Tooltip title="对齐" placement="right">
@@ -1184,21 +1187,24 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
         <Tooltip title="导出BPMN" placement="right">
           <Button type="text" icon={<FileJson size={18} />} onClick={handleExportXML} />
         </Tooltip>
-        <label>
-          <input
-            type="file"
-            accept=".bpmn,.xml"
-            style={{ display: 'none' }}
-            onChange={handleImportXML}
+        <Tooltip title="导入BPMN" placement="right">
+          <Button
+            type="text"
+            icon={<Upload size={18} />}
+            onClick={() => fileInputRef.current?.click()}
           />
-          <Tooltip title="导入BPMN" placement="right">
-            <Button type="text" icon={<Upload size={18} />} />
-          </Tooltip>
-        </label>
+        </Tooltip>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".bpmn,.xml"
+          style={{ display: 'none' }}
+          onChange={handleImportXML}
+        />
       </div>
 
       {/* BPMN 图 */}
-      <div ref={containerRef} style={{ flex: 1, position: 'relative' }} />
+      <div className={styles.sheet} ref={containerRef} style={{ flex: 1, position: 'relative' }} />
 
       {/* 顶部搜索栏 */}
       <div style={{
@@ -1207,8 +1213,9 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
         left: '50%',
         transform: 'translateX(-50%)',
         width: 300,
+        maxWidth: 'calc(100% - 120px)',
         zIndex: 10,
-        background: 'white',
+        background: 'var(--color-bg-secondary)',
         borderRadius: '6px',
         boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
       }}>
@@ -1231,7 +1238,7 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
           right: 16,
           display: 'flex',
           gap: 4,
-          background: 'white',
+          background: 'var(--color-bg-secondary)',
           padding: 4,
           borderRadius: 6,
           boxShadow: '0 2px 8px rgba(0,0,0,0.15)',

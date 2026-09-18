@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/servicecatalog"
+	"itsm-backend/ent/ticketcategory"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -498,6 +499,26 @@ func (_u *ServiceCatalogUpdate) AddSortOrder(v int) *ServiceCatalogUpdate {
 	return _u
 }
 
+// SetDefaultTicketCategoryID sets the "default_ticket_category_id" field.
+func (_u *ServiceCatalogUpdate) SetDefaultTicketCategoryID(v int) *ServiceCatalogUpdate {
+	_u.mutation.SetDefaultTicketCategoryID(v)
+	return _u
+}
+
+// SetNillableDefaultTicketCategoryID sets the "default_ticket_category_id" field if the given value is not nil.
+func (_u *ServiceCatalogUpdate) SetNillableDefaultTicketCategoryID(v *int) *ServiceCatalogUpdate {
+	if v != nil {
+		_u.SetDefaultTicketCategoryID(*v)
+	}
+	return _u
+}
+
+// ClearDefaultTicketCategoryID clears the value of the "default_ticket_category_id" field.
+func (_u *ServiceCatalogUpdate) ClearDefaultTicketCategoryID() *ServiceCatalogUpdate {
+	_u.mutation.ClearDefaultTicketCategoryID()
+	return _u
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_u *ServiceCatalogUpdate) SetCreatedAt(v time.Time) *ServiceCatalogUpdate {
 	_u.mutation.SetCreatedAt(v)
@@ -518,9 +539,20 @@ func (_u *ServiceCatalogUpdate) SetUpdatedAt(v time.Time) *ServiceCatalogUpdate 
 	return _u
 }
 
+// SetDefaultTicketCategory sets the "default_ticket_category" edge to the TicketCategory entity.
+func (_u *ServiceCatalogUpdate) SetDefaultTicketCategory(v *TicketCategory) *ServiceCatalogUpdate {
+	return _u.SetDefaultTicketCategoryID(v.ID)
+}
+
 // Mutation returns the ServiceCatalogMutation object of the builder.
 func (_u *ServiceCatalogUpdate) Mutation() *ServiceCatalogMutation {
 	return _u.mutation
+}
+
+// ClearDefaultTicketCategory clears the "default_ticket_category" edge to the TicketCategory entity.
+func (_u *ServiceCatalogUpdate) ClearDefaultTicketCategory() *ServiceCatalogUpdate {
+	_u.mutation.ClearDefaultTicketCategory()
+	return _u
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -747,6 +779,35 @@ func (_u *ServiceCatalogUpdate) sqlSave(ctx context.Context) (_node int, err err
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(servicecatalog.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DefaultTicketCategoryCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   servicecatalog.DefaultTicketCategoryTable,
+			Columns: []string{servicecatalog.DefaultTicketCategoryColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(ticketcategory.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.DefaultTicketCategoryIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   servicecatalog.DefaultTicketCategoryTable,
+			Columns: []string{servicecatalog.DefaultTicketCategoryColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(ticketcategory.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -1237,6 +1298,26 @@ func (_u *ServiceCatalogUpdateOne) AddSortOrder(v int) *ServiceCatalogUpdateOne 
 	return _u
 }
 
+// SetDefaultTicketCategoryID sets the "default_ticket_category_id" field.
+func (_u *ServiceCatalogUpdateOne) SetDefaultTicketCategoryID(v int) *ServiceCatalogUpdateOne {
+	_u.mutation.SetDefaultTicketCategoryID(v)
+	return _u
+}
+
+// SetNillableDefaultTicketCategoryID sets the "default_ticket_category_id" field if the given value is not nil.
+func (_u *ServiceCatalogUpdateOne) SetNillableDefaultTicketCategoryID(v *int) *ServiceCatalogUpdateOne {
+	if v != nil {
+		_u.SetDefaultTicketCategoryID(*v)
+	}
+	return _u
+}
+
+// ClearDefaultTicketCategoryID clears the value of the "default_ticket_category_id" field.
+func (_u *ServiceCatalogUpdateOne) ClearDefaultTicketCategoryID() *ServiceCatalogUpdateOne {
+	_u.mutation.ClearDefaultTicketCategoryID()
+	return _u
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_u *ServiceCatalogUpdateOne) SetCreatedAt(v time.Time) *ServiceCatalogUpdateOne {
 	_u.mutation.SetCreatedAt(v)
@@ -1257,9 +1338,20 @@ func (_u *ServiceCatalogUpdateOne) SetUpdatedAt(v time.Time) *ServiceCatalogUpda
 	return _u
 }
 
+// SetDefaultTicketCategory sets the "default_ticket_category" edge to the TicketCategory entity.
+func (_u *ServiceCatalogUpdateOne) SetDefaultTicketCategory(v *TicketCategory) *ServiceCatalogUpdateOne {
+	return _u.SetDefaultTicketCategoryID(v.ID)
+}
+
 // Mutation returns the ServiceCatalogMutation object of the builder.
 func (_u *ServiceCatalogUpdateOne) Mutation() *ServiceCatalogMutation {
 	return _u.mutation
+}
+
+// ClearDefaultTicketCategory clears the "default_ticket_category" edge to the TicketCategory entity.
+func (_u *ServiceCatalogUpdateOne) ClearDefaultTicketCategory() *ServiceCatalogUpdateOne {
+	_u.mutation.ClearDefaultTicketCategory()
+	return _u
 }
 
 // Where appends a list predicates to the ServiceCatalogUpdate builder.
@@ -1516,6 +1608,35 @@ func (_u *ServiceCatalogUpdateOne) sqlSave(ctx context.Context) (_node *ServiceC
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(servicecatalog.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DefaultTicketCategoryCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   servicecatalog.DefaultTicketCategoryTable,
+			Columns: []string{servicecatalog.DefaultTicketCategoryColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(ticketcategory.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.DefaultTicketCategoryIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   servicecatalog.DefaultTicketCategoryTable,
+			Columns: []string{servicecatalog.DefaultTicketCategoryColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(ticketcategory.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &ServiceCatalog{config: _u.config}
 	_spec.Assign = _node.assignValues

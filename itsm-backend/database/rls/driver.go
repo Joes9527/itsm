@@ -107,6 +107,7 @@ func (d *Driver) Close() error { return d.inner.Close() }
 
 // Tx and BeginTx retain the caller's real transaction and isolation options.
 func (d *Driver) Tx(ctx context.Context) (dialect.Tx, error) { return d.BeginTx(ctx, nil) }
+
 func (d *Driver) BeginTx(ctx context.Context, opts *sql.TxOptions) (dialect.Tx, error) {
 	if err := d.validateMode(); err != nil {
 		return nil, err
@@ -117,6 +118,7 @@ func (d *Driver) BeginTx(ctx context.Context, opts *sql.TxOptions) (dialect.Tx, 
 	}
 	return d.beginInner(ctx, opts)
 }
+
 func (d *Driver) beginInner(ctx context.Context, opts *sql.TxOptions) (dialect.Tx, error) {
 	if beginner, ok := d.inner.(interface {
 		BeginTx(context.Context, *sql.TxOptions) (dialect.Tx, error)
@@ -128,6 +130,7 @@ func (d *Driver) beginInner(ctx context.Context, opts *sql.TxOptions) (dialect.T
 	}
 	return d.inner.Tx(ctx)
 }
+
 func (d *Driver) Exec(ctx context.Context, query string, args, v any) error {
 	if err := d.validateMode(); err != nil {
 		return err
@@ -138,6 +141,7 @@ func (d *Driver) Exec(ctx context.Context, query string, args, v any) error {
 	}
 	return d.inner.Exec(ctx, query, args, v)
 }
+
 func (d *Driver) Query(ctx context.Context, query string, args, v any) error {
 	if err := d.validateMode(); err != nil {
 		return err

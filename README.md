@@ -117,7 +117,7 @@ docker compose --env-file .env -f docker-compose.dev.yml --profile dev up -d --b
 make dev-status
 
 # 访问应用
-# 前端:    http://localhost:3000
+# 前端:    http://localhost:3010
 # 后端:    http://localhost:8090
 # API文档: http://localhost:8090/swagger/index.html
 ```
@@ -153,7 +153,7 @@ docker compose --env-file .env -f docker-compose.dev.yml \
 curl http://localhost:8090/api/v1/health
 
 # 检查前端服务及后端代理链路
-curl http://localhost:3000/api/health
+curl http://localhost:3010/api/health
 
 # 检查 v1.0 GA 就绪度（默认功能模板、连接器、AI 审计契约）
 curl http://localhost:8090/api/v1/readiness/ga
@@ -220,7 +220,7 @@ DB_NAME=itsm
 ```
 
 访问地址：
-- 前端: http://localhost:3000
+- 前端: http://localhost:3010
 - 后端API: http://localhost:8090
 - Swagger文档: http://localhost:8090/swagger/index.html
 - PostgreSQL: localhost:5432
@@ -236,11 +236,11 @@ DB_NAME=itsm
 
 # 验证前端和后端是否真的可访问
 ./scripts/deploy-dev.sh status --local
-curl -I http://127.0.0.1:3000
+curl -I http://127.0.0.1:3010
 curl http://127.0.0.1:8090/api/v1/health
 
 # 查看监听端口和日志
-lsof -nP -iTCP:3000 -sTCP:LISTEN
+lsof -nP -iTCP:3010 -sTCP:LISTEN
 lsof -nP -iTCP:8090 -sTCP:LISTEN
 tail -f logs/frontend.log
 ```
@@ -483,7 +483,7 @@ itsm/
               ▼                               ▼
 ┌─────────────────────────┐       ┌─────────────────────────┐
 │    🌐 Next.js 前端      │       │     ⚙️ Go 后端 API      │
-│       端口: 3000        │       │       端口: 8090         │
+│       端口: 3010        │       │       端口: 8090         │
 └─────────────────────────┘       └─────────────────────────┘
               │                               │
               │                               ├──────────────┐

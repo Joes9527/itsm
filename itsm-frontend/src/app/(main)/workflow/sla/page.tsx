@@ -172,10 +172,10 @@ export default function SLAMonitoringPage() {
   ];
 
   return (
-    <div className='p-6 space-y-6'>
+    <div className='p-[16px] md:p-[24px] space-y-6'>
       {/* Header */}
       <div className='flex justify-between items-center'>
-        <h1 className='text-2xl font-bold'>{t('bpmn.sla.title') || 'BPMN SLA监控'}</h1>
+        <h1 className='text-[24px] font-semibold'>{t('bpmn.sla.title') || 'BPMN SLA监控'}</h1>
         <Button
           icon={<RefreshCw size={16} />}
           onClick={() => {
@@ -209,7 +209,7 @@ export default function SLAMonitoringPage() {
         </Space>
 
         {selectedProcess && processMetrics && (
-          <Row gutter={[16, 16]}>
+          <Row gutter={[14, 14]}>
             <Col xs={12} sm={8}>
               <Statistic
                 title={t('bpmn.sla.totalInstances') || '总实例数'}
@@ -289,7 +289,7 @@ export default function SLAMonitoringPage() {
       </Card>
 
       {/* SLA Status Summary */}
-      <Row gutter={[16, 16]}>
+      <Row gutter={[14, 14]}>
         <Col xs={24} sm={8}>
           <Card>
             <Statistic

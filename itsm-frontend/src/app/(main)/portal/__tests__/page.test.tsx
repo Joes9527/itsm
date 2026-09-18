@@ -1,4 +1,5 @@
 import { render, screen } from '@/lib/test-utils';
+import { useAuthStore } from '@/lib/store/auth-store';
 import userEvent from '@testing-library/user-event';
 import PortalPage from '../page';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
@@ -25,9 +26,7 @@ jest.mock('@/lib/api/bpmn-workflow-api', () => ({
   },
 }));
 
-jest.mock('@/lib/store/auth-store', () => ({
-  useAuthStore: () => ({ user: { name: '侯艾华', username: 'end_user_test' } }),
-}));
+
 
 const mockGetServices = ServiceCatalogApi.getServices as jest.Mock;
 const mockGetServiceRequests = ServiceCatalogApi.getServiceRequests as jest.Mock;
@@ -36,6 +35,7 @@ const mockListMyApprovalTasks = BPMNWorkflowApi.listUserTasks as jest.Mock;
 describe('PortalPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    useAuthStore.setState({ isAuthenticated: true, user: { id: 1, tenantId: 2, permissions: [], name: '侯艾华', username: 'end_user_test' } as never, currentTenant: { id: 2, status: 'active' } as never });
     mockListMyApprovalTasks.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 4 });
   });
 

@@ -67,6 +67,8 @@ type EmailPollingCoordinator struct {
 	logger *zap.SugaredLogger
 
 	mu      sync.Mutex
+	workers sync.WaitGroup
+	closed  bool
 	cancels map[int]context.CancelFunc // key: tenantID
 }
 
@@ -85,9 +87,21 @@ func NewEmailPollingCoordinator(store TicketStore, triage Triager, logger *zap.S
 // goroutines). The stop-old/install-new step happens under a single lock
 // acquisition so concurrent Start calls for the same tenantID can never
 // leave an old CancelFunc unreachable in c.cancels.
-func (c *EmailPollingCoordinator) Start(ctx context.Context, tenantID int, conn *GraphConnector) {
+func (c *EmailPollingCoordinator) Start(ctx context.Context, tenantID int, conn *GraphConnector) error {
+	if ctx == nil || conn == nil {
+		return fmt.Errorf("polling context and connector required")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	pollCtx, cancel := context.WithCancel(ctx)
 	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		cancel()
+		return fmt.Errorf("email polling coordinator is closed")
+	}
+	c.workers.Add(1)
 	if oldCancel, ok := c.cancels[tenantID]; ok {
 		oldCancel()
 	}
@@ -97,6 +111,7 @@ func (c *EmailPollingCoordinator) Start(ctx context.Context, tenantID int, conn 
 	interval := time.Duration(conn.PollIntervalSeconds()) * time.Second
 
 	go func() {
+		defer c.workers.Done()
 		deltaLink := ""
 		c.pollOnce(pollCtx, tenantID, conn, &deltaLink)
 		ticker := time.NewTicker(interval)
@@ -110,6 +125,19 @@ func (c *EmailPollingCoordinator) Start(ctx context.Context, tenantID int, conn 
 			}
 		}
 	}()
+	return nil
+}
+
+// Close rejects new starts and waits for all polls, including replaced tenants.
+func (c *EmailPollingCoordinator) Close() {
+	c.mu.Lock()
+	c.closed = true
+	for _, cancel := range c.cancels {
+		cancel()
+	}
+	clear(c.cancels)
+	c.mu.Unlock()
+	c.workers.Wait()
 }
 
 // Stop cancels polling for a tenant, if running. Safe to call when nothing
@@ -228,5 +256,4 @@ func (c *EmailPollingCoordinator) handleMessage(ctx context.Context, tenantID in
 		return
 	}
 	c.logger.Infow("msgraph ticket created", "tenant_id", tenantID, "ticket_id", ticketID, "ticket_number", ticketNumber, "from", m.FromAddress)
-
 }

@@ -7,6 +7,7 @@ import (
 	"itsm-backend/ent/problem"
 	"itsm-backend/ent/ticket"
 	"strings"
+	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -17,6 +18,16 @@ type Problem struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
+	// VerifiedVersion holds the value of the "verified_version" field.
+	VerifiedVersion int `json:"verified_version,omitempty"`
+	// VerificationDigest holds the value of the "verification_digest" field.
+	VerificationDigest string `json:"verification_digest,omitempty"`
+	// VerifiedBy holds the value of the "verified_by" field.
+	VerifiedBy int `json:"verified_by,omitempty"`
+	// VerifiedAt holds the value of the "verified_at" field.
+	VerifiedAt time.Time `json:"verified_at,omitempty"`
+	// VerificationNote holds the value of the "verification_note" field.
+	VerificationNote string `json:"verification_note,omitempty"`
 	// 根本原因
 	RootCause string `json:"root_cause,omitempty"`
 	// 临时解决方案
@@ -38,15 +49,9 @@ type Problem struct {
 type ProblemEdges struct {
 	// 共享字段的唯一权威 WorkItem
 	WorkItem *Ticket `json:"work_item,omitempty"`
-	// 关联的工单
-	Tickets []*Ticket `json:"tickets,omitempty"`
-	// 关联的事件
-	Incidents []*Incident `json:"incidents,omitempty"`
-	// 关联的变更
-	Changes []*Change `json:"changes,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [4]bool
+	loadedTypes [1]bool
 }
 
 // WorkItemOrErr returns the WorkItem value or an error if the edge
@@ -60,42 +65,17 @@ func (e ProblemEdges) WorkItemOrErr() (*Ticket, error) {
 	return nil, &NotLoadedError{edge: "work_item"}
 }
 
-// TicketsOrErr returns the Tickets value or an error if the edge
-// was not loaded in eager-loading.
-func (e ProblemEdges) TicketsOrErr() ([]*Ticket, error) {
-	if e.loadedTypes[1] {
-		return e.Tickets, nil
-	}
-	return nil, &NotLoadedError{edge: "tickets"}
-}
-
-// IncidentsOrErr returns the Incidents value or an error if the edge
-// was not loaded in eager-loading.
-func (e ProblemEdges) IncidentsOrErr() ([]*Incident, error) {
-	if e.loadedTypes[2] {
-		return e.Incidents, nil
-	}
-	return nil, &NotLoadedError{edge: "incidents"}
-}
-
-// ChangesOrErr returns the Changes value or an error if the edge
-// was not loaded in eager-loading.
-func (e ProblemEdges) ChangesOrErr() ([]*Change, error) {
-	if e.loadedTypes[3] {
-		return e.Changes, nil
-	}
-	return nil, &NotLoadedError{edge: "changes"}
-}
-
 // scanValues returns the types for scanning values from sql.Rows.
 func (*Problem) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case problem.FieldID, problem.FieldWorkItemID:
+		case problem.FieldID, problem.FieldVerifiedVersion, problem.FieldVerifiedBy, problem.FieldWorkItemID:
 			values[i] = new(sql.NullInt64)
-		case problem.FieldRootCause, problem.FieldWorkaround, problem.FieldResolution, problem.FieldImpact:
+		case problem.FieldVerificationDigest, problem.FieldVerificationNote, problem.FieldRootCause, problem.FieldWorkaround, problem.FieldResolution, problem.FieldImpact:
 			values[i] = new(sql.NullString)
+		case problem.FieldVerifiedAt:
+			values[i] = new(sql.NullTime)
 		case problem.ForeignKeys[0]: // known_error_problem
 			values[i] = new(sql.NullInt64)
 		default:
@@ -119,6 +99,36 @@ func (_m *Problem) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
+		case problem.FieldVerifiedVersion:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field verified_version", values[i])
+			} else if value.Valid {
+				_m.VerifiedVersion = int(value.Int64)
+			}
+		case problem.FieldVerificationDigest:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field verification_digest", values[i])
+			} else if value.Valid {
+				_m.VerificationDigest = value.String
+			}
+		case problem.FieldVerifiedBy:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field verified_by", values[i])
+			} else if value.Valid {
+				_m.VerifiedBy = int(value.Int64)
+			}
+		case problem.FieldVerifiedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field verified_at", values[i])
+			} else if value.Valid {
+				_m.VerifiedAt = value.Time
+			}
+		case problem.FieldVerificationNote:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field verification_note", values[i])
+			} else if value.Valid {
+				_m.VerificationNote = value.String
+			}
 		case problem.FieldRootCause:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field root_cause", values[i])
@@ -174,21 +184,6 @@ func (_m *Problem) QueryWorkItem() *TicketQuery {
 	return NewProblemClient(_m.config).QueryWorkItem(_m)
 }
 
-// QueryTickets queries the "tickets" edge of the Problem entity.
-func (_m *Problem) QueryTickets() *TicketQuery {
-	return NewProblemClient(_m.config).QueryTickets(_m)
-}
-
-// QueryIncidents queries the "incidents" edge of the Problem entity.
-func (_m *Problem) QueryIncidents() *IncidentQuery {
-	return NewProblemClient(_m.config).QueryIncidents(_m)
-}
-
-// QueryChanges queries the "changes" edge of the Problem entity.
-func (_m *Problem) QueryChanges() *ChangeQuery {
-	return NewProblemClient(_m.config).QueryChanges(_m)
-}
-
 // Update returns a builder for updating this Problem.
 // Note that you need to call Problem.Unwrap() before calling this method if this Problem
 // was returned from a transaction, and the transaction was committed or rolled back.
@@ -212,6 +207,21 @@ func (_m *Problem) String() string {
 	var builder strings.Builder
 	builder.WriteString("Problem(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString("verified_version=")
+	builder.WriteString(fmt.Sprintf("%v", _m.VerifiedVersion))
+	builder.WriteString(", ")
+	builder.WriteString("verification_digest=")
+	builder.WriteString(_m.VerificationDigest)
+	builder.WriteString(", ")
+	builder.WriteString("verified_by=")
+	builder.WriteString(fmt.Sprintf("%v", _m.VerifiedBy))
+	builder.WriteString(", ")
+	builder.WriteString("verified_at=")
+	builder.WriteString(_m.VerifiedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("verification_note=")
+	builder.WriteString(_m.VerificationNote)
+	builder.WriteString(", ")
 	builder.WriteString("root_cause=")
 	builder.WriteString(_m.RootCause)
 	builder.WriteString(", ")

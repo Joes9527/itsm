@@ -4,6 +4,7 @@ package container
 
 import (
 	"itsm-backend/config"
+	"itsm-backend/database"
 	"itsm-backend/ent"
 	"itsm-backend/repository/base"
 	ticketRepo "itsm-backend/repository/ticket"
@@ -16,9 +17,10 @@ import (
 // Container 依赖容器
 // 集中管理所有服务的创建和依赖注入
 type Container struct {
-	cfg    *config.Config
-	client *ent.Client
-	logger *zap.SugaredLogger
+	execution *database.ExecutionPolicy
+	cfg       *config.Config
+	client    *ent.Client
+	logger    *zap.SugaredLogger
 
 	// Repositories
 	ticketRepository ticketRepo.Repository
@@ -55,7 +57,12 @@ func (c *Container) Initialize() error {
 	c.initRepositories()
 
 	// 2. 初始化核心服务（无依赖或依赖已初始化）
-	c.initCoreServices()
+	policy, err := database.NewExecutionPolicy(c.cfg.Execution)
+	if err != nil {
+		return err
+	}
+	c.execution = policy
+	c.initCoreServices(policy)
 
 	// 3. 初始化业务服务（依赖核心服务）
 	c.initBusinessServices()
@@ -72,15 +79,15 @@ func (c *Container) initRepositories() {
 }
 
 // initCoreServices 初始化核心服务
-func (c *Container) initCoreServices() {
+func (c *Container) initCoreServices(policy *database.ExecutionPolicy) {
 	// Notification Service
 	c.notificationService = service.NewNotificationService(c.client)
 
 	// Incident Service
-	c.incidentService = service.NewIncidentService(c.client, c.logger)
+	c.incidentService = service.NewIncidentService(c.client, c.logger, policy)
 
 	// Ticket Notification Service
-	c.ticketNotificationService = service.NewTicketNotificationService(c.client, c.logger)
+	c.ticketNotificationService = service.NewTicketNotificationService(c.client, c.logger, policy)
 
 	// Ticket SLA Service
 	c.ticketSLAService = service.NewTicketSLAService(c.client, c.logger)
@@ -90,7 +97,7 @@ func (c *Container) initCoreServices() {
 
 	// BPMN binding and professional transition orchestration.
 	c.processBindingService = service.NewProcessBindingService(c.client)
-	processEngine := service.NewCustomProcessEngine(c.client, c.logger)
+	processEngine := service.NewCustomProcessEngine(c.client, c.logger, policy)
 	c.processTriggerService = service.NewProcessTriggerService(c.client, processEngine)
 }
 
@@ -98,6 +105,7 @@ func (c *Container) initCoreServices() {
 func (c *Container) initBusinessServices() {
 	// Ticket Service V2（使用构造函数注入）
 	c.ticketService = service.NewTicketService(&service.TicketServiceConfig{
+		Execution:             c.execution,
 		Repository:            c.ticketRepository,
 		Client:                c.client,
 		Logger:                c.logger,
@@ -158,7 +166,9 @@ func (c *Container) NewTicketServiceWithDeps(
 	slaSvc *service.TicketSLAService,
 ) *service.TicketService {
 	return service.NewTicketService(&service.TicketServiceConfig{
+		Execution:             c.execution,
 		Repository:            c.ticketRepository,
+		Client:                c.client,
 		Logger:                c.logger,
 		NotificationService:   notificationSvc,
 		AutomationRuleService: automationSvc,

@@ -2,6 +2,9 @@ package service_request
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/authorization"
@@ -11,8 +14,7 @@ import (
 	"itsm-backend/ent/servicerequestaccessresult"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/intake"
-	"testing"
-	"time"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 )
 
 func TestAccessResultFulfillmentUsesProfessionalAndWorkflowOwners(t *testing.T) {
@@ -28,7 +30,7 @@ func TestAccessResultFulfillmentUsesProfessionalAndWorkflowOwners(t *testing.T) 
 			c.ServiceRequest.Create().SetTicketID(item.ID).SetCatalogID(cat.ID).SaveX(ctx)
 			dep := c.ProcessDeployment.Create().SetTenantID(tenant.ID).SetDeploymentID("dep").SetDeploymentName("D").SaveX(ctx)
 			def := c.ProcessDefinition.Create().SetTenantID(tenant.ID).SetDeploymentID(dep.ID).SetKey("access").SetName("Access").SetBpmnXML([]byte(`<definitions><process id="access"><userTask id="approval" taskPurpose="approval"/></process></definitions>`)).SaveX(ctx)
-			inst := c.ProcessInstance.Create().SetTenantID(tenant.ID).SetProcessDefinitionID(def.ID).SetProcessDefinitionKey("access").SetProcessInstanceID("inst").SetBusinessID(item.ID).SetBusinessType("service_request").SaveX(ctx)
+			inst := c.ProcessInstance.Create().SetTenantID(tenant.ID).SetProcessDefinitionID(def.ID).SetProcessDefinitionKey("access").SetProcessInstanceID("inst").SetBusinessID(item.ID).SetBusinessType("service_request_item").SaveX(ctx)
 			task := c.ProcessTask.Create().SetTenantID(tenant.ID).SetProcessInstanceID(inst.ID).SetProcessDefinitionKey("access").SetTaskDefinitionKey("approval").SetTaskName("Approval").SetTaskID("task").SetTaskVariables(map[string]any{"taskPurpose": "approval"}).SaveX(ctx)
 			expected := state
 			switch state {
@@ -71,11 +73,11 @@ func TestAccessResultFulfillmentUsesProfessionalAndWorkflowOwners(t *testing.T) 
 				c.ProcessInstance.UpdateOne(inst).SetStatus("suspended").SaveX(ctx)
 				expected = "unknown"
 			}
-			owner := NewService(NewEntRepository(c), c, zap.NewNop().Sugar(), nil)
+			owner := NewService(NewEntRepository(c, executionfixture.Standard()), c, zap.NewNop().Sugar(), nil, executionfixture.Standard())
 			got, err := owner.ReadFulfillment(ctx, c, item)
 			require.NoError(t, err)
 			require.Equal(t, expected, got.State)
-			reader := intake.NewReadService(authorization.NewSessionReader(c, accessTestDirectory{}), nil, "fixture-only-cursor")
+			reader := intake.NewReadService(authorization.NewSessionReader(c, accessTestDirectory{}), nil, "fixture-only-cursor", intake.ReferenceReadOptions{})
 			reader.SetFulfillmentReader(owner)
 			view, err := reader.WorkItem(tenantctx.WithTenantID(ctx, tenant.ID), creation.Identity{TenantID: tenant.ID, ActorID: u.ID, Role: u.Role}, item.ID)
 			require.NoError(t, err)

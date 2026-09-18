@@ -17,22 +17,25 @@ import (
 )
 
 type Config struct {
-	Database       DatabaseConfig   `mapstructure:"database"`
-	Server         ServerConfig     `mapstructure:"server"`
-	JWT            JWTConfig        `mapstructure:"jwt"`
-	Log            LogConfig        `mapstructure:"log"`
-	LLM            LLMConfig        `mapstructure:"llm"`
-	SMS            SMSConfig        `mapstructure:"sms"`
-	SMTP           SMTPConfig       `mapstructure:"smtp"`
-	MinIO          MinIOConfig      `mapstructure:"minio"`
-	Ticket         TicketConfig     `mapstructure:"ticket"`
-	Redis          RedisConfig      `mapstructure:"redis"`
-	Security       SecurityConfig   `mapstructure:"security"`
-	Deployment     DeploymentConfig `mapstructure:"deployment"`
-	RLS            RLSConfig        `mapstructure:"rls"`
+	Execution      ExecutionConfig     `mapstructure:"execution"`
+	Database       DatabaseConfig      `mapstructure:"database"`
+	Server         ServerConfig        `mapstructure:"server"`
+	JWT            JWTConfig           `mapstructure:"jwt"`
+	Log            LogConfig           `mapstructure:"log"`
+	LLM            LLMConfig           `mapstructure:"llm"`
+	SMS            SMSConfig           `mapstructure:"sms"`
+	SMTP           SMTPConfig          `mapstructure:"smtp"`
+	EmailDelivery  EmailDeliveryConfig `mapstructure:"email_delivery"`
+	MinIO          MinIOConfig         `mapstructure:"minio"`
+	Ticket         TicketConfig        `mapstructure:"ticket"`
+	Redis          RedisConfig         `mapstructure:"redis"`
+	Security       SecurityConfig      `mapstructure:"security"`
+	Deployment     DeploymentConfig    `mapstructure:"deployment"`
+	RLS            RLSConfig           `mapstructure:"rls"`
 	KAFOutbox      KAFOutboxConfig
 	OutboxDelivery OutboxDeliveryConfig
 	IntakeIdentity IntakeIdentityConfig
+	IntakeRead     IntakeReadConfig
 }
 
 // KAFOutboxConfig controls reliable delivery of BPMN delegation events to KAF.
@@ -75,11 +78,20 @@ type SecurityConfig struct {
 	CSRFEnabled bool `mapstructure:"csrf_enabled"` // 是否启用 CSRF 保护
 }
 
+type EventStreamConfig struct {
+	ClaimIdle     time.Duration `mapstructure:"claim_idle"`
+	ClaimInterval time.Duration `mapstructure:"claim_interval"`
+	// NackDelay backs off Redis operation failures. Rejected entries remain in
+	// the PEL and retry according to ClaimIdle and ClaimInterval.
+	NackDelay time.Duration `mapstructure:"nack_delay"`
+}
+
 type RedisConfig struct {
-	Host     string `mapstructure:"host"`
-	Port     int    `mapstructure:"port"`
-	Password string `mapstructure:"password"`
-	DB       int    `mapstructure:"db"`
+	EventStream EventStreamConfig `mapstructure:"event_stream"`
+	Host        string            `mapstructure:"host"`
+	Port        int               `mapstructure:"port"`
+	Password    string            `mapstructure:"password"`
+	DB          int               `mapstructure:"db"`
 }
 
 type TicketConfig struct {
@@ -132,7 +144,7 @@ func (d *DatabaseConfig) AdminDSN() (user, password string) {
 type ServerConfig struct {
 	Port         int    `mapstructure:"port"`
 	Mode         string `mapstructure:"mode"`
-	CookieSecure bool   `mapstructure:"cookie_secure"` // Secure flag for cookies (set true only behind HTTPS)
+	CookieSecure *bool  `mapstructure:"cookie_secure"` // nil preserves production defaults; false explicitly permits HTTP
 	FrontendURL  string `mapstructure:"frontend_url"`  // 前端地址（邮件重置链接等用）
 }
 
@@ -229,19 +241,22 @@ func resolveEnvVars(input string) string {
 // resolveMapEnvVars 递归解析 map 中的环境变量
 func resolveMapEnvVars(m map[string]interface{}) {
 	for k, v := range m {
-		switch val := v.(type) {
-		case string:
-			m[k] = resolveEnvVars(val)
-		case map[string]interface{}:
-			resolveMapEnvVars(val)
-		case []interface{}:
-			for i, item := range val {
-				if s, ok := item.(string); ok {
-					val[i] = resolveEnvVars(s)
-				}
-			}
+		m[k] = resolveConfigEnvValue(v)
+	}
+}
+
+func resolveConfigEnvValue(value interface{}) interface{} {
+	switch val := value.(type) {
+	case string:
+		return resolveEnvVars(val)
+	case map[string]interface{}:
+		resolveMapEnvVars(val)
+	case []interface{}:
+		for i, item := range val {
+			val[i] = resolveConfigEnvValue(item)
 		}
 	}
+	return value
 }
 
 func LoadConfig() (*Config, error) {
@@ -273,16 +288,22 @@ func LoadConfig() (*Config, error) {
 	viper.Set("llm", rawConfig["llm"])
 	viper.Set("sms", rawConfig["sms"])
 	viper.Set("smtp", rawConfig["smtp"])
+	viper.Set("email_delivery", rawConfig["email_delivery"])
 	viper.Set("redis", rawConfig["redis"])
 	viper.Set("ticket", rawConfig["ticket"])
 	viper.Set("embedding", rawConfig["embedding"])
 	viper.Set("security", rawConfig["security"])
 	viper.Set("admin", rawConfig["admin"])
 	viper.Set("deployment", rawConfig["deployment"])
+	viper.Set("execution", rawConfig["execution"])
 
 	// 重新绑定到 Config 结构
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {
+		return nil, err
+	}
+
+	if err := config.Server.applyCookieSecureEnvironment(os.LookupEnv); err != nil {
 		return nil, err
 	}
 
@@ -343,6 +364,11 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 	config.IntakeIdentity = identityConfig
+	intakeReadConfig, err := loadIntakeReadConfig(outboxEnv)
+	if err != nil {
+		return nil, err
+	}
+	config.IntakeRead = intakeReadConfig
 	outboxDeliveryConfig, err := loadOutboxDeliveryConfig(outboxEnv)
 	if err != nil {
 		return nil, err
@@ -384,6 +410,10 @@ func LoadConfig() (*Config, error) {
 	config.SMTP.Password = getEnvWithDefault("SMTP_PASSWORD", config.SMTP.Password)
 	config.SMTP.FromEmail = getEnvWithDefault("SMTP_FROM_EMAIL", config.SMTP.FromEmail)
 	config.SMTP.FromName = getEnvWithDefault("SMTP_FROM_NAME", config.SMTP.FromName)
+	config.EmailDelivery.Transport = getEnvWithDefault("ITSM_EMAIL_DELIVERY_TRANSPORT", config.EmailDelivery.Transport)
+	if err := config.EmailDelivery.Validate(); err != nil {
+		return nil, err
+	}
 
 	// MinIO 环境变量支持
 	config.MinIO.Endpoint = getEnvWithDefault("MINIO_ENDPOINT", config.MinIO.Endpoint)
@@ -606,4 +636,19 @@ func loadOutboxDeliveryConfig(getenv func(string) string) (OutboxDeliveryConfig,
 		config.MaxAttempts = parsed
 	}
 	return config, nil
+}
+
+// applyCookieSecureEnvironment keeps absence distinct from an explicit false.
+// Invalid or empty overrides stop startup instead of silently permitting HTTP.
+func (s *ServerConfig) applyCookieSecureEnvironment(lookup func(string) (string, bool)) error {
+	raw, present := lookup("ITSM_COOKIE_SECURE")
+	if !present {
+		return nil
+	}
+	if raw != "true" && raw != "false" {
+		return fmt.Errorf("ITSM_COOKIE_SECURE must be true or false")
+	}
+	value := raw == "true"
+	s.CookieSecure = &value
+	return nil
 }

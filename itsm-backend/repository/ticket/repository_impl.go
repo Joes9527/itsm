@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"itsm-backend/common"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/repository/base"
@@ -66,10 +68,36 @@ func (r *EntRepository) GetByNumber(ctx context.Context, ticketNumber string, te
 
 // Update 更新工单
 func (r *EntRepository) Update(ctx context.Context, id int, params *UpdateParams, tenantID int) (*Ticket, error) {
-	// 先获取当前工单（包含版本号）
-	current, err := r.GetByID(ctx, id, tenantID)
+	return updateTicket(ctx, r.Client(), id, params, tenantID)
+}
+
+// UpdateTx uses only the caller's transaction for reads, CAS and tag relations.
+// Authorization and execution-scope admission remain the command owner's duty.
+func (r *EntRepository) UpdateTx(ctx context.Context, tx *ent.Tx, id int, params *UpdateParams, tenantID int) (*Ticket, error) {
+	if tx == nil {
+		return nil, fmt.Errorf("ticket update requires caller transaction")
+	}
+	return updateTicket(ctx, tx.Client(), id, params, tenantID)
+}
+
+func updateTicket(ctx context.Context, client *ent.Client, id int, params *UpdateParams, tenantID int) (*Ticket, error) {
+	if params == nil {
+		return nil, fmt.Errorf("ticket update params are required")
+	}
+	current, err := client.Ticket.Query().Where(ticket.IDEQ(id), ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()).Only(ctx)
 	if err != nil {
-		return nil, err
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("ticket not found: %w", err)
+		}
+		return nil, fmt.Errorf("get ticket: %w", err)
+	}
+
+	coreMutation := params.Title != nil || params.Description != nil || params.Status != nil || params.GenericSubtype != nil || params.Priority != nil || params.CategoryID != nil || params.Resolution != nil
+	if coreMutation {
+		switch current.RecordClass {
+		case dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest:
+			return nil, common.NewValidationError(fmt.Sprintf("%s writes require the owning domain command", current.RecordClass), nil)
+		}
 	}
 
 	// 乐观锁检查
@@ -77,9 +105,16 @@ func (r *EntRepository) Update(ctx context.Context, id int, params *UpdateParams
 		return nil, fmt.Errorf("version conflict: expected %d, got %d", current.Version, params.Version)
 	}
 
-	builder := r.Client().Ticket.UpdateOneID(id).
+	builder := client.Ticket.UpdateOneID(id).
 		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(params.Version)).
 		SetVersion(current.Version + 1) // 版本号递增
+	if params.VersionAlreadyAdvanced {
+		builder.SetVersion(current.Version)
+	}
+
+	if coreMutation {
+		builder.Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest))
+	}
 
 	if params.Title != nil {
 		builder.SetTitle(*params.Title)
@@ -107,9 +142,6 @@ func (r *EntRepository) Update(ctx context.Context, id int, params *UpdateParams
 	if params.Priority != nil {
 		builder.SetPriority(string(*params.Priority))
 	}
-	if params.AssigneeID != nil {
-		builder.SetAssigneeID(*params.AssigneeID)
-	}
 	if params.CategoryID != nil {
 		if *params.CategoryID == 0 {
 			builder.ClearCategoryID()
@@ -136,25 +168,6 @@ func (r *EntRepository) Update(ctx context.Context, id int, params *UpdateParams
 	}
 
 	return toDomainModel(entity), nil
-}
-
-// Delete 软删除工单，保留审计和关联记录。
-func (r *EntRepository) Delete(ctx context.Context, id int, tenantID int) error {
-	affected, err := r.Client().Ticket.Update().
-		Where(
-			ticket.ID(id),
-			ticket.TenantID(tenantID),
-			ticket.DeletedAtIsNil(),
-		).
-		SetDeletedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		return fmt.Errorf("delete ticket: %w", err)
-	}
-	if affected == 0 {
-		return fmt.Errorf("ticket not found")
-	}
-	return nil
 }
 
 // List 列表查询工单
@@ -210,20 +223,8 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, filters *FilterP
 		if filters.DateTo != nil {
 			query = query.Where(ticket.CreatedAtLTE(*filters.DateTo))
 		}
-		// 阻断8 修复：行级数据权限。
-		// DataScopeOwnedOrAssigned 强制追加 Or(RequesterIDEQ(uid), AssigneeIDEQ(uid))，
-		// 使普通员工只能看到自己创建或分配给自己的工单。
-		// 这是安全关键路径：即使上层忘记传 RequesterID 过滤，这里仍会兜底收窄。
-		if filters.DataScope == DataScopeOwnedOrAssigned {
-			if filters.CurrentUserID <= 0 {
-				// 防御性：未提供用户 ID 时 fail closed，返回空集而非全量。
-				query = query.Where(ticket.IDEQ(-1))
-			} else {
-				query = query.Where(ticket.Or(
-					ticket.RequesterIDEQ(filters.CurrentUserID),
-					ticket.AssigneeIDEQ(filters.CurrentUserID),
-				))
-			}
+		if filters.ReadScope != nil {
+			query = query.Where(filters.ReadScope)
 		}
 	}
 
@@ -265,25 +266,6 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, filters *FilterP
 	}
 
 	return result, nil
-}
-
-// BatchDelete 批量软删除工单。
-func (r *EntRepository) BatchDelete(ctx context.Context, ids []int, tenantID int) error {
-	if len(ids) == 0 {
-		return nil
-	}
-	_, err := r.Client().Ticket.Update().
-		Where(
-			ticket.IDIn(ids...),
-			ticket.TenantID(tenantID),
-			ticket.DeletedAtIsNil(),
-		).
-		SetDeletedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		return fmt.Errorf("batch delete tickets: %w", err)
-	}
-	return nil
 }
 
 // Exists 检查工单是否存在
@@ -412,23 +394,7 @@ func (r *EntRepository) UpdateStatus(ctx context.Context, id int, status Status,
 }
 
 // AssignTicket 分配工单
-func (r *EntRepository) AssignTicket(ctx context.Context, id int, assigneeID int, tenantID int) (*Ticket, error) {
-	current, err := r.GetByID(ctx, id, tenantID)
-	if err != nil {
-		return nil, err
-	}
-	if err := current.Assign(assigneeID); err != nil {
-		return nil, err
-	}
-	status := current.Status
-	return r.Update(ctx, id, &UpdateParams{
-		AssigneeID: &assigneeID,
-		Status:     &status,
-		Version:    current.Version,
-	}, tenantID)
-}
 
-// UpdateSLADeadlines 更新 SLA 截止时间
 func (r *EntRepository) UpdateSLADeadlines(ctx context.Context, id int, responseDeadline, resolutionDeadline *time.Time, slaDefinitionID *int, tenantID int) error {
 	builder := r.Client().Ticket.UpdateOneID(id).
 		Where(ticket.TenantID(tenantID), ticket.DeletedAtIsNil())

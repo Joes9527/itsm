@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/authentication"
 	"itsm-backend/authorization"
 	"itsm-backend/controller"
@@ -149,10 +151,10 @@ func TestSetupRoutes_ReadinessFailsClosedWithoutInitializationLedger(t *testing.
 	assert.Contains(t, w.Body.String(), `"ready":false`)
 }
 
-func TestInitializationReadinessRequiresLatestRegisteredMigration(t *testing.T) {
-	readiness := checkInitializationReadiness(context.Background(), nil)
+func TestInitializationReadinessDoesNotRequireManualRetirement(t *testing.T) {
+	readiness := checkInitializationReadiness(context.Background(), nil, nil)
 	require.NotEmpty(t, migration.RegisteredMigrations)
-	assert.Equal(t, migration.RegisteredMigrations[len(migration.RegisteredMigrations)-1].Version, readiness.RequiredSchemaVersion)
+	assert.NotEqual(t, migration.WorkItemRetireVersion, readiness.RequiredSchemaVersion)
 }
 
 func TestSetupRoutes_VersionEndpoint(t *testing.T) {
@@ -302,14 +304,14 @@ func TestAssignRouteUsesIncidentWritePermission(t *testing.T) {
 
 	const jwtSecret = "assign-route-secret"
 	logger := zaptest.NewLogger(t).Sugar()
-	incidentController := controller.NewIncidentController(service.NewIncidentService(client, logger), nil, nil, nil, nil, logger)
+	incidentController := controller.NewIncidentController(service.NewIncidentService(client, logger, executionfixture.Standard()), nil, nil, nil, nil, logger)
 	router := gin.New()
 	SetupRoutes(router, &RouterConfig{
 		JWTSecret: jwtSecret, Logger: logger, Client: client, TenantDirectoryClient: client, IncidentController: incidentController,
 	})
 	token, err := authentication.GenerateAccessToken(reporter.ID, reporter.Username, role.Code, tenant.ID, jwtSecret, time.Hour)
 	require.NoError(t, err)
-	body := []byte(fmt.Sprintf(`{"assigneeId":%d}`, assignee.ID))
+	body := []byte(fmt.Sprintf(`{"assigneeId":%d,"version":%d,"operationId":"route-assignment"}`, assignee.ID, workItem.Version))
 	request := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/incidents/%d/assign", incidentEntity.ID), bytes.NewReader(body))
 	request.Header.Set("Authorization", "Bearer "+token)
 	request.Header.Set("Content-Type", "application/json")

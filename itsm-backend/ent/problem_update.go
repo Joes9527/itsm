@@ -6,11 +6,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"itsm-backend/ent/change"
-	"itsm-backend/ent/incident"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/problem"
 	"itsm-backend/ent/ticket"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -27,6 +26,120 @@ type ProblemUpdate struct {
 // Where appends a list predicates to the ProblemUpdate builder.
 func (_u *ProblemUpdate) Where(ps ...predicate.Problem) *ProblemUpdate {
 	_u.mutation.Where(ps...)
+	return _u
+}
+
+// SetVerifiedVersion sets the "verified_version" field.
+func (_u *ProblemUpdate) SetVerifiedVersion(v int) *ProblemUpdate {
+	_u.mutation.ResetVerifiedVersion()
+	_u.mutation.SetVerifiedVersion(v)
+	return _u
+}
+
+// SetNillableVerifiedVersion sets the "verified_version" field if the given value is not nil.
+func (_u *ProblemUpdate) SetNillableVerifiedVersion(v *int) *ProblemUpdate {
+	if v != nil {
+		_u.SetVerifiedVersion(*v)
+	}
+	return _u
+}
+
+// AddVerifiedVersion adds value to the "verified_version" field.
+func (_u *ProblemUpdate) AddVerifiedVersion(v int) *ProblemUpdate {
+	_u.mutation.AddVerifiedVersion(v)
+	return _u
+}
+
+// ClearVerifiedVersion clears the value of the "verified_version" field.
+func (_u *ProblemUpdate) ClearVerifiedVersion() *ProblemUpdate {
+	_u.mutation.ClearVerifiedVersion()
+	return _u
+}
+
+// SetVerificationDigest sets the "verification_digest" field.
+func (_u *ProblemUpdate) SetVerificationDigest(v string) *ProblemUpdate {
+	_u.mutation.SetVerificationDigest(v)
+	return _u
+}
+
+// SetNillableVerificationDigest sets the "verification_digest" field if the given value is not nil.
+func (_u *ProblemUpdate) SetNillableVerificationDigest(v *string) *ProblemUpdate {
+	if v != nil {
+		_u.SetVerificationDigest(*v)
+	}
+	return _u
+}
+
+// ClearVerificationDigest clears the value of the "verification_digest" field.
+func (_u *ProblemUpdate) ClearVerificationDigest() *ProblemUpdate {
+	_u.mutation.ClearVerificationDigest()
+	return _u
+}
+
+// SetVerifiedBy sets the "verified_by" field.
+func (_u *ProblemUpdate) SetVerifiedBy(v int) *ProblemUpdate {
+	_u.mutation.ResetVerifiedBy()
+	_u.mutation.SetVerifiedBy(v)
+	return _u
+}
+
+// SetNillableVerifiedBy sets the "verified_by" field if the given value is not nil.
+func (_u *ProblemUpdate) SetNillableVerifiedBy(v *int) *ProblemUpdate {
+	if v != nil {
+		_u.SetVerifiedBy(*v)
+	}
+	return _u
+}
+
+// AddVerifiedBy adds value to the "verified_by" field.
+func (_u *ProblemUpdate) AddVerifiedBy(v int) *ProblemUpdate {
+	_u.mutation.AddVerifiedBy(v)
+	return _u
+}
+
+// ClearVerifiedBy clears the value of the "verified_by" field.
+func (_u *ProblemUpdate) ClearVerifiedBy() *ProblemUpdate {
+	_u.mutation.ClearVerifiedBy()
+	return _u
+}
+
+// SetVerifiedAt sets the "verified_at" field.
+func (_u *ProblemUpdate) SetVerifiedAt(v time.Time) *ProblemUpdate {
+	_u.mutation.SetVerifiedAt(v)
+	return _u
+}
+
+// SetNillableVerifiedAt sets the "verified_at" field if the given value is not nil.
+func (_u *ProblemUpdate) SetNillableVerifiedAt(v *time.Time) *ProblemUpdate {
+	if v != nil {
+		_u.SetVerifiedAt(*v)
+	}
+	return _u
+}
+
+// ClearVerifiedAt clears the value of the "verified_at" field.
+func (_u *ProblemUpdate) ClearVerifiedAt() *ProblemUpdate {
+	_u.mutation.ClearVerifiedAt()
+	return _u
+}
+
+// SetVerificationNote sets the "verification_note" field.
+func (_u *ProblemUpdate) SetVerificationNote(v string) *ProblemUpdate {
+	_u.mutation.SetVerificationNote(v)
+	return _u
+}
+
+// SetNillableVerificationNote sets the "verification_note" field if the given value is not nil.
+func (_u *ProblemUpdate) SetNillableVerificationNote(v *string) *ProblemUpdate {
+	if v != nil {
+		_u.SetVerificationNote(*v)
+	}
+	return _u
+}
+
+// ClearVerificationNote clears the value of the "verification_note" field.
+func (_u *ProblemUpdate) ClearVerificationNote() *ProblemUpdate {
+	_u.mutation.ClearVerificationNote()
 	return _u
 }
 
@@ -129,51 +242,6 @@ func (_u *ProblemUpdate) SetWorkItem(v *Ticket) *ProblemUpdate {
 	return _u.SetWorkItemID(v.ID)
 }
 
-// AddTicketIDs adds the "tickets" edge to the Ticket entity by IDs.
-func (_u *ProblemUpdate) AddTicketIDs(ids ...int) *ProblemUpdate {
-	_u.mutation.AddTicketIDs(ids...)
-	return _u
-}
-
-// AddTickets adds the "tickets" edges to the Ticket entity.
-func (_u *ProblemUpdate) AddTickets(v ...*Ticket) *ProblemUpdate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddTicketIDs(ids...)
-}
-
-// AddIncidentIDs adds the "incidents" edge to the Incident entity by IDs.
-func (_u *ProblemUpdate) AddIncidentIDs(ids ...int) *ProblemUpdate {
-	_u.mutation.AddIncidentIDs(ids...)
-	return _u
-}
-
-// AddIncidents adds the "incidents" edges to the Incident entity.
-func (_u *ProblemUpdate) AddIncidents(v ...*Incident) *ProblemUpdate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddIncidentIDs(ids...)
-}
-
-// AddChangeIDs adds the "changes" edge to the Change entity by IDs.
-func (_u *ProblemUpdate) AddChangeIDs(ids ...int) *ProblemUpdate {
-	_u.mutation.AddChangeIDs(ids...)
-	return _u
-}
-
-// AddChanges adds the "changes" edges to the Change entity.
-func (_u *ProblemUpdate) AddChanges(v ...*Change) *ProblemUpdate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddChangeIDs(ids...)
-}
-
 // Mutation returns the ProblemMutation object of the builder.
 func (_u *ProblemUpdate) Mutation() *ProblemMutation {
 	return _u.mutation
@@ -183,69 +251,6 @@ func (_u *ProblemUpdate) Mutation() *ProblemMutation {
 func (_u *ProblemUpdate) ClearWorkItem() *ProblemUpdate {
 	_u.mutation.ClearWorkItem()
 	return _u
-}
-
-// ClearTickets clears all "tickets" edges to the Ticket entity.
-func (_u *ProblemUpdate) ClearTickets() *ProblemUpdate {
-	_u.mutation.ClearTickets()
-	return _u
-}
-
-// RemoveTicketIDs removes the "tickets" edge to Ticket entities by IDs.
-func (_u *ProblemUpdate) RemoveTicketIDs(ids ...int) *ProblemUpdate {
-	_u.mutation.RemoveTicketIDs(ids...)
-	return _u
-}
-
-// RemoveTickets removes "tickets" edges to Ticket entities.
-func (_u *ProblemUpdate) RemoveTickets(v ...*Ticket) *ProblemUpdate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveTicketIDs(ids...)
-}
-
-// ClearIncidents clears all "incidents" edges to the Incident entity.
-func (_u *ProblemUpdate) ClearIncidents() *ProblemUpdate {
-	_u.mutation.ClearIncidents()
-	return _u
-}
-
-// RemoveIncidentIDs removes the "incidents" edge to Incident entities by IDs.
-func (_u *ProblemUpdate) RemoveIncidentIDs(ids ...int) *ProblemUpdate {
-	_u.mutation.RemoveIncidentIDs(ids...)
-	return _u
-}
-
-// RemoveIncidents removes "incidents" edges to Incident entities.
-func (_u *ProblemUpdate) RemoveIncidents(v ...*Incident) *ProblemUpdate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveIncidentIDs(ids...)
-}
-
-// ClearChanges clears all "changes" edges to the Change entity.
-func (_u *ProblemUpdate) ClearChanges() *ProblemUpdate {
-	_u.mutation.ClearChanges()
-	return _u
-}
-
-// RemoveChangeIDs removes the "changes" edge to Change entities by IDs.
-func (_u *ProblemUpdate) RemoveChangeIDs(ids ...int) *ProblemUpdate {
-	_u.mutation.RemoveChangeIDs(ids...)
-	return _u
-}
-
-// RemoveChanges removes "changes" edges to Change entities.
-func (_u *ProblemUpdate) RemoveChanges(v ...*Change) *ProblemUpdate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveChangeIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -294,6 +299,42 @@ func (_u *ProblemUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.VerifiedVersion(); ok {
+		_spec.SetField(problem.FieldVerifiedVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedVerifiedVersion(); ok {
+		_spec.AddField(problem.FieldVerifiedVersion, field.TypeInt, value)
+	}
+	if _u.mutation.VerifiedVersionCleared() {
+		_spec.ClearField(problem.FieldVerifiedVersion, field.TypeInt)
+	}
+	if value, ok := _u.mutation.VerificationDigest(); ok {
+		_spec.SetField(problem.FieldVerificationDigest, field.TypeString, value)
+	}
+	if _u.mutation.VerificationDigestCleared() {
+		_spec.ClearField(problem.FieldVerificationDigest, field.TypeString)
+	}
+	if value, ok := _u.mutation.VerifiedBy(); ok {
+		_spec.SetField(problem.FieldVerifiedBy, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedVerifiedBy(); ok {
+		_spec.AddField(problem.FieldVerifiedBy, field.TypeInt, value)
+	}
+	if _u.mutation.VerifiedByCleared() {
+		_spec.ClearField(problem.FieldVerifiedBy, field.TypeInt)
+	}
+	if value, ok := _u.mutation.VerifiedAt(); ok {
+		_spec.SetField(problem.FieldVerifiedAt, field.TypeTime, value)
+	}
+	if _u.mutation.VerifiedAtCleared() {
+		_spec.ClearField(problem.FieldVerifiedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.VerificationNote(); ok {
+		_spec.SetField(problem.FieldVerificationNote, field.TypeString, value)
+	}
+	if _u.mutation.VerificationNoteCleared() {
+		_spec.ClearField(problem.FieldVerificationNote, field.TypeString)
 	}
 	if value, ok := _u.mutation.RootCause(); ok {
 		_spec.SetField(problem.FieldRootCause, field.TypeString, value)
@@ -348,141 +389,6 @@ func (_u *ProblemUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if _u.mutation.TicketsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   problem.TicketsTable,
-			Columns: []string{problem.TicketsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedTicketsIDs(); len(nodes) > 0 && !_u.mutation.TicketsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   problem.TicketsTable,
-			Columns: []string{problem.TicketsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.TicketsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   problem.TicketsTable,
-			Columns: []string{problem.TicketsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if _u.mutation.IncidentsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   problem.IncidentsTable,
-			Columns: problem.IncidentsPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(incident.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedIncidentsIDs(); len(nodes) > 0 && !_u.mutation.IncidentsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   problem.IncidentsTable,
-			Columns: problem.IncidentsPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(incident.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.IncidentsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   problem.IncidentsTable,
-			Columns: problem.IncidentsPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(incident.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if _u.mutation.ChangesCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   problem.ChangesTable,
-			Columns: problem.ChangesPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(change.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedChangesIDs(); len(nodes) > 0 && !_u.mutation.ChangesCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   problem.ChangesTable,
-			Columns: problem.ChangesPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(change.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.ChangesIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   problem.ChangesTable,
-			Columns: problem.ChangesPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(change.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{problem.Label}
@@ -501,6 +407,120 @@ type ProblemUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *ProblemMutation
+}
+
+// SetVerifiedVersion sets the "verified_version" field.
+func (_u *ProblemUpdateOne) SetVerifiedVersion(v int) *ProblemUpdateOne {
+	_u.mutation.ResetVerifiedVersion()
+	_u.mutation.SetVerifiedVersion(v)
+	return _u
+}
+
+// SetNillableVerifiedVersion sets the "verified_version" field if the given value is not nil.
+func (_u *ProblemUpdateOne) SetNillableVerifiedVersion(v *int) *ProblemUpdateOne {
+	if v != nil {
+		_u.SetVerifiedVersion(*v)
+	}
+	return _u
+}
+
+// AddVerifiedVersion adds value to the "verified_version" field.
+func (_u *ProblemUpdateOne) AddVerifiedVersion(v int) *ProblemUpdateOne {
+	_u.mutation.AddVerifiedVersion(v)
+	return _u
+}
+
+// ClearVerifiedVersion clears the value of the "verified_version" field.
+func (_u *ProblemUpdateOne) ClearVerifiedVersion() *ProblemUpdateOne {
+	_u.mutation.ClearVerifiedVersion()
+	return _u
+}
+
+// SetVerificationDigest sets the "verification_digest" field.
+func (_u *ProblemUpdateOne) SetVerificationDigest(v string) *ProblemUpdateOne {
+	_u.mutation.SetVerificationDigest(v)
+	return _u
+}
+
+// SetNillableVerificationDigest sets the "verification_digest" field if the given value is not nil.
+func (_u *ProblemUpdateOne) SetNillableVerificationDigest(v *string) *ProblemUpdateOne {
+	if v != nil {
+		_u.SetVerificationDigest(*v)
+	}
+	return _u
+}
+
+// ClearVerificationDigest clears the value of the "verification_digest" field.
+func (_u *ProblemUpdateOne) ClearVerificationDigest() *ProblemUpdateOne {
+	_u.mutation.ClearVerificationDigest()
+	return _u
+}
+
+// SetVerifiedBy sets the "verified_by" field.
+func (_u *ProblemUpdateOne) SetVerifiedBy(v int) *ProblemUpdateOne {
+	_u.mutation.ResetVerifiedBy()
+	_u.mutation.SetVerifiedBy(v)
+	return _u
+}
+
+// SetNillableVerifiedBy sets the "verified_by" field if the given value is not nil.
+func (_u *ProblemUpdateOne) SetNillableVerifiedBy(v *int) *ProblemUpdateOne {
+	if v != nil {
+		_u.SetVerifiedBy(*v)
+	}
+	return _u
+}
+
+// AddVerifiedBy adds value to the "verified_by" field.
+func (_u *ProblemUpdateOne) AddVerifiedBy(v int) *ProblemUpdateOne {
+	_u.mutation.AddVerifiedBy(v)
+	return _u
+}
+
+// ClearVerifiedBy clears the value of the "verified_by" field.
+func (_u *ProblemUpdateOne) ClearVerifiedBy() *ProblemUpdateOne {
+	_u.mutation.ClearVerifiedBy()
+	return _u
+}
+
+// SetVerifiedAt sets the "verified_at" field.
+func (_u *ProblemUpdateOne) SetVerifiedAt(v time.Time) *ProblemUpdateOne {
+	_u.mutation.SetVerifiedAt(v)
+	return _u
+}
+
+// SetNillableVerifiedAt sets the "verified_at" field if the given value is not nil.
+func (_u *ProblemUpdateOne) SetNillableVerifiedAt(v *time.Time) *ProblemUpdateOne {
+	if v != nil {
+		_u.SetVerifiedAt(*v)
+	}
+	return _u
+}
+
+// ClearVerifiedAt clears the value of the "verified_at" field.
+func (_u *ProblemUpdateOne) ClearVerifiedAt() *ProblemUpdateOne {
+	_u.mutation.ClearVerifiedAt()
+	return _u
+}
+
+// SetVerificationNote sets the "verification_note" field.
+func (_u *ProblemUpdateOne) SetVerificationNote(v string) *ProblemUpdateOne {
+	_u.mutation.SetVerificationNote(v)
+	return _u
+}
+
+// SetNillableVerificationNote sets the "verification_note" field if the given value is not nil.
+func (_u *ProblemUpdateOne) SetNillableVerificationNote(v *string) *ProblemUpdateOne {
+	if v != nil {
+		_u.SetVerificationNote(*v)
+	}
+	return _u
+}
+
+// ClearVerificationNote clears the value of the "verification_note" field.
+func (_u *ProblemUpdateOne) ClearVerificationNote() *ProblemUpdateOne {
+	_u.mutation.ClearVerificationNote()
+	return _u
 }
 
 // SetRootCause sets the "root_cause" field.
@@ -602,51 +622,6 @@ func (_u *ProblemUpdateOne) SetWorkItem(v *Ticket) *ProblemUpdateOne {
 	return _u.SetWorkItemID(v.ID)
 }
 
-// AddTicketIDs adds the "tickets" edge to the Ticket entity by IDs.
-func (_u *ProblemUpdateOne) AddTicketIDs(ids ...int) *ProblemUpdateOne {
-	_u.mutation.AddTicketIDs(ids...)
-	return _u
-}
-
-// AddTickets adds the "tickets" edges to the Ticket entity.
-func (_u *ProblemUpdateOne) AddTickets(v ...*Ticket) *ProblemUpdateOne {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddTicketIDs(ids...)
-}
-
-// AddIncidentIDs adds the "incidents" edge to the Incident entity by IDs.
-func (_u *ProblemUpdateOne) AddIncidentIDs(ids ...int) *ProblemUpdateOne {
-	_u.mutation.AddIncidentIDs(ids...)
-	return _u
-}
-
-// AddIncidents adds the "incidents" edges to the Incident entity.
-func (_u *ProblemUpdateOne) AddIncidents(v ...*Incident) *ProblemUpdateOne {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddIncidentIDs(ids...)
-}
-
-// AddChangeIDs adds the "changes" edge to the Change entity by IDs.
-func (_u *ProblemUpdateOne) AddChangeIDs(ids ...int) *ProblemUpdateOne {
-	_u.mutation.AddChangeIDs(ids...)
-	return _u
-}
-
-// AddChanges adds the "changes" edges to the Change entity.
-func (_u *ProblemUpdateOne) AddChanges(v ...*Change) *ProblemUpdateOne {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddChangeIDs(ids...)
-}
-
 // Mutation returns the ProblemMutation object of the builder.
 func (_u *ProblemUpdateOne) Mutation() *ProblemMutation {
 	return _u.mutation
@@ -656,69 +631,6 @@ func (_u *ProblemUpdateOne) Mutation() *ProblemMutation {
 func (_u *ProblemUpdateOne) ClearWorkItem() *ProblemUpdateOne {
 	_u.mutation.ClearWorkItem()
 	return _u
-}
-
-// ClearTickets clears all "tickets" edges to the Ticket entity.
-func (_u *ProblemUpdateOne) ClearTickets() *ProblemUpdateOne {
-	_u.mutation.ClearTickets()
-	return _u
-}
-
-// RemoveTicketIDs removes the "tickets" edge to Ticket entities by IDs.
-func (_u *ProblemUpdateOne) RemoveTicketIDs(ids ...int) *ProblemUpdateOne {
-	_u.mutation.RemoveTicketIDs(ids...)
-	return _u
-}
-
-// RemoveTickets removes "tickets" edges to Ticket entities.
-func (_u *ProblemUpdateOne) RemoveTickets(v ...*Ticket) *ProblemUpdateOne {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveTicketIDs(ids...)
-}
-
-// ClearIncidents clears all "incidents" edges to the Incident entity.
-func (_u *ProblemUpdateOne) ClearIncidents() *ProblemUpdateOne {
-	_u.mutation.ClearIncidents()
-	return _u
-}
-
-// RemoveIncidentIDs removes the "incidents" edge to Incident entities by IDs.
-func (_u *ProblemUpdateOne) RemoveIncidentIDs(ids ...int) *ProblemUpdateOne {
-	_u.mutation.RemoveIncidentIDs(ids...)
-	return _u
-}
-
-// RemoveIncidents removes "incidents" edges to Incident entities.
-func (_u *ProblemUpdateOne) RemoveIncidents(v ...*Incident) *ProblemUpdateOne {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveIncidentIDs(ids...)
-}
-
-// ClearChanges clears all "changes" edges to the Change entity.
-func (_u *ProblemUpdateOne) ClearChanges() *ProblemUpdateOne {
-	_u.mutation.ClearChanges()
-	return _u
-}
-
-// RemoveChangeIDs removes the "changes" edge to Change entities by IDs.
-func (_u *ProblemUpdateOne) RemoveChangeIDs(ids ...int) *ProblemUpdateOne {
-	_u.mutation.RemoveChangeIDs(ids...)
-	return _u
-}
-
-// RemoveChanges removes "changes" edges to Change entities.
-func (_u *ProblemUpdateOne) RemoveChanges(v ...*Change) *ProblemUpdateOne {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveChangeIDs(ids...)
 }
 
 // Where appends a list predicates to the ProblemUpdate builder.
@@ -798,6 +710,42 @@ func (_u *ProblemUpdateOne) sqlSave(ctx context.Context) (_node *Problem, err er
 			}
 		}
 	}
+	if value, ok := _u.mutation.VerifiedVersion(); ok {
+		_spec.SetField(problem.FieldVerifiedVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedVerifiedVersion(); ok {
+		_spec.AddField(problem.FieldVerifiedVersion, field.TypeInt, value)
+	}
+	if _u.mutation.VerifiedVersionCleared() {
+		_spec.ClearField(problem.FieldVerifiedVersion, field.TypeInt)
+	}
+	if value, ok := _u.mutation.VerificationDigest(); ok {
+		_spec.SetField(problem.FieldVerificationDigest, field.TypeString, value)
+	}
+	if _u.mutation.VerificationDigestCleared() {
+		_spec.ClearField(problem.FieldVerificationDigest, field.TypeString)
+	}
+	if value, ok := _u.mutation.VerifiedBy(); ok {
+		_spec.SetField(problem.FieldVerifiedBy, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedVerifiedBy(); ok {
+		_spec.AddField(problem.FieldVerifiedBy, field.TypeInt, value)
+	}
+	if _u.mutation.VerifiedByCleared() {
+		_spec.ClearField(problem.FieldVerifiedBy, field.TypeInt)
+	}
+	if value, ok := _u.mutation.VerifiedAt(); ok {
+		_spec.SetField(problem.FieldVerifiedAt, field.TypeTime, value)
+	}
+	if _u.mutation.VerifiedAtCleared() {
+		_spec.ClearField(problem.FieldVerifiedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.VerificationNote(); ok {
+		_spec.SetField(problem.FieldVerificationNote, field.TypeString, value)
+	}
+	if _u.mutation.VerificationNoteCleared() {
+		_spec.ClearField(problem.FieldVerificationNote, field.TypeString)
+	}
 	if value, ok := _u.mutation.RootCause(); ok {
 		_spec.SetField(problem.FieldRootCause, field.TypeString, value)
 	}
@@ -844,141 +792,6 @@ func (_u *ProblemUpdateOne) sqlSave(ctx context.Context) (_node *Problem, err er
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if _u.mutation.TicketsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   problem.TicketsTable,
-			Columns: []string{problem.TicketsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedTicketsIDs(); len(nodes) > 0 && !_u.mutation.TicketsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   problem.TicketsTable,
-			Columns: []string{problem.TicketsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.TicketsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   problem.TicketsTable,
-			Columns: []string{problem.TicketsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if _u.mutation.IncidentsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   problem.IncidentsTable,
-			Columns: problem.IncidentsPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(incident.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedIncidentsIDs(); len(nodes) > 0 && !_u.mutation.IncidentsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   problem.IncidentsTable,
-			Columns: problem.IncidentsPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(incident.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.IncidentsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   problem.IncidentsTable,
-			Columns: problem.IncidentsPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(incident.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if _u.mutation.ChangesCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   problem.ChangesTable,
-			Columns: problem.ChangesPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(change.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedChangesIDs(); len(nodes) > 0 && !_u.mutation.ChangesCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   problem.ChangesTable,
-			Columns: problem.ChangesPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(change.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.ChangesIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   problem.ChangesTable,
-			Columns: problem.ChangesPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(change.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

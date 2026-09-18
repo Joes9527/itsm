@@ -1,40 +1,57 @@
 package dto
 
-import "time"
+import (
+	"time"
+
+	relationmeta "itsm-backend/common/workitemrelation"
+	creation "itsm-backend/handlers/common/workitemcreation"
+)
 
 // CreateProblemRequest 创建问题请求
 type CreateProblemRequest struct {
-	RequesterID *int   `json:"requesterId,omitempty" binding:"omitempty,gt=0"` // 可选目标租户申请人
-	Title       string `json:"title" binding:"required,min=2,max=200"`
-	Description string `json:"description" binding:"required,min=10,max=5000"`
-	Priority    string `json:"priority" binding:"required"`
-	Category    string `json:"category"`
-	RootCause   string `json:"rootCause"`
-	Impact      string `json:"impact"`
-	ImpactScope string `json:"impactScope"` // 影响范围
+	RequesterID *int               `json:"requesterId,omitempty" binding:"omitempty,gt=0"` // 可选目标租户申请人
+	Title       string             `json:"title" binding:"required,min=2,max=200"`
+	Description string             `json:"description" binding:"required,min=10,max=5000"`
+	Priority    string             `json:"priority" binding:"required"`
+	CTI         *creation.CTIInput `json:"cti,omitempty"`
+	RootCause   string             `json:"rootCause"`
+	Impact      string             `json:"impact"`
+	ImpactScope string             `json:"impactScope"` // 影响范围
 }
 
 // UpdateProblemRequest 更新问题请求
 type UpdateProblemRequest struct {
-	Title       *string `json:"title" binding:"omitempty,min=2,max=200"`
-	Description *string `json:"description" binding:"omitempty,min=10,max=5000"`
-	Priority    *string `json:"priority" binding:"omitempty"`
-	Status      *string `json:"status" binding:"omitempty"`
-	Category    *string `json:"category" binding:"omitempty"`
-	RootCause   *string `json:"rootCause" binding:"omitempty"`
-	Impact      *string `json:"impact" binding:"omitempty"`
+	OperationID      string `json:"operationId" binding:"required,max=200"`
+	AssigneeID       *int   `json:"assigneeId,omitempty" binding:"omitempty,gt=0"`
+	AssignmentReason string `json:"assignmentReason"`
+	// ClassificationReason 是分类纠正原因：分类确实变化时必填（B1 治理契约）。
+	ClassificationReason string  `json:"classificationReason"`
+	Workaround           *string `json:"workaround"`
+	Resolution           *string `json:"resolution"`
+	Version              int     `json:"version" binding:"required,gt=0"`
+	Title                *string `json:"title" binding:"omitempty,min=2,max=200"`
+	Description          *string `json:"description" binding:"omitempty,min=10,max=5000"`
+	Priority             *string `json:"priority" binding:"omitempty"`
+	Status               *string `json:"status" binding:"omitempty"`
+	CategoryID           *int    `json:"categoryId,omitempty" binding:"omitempty,gte=0"`
+	RootCause            *string `json:"rootCause" binding:"omitempty"`
+	Impact               *string `json:"impact" binding:"omitempty"`
 }
 
 // UpdateProblemRootCauseRequest 记录问题根因。
 type UpdateProblemRootCauseRequest struct {
-	RootCause string `json:"rootCause" binding:"required"`
+	OperationID string `json:"operationId" binding:"required,max=200"`
+	Version     int    `json:"version" binding:"required,gt=0"`
+	RootCause   string `json:"rootCause" binding:"required"`
 }
 
 // UpdateProblemResolutionRequest 记录问题的临时或最终解决方案。
 type UpdateProblemResolutionRequest struct {
-	Solution   string `json:"solution"`
-	Workaround string `json:"workaround"`
-	Resolution string `json:"resolution"`
+	OperationID string  `json:"operationId" binding:"required,max=200"`
+	Version     int     `json:"version" binding:"required,gt=0"`
+	Solution    *string `json:"solution"`
+	Workaround  *string `json:"workaround"`
+	Resolution  *string `json:"resolution"`
 }
 
 // CloseProblemRequest 关闭问题时可同时记录最终解决方案。
@@ -58,57 +75,32 @@ type ListProblemsRequest struct {
 
 // ProblemResponse 问题响应
 type ProblemResponse struct {
-	ID          int                         `json:"id"`
-	Title       string                      `json:"title"`
-	Description string                      `json:"description"`
-	Status      string                      `json:"status"`
-	Priority    string                      `json:"priority"`
-	Category    string                      `json:"category"`
-	RootCause   string                      `json:"rootCause"`
-	Workaround  string                      `json:"workaround"`
-	Resolution  string                      `json:"resolution"`
-	Impact      string                      `json:"impact"`
-	AssigneeID  *int                        `json:"assigneeId,omitempty"`
-	CreatedBy   int                         `json:"createdBy"`
-	TenantID    int                         `json:"tenantId"`
-	CreatedAt   time.Time                   `json:"createdAt"`
-	UpdatedAt   time.Time                   `json:"updatedAt"`
-	Actions     map[string]ActionPermission `json:"actions,omitempty"`
+	Number           string                      `json:"number"`
+	Version          int                         `json:"version"`
+	VerifiedVersion  int                         `json:"verifiedVersion"`
+	VerificationNote string                      `json:"verificationNote"`
+	CategoryID       int                         `json:"categoryId"`
+	ID               int                         `json:"id"`
+	Title            string                      `json:"title"`
+	Description      string                      `json:"description"`
+	Status           string                      `json:"status"`
+	Priority         string                      `json:"priority"`
+	Category         string                      `json:"category"`
+	RootCause        string                      `json:"rootCause"`
+	Workaround       string                      `json:"workaround"`
+	Resolution       string                      `json:"resolution"`
+	Impact           string                      `json:"impact"`
+	AssigneeID       *int                        `json:"assigneeId,omitempty"`
+	CreatedBy        int                         `json:"createdBy"`
+	TenantID         int                         `json:"tenantId"`
+	CreatedAt        time.Time                   `json:"createdAt"`
+	UpdatedAt        time.Time                   `json:"updatedAt"`
+	Actions          map[string]ActionPermission `json:"actions,omitempty"`
 	// WorkItemID 关联的 WorkItem（tickets.id）。Problem 创建事务保证该值存在；nil 表示
 	// 开发数据违反 WorkItem 创建不变量。与 dto.IncidentResponse.WorkItemID 同一模式。
 	WorkItemID *int `json:"workItemId,omitempty"`
-	// 关联数据
-	AssociatedTickets   []*AssociatedItemResponse `json:"associatedTickets,omitempty"`
-	AssociatedIncidents []*AssociatedItemResponse `json:"associatedIncidents,omitempty"`
-	AssociatedChanges   []*AssociatedItemResponse `json:"associatedChanges,omitempty"`
-}
-
-// AssociatedItemResponse 关联项响应
-type AssociatedItemResponse struct {
-	ID     int    `json:"id"`
-	Title  string `json:"title"`
-	Status string `json:"status"`
-	Number string `json:"number,omitempty"`
-	Type   string `json:"type,omitempty"`
-}
-
-// ProblemAssociationRequest 关联管理请求
-type ProblemAssociationRequest struct {
-	RelatedType string `json:"relatedType" binding:"required,oneof=ticket incident change"`
-	RelatedIDs  []int  `json:"relatedIds" binding:"required,min=1"`
-}
-
-// ProblemRemoveAssociationRequest 移除关联请求
-type ProblemRemoveAssociationRequest struct {
-	RelatedType string `json:"relatedType" binding:"required,oneof=ticket incident change"`
-	RelatedID   int    `json:"relatedId" binding:"required"`
-}
-
-// ProblemAssociationResponse 关联管理响应
-type ProblemAssociationResponse struct {
-	Tickets   []*AssociatedItemResponse `json:"tickets"`
-	Incidents []*AssociatedItemResponse `json:"incidents"`
-	Changes   []*AssociatedItemResponse `json:"changes"`
+	// Relations is omitted in metadata mutation responses without a current-authorized query; reads return an array, including empty.
+	Relations *[]relationmeta.View `json:"relations,omitempty"`
 }
 
 // ListProblemsResponse 问题列表响应

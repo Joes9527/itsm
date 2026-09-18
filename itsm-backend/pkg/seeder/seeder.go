@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common/workitemidentity"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/assetlicense"
 	"itsm-backend/ent/change"
@@ -517,12 +519,13 @@ func getEmbeddedConfig() *SeedConfig {
 			{TargetClass: "service_request_item", Name: "API网关", Description: "API接口管理", Category: "开发", ServiceType: "custom", RequiresApproval: true, DeliveryTime: 3},
 		},
 		ProcessBindings: []ProcessBindingSeed{
-			{BusinessType: "ticket", BusinessSubType: "incident", ProcessDefinitionKey: "incident_emergency_flow", IsDefault: true},
-			{BusinessType: "ticket", BusinessSubType: "problem", ProcessDefinitionKey: "problem_management_flow", IsDefault: true},
-			{BusinessType: "ticket", BusinessSubType: "change", ProcessDefinitionKey: "change_normal_flow", IsDefault: true},
-			{BusinessType: "ticket", BusinessSubType: "service_request", ProcessDefinitionKey: "service_request_flow", IsDefault: true},
-			{BusinessType: "ticket", BusinessSubType: "improvement", ProcessDefinitionKey: "ticket_general_flow", IsDefault: true},
-			{BusinessType: "ticket", ProcessDefinitionKey: "ticket_general_flow", IsDefault: true},
+			{BusinessType: "incident", ProcessDefinitionKey: "incident_emergency_flow", IsDefault: true},
+			{BusinessType: "problem", ProcessDefinitionKey: "problem_management_flow", IsDefault: true},
+			{BusinessType: "change_request", ProcessDefinitionKey: "change_normal_flow", IsDefault: true},
+			{BusinessType: "change_request", BusinessSubType: "emergency", ProcessDefinitionKey: "change_emergency_flow", IsDefault: false},
+			{BusinessType: "service_request_item", ProcessDefinitionKey: "service_request_flow", IsDefault: true},
+			{BusinessType: "generic", BusinessSubType: "improvement", ProcessDefinitionKey: "ticket_general_flow", IsDefault: true},
+			{BusinessType: "generic", ProcessDefinitionKey: "ticket_general_flow", IsDefault: true},
 		},
 		TicketViews: []TicketViewSeed{
 			{Name: "我的待办工单", Desc: "分配给我的未关闭工单", IsShared: false, Columns: []string{"id", "title", "priority", "status", "assignee", "created_at"}},
@@ -535,7 +538,10 @@ func getEmbeddedConfig() *SeedConfig {
 }
 
 // SeedAll runs all seeding operations
-func (s *Seeder) SeedAll(ctx context.Context) {
+func (s *Seeder) SeedAll(ctx context.Context) error {
+	if err := s.validateProcessBindingIdentities(); err != nil {
+		return err
+	}
 	// 解析目标租户（默认 default；SeedForTenant 可切换为其他租户）
 	s.tenant(ctx)
 	s.seedDepartments(ctx)
@@ -548,8 +554,10 @@ func (s *Seeder) SeedAll(ctx context.Context) {
 	// 使用配置的初始化数据
 	s.seedSLADefinitions(ctx)
 	s.seedSLAAlertRules(ctx)
-	s.seedProcessBindings(ctx)
-	s.seedBPMNWorkflows(ctx) // 部署BPMN工作流模板
+	s.seedBPMNWorkflows(ctx) // 绑定前部署并验证可执行流程
+	if err := s.seedProcessBindings(ctx); err != nil {
+		return err
+	}
 	s.seedTicketViews(ctx)
 	s.seedServiceCatalog(ctx)
 	s.seedTicketTypes(ctx)            // 新增：初始化工单类型
@@ -561,6 +569,7 @@ func (s *Seeder) SeedAll(ctx context.Context) {
 	s.seedTicketTags(ctx)             // 新增：初始化标签
 	s.seedMenuAndPermissionFixes(ctx) // 修复：更新菜单路径和补充缺失权限
 	s.seedRolePermissions(ctx)        // 新增：为角色分配权限
+	return nil
 }
 
 // SeedProduction applies product defaults and then verifies the minimum
@@ -569,7 +578,9 @@ func (s *Seeder) SeedAll(ctx context.Context) {
 // success when a required tenant, identity, RBAC, menu, or product template
 // was only partially initialized.
 func (s *Seeder) SeedProduction(ctx context.Context) error {
-	s.SeedAll(ctx)
+	if err := s.SeedAll(ctx); err != nil {
+		return err
+	}
 	return s.VerifyProduction(ctx)
 }
 
@@ -795,8 +806,7 @@ func (s *Seeder) SeedForTenant(ctx context.Context, target *ent.Tenant) error {
 	}
 	s.targetTenant = target
 	s.sugar.Infow("seeding for tenant", "tenant_id", target.ID, "tenant_code", target.Code)
-	s.SeedAll(ctx)
-	return nil
+	return s.SeedAll(ctx)
 }
 
 func (s *Seeder) deploymentMode() string {
@@ -804,13 +814,6 @@ func (s *Seeder) deploymentMode() string {
 		return tenantmode.DeploymentModePrivate
 	}
 	return s.appConfig.Deployment.Mode
-}
-
-func nilIfEmpty(value string) *string {
-	if strings.TrimSpace(value) == "" {
-		return nil
-	}
-	return &value
 }
 
 func (s *Seeder) seedAdmin(ctx context.Context) {
@@ -1090,37 +1093,42 @@ func (s *Seeder) seedSLAAlertRules(ctx context.Context) {
 // seedApprovalWorkflows 曾负责创建 legacy ApprovalWorkflow 默认模板，已随引擎下线移除（见 Task 6）。
 // 审批能力现在完全由 seedBPMNWorkflows + seedProcessBindings 提供。
 
-func (s *Seeder) seedProcessBindings(ctx context.Context) {
+func (s *Seeder) validateProcessBindingIdentities() error {
+	if s.config == nil {
+		return fmt.Errorf("seed configuration is required")
+	}
+	for _, binding := range s.config.ProcessBindings {
+		if !workitemidentity.IsKnownProcessIdentity(binding.BusinessType) {
+			return fmt.Errorf("unsupported seed process business type %q", binding.BusinessType)
+		}
+	}
+	return nil
+}
+
+func (s *Seeder) seedProcessBindings(ctx context.Context) error {
+	if err := s.validateProcessBindingIdentities(); err != nil {
+		return err
+	}
 	t := s.tenant(ctx)
 	if t == nil {
-		s.sugar.Warnw("tenant not found; skip seed")
-		return
+		return fmt.Errorf("tenant required for process binding seed")
 	}
-
 	existing, err := s.client.ProcessBinding.Query().Where(processbinding.TenantIDEQ(t.ID)).Count(ctx)
 	if err != nil {
-		s.sugar.Warnw("check existing process bindings failed", "error", err)
-		return
+		return fmt.Errorf("check existing process bindings: %w", err)
 	}
 	if existing > 0 {
-		s.sugar.Infow("process bindings already seeded")
-		return
+		return nil
 	}
-
+	owner := service.NewProcessBindingService(s.client)
 	for _, b := range s.config.ProcessBindings {
-		_, err := s.client.ProcessBinding.Create().
-			SetBusinessType(b.BusinessType).
-			SetNillableBusinessSubType(nilIfEmpty(b.BusinessSubType)).
-			SetProcessDefinitionKey(b.ProcessDefinitionKey).
-			SetIsDefault(b.IsDefault).
-			SetIsActive(true).
-			SetTenantID(t.ID).
-			Save(ctx)
+		_, err := owner.CreateBinding(ctx, &dto.ProcessBinding{BusinessType: dto.BusinessType(b.BusinessType), BusinessSubType: b.BusinessSubType, ProcessDefinitionKey: b.ProcessDefinitionKey, IsDefault: b.IsDefault, IsActive: true, TenantID: t.ID})
 		if err != nil {
-			s.sugar.Warnw("seed process binding failed", "error", err, "business_type", b.BusinessType)
+			return fmt.Errorf("seed process binding %s: %w", b.BusinessType, err)
 		}
 	}
 	s.sugar.Infow("process bindings seeded", "count", len(s.config.ProcessBindings))
+	return nil
 }
 
 // seedBPMNWorkflows 部署BPMN工作流模板
@@ -1506,9 +1514,6 @@ func (s *Seeder) seedMenus(ctx context.Context) {
 		{Name: "变更管理", Path: "/changes", Icon: "BarChart3", PermissionCode: "change:read", SortOrder: 50},
 		{Name: "CMDB", Path: "/cmdb", Icon: "Database", PermissionCode: "cmdb:read", SortOrder: 60},
 		{Name: "服务目录", Path: "/service-catalog", Icon: "Book", PermissionCode: "service:read", SortOrder: 70},
-		// BPMN ProcessTask 审批收件箱的唯一页面。PermissionCode 用 task:read，
-		// 因为任务候选人不必拥有流程定义管理权限。
-		{Name: "我的待办", Path: "/approvals", Icon: "CheckSquare", PermissionCode: "task:read", SortOrder: 75},
 		{Name: "知识库", Path: "/knowledge", Icon: "HelpCircle", PermissionCode: "knowledge:read", SortOrder: 80},
 		{Name: "SLA监控", Path: "/sla-dashboard", Icon: "Calendar", PermissionCode: "sla:read", SortOrder: 90},
 		{Name: "报表", Path: "/reports", Icon: "TrendingUp", PermissionCode: "report:read", SortOrder: 100},
@@ -1518,7 +1523,7 @@ func (s *Seeder) seedMenus(ctx context.Context) {
 
 		// 管理菜单
 		{Name: "系统概览", Path: "/admin/overview", Icon: "LayoutDashboard", PermissionCode: "system:read", SortOrder: 190},
-		{Name: "工作流", Path: "/admin/workflows", Icon: "Workflow", PermissionCode: "workflow:read", SortOrder: 200},
+		{Name: "工作流", Path: "/workflow", Icon: "GitMerge", PermissionCode: "workflow:read", SortOrder: 120},
 		{Name: "用户管理", Path: "/admin/users", Icon: "Users", PermissionCode: "user:read", SortOrder: 210},
 		{Name: "角色管理", Path: "/admin/roles", Icon: "Shield", PermissionCode: "role:read", SortOrder: 220},
 		{Name: "组管理", Path: "/admin/groups", Icon: "Users", PermissionCode: "groups:read", SortOrder: 230},
@@ -1532,6 +1537,9 @@ func (s *Seeder) seedMenus(ctx context.Context) {
 	for _, item := range menus {
 		s.expectedMenus = append(s.expectedMenus, item.Path)
 	}
+	// The approvals reconciler owns creation and legacy migration so operator
+	// visibility settings survive initialization. Keep its route in verification.
+	s.expectedMenus = append(s.expectedMenus, "/approvals")
 
 	for _, m := range menus {
 		existing, err := s.client.Menu.Query().
@@ -1590,7 +1598,6 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 	menuPathFixes := map[string]string{
 		"/admin/sla":                "/admin/sla-definitions",
 		"/admin/system":             "/admin/system-config",
-		"/workflow":                 "/admin/workflows",
 		"/admin/tickets/assignment": "/admin/tickets/assignment-rules",
 		"/admin/tickets/automation": "/admin/tickets/automation-rules",
 	}
@@ -1672,7 +1679,6 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 		PermissionCode string
 		SortOrder      int
 	}{
-		{"工单分类", "/admin/ticket-categories", "Tag", "ticket_category:read", 275},
 		{"CI类型管理", "/admin/cmdb-types", "Database", "cmdb:write", 290},
 		{"许可证管理", "/licenses", "Key", "license:read", 125},
 		{"SLA模板", "/admin/sla-templates", "Layers", "sla:write", 272},
@@ -1707,6 +1713,15 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 		} else {
 			s.sugar.Infow("missing menu created", "path", m.Path)
 		}
+	}
+	if err := reconcileWorkflowMenus(ctx, s.client, t.ID); err != nil {
+		s.sugar.Errorw("reconcile workflow menus failed", "tenant_id", t.ID, "error", err)
+	}
+	if err := reconcileCatalogMenus(ctx, s.client, t.ID); err != nil {
+		s.sugar.Errorw("reconcile catalog menus failed", "tenant_id", t.ID, "error", err)
+	}
+	if err := reconcileApprovalMenus(ctx, s.client, t.ID); err != nil {
+		s.sugar.Errorw("reconcile approval menus failed", "tenant_id", t.ID, "error", err)
 	}
 }
 
@@ -2162,48 +2177,10 @@ func (s *Seeder) seedTicketTypes(ctx context.Context) {
 		return
 	}
 
-	// 定义默认工单类型（与前端ticket-type-presets.ts保持一致）
-	ticketTypes := []struct {
-		Code        string
-		Name        string
-		Description string
-		Icon        string
-		Color       string
-	}{
-		{"k8s_scale", "K8S扩缩容", "Kubernetes容器集群扩容或缩容请求", "Container", "#1890ff"},
-		{"ddl_execute", "DDL执行", "数据库表结构变更、索引创建等DDL操作", "Database", "#722ed1"},
-		{"data_export", "数据导出", "从数据库或系统导出数据", "Download", "#13c2c2"},
-		{"vm_apply", "虚拟机申请", "申请新的虚拟机资源", "Desktop", "#2f54eb"},
-		{"account_apply", "账号申请", "申请系统账号、VPN账号、堡垒机账号等", "User", "#52c41a"},
-		{"gitlab_repo_apply", "GitLab代码仓库申请", "申请创建新的GitLab代码仓库", "Code", "#fa541c"},
-		{"domain_apply", "域名申请", "申请新的域名或域名解析变更", "Global", "#eb2f96"},
-		{"firewall_apply", "防火墙规则申请", "申请开放或变更防火墙端口规则", "Safety", "#fa8c16"},
-		{"app_apply", "应用申请", "申请在K8S集群中部署新应用服务", "Appstore", "#1890ff"},
-		{"project_apply", "项目申请", "申请创建新项目或项目空间", "Project", "#722ed1"},
-		{"db_account_apply", "数据库账号申请", "申请数据库读写账号、只读账号等", "Key", "#faad14"},
-		{"general", "其他工单", "通用工单类型，用于不属于以上分类的请求", "FileText", "#8c8c8c"},
-	}
+	ticketTypes := defaultTicketTypes()
 
 	for _, tt := range ticketTypes {
-		_, err := s.client.TicketType.Create().
-			SetCode(tt.Code).
-			SetName(tt.Name).
-			SetDescription(tt.Description).
-			SetIcon(tt.Icon).
-			SetColor(tt.Color).
-			SetStatus("active").
-			SetApprovalEnabled(false).
-			SetSLAEnabled(false).
-			SetAutoAssignEnabled(false).
-			SetAssignmentRules([]interface{}{}).
-			SetNotificationConfig(map[string]interface{}{}).
-			SetPermissionConfig(map[string]interface{}{}).
-			SetCreatedBy(int64(admin.ID)).
-			SetTenantID(int64(t.ID)).
-			SetCreatedAt(time.Now()).
-			SetUpdatedAt(time.Now()).
-			SetUsageCount(0).
-			Save(ctx)
+		_, err := createDefaultTicketType(ctx, s.client, tt, t.ID, admin.ID)
 		if err != nil {
 			s.sugar.Warnw("seed ticket type failed", "error", err, "code", tt.Code)
 		}
@@ -2677,10 +2654,6 @@ func (s *Seeder) seedTicketTemplates(ctx context.Context) {
 
 		// 按序创建新定义
 		for i, fd := range tmpl.Fields {
-			opts := fd.Options
-			if opts == nil {
-				opts = []map[string]interface{}{}
-			}
 			sortOrder := fd.SortOrder
 			if sortOrder == 0 {
 				sortOrder = i

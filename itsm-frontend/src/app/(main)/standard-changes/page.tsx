@@ -1,4 +1,5 @@
 'use client';
+import { CreationSourceRelations, type CreationSourceRelationsHandle } from '@/components/work-item/CreationSourceRelations';
 
 import { professionalCreationPath } from '@/lib/api/work-item-creation';
 
@@ -8,7 +9,7 @@ import { CreationAttempts } from '@/components/work-item/CreationAttempts';
 import { CreationRequester } from '@/components/work-item/CreationRequester';
 
 
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   Table,
   Button,
@@ -67,6 +68,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 export default function StandardChangesPage() {
   const router = useRouter();
   const creation = useWorkItemCreation();
+  const sourceRelationsRef = useRef<CreationSourceRelationsHandle>(null);
   const { t } = useI18n();
   const [loading, setLoading] = useState(false);
   const [templates, setTemplates] = useState<StandardChange[]>([]);
@@ -170,6 +172,7 @@ export default function StandardChangesPage() {
     if (!selectedTemplate) return;
     try {
       const values = await instantiateForm.validateFields();
+      sourceRelationsRef.current?.validate();
       await creation.submit({ templateId: selectedTemplate.id, values },
         (snapshot, options) => StandardChangeApi.instantiate(snapshot.templateId, snapshot.values, options),
         receipt => { router.push(professionalCreationPath(receipt, 'change')); setInstantiateModalVisible(false); });
@@ -255,7 +258,7 @@ export default function StandardChangesPage() {
       render: (mins: number) => (mins ? `${mins}分钟` : '-'),
     },
     {
-      title: '免审批',
+      title: '授权策略',
       dataIndex: 'approvalRequired',
       key: 'approvalRequired',
       width: 100,
@@ -266,7 +269,7 @@ export default function StandardChangesPage() {
           </Tag>
         ) : (
           <Tag icon={<CheckCircle size={12} />} color='green'>
-            免审批
+            模板预授权策略
           </Tag>
         ),
     },
@@ -303,13 +306,13 @@ export default function StandardChangesPage() {
   ];
 
   return (
-    <div className='p-6 bg-gray-50 min-h-full'>
-      <CreationAttempts creation={creation} />
+    <div className='min-h-full bg-page p-[16px] text-[13px] text-foreground md:p-[24px]'>
+      <CreationAttempts creation={creation} beforeNewConfirmation={() => sourceRelationsRef.current?.refresh() ?? Promise.resolve(true)} />
       <div className='mb-6'>
         <div className='flex items-center justify-between mb-4'>
           <div>
-            <h1 className='text-2xl font-bold text-gray-800'>标准变更库</h1>
-            <p className='text-gray-500 mt-1'>管理预批准的标准变更模板</p>
+            <h1 className='text-[24px] font-semibold text-foreground'>标准变更库</h1>
+            <p className='mt-1 text-[12px] text-muted'>管理预批准的标准变更模板</p>
           </div>
           <Button type='primary' icon={<Plus size={16} />} onClick={handleCreate}>
             新建模板
@@ -515,13 +518,14 @@ export default function StandardChangesPage() {
               <Descriptions.Item label='预计工期'>
                 {selectedTemplate.expectedDuration}分钟
               </Descriptions.Item>
-              <Descriptions.Item label='免审批'>
-                {selectedTemplate.approvalRequired ? '否' : '是'}
+              <Descriptions.Item label='授权策略'>
+                {selectedTemplate.approvalRequired ? '需要审批' : '模板预授权策略（执行时校验适用范围）'}
               </Descriptions.Item>
             </Descriptions>
 
             <Form form={instantiateForm} layout='vertical'>
-              <CreationRequester />
+              <CreationRequester resource="change" />
+              <Form.Item name="sourceRelations" label="创建关联变更（可选）"><CreationSourceRelations ref={sourceRelationsRef} /></Form.Item>
               <Form.Item name='title' label='变更标题' initialValue={selectedTemplate.title}>
                 <Input />
               </Form.Item>

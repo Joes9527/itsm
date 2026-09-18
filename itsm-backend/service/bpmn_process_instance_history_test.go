@@ -67,7 +67,7 @@ func createBPMNHistoryInstance(t *testing.T, ctx context.Context, client *ent.Cl
 	definition := createBPMNHistoryDefinition(t, ctx, client, tenantID, definitionKey)
 	instance, err := client.ProcessInstance.Create().
 		SetProcessInstanceID(instanceKey).
-		SetBusinessKey("ticket:1").
+		SetBusinessKey("generic:1").
 		SetProcessDefinitionKey(definitionKey).
 		SetProcessDefinitionID(definition.ID).
 		SetStatus("running").

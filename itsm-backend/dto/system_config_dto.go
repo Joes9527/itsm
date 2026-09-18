@@ -41,3 +41,20 @@ type UpdateSystemConfigRequest struct {
 	ValueType   string `json:"valueType"`
 	Description string `json:"description"`
 }
+
+// SetCTIGovernanceRequest 受控启用 CTI 门禁。
+// 刻意不接受 effectiveFrom：截止时间只能由后端在第一次启用时派生，之后不可修改。
+type SetCTIGovernanceRequest struct {
+	CatalogEnforced    bool `json:"catalogEnforced"`
+	CompletionEnforced bool `json:"completionEnforced"`
+}
+
+// CTIGovernanceResponse 是启用记录与恢复盘点的响应。
+type CTIGovernanceResponse struct {
+	CatalogEnforced    bool   `json:"catalogEnforced"`
+	CompletionEnforced bool   `json:"completionEnforced"`
+	EffectiveFrom      string `json:"effectiveFrom,omitempty"`
+	Applied            bool   `json:"applied"`
+	// InFlightWithoutClassification 是恢复启用时在途且完全没有分类的工单数下界。
+	InFlightWithoutClassification int `json:"inFlightWithoutClassification"`
+}

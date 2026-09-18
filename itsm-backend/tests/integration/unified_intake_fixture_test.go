@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	changedomain "itsm-backend/handlers/change"
@@ -40,7 +42,7 @@ func newUnifiedIntakeFixture(t *testing.T, ticketOwners ...func(*ent.Client, *za
 	role := client.Role.Create().SetTenantID(tenant.ID).SetCode("requester").SetName("Requester").SaveX(ctx)
 	permission := client.Permission.Create().SetTenantID(tenant.ID).SetCode("create-work").SetName("Create work").SetResource("*").SetAction("*").SaveX(ctx)
 	client.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).SaveX(ctx)
-	for _, business := range []string{"ticket", "incident", "problem", "change", "service_request"} {
+	for _, business := range []string{"generic", "incident", "problem", "change_request", "service_request_item"} {
 		client.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType(business).SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
 	}
 	allocator := workitemnumber.NewPostgreSQLAllocator()
@@ -49,11 +51,11 @@ func newUnifiedIntakeFixture(t *testing.T, ticketOwners ...func(*ent.Client, *za
 	if len(ticketOwners) > 0 {
 		genericOwner = ticketOwners[0](client, logger)
 	}
-	for _, owner := range []creation.ProfessionalCreator{genericOwner, service.NewIncidentService(client, logger), problemdomain.NewService(nil, logger), changedomain.NewService(nil, client, logger), requestdomain.NewService(nil, client, logger, service.NewApprovalChainResolver(client, logger))} {
+	for _, owner := range []creation.ProfessionalCreator{genericOwner, service.NewIncidentService(client, logger, executionfixture.Standard()), problemdomain.NewService(nil, logger, executionfixture.Standard()), changedomain.NewService(nil, client, logger, executionfixture.Standard()), requestdomain.NewService(nil, client, logger, service.NewApprovalChainResolver(client, logger), executionfixture.Standard())} {
 		require.NoError(t, registry.Register(owner))
 	}
 	resolver := intake.NewResolver(catalogdomain.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
-	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(allocator), sameTransactionDirectory{})
+	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(allocator), sameTransactionDirectory{}, executionfixture.Standard())
 	return &unifiedIntakeFixture{client, app, creation.Identity{TenantID: tenant.ID, ActorID: actor.ID, RequesterID: actor.ID, Role: actor.Role, Channel: "http"}, creation.CreateWorkItemCommand{RecordClass: "generic", IntakeKind: "generic", Confirmation: "confirmed", Title: "VPN access", IdempotencyKey: "one"}}
 }
 
@@ -77,6 +79,7 @@ func installEntryMutationFailure(client *ent.Client, stage string) *bool {
 	}
 	return reached
 }
+
 func assertNoEntryGraph(t *testing.T, client *ent.Client) {
 	t.Helper()
 	ctx := context.Background()

@@ -1,0 +1,321 @@
+"""Full physical recovery and actual controlled R for the disposable V1 fixture.
+
+This is test orchestration, not a migration executor. Only the compiled production
+CLI executes P/R. Physical copies preserve immutable receipt and role/OID identity.
+"""
+import base64
+import copy
+import hashlib
+import hmac
+import json
+import os
+import signal
+import subprocess
+import time
+import tarfile
+import io
+import urllib.parse
+import urllib.request
+from datetime import datetime, timezone
+from workitem_recovery_redis import redis_call, redis_snapshot, compare_redis
+
+
+def sha(value):
+    return hashlib.sha256(value).hexdigest()
+
+
+def encode(value):
+    return json.dumps(value, sort_keys=True, separators=(',', ':')).encode()
+
+
+def now():
+    return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+
+
+def verify_recovery(expected, actual, uncaptured=()):
+    if uncaptured:
+        raise ValueError('Uncaptured post-backup data prevents a zero-loss verdict')
+    required={'tables','sequences','roles_acl','attachments','application','consumers','configuration','control','config_yaml','redis','identity_provider_config'}
+    if not required.issubset(expected) or not required.issubset(actual):
+        raise ValueError('Complete recovery manifest required')
+    compare_redis(expected['redis'],actual['redis'])
+    for surface in (set(expected) | set(actual)) - {'redis'}:
+        if surface not in expected or surface not in actual or expected[surface] != actual[surface]:
+            raise ValueError('Recovery mismatch: '+surface)
+    return True
+
+
+class Recovery:
+    def __init__(self, context):
+        self.c = context
+        self.folder = context['folder']
+        self.journal = {'scope': 'isolated test authority only; no target-environment approval', 'events': []}
+        self.negative = []
+        self.redis_targets={context['pg']:(context['redis'],context['redis_port'])}
+        infos=json.loads(self.command(['docker','inspect',context['pg'],context['minio'],context['redis']]))
+        self.images={info['Name'].lstrip('/'):info['Image'] for info in infos}
+
+    def save(self, name, value):
+        (self.folder/name).write_bytes(encode(value))
+
+    def event(self, action, **facts):
+        self.journal['events'].append(dict(at=now(), action=action, **facts))
+        self.save('recovery-journal.json', self.journal)
+
+    def command(self, argv, data=None):
+        p = subprocess.run(argv, input=data, stdout=subprocess.PIPE, stderr=self.c['log'], check=True)
+        return p.stdout
+
+    def sql(self, pg, sql):
+        return self.command(['docker','exec','-i',pg,'psql','-U','v1owner','-d','workitem_v1','-At','-v','ON_ERROR_STOP=1'], sql.encode()).decode().strip()
+
+    def s3_get(self, endpoint, key, method="GET", data=None):
+        # SigV4 uses only generated isolated credentials; no host SDK credential chain.
+        uri='/workitem-v1/'+urllib.parse.quote(key, safe='/~')
+        stamp=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'); day=stamp[:8]
+        empty=sha(data or b''); headers='host:'+endpoint+'\nx-amz-content-sha256:'+empty+'\nx-amz-date:'+stamp+'\n'
+        signed='host;x-amz-content-sha256;x-amz-date'
+        request=method+'\n'+uri+'\n\n'+headers+'\n'+signed+'\n'+empty
+        scope=day+'/us-east-1/s3/aws4_request'
+        tosign='AWS4-HMAC-SHA256\n'+stamp+'\n'+scope+'\n'+sha(request.encode())
+        keybytes=('AWS4'+self.c['minio_password']).encode()
+        for part in [day,'us-east-1','s3','aws4_request']:
+            keybytes=hmac.new(keybytes,part.encode(),hashlib.sha256).digest()
+        signature=hmac.new(keybytes,tosign.encode(),hashlib.sha256).hexdigest()
+        auth='AWS4-HMAC-SHA256 Credential=v1minio/'+scope+', SignedHeaders='+signed+', Signature='+signature
+        req=urllib.request.Request('http://'+endpoint+uri,data=data,method=method,headers={'Authorization':auth,'x-amz-content-sha256':empty,'x-amz-date':stamp})
+        return urllib.request.urlopen(req,timeout=20).read()
+
+    def snapshot(self, pg, endpoint, environment, bundle=None):
+        if bundle:
+            environment=json.loads((bundle/"runtime-environment.json").read_bytes())
+        tables={}
+        names=self.sql(pg,"SELECT quote_ident(schemaname)||'.'||quote_ident(tablename) FROM pg_tables WHERE schemaname NOT IN ('pg_catalog','information_schema') ORDER BY 1").splitlines()
+        queries=["SELECT '"+name+"' AS name,coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),'[]') AS content FROM "+name+" t" for name in names]
+        contents=json.loads(self.sql(pg,"SELECT jsonb_object_agg(name,content)::text FROM ("+' UNION ALL '.join(queries)+") all_tables"))
+        for name,content in contents.items():
+            tables[name]={'rows':len(content),'sha256':sha(encode(content))}
+        sequences={}
+        sequence_names=self.sql(pg,"SELECT quote_ident(schemaname)||'.'||quote_ident(sequencename) FROM pg_sequences ORDER BY 1").splitlines()
+        queries=["SELECT '"+name+"' AS name,json_build_array(last_value,is_called)::text AS content FROM "+name for name in sequence_names]
+        if queries:
+            sequences=json.loads(self.sql(pg,"SELECT json_object_agg(name,content)::text FROM ("+' UNION ALL '.join(queries)+") all_sequences"))
+        schema=self.command(['docker','exec',pg,'pg_dump','-U','v1owner','-d','workitem_v1','--schema-only']).decode()
+        schema='\n'.join(line for line in schema.splitlines() if not line.startswith(('\\restrict','\\unrestrict')))
+        roles=self.sql(pg,"SELECT jsonb_agg(to_jsonb(r) ORDER BY rolname)::text FROM pg_authid r")
+        attachments={}
+        rows=json.loads(self.sql(pg,"SELECT coalesce(json_agg(row_to_json(a)),'[]') FROM (SELECT id,file_path,file_size FROM ticket_attachments ORDER BY id) a"))
+        for row in rows:
+            data=self.s3_get(endpoint,row['file_path'])
+            if len(data)!=row['file_size']:
+                raise ValueError('Attachment bytes differ from database size')
+            attachments[str(row['id'])]={'path':row['file_path'],'bytes':len(data),'sha256':sha(data)}
+        # A live MinIO process does not establish actual backend storage selection.
+        for uploads in [self.folder/'uploads']:
+            if uploads.exists() and any(p.is_file() for p in uploads.rglob('*')):
+                raise ValueError('Unexpected local attachment fallback must be included explicitly')
+        # Transport addresses change for independent recovery; behavior and secrets do not.
+        excluded={'DB_HOST','MINIO_ENDPOINT','ITSM_MIGRATION_INSPECTION_DSN'}
+        cfg={k:v for k,v in environment.items() if k not in excluded}
+        return {'tables':tables,'sequences':sequences,'roles_acl':sha((roles+schema).encode()),'attachments':attachments,
+                'application':sha(((bundle or self.folder)/'backend').read_bytes()),
+                'consumers':sha(encode({k:v for k,v in cfg.items() if k.startswith(('REDIS','ITSM_AUTO','RLS','DB_SYSTEM','ENV','DEPLOYMENT'))})),
+                'configuration':sha(encode(cfg)), 'control':sha(((bundle/'migration-control.json') if bundle else self.c['control_file']).read_bytes()),
+                'config_yaml':sha(((bundle or self.folder)/'config.yaml').read_bytes()),
+                'redis':self.redis_inventory(pg),'identity_provider_config':sha(((bundle or self.folder)/'identity-empty.json').read_bytes())}
+
+    def archive(self, pg, minio, label):
+        # pg_basebackup includes every DB, role, ACL, sequence, WAL and immutable bytea receipt.
+        remote='/tmp/task6-'+label
+        self.command(['docker','exec',pg,'pg_basebackup','-U','v1owner','-D',remote,'-Fp','-X','stream','-c','fast'])
+        self.command(['docker','exec',pg,'pg_verifybackup',remote])
+        backup_manifest=json.loads(self.command(['docker','exec',pg,'cat',remote+'/backup_manifest']))
+        self.event('physical-backup-consistency',verified=True,walRanges=backup_manifest.get('WAL-Ranges'),systemIdentifier=backup_manifest.get('System-Identifier'),postgresVersion=self.sql(pg,'SHOW server_version'))
+        archives={}
+        for kind, container, directory in [('postgres',pg,remote),('objects',minio,'/data')]:
+            destination=self.folder/(label+'-'+kind+'.tar')
+            if kind=='objects': self.command(['docker','stop',container])
+            with destination.open('wb') as out:
+                command=['docker','cp',container+':/data/.','-'] if kind=='objects' else ['docker','exec',container,'tar','-C',directory,'-cf','-','.']
+                subprocess.run(command,stdout=out,stderr=self.c['log'],check=True)
+            if kind=='objects':
+                self.command(['docker','start',container])
+                self.c['wait_ready'](lambda: urllib.request.urlopen('http://'+self.c['env']['MINIO_ENDPOINT']+'/minio/health/live',timeout=2).status==200)
+            os.chmod(destination,0o600);self.c['secret_files'].append(destination)
+            archives[kind]={'file':str(destination),'sha256':sha(destination.read_bytes()),'bytes':destination.stat().st_size}
+        redis_name,redis_port=self.redis_targets[pg]
+        if redis_call(redis_port,'SAVE')!=b'OK':raise ValueError('Redis synchronous snapshot failed')
+        self.command(['docker','exec',redis_name,'redis-check-rdb','/data/dump.rdb'])
+        self.command(['docker','stop',redis_name])
+        redis_archive=self.folder/(label+'-redis.tar');self.c['secret_files'].append(redis_archive)
+        with redis_archive.open('wb') as out:
+            subprocess.run(['docker','cp',redis_name+':/data/.','-'],stdout=out,stderr=self.c['log'],check=True)
+        os.chmod(redis_archive,0o600)
+        archives['redis']={'file':str(redis_archive),'sha256':sha(redis_archive.read_bytes()),'bytes':redis_archive.stat().st_size,'rdbVerified':True}
+        self.command(['docker','start',redis_name]);self.c['wait_ready'](lambda: redis_call(redis_port,'PING')==b'PONG')
+        config_archive=self.folder/(label+'-configuration.tar')
+        with tarfile.open(config_archive,'w') as tar:
+            for name in ['backend','migrate','config.yaml','migration-control.json','identity-empty.json']:
+                tar.add(self.folder/name,arcname=name)
+            content=encode(self.c['env']);info=tarfile.TarInfo('runtime-environment.json');info.size=len(content);info.mode=0o600
+            tar.addfile(info,io.BytesIO(content))
+        os.chmod(config_archive,0o600);self.c['secret_files'].append(config_archive)
+        archives['configuration']={'file':str(config_archive),'sha256':sha(config_archive.read_bytes()),'bytes':config_archive.stat().st_size}
+        self.event('full-backup', label=label, artifacts=archives)
+        return archives
+
+    def restore_container(self, name, image, port, container_port, archive, directory, command):
+        self.c['containers'].append(name)
+        values=['--env-file',str(self.folder/('codex-'+self.c['run_id']+'-minio.env'))] if container_port==9000 else []
+        self.command(['docker','create',*values,'--name',name,'--label','codex.workitem.v1='+self.c['run_id'],'-p','127.0.0.1:'+str(port)+':'+str(container_port),image,*command])
+        created=json.loads(self.command(['docker','inspect',name]))[0]
+        if created['Image']!=image:raise ValueError('Restored image differs from captured immutable source')
+        self.c['owned_ids'][name]=created['Id']
+        self.c['owned_resources'][name]={'id':created['Id'],'volumes':[m['Name'] for m in created['Mounts'] if m['Type']=='volume']}
+        self.save('resource-ownership.json',self.c['owned_resources'])
+        with open(archive,'rb') as inp:
+            subprocess.run(['docker','cp','-',name+':'+directory],stdin=inp,stdout=self.c['log'],stderr=self.c['log'],check=True)
+        self.command(['docker','start',name])
+        info=json.loads(self.command(['docker','inspect',name]))[0]
+        if info['Image']!=image:raise ValueError('Restored image differs from immutable source image')
+        self.c['owned_ids'][name]=info['Id']
+        self.c['owned_resources'][name]={'id':info['Id'],'volumes':[m['Name'] for m in info['Mounts'] if m['Type']=='volume']}
+        self.save('resource-ownership.json',self.c['owned_resources'])
+        self.event('owned-resource',name=name,containerID=info['Id'],imageID=info['Image'],image=info['Config']['Image'])
+        if info['Config']['Labels'].get('codex.workitem.v1')!=self.c['run_id']:
+            raise ValueError('Recovery resource ownership mismatch')
+        return info['Id']
+
+    def restore(self, archives, suffix, offset):
+        pg='codex-'+self.c['run_id']+'-'+suffix+'-pg';minio='codex-'+self.c['run_id']+'-'+suffix+'-minio'
+        port=self.c['args'].base_port+offset
+        pgid=self.restore_container(pg,self.images[self.c['pg']],port,5432,archives['postgres']['file'],'/var/lib/postgresql/data',['postgres'])
+        mid=self.restore_container(minio,self.images[self.c['minio']],port+1,9000,archives['objects']['file'],'/data',['server','/data'])
+        redis_name='codex-'+self.c['run_id']+'-'+suffix+'-redis'
+        rid=self.restore_container(redis_name,self.images[self.c['redis']],port+2,6379,archives['redis']['file'],'/data',[])
+        self.redis_targets[pg]=(redis_name,port+2)
+        self.c['wait_ready'](lambda: redis_call(port+2,'PING')==b'PONG')
+        self.c['wait_ready'](lambda: subprocess.run(['docker','exec',pg,'pg_isready','-U','v1owner','-d','workitem_v1'],stdout=self.c['log'],stderr=self.c['log']).returncode==0)
+        # Restored MinIO credentials are persisted in its data, and env credentials are also explicit.
+        self.c['wait_ready'](lambda: urllib.request.urlopen('http://127.0.0.1:'+str(port+1)+'/minio/health/live',timeout=2).status==200)
+        bundle=self.folder/(suffix+'-configuration');bundle.mkdir(mode=0o700)
+        with tarfile.open(archives['configuration']['file']) as tar:
+            tar.extractall(bundle,filter='data')
+        self.bundles=getattr(self,'bundles',{});self.bundles[pg]=bundle
+        for path in bundle.iterdir(): self.c['secret_files'].append(path)
+        self.event('independent-restore', target=pg, containerID=pgid, objectContainerID=mid, redisContainerID=rid, logicalDatabase='workitem_v1', logicalDeployment=self.c['run_id'])
+        return pg, minio, port
+
+    def pause(self):
+        proc=self.c['backend_process']
+        if proc.poll() is None:
+            os.killpg(proc.pid,signal.SIGTERM);proc.wait(timeout=20)
+        self.event('application-and-inprocess-consumers-stopped', pid=proc.pid)
+
+    def negative_checks(self, expected):
+        for surface in ['tables','sequences','roles_acl','attachments','application','consumers','configuration','control','config_yaml','identity_provider_config']:
+            candidate=copy.deepcopy(expected)
+            candidate[surface]={'missing':'actual recovery verifier must reject'}
+            try: verify_recovery(expected,candidate)
+            except ValueError: self.negative.append(surface)
+            else: raise AssertionError('Recovery falsely passed '+surface)
+        for table in ['public.process_instances','public.audit_logs','public.schema_migrations','public.work_item_migration_evidence']:
+            if table not in expected['tables']: raise ValueError('Required recovery surface missing '+table)
+            candidate=copy.deepcopy(expected);del candidate['tables'][table]
+            try: verify_recovery(expected,candidate)
+            except ValueError: self.negative.append(table)
+            else: raise AssertionError('Recovery falsely passed missing '+table)
+        try: verify_recovery(expected,expected,uncaptured=['post-backup-write'])
+        except ValueError: self.negative.append('uncaptured-post-backup-write')
+        else: raise AssertionError('Uncaptured write accepted')
+
+    def redis_inventory(self,pg):
+        name,port=self.redis_targets[pg]
+        info=json.loads(self.command(['docker','inspect',name]))[0]
+        if info['Id']!=self.c['owned_ids'][name] or not info['State']['Running'] or info['NetworkSettings']['Ports']['6379/tcp'][0]!={'HostIp':'127.0.0.1','HostPort':str(port)}:
+            raise ValueError('Independent Redis ownership/transport unavailable')
+        return redis_snapshot(port)
+
+    def seed_pending_redis(self):
+        port=self.c['redis_port'];key='task6.recovery.pending'
+        ids=[redis_call(port,'XADD',key,'*','body',v) for v in ['acked','pending','undelivered']]
+        redis_call(port,'XGROUP','CREATE',key,'task6-group','0')
+        redis_call(port,'XREADGROUP','GROUP','task6-group','task6-consumer','COUNT',2,'STREAMS',key,'>')
+        redis_call(port,'XACK',key,'task6-group',ids[0])
+        redis_call(port,'SET','task6:absolute-expiry','expires-with-wall-clock','PX',2000)
+        self.pending_id=ids[1]
+        self.event('actual-redis-pending-fixture',acked=1,pending=1,undelivered=1,absoluteExpiryProbe=True)
+
+    def redis_fault(self,expected,pg):
+        name,port=self.redis_targets[pg];key='task6.recovery.pending';value=redis_call(port,'DUMP',key)
+        if redis_call(port,'XPENDING',key,'task6-group')[0]!=1:raise ValueError('Actual pending consumer state required')
+        redis_call(port,'XDEL',key,self.pending_id)
+        try:
+            compare_redis(expected['redis'],self.redis_inventory(pg))
+        except ValueError:self.negative.append('actual-pending-stream-message-loss')
+        else:raise ValueError('Missing pending stream message falsely accepted')
+        finally:redis_call(port,'RESTORE',key,0,value,'REPLACE')
+        compare_redis(expected['redis'],self.redis_inventory(pg))
+        self.event('actual-redis-pending-loss-rejected',target=name,pending=1)
+
+    def actual_fault_checks(self, expected, pg, endpoint, env):
+        bundle=self.bundles[pg]
+        def reject(name):
+            try:
+                candidate=self.snapshot(pg,endpoint,env,bundle=bundle)
+                verify_recovery(expected,candidate)
+            except (ValueError, urllib.error.HTTPError):
+                self.negative.append('actual-'+name)
+                self.event('actual-recovery-fault-rejected',fault=name,target=pg)
+            else: raise AssertionError('Actual recovery fault accepted '+name)
+        # Actual missing workflow/audit/receipt rows, preserved byte-for-byte after each fault.
+        for table in ['audit_logs','process_instances','schema_migrations','work_item_migration_evidence']:
+            identifier='version' if table in ['schema_migrations','work_item_migration_evidence'] else 'id'
+            rows=json.loads(self.sql(pg,"SELECT coalesce(json_agg(row_to_json(t)),'[]') FROM (SELECT * FROM "+table+" LIMIT 1) t"))
+            if not rows: raise ValueError('Required actual fault row missing '+table)
+            row=rows[0];literal="'"+str(row[identifier]).replace("'","''")+"'"
+            if table=='process_instances':
+                # A parent row cannot be removed while real tasks reference it. Lose its
+                # actual persisted identity content without disabling those constraints.
+                self.sql(pg,"UPDATE process_instances SET business_key='' WHERE id="+literal)
+                try: reject('missing-process-identity-content')
+                finally: self.sql(pg,"UPDATE process_instances SET business_key='"+row['business_key'].replace("'","''")+"' WHERE id="+literal)
+            else:
+                self.sql(pg,'DELETE FROM '+table+' WHERE '+identifier+'='+literal)
+                try: reject('missing-'+table)
+                finally:
+                    raw=json.dumps(row).replace("'","''")
+                    self.sql(pg,"INSERT INTO "+table+" SELECT * FROM json_populate_record(NULL::"+table+",'"+raw+"'::json)")
+        attachment=next(iter(expected['attachments'].values()));key=attachment['path'];data=self.s3_get(endpoint,key)
+        self.s3_get(endpoint,key,method='DELETE')
+        try: reject('missing-attachment-object')
+        finally: self.s3_get(endpoint,key,method='PUT',data=data)
+        for filename in ['backend','runtime-environment.json','config.yaml','identity-empty.json']:
+            file=bundle/filename;original=file.read_bytes()
+            if filename=='runtime-environment.json':
+                value=json.loads(original);value['ITSM_AUTO_SEED']='true';file.write_bytes(encode(value))
+            else: file.write_bytes(original+b'\nwrong-recovered-version\n')
+            try: reject('wrong-'+filename)
+            finally: file.write_bytes(original)
+        self.redis_fault(expected,pg)
+        verify_recovery(expected,self.snapshot(pg,endpoint,env,bundle=bundle))
+        self.event('actual-fault-target-restored-and-reverified',target=pg)
+
+    def retire(self, baseline, archives, restored, journey, observation):
+        ownerenv=dict(self.c['env'],DB_USER='v1owner',DB_PASSWORD=self.c['password'])
+        inv=json.loads(subprocess.check_output([str(self.folder/'migrate'),'-retire-workitem','-dry-run'],cwd=self.folder,env=ownerenv,stderr=self.c['log']))
+        if not inv['Objects']: raise ValueError('Actual retained legacy structures required')
+        r=dict(PreparationDigest=inv['PreparationDigest'],DataDigest=inv['DataDigest'],Objects=inv['Objects'],EmptyInventory=False,
+               ObservationStartedAt=self.started,ObservationEndedAt=self.ended,PausedAt=self.paused,FinalRestorePointAt=self.finalpoint,Reports=[])
+        e=dict(Target=inv['Target'],CatalogRevision='workitem-controlled-retirement-v1',LedgerDigest=inv['LedgerDigest'],InventoryDigest=inv['InventoryDigest'],
+               ApplicationDigest=baseline['application'],Operator=self.c['evidence']['Operator'],ChangeRecord=self.c['run_id'],Retirement=r)
+        for kind,body,field in [('backup',archives,'BackupDigest'),('restore',restored,'RestoreReportDigest'),('journey',journey,'JourneyReportDigest'),('observation',observation,'ObservationReportDigest')]:
+            content=encode(body);digest=sha(content);e[field]=digest
+            r['Reports'].append(dict(Result='passed',Kind=kind,Target=e['Target'],ApplicationDigest=e['ApplicationDigest'],LedgerDigest=e['LedgerDigest'],InventoryDigest=e['InventoryDigest'],
+                                    PreparationDigest=r['PreparationDigest'],DataDigest=r['DataDigest'],RecordedAt=now(),Content=base64.b64encode(content).decode(),Digest=digest))
+        signed=self.command([str(self.folder/'sign-fixture')],encode({'Evidence':e,'Private':self.c['key']['private']}))
+        file=self.folder/'retirement-evidence.json';file.write_bytes(signed);os.chmod(file,0o600)
+        self.c['run']([str(self.folder/'migrate'),'-retire-workitem','-evidence-file',str(file)],cwd=self.folder,env=ownerenv)
+        self.event('actual-compiled-R-committed', evidenceSHA256=sha(signed), inventory=inv, receiptCount=self.sql(self.c['pg'],"SELECT count(*) FROM schema_migrations WHERE version='038_work_item_controlled_retirement'"))
+        # Never rewrite the pre-R backup to add a later receipt.
+        if self.sql(self.c['pg'],"SELECT to_regclass('public.workflows') IS NULL")!='t': raise ValueError('R did not retire actual legacy workflow structure')

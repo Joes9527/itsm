@@ -195,37 +195,30 @@ func (s *TicketAssignmentRuleService) TestAssignmentRule(
 	}, nil
 }
 
+// categoryMatchPath 解析工单分类的完整路径：分类条件可能要求子树匹配，
+// 因此求值前必须拿到完整根路径；未分类返回空，解析失败返回错误（调用方失败关闭）。
+func (s *TicketAssignmentRuleService) categoryMatchPath(ctx context.Context, item *ent.Ticket) ([]CTINode, error) {
+	if s == nil || s.client == nil || item == nil || item.CategoryID <= 0 {
+		return nil, nil
+	}
+	return NewTicketCategoryService(s.client).GetCategoryPath(ctx, item.TenantID, item.CategoryID)
+}
+
 // matchRule 检查规则是否匹配工单
 func (s *TicketAssignmentRuleService) matchRule(
 	ctx context.Context,
 	rule *ent.TicketAssignmentRule,
 	ticketEntity *ent.Ticket,
 ) (bool, string) {
-	matched, err := evaluateTicketRuleConditions(rule.Conditions, ticketEntity)
+	categoryPath, err := s.categoryMatchPath(ctx, ticketEntity)
+	if err != nil {
+		return false, err.Error()
+	}
+	matched, err := EvaluateTicketRuleConditions(TicketRuleMatch{Item: ticketEntity, CategoryPath: categoryPath}, rule.Conditions)
 	if err != nil {
 		return false, err.Error()
 	}
 	return matched, "条件已评估"
-}
-
-// compareValue 比较值
-func (s *TicketAssignmentRuleService) compareValue(actual interface{}, operator string, expected interface{}) bool {
-	switch operator {
-	case "equals":
-		return actual == expected
-	case "not_equals":
-		return actual != expected
-	case "contains":
-		actualStr := fmt.Sprintf("%v", actual)
-		expectedStr := fmt.Sprintf("%v", expected)
-		return containsStringInRule(actualStr, expectedStr)
-	case "greater_than":
-		return compareNumbers(actual, expected) > 0
-	case "less_than":
-		return compareNumbers(actual, expected) < 0
-	default:
-		return false
-	}
 }
 
 // ExecuteRuleAction 执行规则动作（公开方法）
@@ -317,49 +310,4 @@ func (s *TicketAssignmentRuleService) toAssignmentRuleResponse(rule *ent.TicketA
 	}
 
 	return resp
-}
-
-// 辅助函数
-func containsStringInRule(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || containsHelperInRule(s, substr))
-}
-
-func containsHelperInRule(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
-
-func compareNumbers(a, b interface{}) int {
-	af, ok1 := toFloat64(a)
-	bf, ok2 := toFloat64(b)
-	if !ok1 || !ok2 {
-		return 0
-	}
-	if af > bf {
-		return 1
-	} else if af < bf {
-		return -1
-	}
-	return 0
-}
-
-func toFloat64(v interface{}) (float64, bool) {
-	switch val := v.(type) {
-	case float64:
-		return val, true
-	case float32:
-		return float64(val), true
-	case int:
-		return float64(val), true
-	case int32:
-		return float64(val), true
-	case int64:
-		return float64(val), true
-	default:
-		return 0, false
-	}
 }

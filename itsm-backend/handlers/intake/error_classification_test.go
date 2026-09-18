@@ -3,11 +3,12 @@ package intake
 import (
 	"context"
 	"errors"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/authorization"
 	"itsm-backend/ent"
 	"itsm-backend/handlers/common/workitemcreation"
-	"testing"
 )
 
 func assertIntakePolicy(t *testing.T, err error, code workitemcreation.ErrorCode, status int, retry bool) {
@@ -18,11 +19,13 @@ func assertIntakePolicy(t *testing.T, err error, code workitemcreation.ErrorCode
 	require.Equal(t, status, detail.HTTPStatus)
 	require.Equal(t, retry, detail.Retryable)
 }
+
 func queryFailure(reached *bool, cause error) ent.Interceptor {
 	return ent.InterceptFunc(func(ent.Querier) ent.Querier {
 		return ent.QuerierFunc(func(context.Context, ent.Query) (ent.Value, error) { *reached = true; return nil, cause })
 	})
 }
+
 func TestApplicationDefinedFieldValidationIsNotRetryable(t *testing.T) {
 	for _, typ := range []string{"number", "select", "multiselect"} {
 		t.Run(typ, func(t *testing.T) {
@@ -47,6 +50,7 @@ func TestApplicationDefinedFieldValidationIsNotRetryable(t *testing.T) {
 		})
 	}
 }
+
 func TestApplicationFieldPersistenceIsRetryable(t *testing.T) {
 	client, s, i, c := graphFixture(t)
 	reached := false
@@ -67,6 +71,7 @@ func TestApplicationFieldPersistenceIsRetryable(t *testing.T) {
 	assertIntakePolicy(t, err, workitemcreation.InfrastructureUnavailable, 503, true)
 	require.Zero(t, client.Ticket.Query().CountX(context.Background()))
 }
+
 func TestInfrastructureReferenceQueryFailuresAreRetryable(t *testing.T) {
 	for _, stage := range []string{"base", "receipt", "audit", "snapshot", "snapshot_receipt", "snapshot_catalog", "snapshot_workflow", "snapshot_sla", "snapshot_ci", "snapshot_cti", "professional"} {
 		t.Run(stage, func(t *testing.T) {
@@ -132,6 +137,7 @@ func TestInfrastructureReferenceQueryFailuresAreRetryable(t *testing.T) {
 		})
 	}
 }
+
 func TestReplayQueryFailuresAreRetryable(t *testing.T) {
 	for _, stage := range []string{"work_item", "incident", "snapshot", "outbox"} {
 		t.Run(stage, func(t *testing.T) {
@@ -208,6 +214,7 @@ func TestProfessionalReplayQueryFailureAndAbsenceAreDistinct(t *testing.T) {
 		}
 	}
 }
+
 func TestReplayMissingGraphIsNotRetryable(t *testing.T) {
 	for _, stage := range []string{"incident", "snapshot", "outbox"} {
 		t.Run(stage, func(t *testing.T) {

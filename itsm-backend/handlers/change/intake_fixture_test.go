@@ -3,6 +3,8 @@ package change
 import (
 	"context"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
@@ -14,6 +16,7 @@ import (
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/intake"
 	"itsm-backend/handlers/service_catalog"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 )
@@ -34,15 +37,15 @@ func NewChangeIntakeApp(client *ent.Client, svc *Service, logger *zap.SugaredLog
 		service.NewConfigurationItemService(client, logger, nil, nil),
 		service.NewTicketCategoryService(client),
 	)
-	return intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})
+	return intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard())
 }
 
 // ConfigureChangeIntakeFixture grants the given actor role current change/ticket
 // read+write permission and provisions an unconditional no-process binding for
 // the "change" business type, idempotently so it can be called once per tenant.
 func ConfigureChangeIntakeFixture(ctx context.Context, client *ent.Client, tenantID int, actorRole string) {
-	if !client.ProcessBinding.Query().Where(processbinding.TenantIDEQ(tenantID), processbinding.BusinessTypeEQ("change")).ExistX(ctx) {
-		client.ProcessBinding.Create().SetTenantID(tenantID).SetBusinessType("change").SetIsDefault(true).
+	if !client.ProcessBinding.Query().Where(processbinding.TenantIDEQ(tenantID), processbinding.BusinessTypeEQ("change_request")).ExistX(ctx) {
+		client.ProcessBinding.Create().SetTenantID(tenantID).SetBusinessType("change_request").SetIsDefault(true).
 			SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
 	}
 	r, err := client.Role.Query().Where(role.TenantIDEQ(tenantID), role.CodeEQ(actorRole)).Only(ctx)
@@ -50,7 +53,7 @@ func ConfigureChangeIntakeFixture(ctx context.Context, client *ent.Client, tenan
 		r = client.Role.Create().SetTenantID(tenantID).SetCode(actorRole).SetName(actorRole).SetIsActive(true).SaveX(ctx)
 	}
 	for _, resource := range []string{"change", "ticket"} {
-		for _, action := range []string{"read", "write"} {
+		for _, action := range []string{"read", "write", "update"} {
 			p, err := client.Permission.Query().Where(permission.TenantIDEQ(tenantID), permission.CodeEQ(resource+":"+action)).Only(ctx)
 			if ent.IsNotFound(err) {
 				p = client.Permission.Create().SetTenantID(tenantID).SetCode(resource + ":" + action).SetName(resource + action).SetResource(resource).SetAction(action).SaveX(ctx)
@@ -66,33 +69,33 @@ func ConfigureChangeIntakeFixture(ctx context.Context, client *ent.Client, tenan
 // application (Resolve -> Prepare -> CreateExtension), the same path the
 // production HTTP handler uses, then reads back the persisted professional
 // record through the existing authoritative GetChange for assertions.
-func CreateChangeViaIntake(ctx context.Context, client *ent.Client, svc *Service, app *intake.Service, tenantID, actorID int, in *Change) (*Change, error) {
+func CreateChangeViaIntake(ctx context.Context, client *ent.Client, svc *Service, app *intake.Service, tenantID, actorID int, in *Change, sources ...creation.SourceRelationInput) (*Change, error) {
 	actor, err := client.User.Get(ctx, actorID)
 	if err != nil {
 		return nil, err
 	}
 	command := creation.CreateWorkItemCommand{
-		RecordClass:    creation.RecordClassChangeRequest,
-		IntakeKind:     creation.IntakeKindChangeRequest,
-		Confirmation:   "confirmed",
-		IdempotencyKey: uuid.NewString(),
-		Title:          in.Title,
-		Description:    in.Description,
-		Priority:       in.Priority,
+		RecordClass:     creation.RecordClassChangeRequest,
+		SourceRelations: sources,
+		IntakeKind:      creation.IntakeKindChangeRequest,
+		Confirmation:    "confirmed",
+		IdempotencyKey:  uuid.NewString(),
+		Title:           in.Title,
+		Description:     in.Description,
+		Priority:        in.Priority,
 		Change: &creation.ChangeInput{
-			Type:                 in.Type,
-			ImpactScope:          in.ImpactScope,
-			RiskLevel:            in.RiskLevel,
-			Justification:        in.Justification,
-			ImplementationPlan:   in.ImplementationPlan,
-			RollbackPlan:         in.RollbackPlan,
-			AffectedCIs:          in.AffectedCIs,
-			RelatedTicketNumbers: in.RelatedTickets,
+			Type:               in.Type,
+			ImpactScope:        in.ImpactScope,
+			RiskLevel:          in.RiskLevel,
+			Justification:      in.Justification,
+			ImplementationPlan: in.ImplementationPlan,
+			RollbackPlan:       in.RollbackPlan,
+			AffectedCIs:        in.AffectedCIs,
 		},
 	}
 	result, err := app.Create(ctx, creation.Identity{TenantID: tenantID, ActorID: actor.ID, RequesterID: actor.ID, Role: actor.Role, Channel: "http"}, command)
 	if err != nil {
 		return nil, err
 	}
-	return svc.GetChange(ctx, result.ProfessionalReference.ID, tenantID)
+	return svc.GetChange(ctx, result.ProfessionalReference.ID, workitemmutation.Meta{TenantID: tenantID, ActorID: actorID, Source: "http"})
 }

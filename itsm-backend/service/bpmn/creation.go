@@ -6,14 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"itsm-backend/authorization"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processcallbackoutbox"
 	"itsm-backend/ent/processinstance"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"strconv"
-	"strings"
 )
 
 func executeWorkItemCreation(ctx context.Context, client, directory *ent.Client, app creation.Application, handlerID, action, class string) (*CallbackEffect, error) {
@@ -81,7 +82,13 @@ func executeWorkItemCreation(ctx context.Context, client, directory *ent.Client,
 	effect.CreationResult = result
 	return effect, nil
 }
+
 func creationCommandFromCallback(values map[string]any, key, class string, actorID int) (creation.CreateWorkItemCommand, int, error) {
+	for _, obsolete := range []string{"related_tickets", "related_ticket_numbers"} {
+		if _, present := values[obsolete]; present {
+			return creation.CreateWorkItemCommand{}, 0, fmt.Errorf("unsupported versionless relation input")
+		}
+	}
 	requester := actorID
 	requesterKey := "reporter_id"
 	if class == creation.RecordClassChangeRequest {
@@ -95,19 +102,19 @@ func creationCommandFromCallback(values map[string]any, key, class string, actor
 		requester = value
 	}
 	raw := map[string]any{"idempotencyKey": "bpmn-create:" + key, "confirmation": "confirmed", "recordClass": class, "intakeKind": class, "sourceReference": map[string]any{"provider": "bpmn", "eventId": key}}
-	for from, to := range map[string]string{"title": "title", "description": "description", "priority": "priority", "assignee_id": "assigneeId", "ci_ids": "ciIds", "template_id": "templateId", "parent_ticket_id": "parentTicketId", "tag_ids": "tagIds", "workflow_definition_key": "workflowDefinitionKey", "form_values": "formValues"} {
+	for from, to := range map[string]string{"title": "title", "description": "description", "priority": "priority", "assignee_id": "assigneeId", "ci_ids": "ciIds", "template_id": "templateId", "parent_ticket_id": "parentTicketId", "tag_ids": "tagIds", "workflow_definition_key": "workflowDefinitionKey", "form_values": "formValues", "source_relations": "sourceRelations"} {
 		if value, ok := values[from]; ok {
 			raw[to] = value
 		}
 	}
 	input := map[string]any{}
-	fieldMap := map[string]string{}
+	var fieldMap map[string]string
 	professional := "incident"
 	if class == creation.RecordClassIncident {
 		fieldMap = map[string]string{"type": "type", "severity": "severity", "impact": "impact", "urgency": "urgency", "category": "category", "subcategory": "subcategory", "detected_at": "detectedAt", "impact_analysis": "impactAnalysis", "metadata": "metadata", "source": "source"}
 	} else if class == creation.RecordClassChangeRequest {
 		professional = "change"
-		fieldMap = map[string]string{"type": "type", "justification": "justification", "impact_scope": "impactScope", "risk_level": "riskLevel", "planned_start_date": "plannedStartDate", "planned_end_date": "plannedEndDate", "implementation_plan": "implementationPlan", "rollback_plan": "rollbackPlan", "affected_cis": "affectedCis", "related_tickets": "relatedTickets", "related_ticket_numbers": "relatedTicketNumbers"}
+		fieldMap = map[string]string{"type": "type", "justification": "justification", "impact_scope": "impactScope", "risk_level": "riskLevel", "planned_start_date": "plannedStartDate", "planned_end_date": "plannedEndDate", "implementation_plan": "implementationPlan", "rollback_plan": "rollbackPlan", "affected_cis": "affectedCis"}
 	} else {
 		return creation.CreateWorkItemCommand{}, 0, fmt.Errorf("unsupported creation class")
 	}

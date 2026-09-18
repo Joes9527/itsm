@@ -26,6 +26,7 @@ import {
 import { Plus, X, Save, Trash2, PlayCircle } from 'lucide-react';
 import type { AutomationRule } from '@/lib/api/ticket-automation-rule-api';
 import { TicketAutomationRuleApi } from '@/lib/api/ticket-automation-rule-api';
+import { RULE_CONDITION_FIELDS, RuleConditionRow } from './RuleConditionRow';
 
 const { TextArea } = Input;
 const { Title, Text } = Typography;
@@ -124,15 +125,8 @@ export const AutomationRuleForm: React.FC<AutomationRuleFormProps> = ({
   };
 
   // 条件字段选项
-  const conditionFields = [
-    { value: 'status', label: '工单状态' },
-    { value: 'priority', label: '优先级' },
-    { value: 'category_id', label: '工单分类' },
-    { value: 'department_id', label: '部门' },
-    { value: 'requesterId', label: '申请人' },
-    { value: 'assigneeId', label: '处理人' },
-    { value: 'title', label: '标题关键词' },
-  ];
+  // 字段词汇由共享组件提供，与后端 evaluateTicketRuleConditions 一致。
+  const conditionFields = RULE_CONDITION_FIELDS;
 
   // 操作类型选项
   const actionTypes = [
@@ -211,7 +205,9 @@ export const AutomationRuleForm: React.FC<AutomationRuleFormProps> = ({
           <Form.List name="conditions">
             {(fields, { add, remove }) => (
               <div>
-                {fields.map((field, index) => (
+                {fields.map((field, index) => {
+                  const condition = form.getFieldValue(['conditions', index]);
+                  return (
                   <Card
                     key={field.key}
                     size="small"
@@ -225,45 +221,20 @@ export const AutomationRuleForm: React.FC<AutomationRuleFormProps> = ({
                       />
                     }
                   >
-                    <Row gutter={8} align="middle">
-                      <Col span={8}>
-                        <Form.Item
-                          {...field}
-                          name={[field.name, 'field']}
-                          rules={[{ required: true }]}
-                        >
-                          <Select placeholder="选择字段" options={conditionFields.map(f => ({ value: f.value, label: f.label }))} />
-                        </Form.Item>
-                      </Col>
-                      <Col span={6}>
-                        <Form.Item
-                          {...field}
-                          name={[field.name, 'operator']}
-                          rules={[{ required: true }]}
-                        >
-                          <Select placeholder="操作符" options={[
-                            { value: 'equals', label: '等于' },
-                            { value: 'not_equals', label: '不等于' },
-                            { value: 'contains', label: '包含' },
-                            { value: 'in', label: '属于' },
-                            { value: 'not_in', label: '不属于' },
-                            { value: 'greater_than', label: '大于' },
-                            { value: 'less_than', label: '小于' },
-                          ]} />
-                        </Form.Item>
-                      </Col>
-                      <Col span={10}>
-                        <Form.Item
-                          {...field}
-                          name={[field.name, 'value']}
-                          rules={[{ required: true }]}
-                        >
-                          <Input placeholder="值" />
-                        </Form.Item>
-                      </Col>
-                    </Row>
+                    <RuleConditionRow
+                      index={index}
+                      field={field}
+                      fieldValue={condition?.field}
+                      onFieldChange={value => {
+                        // 离开分类条件时清理 scope，避免脏 scope 影响其它字段。
+                        const conditions = form.getFieldValue('conditions') || [];
+                        conditions[index] = { ...conditions[index], scope: value === 'category_id' ? 'exact' : undefined };
+                        form.setFieldsValue({ conditions });
+                      }}
+                    />
                   </Card>
-                ))}
+                  );
+                })}
                 <Button type="dashed" onClick={() => add()} block icon={<Plus />}>
                   添加条件
                 </Button>

@@ -1,7 +1,7 @@
 /* 企业级ITSM仪表盘样式 */
 .enterprise-dashboard-container {
   /* 使用主题定义的布局背景色 */
-  background-color: #f8fafc; /* slate-50 from antdTheme.token.colorBgLayout */
+  background-color: var(--color-bg-secondary); /* slate-50 from antdTheme.token.colorBgLayout */
   padding: 24px; /* Consistent with antdTheme.token.paddingLG */
   scroll-behavior: smooth;
 }
@@ -63,8 +63,8 @@
 .enterprise-dashboard-container .ant-card {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: 8px; /* Consistent with antdTheme.token.borderRadiusLG */
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); /* Consistent with designSystem.boxShadow.md */
-  border: 1px solid #e2e8f0; /* Consistent with antdTheme.token.colorBorder */
+  box-shadow: none; /* Consistent with designSystem.boxShadow.md */
+  border: 1px solid var(--color-border); /* Consistent with antdTheme.token.colorBorder */
 }
 
 .enterprise-dashboard-container .ant-tabs-tab {
@@ -73,7 +73,7 @@
 }
 
 .enterprise-dashboard-container .ant-tabs-tab:hover {
-  color: #F06820;
+  color: var(--color-selected-text);
 }
 
 .enterprise-dashboard-container .ant-tabs-tab-active {
@@ -82,7 +82,7 @@
 
 /* 加载状态优化 */
 .enterprise-dashboard-container .ant-spin {
-  color: #F06820;
+  color: var(--color-selected-text);
 }
 
 /* 徽章样式 */
@@ -133,7 +133,7 @@
 
 @media (max-width: 576px) {
   .enterprise-dashboard-container .ant-statistic-content-value {
-    font-size: 28px;
+    font-size: 26px;
   }
 }
 
@@ -153,17 +153,6 @@
   }
 }
 
-/* 深色模式支持 */
-@media (prefers-color-scheme: dark) {
-  .enterprise-dashboard-container {
-    --bg-primary: #1f2937;
-    --bg-secondary: #111827;
-    --text-primary: #f9fafb;
-    --text-secondary: #d1d5db;
-    --border-color: #374151;
-  }
-}
-
 /* 性能优化 */
 .enterprise-dashboard-container * {
   will-change: auto;
@@ -175,7 +164,7 @@
 
 /* 无障碍优化 */
 .enterprise-dashboard-container *:focus-visible {
-  outline: 2px solid #F06820;
+  outline: 2px solid var(--color-focus-outline);
   outline-offset: 2px;
 }
 

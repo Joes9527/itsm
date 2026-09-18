@@ -3,6 +3,8 @@ package intake
 import (
 	"context"
 	"encoding/json"
+	"strconv"
+
 	"itsm-backend/authorization"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
@@ -10,7 +12,6 @@ import (
 	"itsm-backend/ent/tickettemplate"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service"
-	"strconv"
 )
 
 type Resolver struct {
@@ -23,6 +24,7 @@ type Resolver struct {
 func NewResolver(catalog creation.CatalogResolver, workflow creation.WorkflowResolver, cis creation.ConfigurationItemResolver, classification creation.ClassificationResolver) *Resolver {
 	return &Resolver{catalog: catalog, workflow: workflow, cis: cis, classification: classification}
 }
+
 func (r *Resolver) Resolve(ctx context.Context, tx *ent.Tx, identity creation.Identity, command creation.CreateWorkItemCommand) (*creation.ResolvedIntake, error) {
 	if r == nil || missingDependency(r.catalog) || missingDependency(r.workflow) || missingDependency(r.cis) || missingDependency(r.classification) {
 		return nil, creation.NewInternalFailure("intake resolver is not fully configured", nil)
@@ -32,10 +34,8 @@ func (r *Resolver) Resolve(ctx context.Context, tx *ent.Tx, identity creation.Id
 	}
 	result := &creation.ResolvedIntake{Identity: identity, Command: command, RecordClass: command.RecordClass, ResolverVersion: "intake-resolver-v1"}
 	var err error
-	result.CTI, err = r.classification.ResolveCreationClassification(ctx, tx, identity, command)
-	if err != nil {
-		return nil, err
-	}
+	// 目录先解析：目录版本与默认分类是分类解析的初始权威（设计 §5.1）。
+	// 申请入口不允许客户端自报默认值，也不重复询问用户 CTI。
 	if command.CatalogItemID != nil {
 		result.Catalog, result.FieldDefinitions, err = r.catalog.ResolveCreationCatalog(ctx, tx, identity, *command.CatalogItemID)
 		if err != nil {
@@ -50,6 +50,10 @@ func (r *Resolver) Resolve(ctx context.Context, tx *ent.Tx, identity creation.Id
 		if result.Catalog.Version != command.CatalogVersion || result.Catalog.FormSchemaVersion != command.FormSchemaVersion {
 			return nil, creation.NewIntakeError(creation.CatalogVersionConflict, "catalog or form changed after confirmation", nil)
 		}
+		result.Command.CatalogDefaultCategoryID = result.Catalog.DefaultTicketCategoryID
+		if err := r.requireCatalogDefaultCTI(ctx, tx, identity, result.Catalog); err != nil {
+			return nil, err
+		}
 		if identity.CatalogOptionKeys {
 			result.Command.FormValues, err = service.ResolveCatalogOptionKeys(result.FieldDefinitions, command.FormValues)
 			if err != nil {
@@ -59,7 +63,12 @@ func (r *Resolver) Resolve(ctx context.Context, tx *ent.Tx, identity creation.Id
 		if err = service.NewFieldDefinitionService(tx.Client()).ValidateCreationValues(ctx, tx, identity.TenantID, "service_catalog", result.Catalog.ID, result.Command.FormValues); err != nil {
 			return nil, err
 		}
-	} else {
+	}
+	result.CTI, err = r.classification.ResolveCreationClassification(ctx, tx, identity, result.Command)
+	if err != nil {
+		return nil, err
+	}
+	if command.CatalogItemID == nil {
 		if command.TemplateID != nil {
 			fields := service.NewFieldDefinitionService(tx.Client())
 			if err = fields.ValidateCreationValues(ctx, tx, identity.TenantID, "ticket_template", *command.TemplateID, command.FormValues); err != nil {
@@ -92,6 +101,24 @@ func (r *Resolver) Resolve(ctx context.Context, tx *ent.Tx, identity creation.Id
 		result.CIIDs = append(result.CIIDs, ci.ID)
 	}
 	return result, nil
+}
+
+// requireCatalogDefaultCTI 在目录强制门禁启用后要求目录具备默认分类。
+//
+// 未启用门禁且目录未配置默认值时保留既有行为：部署新代码不会立即阻断旧目录申请
+// （设计 §5.1），此时客户端仍可按原契约提交 CTI 或不分类。
+func (r *Resolver) requireCatalogDefaultCTI(ctx context.Context, tx *ent.Tx, identity creation.Identity, catalog *creation.ResolvedCatalog) error {
+	if catalog == nil || (catalog.DefaultTicketCategoryID != nil && *catalog.DefaultTicketCategoryID > 0) {
+		return nil
+	}
+	governance, err := service.ReadCTIGovernance(ctx, tx, identity.TenantID)
+	if err != nil {
+		return creation.NewInfrastructureUnavailable("could not read CTI governance record", err)
+	}
+	if governance.CatalogEnforced {
+		return creation.NewDomainValidationFailed("catalog does not declare a complete default classification", nil)
+	}
+	return nil
 }
 
 // ResolveWorkflow follows owning-domain preparation, so routing observes exactly

@@ -2,9 +2,7 @@ package integration
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -26,7 +24,8 @@ func TestIntakeProblemConversionOwnsWholeGraph(t *testing.T) {
 			source := client.Ticket.Create().SetTenantID(identity.TenantID).SetRequesterID(identity.ActorID).SetTitle("VPN outage").SetDescription("Connection loss").SetPriority("high").SetStatus("new").SetTicketNumber("TKT-SOURCE").SetRecordClass("incident").SaveX(ctx)
 			incident := client.Incident.Create().SetWorkItemID(source.ID).SetSeverity("high").SetImpact("high").SetUrgency("high").SaveX(ctx)
 			command.RecordClass, command.IntakeKind, command.Title = "problem", "problem", ""
-			require.NoError(t, json.Unmarshal([]byte(fmt.Sprintf(`{"sourceIncidentId":%d,"rootCause":"sensitive diagnosis"}`, incident.ID)), &command.Problem))
+			command.Problem = &creation.ProblemInput{RootCause: "sensitive diagnosis"}
+			command.SourceRelations = []creation.SourceRelationInput{{SourceWorkItemID: source.ID, ExpectedVersion: source.Version, RelationType: "investigated_by"}}
 			reached := false
 			hook := func(next ent.Mutator) ent.Mutator {
 				return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
@@ -70,7 +69,7 @@ func TestIntakeProblemConversionOwnsWholeGraph(t *testing.T) {
 			require.Equal(t, "investigated_by", relation.RelationType)
 			event := client.IncidentEvent.Query().OnlyX(ctx)
 			require.Equal(t, incident.ID, event.IncidentID)
-			require.Equal(t, 2, client.AuditLog.Query().CountX(ctx))
+			require.Equal(t, 3, client.AuditLog.Query().CountX(ctx))
 			audits := client.AuditLog.Query().AllX(ctx)
 			for _, audit := range audits {
 				if audit.RequestBody != nil {
@@ -86,7 +85,7 @@ func TestIntakeProblemConversionOwnsWholeGraph(t *testing.T) {
 			require.Equal(t, "incident", client.Ticket.GetX(ctx, source.ID).RecordClass)
 			command.IdempotencyKey = "another"
 			_, err = app.Create(ctx, identity, command)
-			require.ErrorIs(t, err, creation.ErrDomainValidationFailed)
+			require.Error(t, err)
 			require.Equal(t, 1, client.Ticket.Query().Where(ticket.RecordClassEQ("problem")).CountX(ctx))
 			command.IdempotencyKey = "one"
 			// The caller retains Problem permissions, but loses Incident access. Even

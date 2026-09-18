@@ -306,6 +306,9 @@ func (_u *OutboxEventUpdate) sqlSave(ctx context.Context) (_node int, err error)
 			}
 		}
 	}
+	if _u.mutation.ExecutionWorkItemIDCleared() {
+		_spec.ClearField(outboxevent.FieldExecutionWorkItemID, field.TypeInt)
+	}
 	if value, ok := _u.mutation.EventType(); ok {
 		_spec.SetField(outboxevent.FieldEventType, field.TypeString, value)
 	}
@@ -690,6 +693,9 @@ func (_u *OutboxEventUpdateOne) sqlSave(ctx context.Context) (_node *OutboxEvent
 				ps[i](selector)
 			}
 		}
+	}
+	if _u.mutation.ExecutionWorkItemIDCleared() {
+		_spec.ClearField(outboxevent.FieldExecutionWorkItemID, field.TypeInt)
 	}
 	if value, ok := _u.mutation.EventType(); ok {
 		_spec.SetField(outboxevent.FieldEventType, field.TypeString, value)

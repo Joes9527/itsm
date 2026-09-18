@@ -1012,6 +1012,29 @@ func HasDepartmentWith(preds ...predicate.Department) predicate.TicketCategory {
 	})
 }
 
+// HasDefaultCatalogs applies the HasEdge predicate on the "default_catalogs" edge.
+func HasDefaultCatalogs() predicate.TicketCategory {
+	return predicate.TicketCategory(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, DefaultCatalogsTable, DefaultCatalogsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasDefaultCatalogsWith applies the HasEdge predicate on the "default_catalogs" edge with a given conditions (other predicates).
+func HasDefaultCatalogsWith(preds ...predicate.ServiceCatalog) predicate.TicketCategory {
+	return predicate.TicketCategory(func(s *sql.Selector) {
+		step := newDefaultCatalogsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.TicketCategory) predicate.TicketCategory {
 	return predicate.TicketCategory(sql.AndPredicates(predicates...))

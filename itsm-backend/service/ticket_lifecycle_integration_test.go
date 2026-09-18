@@ -5,11 +5,15 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/common/tenantctx"
+
 	_ "github.com/mattn/go-sqlite3"
 
 	"itsm-backend/common"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/handlers/shared/workitemmutation"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -84,6 +88,7 @@ func TestTicketLifecycle_Escalate(t *testing.T) {
 	ctx := context.Background()
 
 	tenant, user := createTestUserAndTenant(t, ctx, client)
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
 
 	// 创建高优先级工单
 	ticketEntity, err := client.Ticket.Create().
@@ -97,12 +102,14 @@ func TestTicketLifecycle_Escalate(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	service := NewTicketLifecycleService(client, zaptest.NewLogger(t).Sugar())
+	service := newManualEscalationTestOwner(client, zaptest.NewLogger(t).Sugar())
 
+	client.User.UpdateOneID(user.ID).SetRole("super_admin").SaveX(ctx)
 	// 升级工单
-	escalated, err := service.EscalateTicket(ctx, ticketEntity.ID, "需要高级别支持", tenant.ID, user.ID)
+	result, err := service.EscalateTicket(ctx, dto.TicketEscalationCommand{WorkItemID: ticketEntity.ID, Reason: "需要高级别支持", Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, ExpectedVersion: ticketEntity.Version, OperationID: "lifecycle-escalate", Source: "test"}})
 	require.NoError(t, err)
-	assert.Equal(t, common.TicketStatusOpen, escalated.Status)
+	escalated := client.Ticket.GetX(ctx, result.WorkItemID)
+	assert.Equal(t, common.TicketStatusInProgress, escalated.Status)
 	assert.Equal(t, "critical", escalated.Priority)
 }
 

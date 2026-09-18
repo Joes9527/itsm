@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/ent/enttest"
@@ -12,7 +14,7 @@ import (
 	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
-	"testing"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 )
 
 func TestAccessSnapshotTrustedRequesterAndFrozenTerms(t *testing.T) {
@@ -44,7 +46,7 @@ func TestAccessSnapshotTrustedRequesterAndFrozenTerms(t *testing.T) {
 	require.NoError(t, saveAccessSnapshot(ctx, tx, item.ID, snapshot))
 	require.NoError(t, tx.Commit())
 	c.CatalogAccessPolicy.UpdateOne(policy).SetGroupID("changed-group").SetDurationOptions([]accessgrant.DurationOption{{Key: "month", Label: "一个月", Seconds: 3600}}).AddVersion(1).SaveX(ctx)
-	owner := NewService(NewEntRepository(c), c, zap.NewNop().Sugar(), nil)
+	owner := NewService(NewEntRepository(c, executionfixture.Standard()), c, zap.NewNop().Sugar(), nil, executionfixture.Standard())
 	frozen, err := owner.ReadAccessSnapshot(ctx, c, tenant.ID, item.ID)
 	require.NoError(t, err)
 	require.Equal(t, snapshot, frozen)
@@ -54,10 +56,10 @@ func TestAccessSnapshotTrustedRequesterAndFrozenTerms(t *testing.T) {
 	require.Nil(t, foreign)
 	dep := c.ProcessDeployment.Create().SetTenantID(tenant.ID).SetDeploymentID("approved-dep").SetDeploymentName("Access").SaveX(ctx)
 	def := c.ProcessDefinition.Create().SetTenantID(tenant.ID).SetDeploymentID(dep.ID).SetKey("access").SetName("Access").SetBpmnXML([]byte(`<definitions/>`)).SaveX(ctx)
-	inst := c.ProcessInstance.Create().SetTenantID(tenant.ID).SetProcessDefinitionID(def.ID).SetProcessDefinitionKey("access").SetProcessInstanceID("approved-inst").SetBusinessType("service_request").SetBusinessID(item.ID).SaveX(ctx)
+	inst := c.ProcessInstance.Create().SetTenantID(tenant.ID).SetProcessDefinitionID(def.ID).SetProcessDefinitionKey("access").SetProcessInstanceID("approved-inst").SetBusinessType("service_request_item").SetBusinessID(item.ID).SaveX(ctx)
 	task := c.ProcessTask.Create().SetTenantID(tenant.ID).SetProcessInstanceID(inst.ID).SetProcessDefinitionKey("access").SetTaskDefinitionKey("grant").SetTaskName("Grant").SetTaskID("approved-task").SetTaskType("kaf_delegate").SetStatus("delegated").SetCallbackAction(accessgrant.Capability).SetCallbackConfigRef(fmt.Sprint(policy.ID)).SaveX(ctx)
 	kaf := c.User.Create().SetTenantID(tenant.ID).SetName("KAF").SetUsername("kaf").SetEmail("kaf@example.test").SetPasswordHash("unused").SetRole("kaf_automation").SaveX(ctx)
-	delegate := service.NewKafDelegationService(c)
+	delegate := service.NewKafDelegationService(c, executionfixture.Standard())
 	delegate.SetApprovedAccessReader(owner)
 	kafctx := context.WithValue(context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID), bpmn.BPMNUserIDContextKey, kaf.ID)
 	_, err = delegate.GetTaskContext(kafctx, task.TaskID)
@@ -131,5 +133,4 @@ func TestAccessSnapshotTrustedRequesterAndFrozenTerms(t *testing.T) {
 	require.Error(t, err, "domain-reader database failure must abort the page")
 	var blocked *accessgrant.BlockedError
 	require.NotErrorAs(t, err, &blocked)
-
 }

@@ -5,6 +5,11 @@ package intake
 import (
 	"context"
 	"fmt"
+	"os"
+	"sync"
+	"testing"
+	"time"
+
 	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 	"itsm-backend/ent"
@@ -19,10 +24,7 @@ import (
 	"itsm-backend/ent/workitemnumbersequence"
 	"itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/repository/workitemnumber"
-	"os"
-	"sync"
-	"testing"
-	"time"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 )
 
 // Real PostgreSQL upsert contention exercises the application and its owning
@@ -46,7 +48,7 @@ func TestPostgresConcurrentApplicationCreation(t *testing.T) {
 	c := workitemcreation.CreateWorkItemCommand{RecordClass: "generic", IntakeKind: "generic", Confirmation: "confirmed", IdempotencyKey: "concurrent", Title: "VPN"}
 	registry := NewCreatorRegistry()
 	require.NoError(t, registry.Register(&preparedCreator{}))
-	service := NewService(client, preparedResolver{}, registry, NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})
+	service := NewService(client, preparedResolver{}, registry, NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard())
 	type outcome struct {
 		result *workitemcreation.CreateWorkItemResult
 		err    error

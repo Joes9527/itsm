@@ -27,6 +27,7 @@ func (ServiceRequestAccessResult) Fields() []ent.Field {
 		field.String("evidence_ref").NotEmpty().Immutable(),
 	}
 }
+
 func (ServiceRequestAccessResult) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("work_item", Ticket.Type).Field("work_item_id").Required().Unique().Immutable(),

@@ -39,9 +39,11 @@ import {
   Tag,
   Divider,
 } from 'antd';
+import { CTISelector } from '@/components/business/CTISelector';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
 import { CMDBApi } from '@/lib/api/cmdb-api';
 import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
+import { apiErrorMessage } from '@/lib/api/http-client';
 import { BatchActionBar, type BatchAction } from '@/components/business/BatchActionBar';
 import { CustomFieldsEditor } from '@/components/common/CustomFieldsEditor';
 import type {
@@ -182,6 +184,8 @@ const ServiceCatalogManagement = () => {
         availability: values.deliveryTime ? { responseTime: values.deliveryTime } : undefined,
         ciTypeId: values.ciTypeId ?? 0,
         cloudServiceId: values.cloudServiceId ?? 0,
+        // 目录默认分类：未选择视为未配置；更新时 0 显式清除（后端 Clear）。
+        defaultTicketCategoryId: values.defaultTicketCategoryId ?? 0,
         fields,
         processDefinitionKey: values.processDefinitionKey || '',
         targetClass: values.targetClass || '',
@@ -206,9 +210,7 @@ const ServiceCatalogManagement = () => {
       form.resetFields();
       fetchCatalogs();
     } catch (error) {
-      message.error(
-        error instanceof Error ? error.message : editingCatalog ? '更新失败' : '创建失败'
-      );
+      message.error(apiErrorMessage(error, editingCatalog ? '更新失败' : '创建失败'));
     }
   };
 
@@ -235,6 +237,7 @@ const ServiceCatalogManagement = () => {
       status: catalog.status,
       ciTypeId: catalog.ciTypeId,
       cloudServiceId: catalog.cloudServiceId,
+      defaultTicketCategoryId: catalog.defaultTicketCategoryId ?? undefined,
       fields: fieldsForForm,
       processDefinitionKey: catalog.processDefinitionKey,
       serviceType: catalog.serviceType,
@@ -423,8 +426,8 @@ const ServiceCatalogManagement = () => {
       key: 'name',
       render: (name: string, record: ServiceItem) => (
         <div>
-          <div className='font-medium text-gray-900'>{name}</div>
-          <div className='text-sm text-gray-500 mt-1'>{record.shortDescription}</div>
+          <div className='font-medium text-foreground'>{name}</div>
+          <div className='text-[13px] text-muted mt-1'>{record.shortDescription}</div>
         </div>
       ),
     },
@@ -461,7 +464,7 @@ const ServiceCatalogManagement = () => {
       key: 'deliveryTime',
       width: 120,
       render: (_: unknown, record: ServiceItem) => (
-        <span className='text-sm flex items-center'>
+        <span className='text-[13px] flex items-center'>
           <Clock className='w-4 h-4 mr-1' />
           {record.availability?.responseTime ? `${record.availability.responseTime}小时` : '-'}
         </span>
@@ -493,7 +496,7 @@ const ServiceCatalogManagement = () => {
       key: 'createdAt',
       width: 150,
       render: (date: string) => (
-        <span className='text-sm text-gray-600'>{new Date(date).toLocaleDateString('zh-CN')}</span>
+        <span className='text-[13px] text-muted'>{new Date(date).toLocaleDateString('zh-CN')}</span>
       ),
     },
     {
@@ -567,7 +570,7 @@ const ServiceCatalogManagement = () => {
           <BookOpen className='inline-block w-6 h-6 mr-2' />
           服务目录管理
         </Title>
-        <Text type='secondary'>管理IT服务目录和服务分类</Text>
+        <Text type='secondary'>维护可申请的服务目录项，配置申请字段、流程和服务级别</Text>
       </div>
 
       {/* 统计卡片 */}
@@ -605,10 +608,10 @@ const ServiceCatalogManagement = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card className='enterprise-card'>
             <Statistic
-              title='服务分类'
+              title='目录分类'
               value={stats.categories}
               prefix={<Filter className='w-5 h-5' />}
-              styles={{ content: { color: '#722ed1' } }}
+              styles={{ content: { color: 'var(--color-text-primary)' } }}
             />
           </Card>
         </Col>
@@ -787,11 +790,11 @@ const ServiceCatalogManagement = () => {
 
           <Form.Item
             name='category'
-            label='服务分类'
-            rules={[{ required: true, message: '请选择服务分类' }]}
+            label='目录分类'
+            rules={[{ required: true, message: '请选择目录分类' }]}
           >
             <Select
-              placeholder='请选择服务分类'
+              placeholder='请选择目录分类'
               options={[
                 { value: '云服务', label: '云服务' },
                 { value: '基础设施', label: '基础设施' },
@@ -850,7 +853,7 @@ const ServiceCatalogManagement = () => {
           <CustomFieldsEditor name='fields' />
 
           {/* 审批配置 */}
-          <div className='bg-gray-50 p-4 rounded-lg mb-4'>
+          <div className='bg-raised p-[16px] rounded-[8px] mb-4'>
             <Text strong className='block mb-3'>
               审批配置
             </Text>
@@ -892,7 +895,7 @@ const ServiceCatalogManagement = () => {
           </div>
 
           {/* SLA配置 */}
-          <div className='bg-blue-50 p-4 rounded-lg mb-4'>
+          <div className='bg-raised p-[16px] rounded-[8px] mb-4'>
             <Text strong className='block mb-3'>
               SLA配置
             </Text>
@@ -941,6 +944,23 @@ const ServiceCatalogManagement = () => {
               </Form.Item>
             </Col>
           </Row>
+
+          <Form.Item
+            name='defaultTicketCategoryId'
+            label='默认工单分类（三级）'
+            tooltip='申请该服务后新工单的分类；发布且启用分类门禁后必填'
+            extra='目录默认分类是初始权威：申请入口不再询问用户分类；独立报障仍可“不确定”。'
+            rules={[
+              ({ getFieldValue }) => ({
+                validator: (_rule, value) =>
+                  getFieldValue('status') === 'enabled' && !value
+                    ? Promise.reject(new Error('发布的服务目录必须选择完整三级默认分类'))
+                    : Promise.resolve(),
+              }),
+            ]}
+          >
+            <CTISelector requiredDepth={3} />
+          </Form.Item>
 
           <Row gutter={16}>
             <Col span={12}>

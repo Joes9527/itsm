@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
 )
 
 // TicketCategory holds the schema definition for the TicketCategory entity.
@@ -23,8 +24,7 @@ func (TicketCategory) Fields() []ent.Field {
 			Comment("分类描述").
 			Optional(),
 		field.String("code").
-			Comment("分类代码").
-			Unique().
+			Comment("分类代码（租户内唯一，创建后不可修改）").
 			NotEmpty(),
 		field.Int("parent_id").
 			Comment("父分类ID").
@@ -86,5 +86,18 @@ func (TicketCategory) Edges() []ent.Edge {
 			Field("department_id").
 			Unique().
 			Comment("所属部门"),
+		edge.To("default_catalogs", ServiceCatalog.Type).
+			Comment("把该分类作为默认 CTI 的服务目录项"),
+	}
+}
+
+// Indexes of the TicketCategory.
+//
+// code 的唯一范围是租户内，而不是全表：分类由各租户独立维护，跨租户重名/同码是
+// 合法业务事实。表级全局唯一会让第二个租户无法创建同名代码，与 service 层按租户
+// 判重以及多租户产品契约不一致。迁移 048 在同一次变更中放宽该约束。
+func (TicketCategory) Indexes() []ent.Index {
+	return []ent.Index{
+		index.Fields("tenant_id", "code").Unique(),
 	}
 }

@@ -3,10 +3,12 @@ package service_catalog
 import (
 	"encoding/json"
 	"errors"
-	"github.com/gin-gonic/gin/binding"
 	"io"
-	creation "itsm-backend/handlers/common/workitemcreation"
 	"strconv"
+
+	"github.com/gin-gonic/gin/binding"
+
+	creation "itsm-backend/handlers/common/workitemcreation"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
@@ -277,7 +279,8 @@ func (h *Handler) toDTO(c *ServiceCatalog) dto.ServiceCatalogResponse {
 			"required": d.Required, "options": d.Options, "sortOrder": d.SortOrder,
 		})
 	}
-	return dto.ServiceCatalogResponse{AccessPolicy: c.AccessPolicy,
+	return dto.ServiceCatalogResponse{
+		AccessPolicy:   c.AccessPolicy,
 		CatalogVersion: c.CatalogVersion, FormSchemaVersion: c.FormSchemaVersion,
 		ID:                   c.ID,
 		Name:                 c.Name,
@@ -291,11 +294,33 @@ func (h *Handler) toDTO(c *ServiceCatalog) dto.ServiceCatalogResponse {
 		ServiceType:          c.ServiceType,
 		TargetClass:          c.TargetClass,
 		RequiresApproval:     c.RequiresApproval, SLAResponseTime: c.SLAResponseTime, SLAResolutionTime: c.SLAResolutionTime,
-		RequiresInfraFields: RequiresInfraFields(c.ServiceType),
-		Fields:              fields,
-		CreatedAt:           c.CreatedAt,
-		UpdatedAt:           c.UpdatedAt,
+		RequiresInfraFields:     RequiresInfraFields(c.ServiceType),
+		Fields:                  fields,
+		DefaultTicketCategoryID: defaultCTIID(c.DefaultTicketCategoryID),
+		DefaultCTIPath:          defaultCTIPath(c.DefaultCTIPath),
+		CreatedAt:               c.CreatedAt,
+		UpdatedAt:               c.UpdatedAt,
 	}
+}
+
+// defaultCTIID 区分“未配置”（null）与已配置：0 也视为未配置。
+func defaultCTIID(id int) *int {
+	if id <= 0 {
+		return nil
+	}
+	value := id
+	return &value
+}
+
+func defaultCTIPath(path []CTIPathNode) []dto.CTIPathNodeResponse {
+	if len(path) == 0 {
+		return nil
+	}
+	projection := make([]dto.CTIPathNodeResponse, 0, len(path))
+	for _, node := range path {
+		projection = append(projection, dto.CTIPathNodeResponse{ID: node.ID, ParentID: node.ParentID, Level: node.Level, Name: node.Name, Code: node.Code, IsActive: node.IsActive})
+	}
+	return projection
 }
 
 func bindCatalogJSON(c *gin.Context, value any) error {

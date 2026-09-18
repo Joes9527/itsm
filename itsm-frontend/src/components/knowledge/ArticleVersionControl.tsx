@@ -156,7 +156,7 @@ const ArticleVersionControl: React.FC<ArticleVersionControlProps> = ({
       key: 'createdByName',
       render: (name: string) => (
         <Space>
-          <User className="w-4 h-4 text-gray-500" />
+          <User className="w-4 h-4 text-muted" />
           {name}
         </Space>
       ),
@@ -167,7 +167,7 @@ const ArticleVersionControl: React.FC<ArticleVersionControlProps> = ({
       key: 'createdAt',
       render: (date: string) => (
         <Space>
-          <Calendar className="w-4 h-4 text-gray-500" />
+          <Calendar className="w-4 h-4 text-muted" />
           {format(new Date(date), 'yyyy-MM-dd HH:mm')}
         </Space>
       ),
@@ -217,7 +217,7 @@ const ArticleVersionControl: React.FC<ArticleVersionControlProps> = ({
 
         {compareResult.changes && compareResult.changes.length > 0 ? (
           <div>
-            <Title level={5}>变更详情</Title>
+            <Title className="!text-[15px] !font-semibold" level={5}>变更详情</Title>
             {compareResult.changes.map((change: any, index: number) => (
               <Card key={index} size="small" className="mb-2">
                 <Space>
@@ -241,9 +241,9 @@ const ArticleVersionControl: React.FC<ArticleVersionControlProps> = ({
 
         {compareResult.diff && (
           <div>
-            <Title level={5}>详细差异</Title>
+            <Title className="!text-[15px] !font-semibold" level={5}>详细差异</Title>
             <Card size="small">
-              <pre className="whitespace-pre-wrap text-xs bg-gray-50 p-3 rounded">
+              <pre className="whitespace-pre-wrap text-[12px] bg-raised p-3 rounded">
                 {compareResult.diff}
               </pre>
             </Card>
@@ -293,11 +293,11 @@ const ArticleVersionControl: React.FC<ArticleVersionControlProps> = ({
       />
 
       {/* 版本统计 */}
-      <Row gutter={16} className="mt-4">
+      <Row gutter={14} className="mt-4">
         <Col span={6}>
           <Card size="small">
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{versions.length}</div>
+              <div className="text-[26px] font-semibold text-foreground">{versions.length}</div>
               <Text type="secondary">总版本数</Text>
             </div>
           </Card>
@@ -305,7 +305,7 @@ const ArticleVersionControl: React.FC<ArticleVersionControlProps> = ({
         <Col span={6}>
           <Card size="small">
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">{currentVersion}</div>
+              <div className="text-[26px] font-semibold text-green-600">{currentVersion}</div>
               <Text type="secondary">当前版本</Text>
             </div>
           </Card>
@@ -313,7 +313,7 @@ const ArticleVersionControl: React.FC<ArticleVersionControlProps> = ({
         <Col span={6}>
           <Card size="small">
             <div className="text-center">
-              <div className="text-2xl font-bold text-orange-600">
+              <div className="text-[26px] font-semibold text-orange-600">
                 {versions.filter(v => v.changeLog).length}
               </div>
               <Text type="secondary">有变更记录</Text>
@@ -323,7 +323,7 @@ const ArticleVersionControl: React.FC<ArticleVersionControlProps> = ({
         <Col span={6}>
           <Card size="small">
             <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">
+              <div className="text-[26px] font-semibold text-foreground">
                 {versions.filter(v => v.version > currentVersion).length}
               </div>
               <Text type="secondary">可恢复版本</Text>
@@ -351,8 +351,8 @@ const ArticleVersionControl: React.FC<ArticleVersionControlProps> = ({
       >
         {!compareResult ? (
           <div className="space-y-4">
-            <Title level={5}>选择比较版本</Title>
-            <Row gutter={16}>
+            <Title className="!text-[15px] !font-semibold" level={5}>选择比较版本</Title>
+            <Row gutter={14}>
               <Col span={12}>
                 <Text strong>源版本</Text>
                 <Select
@@ -443,16 +443,16 @@ const ArticleVersionControl: React.FC<ArticleVersionControlProps> = ({
 
             {previewVersion.summary && (
               <div>
-                <Title level={5}>摘要</Title>
+                <Title className="!text-[15px] !font-semibold" level={5}>摘要</Title>
                 <Paragraph>{previewVersion.summary}</Paragraph>
               </div>
             )}
 
             <div>
-              <Title level={5}>内容预览</Title>
+              <Title className="!text-[15px] !font-semibold" level={5}>内容预览</Title>
               <Card size="small">
                 <div
-                  className="prose max-w-none"
+                  className="prose max-w-none text-[13px] text-foreground"
                   dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewVersion.content) }}
                 />
               </Card>

@@ -4,16 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
+	"strconv"
+	"strings"
+	"time"
+
 	"itsm-backend/ent"
 	"itsm-backend/ent/catalogaccesspolicy"
 	"itsm-backend/ent/fielddefinition"
 	"itsm-backend/ent/servicecatalog"
 	"itsm-backend/handlers/common/accessgrant"
 	"itsm-backend/service"
-	"math"
-	"strconv"
-	"strings"
-	"time"
+	"itsm-backend/service/bpmn"
 )
 
 func ValidateAccessPolicy(p *accessgrant.Policy, fields []service.FieldDefinitionInput) error {
@@ -65,6 +67,7 @@ func ReadAccessPolicy(ctx context.Context, client *ent.Client, tenantID, catalog
 	}
 	return &accessgrant.Policy{ID: row.ID, Version: row.Version, Provider: accessgrant.Provider(row.Provider), ExternalSystem: row.ExternalSystem, GroupID: row.GroupID, DurationField: row.DurationField, DurationOptions: row.DurationOptions}, nil
 }
+
 func saveAccessPolicy(ctx context.Context, tx *ent.Tx, tenantID, catalogID int, p *accessgrant.Policy) error {
 	if p == nil {
 		return nil
@@ -104,6 +107,7 @@ func (s *Service) PublicationConfiguration(ctx context.Context, client *ent.Clie
 	}
 	return json.Marshal(p)
 }
+
 func (s *Service) ValidatePublicationConfiguration(ctx context.Context, client *ent.Client, tenantID int, action, ref string) error {
 	if action != accessgrant.Capability {
 		return fmt.Errorf("unsupported external grant capability")
@@ -113,8 +117,11 @@ func (s *Service) ValidatePublicationConfiguration(ctx context.Context, client *
 		return err
 	}
 	var p *accessgrant.Policy
-	if err = json.Unmarshal(raw, &p); err != nil || p == nil {
-		return fmt.Errorf("external grant policy is unavailable")
+	if err = json.Unmarshal(raw, &p); err != nil {
+		return err
+	}
+	if p == nil {
+		return &bpmn.PublicationConfigurationError{Message: "external grant policy is unavailable"}
 	}
 	row, err := client.CatalogAccessPolicy.Get(ctx, p.ID)
 	if err != nil {

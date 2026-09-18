@@ -5,8 +5,12 @@ import (
 	"testing"
 	"time"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
+	"go.uber.org/zap"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/handlers/shared/workitemmutation"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
@@ -54,7 +58,7 @@ func TestEntRepository_GetByTicketID_CrossTenantIsolation(t *testing.T) {
 
 	ticketA := createTestTicketForSR(t, client, tenantA.ID, requesterA.ID, "TKT-CROSS-A")
 
-	repo := NewEntRepository(client)
+	repo := NewEntRepository(client, executionfixture.Standard())
 	created, err := createSRRepositoryFixture(ctx, client, &ServiceRequest{
 		TenantID:           tenantA.ID,
 		TicketID:           ticketA.ID,
@@ -96,7 +100,7 @@ func TestEntRepository_GetByTicketID_ExcludesSoftDeleted(t *testing.T) {
 
 	ticket := createTestTicketForSR(t, client, tenant.ID, requester.ID, "TKT-SOFTDEL")
 
-	repo := NewEntRepository(client)
+	repo := NewEntRepository(client, executionfixture.Standard())
 	created, err := createSRRepositoryFixture(ctx, client, &ServiceRequest{
 		TenantID:           tenant.ID,
 		TicketID:           ticket.ID,
@@ -139,7 +143,7 @@ func TestEntRepository_Create_PersistsContactAndQuantityFields(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	repo := NewEntRepository(client)
+	repo := NewEntRepository(client, executionfixture.Standard())
 	expected := time.Now().Add(48 * time.Hour)
 	created, err := createSRRepositoryFixture(ctx, client, &ServiceRequest{
 		TenantID:           tenant.ID,
@@ -210,7 +214,7 @@ func TestEntRepository_WorkItemAuthority(t *testing.T) {
 	require.Equal(t, wi.UpdatedAt, sr.UpdatedAt)
 	require.Equal(t, wi.Title, sr.TicketTitle)
 	require.Equal(t, wi.AssigneeID, *sr.ProcessorID)
-	repo := NewEntRepository(client)
+	repo := NewEntRepository(client, executionfixture.Standard())
 	rows, count, err := repo.List(ctx, tenant.ID, ListFilters{UserID: requester.ID})
 	require.NoError(t, err)
 	require.Equal(t, 1, count)
@@ -227,8 +231,11 @@ func TestEntRepository_WorkItemAuthority(t *testing.T) {
 	current, err := repo.Get(ctx, sr.ID, tenant.ID)
 	require.NoError(t, err)
 	require.Equal(t, 10, current.Version)
-	require.Error(t, repo.Delete(ctx, &stale))
-	require.NoError(t, repo.Delete(ctx, current))
+	// Deletion now uses current authority and the application guard; stale update CAS is asserted above.
+	client.User.UpdateOneID(requester.ID).SetRole("super_admin").SetActive(true).ExecX(ctx)
+	owner := NewService(repo, client, zap.NewNop().Sugar(), nil)
+	require.NoError(t, owner.Delete(ctx, current.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: requester.ID, Source: "http"}))
+	require.Equal(t, current.Version+1, client.Ticket.GetX(ctx, wi.ID).Version)
 	require.NotNil(t, client.Ticket.GetX(ctx, wi.ID).DeletedAt)
 	_, err = repo.Get(ctx, sr.ID, tenant.ID)
 	require.Error(t, err)

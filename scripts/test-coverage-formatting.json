@@ -1,0 +1,17 @@
+{
+  "itsm-backend/service/root_cause_service.go": {
+    "baseBlob": "470d68204230ccce519670989fb8a8c201db6c03",
+    "headBlob": "6e5a6bfff030966dee25d73c7e0bed8ff46dda5b",
+    "reason": "Reviewed gofumpt v0.11.0 formatting only; historical behavioral coverage gap remains."
+  },
+  "itsm-backend/service/sms_service.go": {
+    "baseBlob": "08767657ec650b1b59b52f5874deef8f7dabc536",
+    "headBlob": "0233acc4e93343d5b4e409de0d0f14371321abd1",
+    "reason": "Reviewed gofumpt v0.11.0 formatting only; historical behavioral coverage gap remains."
+  },
+  "itsm-backend/service/ticket_category_reference_view.go": {
+    "baseBlob": "7a416febbbe956a40e97689a0760739aa6e25187",
+    "headBlob": "0d718b5b934e4064127d7717af5deab6ef7fe745",
+    "reason": "Reviewed gofumpt v0.11.0 formatting only: split composite literals; the token stream is identical apart from the 4 commas required by multi-line literals. Behaviour is covered by ticket_category_reference_view_test.go."
+  }
+}

@@ -2,12 +2,13 @@ package intake
 
 import (
 	"context"
+	"strings"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/authorization"
 	"itsm-backend/common/tenantctx"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"strings"
-	"testing"
 )
 
 func TestIdentityMappingPermissionCASAuditAndRevocation(t *testing.T) {

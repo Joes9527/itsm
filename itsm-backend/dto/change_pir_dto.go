@@ -3,9 +3,19 @@ package dto
 import "time"
 
 // CreateChangePIRRequest 创建变更PIR请求
+type PIRMutationRequest struct {
+	ExpectedVersion int    `json:"expectedVersion" binding:"required,min=1"`
+	OperationID     string `json:"operationId" binding:"required"`
+}
+type DeleteChangePIRRequest struct {
+	PIRMutationRequest
+	ChangeID int `json:"changeId" binding:"required,min=1"`
+}
+
 type CreateChangePIRRequest struct {
+	PIRMutationRequest
 	ChangeID                   int        `json:"changeId"`
-	OverallResult              string     `json:"overallResult" binding:"required,oneof=successful partially_successful failed"`
+	OverallResult              string     `json:"overallResult" binding:"required,oneof=successful partially_successful failed rolled_back"`
 	ObjectivesAchieved         bool       `json:"objectivesAchieved"`
 	SuccessSummary             *string    `json:"successSummary"`
 	IssuesEncountered          *string    `json:"issuesEncountered"`
@@ -19,7 +29,9 @@ type CreateChangePIRRequest struct {
 
 // UpdateChangePIRRequest 更新变更PIR请求
 type UpdateChangePIRRequest struct {
-	OverallResult              *string `json:"overallResult" binding:"omitempty,oneof=successful partially_successful failed"`
+	PIRMutationRequest
+	ChangeID                   int     `json:"changeId" binding:"required,min=1"`
+	OverallResult              *string `json:"overallResult" binding:"omitempty,oneof=successful partially_successful failed rolled_back"`
 	ObjectivesAchieved         *bool   `json:"objectivesAchieved"`
 	SuccessSummary             *string `json:"successSummary"`
 	IssuesEncountered          *string `json:"issuesEncountered"`

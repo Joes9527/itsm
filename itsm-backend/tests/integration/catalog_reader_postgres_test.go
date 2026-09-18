@@ -7,13 +7,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"itsm-backend/ent/processdefinition"
-	"itsm-backend/handlers/intake"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
+
+	"itsm-backend/ent/processdefinition"
+	"itsm-backend/handlers/intake"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"itsm-backend/authorization"
 	"itsm-backend/common/tenantctx"
@@ -226,7 +228,7 @@ func TestPostgresCatalogConcurrentActivationKeepsOneExecutableVersion(t *testing
 	f := newIncidentEffectsFixture(t)
 	ctx := service.WithBPMNAccessScope(f.ctx, service.BPMNAccessScope{TenantID: f.tenant.ID, UserID: f.actor.ID})
 	logger := zap.NewNop().Sugar()
-	engine := service.NewCustomProcessEngine(f.client, logger).(*service.CustomProcessEngine)
+	engine := service.NewCustomProcessEngine(f.client, logger, executionfixture.Standard()).(*service.CustomProcessEngine)
 	xml := `<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><process id="flow" isExecutable="true"><startEvent id="start"/><userTask id="work" assignee="${requester_id}"/><endEvent id="end"/><sequenceFlow id="a" sourceRef="start" targetRef="work"/><sequenceFlow id="b" sourceRef="work" targetRef="end"/></process></definitions>`
 	definition, err := engine.ProcessDefinitionService().CreateProcessDefinition(ctx, &service.CreateProcessDefinitionRequest{Key: "concurrent-catalog", Name: "Flow", BPMNXML: xml, TenantID: f.tenant.ID})
 	require.NoError(t, err)

@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http/httptest"
+	"testing"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"itsm-backend/authentication"
 	"itsm-backend/authorization"
-	"net/http/httptest"
-	"testing"
-	"time"
 )
 
 func TestIdentityHTTPErrorDetailsStrictContract(t *testing.T) {
@@ -23,7 +24,7 @@ func TestIdentityHTTPErrorDetailsStrictContract(t *testing.T) {
 	ex := NewIdentityExchangeService(cfg.config, n, NewIdentityRepository(client, client, sessions), "test-jwt")
 	ex.now = cfg.now
 	h := NewHandler(ex, app)
-	h.SetReaders(NewReadService(sessions, nil, "test-cursor"))
+	h.SetReaders(NewReadService(sessions, nil, "test-cursor", ReferenceReadOptions{FrontendURL: "https://support.example.test", PageSize: 50, Lifecycle: NewRequesterLifecycleReader(referenceLifecycleOwners())}))
 	r := gin.New()
 	h.RegisterRoutes(r.Group("/api/v1"))
 	token := func(scopes []string) string {
@@ -56,6 +57,13 @@ func TestIdentityHTTPErrorDetailsStrictContract(t *testing.T) {
 		}},
 		{401, 2001, "AuthenticationRequired", func() *httptest.ResponseRecorder { return call("GET", "/api/v1/intake/catalog-items", nil, "") }},
 		{403, 2003, "PermissionDenied", func() *httptest.ResponseRecorder { return call("GET", "/api/v1/intake/catalog-items", nil, write) }},
+		{401, 2001, "AuthenticationRequired", func() *httptest.ResponseRecorder { return call("GET", "/api/v1/intake/work-item-references", nil, "") }},
+		{403, 2003, "PermissionDenied", func() *httptest.ResponseRecorder {
+			return call("GET", "/api/v1/intake/work-item-references", nil, write)
+		}},
+		{404, 4004, "ReferenceNotFound", func() *httptest.ResponseRecorder {
+			return call("GET", "/api/v1/intake/work-item-references?number=absent", nil, read)
+		}},
 		{404, 4004, "ReferenceNotFound", func() *httptest.ResponseRecorder { return call("GET", "/api/v1/intake/work-items/999999", nil, read) }},
 		{409, 4090, "IdempotencyConflict", func() *httptest.ResponseRecorder { return call("POST", "/api/v1/intake/work-items", changed, write) }},
 		{503, 5003, "InfrastructureUnavailable", func() *httptest.ResponseRecorder {
@@ -75,6 +83,7 @@ func TestIdentityHTTPErrorDetailsStrictContract(t *testing.T) {
 	require.Equal(t, 400, w.Code, w.Body.String())
 	assertIdentityErrorDetails(t, w, 1001, "InvalidCommand", false, true)
 }
+
 func assertIdentityErrorDetails(t *testing.T, w *httptest.ResponseRecorder, code int, errorCode string, retryable, nonempty bool) {
 	t.Helper()
 	var wire map[string]any

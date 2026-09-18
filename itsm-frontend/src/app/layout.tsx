@@ -5,9 +5,10 @@ import Script from 'next/script';
 import './globals.css';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
-import { AuthGuard } from '@/components/auth/AuthGuard';
+import { getThemeBootstrapScript } from '@/lib/design-system/theme-preference';
+import themeTokens from '@/design-system/theme-tokens.json';
 import { AntdProvider } from '@/lib/providers/AntdProvider';
-import { ThemeProvider, ThemeConfig, useTheme } from '@/lib/design-system/theme';
+import { ThemeProvider, ThemeConfig } from '@/lib/design-system/theme';
 import { RecentVisitTracker } from '@/components/layout/RecentVisitTracker';
 import { ThemeHtmlClassSync } from '@/components/layout/ThemeHtmlClassSync';
 
@@ -16,13 +17,10 @@ import ErrorBoundary from '@/components/common/ErrorBoundary';
 import { QueryProvider } from '@/lib/providers/QueryProvider';
 import GlobalShortcutProvider from '@/components/common/GlobalShortcutProvider';
 
-// 使用系统字体代替 Google Fonts
-const inter = { variable: '--font-inter' };
-const notoSansSC = { variable: '--font-noto-sans-sc' };
-
 export const metadata: Metadata = {
   title: 'AI-Native ITSM - AI驱动的IT服务管理系统',
-  description: 'AI-Native ITSM 是一款开源的AI驱动IT服务管理系统，提供工单管理、CMDB、知识库RAG、BPMN工作流、SLA监控、AI智能分诊等核心功能',
+  description:
+    'AI-Native ITSM 是一款开源的AI驱动IT服务管理系统，提供工单管理、CMDB、知识库RAG、BPMN工作流、SLA监控、AI智能分诊等核心功能',
   keywords: 'ITSM, AI, 工单管理, CMDB, 知识库, BPMN, SLA, IT服务管理, 开源',
   authors: [{ name: 'AI-Native ITSM Team' }],
   creator: 'AI-Native ITSM',
@@ -45,7 +43,8 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: 'AI-Native ITSM - AI驱动的IT服务管理系统',
-    description: 'AI-Native ITSM 是一款开源的AI驱动IT服务管理系统，提供工单管理、CMDB、知识库RAG、BPMN工作流、SLA监控、AI智能分诊等核心功能',
+    description:
+      'AI-Native ITSM 是一款开源的AI驱动IT服务管理系统，提供工单管理、CMDB、知识库RAG、BPMN工作流、SLA监控、AI智能分诊等核心功能',
     type: 'website',
     locale: 'zh_CN',
     siteName: 'AI-Native ITSM',
@@ -53,7 +52,8 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'AI-Native ITSM - AI驱动的IT服务管理系统',
-    description: 'AI-Native ITSM 是一款开源的AI驱动IT服务管理系统，提供工单管理、CMDB、知识库RAG、BPMN工作流、SLA监控、AI智能分诊等核心功能',
+    description:
+      'AI-Native ITSM 是一款开源的AI驱动IT服务管理系统，提供工单管理、CMDB、知识库RAG、BPMN工作流、SLA监控、AI智能分诊等核心功能',
   },
   icons: {
     icon: '/file.svg',
@@ -76,38 +76,36 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" suppressHydrationWarning>
+    <html lang='zh-CN' suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: getThemeBootstrapScript() }} />
         {/* 安全相关头部 */}
-        <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="theme-color" content="#1890ff" />
+        <meta httpEquiv='X-UA-Compatible' content='IE=edge' />
+        <meta name='theme-color' content={themeTokens.brand.palette[500]} />
 
         {/* PWA相关 */}
-        <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="AI-Native ITSM" />
+        <meta name='mobile-web-app-capable' content='yes' />
+        <meta name='apple-mobile-web-app-capable' content='yes' />
+        <meta name='apple-mobile-web-app-status-bar-style' content='default' />
+        <meta name='apple-mobile-web-app-title' content='AI-Native ITSM' />
       </head>
-      <body
-        className={`${inter.variable} ${notoSansSC.variable} antialiased`}
-        style={{
-          fontFamily: `var(--font-noto-sans-sc), var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'`,
-        }}
-      >
+      <body className='antialiased' style={{ fontFamily: 'var(--font-family-base)' }}>
         <ThemeProvider>
           <RecentVisitTracker />
           <ThemeHtmlClassSync />
           <ThemeConfig>
             <AntdProvider>
               <QueryProvider>
-                <GlobalShortcutProvider><ErrorBoundary>{children}</ErrorBoundary></GlobalShortcutProvider>
+                <GlobalShortcutProvider>
+                  <ErrorBoundary>{children}</ErrorBoundary>
+                </GlobalShortcutProvider>
               </QueryProvider>
             </AntdProvider>
           </ThemeConfig>
         </ThemeProvider>
 
         {/* 性能监控脚本 */}
-        <Script src="/scripts/monitoring.js" strategy="afterInteractive" />
+        <Script src='/scripts/monitoring.js' strategy='afterInteractive' />
       </body>
     </html>
   );

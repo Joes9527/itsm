@@ -24,6 +24,20 @@ type SLAAlertHistoryCreate struct {
 	conflict []sql.ConflictOption
 }
 
+// SetNotificationTrackingVersion sets the "notification_tracking_version" field.
+func (_c *SLAAlertHistoryCreate) SetNotificationTrackingVersion(v int) *SLAAlertHistoryCreate {
+	_c.mutation.SetNotificationTrackingVersion(v)
+	return _c
+}
+
+// SetNillableNotificationTrackingVersion sets the "notification_tracking_version" field if the given value is not nil.
+func (_c *SLAAlertHistoryCreate) SetNillableNotificationTrackingVersion(v *int) *SLAAlertHistoryCreate {
+	if v != nil {
+		_c.SetNotificationTrackingVersion(*v)
+	}
+	return _c
+}
+
 // SetTicketID sets the "ticket_id" field.
 func (_c *SLAAlertHistoryCreate) SetTicketID(v int) *SLAAlertHistoryCreate {
 	_c.mutation.SetTicketID(v)
@@ -231,6 +245,11 @@ func (_c *SLAAlertHistoryCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *SLAAlertHistoryCreate) check() error {
+	if v, ok := _c.mutation.NotificationTrackingVersion(); ok {
+		if err := slaalerthistory.NotificationTrackingVersionValidator(v); err != nil {
+			return &ValidationError{Name: "notification_tracking_version", err: fmt.Errorf(`ent: validator failed for field "SLAAlertHistory.notification_tracking_version": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.TicketID(); !ok {
 		return &ValidationError{Name: "ticket_id", err: errors.New(`ent: missing required field "SLAAlertHistory.ticket_id"`)}
 	}
@@ -330,6 +349,10 @@ func (_c *SLAAlertHistoryCreate) createSpec() (*SLAAlertHistory, *sqlgraph.Creat
 		_spec = sqlgraph.NewCreateSpec(slaalerthistory.Table, sqlgraph.NewFieldSpec(slaalerthistory.FieldID, field.TypeInt))
 	)
 	_spec.OnConflict = _c.conflict
+	if value, ok := _c.mutation.NotificationTrackingVersion(); ok {
+		_spec.SetField(slaalerthistory.FieldNotificationTrackingVersion, field.TypeInt, value)
+		_node.NotificationTrackingVersion = &value
+	}
 	if value, ok := _c.mutation.TicketNumber(); ok {
 		_spec.SetField(slaalerthistory.FieldTicketNumber, field.TypeString, value)
 		_node.TicketNumber = value
@@ -415,7 +438,7 @@ func (_c *SLAAlertHistoryCreate) createSpec() (*SLAAlertHistory, *sqlgraph.Creat
 // of the `INSERT` statement. For example:
 //
 //	client.SLAAlertHistory.Create().
-//		SetTicketID(v).
+//		SetNotificationTrackingVersion(v).
 //		OnConflict(
 //			// Update the row with the new values
 //			// the was proposed for insertion.
@@ -424,7 +447,7 @@ func (_c *SLAAlertHistoryCreate) createSpec() (*SLAAlertHistory, *sqlgraph.Creat
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.SLAAlertHistoryUpsert) {
-//			SetTicketID(v+v).
+//			SetNotificationTrackingVersion(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *SLAAlertHistoryCreate) OnConflict(opts ...sql.ConflictOption) *SLAAlertHistoryUpsertOne {
@@ -656,6 +679,11 @@ func (u *SLAAlertHistoryUpsert) ClearResolvedAt() *SLAAlertHistoryUpsert {
 //		Exec(ctx)
 func (u *SLAAlertHistoryUpsertOne) UpdateNewValues() *SLAAlertHistoryUpsertOne {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.NotificationTrackingVersion(); exists {
+			s.SetIgnore(slaalerthistory.FieldNotificationTrackingVersion)
+		}
+	}))
 	return u
 }
 
@@ -1038,7 +1066,7 @@ func (_c *SLAAlertHistoryCreateBulk) ExecX(ctx context.Context) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.SLAAlertHistoryUpsert) {
-//			SetTicketID(v+v).
+//			SetNotificationTrackingVersion(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *SLAAlertHistoryCreateBulk) OnConflict(opts ...sql.ConflictOption) *SLAAlertHistoryUpsertBulk {
@@ -1077,6 +1105,13 @@ type SLAAlertHistoryUpsertBulk struct {
 //		Exec(ctx)
 func (u *SLAAlertHistoryUpsertBulk) UpdateNewValues() *SLAAlertHistoryUpsertBulk {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		for _, b := range u.create.builders {
+			if _, exists := b.mutation.NotificationTrackingVersion(); exists {
+				s.SetIgnore(slaalerthistory.FieldNotificationTrackingVersion)
+			}
+		}
+	}))
 	return u
 }
 

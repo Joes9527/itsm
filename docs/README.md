@@ -1,6 +1,28 @@
 # ITSM 文档中心
 
-- [KAF / ITSM 本机 WSL 开发环境](development-environment.md)：当前源码入口、运行关联、启动来源、共享基础设施和回滚材料。
+- [CTI 治理实施计划（draft，未执行）](superpowers/plans/2026-09-17-cti-governance.md)：A1–A4 基础/创建，B1–B4 处理/完成，任务依赖与真实验收。
+
+- [CTI 三级分类与目录、完成质量设计（accepted，未实现）](superpowers/specs/2026-09-17-cti-governance-design.md)：已确认业务方向、两阶段范围、历史兼容与验收；不是部署证据。
+
+- **组织与审批路由设计组（proposed，待评审，2026-09-18）**：[统一数据契约](superpowers/specs/2026-09-18-org-people-data-contract-design.md)（组织/部门/负责人/上级四个词的统一口径与两条取数轴）、[《组织》](superpowers/specs/2026-09-18-organization-model-design.md)、[《部门》](superpowers/specs/2026-09-18-department-management-unit-design.md)、[《人员与汇报线》](superpowers/specs/2026-09-18-people-reporting-line-design.md)、[《流程与路由》](superpowers/specs/2026-09-18-process-routing-migration-design.md)。**均为设计意图，不代表已实现或已迁移；无数据库写入授权。**
+
+- [组织基础实施计划（迁移前置 + 组织树，draft，未执行）](superpowers/plans/2026-09-18-organization-foundation.md)：5 个任务（克隆来源证明与结构拉齐、seed 隔离、编码租户内唯一与导入幂等、节点类型、组织树轻量懒加载）。**Task 1/2 含数据库写入，需单独授权；其余只改代码与迁移文件。**
+
+> **开发／迁移任务先读：[当前结构目标047](development-environment.md#selected-schema-target-047)及[实际数据库状态](superpowers/plans/2026-09-15-migration-validation-ledger.md#schema-target-status)。目标版本与已部署状态分开记录。**
+
+- [Ticket 详情体验统一实施计划](./superpowers/plans/2026-09-15-ticket-detail-experience-unification.md)：六项任务及最终复审完成；浏览器 7/7、最终并发回归 98/98，已提交 PR #35。
+
+- [Ticket 详情体验统一设计（implemented）](./superpowers/specs/2026-09-15-ticket-detail-experience-unification-design.md)：统一刷新、局部恢复、编辑保护和当前／历史任务展示。
+
+- [原Dev恢复与双数据库收敛设计（accepted）](superpowers/specs/2026-09-16-dev-restoration-two-database-design.md)：四阶段交付、保留边界、最终两个业务库与恢复规则。
+
+- [Dev031与主干047分离原因及Agent接续指引](review/2026-09-16-dev-schema-divergence-report.md)：双重核验结论；解决路径待设计讨论，不代表迁移授权。
+
+- [WorkItem 任务分配：实现决策、验证证据与后续顺序](./review/2026-09-15-work-item-task-assignment-report.md)
+
+- [旧 ITSM 主数据迁移与当前目标验证：唯一续办清单](superpowers/plans/2026-09-15-migration-validation-ledger.md)：已完成、待补配置、运行阻塞、待验收及数据库清理边界。
+- [KAF / ITSM 本机 WSL 开发环境](development-environment.md)：开发／迁移验证双数据库约定、3010 → 8080 入口、版本与结构同步、启动来源和恢复边界。
+- [本地 PostgreSQL 数据库总清单](review/2026-09-14-postgresql-database-register.md)：实例、库名、用途、任务归属及待核项；操作边界见[开发环境状态](development-environment.md)。
 
 这个目录包含产品说明、部署运维、开发协作、测试报告和阶段性评审文档。为了避免新用户在大量历史文档中迷路，建议先从本页按角色阅读。
 
@@ -12,7 +34,7 @@
 | 部署人员 | [部署指南](./deployment.md)、[配置参考](./configuration.md)、[运维手册](./operations.md) |
 | 后端开发 | [开发指南](./development.md)、[数据库说明](./database.md)、[后端 CI](../.github/workflows/backend-ci.yml) |
 | 前端开发 | [开发指南](./development.md)、[前端 CI](../.github/workflows/frontend-ci.yml) |
-| Coding Agent | [Agent 工程协作规范](./agent-engineering-governance.md)、[开发与运维手册](./DEVELOPMENT_GUIDE.md) |
+| Coding Agent | [架构与领域契约](../AGENTS.md)、[Agent 工程协作规范](./agent-engineering-governance.md)、[共享工程约定](./engineering-conventions.md)、[开发与运维手册](./DEVELOPMENT_GUIDE.md) |
 | 产品/方案 | [开源发布能力说明](./product/open-source-release-capability.md)、[产品文档索引](./product/README.md) |
 | 测试/QA | [角色视角测试方案](./testing/role-based-product-test-plan.md)、[测试用例目录](./testing/test-cases/README.md) |
 | 发布维护 | [Release workflow](../.github/workflows/release.yml) |
@@ -20,6 +42,7 @@
 
 ## 核心文档
 
+- [从服务目录到工单流程与 SLA](./product/service-to-work-item-lifecycle.md)：模块职责、完整申请链路、SSL-VPN 示例和配置验收清单。
 - [SSLVPN Coding Agent 执行任务包](./testing/sslvpn-coding-agent-execution-guide.md)：使用测试手册前先登记授权、环境与角色分工，持续保存证据和续跑断点。
 - [SSLVPN UI 全流程测试手册](./testing/sslvpn-manual-lifecycle-runbook.md)：WSL/KAF 部署前置、自定义表单、审批链/BPMN、生命周期、查找和恢复；业务验收仅通过 UI。
 - [邮件建单与自动回复 UI 手册](./testing/email-ticket-ui-runbook.md)：真实邮箱发信、确认回信、原会话回复、附件、工程师通知与内部备注保密。
@@ -29,10 +52,38 @@
 - [开发指南](./development.md): 本地开发、前后端命令、调试和常见问题。
 - [数据库说明](./database.md): 数据库迁移、备份和模型说明。
 - [运维手册](./operations.md): 日志、健康检查、备份、恢复和故障排查。
+- [CTI 治理受控启用清单](./operations/cti-governance-rollout-checklist.md): 迁移 048 的前置体检、唯一写入者、已发布目录补配清单、分阶段开关与暂停、回退与复验（**代码已交付、目标未启用**）。
 - [v1.0 GA 收口验收指南](./v1-ga-readiness.md): 默认能力、连接器、AI 审计和部署模式检查。
 - [文档命名与维护规范](./documentation-style-guide.md): 目录分层、命名规则和归档标准。
 
 ## 产品与架构
+
+- [ITSM 双机双 Agent 候选交付总计划](./superpowers/plans/2026-09-12-itsm-candidate-two-agent-delivery.md)
+
+- [ITSM 候选版本集成、验收与 WSL 交付设计（accepted）](./superpowers/specs/2026-09-12-itsm-candidate-integration-delivery-design.md)
+- [候选执行范围与启动生命周期设计（accepted）](./superpowers/specs/2026-09-12-itsm-candidate-execution-scope-design.md)
+- [PostgreSQL 鉴权状态权威设计（accepted）](./superpowers/specs/2026-09-12-itsm-candidate-auth-state-design.md)
+- [候选执行范围实施计划](./superpowers/plans/2026-09-12-itsm-candidate-execution-scope.md)
+- [候选鉴权状态实施计划](./superpowers/plans/2026-09-12-itsm-candidate-auth-state.md)
+
+- [WorkItem 后续实施计划（代码与隔离旅程已验收，退役未完成）](./superpowers/plans/2026-09-11-workitem-next-stage.md)：后端五项任务、公共页面三项任务和跨域验收/退役两项任务的依赖与证据入口。
+
+- [WorkItem 后续收敛设计（accepted，执行中）](./superpowers/specs/2026-09-11-workitem-convergence-next-stage-design.md)：后端契约、页面操作、跨域验收与退役门禁三批设计；包含已确认的三域转派和 backlog 边界。
+
+- [WorkItem 重构后续开发输入与决策记录（accepted）](./superpowers/specs/2026-09-11-workitem-convergence-development-input.md)：本轮讨论总入口，覆盖 Incident、Problem、Change、Requested Item/generic 回归和公共能力；已确认与待讨论分列。
+
+- [Incident 分配与处理动作决策（accepted，B1 已验证）](./superpowers/specs/2026-09-11-workitem-incident-assignment-convergence-design.md)：WorkItem 收敛的分配/转派、可选确认和首次响应 backlog 决策过程。
+
+- [WorkItem 收敛实施总计划（draft）](./superpowers/plans/2026-09-09-workitem-convergence.md)：专业动作、关系联动、流程身份及切换门禁三个子计划。
+
+- [WorkItem 现有实现收敛设计（accepted）](./superpowers/specs/2026-09-09-workitem-convergence-design.md)：Incident、Problem、Change 生命周期、关系、SLA 与 BPMN 的分批收敛。
+- [UI 核心路径复核与后续修复顺序（accepted）](./superpowers/plans/2026-09-14-ui-core-journey-recovery.md)
+- [UI 工作台 1A 回归修复实施计划](./superpowers/plans/2026-09-14-ui-workbench-1a-recovery.md)
+
+- [主管工作台 2B 能力盘点（draft，暂缓）](./superpowers/specs/2026-09-14-manager-workspace-2b-design.md)
+- [工程师工作台 2A 实施与验收](./superpowers/plans/2026-09-14-engineer-workspace-real-data.md)
+- [工程师工作台 2A：真实队列与既有处理能力复用（implemented）](./superpowers/specs/2026-09-14-engineer-workspace-real-data-design.md)
+- [UI 工作台补齐：背景与第一阶段回归修复设计（accepted）](./superpowers/specs/2026-09-14-ui-workbench-completion-design.md)
 
 - [SSLVPN：KAF 对话受理、统一创建与授权闭环设计](./superpowers/specs/2026-09-05-sslvpn-kaf-intake-end-to-end-design.md)
 - [SSLVPN 端到端实施总计划](./superpowers/plans/2026-09-05-sslvpn-end-to-end-implementation.md)
@@ -44,10 +95,32 @@
 
 ## 测试与评审
 
+- [WorkItem 本轮实施复核与交接](./review/2026-09-11-workitem-next-stage-implementation-review.md)：已关闭问题、真实验证、代码提交与运行待办。
+
+- [WorkItem 受控退役设计（accepted）](./superpowers/specs/2026-09-11-workitem-controlled-retirement-design.md)：保留历史账本、结构准备、受控删除和删除后恢复的详细契约；审阅修订已通过；代码及隔离验证已实施，Tasks 1–6 分批审阅已通过；最终审阅 I1/I3/I4/M1 已修复、限定复审已完成（接手方复审 PASS，非独立第三方）；I2 已按维护者决定列为 backlog，一般 P 前活动流程退役仍未验收。当前 HEAD 隔离全流程重跑 `workitem-v1-e27375881582` 三时点各 9/9、共 27/27，覆盖 observation、R(038)、独立 Redis 恢复与业务 V1；共享 dev 容器 `itsm-postgres-dev` 专属 DB `workitem-target-20260912102644-8d3920` 已完成真实 CLI 准入（037 fail-closed）、P(037) 与普通迁移并精确清理。真实目标环境部署/退役仍未授权或实施；共享目标完整 P→观察→R→恢复与 focused real-PG 未执行。
+
+- [WorkItem 受控退役实施计划](./superpowers/plans/2026-09-11-workitem-controlled-retirement.md)：六批实施与验证任务；Tasks 1–6 已通过分批审阅，Task 6 验证及审阅状态见计划。
+- [WorkItem 受控退役审阅闭环](./review/2026-09-11-workitem-controlled-retirement-review-report.md)：验证顺序、回退依赖与写入前门禁的证据及修订结论。
+
+- [WorkItem 切换与恢复手册](./deployment/workitem-convergence-cutover.md)：P／普通迁移／授权 R 的执行边界、三时点隔离恢复证据、独立 Redis 与受控令牌失效边界及目标环境待执行步骤。
+
+- [WorkItem 受控退役目标环境执行 Runbook（待授权）](./deployment/workitem-controlled-retirement-target-runbook.md)：准入/权限核验/写入者盘点/P→观察→R→恢复步骤、失败决策树与证据模板。
+
+- [WorkItem 后续 backlog 就绪评估](./review/2026-09-12-workitem-backlog-readiness.md)：I2、物理清理审计、Change 多 WorkOrder、首响、RCA/HMAC/Redis/匿名卷的现状与未来验收条件。
+
+- [WorkItem 后续 backlog 设计草案（DRAFT）](./superpowers/specs/2026-09-12-backlog-design-drafts.md)：各项 backlog 的问题、方向、备选、验收与待决问题；未批准、未实现。
+
+- [Shared-target 受控准备执行报告（admission + P + ordinary）](./review/2026-09-12-shared-target-controlled-preparation.md)：共享 dev 容器专属 DB 的真实 CLI 准入/P/普通迁移与清理证据；未执行 R/V1。
+
+- [WorkItem 后续计划独立审查](./review/2026-09-11-workitem-next-stage-plan-review-report.md)：五项重要契约问题、修订及最终复核结论。
+
+- [2026-09-11 WorkItem 收敛独立评审与接手记录](./review/2026-09-11-workitem-convergence-review-report.md)：B/C1 反例、全入口收敛缺口与剩余工作。
+
 - [2026-09-05 ITSM 架构、功能差距与迭代建议（待评审）](./review/2026-09-05-architecture-product-assessment-report.md)
 - [角色视角测试方案](./testing/role-based-product-test-plan.md)
 - [测试用例目录](./testing/test-cases/README.md)
 - [系统功能评审清单](./review/system-function-review-checklist-2026-07-01.md)
+- [旧 ITSM / KAF EHR / 新 ITSM 数据对账与全景审计（只读，2026-09-18）](./review/2026-09-18-legacy-ehr-new-itsm-data-reconciliation.md)：组织/人员、领导与汇报线、流程与路由、分类/字典/SLA 的跨源缺口清单与证据；含旧 ITSM 生产口径重抓摘要（流程 144/模型 23/路由 1085）。**只读对账，非迁移授权或目标启用证据。**
 
 历史测试报告与阶段性评审（模块功能复盘、浏览器 E2E/功能测试报告、深度业务测试报告、前端 UX
 Review、商用就绪验收报告等）已移入 [archive](./archive/README.md)，仅作历史记录，不代表当前状态。
@@ -77,3 +150,5 @@ CI 按后端、前端、契约、集成、安全和发布分层。`ga-gate` 只�
 - 仍有长期参考价值的评审、测试方案保留在 `docs/review/`、`docs/testing/` 等目录。
 - 新增长期有效文档时，优先补到本页索引；临时报告使用日期命名，避免和正式指南混淆。
 - 历史 bug 报告、过期计划和阶段性复盘统一放入 [archive](./archive/README.md)，避免干扰当前用户路径。
+
+- [迁移验证工具包：users/departments只读核验与补建限制](migrations/runbook-data-migration-validation.md)

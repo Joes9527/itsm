@@ -1,3 +1,4 @@
+import { message } from 'antd';
 import { act, renderHook } from '@testing-library/react';
 import { useWorkItemCreation } from '../useWorkItemCreation';
 import { useAuthStore } from '@/lib/store/auth-store';
@@ -170,4 +171,43 @@ it.each(['committed', 'unknown'])('durably requests a fresh confirmation while s
     expect(send.mock.calls[3][0]).toEqual({ title: 'original' });
     expect(send.mock.calls[3][1].idempotencyKey).toBe(originalKey);
   } else expect(send).toHaveBeenCalledTimes(3);
+});
+
+
+describe('creation over LAN HTTP', () => {
+  const originalRandomUUID = crypto.randomUUID;
+  const originalGetRandomValues = crypto.getRandomValues;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: undefined });
+  });
+  afterEach(() => {
+    Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: originalRandomUUID });
+    Object.defineProperty(crypto, 'getRandomValues', { configurable: true, value: originalGetRandomValues });
+  });
+
+  it('submits with a cryptographic key and reuses the confirmed key/body after response loss', async () => {
+    const { result } = renderHook(() => useWorkItemCreation());
+    const send = jest.fn().mockRejectedValueOnce(new Error('lost')).mockResolvedValue(receipt);
+    await act(async () => { await result.current.submit({ title: 'confirmed' }, send); });
+    const originalKey = result.current.attempts[0].key;
+    expect(originalKey).toMatch(/^[0-9a-f]{32}$/);
+    Object.defineProperty(crypto, 'getRandomValues', { configurable: true, value: () => { throw new Error('random source failed'); } });
+    await act(async () => { await result.current.submit({ title: 'edited draft' }, send); });
+    expect(send.mock.calls.map(call => [call[0], call[1].idempotencyKey])).toEqual([
+      [{ title: 'confirmed' }, originalKey], [{ title: 'confirmed' }, originalKey],
+    ]);
+    expect(result.current.attempts[0]).toMatchObject({ state: 'committed', receipt });
+  });
+
+  it('does not send or retain an attempt without a secure random source', async () => {
+    Object.defineProperty(crypto, 'getRandomValues', { configurable: true, value: undefined });
+    const { result } = renderHook(() => useWorkItemCreation());
+    const send = jest.fn().mockResolvedValue(receipt);
+    await act(async () => { await result.current.submit({ title: 'draft' }, send); });
+    expect(send).not.toHaveBeenCalled();
+    expect(result.current.attempts).toEqual([]);
+    expect(message.error).toHaveBeenCalledWith(expect.stringContaining('浏览器不支持安全操作标识'));
+    expect(result.current.submitting).toBe(false);
+  });
 });

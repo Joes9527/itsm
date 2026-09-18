@@ -2,8 +2,9 @@ package service
 
 import (
 	"encoding/json"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestExpressionEngineExactJSONNumbers(t *testing.T) {

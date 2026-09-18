@@ -1,8 +1,9 @@
 package schema
 
 import (
-	"itsm-backend/internal/jsonvalue"
 	"time"
+
+	"itsm-backend/internal/jsonvalue"
 
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
@@ -40,6 +41,10 @@ func (ProcessTask) Fields() []ent.Field {
 		field.String("assignee").
 			Comment("任务负责人").
 			Optional(),
+		field.String("assignee_source").
+			Default("").
+			Immutable().
+			Comment("Immutable task assignment source from the pinned process definition"),
 		field.String("candidate_users").
 			Comment("候选用户，逗号分隔").
 			Optional(),

@@ -22,6 +22,62 @@ type AuditLogCreate struct {
 	conflict []sql.ConflictOption
 }
 
+// SetOperationID sets the "operation_id" field.
+func (_c *AuditLogCreate) SetOperationID(v string) *AuditLogCreate {
+	_c.mutation.SetOperationID(v)
+	return _c
+}
+
+// SetNillableOperationID sets the "operation_id" field if the given value is not nil.
+func (_c *AuditLogCreate) SetNillableOperationID(v *string) *AuditLogCreate {
+	if v != nil {
+		_c.SetOperationID(*v)
+	}
+	return _c
+}
+
+// SetRequestDigest sets the "request_digest" field.
+func (_c *AuditLogCreate) SetRequestDigest(v string) *AuditLogCreate {
+	_c.mutation.SetRequestDigest(v)
+	return _c
+}
+
+// SetNillableRequestDigest sets the "request_digest" field if the given value is not nil.
+func (_c *AuditLogCreate) SetNillableRequestDigest(v *string) *AuditLogCreate {
+	if v != nil {
+		_c.SetRequestDigest(*v)
+	}
+	return _c
+}
+
+// SetResultVersion sets the "result_version" field.
+func (_c *AuditLogCreate) SetResultVersion(v int) *AuditLogCreate {
+	_c.mutation.SetResultVersion(v)
+	return _c
+}
+
+// SetNillableResultVersion sets the "result_version" field if the given value is not nil.
+func (_c *AuditLogCreate) SetNillableResultVersion(v *int) *AuditLogCreate {
+	if v != nil {
+		_c.SetResultVersion(*v)
+	}
+	return _c
+}
+
+// SetResultStatus sets the "result_status" field.
+func (_c *AuditLogCreate) SetResultStatus(v string) *AuditLogCreate {
+	_c.mutation.SetResultStatus(v)
+	return _c
+}
+
+// SetNillableResultStatus sets the "result_status" field if the given value is not nil.
+func (_c *AuditLogCreate) SetNillableResultStatus(v *string) *AuditLogCreate {
+	if v != nil {
+		_c.SetResultStatus(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *AuditLogCreate) SetCreatedAt(v time.Time) *AuditLogCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -267,6 +323,22 @@ func (_c *AuditLogCreate) createSpec() (*AuditLog, *sqlgraph.CreateSpec) {
 		_spec = sqlgraph.NewCreateSpec(auditlog.Table, sqlgraph.NewFieldSpec(auditlog.FieldID, field.TypeInt))
 	)
 	_spec.OnConflict = _c.conflict
+	if value, ok := _c.mutation.OperationID(); ok {
+		_spec.SetField(auditlog.FieldOperationID, field.TypeString, value)
+		_node.OperationID = &value
+	}
+	if value, ok := _c.mutation.RequestDigest(); ok {
+		_spec.SetField(auditlog.FieldRequestDigest, field.TypeString, value)
+		_node.RequestDigest = &value
+	}
+	if value, ok := _c.mutation.ResultVersion(); ok {
+		_spec.SetField(auditlog.FieldResultVersion, field.TypeInt, value)
+		_node.ResultVersion = &value
+	}
+	if value, ok := _c.mutation.ResultStatus(); ok {
+		_spec.SetField(auditlog.FieldResultStatus, field.TypeString, value)
+		_node.ResultStatus = &value
+	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(auditlog.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
@@ -318,7 +390,7 @@ func (_c *AuditLogCreate) createSpec() (*AuditLog, *sqlgraph.CreateSpec) {
 // of the `INSERT` statement. For example:
 //
 //	client.AuditLog.Create().
-//		SetCreatedAt(v).
+//		SetOperationID(v).
 //		OnConflict(
 //			// Update the row with the new values
 //			// the was proposed for insertion.
@@ -327,7 +399,7 @@ func (_c *AuditLogCreate) createSpec() (*AuditLog, *sqlgraph.CreateSpec) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.AuditLogUpsert) {
-//			SetCreatedAt(v+v).
+//			SetOperationID(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *AuditLogCreate) OnConflict(opts ...sql.ConflictOption) *AuditLogUpsertOne {
@@ -362,6 +434,84 @@ type (
 		*sql.UpdateSet
 	}
 )
+
+// SetOperationID sets the "operation_id" field.
+func (u *AuditLogUpsert) SetOperationID(v string) *AuditLogUpsert {
+	u.Set(auditlog.FieldOperationID, v)
+	return u
+}
+
+// UpdateOperationID sets the "operation_id" field to the value that was provided on create.
+func (u *AuditLogUpsert) UpdateOperationID() *AuditLogUpsert {
+	u.SetExcluded(auditlog.FieldOperationID)
+	return u
+}
+
+// ClearOperationID clears the value of the "operation_id" field.
+func (u *AuditLogUpsert) ClearOperationID() *AuditLogUpsert {
+	u.SetNull(auditlog.FieldOperationID)
+	return u
+}
+
+// SetRequestDigest sets the "request_digest" field.
+func (u *AuditLogUpsert) SetRequestDigest(v string) *AuditLogUpsert {
+	u.Set(auditlog.FieldRequestDigest, v)
+	return u
+}
+
+// UpdateRequestDigest sets the "request_digest" field to the value that was provided on create.
+func (u *AuditLogUpsert) UpdateRequestDigest() *AuditLogUpsert {
+	u.SetExcluded(auditlog.FieldRequestDigest)
+	return u
+}
+
+// ClearRequestDigest clears the value of the "request_digest" field.
+func (u *AuditLogUpsert) ClearRequestDigest() *AuditLogUpsert {
+	u.SetNull(auditlog.FieldRequestDigest)
+	return u
+}
+
+// SetResultVersion sets the "result_version" field.
+func (u *AuditLogUpsert) SetResultVersion(v int) *AuditLogUpsert {
+	u.Set(auditlog.FieldResultVersion, v)
+	return u
+}
+
+// UpdateResultVersion sets the "result_version" field to the value that was provided on create.
+func (u *AuditLogUpsert) UpdateResultVersion() *AuditLogUpsert {
+	u.SetExcluded(auditlog.FieldResultVersion)
+	return u
+}
+
+// AddResultVersion adds v to the "result_version" field.
+func (u *AuditLogUpsert) AddResultVersion(v int) *AuditLogUpsert {
+	u.Add(auditlog.FieldResultVersion, v)
+	return u
+}
+
+// ClearResultVersion clears the value of the "result_version" field.
+func (u *AuditLogUpsert) ClearResultVersion() *AuditLogUpsert {
+	u.SetNull(auditlog.FieldResultVersion)
+	return u
+}
+
+// SetResultStatus sets the "result_status" field.
+func (u *AuditLogUpsert) SetResultStatus(v string) *AuditLogUpsert {
+	u.Set(auditlog.FieldResultStatus, v)
+	return u
+}
+
+// UpdateResultStatus sets the "result_status" field to the value that was provided on create.
+func (u *AuditLogUpsert) UpdateResultStatus() *AuditLogUpsert {
+	u.SetExcluded(auditlog.FieldResultStatus)
+	return u
+}
+
+// ClearResultStatus clears the value of the "result_status" field.
+func (u *AuditLogUpsert) ClearResultStatus() *AuditLogUpsert {
+	u.SetNull(auditlog.FieldResultStatus)
+	return u
+}
 
 // SetCreatedAt sets the "created_at" field.
 func (u *AuditLogUpsert) SetCreatedAt(v time.Time) *AuditLogUpsert {
@@ -575,6 +725,97 @@ func (u *AuditLogUpsertOne) Update(set func(*AuditLogUpsert)) *AuditLogUpsertOne
 		set(&AuditLogUpsert{UpdateSet: update})
 	}))
 	return u
+}
+
+// SetOperationID sets the "operation_id" field.
+func (u *AuditLogUpsertOne) SetOperationID(v string) *AuditLogUpsertOne {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.SetOperationID(v)
+	})
+}
+
+// UpdateOperationID sets the "operation_id" field to the value that was provided on create.
+func (u *AuditLogUpsertOne) UpdateOperationID() *AuditLogUpsertOne {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.UpdateOperationID()
+	})
+}
+
+// ClearOperationID clears the value of the "operation_id" field.
+func (u *AuditLogUpsertOne) ClearOperationID() *AuditLogUpsertOne {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.ClearOperationID()
+	})
+}
+
+// SetRequestDigest sets the "request_digest" field.
+func (u *AuditLogUpsertOne) SetRequestDigest(v string) *AuditLogUpsertOne {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.SetRequestDigest(v)
+	})
+}
+
+// UpdateRequestDigest sets the "request_digest" field to the value that was provided on create.
+func (u *AuditLogUpsertOne) UpdateRequestDigest() *AuditLogUpsertOne {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.UpdateRequestDigest()
+	})
+}
+
+// ClearRequestDigest clears the value of the "request_digest" field.
+func (u *AuditLogUpsertOne) ClearRequestDigest() *AuditLogUpsertOne {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.ClearRequestDigest()
+	})
+}
+
+// SetResultVersion sets the "result_version" field.
+func (u *AuditLogUpsertOne) SetResultVersion(v int) *AuditLogUpsertOne {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.SetResultVersion(v)
+	})
+}
+
+// AddResultVersion adds v to the "result_version" field.
+func (u *AuditLogUpsertOne) AddResultVersion(v int) *AuditLogUpsertOne {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.AddResultVersion(v)
+	})
+}
+
+// UpdateResultVersion sets the "result_version" field to the value that was provided on create.
+func (u *AuditLogUpsertOne) UpdateResultVersion() *AuditLogUpsertOne {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.UpdateResultVersion()
+	})
+}
+
+// ClearResultVersion clears the value of the "result_version" field.
+func (u *AuditLogUpsertOne) ClearResultVersion() *AuditLogUpsertOne {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.ClearResultVersion()
+	})
+}
+
+// SetResultStatus sets the "result_status" field.
+func (u *AuditLogUpsertOne) SetResultStatus(v string) *AuditLogUpsertOne {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.SetResultStatus(v)
+	})
+}
+
+// UpdateResultStatus sets the "result_status" field to the value that was provided on create.
+func (u *AuditLogUpsertOne) UpdateResultStatus() *AuditLogUpsertOne {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.UpdateResultStatus()
+	})
+}
+
+// ClearResultStatus clears the value of the "result_status" field.
+func (u *AuditLogUpsertOne) ClearResultStatus() *AuditLogUpsertOne {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.ClearResultStatus()
+	})
 }
 
 // SetCreatedAt sets the "created_at" field.
@@ -915,7 +1156,7 @@ func (_c *AuditLogCreateBulk) ExecX(ctx context.Context) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.AuditLogUpsert) {
-//			SetCreatedAt(v+v).
+//			SetOperationID(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *AuditLogCreateBulk) OnConflict(opts ...sql.ConflictOption) *AuditLogUpsertBulk {
@@ -982,6 +1223,97 @@ func (u *AuditLogUpsertBulk) Update(set func(*AuditLogUpsert)) *AuditLogUpsertBu
 		set(&AuditLogUpsert{UpdateSet: update})
 	}))
 	return u
+}
+
+// SetOperationID sets the "operation_id" field.
+func (u *AuditLogUpsertBulk) SetOperationID(v string) *AuditLogUpsertBulk {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.SetOperationID(v)
+	})
+}
+
+// UpdateOperationID sets the "operation_id" field to the value that was provided on create.
+func (u *AuditLogUpsertBulk) UpdateOperationID() *AuditLogUpsertBulk {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.UpdateOperationID()
+	})
+}
+
+// ClearOperationID clears the value of the "operation_id" field.
+func (u *AuditLogUpsertBulk) ClearOperationID() *AuditLogUpsertBulk {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.ClearOperationID()
+	})
+}
+
+// SetRequestDigest sets the "request_digest" field.
+func (u *AuditLogUpsertBulk) SetRequestDigest(v string) *AuditLogUpsertBulk {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.SetRequestDigest(v)
+	})
+}
+
+// UpdateRequestDigest sets the "request_digest" field to the value that was provided on create.
+func (u *AuditLogUpsertBulk) UpdateRequestDigest() *AuditLogUpsertBulk {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.UpdateRequestDigest()
+	})
+}
+
+// ClearRequestDigest clears the value of the "request_digest" field.
+func (u *AuditLogUpsertBulk) ClearRequestDigest() *AuditLogUpsertBulk {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.ClearRequestDigest()
+	})
+}
+
+// SetResultVersion sets the "result_version" field.
+func (u *AuditLogUpsertBulk) SetResultVersion(v int) *AuditLogUpsertBulk {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.SetResultVersion(v)
+	})
+}
+
+// AddResultVersion adds v to the "result_version" field.
+func (u *AuditLogUpsertBulk) AddResultVersion(v int) *AuditLogUpsertBulk {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.AddResultVersion(v)
+	})
+}
+
+// UpdateResultVersion sets the "result_version" field to the value that was provided on create.
+func (u *AuditLogUpsertBulk) UpdateResultVersion() *AuditLogUpsertBulk {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.UpdateResultVersion()
+	})
+}
+
+// ClearResultVersion clears the value of the "result_version" field.
+func (u *AuditLogUpsertBulk) ClearResultVersion() *AuditLogUpsertBulk {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.ClearResultVersion()
+	})
+}
+
+// SetResultStatus sets the "result_status" field.
+func (u *AuditLogUpsertBulk) SetResultStatus(v string) *AuditLogUpsertBulk {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.SetResultStatus(v)
+	})
+}
+
+// UpdateResultStatus sets the "result_status" field to the value that was provided on create.
+func (u *AuditLogUpsertBulk) UpdateResultStatus() *AuditLogUpsertBulk {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.UpdateResultStatus()
+	})
+}
+
+// ClearResultStatus clears the value of the "result_status" field.
+func (u *AuditLogUpsertBulk) ClearResultStatus() *AuditLogUpsertBulk {
+	return u.Update(func(s *AuditLogUpsert) {
+		s.ClearResultStatus()
+	})
 }
 
 // SetCreatedAt sets the "created_at" field.

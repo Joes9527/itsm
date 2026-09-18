@@ -26,6 +26,7 @@ func (ServiceRequestAccessSnapshot) Fields() []ent.Field {
 		field.Int64("duration_seconds").Positive().Immutable(),
 	}
 }
+
 func (ServiceRequestAccessSnapshot) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("work_item", Ticket.Type).Field("work_item_id").Required().Unique().Immutable(),

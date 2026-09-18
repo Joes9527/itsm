@@ -1,5 +1,7 @@
 package migration
 
+import "itsm-backend/migrations"
+
 // LegacyMigrations documents the pre-unified migration history. These versions
 // were superseded by the Ent schema and must never be replayed by active
 // migration entry points.
@@ -39,6 +41,12 @@ var LegacyMigrations = []Migration{
 		Description: "Retired: ticket_types is now owned by the Ent schema; retained only for checksum/history lookup",
 		RollbackSQL: "",
 	},
+	{
+		Version:     "022_drop_professional_extension_shared_fields",
+		Description: "Remove WorkItem-owned extension fields and retire legacy TicketApproval and Workflow runtimes",
+		RollbackSQL: "",
+	},
+	{Version: "027_work_item_identity_field_retirement", Description: "Retire duplicate Ticket type and Incident number identity fields"},
 }
 
 // RegisteredMigrations is the single canonical active migration stream used
@@ -438,20 +446,31 @@ var RegisteredMigrations = []Migration{
 		Description: "Snapshot definition-declared callback optionality in the callback outbox",
 		RollbackSQL: "ALTER TABLE process_callback_outboxes DROP COLUMN IF EXISTS optional_declared;",
 	},
-	{
-		Version:     "022_drop_professional_extension_shared_fields",
-		Description: "Remove WorkItem-owned extension fields and retire legacy TicketApproval and Workflow runtimes",
-		RollbackSQL: "",
-	},
+	{Version: WorkItemPrepareVersion, Description: "Prepare WorkItem structure with controlled evidence"},
 	{Version: "023_add_process_start_request_digest", Description: "Persist immutable original BPMN start context for durable replay conflicts", RollbackSQL: processStartRequestDigestDevelopmentResetSQL},
 	{Version: "024_incident_rule_action_receipts", Description: "Freeze creation rule decisions and commit action receipts with domain effects", RollbackSQL: incidentRuleActionReceiptsDevelopmentResetSQL},
 	{Version: "025_email_attachment_source_identity", Description: "Persist scoped inbound attachment identity for recoverable delivery", RollbackSQL: emailAttachmentSourceIdentityDevelopmentResetSQL},
 	{Version: "026_intake_actor_provenance", Description: "Preserve immutable native actor provenance for Intake and committed tenant policy effects", RollbackSQL: intakeActorProvenanceDevelopmentResetSQL},
-	{Version: "027_work_item_identity_field_retirement", Description: "Retire duplicate Ticket type and Incident number identity fields"},
 	{Version: "028_service_request_work_item_authority", Description: "Use WorkItem authority for ServiceRequest shared fields"},
 	{Version: "029_catalog_target_class_authority", Description: "Retire legacy Catalog class inference"},
 	{Version: "030_catalog_access_policy_result", Description: "Finite catalog access policy and immutable verified results"},
 	{Version: "031_kaf_action_request_digest", Description: "Bind verified access completion to immutable canonical request digest"},
+	{Version: "032_workitem_sla_cycle", Description: "Freeze applied SLA cycles and immutable action audit receipts"},
+	{Version: "033_incident_status_events", Description: "Authorize Incident status events from immutable command receipts"},
+	{Version: "034_problem_investigation_completion", Description: "Problem investigation schema and verified resolution evidence"},
+	{Version: "035_change_professional_evidence", Description: "Change outcome, review and standard policy evidence"},
+	{Version: "036_intake_frozen_workflow_context", Description: "Freeze workflow definition content and prepared variables in intake snapshots"},
+	{Version: CandidateExecutionScopeVersion, Description: "Register new candidate WorkItems in bounded deployment execution scopes"},
+	{Version: SLAAlertNotificationVersion, Description: "Link SLA alert delivery identities and preserve historical notification facts"},
+	{Version: ToolInvocationExecutionScopeVersion, Description: "Register new tool invocation execution provenance without enrolling history"},
+	{Version: ToolExecutionAuthorityLockVersion, Description: "Lock candidate tool authority within the caller transaction"},
+	{Version: ToolExecutionAuthorizationLockVersion, Description: "Hold candidate tool approval and current authorization through transaction completion"},
+	{Version: NotificationConnectorTargetVersion, Description: "Freeze connector notification target identity without binding historical intents"},
+	{Version: NotificationEmailTargetVersion, Description: "Freeze email notification transport and identity without rebinding history"},
+	{Version: AuthTokenStateVersion, Description: "Persist append-only token revocation and refresh consumption authority"},
+	{Version: "047_bpmn_assignment_source", Description: "Persist immutable BPMN WorkItem assignment source"},
+	{Version: CTIGovernanceVersion, Description: "Scope ticket category code uniqueness to the tenant and persist the Service Catalog default CTI reference", RollbackSQL: ctiGovernanceDevelopmentResetSQL},
+	{Version: WorkItemRetireVersion, Description: "Retire WorkItem legacy structures with controlled evidence"},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -464,6 +483,24 @@ func PostSchemaMigrations() []Migration {
 // GetMigrationSQL returns the SQL for a specific migration
 func GetMigrationSQL(version string) string {
 	switch version {
+	case AuthTokenStateVersion:
+		return authTokenStateSQL
+	case CTIGovernanceVersion:
+		return ctiGovernanceSQL
+	case NotificationEmailTargetVersion:
+		return notificationEmailTargetSQL
+	case NotificationConnectorTargetVersion:
+		return notificationConnectorTargetSQL
+	case ToolExecutionAuthorizationLockVersion:
+		return toolExecutionAuthorizationLockSQL
+	case ToolExecutionAuthorityLockVersion:
+		return toolExecutionAuthorityLockSQL
+	case ToolInvocationExecutionScopeVersion:
+		return toolInvocationExecutionScopeSQL
+	case SLAAlertNotificationVersion:
+		return slaAlertNotificationSQL
+	case CandidateExecutionScopeVersion:
+		return candidateExecutionScopeSQL
 	case "002_add_notification_preferences":
 		return `
 CREATE TABLE IF NOT EXISTS user_notification_preferences (
@@ -1102,14 +1139,30 @@ CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number
 	case "021_add_callback_optional_declared":
 		return `ALTER TABLE process_callback_outboxes
     ADD COLUMN IF NOT EXISTS optional_declared boolean NOT NULL DEFAULT false;`
+	case "033_incident_status_events":
+		return incidentStatusEventsSQL
+	case "034_problem_investigation_completion":
+		return migrations.ProblemInvestigationCompletionSQL
+	case "035_change_professional_evidence":
+		return migrations.ChangeProfessionalEvidenceSQL
+	case "032_workitem_sla_cycle":
+		return migrations.WorkItemSLACycleSQL
 	case "031_kaf_action_request_digest":
 		return kafActionRequestDigestSQL
+	case "047_bpmn_assignment_source":
+		return bpmnAssignmentSourceSQL
 	case "030_catalog_access_policy_result":
 		return catalogAccessPolicyResultSQL
 	case "029_catalog_target_class_authority":
 		return catalogTargetClassAuthoritySQL
+	case "036_intake_frozen_workflow_context":
+		return intakeFrozenWorkflowContextSQL
 	case "028_service_request_work_item_authority":
 		return serviceRequestWorkItemAuthoritySQL
+	case WorkItemRetireVersion:
+		return workItemRetirementSQL
+	case WorkItemPrepareVersion:
+		return workItemPreparationSQL
 	case "027_work_item_identity_field_retirement":
 		return workItemIdentityRetirementSQL
 	case "026_intake_actor_provenance":
@@ -1124,5 +1177,47 @@ CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number
 		return professionalExtensionSharedFieldsSQL
 	default:
 		return ""
+	}
+}
+
+// Reserved identities; Task 1 does not register or execute these stages.
+const (
+	ControlledCatalogRevision = "workitem-controlled-retirement-v1"
+	WorkItemPrepareVersion    = "037_work_item_structure_preparation"
+	WorkItemRetireVersion     = "038_work_item_controlled_retirement"
+)
+
+// frozenMigrationVersions preserves the exact pre-conversion active order.
+func frozenMigrationVersions() []string {
+	return []string{
+		"007_add_change_execution_tables",
+		"008_add_initialization_ledger",
+		"009_enable_rls_tenant_isolation",
+		"011_add_tool_invocation_tenant_id",
+		"012_drop_service_catalog_item",
+		"013_service_request_delegates_to_ticket",
+		"014_drop_legacy_approval_workflow",
+		"015_process_instance_running_unique_guard",
+		"016_add_service_request_contact_fields",
+		"017_drop_ticket_type_legacy_approval_fields",
+		"018_convert_legacy_serial_ids_to_identity",
+		"019_kaf_execution_integrity_rls",
+		"020_work_item_number_allocator",
+		"021_add_callback_optional_declared",
+		"022_drop_professional_extension_shared_fields",
+		"023_add_process_start_request_digest",
+		"024_incident_rule_action_receipts",
+		"025_email_attachment_source_identity",
+		"026_intake_actor_provenance",
+		"027_work_item_identity_field_retirement",
+		"028_service_request_work_item_authority",
+		"029_catalog_target_class_authority",
+		"030_catalog_access_policy_result",
+		"031_kaf_action_request_digest",
+		"032_workitem_sla_cycle",
+		"033_incident_status_events",
+		"034_problem_investigation_completion",
+		"035_change_professional_evidence",
+		"036_intake_frozen_workflow_context",
 	}
 }

@@ -2,11 +2,12 @@ package intake
 
 import (
 	"context"
+	"strings"
+
 	"itsm-backend/authorization"
 	"itsm-backend/ent"
 	"itsm-backend/ent/externalidentity"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"strings"
 )
 
 type IdentityMappingService struct {
@@ -30,6 +31,7 @@ type IdentityMappingView struct {
 func NewIdentityMappingService(sessions *authorization.SessionReader, providers map[string]IdentityProvider) *IdentityMappingService {
 	return &IdentityMappingService{sessions: sessions, providers: providers}
 }
+
 func (s *IdentityMappingService) Create(ctx context.Context, i creation.Identity, input CreateIdentityMapping) (*IdentityMappingView, error) {
 	if s == nil || s.sessions == nil {
 		return nil, creation.NewInfrastructureUnavailable("mapping management unavailable", nil)
@@ -65,6 +67,7 @@ func (s *IdentityMappingService) Create(ctx context.Context, i creation.Identity
 	})
 	return result, err
 }
+
 func (s *IdentityMappingService) Update(ctx context.Context, i creation.Identity, id, version int, active bool) (*IdentityMappingView, error) {
 	if s == nil || s.sessions == nil {
 		return nil, creation.NewInfrastructureUnavailable("mapping management unavailable", nil)
@@ -97,6 +100,7 @@ func (s *IdentityMappingService) Update(ctx context.Context, i creation.Identity
 	})
 	return result, err
 }
+
 func (s *IdentityMappingService) List(ctx context.Context, i creation.Identity) ([]IdentityMappingView, error) {
 	if s == nil || s.sessions == nil {
 		return nil, creation.NewInfrastructureUnavailable("mapping management unavailable", nil)
@@ -117,6 +121,7 @@ func (s *IdentityMappingService) List(ctx context.Context, i creation.Identity) 
 	})
 	return result, err
 }
+
 func mappingView(row *ent.ExternalIdentity) *IdentityMappingView {
 	return &IdentityMappingView{ID: row.ID, Provider: row.Provider, UserID: row.UserID, Active: row.Active, Version: row.Version}
 }

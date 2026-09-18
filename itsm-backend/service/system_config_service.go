@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"itsm-backend/dto"
@@ -17,6 +19,21 @@ type SystemConfigService struct {
 	logger *zap.SugaredLogger
 }
 
+// ErrReservedSystemConfigKey 表示该键由专用受控流程拥有，通用配置接口不得读写绕过。
+var ErrReservedSystemConfigKey = errors.New("system config key is owned by a governed flow")
+
+// IsReservedSystemConfigKey 判断保留键。保留键只能由拥有者（如 CTI 治理的受控启用路径）写入。
+func IsReservedSystemConfigKey(key string) bool {
+	return strings.TrimSpace(key) == CTIGovernanceConfigKey
+}
+
+func rejectReservedSystemConfigKey(key string) error {
+	if IsReservedSystemConfigKey(key) {
+		return fmt.Errorf("%w: %s", ErrReservedSystemConfigKey, strings.TrimSpace(key))
+	}
+	return nil
+}
+
 func NewSystemConfigService(client *ent.Client, logger *zap.SugaredLogger) *SystemConfigService {
 	return &SystemConfigService{
 		client: client,
@@ -26,6 +43,12 @@ func NewSystemConfigService(client *ent.Client, logger *zap.SugaredLogger) *Syst
 
 // CreateSystemConfig 创建系统配置
 func (s *SystemConfigService) CreateSystemConfig(ctx context.Context, req *dto.SystemConfigRequest, tenantID int) (*ent.SystemConfig, error) {
+	if req == nil {
+		return nil, fmt.Errorf("配置请求不能为空")
+	}
+	if err := rejectReservedSystemConfigKey(req.Key); err != nil {
+		return nil, err
+	}
 	// 检查key是否已存在
 	exists, err := s.client.SystemConfig.Query().
 		Where(systemconfig.KeyEQ(req.Key), systemconfig.DeletedAtIsNil()).
@@ -119,7 +142,7 @@ func (s *SystemConfigService) ListSystemConfigs(ctx context.Context, tenantID in
 
 // UpdateSystemConfig 更新系统配置
 func (s *SystemConfigService) UpdateSystemConfig(ctx context.Context, id int, req *dto.UpdateSystemConfigRequest, tenantID int) (*ent.SystemConfig, error) {
-	_, err := s.client.SystemConfig.Query().
+	existing, err := s.client.SystemConfig.Query().
 		Where(systemconfig.ID(id), systemconfig.DeletedAtIsNil()).
 		Where(systemconfig.TenantIDEQ(tenantID)).
 		Only(ctx)
@@ -129,6 +152,10 @@ func (s *SystemConfigService) UpdateSystemConfig(ctx context.Context, id int, re
 		}
 		s.logger.Errorf("检查配置失败: %v", err)
 		return nil, fmt.Errorf("检查配置失败: %w", err)
+	}
+	// 保留键由拥有者的受控激活路径写入，通用配置更新不得绕过其锁与审计。
+	if err := rejectReservedSystemConfigKey(existing.Key); err != nil {
+		return nil, err
 	}
 	update := s.client.SystemConfig.UpdateOneID(id).
 		Where(systemconfig.TenantIDEQ(tenantID), systemconfig.DeletedAtIsNil()).
@@ -158,6 +185,10 @@ func (s *SystemConfigService) BatchUpdateSystemConfigs(ctx context.Context, conf
 	results := make([]*ent.SystemConfig, 0, len(configs))
 
 	for _, cfg := range configs {
+		// 保留键即使出现在批量请求中也必须整笔拒绝，不能部分写入后被“部分成功”掩盖。
+		if err := rejectReservedSystemConfigKey(cfg.Key); err != nil {
+			return nil, err
+		}
 		// 尝试查找现有配置
 		existing, err := s.client.SystemConfig.Query().
 			Where(systemconfig.KeyEQ(cfg.Key), systemconfig.DeletedAtIsNil()).
@@ -202,16 +233,20 @@ func (s *SystemConfigService) BatchUpdateSystemConfigs(ctx context.Context, conf
 
 // DeleteSystemConfig 删除系统配置
 func (s *SystemConfigService) DeleteSystemConfig(ctx context.Context, id int, tenantID int) error {
-	exists, err := s.client.SystemConfig.Query().
+	existing, err := s.client.SystemConfig.Query().
 		Where(systemconfig.ID(id), systemconfig.DeletedAtIsNil()).
 		Where(systemconfig.TenantIDEQ(tenantID)).
-		Exist(ctx)
+		Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return fmt.Errorf("配置不存在: %d", id)
+		}
 		s.logger.Errorf("检查配置失败: %v", err)
 		return fmt.Errorf("检查配置失败: %w", err)
 	}
-	if !exists {
-		return fmt.Errorf("配置不存在: %d", id)
+	// 保留键是治理启用记录，删除等同于绕过受控关闭，必须拒绝。
+	if err := rejectReservedSystemConfigKey(existing.Key); err != nil {
+		return err
 	}
 
 	_, err = s.client.SystemConfig.UpdateOneID(id).

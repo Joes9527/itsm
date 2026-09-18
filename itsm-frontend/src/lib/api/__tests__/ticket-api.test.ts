@@ -1,5 +1,6 @@
+import { prepareTicketEdit, isTicketEditConflict } from '../ticket-edit';
 import { creationReceipt, creationOptions, creationHttpOptions } from '../creation.test-utils';
-import { TicketApi } from '../ticket-api';
+import { TicketApi, type TicketEditPayload } from '../ticket-api';
 import { httpClient } from '../http-client';
 import { handleApiRequest } from '../base-api-handler';
 
@@ -73,12 +74,46 @@ describe('TicketApi', () => {
   });
 
   describe('updateTicket', () => {
+    it.each([undefined, 0, -1, 1.5, NaN])('rejects missing or invalid edit version %s before HTTP', async version => {
+      // 故意传入非法版本：运行期必须先于 HTTP 拒绝。
+      const invalid = { title: 'Updated', version } as unknown as TicketEditPayload;
+      await expect(TicketApi.updateTicket(1, invalid)).rejects.toThrow('工单版本');
+      expect(mockPut).not.toHaveBeenCalled();
+    });
+
     it('should update ticket', async () => {
-      const data = { title: 'Updated' };
+      const data: TicketEditPayload = { title: 'Updated', version: 4, operationId: 'edit-test' };
       const expected = { id: 1, title: 'Updated' };
       mockPut.mockResolvedValue(expected);
-      const result = await TicketApi.updateTicket(1, data as any);
+      const result = await TicketApi.updateTicket(1, data);
       expect(result).toEqual(expected);
+    });
+
+    it('sends the classification as the deepest node id together with its reason', async () => {
+      mockPut.mockResolvedValue({ id: 1 });
+      const payload: TicketEditPayload = {
+        categoryId: 42,
+        classificationReason: '现场归类有误',
+        version: 7,
+        operationId: 'edit-classification',
+      };
+
+      await TicketApi.updateTicket(1, payload);
+
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/tickets/1', payload);
+      const body = mockPut.mock.calls[0][1] as Record<string, unknown>;
+      expect(body.categoryId).toBe(42);
+      expect(body.classificationReason).toBe('现场归类有误');
+      // 退役的按名称字段不得出现在载荷中（后端编辑边界会拒绝未知字段）。
+      expect(body).not.toHaveProperty('category');
+    });
+
+    it('rejects the retired name field at compile time', () => {
+      // 分类只接受最深节点 ID：多写 category 的载荷无法通过类型检查（npm run type-check 保证），
+      // 运行期同样失败关闭。若有人把 category 加回契约，这里的 @ts-expect-error 会变成未使用而报错。
+      // @ts-expect-error category 已退役，分类只接受 categoryId
+      const retired: TicketEditPayload = { category: 'network', version: 1, operationId: 'op' };
+      expect(retired).toBeDefined();
     });
   });
 
@@ -115,17 +150,15 @@ describe('TicketApi', () => {
   });
 
   describe('escalateTicket', () => {
-    it('should escalate with string reason', async () => {
-      mockPost.mockResolvedValue({ id: 1 });
-      await TicketApi.escalateTicket(1, 'urgent');
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/tickets/1/escalate', { reason: 'urgent' });
-    });
-
-    it('should escalate with object', async () => {
-      const data = { level: 'L2', reason: 'complex' };
-      mockPost.mockResolvedValue({ id: 1 });
-      await TicketApi.escalateTicket(1, data);
+    it('preserves command identity and returns the immutable receipt', async () => {
+      const data = { reason: 'complex', version: 4, operationId: 'escalate-once' };
+      const receipt = { workItemId: 1, version: 5, status: 'in_progress', replayed: false };
+      mockPost.mockResolvedValue(receipt);
+      expect(await TicketApi.escalateTicket(1, data)).toEqual(receipt);
       expect(mockPost).toHaveBeenCalledWith('/api/v1/tickets/1/escalate', data);
+      mockPost.mockResolvedValue({ ...receipt, replayed: true });
+      expect(await TicketApi.escalateTicket(1, data)).toEqual({ ...receipt, replayed: true });
+      expect(mockPost).toHaveBeenLastCalledWith('/api/v1/tickets/1/escalate', data);
     });
   });
 
@@ -479,4 +512,74 @@ describe('TicketApi', () => {
     });
   });
 
+});
+
+describe('ticket edit operation identity', () => {
+  beforeEach(() => jest.clearAllMocks());
+  it('rejects a missing operation identity before sending an edit', async () => {
+    await expect(TicketApi.updateTicket(1, { title: 'changed', version: 2 } as never)).rejects.toThrow();
+    expect(mockPut).not.toHaveBeenCalled();
+  });
+});
+
+describe('confirmed ticket edit intent', () => {
+  it('preserves the original version, operation and deep payload on an uncertain retry', () => {
+    const original = crypto.randomUUID;
+    Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: jest.fn().mockReturnValueOnce('edit-first').mockReturnValueOnce('edit-changed') });
+    try {
+      const fields = { title: 'Original', tags: ['one'] };
+      const first = prepareTicketEdit(undefined, fields, 4);
+      fields.tags.push('not confirmed');
+      const retry = prepareTicketEdit(first, { title: 'Original', tags: ['one'] }, 9);
+      expect(retry).toBe(first);
+      expect(retry.payload).toEqual({ title: 'Original', tags: ['one'], version: 4, operationId: 'edit-first' });
+      const changed = prepareTicketEdit(first, { title: 'Changed', tags: ['one'] }, 9);
+      expect(changed.payload).toEqual({ title: 'Changed', tags: ['one'], version: 9, operationId: 'edit-changed' });
+    } finally {
+      Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: original });
+    }
+  });
+});
+
+
+describe('explicit edit conflict versus unknown result', () => {
+  it('only releases an intent for the structured backend conflict response', () => {
+    expect(isTicketEditConflict(Object.assign(new Error('version conflict'), { status: 409, code: 4090 }))).toBe(true);
+    expect(isTicketEditConflict(new Error('network timeout'))).toBe(false);
+    expect(isTicketEditConflict(Object.assign(new Error('server error'), { status: 500, code: 5000 }))).toBe(false);
+    expect(isTicketEditConflict(Object.assign(new Error('proxy conflict'), { status: 409 }))).toBe(false);
+  });
+});
+
+
+describe('ticket edit identity over LAN HTTP', () => {
+  const originalRandomUUID = crypto.randomUUID;
+  const originalGetRandomValues = crypto.getRandomValues;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: undefined });
+  });
+  afterEach(() => {
+    Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: originalRandomUUID });
+    Object.defineProperty(crypto, 'getRandomValues', { configurable: true, value: originalGetRandomValues });
+  });
+
+  it('sends an edit with cryptographic identity and preserves it across uncertain retries', async () => {
+    const first = prepareTicketEdit<Partial<import('../api-config').Ticket>>(undefined, { status: 'in_progress' }, 4);
+    expect(first.payload.operationId).toMatch(/^[0-9a-f]{32}$/);
+    await TicketApi.updateTicket(1, first.payload);
+    expect(mockPut).toHaveBeenCalledWith('/api/v1/tickets/1', {
+      status: 'in_progress', version: 4, operationId: first.payload.operationId,
+    });
+    // A retry must not need another random draw, even if the source later fails.
+    Object.defineProperty(crypto, 'getRandomValues', { configurable: true, value: () => { throw new Error('random source failed'); } });
+    expect(prepareTicketEdit(first, { status: 'in_progress' }, 9)).toBe(first);
+    expect(() => prepareTicketEdit(first, { status: 'pending' }, 9)).toThrow('random source failed');
+  });
+
+  it('rejects a new intent when no cryptographic random source exists', () => {
+    Object.defineProperty(crypto, 'getRandomValues', { configurable: true, value: undefined });
+    expect(() => prepareTicketEdit(undefined, { title: 'changed' }, 4)).toThrow('浏览器不支持安全操作标识');
+    expect(mockPut).not.toHaveBeenCalled();
+  });
 });

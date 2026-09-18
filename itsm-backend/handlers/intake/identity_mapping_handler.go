@@ -1,12 +1,13 @@
 package intake
 
 import (
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 	"itsm-backend/common"
 	"itsm-backend/handlers/common/intakehttp"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/middleware"
-	"strconv"
 )
 
 // RegisterMappingRoutes is attached only to the existing authenticated tenant
@@ -16,9 +17,11 @@ func (h *Handler) RegisterMappingRoutes(group gin.IRoutes) {
 	group.POST("/intake/identity-mappings", middleware.RequirePermission("intake_identity_mapping", "write"), h.CreateMapping)
 	group.PATCH("/intake/identity-mappings/:id", middleware.RequirePermission("intake_identity_mapping", "write"), h.UpdateMapping)
 }
+
 func mappingActor(c *gin.Context) creation.Identity {
 	return creation.Identity{TenantID: c.GetInt("tenant_id"), ActorID: c.GetInt("user_id"), RequesterID: c.GetInt("user_id"), Role: c.GetString("role"), Channel: "http"}
 }
+
 func (h *Handler) ListMappings(c *gin.Context) {
 	result, err := h.mappings.List(c.Request.Context(), mappingActor(c))
 	if err != nil {
@@ -27,6 +30,7 @@ func (h *Handler) ListMappings(c *gin.Context) {
 	}
 	common.Success(c, result)
 }
+
 func (h *Handler) CreateMapping(c *gin.Context) {
 	var input CreateIdentityMapping
 	if err := decodeIdentityBody(c, &input); err != nil {
@@ -40,6 +44,7 @@ func (h *Handler) CreateMapping(c *gin.Context) {
 	}
 	c.JSON(201, common.Response{Code: 0, Message: "success", Data: result})
 }
+
 func (h *Handler) UpdateMapping(c *gin.Context) {
 	var input struct {
 		Version int   `json:"version"`

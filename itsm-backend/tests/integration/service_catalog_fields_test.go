@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"testing"
 
+	executionfixture "itsm-backend/tests/fixtures/execution"
+
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/google/uuid"
@@ -50,9 +52,9 @@ func setupServiceCatalogFieldsRouter(t *testing.T) (*gin.Engine, *ent.Tenant, *e
 	scService := service_catalog.NewService(scRepo, client, logger, sameTransactionDirectory{})
 	scHandler := service_catalog.NewHandler(scService)
 
-	srRepo := service_request.NewEntRepository(client)
+	srRepo := service_request.NewEntRepository(client, executionfixture.Standard())
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	srService := service_request.NewService(srRepo, client, logger, service.NewApprovalChainResolver(client, logger))
+	srService := service_request.NewService(srRepo, client, logger, service.NewApprovalChainResolver(client, logger), executionfixture.Standard())
 	srHandler := service_request.NewHandler(srService)
 
 	// Wire the real shared Intake application: service request creation now
@@ -63,17 +65,17 @@ func setupServiceCatalogFieldsRouter(t *testing.T) (*gin.Engine, *ent.Tenant, *e
 	registry := intake.NewCreatorRegistry()
 	for _, owner := range []creation.ProfessionalCreator{
 		ticketSvc,
-		service.NewIncidentService(client, logger),
-		problemdomain.NewService(nil, logger),
-		changedomain.NewService(nil, client, logger),
+		service.NewIncidentService(client, logger, executionfixture.Standard()),
+		problemdomain.NewService(nil, logger, executionfixture.Standard()),
+		changedomain.NewService(nil, client, logger, executionfixture.Standard()),
 		srService,
 	} {
 		require.NoError(t, registry.Register(owner))
 	}
 	scService.SetCreatorRegistry(registry)
-	scService.SetPublicationEngine(service.NewCustomProcessEngine(client, logger).(*service.CustomProcessEngine))
+	scService.SetPublicationEngine(service.NewCustomProcessEngine(client, logger, executionfixture.Standard()).(*service.CustomProcessEngine))
 	resolver := intake.NewResolver(scService, service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
-	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})
+	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard())
 	srHandler.SetCreationApplication(app)
 
 	// handlers/service_catalog default Create leaves RequiresApproval at the
@@ -84,7 +86,7 @@ func setupServiceCatalogFieldsRouter(t *testing.T) (*gin.Engine, *ent.Tenant, *e
 	const processKey = "service-catalog-fields-approval"
 	deployment := client.ProcessDeployment.Create().SetTenantID(tenant.ID).SetDeploymentID(processKey).SetDeploymentName(processKey).SaveX(ctx)
 	client.ProcessDefinition.Create().SetTenantID(tenant.ID).SetDeploymentID(deployment.ID).SetKey(processKey).SetName(processKey).SetVersion("1").SetIsActive(true).SetIsLatest(true).SetBpmnXML([]byte(fmt.Sprintf(`<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" targetNamespace="test"><bpmn:process id="%s" isExecutable="true"><bpmn:startEvent id="start"/><bpmn:userTask id="approval" assignee="%d" taskPurpose="approval"/><bpmn:endEvent id="end"/><bpmn:sequenceFlow id="a" sourceRef="start" targetRef="approval"/><bpmn:sequenceFlow id="b" sourceRef="approval" targetRef="end"/></bpmn:process></bpmn:definitions>`, processKey, user.ID))).SaveX(ctx)
-	client.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType("service_request").SetIsDefault(true).SetProcessDefinitionKey(processKey).SaveX(ctx)
+	client.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType("service_request_item").SetIsDefault(true).SetProcessDefinitionKey(processKey).SaveX(ctx)
 	adminRole := client.Role.Create().SetTenantID(tenant.ID).SetCode("admin").SetName("admin").SetIsActive(true).SaveX(ctx)
 	for _, grant := range []struct{ resource, action string }{
 		{"service_catalog", "read"}, {"service_request", "read"}, {"service_request", "write"}, {"ticket", "read"}, {"ticket", "write"},

@@ -71,14 +71,19 @@ const (
 
 // CreateProblemInvestigationRequest 创建问题调查请求
 type CreateProblemInvestigationRequest struct {
+	Version                 int        `json:"version" binding:"required,gt=0"`
+	OperationID             string     `json:"operationId" binding:"required,max=200"`
 	ProblemID               int        `json:"problemId" binding:"required"`
-	InvestigatorID          int        `json:"investigatorId" binding:"required"`
+	InvestigatorID          int        `json:"investigatorId" binding:"omitempty,gt=0"`
 	EstimatedCompletionDate *time.Time `json:"estimatedCompletionDate"`
 	InvestigationSummary    string     `json:"investigationSummary"`
 }
 
 // UpdateProblemInvestigationRequest 更新问题调查请求
 type UpdateProblemInvestigationRequest struct {
+	Version                 int                         `json:"version" binding:"required,gt=0"`
+	OperationID             string                      `json:"operationId" binding:"required,max=200"`
+	ProblemID               int                         `json:"problemId" binding:"required,gt=0"`
 	Status                  *ProblemInvestigationStatus `json:"status"`
 	EstimatedCompletionDate *time.Time                  `json:"estimatedCompletionDate"`
 	ActualCompletionDate    *time.Time                  `json:"actualCompletionDate"`
@@ -87,6 +92,9 @@ type UpdateProblemInvestigationRequest struct {
 
 // CreateInvestigationStepRequest 创建调查步骤请求
 type CreateInvestigationStepRequest struct {
+	Version         int    `json:"version" binding:"required,gt=0"`
+	OperationID     string `json:"operationId" binding:"required,max=200"`
+	ProblemID       int    `json:"problemId" binding:"required,gt=0"`
 	InvestigationID int    `json:"investigationId" binding:"required"`
 	StepNumber      int    `json:"stepNumber" binding:"required"`
 	StepTitle       string `json:"stepTitle" binding:"required"`
@@ -97,6 +105,9 @@ type CreateInvestigationStepRequest struct {
 
 // UpdateInvestigationStepRequest 更新调查步骤请求
 type UpdateInvestigationStepRequest struct {
+	Version         int                             `json:"version" binding:"required,gt=0"`
+	OperationID     string                          `json:"operationId" binding:"required,max=200"`
+	ProblemID       int                             `json:"problemId" binding:"required,gt=0"`
 	StepTitle       *string                         `json:"stepTitle"`
 	StepDescription *string                         `json:"stepDescription"`
 	Status          *ProblemInvestigationStepStatus `json:"status"`
@@ -108,8 +119,10 @@ type UpdateInvestigationStepRequest struct {
 
 // CreateRootCauseAnalysisRequest 创建根本原因分析请求
 type CreateRootCauseAnalysisRequest struct {
+	Version              int             `json:"version" binding:"required,gt=0"`
+	OperationID          string          `json:"operationId" binding:"required,max=200"`
 	ProblemID            int             `json:"problemId" binding:"required"`
-	AnalystID            int             `json:"analystId" binding:"required"`
+	AnalystID            int             `json:"analystId" binding:"omitempty,gt=0"`
 	AnalysisMethod       string          `json:"analysisMethod" binding:"required"`
 	RootCauseDescription string          `json:"rootCauseDescription" binding:"required"`
 	ContributingFactors  string          `json:"contributingFactors"`
@@ -119,6 +132,8 @@ type CreateRootCauseAnalysisRequest struct {
 
 // UpdateRootCauseAnalysisRequest 更新根本原因分析请求
 type UpdateRootCauseAnalysisRequest struct {
+	Version              int              `json:"version" binding:"required,gt=0"`
+	OperationID          string           `json:"operationId" binding:"required,max=200"`
 	AnalysisMethod       *string          `json:"analysisMethod"`
 	RootCauseDescription *string          `json:"rootCauseDescription"`
 	ContributingFactors  *string          `json:"contributingFactors"`
@@ -130,11 +145,13 @@ type UpdateRootCauseAnalysisRequest struct {
 
 // CreateProblemSolutionRequest 创建问题解决方案请求
 type CreateProblemSolutionRequest struct {
+	Version              int          `json:"version" binding:"required,gt=0"`
+	OperationID          string       `json:"operationId" binding:"required,max=200"`
 	ProblemID            int          `json:"problemId" binding:"required"`
 	SolutionType         SolutionType `json:"solutionType" binding:"required"`
 	SolutionDescription  string       `json:"solutionDescription" binding:"required"`
 	Priority             string       `json:"priority" binding:"required,oneof=low medium high critical"`
-	ProposedBy           int          `json:"proposedBy" binding:"required"`
+	ProposedBy           int          `json:"proposedBy" binding:"omitempty,gt=0"`
 	EstimatedEffortHours *int         `json:"estimatedEffortHours"`
 	EstimatedCost        *float64     `json:"estimatedCost"`
 	RiskAssessment       string       `json:"riskAssessment"`
@@ -142,6 +159,9 @@ type CreateProblemSolutionRequest struct {
 
 // UpdateProblemSolutionRequest 更新问题解决方案请求
 type UpdateProblemSolutionRequest struct {
+	Version              int             `json:"version" binding:"required,gt=0"`
+	OperationID          string          `json:"operationId" binding:"required,max=200"`
+	ProblemID            int             `json:"problemId" binding:"required,gt=0"`
 	SolutionType         *SolutionType   `json:"solutionType"`
 	SolutionDescription  *string         `json:"solutionDescription"`
 	Priority             *string         `json:"priority"`
@@ -331,4 +351,11 @@ type ProblemInvestigationSummaryResponse struct {
 	Implementations   []*SolutionImplementationResponse  `json:"implementations"`
 	Relationships     []*ProblemRelationshipResponse     `json:"relationships"`
 	KnowledgeArticles []*ProblemKnowledgeArticleResponse `json:"knowledgeArticles"`
+}
+
+// DeleteProblemSolutionRequest retains the original Problem identity for safe replay after deletion.
+type DeleteProblemSolutionRequest struct {
+	ProblemID   int    `json:"problemId" binding:"required,gt=0"`
+	Version     int    `json:"version" binding:"required,gt=0"`
+	OperationID string `json:"operationId" binding:"required,max=200"`
 }

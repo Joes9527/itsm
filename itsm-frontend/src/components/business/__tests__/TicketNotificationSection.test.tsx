@@ -4,11 +4,13 @@ import userEvent from '@testing-library/user-event';
 import { TicketNotificationSection } from '../TicketNotificationSection';
 import { httpClient } from '@/lib/api/http-client';
 
+const mockSuccess = jest.fn();
+
 jest.mock('antd', () => {
   const actual = jest.requireActual('antd');
   return {
     ...actual,
-    App: { useApp: () => ({ message: { success: jest.fn(), error: jest.fn() } }) },
+    App: { useApp: () => ({ message: { success: mockSuccess, error: jest.fn() } }) },
   };
 });
 
@@ -20,6 +22,7 @@ jest.mock('@/components/common/UserSelect', () => ({
 jest.mock('@/lib/store/auth-store', () => ({ useAuthStore: () => ({ user: { id: 1 } }) }));
 jest.mock('@/lib/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 jest.mock('@/lib/api/http-client', () => ({
+  ...jest.requireActual('@/lib/api/http-client'),
   httpClient: { get: jest.fn(), post: jest.fn(), put: jest.fn(), delete: jest.fn() },
 }));
 
@@ -173,6 +176,22 @@ describe('TicketNotificationSection', () => {
     expect(mockPost.mock.calls[0][1]).not.toHaveProperty('channel');
   });
 
+  it.each([
+    ['queued', '已加入发送队列'],
+    ['idempotent', '该通知已受理'],
+    ['applied', '已生成 1 条站内通知'],
+  ])('reports %s without claiming external delivery', async (effect, message) => {
+    mockGet.mockResolvedValueOnce({ notifications: [], total: 0 })
+      .mockResolvedValueOnce({ eventTypes: [{ code: 'ticket_updated', name: '工单更新' }] })
+      .mockResolvedValueOnce({ notifications: [], total: 0 });
+    mockPost.mockResolvedValue({ effect, appliedCount: 1, deliveryCount: 3, queuedCount: 2, externalIntentCount: 2 });
+    const user = userEvent.setup();
+    render(<TicketNotificationSection ticketId={10} />);
+    await fillStrictNotificationForm(user);
+    await user.click(screen.getByRole('button', { name: 'common.submit' }));
+    await waitFor(() => expect(mockSuccess).toHaveBeenCalledWith(message));
+  });
+
   it('keeps persisted UI state on delivery failure and never manufactures a notification', async () => {
     mockGet.mockResolvedValueOnce({
       notifications: [{ id: 5, ticketId: 10, userId: 1, type: 'assigned', channel: 'in_app', content: '已有通知', status: 'sent', createdAt: '2026-08-31T00:00:00Z' }], total: 1,
@@ -206,4 +225,16 @@ describe('TicketNotificationSection', () => {
     expect(await screen.findByText('服务端投递')).toBeInTheDocument();
     expect(mockGet).toHaveBeenCalledTimes(3);
   });
+});
+import { DetailRefreshProvider, useDetailRefresh } from '@/components/business/detail-tabs/DetailRefreshContext';
+function RefreshNotifications() { const refresh = useDetailRefresh()!; return <button onClick={() => void refresh.refresh()}>页面刷新</button>; }
+it('registers notification list refresh and preserves prior content on failure', async () => {
+  mockGet.mockResolvedValue({ notifications: [{id: 8, content: '保留通知', type:'assigned', channel:'in_app', readAt:'2026-09-15'}], total:1 });
+  render(<DetailRefreshProvider identity='notification-test'><RefreshNotifications/><TicketNotificationSection ticketId={10}/></DetailRefreshProvider>);
+  await screen.findByText('保留通知');
+  mockGet.mockRejectedValueOnce(new Error('通知离线'));
+  await userEvent.click(screen.getByText('页面刷新'));
+  expect(await screen.findByRole('alert')).toHaveTextContent('通知离线');
+  expect(screen.getByText('保留通知')).toBeInTheDocument();
+  expect(mockGet).not.toHaveBeenCalledWith('/api/v1/notifications/preferences');
 });

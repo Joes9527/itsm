@@ -4,15 +4,16 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
-	"github.com/stretchr/testify/require"
-	"itsm-backend/handlers/intake"
 	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/require"
+	"itsm-backend/handlers/intake"
 )
 
 func TestIdentityRedisNonceAtomicReplayAndUnavailable(t *testing.T) {

@@ -1,7 +1,29 @@
+import { ticketEditVersion, ticketEditOperation, type TicketEditResult } from './ticket-edit';
 import { createWorkItem, type CreationRequestOptions, type CreateWorkItemResult } from './work-item-creation';
 import { httpClient } from './http-client';
 import { handleApiRequest } from './base-api-handler';
 import type { Ticket, TicketListResponse, CreateTicketRequest, GetTicketsParams } from './api-config';
+import type { TicketPriority, TicketStatus } from '@/types/ticket';
+
+// TicketEditPayload 与后端 dto.TicketEditFields 一一对应：分类只接受最深节点 ID
+// （categoryId），不包含已退役的按显示名称解析字段（category）。编辑边界会拒绝未知字段，
+// 因此这里只声明契约内的键——多写的键在运行期会直接失败关闭，而不是被静默忽略。
+export interface TicketEditPayload {
+  title?: string;
+  description?: string;
+  priority?: TicketPriority;
+  status?: TicketStatus;
+  type?: string;
+  categoryId?: number;
+  classificationReason?: string;
+  assigneeId?: number;
+  requesterId?: number;
+  tags?: string[];
+  resolution?: string;
+  formFields?: Record<string, unknown>;
+  version: number;
+  operationId: string;
+}
 
 export class TicketApi {
   // Get ticket list
@@ -40,11 +62,10 @@ export class TicketApi {
   }
 
   // Update ticket information
-  static async updateTicket(
-    id: number,
-    data: Partial<Ticket> & { version?: number; force?: boolean }
-  ): Promise<Ticket> {
-    return handleApiRequest(httpClient.put<Ticket>(`/api/v1/tickets/${id}`, data), {
+  static async updateTicket(id: number, data: TicketEditPayload): Promise<TicketEditResult> {
+    ticketEditVersion(data.version);
+    ticketEditOperation(data.operationId);
+    return handleApiRequest(httpClient.put<TicketEditResult>(`/api/v1/tickets/${id}`, data), {
       errorMessage: 'Failed to update ticket',
       showSuccess: true,
     });
@@ -87,13 +108,12 @@ export class TicketApi {
     return httpClient.post<Ticket>(`/api/v1/tickets/${id}/assign`, payload);
   }
 
-  // Escalate ticket
+  // A retry reuses the original operationId and version.
   static async escalateTicket(
     id: number,
-    reasonOrData: string | { level: string; reason: string; assigneeId?: number }
-  ): Promise<Ticket> {
-    const payload = typeof reasonOrData === 'string' ? { reason: reasonOrData } : reasonOrData;
-    return httpClient.post<Ticket>(`/api/v1/tickets/${id}/escalate`, payload);
+    data: { reason: string; version: number; operationId: string }
+  ): Promise<{ workItemId: number; version: number; status: string; replayed: boolean }> {
+    return httpClient.post(`/api/v1/tickets/${id}/escalate`, data);
   }
 
   // Resolve ticket
@@ -653,7 +673,44 @@ export class TicketApi {
   }
 
   // Get ticket SLA info
-  static async getTicketSLA(id: number | string): Promise<{
+  static async getTicketSLA(id: number | string): Promise<TicketSLAInfo> {
+    return httpClient.get(`/api/v1/tickets/${id}/sla`);
+  }
+}
+
+// 统一导出别名
+export const TicketAPI = TicketApi;
+export default TicketAPI;
+
+export interface SLACycleResult {
+  actorId: number;
+  source: string;
+  correlationId: string;
+  number: number;
+  startedAt: string | null;
+  endedAt: string;
+  responseAt: string | null;
+  resolvedAt: string | null;
+  responseDeadline: string | null;
+  resolutionDeadline: string | null;
+  pausedMinutes: number;
+  responseBreached: boolean;
+  resolutionBreached: boolean;
+  policy: AppliedSLAPolicy | null;
+}
+export interface AppliedSLAPolicy {
+  schemaVersion: number;
+  definitionId: number;
+  definitionVersion: string;
+  name: string;
+  serviceType: string;
+  responseMinutes: number;
+  resolutionMinutes: number;
+  businessHours: Record<string, unknown> | null;
+}
+export interface TicketSLAInfo {
+  slaStatus: "ok" | "warning" | "breached" | "not_required" | "configuration_missing";
+  closedAt: string | null;
     ticketId: number;
     slaDefinitionId: number;
     slaName: string;
@@ -668,11 +725,9 @@ export class TicketApi {
     isBreached: boolean;
     responseTimeRemaining: number | null;
     resolutionTimeRemaining: number | null;
-  }> {
-    return httpClient.get(`/api/v1/tickets/${id}/sla`);
-  }
+  cycleNumber: number;
+  cycleStartedAt: string | null;
+  pausedMinutes: number;
+  appliedPolicy: AppliedSLAPolicy | null;
+  history: SLACycleResult[];
 }
-
-// 统一导出别名
-export const TicketAPI = TicketApi;
-export default TicketAPI;

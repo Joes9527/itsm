@@ -39,6 +39,7 @@ func (c *recordingRLSConn) Close() error { return nil }
 func (c *recordingRLSConn) Begin() (driver.Tx, error) {
 	return nil, errors.New("transactions are not supported")
 }
+
 func (c *recordingRLSConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -64,13 +65,16 @@ type failingDiscardConn struct {
 func (c *failingDiscardConn) Prepare(string) (driver.Stmt, error) {
 	return nil, errors.New("prepare is not supported")
 }
+
 func (c *failingDiscardConn) Close() error {
 	c.driver.closeCount.Add(1)
 	return nil
 }
+
 func (c *failingDiscardConn) Begin() (driver.Tx, error) {
 	return nil, errors.New("transactions are not supported")
 }
+
 func (c *failingDiscardConn) ExecContext(ctx context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

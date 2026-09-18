@@ -8,6 +8,7 @@ const itsmModdleDescriptor = {
     extends: ['bpmn:UserTask'],
     properties: [
       { name: 'assignee', isAttr: true, type: 'String' },
+      { name: 'assigneeSource', isAttr: true, type: 'String' },
       { name: 'assigneeRole', isAttr: true, type: 'String' },
       { name: 'assigneeDeptId', isAttr: true, type: 'Integer' },
       { name: 'assigneeGmChain', isAttr: true, type: 'Boolean' },

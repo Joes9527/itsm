@@ -17,7 +17,6 @@ function MicrosoftIcon() {
 }
 import { useI18n } from '@/lib/i18n/useI18n';
 import { Typography, Alert, ConfigProvider, Form, Input, Button, Flex, Tooltip } from 'antd';
-import { antdTheme } from '@/lib/antd-theme';
 import { AuthService } from '@/lib/services/auth-service';
 import { logger } from '@/lib/env';
 import { buildAzureLoginURL } from './azure-login-url';
@@ -80,21 +79,21 @@ function LoginForm() {
   };
 
   return (
-    <div className='relative w-full max-w-[420px] bg-white rounded-2xl px-10 pt-12 pb-10 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_12px_40px_rgba(0,0,0,0.08)]'>
+    <div className='relative w-full max-w-[420px] bg-surface rounded-[8px] border border-border px-5 sm:px-8 pt-12 pb-8'>
       {/* KLN 品牌水印 */}
       <img src='/kln-logo.png' alt='KLN' className='absolute top-5 left-6 h-8 w-auto opacity-50' />
 
       <div className='text-center mb-8'>
         <Title
           level={2}
-          className='!mb-1 !text-gray-900 !tracking-tight'
-          style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 'var(--font-weight-bold)' }}
+          className='!mb-1 !text-foreground !tracking-tight'
+          style={{ fontSize: 'var(--font-size-page-title)', fontWeight: 'var(--font-weight-semibold)' }}
         >
           {t('auth.login.title')}
         </Title>
         <div className='flex items-center justify-center gap-2 mt-1'>
-          <span className='w-[3px] h-3.5 rounded-full bg-[#2A2A2A]' />
-          <Text className='text-secondary' style={{ fontSize: 'var(--font-size-sm)' }}>
+          <span className='w-[3px] h-3.5 rounded-full bg-selected' />
+          <Text className='text-secondary' style={{ fontSize: '12px' }}>
             {t('auth.login.subtitle')}
           </Text>
         </div>
@@ -157,7 +156,7 @@ function LoginForm() {
           ]}
         >
           <Input
-            prefix={<User size={14} className='text-gray-400' />}
+            prefix={<User size={14} className='text-muted' />}
             placeholder={t('auth.login.usernamePlaceholder')}
             disabled={loading}
           />
@@ -172,7 +171,7 @@ function LoginForm() {
           ]}
         >
           <Input.Password
-            prefix={<Lock size={14} className='text-gray-400' />}
+            prefix={<Lock size={14} className='text-muted' />}
             placeholder={t('auth.login.passwordPlaceholder')}
             disabled={loading}
           />
@@ -182,7 +181,7 @@ function LoginForm() {
           <Flex justify='flex-end' align='center'>
             <Tooltip title={loading ? '登录中...' : ''}>
               <Link href='/forgot-password'>
-                <Button type='link' className='p-0 h-auto text-xs' disabled={loading}>
+                <Button type='link' className='p-0 h-auto text-[12px]' disabled={loading}>
                   {t('auth.login.forgotPassword')}
                 </Button>
               </Link>
@@ -195,8 +194,8 @@ function LoginForm() {
             type='primary'
             htmlType='submit'
             loading={loading}
-            size='large'
-            className='w-full h-11 rounded-xl text-sm font-semibold'
+            size='middle'
+            className='w-full h-[34px] rounded-[6px] text-[13px] font-semibold'
             icon={<ArrowRight size={14} />}
           >
             {loading ? t('auth.login.loggingIn') : t('auth.login.loginButton')}
@@ -205,17 +204,17 @@ function LoginForm() {
       </Form>
 
       <div className='flex items-center gap-3 my-5'>
-        <div className='flex-1 border-t border-gray-200'></div>
+        <div className='flex-1 border-t border-border'></div>
         <Text className='text-muted' style={{ fontSize: 'var(--font-size-xs)' }}>
           或
         </Text>
-        <div className='flex-1 border-t border-gray-200'></div>
+        <div className='flex-1 border-t border-border'></div>
       </div>
 
       <Button
         type='default'
-        size='large'
-        className='w-full h-10 rounded-xl text-sm font-semibold'
+        size='middle'
+        className='w-full h-[34px] rounded-[6px] text-[13px] font-semibold'
         icon={<MicrosoftIcon />}
         onClick={() => {
           try {
@@ -229,10 +228,10 @@ function LoginForm() {
         使用 Microsoft 账户登录
       </Button>
 
-      <div className='flex justify-center gap-8 mt-8 pt-6 border-t border-gray-100'>
+      <div className='flex justify-center gap-8 mt-8 pt-6 border-t border-border'>
         {CAPABILITIES.map(c => (
           <div key={c.label} className='flex flex-col items-center gap-1.5'>
-            <span className='text-gray-300'>{c.icon}</span>
+            <span className='text-muted'>{c.icon}</span>
             <span className='text-muted' style={{ fontSize: 'var(--font-size-xs)' }}>
               {c.label}
             </span>
@@ -261,8 +260,8 @@ function LoginForm() {
  */
 export default function LoginPage() {
   return (
-    <ConfigProvider theme={antdTheme}>
-      <div className='min-h-screen flex flex-col lg:flex-row overflow-hidden bg-[#f8f6f3]'>
+    <ConfigProvider>
+      <div className='min-h-screen flex flex-col lg:flex-row overflow-hidden bg-page'>
         {/* 左侧品牌区域 */}
         <div
           className='hidden lg:flex lg:flex-[0_0_52%] relative overflow-hidden'
@@ -296,7 +295,7 @@ export default function LoginPage() {
           <div className='absolute left-10 top-9 z-10 flex items-center gap-3'>
             <img src='/kln-logo.png' alt='KLN' className='h-7 w-auto' />
             <div>
-              <div className='text-white font-semibold text-sm tracking-wide'>AI-Native ITSM</div>
+              <div className='text-white font-semibold text-[13px] tracking-wide'>AI-Native ITSM</div>
               <div className='text-white/40 text-[11px] mt-0.5'>Enterprise Service Desk</div>
             </div>
           </div>
@@ -320,8 +319,8 @@ export default function LoginPage() {
                 boxShadow: '0 0 0 22px rgba(240,104,32,.035), 0 0 90px rgba(240,104,32,.28)',
               }}
             >
-              <strong className='text-white text-2xl tracking-wide'>ITSM</strong>
-              <span className='absolute bottom-9 text-[#f27c38] text-xs font-bold tracking-[0.15em] uppercase'>
+              <strong className='text-white text-[24px] tracking-wide'>ITSM</strong>
+              <span className='absolute bottom-9 text-[#f27c38] text-[12px] font-semibold tracking-[0.15em] uppercase'>
                 AI-Native
               </span>
             </div>
@@ -332,7 +331,7 @@ export default function LoginPage() {
         <div className='flex-1 flex items-center justify-center p-6 lg:p-12'>
           <Suspense
             fallback={
-              <div className='w-full max-w-[420px] bg-white rounded-2xl px-10 py-16 text-center text-gray-400 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_12px_40px_rgba(0,0,0,0.08)]'>
+              <div className='w-full max-w-[420px] bg-surface rounded-[8px] border border-border px-5 py-16 text-center text-muted'>
                 加载中...
               </div>
             }

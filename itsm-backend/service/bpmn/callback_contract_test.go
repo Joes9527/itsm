@@ -40,3 +40,14 @@ func TestKAFDelegationIsNotASynchronousCallbackContractProvider(t *testing.T) {
 	_, ok := any(&KafDelegateServiceTaskHandler{}).(CallbackContractProvider)
 	require.False(t, ok)
 }
+
+func TestChangeLifecycleCallbackContractsCarryTypedVersion(t *testing.T) {
+	for _, action := range []string{"assess_risk", "approve_change", "authorize_change", "reject_change", "schedule_change", "implement_change", "verify_change", "review_change", "close_change", "cancel_change"} {
+		contract, ok := (&ChangeServiceTaskHandler{}).CallbackContract(action)
+		require.True(t, ok, action)
+		require.Equal(t, "change_request", contract.LifecycleRecordClass, action)
+		require.Contains(t, contract.PayloadFields, "version", action)
+		require.NotContains(t, contract.PayloadFields, "actor_id", action)
+		require.NotContains(t, contract.PayloadFields, "approval_decision_id", action)
+	}
+}

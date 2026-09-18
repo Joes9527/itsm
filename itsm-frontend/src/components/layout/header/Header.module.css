@@ -1,31 +1,14 @@
 .header {
-  padding: 0 20px;
-  background: #2A2A2A;
+  padding: 0 24px;
+  background: var(--color-bg-primary);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 56px;
-  min-height: 56px;
+  height: var(--header-height);
+  min-height: var(--header-height);
   position: relative;
-  overflow: hidden;
-}
-
-/* Orange glow sweep at bottom edge */
-.header::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: -100%;
-  width: 300%;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #F06820, #F27C38, #F06820, transparent);
-  animation: cp-glow-sweep 4s ease-in-out infinite;
-}
-
-@keyframes cp-glow-sweep {
-  0% { transform: translateX(-33%); }
-  50% { transform: translateX(33%); }
-  100% { transform: translateX(-33%); }
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-header);
 }
 
 .mainRow {
@@ -45,8 +28,8 @@
 
 .collapseButton {
   font-size: 16px;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -72,33 +55,38 @@
   gap: 8px;
 }
 
-/* antd Breadcrumb 默认使用亮色主题文字色（colorTextDescription/colorText），
-   在深色 Header 背景（#2A2A2A）上对比度不足，这里覆盖为白色系 */
 .breadcrumb :global(.ant-breadcrumb-link) {
-  color: rgba(255, 255, 255, 0.65) !important;
+  color: var(--color-text-secondary) !important;
 }
 
 .breadcrumb :global(.ant-breadcrumb-link a) {
-  color: rgba(255, 255, 255, 0.65) !important;
+  color: var(--color-text-secondary) !important;
 }
 
 .breadcrumb :global(.ant-breadcrumb-link a:hover) {
-  color: #F06820 !important;
+  color: #f06820 !important;
 }
 
 .breadcrumb :global(.ant-breadcrumb-separator) {
-  color: rgba(255, 255, 255, 0.35) !important;
+  color: var(--color-text-disabled) !important;
 }
 
 .breadcrumb :global(.ant-breadcrumb-item:last-child .ant-breadcrumb-link) {
-  color: #ffffff !important;
+  color: var(--color-text-header) !important;
   font-weight: 600;
 }
 
 .right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  line-height: 1;
+}
+
+.mobileOverflowItem {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .searchInput {
@@ -109,11 +97,12 @@
 }
 
 .searchInput:focus {
-  border-color: #F06820;
+  border-color: #f06820;
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
 .headerSearchInput {
+  width: 175px !important;
   min-height: 32px !important;
   height: 32px !important;
   padding: 0 10px !important;
@@ -149,51 +138,53 @@
 }
 
 .actionButton {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  color: #ffffff !important;
+  color: var(--color-text-header) !important;
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: color 0.2s, background-color 0.2s;
+  transition:
+    color 0.2s,
+    background-color 0.2s;
   flex-shrink: 0;
 }
 
 .actionButton:hover {
-  color: #F06820 !important;
-  background: rgba(255, 255, 255, 0.12);
+  color: var(--color-text-primary) !important;
+  background: var(--color-bg-tertiary);
 }
 
 .actionButton:focus-visible {
-  outline: 2px solid #F06820;
+  outline: 2px solid #f06820;
   outline-offset: 2px;
 }
 
 .actionButton svg {
-  color: #ffffff;
-  stroke: #ffffff;
-  stroke-width: 2.25;
+  color: currentColor;
+  stroke: currentColor;
+  stroke-width: 1.8;
   flex-shrink: 0;
 }
 
 .actionButton:hover svg,
 .actionButton:focus svg {
-  color: #F06820;
-  stroke: #F06820;
+  color: currentColor;
+  stroke: currentColor;
 }
 
 .actionButton.active {
-  color: #F27C38 !important;
+  color: #f27c38 !important;
   background: rgba(240, 104, 32, 0.2);
 }
 
 .actionButton.active svg {
-  color: #F27C38;
-  stroke: #F27C38;
+  color: #f27c38;
+  stroke: #f27c38;
 }
 
 /* 通知按钮：复用 actionButton 基础样式，只需覆盖特定差异 */
@@ -202,32 +193,32 @@
 }
 
 .notificationButton svg {
-  color: #ffffff;
-  stroke: #ffffff;
+  color: currentColor;
+  stroke: currentColor;
 }
 
 .notificationButton:hover,
 .notificationButton:focus {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--color-bg-tertiary);
 }
 
 .notificationButton:hover svg,
 .notificationButton:focus svg {
-  color: #F06820;
-  stroke: #F06820;
+  color: #f06820;
+  stroke: #f06820;
 }
 
 /* 激活状态：使用两个类选择器组合，特异性高于 .notificationButton */
 .actionButton.notificationButton.active,
 .notificationButton.active {
-  color: #F27C38 !important;
+  color: #f27c38 !important;
   background: rgba(240, 104, 32, 0.2);
 }
 
 .actionButton.notificationButton.active svg,
 .notificationButton.active svg {
-  color: #F06820 !important;
-  stroke: #F06820 !important;
+  color: #f06820 !important;
+  stroke: #f06820 !important;
 }
 
 .userMenu {
@@ -353,7 +344,7 @@
   padding: 2px 8px;
   font-size: 11px;
   font-weight: 500;
-  color: #F06820;
+  color: #f06820;
   background: #eff6ff;
   border-radius: 4px;
 }
@@ -368,7 +359,7 @@
 }
 
 .menuItemContent:hover {
-  color: #F06820;
+  color: #f06820;
 }
 
 .menuItemLogout {
@@ -435,24 +426,106 @@
 .userMenuTrigger {
   min-width: 0;
   /* 防止继承 AntHeader 的 line-height:56px 把触发器撑高，固定高度保证顶栏不被撑开 */
-  height: 44px;
+  height: 32px;
   line-height: 1;
   box-sizing: border-box;
   flex-shrink: 0;
+}
+
+.compactSearchButton,
+.moreButton {
+  display: none;
+}
+
+@media (max-width: 1199px) {
+  .header {
+    padding: 0 16px;
+  }
+  .right {
+    gap: 4px;
+  }
+  .headerSearchInput {
+    width: 140px !important;
+  }
 }
 
 .userMenuDetails {
   min-width: 0;
 }
 
+.userMenuDetails > div,
+.personaName {
+  display: block;
+  max-width: 112px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.personaButton,
+.personaStatic {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  max-width: 160px;
+  padding: 0 8px;
+  color: var(--color-text-header);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  box-shadow: none;
+  font-size: 13px;
+}
+
 .userMenuChevron {
   flex-shrink: 0;
 }
 
+@media (max-width: 991px) {
+  .headerSearchInput {
+    display: none !important;
+  }
+  .compactSearchButton {
+    display: inline-flex;
+  }
+  .mobileOverflowItem {
+    display: none;
+  }
+  .moreButton {
+    display: inline-flex;
+  }
+  .breadcrumb {
+    max-width: 180px;
+    overflow: hidden;
+  }
+  .personaName {
+    display: none;
+  }
+  .personaButton,
+  .personaStatic {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+  }
+  .personaButton :global(.lucide-chevron-down) {
+    display: none;
+  }
+  .userMenuDetails,
+  .userMenuChevron {
+    display: none;
+  }
+  .userMenuTrigger {
+    width: 32px;
+    padding: 2px !important;
+    justify-content: center;
+  }
+}
+
 @media (max-width: 767px) {
   .header {
-    min-height: 56px;
-    padding: 0 8px;
+    min-height: var(--header-height);
+    padding: 0 16px;
   }
 
   .mainRow {
@@ -466,7 +539,6 @@
     gap: 2px;
   }
 
-  .headerSearchInput,
   .breadcrumb {
     display: none !important;
   }

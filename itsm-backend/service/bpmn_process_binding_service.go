@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"itsm-backend/common/workitemidentity"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processbinding"
@@ -25,6 +26,12 @@ func NewProcessBindingService(client *ent.Client) *ProcessBindingService {
 
 // CreateBinding 创建流程绑定
 func (s *ProcessBindingService) CreateBinding(ctx context.Context, binding *dto.ProcessBinding) (*dto.ProcessBinding, error) {
+	// 绑定词表与实例身份同源：只接受规范 recordClass 与 Release 的显式遗留值。
+	// 旧词表（ticket/change/service_request）与任意字符串在此失败关闭——否则会留下
+	// 运行期永远匹配不到的绑定，且把已退役词表继续写进数据库。
+	if !workitemidentity.IsKnownProcessIdentity(string(binding.BusinessType)) {
+		return nil, fmt.Errorf("不支持的流程业务类型 %q", binding.BusinessType)
+	}
 	// 验证流程定义存在
 	def, err := selectExecutableProcessDefinition(ctx, s.client, binding.TenantID, binding.ProcessDefinitionKey, binding.ProcessVersion)
 	if err != nil {
@@ -110,6 +117,9 @@ func (s *ProcessBindingService) UpdateBinding(ctx context.Context, id int, bindi
 
 	update := entity.Update()
 	if binding.BusinessType != "" {
+		if !workitemidentity.IsKnownProcessIdentity(string(binding.BusinessType)) {
+			return nil, fmt.Errorf("不支持的流程业务类型 %q", binding.BusinessType)
+		}
 		update.SetBusinessType(string(binding.BusinessType))
 	}
 	if binding.ProcessDefinitionKey != "" {
@@ -302,7 +312,7 @@ func (s *ProcessBindingService) InitDefaultBindings(ctx context.Context, tenantI
 	defaultBindings := []dto.ProcessBinding{
 		// 工单流程
 		{
-			BusinessType:         dto.BusinessTypeTicket,
+			BusinessType:         dto.BusinessTypeGeneric,
 			BusinessSubType:      "general",
 			ProcessDefinitionKey: "ticket_general_flow",
 			Priority:             10,
@@ -320,7 +330,7 @@ func (s *ProcessBindingService) InitDefaultBindings(ctx context.Context, tenantI
 		},
 		// 变更流程
 		{
-			BusinessType:         dto.BusinessTypeChange,
+			BusinessType:         dto.BusinessTypeChangeRequest,
 			BusinessSubType:      "normal",
 			ProcessDefinitionKey: "change_normal_flow",
 			Priority:             10,
@@ -328,7 +338,7 @@ func (s *ProcessBindingService) InitDefaultBindings(ctx context.Context, tenantI
 			IsActive:             true,
 		},
 		{
-			BusinessType:         dto.BusinessTypeChange,
+			BusinessType:         dto.BusinessTypeChangeRequest,
 			BusinessSubType:      "emergency",
 			ProcessDefinitionKey: "change_emergency_flow",
 			Priority:             20,
@@ -337,7 +347,7 @@ func (s *ProcessBindingService) InitDefaultBindings(ctx context.Context, tenantI
 		},
 		// 服务请求流程
 		{
-			BusinessType:         dto.BusinessTypeServiceRequest,
+			BusinessType:         dto.BusinessTypeServiceRequestItem,
 			BusinessSubType:      "",
 			ProcessDefinitionKey: "service_request_flow",
 			Priority:             10,
@@ -364,7 +374,7 @@ func (s *ProcessBindingService) InitDefaultBindings(ctx context.Context, tenantI
 		},
 		// 工单分配流程
 		{
-			BusinessType:         dto.BusinessTypeTicket,
+			BusinessType:         dto.BusinessTypeGeneric,
 			BusinessSubType:      "assignment",
 			ProcessDefinitionKey: "ticket_assignment_flow",
 			Priority:             20,
@@ -504,25 +514,25 @@ func getDepartmentDefaultBindings(departmentType string) []dto.ProcessBinding {
 		return []dto.ProcessBinding{
 			{BusinessType: dto.BusinessTypeIncident, BusinessSubType: "alert_p0", ProcessDefinitionKey: "incident_emergency_flow", ProcessVersion: 1, Scenario: "alert_handling", Category: "operations", Priority: 100, Conditions: map[string]interface{}{"severity": "p0"}},
 			{BusinessType: dto.BusinessTypeIncident, BusinessSubType: "alert_p1", ProcessDefinitionKey: "incident_emergency_flow", ProcessVersion: 1, Scenario: "alert_handling", Category: "operations", Priority: 90, Conditions: map[string]interface{}{"severity": "p1"}},
-			{BusinessType: dto.BusinessTypeChange, BusinessSubType: "normal", ProcessDefinitionKey: "change_normal_flow", ProcessVersion: 1, Scenario: "change_release", Category: "operations", Priority: 70},
-			{BusinessType: dto.BusinessTypeChange, BusinessSubType: "emergency", ProcessDefinitionKey: "change_emergency_flow", ProcessVersion: 1, Scenario: "emergency_change", Category: "operations", Priority: 90},
+			{BusinessType: dto.BusinessTypeChangeRequest, BusinessSubType: "normal", ProcessDefinitionKey: "change_normal_flow", ProcessVersion: 1, Scenario: "change_release", Category: "operations", Priority: 70},
+			{BusinessType: dto.BusinessTypeChangeRequest, BusinessSubType: "emergency", ProcessDefinitionKey: "change_emergency_flow", ProcessVersion: 1, Scenario: "emergency_change", Category: "operations", Priority: 90},
 		}
 	case "rd":
 		return []dto.ProcessBinding{
 			{BusinessType: dto.BusinessTypeRelease, BusinessSubType: "production", ProcessDefinitionKey: "release_approval_flow", ProcessVersion: 1, Scenario: "code_release_prod", Category: "rd", Priority: 90, Conditions: map[string]interface{}{"environment": "production"}},
 			{BusinessType: dto.BusinessTypeRelease, BusinessSubType: "testing", ProcessDefinitionKey: "release_test_flow", ProcessVersion: 1, Scenario: "code_release_test", Category: "rd", Priority: 70, Conditions: map[string]interface{}{"environment": "testing"}},
-			{BusinessType: dto.BusinessTypeChange, BusinessSubType: "requirement", ProcessDefinitionKey: "change_requirement_flow", ProcessVersion: 1, Scenario: "requirement_change", Category: "rd", Priority: 80},
+			{BusinessType: dto.BusinessTypeChangeRequest, BusinessSubType: "requirement", ProcessDefinitionKey: "change_requirement_flow", ProcessVersion: 1, Scenario: "requirement_change", Category: "rd", Priority: 80},
 		}
 	case "finance":
 		return []dto.ProcessBinding{
-			{BusinessType: dto.BusinessTypeServiceRequest, BusinessSubType: "expense", ProcessDefinitionKey: "expense_approval_flow", ProcessVersion: 1, Scenario: "expense_approval", Category: "finance", Priority: 80},
-			{BusinessType: dto.BusinessTypeServiceRequest, BusinessSubType: "budget", ProcessDefinitionKey: "budget_approval_flow", ProcessVersion: 1, Scenario: "budget_approval", Category: "finance", Priority: 90},
-			{BusinessType: dto.BusinessTypeServiceRequest, BusinessSubType: "procurement", ProcessDefinitionKey: "procurement_flow", ProcessVersion: 1, Scenario: "procurement", Category: "finance", Priority: 85},
+			{BusinessType: dto.BusinessTypeServiceRequestItem, BusinessSubType: "expense", ProcessDefinitionKey: "expense_approval_flow", ProcessVersion: 1, Scenario: "expense_approval", Category: "finance", Priority: 80},
+			{BusinessType: dto.BusinessTypeServiceRequestItem, BusinessSubType: "budget", ProcessDefinitionKey: "budget_approval_flow", ProcessVersion: 1, Scenario: "budget_approval", Category: "finance", Priority: 90},
+			{BusinessType: dto.BusinessTypeServiceRequestItem, BusinessSubType: "procurement", ProcessDefinitionKey: "procurement_flow", ProcessVersion: 1, Scenario: "procurement", Category: "finance", Priority: 85},
 		}
 	case "hr":
 		return []dto.ProcessBinding{
-			{BusinessType: dto.BusinessTypeServiceRequest, BusinessSubType: "leave", ProcessDefinitionKey: "leave_approval_flow", ProcessVersion: 1, Scenario: "leave_approval", Category: "hr", Priority: 70},
-			{BusinessType: dto.BusinessTypeServiceRequest, BusinessSubType: "recruitment", ProcessDefinitionKey: "recruitment_approval_flow", ProcessVersion: 1, Scenario: "recruitment_approval", Category: "hr", Priority: 80},
+			{BusinessType: dto.BusinessTypeServiceRequestItem, BusinessSubType: "leave", ProcessDefinitionKey: "leave_approval_flow", ProcessVersion: 1, Scenario: "leave_approval", Category: "hr", Priority: 70},
+			{BusinessType: dto.BusinessTypeServiceRequestItem, BusinessSubType: "recruitment", ProcessDefinitionKey: "recruitment_approval_flow", ProcessVersion: 1, Scenario: "recruitment_approval", Category: "hr", Priority: 80},
 		}
 	default:
 		return nil

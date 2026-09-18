@@ -29,6 +29,7 @@ func scopeFrom(ctx context.Context) (scope, error) {
 	}
 	return scope{tenant: id}, nil
 }
+
 func (d *Driver) beginEnforced(ctx context.Context, opts *sql.TxOptions) (dialect.Tx, error) {
 	scoped, err := scopeFrom(ctx)
 	if err != nil {
@@ -94,6 +95,7 @@ func (tx *scopedTx) check(ctx context.Context) error {
 	}
 	return nil
 }
+
 func (tx *scopedTx) Exec(ctx context.Context, q string, args, v any) error {
 	if err := tx.check(ctx); err != nil {
 		return err
@@ -106,6 +108,7 @@ func (tx *scopedTx) Exec(ctx context.Context, q string, args, v any) error {
 	}
 	return (rawConnection{tx.raw}).Exec(ctx, q, args, v)
 }
+
 func (tx *scopedTx) Query(ctx context.Context, q string, args, v any) error {
 	if err := tx.check(ctx); err != nil {
 		return err
@@ -174,6 +177,7 @@ func (d *Driver) execEnforced(ctx context.Context, q string, args, v any) (err e
 	defer func() { err = errors.Join(err, ReleaseConn(ctx, conn)) }()
 	return (rawConnection{conn}).Exec(ctx, q, args, v)
 }
+
 func (d *Driver) queryEnforced(ctx context.Context, q string, args, v any) error {
 	if _, err := scopeFrom(ctx); err != nil {
 		return err
@@ -251,6 +255,7 @@ func (tx *scopedTx) ExecContext(ctx context.Context, query string, args ...any) 
 	}
 	return tx.raw.ExecContext(ctx, query, args...)
 }
+
 func (tx *scopedTx) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	if err := tx.check(ctx); err != nil {
 		return nil, err

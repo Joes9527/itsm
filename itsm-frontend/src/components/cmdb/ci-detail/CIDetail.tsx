@@ -148,12 +148,12 @@ export const CIDetail: React.FC = () => {
             style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}
           >
             <Space orientation='vertical' size={0}>
-              <Title level={3} style={{ margin: 0 }}>
+              <Title level={2} className="!text-[24px] !font-semibold" style={{ margin: 0 }}>
                 {ci.name}
               </Title>
               <Text type='secondary'>配置项 ID: {ci.id}</Text>
             </Space>
-            <Tag color={STATUS_COLORS[ci.status]} style={{ padding: '4px 12px', fontSize: 14 }}>
+            <Tag color={STATUS_COLORS[ci.status]} style={{ padding: '4px 12px', fontSize: 12 }}>
               {CIStatusLabels[ci.status] || ci.status}
             </Tag>
           </div>

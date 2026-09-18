@@ -13,6 +13,8 @@ const (
 	Label = "outbox_event"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldExecutionWorkItemID holds the string denoting the execution_work_item_id field in the database.
+	FieldExecutionWorkItemID = "execution_work_item_id"
 	// FieldEventID holds the string denoting the event_id field in the database.
 	FieldEventID = "event_id"
 	// FieldEventType holds the string denoting the event_type field in the database.
@@ -50,6 +52,7 @@ const (
 // Columns holds all SQL columns for outboxevent fields.
 var Columns = []string{
 	FieldID,
+	FieldExecutionWorkItemID,
 	FieldEventID,
 	FieldEventType,
 	FieldTenantID,
@@ -78,6 +81,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// ExecutionWorkItemIDValidator is a validator for the "execution_work_item_id" field. It is called by the builders before save.
+	ExecutionWorkItemIDValidator func(int) error
 	// EventIDValidator is a validator for the "event_id" field. It is called by the builders before save.
 	EventIDValidator func(string) error
 	// EventTypeValidator is a validator for the "event_type" field. It is called by the builders before save.
@@ -108,6 +113,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByExecutionWorkItemID orders the results by the execution_work_item_id field.
+func ByExecutionWorkItemID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExecutionWorkItemID, opts...).ToFunc()
 }
 
 // ByEventID orders the results by the event_id field.

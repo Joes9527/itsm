@@ -31,6 +31,7 @@ func (*graphCreator) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.
 	}
 	return &workitemcreation.ProfessionalReference{Type: "incident", ID: extension.ID}, nil
 }
+
 func graphFixture(t *testing.T) (*ent.Client, *Service, workitemcreation.Identity, workitemcreation.CreateWorkItemCommand) {
 	client, s, i, c, _, _ := intakeFixture(t)
 	i.Channel = "http"
@@ -51,6 +52,7 @@ func graphFixture(t *testing.T) (*ent.Client, *Service, workitemcreation.Identit
 	c.FormValues = map[string]any{"location": "Shanghai"}
 	return client, s, i, c
 }
+
 func TestApplicationEachWriteStageFailureRollsBackEntireGraph(t *testing.T) {
 	for _, stage := range []string{"base", "extension", "field", "snapshot", "audit", "outbox", "complete"} {
 		t.Run(stage, func(t *testing.T) {
@@ -105,6 +107,7 @@ func TestApplicationEachWriteStageFailureRollsBackEntireGraph(t *testing.T) {
 		})
 	}
 }
+
 func TestApplicationGraphCommitsFieldsSnapshotAndOutbox(t *testing.T) {
 	client, s, i, c := graphFixture(t)
 	ctx := context.Background()

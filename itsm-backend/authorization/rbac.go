@@ -2,6 +2,7 @@ package authorization
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
@@ -117,8 +118,16 @@ func permissionCacheKey(roleName string, tenantID int) string {
 }
 
 func loadPermissionsFromDB(client *ent.Client, roleName string, tenantID int) []Permission {
+	permissions, _ := loadPermissionsFromDBChecked(context.Background(), client, roleName, tenantID)
+	return permissions
+}
+
+func loadPermissionsFromDBChecked(ctx context.Context, client *ent.Client, roleName string, tenantID int) ([]Permission, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if client == nil {
-		return nil
+		return nil, fmt.Errorf("RBAC client unavailable")
 	}
 	cacheKey := permissionCacheKey(roleName, tenantID)
 	if PermissionConfig.EnableCache {
@@ -126,41 +135,40 @@ func loadPermissionsFromDB(client *ent.Client, roleName string, tenantID int) []
 		cached, exists := permissionCache[cacheKey]
 		permissionCacheLock.RUnlock()
 		if exists && time.Now().Before(cached.expiresAt) {
-			return cached.permissions
+			return cached.permissions, nil
 		}
 	}
-
 	permissions := make([]Permission, 0)
-	ctx := tenantctx.WithTenantID(context.Background(), tenantID)
-	roleEntity, err := client.Role.Query().
-		Where(role.Code(roleName), role.TenantID(tenantID)).
-		Only(ctx)
+	ctx = tenantctx.WithTenantID(ctx, tenantID)
+	roleEntity, err := client.Role.Query().Where(role.Code(roleName), role.TenantID(tenantID)).Only(ctx)
+	if err != nil && !ent.IsNotFound(err) {
+		return nil, err
+	}
 	if err == nil {
-		rolePermissions, queryErr := client.RolePermission.Query().
-			Where(rolepermission.RoleIDEQ(roleEntity.ID), rolepermission.TenantID(tenantID)).
-			All(ctx)
-		if queryErr == nil && len(rolePermissions) > 0 {
-			permissionIDs := make([]int, len(rolePermissions))
-			for index, rolePermission := range rolePermissions {
-				permissionIDs[index] = rolePermission.PermissionID
+		grants, err := client.RolePermission.Query().Where(rolepermission.RoleIDEQ(roleEntity.ID), rolepermission.TenantID(tenantID)).All(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(grants) > 0 {
+			ids := make([]int, len(grants))
+			for i, grant := range grants {
+				ids[i] = grant.PermissionID
 			}
-			permissionEntities, permissionErr := client.Permission.Query().
-				Where(permission.IDIn(permissionIDs...), permission.TenantID(tenantID)).
-				All(ctx)
-			if permissionErr == nil {
-				for _, permissionEntity := range permissionEntities {
-					permissions = append(permissions, Permission{Resource: permissionEntity.Resource, Action: permissionEntity.Action})
-				}
+			rows, err := client.Permission.Query().Where(permission.IDIn(ids...), permission.TenantID(tenantID)).All(ctx)
+			if err != nil {
+				return nil, err
+			}
+			for _, row := range rows {
+				permissions = append(permissions, Permission{Resource: row.Resource, Action: row.Action})
 			}
 		}
 	}
-
 	if PermissionConfig.EnableCache {
 		permissionCacheLock.Lock()
 		permissionCache[cacheKey] = &cachedPermission{permissions: permissions, expiresAt: time.Now().Add(permissionCacheTTL)}
 		permissionCacheLock.Unlock()
 	}
-	return permissions
+	return permissions, nil
 }
 
 func GetRolePermissions(client *ent.Client, roleName string, tenantID int) []Permission {
@@ -168,14 +176,28 @@ func GetRolePermissions(client *ent.Client, roleName string, tenantID int) []Per
 }
 
 func LoadPermissionsByMode(client *ent.Client, roleName string, tenantID int) []Permission {
+	permissions, _ := LoadPermissionsByModeChecked(context.Background(), client, roleName, tenantID)
+	return permissions
+}
+
+// LoadPermissionsByModeChecked retains the shared RBAC policy and distinguishes
+// storage failure from genuine empty grants. Failures never populate the cache.
+func LoadPermissionsByModeChecked(ctx context.Context, client *ent.Client, roleName string, tenantID int) ([]Permission, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if PermissionConfig.Mode == PermissionConfigModeHardcodeOnly {
+		return RolePermissions[roleName], nil
+	}
+	databasePermissions, err := loadPermissionsFromDBChecked(ctx, client, roleName, tenantID)
+	if err != nil {
+		return nil, err
+	}
 	switch PermissionConfig.Mode {
 	case PermissionConfigModeDBOnly:
-		return loadPermissionsFromDB(client, roleName, tenantID)
-	case PermissionConfigModeHardcodeOnly:
-		return RolePermissions[roleName]
+		return databasePermissions, nil
 	case PermissionConfigModeMerge:
-		databasePermissions := loadPermissionsFromDB(client, roleName, tenantID)
-		merged := make(map[string]Permission, len(databasePermissions)+len(RolePermissions[roleName]))
+		merged := make(map[string]Permission)
 		for _, candidate := range append(databasePermissions, RolePermissions[roleName]...) {
 			merged[candidate.Resource+":"+candidate.Action] = candidate
 		}
@@ -183,15 +205,12 @@ func LoadPermissionsByMode(client *ent.Client, roleName string, tenantID int) []
 		for _, candidate := range merged {
 			result = append(result, candidate)
 		}
-		return result
-	case PermissionConfigModeFallback:
-		fallthrough
+		return result, nil
 	default:
-		databasePermissions := loadPermissionsFromDB(client, roleName, tenantID)
 		if len(databasePermissions) > 0 {
-			return databasePermissions
+			return databasePermissions, nil
 		}
-		return RolePermissions[roleName]
+		return RolePermissions[roleName], nil
 	}
 }
 

@@ -33,7 +33,7 @@ func AuthorizeTenantSession(ctx context.Context, client *ent.Client, actor *ent.
 		if ent.IsNotFound(err) {
 			return nil, ErrTenantAccessDenied
 		}
-		return nil, fmt.Errorf("%w: load target tenant: %v", ErrTenantAuthorizationUnavailable, err)
+		return nil, fmt.Errorf("%w: load target tenant: %w", ErrTenantAuthorizationUnavailable, err)
 	}
 
 	allowed := actor.TenantID == targetTenantID || actor.Role == "super_admin"
@@ -41,7 +41,7 @@ func AuthorizeTenantSession(ctx context.Context, client *ent.Client, actor *ent.
 		origin, originErr := client.Tenant.Get(ctx, actor.TenantID)
 		if originErr != nil {
 			if !ent.IsNotFound(originErr) {
-				return nil, fmt.Errorf("%w: load actor tenant: %v", ErrTenantAuthorizationUnavailable, originErr)
+				return nil, fmt.Errorf("%w: load actor tenant: %w", ErrTenantAuthorizationUnavailable, originErr)
 			}
 		} else if tenantmode.IsMSPProviderTenantType(string(origin.Type)) && tenantmode.IsCustomerTenantType(string(target.Type)) {
 			allocated, allocationErr := client.MSPAllocation.Query().
@@ -52,7 +52,7 @@ func AuthorizeTenantSession(ctx context.Context, client *ent.Client, actor *ent.
 				).
 				Exist(ctx)
 			if allocationErr != nil {
-				return nil, fmt.Errorf("%w: query MSP allocation: %v", ErrTenantAuthorizationUnavailable, allocationErr)
+				return nil, fmt.Errorf("%w: query MSP allocation: %w", ErrTenantAuthorizationUnavailable, allocationErr)
 			}
 			allowed = allocated
 		}
@@ -110,4 +110,18 @@ func resolveCurrentSessionActor(ctx context.Context, directory *ent.Client, acto
 		return nil, creation.NewPermissionDenied("current tenant session is unavailable", err)
 	}
 	return actor, nil
+}
+
+// ResolveCurrentTenantUser validates a directory identity against the existing
+// tenant-session policy without treating the supplied ID as actor provenance.
+func ResolveCurrentTenantUser(ctx context.Context, directory *ent.Client, id, targetTenantID int, now time.Time) (*ent.User, error) {
+	if directory == nil {
+		return nil, creation.NewInfrastructureUnavailable("session directory is required", nil)
+	}
+	lookup := tenantctx.SystemContext(ctx, "session:current", "resolve current user eligibility for selected tenant")
+	candidate, err := directory.User.Get(lookup, id)
+	if err != nil {
+		return nil, err
+	}
+	return resolveCurrentSessionActor(lookup, directory, id, targetTenantID, EffectiveSessionRole(candidate), now)
 }

@@ -11,6 +11,7 @@ func catalogCommand() CreateWorkItemCommand {
 	id := 101
 	return CreateWorkItemCommand{IdempotencyKey: " key ", IntakeKind: "catalog_item", RecordClass: "service_request_item", Confirmation: "confirmed", Title: " Request ", CatalogItemID: &id, CatalogVersion: "catalog-v1", FormSchemaVersion: "form-v1"}
 }
+
 func TestDecodeRejectsInvalidWire(t *testing.T) {
 	for _, raw := range []string{`null`, `[]`, `{} {}`, `{"tenantId":2}`, `{"actorId":2}`, `{"requesterId":2}`, `{"incident":{"tenantId":2}}`, `{"incident":{"priority":"high"}}`, `{"incident":{"impactAnalysis":{"unknown":1}}}`, `{"incident":{"impactAnalysis":{"businessImpact":{"unknown":1}}}}`, `{"problem":{"impactScope":"global"}}`} {
 		t.Run(raw, func(t *testing.T) {
@@ -20,6 +21,7 @@ func TestDecodeRejectsInvalidWire(t *testing.T) {
 		})
 	}
 }
+
 func TestCanonicalSemanticFields(t *testing.T) {
 	base := catalogCommand()
 	_, digest, err := CanonicalizeCommand(base)
@@ -49,6 +51,7 @@ func TestCanonicalSemanticFields(t *testing.T) {
 		t.Fatal("key entered semantic digest")
 	}
 }
+
 func TestCanonicalRejectsInvalidStructure(t *testing.T) {
 	cases := map[string]func(*CreateWorkItemCommand){"key": func(c *CreateWorkItemCommand) { c.IdempotencyKey = " " }, "version": func(c *CreateWorkItemCommand) { c.CatalogVersion = " " }, "formVersion": func(c *CreateWorkItemCommand) { c.FormSchemaVersion = "" }, "class": func(c *CreateWorkItemCommand) { c.RecordClass = "unknown" }, "kind": func(c *CreateWorkItemCommand) { c.IntakeKind = "unknown" }, "id": func(c *CreateWorkItemCommand) { id := -1; c.AssigneeID = &id }, "ci": func(c *CreateWorkItemCommand) { c.CIIDs = []int{0} }, "professional": func(c *CreateWorkItemCommand) { c.Incident = &IncidentInput{} }, "json": func(c *CreateWorkItemCommand) { c.FormValues = map[string]any{"bad": make(chan int)} }}
 	for name, change := range cases {
@@ -61,6 +64,7 @@ func TestCanonicalRejectsInvalidStructure(t *testing.T) {
 		})
 	}
 }
+
 func TestCanonicalClonesAndOrdersMaps(t *testing.T) {
 	c := catalogCommand()
 	c.FormValues = map[string]any{"b": []any{map[string]any{"x": "before"}}, "a": 1}
@@ -79,6 +83,7 @@ func TestCanonicalClonesAndOrdersMaps(t *testing.T) {
 		t.Fatal("caller mutation changed canonical payload")
 	}
 }
+
 func TestIncidentNestedFieldsAndTimestamps(t *testing.T) {
 	raw := `{"idempotencyKey":"i","intakeKind":"incident","recordClass":"incident","confirmation":"confirmed","title":"Incident","incident":{"detectedAt":"2026-09-05T08:00:00+08:00","impactAnalysis":{"businessImpact":{"affectedUsers":3,"revenueImpact":4.5,"serviceAvailability":0.9},"technicalImpact":"down","affectedUsers":5,"timeImpact":{"isOverdue":true,"hoursSinceCreation":4,"responseDeadline":"2026-09-06T00:00:00Z","resolutionDeadline":"2026-09-07T00:00:00Z"}},"metadata":{"nested":{"value":1}}}}`
 	c, err := DecodeCreateWorkItemCommand(strings.NewReader(raw))
@@ -106,6 +111,7 @@ func TestIncidentNestedFieldsAndTimestamps(t *testing.T) {
 		t.Fatal("invalid timestamp accepted")
 	}
 }
+
 func TestCreateFixture(t *testing.T) {
 	f, err := os.Open("../../../../docs/contracts/fixtures/intake-create.json")
 	if err != nil {
@@ -126,7 +132,7 @@ func TestEveryProfessionalFieldContributesToDigest(t *testing.T) {
 	bodies := map[string]string{
 		"generic":              `{"generic":{"type":"improvement","typeId":"3","source":"manual","category":"ops"}}`,
 		"problem":              `{"problem":{"category":"ops","rootCause":"fault","impact":"high"}}`,
-		"change_request":       `{"change":{"category":"ops","justification":"reason","type":"normal","impactScope":"service","riskLevel":"low","plannedStartDate":"2026-09-06T00:00:00Z","plannedEndDate":"2026-09-07T00:00:00Z","implementationPlan":"apply","rollbackPlan":"undo","affectedCis":["2"],"relatedTickets":[3]}}`,
+		"change_request":       `{"change":{"category":"ops","justification":"reason","type":"normal","impactScope":"service","riskLevel":"low","plannedStartDate":"2026-09-06T00:00:00Z","plannedEndDate":"2026-09-07T00:00:00Z","implementationPlan":"apply","rollbackPlan":"undo","affectedCis":["2"]}}`,
 		"incident":             `{"incident":{"type":"incident","severity":"high","impact":"medium","urgency":"low","category":"ops","subcategory":"network","detectedAt":"2026-09-05T00:00:00Z","source":"manual","metadata":{"deep":{"items":["a"]}},"impactAnalysis":{"businessImpact":{"affectedUsers":2,"revenueImpact":3.5,"serviceAvailability":0.9},"technicalImpact":"outage","affectedUsers":4,"timeImpact":{"isOverdue":true,"hoursSinceCreation":5,"responseDeadline":"2026-09-06T00:00:00Z","resolutionDeadline":"2026-09-07T00:00:00Z"}}}}`,
 		"service_request_item": `{"serviceRequest":{"costCenter":"it","dataClassification":"internal","needsPublicIp":true,"sourceIpWhitelist":["192.0.2.1"],"expireAt":"2026-10-05T00:00:00Z","complianceAck":true,"contactName":"Fixture","contactEmail":"fixture@example.invalid","quantity":2,"expectedAt":"2026-09-06T00:00:00Z"}}`,
 	}
@@ -178,6 +184,7 @@ func TestEveryProfessionalFieldContributesToDigest(t *testing.T) {
 		})
 	}
 }
+
 func TestCanonicalClonesTypedJSONContainers(t *testing.T) {
 	c := catalogCommand()
 	nested := map[string]string{"x": "before"}

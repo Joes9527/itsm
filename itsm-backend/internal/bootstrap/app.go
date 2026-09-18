@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	intakecreation "itsm-backend/handlers/common/workitemcreation"
-	"itsm-backend/handlers/intake"
 	"log"
 	"net"
 	"net/http"
@@ -16,6 +14,9 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	intakecreation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/handlers/intake"
 
 	"itsm-backend/authentication"
 	"itsm-backend/authorization"
@@ -65,7 +66,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
+	redis "github.com/redis/go-redis/v9"
+
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.uber.org/zap"
@@ -84,6 +86,9 @@ type Application struct {
 	Logger                   *zap.SugaredLogger
 	DBClient                 *ent.Client
 	systemClient             *ent.Client
+	slaMonitor               slaViolationMonitor
+	escalationService        escalationProcessor
+	executionPolicy          *database.ExecutionPolicy
 	Router                   *gin.Engine
 	Embedder                 service.Embedder
 	VectorStore              *service.VectorStore
@@ -92,9 +97,14 @@ type Application struct {
 	outboxDeliveryWorker     kafOutboxRunner
 	toolQueue                toolQueueCloser
 	startBackgroundTasksFunc func(context.Context)
+	backgroundTasks          sync.WaitGroup
+	eventRuntime             *eventbus.WatermillEventBus
+	connectorRuntime         *controller.ConnectorController
+	connectorManager         *connector.Manager
 }
 
 type toolQueueCloser interface {
+	Start(context.Context) error
 	Close()
 }
 
@@ -238,6 +248,9 @@ func NewApplication() *Application {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+	if err := cfg.Execution.Validate(); err != nil {
+		log.Fatalf("Invalid execution configuration: %v", err)
+	}
 
 	// 2. 初始化日志系统
 	logger := initLogger(&cfg.Log)
@@ -262,6 +275,19 @@ func NewApplication() *Application {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	client, systemClient := clients.Tenant, clients.System
+	if cfg.Execution.Mode == "candidate" && cfg.RLS.Mode != "enforce" {
+		sugar.Fatal("candidate execution requires enforced tenant RLS")
+	}
+	admissionCtx, admissionCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	admissionErr := database.ValidateExecutionRuntime(admissionCtx, database.GetRawDB(), cfg.Execution)
+	admissionCancel()
+	if admissionErr != nil {
+		sugar.Fatalw("execution runtime admission failed", "error", admissionErr)
+	}
+	executionPolicy, err := database.NewExecutionPolicy(cfg.Execution)
+	if err != nil {
+		sugar.Fatalw("execution manifest cannot be frozen", "error", err)
+	}
 	// 6. 初始化服务层 & 控制器
 	// 这部分代码量较大，为了简化，我们先在这里进行组装，后续可以进一步拆分为 wires / container
 
@@ -270,11 +296,12 @@ func NewApplication() *Application {
 	numberAllocator := workitemnumber.NewPostgreSQLAllocator()
 
 	// 初始化业务服务层
-	incidentService := service.NewIncidentService(client, sugar)
+	incidentService := service.NewIncidentService(client, sugar, executionPolicy)
 	incidentService.RuleEngine().SetActorDirectory(systemClient)
+	incidentService.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 
 	// 初始化 EventBus 事件总线
-	eventBus, err := eventbus.NewWatermillEventBus(&cfg.Redis, sugar)
+	eventBus, err := eventbus.NewWatermillEventBus(&cfg.Redis, cfg.Execution, service.NewExecutionEventAuthority(client, executionPolicy), sugar)
 	if err != nil {
 		sugar.Fatalw("Failed to initialize event bus", "error", err)
 	}
@@ -282,16 +309,20 @@ func NewApplication() *Application {
 	sugar.Infow("Event bus initialized successfully")
 
 	// 事件驱动审计订阅方：sla.breached / ai.triage.completed 写入 AuditLog
-	auditSubscriber := service.NewEventAuditSubscriber(client, sugar)
+	auditSubscriber := service.NewEventAuditSubscriber(client, sugar, executionPolicy)
 	for _, topic := range service.AuditedEventTopics() {
-		if err := eventBus.Subscribe(topic, auditSubscriber); err != nil {
-			sugar.Warnw("failed to subscribe audit subscriber", "error", err, "topic", topic)
+		if !cfg.Execution.Enabled("event_audit") {
+			continue
+		}
+		if err := eventBus.RegisterSubscription(topic, auditSubscriber); err != nil {
+			sugar.Fatalw("failed to subscribe audit subscriber", "error", err, "topic", topic)
 		}
 	}
 
 	// BPMN 子服务（必须在 TicketService 之前创建）
 	processBindingService := service.NewProcessBindingService(client)
-	concreteProcessEngine := service.NewCustomProcessEngine(client, sugar).(*service.CustomProcessEngine)
+	concreteProcessEngine := service.NewCustomProcessEngine(client, sugar, executionPolicy).(*service.CustomProcessEngine)
+	concreteProcessEngine.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 	concreteProcessEngine.SetCallbackCandidateClient(systemClient)
 	var processEngine service.ProcessEngine = concreteProcessEngine
 	processTriggerService := service.NewProcessTriggerService(client, processEngine)
@@ -301,39 +332,49 @@ func NewApplication() *Application {
 	ticketRepoImpl := repository_ticket.NewEntRepository(client, sugar)
 
 	// Connector Manager / Registry / Market —— 连接器/插件/技能市场基础设施
-	connectorManager := connector.NewManager(connector.Default(), sugar)
+	connectorManager := connector.NewManager(connector.Default(), sugar, executionPolicy)
 	connectorMarket := marketplace.New()
 	connectorController := controller.NewConnectorController(connectorManager, connector.Default(), connectorMarket, sugar, client, systemClient)
 
 	// Webhook 事件推送订阅方：sla.breached 按租户推送到已配置的 webhook 端点
-	webhookSubscriber := service.NewWebhookEventSubscriber(connectorManager, sugar)
+	webhookSubscriber := service.NewWebhookEventSubscriber(connectorManager, sugar, client, executionPolicy)
 	for _, topic := range service.WebhookEventTopics() {
-		if err := eventBus.Subscribe(topic, webhookSubscriber); err != nil {
-			sugar.Warnw("failed to subscribe webhook subscriber", "error", err, "topic", topic)
+		if !cfg.Execution.Enabled("webhook") {
+			continue
+		}
+		if err := eventBus.RegisterSubscription(topic, webhookSubscriber); err != nil {
+			sugar.Fatalw("failed to subscribe webhook subscriber", "error", err, "topic", topic)
 		}
 	}
 
 	// 通知 / 审批 / SLA / 自动化 / 序列服务（V2 子服务）
-	ticketNotificationService := service.NewTicketNotificationService(client, sugar)
+	ticketNotificationService := service.NewTicketNotificationService(client, sugar, executionPolicy)
 	ticketNotificationService.SetConnectorManager(connectorManager)
 	ticketNotificationService.SetDeliveryQueueClient(systemClient)
 	// 邮件通知（Graph sendMail 为主，SMTP fallback）
 	emailService := service.NewEmailService(service.EmailConfig{
-		Host:     cfg.SMTP.Host,
-		Port:     cfg.SMTP.Port,
-		Username: cfg.SMTP.Username,
-		Password: cfg.SMTP.Password,
-		From:     cfg.SMTP.FromEmail,
-		FromName: cfg.SMTP.FromName,
+		DeliveryTransport: cfg.EmailDelivery.EffectiveTransport(),
+		Host:              cfg.SMTP.Host,
+		Port:              cfg.SMTP.Port,
+		Username:          cfg.SMTP.Username,
+		Password:          cfg.SMTP.Password,
+		From:              cfg.SMTP.FromEmail,
+		FromName:          cfg.SMTP.FromName,
 	}, sugar)
 	// 延迟绑定 Graph 发信：发信时只查询当前租户的 msgraph 连接器。
 	emailService.SetGraphProvider(newTenantGraphProvider(connectorManager))
+	emailService.SetDeliveryTargetDependencies(connectorManager, executionPolicy)
 	ticketNotificationService.SetEmailService(emailService)
+	ticketNotificationService.SetAssignmentDirectory(clients.IntakeDirectorySnapshot())
 	ticketSLAService := service.NewTicketSLAService(client, sugar)
 	ticketAutomationRuleService := service.NewTicketAutomationRuleService(client, sugar)
 
+	sessionReader := authorization.NewSessionReader(client, clients.IntakeDirectorySnapshot())
 	// V2 工单服务（构造函数注入）
 	ticketService := service.NewTicketService(&service.TicketServiceConfig{
+		Execution:             executionPolicy,
+		SessionReader:         sessionReader,
+		Directory:             clients.IntakeDirectorySnapshot(),
 		ProcessTriggerService: processTriggerService,
 		Repository:            ticketRepoImpl,
 		Client:                client,
@@ -409,27 +450,19 @@ func NewApplication() *Application {
 	ragService := service.NewRAGServiceWithAutoConfig(client, vectorStore, embedder, sugar)
 	aiTelemetryService := service.NewAITelemetryService(database.GetRawDB())
 
-	// 非阻塞初始化：向量扩展检测与 Embedding 管道预热
-	// 如果 pgvector 扩展未就绪，RAG 功能自动降级为关键字搜索
-	go func() {
-		ctx := context.Background()
-		if err := vectorStore.EnsureExtension(ctx); err != nil {
-			sugar.Warnw("pgvector 扩展未就绪，RAG功能降级为关键字搜索", "error", err)
-			return
-		}
-		sugar.Infow("pgvector 扩展初始化成功")
-	}()
+	// Vector schema provisioning belongs to explicit migration/resource preparation.
 
 	// 控制器依赖
 	incidentMonitoringService := service.NewIncidentMonitoringService(client, sugar)
-	incidentAlertingService := service.NewIncidentAlertingService(client, sugar)
+	incidentAlertingService := service.NewIncidentAlertingService(client, sugar, executionPolicy)
+	incidentAlertingService.SetEmailService(emailService)
 	incidentService.SetAlertCreator(incidentAlertingService)
 	ticketDependencyService := service.NewTicketDependencyService(client, sugar)
 	analyticsService := service.NewAnalyticsService(client, sugar)
 	predictionService := service.NewPredictionService(client, sugar)
 	slaForecastSkill := service.NewSLAForecastSkill(client, llmGateway, sugar)
 	// 市场服务
-	marketplaceSvc := marketplaceService.NewService(client, sugar)
+	marketplaceSvc := marketplaceService.NewService(client, sugar, executionPolicy)
 	marketplaceCtrl := marketplaceController.NewController(marketplaceSvc, connectorManager)
 
 	// Guidance sidecar for constrained JSON generation
@@ -440,17 +473,19 @@ func NewApplication() *Application {
 	guidanceClient := service.NewGuidanceClient(guidanceURL, sugar)
 	triageService := service.NewTriageServiceWithGuidanceAndSugaredLogger(llmGateway, guidanceClient, sugar)
 	ticketAttachmentService := service.NewTicketAttachmentService(client, sugar)
-	// 配置了 MinIO 则切换附件存储后端为对象存储；失败回退本地文件系统。
+	// Verify the configured backend; failure must not select a different filesystem.
 	if cfg.MinIO.Endpoint != "" {
 		if minioStorage, err := service.NewMinioAttachmentStorage(
 			cfg.MinIO.Endpoint, cfg.MinIO.AccessKey, cfg.MinIO.SecretKey, cfg.MinIO.Bucket, cfg.MinIO.UseSSL,
 		); err != nil {
-			sugar.Warnw("failed to init MinIO storage, falling back to local filesystem", "error", err)
+			sugar.Fatalw("configured attachment storage is unavailable", "error", err)
 		} else {
 			ticketAttachmentService.SetStorage(minioStorage)
 			sugar.Infow("attachment storage backend: minio", "endpoint", cfg.MinIO.Endpoint, "bucket", cfg.MinIO.Bucket)
 		}
 	}
+
+	// Connector activation belongs to the explicitly enabled runtime lifecycle.
 
 	rootCauseService := service.NewRootCauseService(client, sugar)
 	// LLM/Embedding/VectorStore
@@ -487,10 +522,15 @@ func NewApplication() *Application {
 	ticketAutomationRuleService.SetNotificationService(ticketNotificationService)
 	ticketAssignmentRuleService := service.NewTicketAssignmentRuleService(client, sugar)
 	ticketAssignmentSmartService := service.NewTicketAssignmentSmartService(client, sugar, ticketAssignmentService, ticketAssignmentRuleService)
+	ticketAssignmentSmartService.SetSessionReader(sessionReader)
+	ticketAssignmentSmartService.SetExecutionPolicy(executionPolicy)
 	ticketAssignmentSmartController := controller.NewTicketAssignmentSmartController(ticketAssignmentSmartService, ticketAssignmentRuleService, sugar)
 
 	// Ticket Workflow Service & Controller
 	ticketWorkflowService := service.NewTicketWorkflowService(client, sugar)
+	ticketWorkflowService.SetNotificationService(ticketNotificationService)
+	ticketWorkflowService.SetSessionReader(sessionReader)
+	ticketWorkflowService.SetExecutionPolicy(executionPolicy)
 	ticketWorkflowController := controller.NewTicketWorkflowController(ticketWorkflowService, database.GetRawDB(), sugar)
 
 	// Ticket Automation Rule Controller (service 已于 131 行预创建并注入 V2)
@@ -507,8 +547,13 @@ func NewApplication() *Application {
 	// 该方法只加在具体实现 *service.CustomProcessEngine 上，避免影响接口的其他实现/测试假实现），
 	// 所以这里先做一次类型断言。
 	if cpe, ok := processEngine.(*service.CustomProcessEngine); ok {
+		if h, ok := cpe.CallbackRegistry().GetHandler("cc_handler").(*bpmn.CCTaskHandler); ok {
+			h.SetNotificationTargetBinder(ticketNotificationService)
+		}
 		if h, ok := cpe.CallbackRegistry().GetHandler("ticket_service_handler").(*bpmn.TicketServiceTaskHandler); ok {
+			ticketService.SetWorkflowAssignmentBoundary(service.NewWorkflowAssignmentBoundary(clients.IntakeDirectorySnapshot()))
 			h.SetTicketService(ticketService)
+			h.SetEscalationService(ticketService)
 			h.SetNotificationService(ticketNotificationService)
 		}
 		// 同上，事件 ServiceTask 的 create/assign/status 写入也从裸 Ent 操作收回到
@@ -523,8 +568,12 @@ func NewApplication() *Application {
 
 	rootCauseAnalysisService := service.NewRootCauseAnalysisService(client)
 	problemRepo := problem.NewEntRepository(client)
-	problemServiceDomain := problem.NewService(problemRepo, sugar)
+	problemServiceDomain := problem.NewService(problemRepo, sugar, executionPolicy)
+	problemServiceDomain.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 	problemHandler := problem.NewHandler(problemServiceDomain, client)
+	problemInvestigationService := service.NewTenantScopedProblemInvestigationService(database.GetRawDB(), sugar)
+	problemInvestigationController := controller.NewProblemInvestigationController(sugar, problemInvestigationService)
+	problemInvestigationController.SetProblemDomain(problemServiceDomain)
 	incidentController := controller.NewIncidentController(incidentService, incidentService.RuleEngine(), incidentMonitoringService, incidentAlertingService, rootCauseAnalysisService, sugar)
 
 	provisioningService := service.NewProvisioningService(client, sugar)
@@ -547,8 +596,7 @@ func NewApplication() *Application {
 	ticketTagService := service.NewTicketTagService(client)
 	ticketTagController := controller.NewTicketTagController(ticketTagService, sugar.Desugar())
 
-	bpmnWorkflowController := controller.NewBPMNWorkflowController(processEngine, bpmnVersionService, client)
-	bpmnTemplateService := service.NewBPMNTemplateService(client)
+	bpmnWorkflowController := controller.NewBPMNWorkflowController(processEngine, bpmnVersionService, executionPolicy, client)
 
 	// BPMN Process Trigger Controller (processBindingService/processTriggerService 已于 119-122 行预创建并注入 V2)
 	configInheritanceService := service.NewConfigInheritanceService(client, sugar)
@@ -584,17 +632,7 @@ func NewApplication() *Application {
 
 	// Set process trigger service for workflow integration (after processTriggerService is declared)
 
-	// 初始化模板并部署默认流程
-	go func() {
-		const defaultTenantID = 1
-		ctx := tenantctx.WithTenantID(context.Background(), defaultTenantID)
-		if _, err := bpmnTemplateService.LoadAndDeployTemplates(ctx, defaultTenantID); err != nil {
-			sugar.Warnw("Failed to deploy BPMN templates", "error", err)
-		}
-		if err := processBindingService.InitDefaultBindings(ctx, defaultTenantID); err != nil {
-			sugar.Warnw("Failed to init default process bindings", "error", err)
-		}
-	}()
+	// Startup never deploys defaults or modifies historical process configuration.
 
 	dashboardService := service.NewDashboardService(client, sugar)
 	dashboardHandler := handlers.NewDashboardHandler(dashboardService, ticketService, incidentService, sugar)
@@ -602,6 +640,8 @@ func NewApplication() *Application {
 	// Domain: Service Catalog (DDD)
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, sugar, clients.IntakeDirectorySnapshot())
+	// 分类详情的引用清单需要目录名称：由目录所有者把名称契约注册给分类聚合层。
+	service_catalog.RegisterCTIReferenceNameSource()
 	concreteProcessEngine.SetPublicationKAFConfig(cfg)
 	scService.SetPublicationEngine(concreteProcessEngine)
 	scHandler := service_catalog.NewHandler(scService)
@@ -613,9 +653,11 @@ func NewApplication() *Application {
 	delegatedExecutionHandler := delegated_execution.NewHandler(delegated_execution.NewService(client))
 
 	// Domain: Service Request (DDD)
-	srRepo := service_request.NewEntRepository(client)
+	srRepo := service_request.NewEntRepository(client, executionPolicy)
 	chainResolver := service.NewApprovalChainResolver(client, sugar)
-	srService := service_request.NewService(srRepo, client, sugar, chainResolver)
+	srService := service_request.NewService(srRepo, client, sugar, chainResolver, executionPolicy)
+	srService.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
+	srService.SetWorkflowAssignmentBoundary(service.NewWorkflowAssignmentBoundary(clients.IntakeDirectorySnapshot()))
 	srHandler := service_request.NewHandler(srService)
 	bpmnWorkflowController.SetApprovedAccessReader(srService)
 	concreteProcessEngine.SetAccessCompletionContributor(srService)
@@ -623,10 +665,9 @@ func NewApplication() *Application {
 
 	// Domain: Change (DDD)
 	changeRepo := change.NewEntRepository(client, database.GetRawDB())
-	changeServiceDomain := change.NewService(changeRepo, client, sugar)
-	// 提交变更审批后自动启动 change_normal_flow，见 change.Service.SetProcessTriggerService 注释；
-	// CAB 审批决定/阶段流转完成 BPMN 任务需要 processEngine，见 SetProcessEngine 注释。
-	changeServiceDomain.SetProcessTriggerService(processTriggerService)
+	changeServiceDomain := change.NewService(changeRepo, client, sugar, executionPolicy)
+	changeServiceDomain.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
+	// The Change owner starts and completes its governed workflow in the owning transaction.
 	changeServiceDomain.SetProcessEngine(processEngine)
 	changeHandler := change.NewHandler(changeServiceDomain)
 	// Standard Change Handler reuses the authoritative Change creation service so
@@ -652,7 +693,7 @@ func NewApplication() *Application {
 		}
 	}
 	scService.SetCreatorRegistry(creationRegistry)
-	intakeApplication := intake.NewService(client, intake.NewResolver(scService, processBindingService, configurationItemService, ticketCategoryService), creationRegistry, intake.NewWorkItemCreator(numberAllocator), clients.IntakeDirectorySnapshot())
+	intakeApplication := intake.NewService(client, intake.NewResolver(scService, processBindingService, configurationItemService, ticketCategoryService), creationRegistry, intake.NewWorkItemCreator(numberAllocator), clients.IntakeDirectorySnapshot(), executionPolicy)
 	ticketController.SetCreationApplication(intakeApplication)
 	incidentController.SetCreationApplication(intakeApplication)
 	problemHandler.SetCreationApplication(intakeApplication)
@@ -668,24 +709,31 @@ func NewApplication() *Application {
 			h.SetCreationApplication(intakeApplication, clients.System)
 		}
 	}
-	toolQueue := service.NewToolQueue(client, toolRegistry, intakeApplication, ticketService, 100, sugar)
+	toolQueue := service.NewToolQueue(client, toolRegistry, intakeApplication, ticketService, 100, sugar, executionPolicy)
 	feishuSyncService := service.NewFeishuSyncService(client, sugar, intakeApplication)
-	outboxRegistry, err := service.NewOutboxEventTypeRegistry(
-		[]service.OutboxDeliveryHandler{service.NewWorkflowStartOutboxHandler(client, concreteProcessEngine, systemClient), incidentService.RuleEngine(), service.NewFeishuCreationDeliveryHandler(feishuSyncService, func(tenantID int) (service.FeishuTaskCreator, bool) {
+	outboxRegistry, err := newOutboxRegistry(cfg.Execution,
+		[]service.OutboxDeliveryHandler{service.NewWorkItemAssignmentNotificationHandler(client, ticketNotificationService), service.NewFeishuUpdateDeliveryHandler(client, executionPolicy, clients.IntakeDirectorySnapshot(), func(tenantID int) (service.FeishuTaskUpdater, bool) {
+			conn, ok := connectorManager.Get(tenantID, "feishu")
+			if !ok {
+				return nil, false
+			}
+			updater, ok := conn.(service.FeishuTaskUpdater)
+			return updater, ok
+		}), service.NewSLABreachDeliveryHandler(), service.NewWorkflowStartOutboxHandler(client, concreteProcessEngine, systemClient), incidentService.RuleEngine(), service.NewIncidentStatusDeliveryHandler(incidentService.RuleEngine()), service.NewFeishuCreationDeliveryHandler(feishuSyncService, func(tenantID int) (service.FeishuTaskCreator, bool) {
 			conn, ok := connectorManager.Get(tenantID, "feishu")
 			if !ok {
 				return nil, false
 			}
 			tasks, ok := conn.(service.FeishuTaskCreator)
 			return tasks, ok
-		}), service.NewIncidentAlertDeliveryHandler(emailService), service.NewEmailAttachmentsDeliveryHandler(client, ticketAttachmentService, newTenantGraphInboundProvider(connectorManager)), service.NewEmailConfirmationDeliveryHandler(client, newTenantGraphInboundProvider(connectorManager))},
-		service.KafDelegateRequestedEventType,
+		}), service.NewIncidentAlertDeliveryHandler(client, executionPolicy, emailService), service.NewEmailAttachmentsDeliveryHandler(client, ticketAttachmentService, newTenantGraphInboundProvider(connectorManager)), service.NewEmailConfirmationDeliveryHandler(client, newTenantGraphInboundProvider(connectorManager)), service.NewWorkItemRelationCreatedDeliveryHandler(client, clients.IntakeDirectorySnapshot(), ticketNotificationService, sugar), service.NewWorkItemRelationRemovedDeliveryHandler(client, clients.IntakeDirectorySnapshot(), ticketNotificationService, sugar), service.NewChangeOutcomeDeliveryHandler(client, clients.IntakeDirectorySnapshot(), ticketNotificationService, sugar), service.NewProblemResolvedDeliveryHandler(client, clients.IntakeDirectorySnapshot(), ticketNotificationService, sugar)},
+		service.NewWebhookDeliveryHandler(client, executionPolicy, connectorManager),
 	)
 	if err != nil {
 		log.Fatalf("Invalid outbox event type registry: %v", err)
 	}
 	outboxDeliveryWorker, err := service.NewOutboxDeliveryWorker(
-		service.NewOutboxEventRepository(systemClient),
+		service.NewOutboxEventRepository(systemClient, executionPolicy),
 		service.OutboxDeliveryWorkerConfig{
 			BatchSize:      cfg.OutboxDelivery.BatchSize,
 			PollInterval:   cfg.OutboxDelivery.PollInterval,
@@ -725,7 +773,7 @@ func NewApplication() *Application {
 	slaTemplateController := controller.NewSLATemplateController(slaTemplateService)
 
 	// AI Domain
-	aiRepo := ai.NewEntRepository(client)
+	aiRepo := ai.NewEntRepository(client, executionPolicy)
 	aiServiceDomain := ai.NewService(aiRepo, sugar, ragService, toolRegistry, toolQueue, analyticsService, predictionService, slaForecastSkill, triageService, rootCauseService, aiTelemetryService)
 	aiServiceDomain.SetLLMGateway(llmGateway)
 	// P2-6: 注入 ent client 供 AI 工具 RBAC 校验复用 hasResourcePermission
@@ -757,7 +805,6 @@ func NewApplication() *Application {
 		sugar.Warn("REDIS_HOST is not configured; token refresh unavailable")
 	}
 	refreshTokenConsumer := authentication.NewRefreshTokenConsumer(cfg.JWT.Secret, refreshTokenStore)
-	sessionReader := authorization.NewSessionReader(client, clients.IntakeDirectorySnapshot())
 	commonServiceDomain := domainCommon.NewService(commonRepo, cfg.JWT.Secret, sugar, systemClient, refreshTokenConsumer, sessionReader)
 	commonHandler := domainCommon.NewHandler(commonServiceDomain)
 
@@ -812,15 +859,16 @@ func NewApplication() *Application {
 	approvalChainController := controller.NewApprovalChainController(approvalChainService, sugar)
 
 	// SLA Monitor & Alert Services (legacy, for background tasks)
-	slaMonitorService := service.NewSLAMonitorService(client, sugar)
-	slaAlertService := service.NewSLAAlertService(client, sugar)
-	escalationService := service.NewEscalationService(client, sugar)
+	slaMonitorService := service.NewSLAMonitorService(client, sugar, executionPolicy)
+	slaAlertService := service.NewSLAAlertService(client, sugar, executionPolicy)
+	escalationService := service.NewEscalationService(client, sugar, executionPolicy)
 	escalationMatrixService := service.NewEscalationMatrixService(sugar)
 	escalationMatrixController := controller.NewEscalationMatrixController(sugar, escalationMatrixService)
 
 	// Wire up notification service
 	slaMonitorService.SetNotificationService(ticketNotificationService)
 	slaAlertService.SetNotificationService(ticketNotificationService)
+	slaMonitorService.SetAlertService(slaAlertService)
 	escalationService.SetNotificationService(ticketNotificationService)
 
 	// Survey Service & Controller
@@ -843,6 +891,10 @@ func NewApplication() *Application {
 		gin.SetMode(gin.TestMode)
 	}
 	r := gin.Default()
+	r.Use(func(c *gin.Context) {
+		c.Request = authentication.WithCookieTransportPolicy(c.Request, cfg.Server.CookieSecure, gin.Mode() == gin.ReleaseMode)
+		c.Next()
+	})
 	if err := r.SetTrustedProxies([]string{"127.0.0.1"}); err != nil {
 		sugar.Warnw("failed to set trusted proxies, falling back to default", "error", err)
 	}
@@ -880,11 +932,24 @@ func NewApplication() *Application {
 	identityRepository := intake.NewIdentityRepository(client, systemClient, sessionReader)
 	identityExchange := intake.NewIdentityExchangeService(identityConfig, intake.NewRedisNonceStore(identityRedis), identityRepository, cfg.JWT.Secret)
 	intakeHandler := intake.NewHandler(identityExchange, intakeApplication)
-	intakeReaders := intake.NewReadService(sessionReader, scService, cfg.JWT.Secret)
+	intakeReaders := intake.NewReadService(sessionReader, scService, cfg.JWT.Secret, intake.ReferenceReadOptions{
+		FrontendURL: cfg.Server.FrontendURL, PageSize: cfg.IntakeRead.ReferencePageSize,
+		Lifecycle: intake.NewRequesterLifecycleReader(map[string]authorization.WorkItemLifecycleReader{
+			"ticket": ticketService, "incident": incidentService, "problem": problemServiceDomain,
+			"change": changeServiceDomain, "service_request": srService,
+		}),
+	})
 	intakeReaders.SetFulfillmentReader(srService)
 	intakeHandler.SetReaders(intakeReaders)
 	intakeHandler.SetMappings(intake.NewIdentityMappingService(sessionReader, identityProviders))
+	readinessControl, err := migration.LoadControlConfiguration()
+	if err != nil {
+		sugar.Fatalw("readiness migration control configuration rejected", "error", err)
+	}
 	routerConfig := &router.RouterConfig{
+		InspectSchema: func(ctx context.Context) error {
+			return migration.InspectRuntimeDatabase(ctx, database.GetRawDB(), readinessControl)
+		},
 		IntakeHandler:                   intakeHandler,
 		JWTSecret:                       cfg.JWT.Secret,
 		Logger:                          sugar,
@@ -894,6 +959,7 @@ func NewApplication() *Application {
 		CSRFEnabled:                     cfg.Security.CSRFEnabled,
 		RedisRateLimiter:                redisRateLimiter,
 		TicketController:                ticketController,
+		WorkItemRelationController:      controller.NewWorkItemRelationController(service.NewWorkItemRelationService(client, clients.IntakeDirectorySnapshot())),
 		TicketDependencyController:      ticketDependencyController,
 		TicketCommentController:         ticketCommentController,
 		TicketAttachmentController:      ticketAttachmentController,
@@ -952,17 +1018,18 @@ func NewApplication() *Application {
 		CloudController:        cloudController,
 
 		// Domain Handlers
-		ServiceCatalogHandler: scHandler,
-		ServiceRequestHandler: srHandler,
-		ProblemHandler:        problemHandler,
-		ChangeHandler:         changeHandler,
-		KnowledgeHandler:      knowledgeHandler,
-		SLAHandler:            slaHandler,
-		SLATemplateController: slaTemplateController,
-		AIHandler:             aiHandler, // Added AI domain handler
-		CommonHandler:         commonHandler,
-		AuthController:        authController,
-		RoleHandler:           roleHandler,
+		ServiceCatalogHandler:          scHandler,
+		ServiceRequestHandler:          srHandler,
+		ProblemHandler:                 problemHandler,
+		ProblemInvestigationController: problemInvestigationController,
+		ChangeHandler:                  changeHandler,
+		KnowledgeHandler:               knowledgeHandler,
+		SLAHandler:                     slaHandler,
+		SLATemplateController:          slaTemplateController,
+		AIHandler:                      aiHandler, // Added AI domain handler
+		CommonHandler:                  commonHandler,
+		AuthController:                 authController,
+		RoleHandler:                    roleHandler,
 
 		// Global Search
 		GlobalSearchController: globalSearchController,
@@ -997,6 +1064,9 @@ func NewApplication() *Application {
 		Cfg:                  cfg,
 		Logger:               sugar,
 		DBClient:             client,
+		slaMonitor:           slaMonitorService,
+		escalationService:    escalationService,
+		executionPolicy:      executionPolicy,
 		systemClient:         systemClient,
 		Router:               r,
 		Embedder:             embedder,
@@ -1005,6 +1075,9 @@ func NewApplication() *Application {
 		notificationWorker:   ticketNotificationService,
 		outboxDeliveryWorker: outboxDeliveryWorker,
 		toolQueue:            toolQueue,
+		eventRuntime:         eventBus,
+		connectorRuntime:     connectorController,
+		connectorManager:     connectorManager,
 	}
 }
 
@@ -1035,8 +1108,19 @@ func InitializeStorage(cfg *config.Config, client *ent.Client, sugar *zap.Sugare
 	ctx := tenantctx.SystemContext(context.Background(), "bootstrap:initialize_storage",
 		"schema migration and default seed at process boot")
 
+	control, err := migration.LoadControlConfiguration()
+	if err != nil {
+		return fmt.Errorf("migration control configuration: %w", err)
+	}
+	migrator := migration.NewMigrator(database.GetRawDB(), sugar, control)
+	if !cfg.Deployment.AutoMigrate {
+		if err := migration.InspectRuntimeDatabase(ctx, database.GetRawDB(), control); err != nil {
+			return fmt.Errorf("runtime migration admission: %w", err)
+		}
+	} else if err := migrator.InspectMigrationTarget(ctx); err != nil {
+		return fmt.Errorf("inspect storage migration target: %w", err)
+	}
 	if cfg.Deployment.AutoMigrate {
-		migrator := migration.NewMigrator(database.GetRawDB(), sugar)
 		bootstrap := migration.CanonicalBootstrap{
 			Prepare: func(ctx context.Context) error {
 				if err := database.PrepareBootstrapInfrastructure(ctx, database.GetRawDB()); err != nil {
@@ -1083,7 +1167,12 @@ func InitializeStorage(cfg *config.Config, client *ent.Client, sugar *zap.Sugare
 	}
 
 	if cfg.Deployment.AutoSeed && !cfg.Deployment.AutoMigrate {
-		if err := runBootstrapSeed(ctx, cfg, client, sugar); err != nil {
+		if err := migrator.WithMigrationLock(ctx, func(ctx context.Context) error {
+			if err := migration.InspectRuntimeDatabase(ctx, database.GetRawDB(), control); err != nil {
+				return err
+			}
+			return runBootstrapSeed(ctx, cfg, client, sugar)
+		}); err != nil {
 			return err
 		}
 	}
@@ -1202,48 +1291,40 @@ func needsBootstrapAdmin(ctx context.Context, client *ent.Client) (bool, error) 
 	return !exists, nil
 }
 
-func (app *Application) Run() {
+func (app *Application) Run() error {
 	defer app.Logger.Sync()
+	defer func() {
+		if app.systemClient != nil {
+			_ = app.systemClient.Close()
+		}
+		if app.DBClient != nil {
+			_ = app.DBClient.Close()
+		}
+	}()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	stopAPIRuntime := app.startAPIRuntime(ctx)
-	defer stopAPIRuntimeBeforeDependencies(stopAPIRuntime, func() {
-		if app.systemClient != nil {
-			app.systemClient.Close()
-		}
-		app.DBClient.Close()
-	})
-
+	// Reserve the listening port before starting any background consumer.
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", app.Cfg.Server.Port))
 	if err != nil {
-		log.Fatalf("Failed to listen on server port: %v", err)
+		return fmt.Errorf("listen on server port: %w", err)
 	}
+	return app.runHTTPRuntime(ctx, listener)
+}
+
+func (app *Application) runHTTPRuntime(ctx context.Context, listener net.Listener) error {
+	defer listener.Close()
+	stopRuntime, err := app.startAPIRuntime(ctx)
+	if err != nil {
+		return fmt.Errorf("start application runtime: %w", err)
+	}
+	defer stopRuntime()
 	server := &http.Server{Handler: app.Router}
-	app.Logger.Infof("Server starting on port %d", app.Cfg.Server.Port)
-	if err := serveUntilContextCancelled(ctx, server, listener); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
-	}
+	return serveUntilContextCancelled(ctx, server, listener)
 }
 
 func stopAPIRuntimeBeforeDependencies(stopRuntime func(), closeDependencies func()) {
 	stopRuntime()
 	closeDependencies()
-}
-
-// startAPIRuntime starts the background responsibilities that remain owned by
-// the API process in this release. KAF delegation delivery is deliberately
-// excluded: it has a single owner in the dedicated Worker process.
-func (app *Application) startAPIRuntime(ctx context.Context) func() {
-	waitForOutboxDelivery := app.startOutboxDeliveryWorker(ctx)
-	backgroundCtx, cancelBackground := context.WithCancel(ctx)
-	app.startBackground(backgroundCtx)
-	return func() {
-		cancelBackground()
-		waitForOutboxDelivery()
-		if app.toolQueue != nil {
-			app.toolQueue.Close()
-		}
-	}
 }
 
 func (app *Application) startBackground(ctx context.Context) {
@@ -1295,48 +1376,61 @@ func serveUntilContextCancelled(ctx context.Context, server *http.Server, listen
 }
 
 func (app *Application) startBackgroundTasks(lifecycleCtx context.Context) {
-	app.startCallbackOutboxWorker(lifecycleCtx)
-	app.startNotificationDeliveryWorker(lifecycleCtx)
+	if app.Cfg.Execution.Enabled("callback") {
+		app.startCallbackOutboxWorker(lifecycleCtx)
+	}
+	if app.Cfg.Execution.Enabled("notification") {
+		app.startNotificationDeliveryWorker(lifecycleCtx)
+	}
 
-	go func() {
-		pipeline := service.NewEmbeddingPipeline(app.DBClient, app.Embedder, app.Logger, app.VectorStore)
-		ctx := context.Background()
-		// initial full-ish pass per tenant
-		tenants, err := app.DBClient.Tenant.Query().All(ctx)
-		if err == nil {
-			for _, t := range tenants {
-				if err := pipeline.RunOnce(ctx, t.ID, 200); err != nil {
-					app.Logger.Warnw("embedding pipeline failed", "error", err, "tenant_id", t.ID)
-				}
-			}
-		} else {
-			// fallback default tenant 1
-			if err := pipeline.RunOnce(ctx, 1, 200); err != nil {
-				app.Logger.Warnw("embedding pipeline failed", "error", err, "tenant_id", 1)
-			}
-		}
-		// periodic incremental per tenant
-		ticker := time.NewTicker(15 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
+	if app.Cfg.Execution.Enabled("embedding") {
+		app.backgroundTasks.Add(1)
+		go func() {
+			defer app.backgroundTasks.Done()
+			pipeline := service.NewEmbeddingPipeline(app.DBClient, app.Embedder, app.Logger, app.VectorStore)
+			ctx := lifecycleCtx
+			// initial full-ish pass per tenant
 			tenants, err := app.DBClient.Tenant.Query().All(ctx)
-			if err != nil {
-				continue
+			if err == nil {
+				for _, t := range tenants {
+					if err := pipeline.RunOnce(ctx, t.ID, 200); err != nil {
+						app.Logger.Warnw("embedding pipeline failed", "error", err, "tenant_id", t.ID)
+					}
+				}
+			} else {
+				app.Logger.Warnw("embedding tenant inventory unavailable", "error", err)
 			}
-			for _, t := range tenants {
-				if err := pipeline.RunOnce(ctx, t.ID, 50); err != nil {
-					app.Logger.Warnw("embedding pipeline failed", "error", err, "tenant_id", t.ID)
+			// periodic incremental per tenant
+			ticker := time.NewTicker(15 * time.Minute)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+				}
+				tenants, err := app.DBClient.Tenant.Query().All(ctx)
+				if err != nil {
+					continue
+				}
+				for _, t := range tenants {
+					if err := pipeline.RunOnce(ctx, t.ID, 50); err != nil {
+						app.Logger.Warnw("embedding pipeline failed", "error", err, "tenant_id", t.ID)
+					}
 				}
 			}
-		}
-	}()
+		}()
+	}
 
 	// SLA Monitoring and Escalation background tasks
+	if !app.Cfg.Execution.Enabled("sla") && !app.Cfg.Execution.Enabled("escalation") {
+		return
+	}
+	app.backgroundTasks.Add(1)
 	go func() {
-		slaMonitorService := service.NewSLAMonitorService(app.DBClient, app.Logger)
-		escalationService := service.NewEscalationService(app.DBClient, app.Logger)
+		defer app.backgroundTasks.Done()
 
-		ctx := context.Background()
+		ctx := lifecycleCtx
 		// Run SLA check every 5 minutes
 		slaTicker := time.NewTicker(5 * time.Minute)
 		defer slaTicker.Stop()
@@ -1347,25 +1441,21 @@ func (app *Application) startBackgroundTasks(lifecycleCtx context.Context) {
 
 		for {
 			select {
+			case <-ctx.Done():
+				return
 			case <-slaTicker.C:
-				tenants, err := app.DBClient.Tenant.Query().All(ctx)
-				if err != nil {
+				if !app.Cfg.Execution.Enabled("sla") {
 					continue
 				}
-				for _, t := range tenants {
-					if _, err := slaMonitorService.CheckSLAViolations(ctx, t.ID); err != nil {
-						app.Logger.Warnw("SLA violation check failed", "error", err, "tenant_id", t.ID)
-					}
+				if err := app.runSLACycle(ctx); err != nil {
+					app.Logger.Warnw("SLA violation cycle failed", "error", err)
 				}
 			case <-escalationTicker.C:
-				tenants, err := app.DBClient.Tenant.Query().All(ctx)
-				if err != nil {
+				if !app.Cfg.Execution.Enabled("escalation") {
 					continue
 				}
-				for _, t := range tenants {
-					if err := escalationService.ProcessEscalations(ctx, t.ID); err != nil {
-						app.Logger.Warnw("escalation processing failed", "error", err, "tenant_id", t.ID)
-					}
+				if err := app.runEscalationCycle(ctx); err != nil {
+					app.Logger.Warnw("escalation cycle failed", "error", err)
 				}
 			}
 		}
@@ -1377,7 +1467,11 @@ func (app *Application) startCallbackOutboxWorker(ctx context.Context) {
 		return
 	}
 	workerID := "bpmn-callback-" + uuid.NewString()
-	go app.callbackWorker.RunCallbackOutboxWorker(ctx, workerID, 2*time.Second)
+	app.backgroundTasks.Add(1)
+	go func() {
+		defer app.backgroundTasks.Done()
+		app.callbackWorker.RunCallbackOutboxWorker(ctx, workerID, 2*time.Second)
+	}()
 }
 
 func (app *Application) startNotificationDeliveryWorker(ctx context.Context) {
@@ -1385,5 +1479,9 @@ func (app *Application) startNotificationDeliveryWorker(ctx context.Context) {
 		return
 	}
 	workerID := "ticket-notification-" + uuid.NewString()
-	go app.notificationWorker.RunDeliveryWorker(ctx, workerID, 2*time.Second)
+	app.backgroundTasks.Add(1)
+	go func() {
+		defer app.backgroundTasks.Done()
+		app.notificationWorker.RunDeliveryWorker(ctx, workerID, 2*time.Second)
+	}()
 }

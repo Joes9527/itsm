@@ -2,10 +2,11 @@ package service
 
 import (
 	"context"
+	"strconv"
+
 	"itsm-backend/ent"
 	"itsm-backend/ent/tickettype"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"strconv"
 )
 
 func (*TicketService) RecordClass() string { return creation.RecordClassGeneric }
@@ -78,6 +79,7 @@ func (s *TicketService) Prepare(ctx context.Context, tx *ent.Tx, in creation.Res
 	}
 	return plan, nil
 }
+
 func (s *TicketService) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.Ticket, plan *creation.CreationPlan) (*creation.ProfessionalReference, error) {
 	if plan.Resolved.Command.Email != nil {
 		if err := writeEmailCreationSource(ctx, tx, item, plan); err != nil {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -93,6 +94,10 @@ func (tnc *TicketNotificationController) SendTicketNotification(c *gin.Context) 
 		return
 	}
 
+	if result.Effect == dto.TicketNotificationEffectQueued {
+		c.JSON(http.StatusAccepted, common.Response{Code: common.SuccessCode, Message: "success", Data: result})
+		return
+	}
 	common.Success(c, result)
 }
 

@@ -1,0 +1,25 @@
+.host {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+  font-size: 13px;
+}
+.host :global(.react-flow__controls-button) {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border-color: var(--color-border);
+  fill: currentColor;
+}
+.host :global(.react-flow__controls-button:hover) {
+  background: var(--color-bg-tertiary);
+}
+.host :global(.react-flow__edge-text) {
+  fill: var(--color-text-primary);
+}
+.host :global(.react-flow__edge-textbg) {
+  fill: var(--color-bg-secondary);
+}
+.host :global(.react-flow__attribution) {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"itsm-backend/database"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/slaalerthistory"
@@ -25,14 +26,16 @@ const defaultAlertCooldownMinutes = 15
 
 type SLAAlertService struct {
 	client          *ent.Client
+	execution       *database.ExecutionPolicy
 	logger          *zap.SugaredLogger
 	notificationSvc *TicketNotificationService
 }
 
-func NewSLAAlertService(client *ent.Client, logger *zap.SugaredLogger) *SLAAlertService {
+func NewSLAAlertService(client *ent.Client, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) *SLAAlertService {
 	return &SLAAlertService{
-		client: client,
-		logger: logger,
+		client:    client,
+		execution: execution,
+		logger:    logger,
 	}
 }
 
@@ -290,275 +293,127 @@ func (s *SLAAlertService) GetAlertHistory(ctx context.Context, req *dto.GetSLAAl
 		return nil, 0, fmt.Errorf("failed to get SLA alert history: %w", err)
 	}
 
+	sent, err := s.projectAlertNotificationStatus(ctx, histories, tenantID)
+	if err != nil {
+		return nil, 0, err
+	}
 	responses := make([]*dto.SLAAlertHistoryResponse, len(histories))
 	for i, history := range histories {
-		responses[i] = s.toAlertHistoryResponse(history)
+		responses[i] = s.toAlertHistoryResponse(history, sent[history.ID])
 	}
 
 	return responses, total, nil
 }
 
-// CheckAndTriggerAlerts 检查并触发预警，返回是否触发了告警
-func (s *SLAAlertService) CheckAndTriggerAlerts(ctx context.Context, ticketID int, tenantID int) (bool, error) {
-	s.logger.Infow("Checking and triggering alerts", "ticket_id", ticketID, "tenant_id", tenantID)
-
-	// 获取工单信息
-	ticketEntity, err := s.client.Ticket.Query().
-		Where(
-			ticket.IDEQ(ticketID),
-			ticket.TenantIDEQ(tenantID),
-		).
-		Only(ctx)
-	if err != nil {
-		return false, fmt.Errorf("failed to get ticket: %w", err)
-	}
-
-	if ticketEntity.SLADefinitionID == 0 {
-		return false, nil // 没有SLA定义，无需检查
-	}
-
-	// 获取该SLA定义的所有活跃预警规则
-	alertRules, err := s.client.SLAAlertRule.Query().
-		Where(
-			slaalertrule.SLADefinitionIDEQ(ticketEntity.SLADefinitionID),
-			slaalertrule.TenantIDEQ(tenantID),
-			slaalertrule.IsActiveEQ(true),
-		).
-		All(ctx)
-	if err != nil {
-		return false, fmt.Errorf("failed to get alert rules: %w", err)
-	}
-
-	if len(alertRules) == 0 {
-		return false, nil
-	}
-
-	now := time.Now()
-	var slaDeadline time.Time
-	var timeRemaining float64
-	alertTriggered := false
-
-	// 检查响应时间预警
-	if !ticketEntity.SLAResponseDeadline.IsZero() && ticketEntity.FirstResponseAt.IsZero() {
-		slaDeadline = ticketEntity.SLAResponseDeadline
-		timeRemaining = slaDeadline.Sub(now).Minutes()
-		if timeRemaining > 0 {
-			// 计算剩余时间百分比
-			totalTime := slaDeadline.Sub(ticketEntity.CreatedAt).Minutes()
-			if totalTime > 0 {
-				percentage := (timeRemaining / totalTime) * 100
-				triggered := s.checkAndCreateAlert(ctx, ticketEntity, alertRules, "response_time", percentage, tenantID)
-				if triggered {
-					alertTriggered = true
-				}
-			}
-		}
-	}
-
-	// 检查解决时间预警
-	if !ticketEntity.SLAResolutionDeadline.IsZero() && ticketEntity.ResolvedAt.IsZero() {
-		slaDeadline = ticketEntity.SLAResolutionDeadline
-		timeRemaining = slaDeadline.Sub(now).Minutes()
-		if timeRemaining > 0 {
-			// 计算剩余时间百分比
-			totalTime := slaDeadline.Sub(ticketEntity.CreatedAt).Minutes()
-			if totalTime > 0 {
-				percentage := (timeRemaining / totalTime) * 100
-				triggered := s.checkAndCreateAlert(ctx, ticketEntity, alertRules, "resolution_time", percentage, tenantID)
-				if triggered {
-					alertTriggered = true
-				}
-			}
-		}
-	}
-
-	return alertTriggered, nil
+// CheckAndTriggerAlerts checks both SLA deadlines in one owning transaction.
+func (s *SLAAlertService) CheckAndTriggerAlerts(ctx context.Context, ticketID, tenantID int) (bool, error) {
+	return s.triggerAlerts(ctx, ticketID, tenantID, "")
 }
 
-// TriggerSLAWarning 触发SLA预警（基于默认阈值）
-// 返回是否成功触发预警
 func (s *SLAAlertService) TriggerSLAWarning(ctx context.Context, ticketID int, warningType string, tenantID int) (bool, error) {
-	// 获取工单信息
-	ticketEntity, err := s.client.Ticket.Query().
-		Where(
-			ticket.IDEQ(ticketID),
-			ticket.TenantIDEQ(tenantID),
-		).
-		Only(ctx)
-	if err != nil {
-		return false, fmt.Errorf("failed to get ticket: %w", err)
+	if warningType != "response_time" && warningType != "resolution_time" {
+		return false, fmt.Errorf("unsupported SLA warning type: %s", warningType)
 	}
-
-	if ticketEntity.SLADefinitionID == 0 {
-		return false, nil
-	}
-
-	// 获取该SLA定义的所有活跃预警规则
-	alertRules, err := s.client.SLAAlertRule.Query().
-		Where(
-			slaalertrule.SLADefinitionIDEQ(ticketEntity.SLADefinitionID),
-			slaalertrule.TenantIDEQ(tenantID),
-			slaalertrule.IsActiveEQ(true),
-		).
-		All(ctx)
-	if err != nil {
-		return false, fmt.Errorf("failed to get alert rules: %w", err)
-	}
-
-	if len(alertRules) == 0 {
-		return false, nil
-	}
-
-	now := time.Now()
-	var percentage float64
-	var slaDeadline time.Time
-
-	if warningType == "response_time" && !ticketEntity.SLAResponseDeadline.IsZero() && ticketEntity.FirstResponseAt.IsZero() {
-		slaDeadline = ticketEntity.SLAResponseDeadline
-		totalTime := slaDeadline.Sub(ticketEntity.CreatedAt).Minutes()
-		timeRemaining := slaDeadline.Sub(now).Minutes()
-		if totalTime > 0 && timeRemaining > 0 {
-			percentage = (timeRemaining / totalTime) * 100
-		}
-	} else if warningType == "resolution_time" && !ticketEntity.SLAResolutionDeadline.IsZero() && ticketEntity.ResolvedAt.IsZero() {
-		slaDeadline = ticketEntity.SLAResolutionDeadline
-		totalTime := slaDeadline.Sub(ticketEntity.CreatedAt).Minutes()
-		timeRemaining := slaDeadline.Sub(now).Minutes()
-		if totalTime > 0 && timeRemaining > 0 {
-			percentage = (timeRemaining / totalTime) * 100
-		}
-	}
-
-	if percentage <= 0 {
-		return false, nil
-	}
-
-	triggered := s.checkAndCreateAlert(ctx, ticketEntity, alertRules, warningType, percentage, tenantID)
-	return triggered, nil
+	return s.triggerAlerts(ctx, ticketID, tenantID, warningType)
 }
 
-// checkAndCreateAlert 检查并创建预警记录，返回是否触发了告警
-func (s *SLAAlertService) checkAndCreateAlert(ctx context.Context, ticketEntity *ent.Ticket, alertRules []*ent.SLAAlertRule, alertType string, percentage float64, tenantID int) bool {
-	alertTriggered := false
-	for _, rule := range alertRules {
-		threshold := float64(rule.ThresholdPercentage)
-		if percentage <= threshold {
-			// 检查是否已存在未解决的预警
-			exists, _ := s.client.SLAAlertHistory.Query().
-				Where(
-					slaalerthistory.TicketIDEQ(ticketEntity.ID),
-					slaalerthistory.AlertRuleIDEQ(rule.ID),
-					slaalerthistory.ResolvedAtIsNil(),
-				).
-				Exist(ctx)
-			if exists {
-				continue // 已存在预警，跳过
-			}
-
-			// Cooldown 抑制：避免同一 (ticket, rule) 在窗口内重复告警
-			cooldownMin := resolveCooldownMinutes(rule)
-			if cooldownMin > 0 {
-				lastAlert, err := s.client.SLAAlertHistory.Query().
-					Where(
-						slaalerthistory.TicketIDEQ(ticketEntity.ID),
-						slaalerthistory.AlertRuleIDEQ(rule.ID),
-					).
-					Order(ent.Desc(slaalerthistory.FieldCreatedAt)).
-					First(ctx)
-				if err == nil && lastAlert != nil {
-					elapsed := time.Since(lastAlert.CreatedAt)
-					if elapsed < time.Duration(cooldownMin)*time.Minute {
-						remaining := time.Duration(cooldownMin)*time.Minute - elapsed
-						s.logger.Infow(
-							"SLA alert suppressed by cooldown",
-							"ticket_id", ticketEntity.ID,
-							"alert_rule_id", rule.ID,
-							"alert_level", rule.AlertLevel,
-							"alert_type", alertType,
-							"cooldown_minutes", cooldownMin,
-							"cooldown_remaining_seconds", int(remaining.Seconds()),
-						)
-						continue
-					}
-				}
-			}
-
-			// 创建预警历史记录
-			alertHistory, err := s.client.SLAAlertHistory.Create().
-				SetTicketID(ticketEntity.ID).
-				SetTicketNumber(ticketEntity.TicketNumber).
-				SetTicketTitle(ticketEntity.Title).
-				SetAlertRuleID(rule.ID).
-				SetAlertRuleName(rule.Name).
-				SetAlertLevel(rule.AlertLevel).
-				SetThresholdPercentage(rule.ThresholdPercentage).
-				SetActualPercentage(percentage).
-				SetNotificationSent(false).
-				SetEscalationLevel(0).
-				SetTenantID(tenantID).
-				SetCreatedAt(time.Now()).
-				Save(ctx)
-			if err != nil {
-				s.logger.Errorw("Failed to create alert history", "error", err)
+func (s *SLAAlertService) triggerAlerts(ctx context.Context, ticketID, tenantID int, onlyType string) (bool, error) {
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	member, err := s.execution.TenantPredicate(ctx, tx, tenantID, ticket.FieldTenantID, ticket.FieldID)
+	if err != nil {
+		return false, err
+	}
+	if err := s.execution.RequireEntMembers(ctx, tx, tenantID, ticketID); err != nil {
+		return false, err
+	}
+	item, err := tx.Ticket.Query().Where(ticket.IDEQ(ticketID), ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), member).Only(ctx)
+	if err != nil {
+		return false, err
+	}
+	if item.ClosedAt != nil || item.SLADefinitionID == 0 {
+		return false, tx.Commit()
+	}
+	rules, err := tx.SLAAlertRule.Query().Where(slaalertrule.TenantIDEQ(tenantID), slaalertrule.SLADefinitionIDEQ(item.SLADefinitionID), slaalertrule.IsActiveEQ(true)).Order(ent.Asc(slaalertrule.FieldID)).All(ctx)
+	if err != nil {
+		return false, err
+	}
+	now := time.Now()
+	triggered := false
+	for _, kind := range []struct {
+		name     string
+		deadline time.Time
+		complete bool
+	}{
+		{"response_time", item.SLAResponseDeadline, !item.FirstResponseAt.IsZero()},
+		{"resolution_time", item.SLAResolutionDeadline, !item.ResolvedAt.IsZero()},
+	} {
+		if onlyType != "" && kind.name != onlyType {
+			continue
+		}
+		if kind.complete || kind.deadline.IsZero() || !now.Before(kind.deadline) {
+			continue
+		}
+		total := kind.deadline.Sub(slaCycleStart(item)) - time.Duration(item.SLAPausedMinutes)*time.Minute
+		if total <= 0 {
+			continue
+		}
+		percentage := kind.deadline.Sub(now).Seconds() / total.Seconds() * 100
+		for _, rule := range rules {
+			if percentage > float64(rule.ThresholdPercentage) {
 				continue
 			}
-
-			// 发送预警通知
-			if s.notificationSvc != nil {
-				// 根据预警级别确定通知渠道
-				alertLevel := rule.AlertLevel
-				if alertLevel == "" {
-					alertLevel = "warning"
+			if err := validateIncidentAlertChannels(rule.NotificationChannels); err != nil {
+				return false, err
+			}
+			exists, err := tx.SLAAlertHistory.Query().Where(slaalerthistory.TenantIDEQ(tenantID), slaalerthistory.TicketIDEQ(ticketID), slaalerthistory.AlertRuleIDEQ(rule.ID), slaalerthistory.ResolvedAtIsNil()).Exist(ctx)
+			if err != nil {
+				return false, err
+			}
+			if exists {
+				continue
+			}
+			cooldown := resolveCooldownMinutes(rule)
+			if cooldown > 0 {
+				exists, err = tx.SLAAlertHistory.Query().Where(slaalerthistory.TenantIDEQ(tenantID), slaalerthistory.TicketIDEQ(ticketID), slaalerthistory.AlertRuleIDEQ(rule.ID), slaalerthistory.CreatedAtGT(now.Add(-time.Duration(cooldown)*time.Minute))).Exist(ctx)
+				if err != nil {
+					return false, err
 				}
-
-				// 发送站内通知
-				if err := s.notificationSvc.NotifySLAAlertLevelChanged(ctx, ticketEntity.ID, alertLevel, percentage, tenantID); err != nil {
-					s.logger.Warnw("failed to send SLA alert level change notification", "error", err, "ticket_id", ticketEntity.ID, "alert_level", alertLevel)
-				}
-
-				// 如果是严重级别，发送邮件通知
-				if alertLevel == "critical" && s.notificationSvc.emailService != nil {
-					// 获取处理人和创建人
-					userIDs := []int{ticketEntity.RequesterID}
-					if ticketEntity.AssigneeID > 0 {
-						userIDs = append(userIDs, ticketEntity.AssigneeID)
-					}
-
-					var emails []string
-					for _, userID := range userIDs {
-						userEntity, _ := s.client.User.Get(ctx, userID)
-						if userEntity != nil && userEntity.Email != "" {
-							emails = append(emails, userEntity.Email)
-						}
-					}
-
-					if len(emails) > 0 {
-						content := fmt.Sprintf("【严重SLA预警】工单 #%s 剩余时间不足 %.1f%%，请立即处理！",
-							ticketEntity.TicketNumber, percentage)
-						if err := s.notificationSvc.emailService.SendTicketNotification(
-							ctx, emails, ticketEntity.TicketNumber, ticketEntity.Title, "sla_alert", content,
-						); err != nil {
-							s.logger.Warnw("failed to send SLA critical alert email", "error", err, "ticket_id", ticketEntity.ID)
-						}
-					}
-				}
-
-				// 标记通知已发送
-				if alertHistory != nil {
-					if _, err := s.client.SLAAlertHistory.UpdateOneID(alertHistory.ID).
-						SetNotificationSent(true).
-						Save(ctx); err != nil {
-						s.logger.Warnw("failed to mark alert notification as sent", "error", err, "alert_history_id", alertHistory.ID)
-					}
+				if exists {
+					continue
 				}
 			}
-
-			s.logger.Infow("SLA alert triggered", "ticket_id", ticketEntity.ID,
-				"alert_rule", rule.Name, "level", rule.AlertLevel, "percentage", percentage)
-			alertTriggered = true
+			if len(rule.NotificationChannels) > 0 && s.notificationSvc == nil {
+				return false, fmt.Errorf("SLA alert notification service is required")
+			}
+			if !triggered {
+				count, err := tx.Ticket.Update().Where(ticket.IDEQ(ticketID), ticket.TenantIDEQ(tenantID), ticket.VersionEQ(item.Version), ticket.DeletedAtIsNil(), member).AddVersion(1).Save(ctx)
+				if err != nil {
+					return false, err
+				}
+				if count != 1 {
+					return false, fmt.Errorf("SLA alert cycle changed during scan")
+				}
+			}
+			history, err := tx.SLAAlertHistory.Create().SetNotificationTrackingVersion(1).SetTicketID(ticketID).SetTicketNumber(item.TicketNumber).SetTicketTitle(item.Title).SetAlertRuleID(rule.ID).SetAlertRuleName(rule.Name).SetAlertLevel(rule.AlertLevel).SetThresholdPercentage(rule.ThresholdPercentage).SetActualPercentage(percentage).SetNotificationSent(false).SetEscalationLevel(0).SetTenantID(tenantID).SetCreatedAt(now).Save(ctx)
+			if err != nil {
+				return false, err
+			}
+			if s.notificationSvc != nil {
+				if err := s.notificationSvc.EnqueueSLAAlertTx(ctx, tx, item, history, rule.NotificationChannels); err != nil {
+					return false, err
+				}
+			}
+			triggered = true
 		}
 	}
-	return alertTriggered
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return triggered, nil
 }
 
 // 辅助方法：转换为响应DTO
@@ -608,7 +463,7 @@ func (s *SLAAlertService) toAlertRuleResponse(rule *ent.SLAAlertRule) *dto.SLAAl
 	}
 }
 
-func (s *SLAAlertService) toAlertHistoryResponse(history *ent.SLAAlertHistory) *dto.SLAAlertHistoryResponse {
+func (s *SLAAlertService) toAlertHistoryResponse(history *ent.SLAAlertHistory, notificationSent bool) *dto.SLAAlertHistoryResponse {
 	response := &dto.SLAAlertHistoryResponse{
 		ID:                  history.ID,
 		TicketID:            history.TicketID,
@@ -619,7 +474,7 @@ func (s *SLAAlertService) toAlertHistoryResponse(history *ent.SLAAlertHistory) *
 		AlertLevel:          history.AlertLevel,
 		ThresholdPercentage: history.ThresholdPercentage,
 		ActualPercentage:    history.ActualPercentage,
-		NotificationSent:    history.NotificationSent,
+		NotificationSent:    notificationSent,
 		EscalationLevel:     history.EscalationLevel,
 		CreatedAt:           history.CreatedAt,
 	}

@@ -54,6 +54,16 @@ func IDLTE(id int) predicate.ProcessCallbackOutbox {
 	return predicate.ProcessCallbackOutbox(sql.FieldLTE(FieldID, id))
 }
 
+// ActorID applies equality check predicate on the "actor_id" field. It's identical to ActorIDEQ.
+func ActorID(v int) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldEQ(FieldActorID, v))
+}
+
+// ActorSource applies equality check predicate on the "actor_source" field. It's identical to ActorSourceEQ.
+func ActorSource(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldEQ(FieldActorSource, v))
+}
+
 // ExecutionKey applies equality check predicate on the "execution_key" field. It's identical to ExecutionKeyEQ.
 func ExecutionKey(v string) predicate.ProcessCallbackOutbox {
 	return predicate.ProcessCallbackOutbox(sql.FieldEQ(FieldExecutionKey, v))
@@ -157,6 +167,131 @@ func CreatedAt(v time.Time) predicate.ProcessCallbackOutbox {
 // UpdatedAt applies equality check predicate on the "updated_at" field. It's identical to UpdatedAtEQ.
 func UpdatedAt(v time.Time) predicate.ProcessCallbackOutbox {
 	return predicate.ProcessCallbackOutbox(sql.FieldEQ(FieldUpdatedAt, v))
+}
+
+// ActorIDEQ applies the EQ predicate on the "actor_id" field.
+func ActorIDEQ(v int) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldEQ(FieldActorID, v))
+}
+
+// ActorIDNEQ applies the NEQ predicate on the "actor_id" field.
+func ActorIDNEQ(v int) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldNEQ(FieldActorID, v))
+}
+
+// ActorIDIn applies the In predicate on the "actor_id" field.
+func ActorIDIn(vs ...int) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldIn(FieldActorID, vs...))
+}
+
+// ActorIDNotIn applies the NotIn predicate on the "actor_id" field.
+func ActorIDNotIn(vs ...int) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldNotIn(FieldActorID, vs...))
+}
+
+// ActorIDGT applies the GT predicate on the "actor_id" field.
+func ActorIDGT(v int) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldGT(FieldActorID, v))
+}
+
+// ActorIDGTE applies the GTE predicate on the "actor_id" field.
+func ActorIDGTE(v int) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldGTE(FieldActorID, v))
+}
+
+// ActorIDLT applies the LT predicate on the "actor_id" field.
+func ActorIDLT(v int) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldLT(FieldActorID, v))
+}
+
+// ActorIDLTE applies the LTE predicate on the "actor_id" field.
+func ActorIDLTE(v int) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldLTE(FieldActorID, v))
+}
+
+// ActorIDIsNil applies the IsNil predicate on the "actor_id" field.
+func ActorIDIsNil() predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldIsNull(FieldActorID))
+}
+
+// ActorIDNotNil applies the NotNil predicate on the "actor_id" field.
+func ActorIDNotNil() predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldNotNull(FieldActorID))
+}
+
+// ActorSourceEQ applies the EQ predicate on the "actor_source" field.
+func ActorSourceEQ(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldEQ(FieldActorSource, v))
+}
+
+// ActorSourceNEQ applies the NEQ predicate on the "actor_source" field.
+func ActorSourceNEQ(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldNEQ(FieldActorSource, v))
+}
+
+// ActorSourceIn applies the In predicate on the "actor_source" field.
+func ActorSourceIn(vs ...string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldIn(FieldActorSource, vs...))
+}
+
+// ActorSourceNotIn applies the NotIn predicate on the "actor_source" field.
+func ActorSourceNotIn(vs ...string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldNotIn(FieldActorSource, vs...))
+}
+
+// ActorSourceGT applies the GT predicate on the "actor_source" field.
+func ActorSourceGT(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldGT(FieldActorSource, v))
+}
+
+// ActorSourceGTE applies the GTE predicate on the "actor_source" field.
+func ActorSourceGTE(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldGTE(FieldActorSource, v))
+}
+
+// ActorSourceLT applies the LT predicate on the "actor_source" field.
+func ActorSourceLT(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldLT(FieldActorSource, v))
+}
+
+// ActorSourceLTE applies the LTE predicate on the "actor_source" field.
+func ActorSourceLTE(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldLTE(FieldActorSource, v))
+}
+
+// ActorSourceContains applies the Contains predicate on the "actor_source" field.
+func ActorSourceContains(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldContains(FieldActorSource, v))
+}
+
+// ActorSourceHasPrefix applies the HasPrefix predicate on the "actor_source" field.
+func ActorSourceHasPrefix(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldHasPrefix(FieldActorSource, v))
+}
+
+// ActorSourceHasSuffix applies the HasSuffix predicate on the "actor_source" field.
+func ActorSourceHasSuffix(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldHasSuffix(FieldActorSource, v))
+}
+
+// ActorSourceIsNil applies the IsNil predicate on the "actor_source" field.
+func ActorSourceIsNil() predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldIsNull(FieldActorSource))
+}
+
+// ActorSourceNotNil applies the NotNil predicate on the "actor_source" field.
+func ActorSourceNotNil() predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldNotNull(FieldActorSource))
+}
+
+// ActorSourceEqualFold applies the EqualFold predicate on the "actor_source" field.
+func ActorSourceEqualFold(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldEqualFold(FieldActorSource, v))
+}
+
+// ActorSourceContainsFold applies the ContainsFold predicate on the "actor_source" field.
+func ActorSourceContainsFold(v string) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldContainsFold(FieldActorSource, v))
 }
 
 // ExecutionKeyEQ applies the EQ predicate on the "execution_key" field.

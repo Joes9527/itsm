@@ -4,10 +4,11 @@ package integration
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/require"
-	"itsm-backend/migration"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+	"itsm-backend/migration"
 )
 
 const retirementVersion = "027_work_item_identity_field_retirement"

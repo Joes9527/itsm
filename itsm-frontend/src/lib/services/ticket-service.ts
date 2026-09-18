@@ -1,3 +1,4 @@
+import { ticketEditVersion, ticketEditOperation, type TicketEditResult } from '../api/ticket-edit';
 import { httpClient } from '@/lib/api/http-client';
 import type { Ticket, TicketListResponse } from '@/lib/api/api-config';
 
@@ -71,6 +72,8 @@ export interface CreateTicketRequest {
 
 // 更新工单请求
 export interface UpdateTicketRequest {
+  operationId: string;
+  version: number;
   title?: string;
   description?: string;
   status?: TicketStatus;
@@ -189,8 +192,10 @@ class TicketService {
   async updateTicket(
     id: number,
     data: UpdateTicketRequest
-  ): Promise<{ message: string; ticketId: number }> {
-    return httpClient.put<{ message: string; ticketId: number }>(`${this.baseUrl}/${id}`, data);
+  ): Promise<TicketEditResult> {
+    ticketEditVersion(data.version);
+    ticketEditOperation(data.operationId);
+    return httpClient.put<TicketEditResult>(`${this.baseUrl}/${id}`, data);
   }
 
   // 删除工单

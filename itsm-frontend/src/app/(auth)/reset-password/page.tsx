@@ -16,7 +16,6 @@ import {
   ConfigProvider,
   message,
 } from 'antd';
-import { antdTheme } from '@/lib/antd-theme';
 import { AuthService } from '@/lib/services/auth-service';
 import { logger } from '@/lib/env';
 
@@ -95,23 +94,23 @@ function ResetPasswordContent() {
 
   if (!tokenValid) {
     return (
-      <ConfigProvider theme={antdTheme}>
-        <div className="min-h-screen flex items-center justify-center p-5 bg-gradient-to-br from-gray-50 to-blue-50">
+      <ConfigProvider>
+        <div className="min-h-screen flex items-center justify-center p-5 bg-page">
           <div className="w-full max-w-[420px]">
             <Card
-              className="rounded-xl shadow-xl border-none"
-              styles={{ body: { padding: '40px' } }}
+              className="rounded-[8px] shadow-none border-none"
+              styles={{ body: { padding: '24px' } }}
             >
               <div className="text-center">
                 <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
                   <AlertCircle size={32} className="text-red-600" />
                 </div>
 
-                <Title level={3} className="!mb-2 !text-gray-900 !text-xl">
+                <Title level={3} className="!mb-2 !text-foreground !text-[15px]">
                   链接已失效
                 </Title>
 
-                <Text className="!text-gray-500 !text-sm block !mb-6">
+                <Text className="!text-muted !text-[13px] block !mb-6">
                   密码重置链接已过期或无效
                   <br />
                   请重新发起密码重置请求
@@ -119,17 +118,17 @@ function ResetPasswordContent() {
 
                 <Button
                   type="primary"
-                  size="large"
-                  className="w-full h-10 rounded-md text-sm font-semibold"
+                  size="middle"
+                  className="w-full h-[34px] rounded-[6px] text-[13px] font-semibold"
                   onClick={() => router.push('/forgot-password')}
                 >
                   重新发送请求
                 </Button>
 
                 <div className="text-center mt-4">
-                  <Text className="text-gray-400 text-xs">
+                  <Text className="text-muted text-[12px]">
                     记起密码了？{' '}
-                    <a href="/login" className="text-blue-600 hover:underline">
+                    <a href="/login" className="text-foreground hover:underline">
                       {t('auth.register.loginNow')}
                     </a>
                   </Text>
@@ -144,23 +143,23 @@ function ResetPasswordContent() {
 
   if (success) {
     return (
-      <ConfigProvider theme={antdTheme}>
-        <div className="min-h-screen flex items-center justify-center p-5 bg-gradient-to-br from-gray-50 to-blue-50">
+      <ConfigProvider>
+        <div className="min-h-screen flex items-center justify-center p-5 bg-page">
           <div className="w-full max-w-[420px]">
             <Card
-              className="rounded-xl shadow-xl border-none"
-              styles={{ body: { padding: '40px' } }}
+              className="rounded-[8px] shadow-none border-none"
+              styles={{ body: { padding: '24px' } }}
             >
               <div className="text-center">
                 <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
                   <CheckCircle size={32} className="text-green-600" />
                 </div>
 
-                <Title level={3} className="!mb-2 !text-gray-900 !text-xl">
+                <Title level={3} className="!mb-2 !text-foreground !text-[15px]">
                   {t('auth.resetPassword.resetSuccess')}
                 </Title>
 
-                <Text className="!text-gray-500 !text-sm block !mb-6">
+                <Text className="!text-muted !text-[13px] block !mb-6">
                   您的密码已成功重置
                   <br />
                   正在跳转到登录页...
@@ -168,8 +167,8 @@ function ResetPasswordContent() {
 
                 <Button
                   type="primary"
-                  size="large"
-                  className="w-full h-10 rounded-md text-sm font-semibold"
+                  size="middle"
+                  className="w-full h-[34px] rounded-[6px] text-[13px] font-semibold"
                   onClick={() => router.push('/login')}
                 >
                   {t('auth.login.loginButton')}
@@ -188,16 +187,16 @@ function ResetPasswordContent() {
   const strengthLabels = ['非常弱', '弱', '一般', '中等', '强', '非常强'];
 
   return (
-    <ConfigProvider theme={antdTheme}>
-      <div className="min-h-screen flex items-center justify-center p-5 bg-gradient-to-br from-gray-50 to-blue-50">
+    <ConfigProvider>
+      <div className="min-h-screen flex items-center justify-center p-5 bg-page">
         <div className="w-full max-w-[420px]">
-          <Card className="rounded-xl shadow-xl border-none" styles={{ body: { padding: '40px' } }}>
+          <Card className="rounded-[8px] shadow-none border-none" styles={{ body: { padding: '24px' } }}>
             <div className="text-center mb-6">
-              <Title level={2} className="!mb-2 !text-gray-900 !text-2xl">
+              <Title level={2} className="!mb-2 !text-foreground !text-[24px]">
                 {t('auth.resetPassword.title')}
               </Title>
-              <Text className="!text-gray-500 !text-sm">{t('auth.resetPassword.subtitle')}</Text>
-              {email && <Text className="!text-gray-400 !text-xs block !mt-1">账户：{email}</Text>}
+              <Text className="!text-muted !text-[13px]">{t('auth.resetPassword.subtitle')}</Text>
+              {email && <Text className="!text-muted !text-[12px] block !mt-1">账户：{email}</Text>}
             </div>
 
             <Form form={form} layout="vertical" size="middle" onFinish={handleReset}>
@@ -210,9 +209,9 @@ function ResetPasswordContent() {
                 ]}
               >
                 <Input.Password
-                  prefix={<Lock size={14} className="text-gray-400" />}
+                  prefix={<Lock size={14} className="text-muted" />}
                   placeholder={t('auth.resetPassword.newPasswordPlaceholder')}
-                  size="large"
+                  size="middle"
                   disabled={loading}
                 />
               </Form.Item>
@@ -220,7 +219,7 @@ function ResetPasswordContent() {
               {password && password.length > 0 && (
                 <div className="mb-4 -mt-2">
                   <div className="flex items-center gap-2 mb-1">
-                    <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div className="flex-1 h-1.5 bg-raised rounded-full overflow-hidden">
                       <div
                         className="h-full rounded-full transition-all duration-300"
                         style={{
@@ -230,7 +229,7 @@ function ResetPasswordContent() {
                       />
                     </div>
                     <Text
-                      className="text-xs"
+                      className="text-[12px]"
                       style={{ color: strengthColors[strength - 1] || '#ff4d4f' }}
                     >
                       {strengthLabels[strength - 1] || '非常弱'}
@@ -256,17 +255,17 @@ function ResetPasswordContent() {
                 ]}
               >
                 <Input.Password
-                  prefix={<Lock size={14} className="text-gray-400" />}
+                  prefix={<Lock size={14} className="text-muted" />}
                   placeholder={t('auth.resetPassword.confirmPasswordPlaceholder')}
-                  size="large"
+                  size="middle"
                   disabled={loading}
                 />
               </Form.Item>
 
               <Form.Item className="mb-2">
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <Text className="!text-gray-600 !text-xs block !mb-2">密码要求：</Text>
-                  <ul className="!text-gray-500 !text-xs list-disc list-inside space-y-0.5">
+                <div className="bg-raised rounded-[8px] p-3">
+                  <Text className="!text-muted !text-[12px] block !mb-2">密码要求：</Text>
+                  <ul className="!text-muted !text-[12px] list-disc list-inside space-y-0.5">
                     <li>至少 8 个字符</li>
                     <li>包含大小写字母</li>
                     <li>包含数字或特殊字符</li>
@@ -278,8 +277,8 @@ function ResetPasswordContent() {
                 <Button
                   type="primary"
                   htmlType="submit"
-                  size="large"
-                  className="w-full h-10 rounded-md text-sm font-semibold"
+                  size="middle"
+                  className="w-full h-[34px] rounded-[6px] text-[13px] font-semibold"
                   loading={loading}
                   icon={<ArrowRight size={14} />}
                 >
@@ -291,9 +290,9 @@ function ResetPasswordContent() {
             </Form>
 
             <div className="text-center">
-              <Text className="text-gray-400 text-xs">
+              <Text className="text-muted text-[12px]">
                 记起密码了？{' '}
-                <a href="/login" className="text-blue-600 hover:underline">
+                <a href="/login" className="text-foreground hover:underline">
                   {t('auth.register.loginNow')}
                 </a>
               </Text>
@@ -309,14 +308,14 @@ export default function ResetPasswordPage() {
   return (
     <Suspense
       fallback={
-        <ConfigProvider theme={antdTheme}>
-          <div className="min-h-screen flex items-center justify-center p-5 bg-gradient-to-br from-gray-50 to-blue-50">
+        <ConfigProvider>
+          <div className="min-h-screen flex items-center justify-center p-5 bg-page">
             <Card
-              className="rounded-xl shadow-xl border-none"
-              styles={{ body: { padding: '40px' } }}
+              className="rounded-[8px] shadow-none border-none"
+              styles={{ body: { padding: '24px' } }}
             >
               <div className="text-center">
-                <Title level={3} className="!mb-2 !text-gray-900 !text-xl">
+                <Title level={3} className="!mb-2 !text-foreground !text-[15px]">
                   正在加载...
                 </Title>
               </div>

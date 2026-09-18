@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	relationmetadata "itsm-backend/common/workitemrelation"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/workitemrelation"
 	"time"
@@ -127,8 +128,16 @@ func (_u *WorkItemRelationUpdate) AddCreatedByID(v int) *WorkItemRelationUpdate 
 }
 
 // SetMetadata sets the "metadata" field.
-func (_u *WorkItemRelationUpdate) SetMetadata(v map[string]interface{}) *WorkItemRelationUpdate {
+func (_u *WorkItemRelationUpdate) SetMetadata(v relationmetadata.Metadata) *WorkItemRelationUpdate {
 	_u.mutation.SetMetadata(v)
+	return _u
+}
+
+// SetNillableMetadata sets the "metadata" field if the given value is not nil.
+func (_u *WorkItemRelationUpdate) SetNillableMetadata(v *relationmetadata.Metadata) *WorkItemRelationUpdate {
+	if v != nil {
+		_u.SetMetadata(*v)
+	}
 	return _u
 }
 
@@ -407,8 +416,16 @@ func (_u *WorkItemRelationUpdateOne) AddCreatedByID(v int) *WorkItemRelationUpda
 }
 
 // SetMetadata sets the "metadata" field.
-func (_u *WorkItemRelationUpdateOne) SetMetadata(v map[string]interface{}) *WorkItemRelationUpdateOne {
+func (_u *WorkItemRelationUpdateOne) SetMetadata(v relationmetadata.Metadata) *WorkItemRelationUpdateOne {
 	_u.mutation.SetMetadata(v)
+	return _u
+}
+
+// SetNillableMetadata sets the "metadata" field if the given value is not nil.
+func (_u *WorkItemRelationUpdateOne) SetNillableMetadata(v *relationmetadata.Metadata) *WorkItemRelationUpdateOne {
+	if v != nil {
+		_u.SetMetadata(*v)
+	}
 	return _u
 }
 

@@ -5,9 +5,8 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Card, Tag, Space, Button, App } from 'antd';
 import { User as UserIcon, Users } from 'lucide-react';
-import { CommonApi } from '@/lib/api/';
+import { UserApi, type User } from '@/lib/api/user-api';
 import { UserRoleLabels } from '@/constants/common';
-import type { User } from '@/types/biz/common';
 
 const UserList: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -17,8 +16,8 @@ const UserList: React.FC = () => {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const data = await CommonApi.listUsers();
-      setUsers(data);
+      const data = await UserApi.getUsers();
+      setUsers(data.users);
     } catch (error) {
       message.error('获取用户列表失败');
     } finally {

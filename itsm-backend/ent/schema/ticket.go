@@ -3,6 +3,8 @@ package schema
 import (
 	"time"
 
+	"itsm-backend/handlers/shared/slacontract"
+
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
@@ -79,6 +81,10 @@ func (Ticket) Fields() []ent.Field {
 		field.Int("parent_ticket_id").
 			Comment("父工单ID").
 			Optional(),
+		field.Int("sla_cycle_number").Default(0).NonNegative(),
+		field.Time("sla_cycle_started_at").Optional(),
+		field.Int("sla_paused_minutes").Default(0).NonNegative(),
+		field.JSON("applied_sla_policy", &slacontract.Policy{}).Optional(),
 		field.Int("sla_definition_id").
 			Comment("SLA定义ID").
 			Optional(),

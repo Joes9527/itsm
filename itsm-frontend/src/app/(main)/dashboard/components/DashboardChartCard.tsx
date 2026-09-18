@@ -44,9 +44,9 @@ export const DashboardChartCard: React.FC<DashboardChartCardProps> = ({
         </div>
       )}
       <div>
-        <div className="font-semibold text-base">{title}</div>
+        <div className="font-semibold text-[15px]">{title}</div>
         {subtitle && (
-          <Text type="secondary" className="text-xs">
+          <Text type="secondary" className="text-[12px]">
             {subtitle}
           </Text>
         )}
@@ -58,7 +58,7 @@ export const DashboardChartCard: React.FC<DashboardChartCardProps> = ({
   const extraContent = (
     <Space>
       {trend && (
-        <Text type={trend.isPositive ? 'success' : 'danger'} className="text-sm font-semibold">
+        <Text type={trend.isPositive ? 'success' : 'danger'} className="text-[13px] font-semibold">
           {trend.isPositive ? '+' : ''}
           {trend.value.toFixed(1)}%
         </Text>
@@ -71,7 +71,7 @@ export const DashboardChartCard: React.FC<DashboardChartCardProps> = ({
     <Card
       title={titleContent}
       extra={extraContent}
-      className="h-full rounded-lg shadow-sm border border-gray-200"
+      className="h-full rounded-[8px] shadow-none border border-border"
      
       {...cardProps}
     >

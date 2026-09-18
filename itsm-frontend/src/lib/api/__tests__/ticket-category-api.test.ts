@@ -1,4 +1,4 @@
-import { TicketCategoryApi } from '@/lib/api/ticket-category-api';
+import { CTI_COMPLETE_LEVEL, CTI_MAX_LEVEL, TicketCategoryApi } from '@/lib/api/ticket-category-api';
 import { httpClient } from '@/lib/api/http-client';
 
 jest.mock('@/lib/api/http-client', () => ({
@@ -34,6 +34,21 @@ describe('TicketCategoryApi', () => {
       const result = await TicketCategoryApi.getCategoryTree();
       expect(mockGet).toHaveBeenCalledWith('/api/v1/ticket-categories/tree');
       expect(result).toHaveLength(1);
+    });
+
+    it('requests inactive nodes explicitly for the maintenance view', async () => {
+      mockGet.mockResolvedValue([{ id: 1, name: 'Root', isActive: false, path: 'Root', pathIds: [1] }]);
+      const result = await TicketCategoryApi.getCategoryTree({ includeInactive: true });
+      expect(mockGet).toHaveBeenCalledWith('/api/v1/ticket-categories/tree', { includeInactive: true });
+      expect(result[0].isActive).toBe(false);
+      expect(result[0].pathIds).toEqual([1]);
+    });
+
+    it('keeps the selection contract free of client-side level authority', () => {
+      // 层级上限来自同一个常量，选择器与维护界面不会各自硬编码。
+      expect(TicketCategoryApi).toBeDefined();
+      expect(CTI_MAX_LEVEL).toBe(3);
+      expect(CTI_COMPLETE_LEVEL).toBe(3);
     });
   });
 

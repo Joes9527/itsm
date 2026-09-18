@@ -1,3 +1,8 @@
+import type { CTIPathNode } from '@/lib/api/ticket-category-api';
+
+/** 分类路径节点（与工单分类 API 共用同一契约）。 */
+export type { CTIPathNode };
+
 import type { CatalogAccessPolicy } from '@/types/access-grant';
 import type { WorkItemRecordClass } from '@/lib/api/work-item-creation';
 import type { CreateIncidentRequest } from '@/lib/api/incident-api';
@@ -55,6 +60,12 @@ export interface ServiceItem {
   fullDescription?: string;
   ciTypeId?: number;
   cloudServiceId?: number;
+
+  // 默认工单分类（CTI）最深节点；null/undefined 表示未配置。
+  // 申请该目录时由后端解析为完整三级路径并写入新工单；客户端只回显，不能自报。
+  defaultTicketCategoryId?: number | null;
+  // 派生只读路径（根 → 最深节点），用于配置端与申请端回显。
+  defaultCTIPath?: CTIPathNode[];
 
   // 服务类型 - 用于动态表单
   serviceType?: ServiceType;
@@ -425,6 +436,8 @@ export interface CreateServiceItemRequest {
   fullDescription?: string;
   ciTypeId?: number;
   cloudServiceId?: number;
+  /** 默认三级工单分类最深节点；发布且启用门禁时必填。 */
+  defaultTicketCategoryId?: number | null;
   icon?: string;
   provider?: string;
   owner?: number;
@@ -464,11 +477,11 @@ export interface CreateServiceRequestRequest {
   ciIds?: number[];
   generic?: { type?: string; typeId?: string; source?: string; category?: string };
   incident?: Omit<CreateIncidentRequest, 'title' | 'description' | 'priority' | 'requesterId' | 'assigneeId' | 'configurationItemIds'>;
-  problem?: { category?: string; rootCause?: string; impact?: string; sourceIncidentId?: number };
+  problem?: { category?: string; rootCause?: string; impact?: string };
   change?: {
     category?: string; justification?: string; type?: string; impactScope?: string; riskLevel?: string;
     plannedStartDate?: string; plannedEndDate?: string; implementationPlan?: string; rollbackPlan?: string;
-    affectedCis?: string[]; relatedTickets?: number[]; relatedTicketNumbers?: string[];
+    affectedCis?: string[];
   };
   contactName?: string;
   contactEmail?: string;

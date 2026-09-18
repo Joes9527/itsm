@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"itsm-backend/common"
+	"itsm-backend/common/executionscope"
 	"itsm-backend/connector"
 	"itsm-backend/ent"
 	"itsm-backend/ent/marketplaceitem"
@@ -117,7 +118,7 @@ func (c *Controller) ListItems(ctx *gin.Context) {
 		isOfficial = &boo
 	}
 
-	items, total, err := c.service.ListItems(ctx, itemType, category, search, isOfficial, page, pageSize)
+	items, total, err := c.service.ListItems(ctx.Request.Context(), itemType, category, search, isOfficial, page, pageSize)
 	if err != nil {
 		common.Fail(ctx, http.StatusInternalServerError, err.Error())
 		return
@@ -148,7 +149,7 @@ func (c *Controller) GetItem(ctx *gin.Context) {
 		return
 	}
 
-	item, err := c.service.GetItem(ctx, itemID)
+	item, err := c.service.GetItem(ctx.Request.Context(), itemID)
 	if err != nil {
 		common.Fail(ctx, http.StatusNotFound, err.Error())
 		return
@@ -184,9 +185,11 @@ func (c *Controller) InstallItem(ctx *gin.Context) {
 		return
 	}
 
-	installation, err := c.service.InstallItem(ctx, tenantID, itemID, strconv.Itoa(userID))
+	installation, err := c.service.InstallItem(ctx.Request.Context(), tenantID, itemID, strconv.Itoa(userID))
 	if err != nil {
 		switch {
+		case errors.Is(err, executionscope.ErrDenied):
+			common.Forbidden(ctx, "当前执行环境不允许修改集成配置")
 		case errors.Is(err, marketplace.ErrMarketplaceItemNotFound):
 			common.Fail(ctx, http.StatusNotFound, err.Error())
 		case errors.Is(err, marketplace.ErrMarketplaceItemUnavailable), errors.Is(err, marketplace.ErrMarketplaceInstalledByMissing):
@@ -223,8 +226,12 @@ func (c *Controller) UninstallItem(ctx *gin.Context) {
 		return
 	}
 
-	err = c.service.UninstallItem(ctx, tenantID, itemID)
+	err = c.service.UninstallItem(ctx.Request.Context(), tenantID, itemID)
 	if err != nil {
+		if errors.Is(err, executionscope.ErrDenied) {
+			common.Forbidden(ctx, "当前执行环境不允许修改集成配置")
+			return
+		}
 		if errors.Is(err, marketplace.ErrMarketplaceInstallationAbsent) {
 			common.Fail(ctx, http.StatusNotFound, err.Error())
 			return
@@ -253,7 +260,7 @@ func (c *Controller) ListInstallations(ctx *gin.Context) {
 		return
 	}
 
-	installations, err := c.service.ListInstallations(ctx, tenantID, status)
+	installations, err := c.service.ListInstallations(ctx.Request.Context(), tenantID, status)
 	if err != nil {
 		common.Fail(ctx, http.StatusInternalServerError, err.Error())
 		return
@@ -285,7 +292,7 @@ func (c *Controller) GetInstallation(ctx *gin.Context) {
 		return
 	}
 
-	installation, err := c.service.GetInstallation(ctx, tenantID, itemID)
+	installation, err := c.service.GetInstallation(ctx.Request.Context(), tenantID, itemID)
 	if err != nil {
 		if errors.Is(err, marketplace.ErrMarketplaceInstallationAbsent) {
 			common.Fail(ctx, http.StatusNotFound, err.Error())
@@ -328,13 +335,17 @@ func (c *Controller) UpdateInstallationConfig(ctx *gin.Context) {
 		return
 	}
 
-	_, err = c.service.UpdateInstallationConfig(ctx, tenantID, itemID, config)
+	_, err = c.service.UpdateInstallationConfig(ctx.Request.Context(), tenantID, itemID, config)
 	if err != nil {
+		if errors.Is(err, executionscope.ErrDenied) {
+			common.Forbidden(ctx, "当前执行环境不允许修改集成配置")
+			return
+		}
 		common.Fail(ctx, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	installation, err := c.service.GetInstallation(ctx, tenantID, itemID)
+	installation, err := c.service.GetInstallation(ctx.Request.Context(), tenantID, itemID)
 	if err != nil {
 		common.Fail(ctx, http.StatusInternalServerError, err.Error())
 		return
@@ -348,12 +359,15 @@ func (c *Controller) UpdateInstallationConfig(ctx *gin.Context) {
 }
 
 func (c *Controller) provisionConnectorInstallation(ctx *gin.Context, installation *ent.TenantInstallation) error {
-	if c.connectorManager == nil || installation == nil || installation.Edges.Item == nil {
-		return nil
+	if installation == nil || installation.Edges.Item == nil {
+		return errors.New("installation identity is required")
 	}
 	item := installation.Edges.Item
 	if item.Type != marketplaceitem.TypeConnector {
 		return nil
+	}
+	if c.connectorManager == nil {
+		return errors.New("connector runtime is required")
 	}
 	connectorName := strings.TrimSuffix(item.Name, "-connector")
 	cfg := connector.Config{

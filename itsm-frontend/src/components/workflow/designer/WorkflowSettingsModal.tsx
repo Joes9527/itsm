@@ -58,7 +58,7 @@ export default function WorkflowSettingsModal({
               label: 'SLA配置',
               children: (
                 <>
-                  <Row gutter={16}>
+                  <Row gutter={14}>
                     <Col span={12}>
                       <Form.Item
                         label="响应时间(小时)"

@@ -37,6 +37,9 @@ func (r *EntRepository) Create(ctx context.Context, catalog *ServiceCatalog) (*S
 	entFunc = entFunc.SetCloudServiceID(catalog.CloudServiceID)
 	entFunc = entFunc.SetProcessDefinitionKey(catalog.ProcessDefinitionKey)
 	entFunc = entFunc.SetServiceType(catalog.ServiceType)
+	if catalog.DefaultTicketCategoryID > 0 {
+		entFunc = entFunc.SetDefaultTicketCategoryID(catalog.DefaultTicketCategoryID)
+	}
 
 	res, err := entFunc.Save(ctx)
 	if err != nil {
@@ -114,6 +117,12 @@ func (r *EntRepository) Update(ctx context.Context, tenantID int, catalog *Servi
 	update = update.SetCloudServiceID(catalog.CloudServiceID)
 	update = update.SetProcessDefinitionKey(catalog.ProcessDefinitionKey)
 	update = update.SetServiceType(catalog.ServiceType)
+	// nil/0 表示清除默认分类；正数写入结构引用（租户与启用状态由服务层校验）。
+	if catalog.DefaultTicketCategoryID > 0 {
+		update = update.SetDefaultTicketCategoryID(catalog.DefaultTicketCategoryID)
+	} else {
+		update = update.ClearDefaultTicketCategoryID()
+	}
 
 	res, err := update.Save(ctx)
 	if err != nil {
@@ -243,7 +252,7 @@ func (r *EntRepository) Search(ctx context.Context, tenantID int, keyword string
 }
 
 func (r *EntRepository) toDomain(e *ent.ServiceCatalog) *ServiceCatalog {
-	return &ServiceCatalog{
+	domain := &ServiceCatalog{
 		ID:                   e.ID,
 		Name:                 e.Name,
 		Category:             e.Category,
@@ -262,4 +271,7 @@ func (r *EntRepository) toDomain(e *ent.ServiceCatalog) *ServiceCatalog {
 		CreatedAt:            e.CreatedAt,
 		UpdatedAt:            e.UpdatedAt,
 	}
+	// 可空列读取为 0，与服务层“0 = 未配置”的约定一致。
+	domain.DefaultTicketCategoryID = e.DefaultTicketCategoryID
+	return domain
 }

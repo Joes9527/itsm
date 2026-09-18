@@ -5,6 +5,12 @@
 // 事件状态
 export enum IncidentStatus {
   NEW = 'new',
+  ACKNOWLEDGED = 'acknowledged',
+  ASSIGNED = 'assigned',
+  TRIAGED = 'triaged',
+  ESCALATED = 'escalated',
+  ON_HOLD = 'on_hold',
+  CANCELLED = 'cancelled',
   IN_PROGRESS = 'in_progress',
   RESOLVED = 'resolved',
   CLOSED = 'closed',
@@ -13,6 +19,12 @@ export enum IncidentStatus {
 // 状态描述映射
 export const IncidentStatusLabels: Record<IncidentStatus, string> = {
   [IncidentStatus.NEW]: '新建',
+  [IncidentStatus.ACKNOWLEDGED]: '已确认',
+  [IncidentStatus.ASSIGNED]: '已分配',
+  [IncidentStatus.TRIAGED]: '已分类',
+  [IncidentStatus.ESCALATED]: '已升级',
+  [IncidentStatus.ON_HOLD]: '暂停',
+  [IncidentStatus.CANCELLED]: '已取消',
   [IncidentStatus.IN_PROGRESS]: '处理中',
   [IncidentStatus.RESOLVED]: '已解决',
   [IncidentStatus.CLOSED]: '已关闭',

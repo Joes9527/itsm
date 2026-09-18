@@ -2,9 +2,9 @@ package service_request
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"strings"
-	"time"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent/ticket"
 	"itsm-backend/handlers/common/intakehttp"
 	creation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
 
@@ -24,6 +25,17 @@ type Handler struct {
 }
 
 func failServiceRequest(c *gin.Context, err error) {
+	var intake *creation.IntakeError
+	if errors.As(err, &intake) {
+		intakehttp.Fail(c, err)
+		return
+	}
+	var state interface{ SQLState() string }
+	if errors.As(err, &state) && (state.SQLState() == "40001" || state.SQLState() == "40P01") {
+		common.Conflict(c, "Service request mutation conflicts with current state", nil)
+		return
+	}
+
 	if appErr, ok := common.AsAppError(err); ok {
 		switch appErr.Code {
 		case common.ErrCodeBadRequest, common.ErrCodeValidation:
@@ -45,7 +57,7 @@ func failServiceRequest(c *gin.Context, err error) {
 		common.Fail(c, common.NotFoundErrorCode, "Service request not found")
 		return
 	}
-	common.Fail(c, common.InternalErrorCode, err.Error())
+	common.Fail(c, common.InternalErrorCode, "Service request operation failed")
 }
 
 func NewHandler(service *Service) *Handler {
@@ -300,6 +312,46 @@ func (h *Handler) Update(c *gin.Context) {
 	common.Success(c, h.toDTO(fullReq))
 }
 
+// CorrectClassification 处理申请项的分类纠正（PUT /service-requests/:id/classification）。
+//
+// 权限：路由要求 service_request:write，服务层再要求管理侧身份（申请人不能自助改分类）。
+// 目标必须是完整三级且不允许清空，原因必填，证据与写入同事务。
+func (h *Handler) CorrectClassification(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.Fail(c, 1001, "Invalid ID")
+		return
+	}
+	tenantID := c.GetInt("tenant_id")
+	if tenantID == 0 {
+		common.Fail(c, 2001, "Tenant ID missing")
+		return
+	}
+	var req dto.CorrectServiceRequestClassificationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.Fail(c, 1001, "请求参数无效")
+		return
+	}
+	updated, err := h.service.CorrectClassification(c.Request.Context(), ClassificationCorrection{
+		Meta: workitemmutation.Meta{
+			TenantID:        tenantID,
+			ActorID:         c.GetInt("user_id"),
+			Source:          "http",
+			ExpectedVersion: req.Version,
+			CorrelationID:   c.GetHeader("X-Correlation-ID"),
+		},
+		ServiceRequestID: id,
+		TargetCategoryID: req.CategoryID,
+		Reason:           req.Reason,
+		ActorRole:        c.GetString("role"),
+	})
+	if err != nil {
+		failServiceRequest(c, err)
+		return
+	}
+	common.Success(c, map[string]any{"id": id, "categoryId": updated.CategoryID, "version": updated.Version})
+}
+
 func (h *Handler) Delete(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
@@ -314,61 +366,13 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 
-	err = h.service.Delete(c.Request.Context(), id, tenantID, c.GetInt("user_id"), c.GetString("role"))
+	err = h.service.Delete(c.Request.Context(), id, workitemmutation.Meta{TenantID: tenantID, ActorID: c.GetInt("user_id"), Source: "http"})
 	if err != nil {
 		failServiceRequest(c, err)
 		return
 	}
 
 	common.Success(c, nil)
-}
-
-func normalizeCreateServiceRequest(req *dto.CreateServiceRequestRequest) {
-	if req.FormData == nil {
-		req.FormData = map[string]any{}
-	}
-	if req.Title == "" {
-		if title, ok := req.FormData["title"].(string); ok {
-			req.Title = title
-		}
-	}
-	if req.Reason == "" {
-		if reason, ok := req.FormData["reason"].(string); ok {
-			req.Reason = reason
-		}
-	}
-	if req.CostCenter == "" {
-		if costCenter, ok := req.FormData["cost_center"].(string); ok {
-			req.CostCenter = costCenter
-		}
-	}
-	if req.DataClassification == "" {
-		if classification, ok := req.FormData["data_classification"].(string); ok {
-			req.DataClassification = classification
-		}
-	}
-	if req.DataClassification == "" {
-		req.DataClassification = "internal"
-	}
-	if len(req.SourceIPWhitelist) == 0 {
-		if whitelist, ok := req.FormData["source_ip_whitelist"].([]string); ok {
-			req.SourceIPWhitelist = whitelist
-		}
-	}
-	if req.ExpireAt == nil {
-		if expireAt, ok := req.FormData["expire_at"].(string); ok {
-			if parsed, err := time.Parse(time.RFC3339, expireAt); err == nil {
-				req.ExpireAt = &parsed
-			}
-		}
-	}
-	if req.ExpireAt == nil {
-		defaultExpireAt := time.Now().Add(30 * 24 * time.Hour)
-		req.ExpireAt = &defaultExpireAt
-	}
-	if ack, ok := req.FormData["compliance_ack"].(bool); ok {
-		req.ComplianceAck = ack
-	}
 }
 
 func normalizeUpdateServiceRequest(req *dto.UpdateServiceRequestRequest) {

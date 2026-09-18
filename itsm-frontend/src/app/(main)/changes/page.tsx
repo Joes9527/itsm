@@ -32,6 +32,7 @@ import {
 // 看板列配置（颜色与全站主色 #F06820 对齐，避免遗留 antd 旧蓝 #1890ff）
 const KANBAN_COLUMNS: KanbanColumnConfig<Change>[] = [
   { key: 'draft', title: '草稿', color: '#d9d9d9' },
+  { key: 'submitted', title: '待审批', color: '#fa8c16' },
   { key: 'pending', title: '待审批', color: '#fa8c16' },
   { key: 'approved', title: '已批准', color: '#F06820' },
   { key: 'scheduled', title: '已排期', color: '#722ed1' },
@@ -43,6 +44,7 @@ const KANBAN_COLUMNS: KanbanColumnConfig<Change>[] = [
 // 筛选选项
 const statusOptions = [
   { value: 'draft', label: '草稿' },
+  { value: 'submitted', label: '待审批' },
   { value: 'pending', label: '待审批' },
   { value: 'approved', label: '已批准' },
   { value: 'in_progress', label: '实施中' },
@@ -59,6 +61,7 @@ const riskOptions = [
 
 const CHANGE_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   draft: { label: '草稿', color: 'default' },
+  submitted: { label: '待审批', color: 'orange' },
   pending: { label: '待审批', color: 'orange' },
   approved: { label: '已批准', color: 'blue' },
   scheduled: { label: '已排期', color: 'purple' },
@@ -384,7 +387,7 @@ export default function ChangesPage() {
                     );
                   })}
                   {dayChanges.length > 3 && (
-                    <span className="text-xs text-gray-500">另有 {dayChanges.length - 3} 项</span>
+                    <span className="text-xs text-muted">另有 {dayChanges.length - 3} 项</span>
                   )}
                 </div>
               );
@@ -406,13 +409,13 @@ export default function ChangesPage() {
                   <button
                     key={change.id}
                     type="button"
-                    className="flex w-full items-center gap-3 rounded-md border border-gray-200 px-3 py-2 text-left transition-colors hover:bg-gray-50"
+                    className="flex w-full items-center gap-3 rounded-md border border-border px-3 py-2 text-left transition-colors hover:bg-raised"
                     onClick={() => router.push(`/changes/${change.id}`)}
                   >
                     <Tag color={status.color}>{status.label}</Tag>
-                    <span className="shrink-0 text-sm text-gray-500">{change.changeNumber}</span>
+                    <span className="shrink-0 text-sm text-muted">{change.changeNumber}</span>
                     <span className="min-w-0 flex-1 truncate">{change.title}</span>
-                    <span className="shrink-0 text-sm text-gray-500">{change.assigneeName || '未分配'}</span>
+                    <span className="shrink-0 text-sm text-muted">{change.assigneeName || '未分配'}</span>
                   </button>
                 );
               })}

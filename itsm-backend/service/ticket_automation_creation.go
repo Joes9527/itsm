@@ -20,9 +20,9 @@ type ticketCreationNotification struct {
 	RecipientIDs []int
 }
 type ticketCreationEffects struct {
-	FeishuDestination string
-	RuleIDs           []int
-	Notifications     []ticketCreationNotification
+	FeishuTarget  *FeishuTarget
+	RuleIDs       []int
+	Notifications []ticketCreationNotification
 }
 
 func (s *TicketAutomationRuleService) prepareCreationRules(ctx context.Context, tx *ent.Tx, item *ent.Ticket) (*ticketCreationEffects, error) {
@@ -34,8 +34,12 @@ func (s *TicketAutomationRuleService) prepareCreationRules(ctx context.Context, 
 	if len(rules) > 0 && s == nil {
 		return nil, creation.NewDomainValidationFailed("configured ticket rules have no owner", nil)
 	}
+	categoryPath, err := ResolveRuleMatchPath(ctx, tx, item.TenantID, item.CategoryID)
+	if err != nil {
+		return nil, creation.NewDomainValidationFailed("classification path unavailable for ticket rules", err)
+	}
 	for _, rule := range rules {
-		matched, err := evaluateTicketRuleConditions(rule.Conditions, item)
+		matched, err := EvaluateTicketRuleConditions(TicketRuleMatch{Item: item, CategoryPath: categoryPath}, rule.Conditions)
 		if err != nil {
 			return nil, creation.NewDomainValidationFailed("malformed ticket rule conditions", err)
 		}
@@ -52,6 +56,7 @@ func (s *TicketAutomationRuleService) prepareCreationRules(ctx context.Context, 
 	}
 	return effects, nil
 }
+
 func (s *TicketAutomationRuleService) prepareRuleActions(ctx context.Context, tx *ent.Tx, rule *ent.TicketAutomationRule, item *ent.Ticket, effects *ticketCreationEffects) error {
 	if len(rule.Actions) == 0 {
 		return creation.NewDomainValidationFailed("ticket rule actions are required", nil)
@@ -147,6 +152,7 @@ func (s *TicketAutomationRuleService) prepareRuleActions(ctx context.Context, tx
 	}
 	return nil
 }
+
 func validTicketRulePriority(priority string) bool {
 	switch priority {
 	case "low", "medium", "high", "urgent", "critical":

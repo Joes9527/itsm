@@ -229,12 +229,12 @@ export default function TenantManagement() {
       key: 'info',
       render: (_: unknown, record: Tenant) => (
         <div className="flex items-center">
-          <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-            <Building2 className="h-5 w-5 text-blue-600" />
+          <div className="flex-shrink-0 h-10 w-10 rounded-full bg-raised flex items-center justify-center">
+            <Building2 className="h-5 w-5 text-foreground" />
           </div>
           <div className="ml-4">
-            <div className="text-sm font-medium text-gray-900">{record.name}</div>
-            <div className="text-sm text-gray-500">
+            <div className="text-[13px] font-medium text-foreground">{record.name}</div>
+            <div className="text-[13px] text-muted">
               {record.code} • {record.domain || ''}
             </div>
           </div>
@@ -263,10 +263,10 @@ export default function TenantManagement() {
       render: (_: unknown, record: Tenant) => (
         <div className="space-y-1">
           <div className="flex items-center">
-            <Users className="w-4 h-4 mr-1 text-gray-400" />
+            <Users className="w-4 h-4 mr-1 text-muted" />
             <span>{record.userCount || 0} 用户</span>
           </div>
-          <div className="text-xs text-gray-500">{record.ticketCount || 0} 工单</div>
+          <div className="text-[12px] text-muted">{record.ticketCount || 0} 工单</div>
         </div>
       ),
     },
@@ -276,7 +276,7 @@ export default function TenantManagement() {
       dataIndex: 'expiresAt',
       render: (expiresAt: string) => (
         <div className="flex items-center">
-          <Calendar className="w-4 h-4 mr-1 text-gray-400" />
+          <Calendar className="w-4 h-4 mr-1 text-muted" />
           {expiresAt ? new Date(expiresAt).toLocaleDateString() : '无'}
         </div>
       ),
@@ -393,7 +393,7 @@ export default function TenantManagement() {
           <Col xs={24} md={12} lg={8}>
             <Input
               placeholder="搜索租户名称、编码或域名..."
-              prefix={<Search className="w-4 h-4 text-gray-400" />}
+              prefix={<Search className="w-4 h-4 text-muted" />}
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               allowClear
@@ -510,7 +510,13 @@ export default function TenantManagement() {
             : undefined
         }
       >
-        <Form form={form} layout="vertical" className="mt-4" disabled={viewOnly} initialValues={{ type: 'standard', status: 'active' }}>
+        <Form
+          form={form}
+          layout="vertical"
+          className="mt-4"
+          disabled={viewOnly}
+          initialValues={{ type: 'standard', status: 'active' }}
+        >
           <Form.Item
             label="租户名称"
             name="name"
@@ -538,13 +544,16 @@ export default function TenantManagement() {
                 name="type"
                 rules={[{ required: true, message: '请选择租户类型' }]}
               >
-                <Select placeholder="请选择租户类型" options={[
-                  { value: 'standard', label: '标准租户' },
-                  { value: 'internal', label: '内部组织' },
-                  { value: 'saas_customer', label: 'SaaS客户' },
-                  { value: 'msp_provider', label: 'MSP服务商' },
-                  { value: 'msp_customer', label: 'MSP客户' },
-                ]} />
+                <Select
+                  placeholder="请选择租户类型"
+                  options={[
+                    { value: 'standard', label: '标准租户' },
+                    { value: 'internal', label: '内部组织' },
+                    { value: 'saas_customer', label: 'SaaS客户' },
+                    { value: 'msp_provider', label: 'MSP服务商' },
+                    { value: 'msp_customer', label: 'MSP客户' },
+                  ]}
+                />
               </Form.Item>
             </Col>
 
@@ -554,12 +563,15 @@ export default function TenantManagement() {
                 name="status"
                 rules={[{ required: true, message: '请选择状态' }]}
               >
-                <Select placeholder="请选择状态" options={[
-                  { value: 'active', label: '活跃' },
-                  { value: 'suspended', label: '暂停' },
-                  { value: 'expired', label: '过期' },
-                  { value: 'deleted', label: '已删除' },
-                ]} />
+                <Select
+                  placeholder="请选择状态"
+                  options={[
+                    { value: 'active', label: '活跃' },
+                    { value: 'suspended', label: '暂停' },
+                    { value: 'expired', label: '过期' },
+                    { value: 'deleted', label: '已删除' },
+                  ]}
+                />
               </Form.Item>
             </Col>
           </Row>

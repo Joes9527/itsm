@@ -18,6 +18,8 @@ type OutboxEvent struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
+	// Immutable execution WorkItem reference; historical rows remain NULL; FK managed by migration 039
+	ExecutionWorkItemID *int `json:"execution_work_item_id,omitempty"`
 	// Immutable cross-system event identifier
 	EventID string `json:"event_id,omitempty"`
 	// Event type consumed by the delivery target
@@ -58,7 +60,7 @@ func (*OutboxEvent) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case outboxevent.FieldPayload:
 			values[i] = new([]byte)
-		case outboxevent.FieldID, outboxevent.FieldTenantID, outboxevent.FieldAttemptCount:
+		case outboxevent.FieldID, outboxevent.FieldExecutionWorkItemID, outboxevent.FieldTenantID, outboxevent.FieldAttemptCount:
 			values[i] = new(sql.NullInt64)
 		case outboxevent.FieldEventID, outboxevent.FieldEventType, outboxevent.FieldAggregateType, outboxevent.FieldAggregateID, outboxevent.FieldStatus, outboxevent.FieldClaimToken, outboxevent.FieldLastError:
 			values[i] = new(sql.NullString)
@@ -85,6 +87,13 @@ func (_m *OutboxEvent) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
+		case outboxevent.FieldExecutionWorkItemID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field execution_work_item_id", values[i])
+			} else if value.Valid {
+				_m.ExecutionWorkItemID = new(int)
+				*_m.ExecutionWorkItemID = int(value.Int64)
+			}
 		case outboxevent.FieldEventID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field event_id", values[i])
@@ -213,6 +222,11 @@ func (_m *OutboxEvent) String() string {
 	var builder strings.Builder
 	builder.WriteString("OutboxEvent(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	if v := _m.ExecutionWorkItemID; v != nil {
+		builder.WriteString("execution_work_item_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
 	builder.WriteString("event_id=")
 	builder.WriteString(_m.EventID)
 	builder.WriteString(", ")
