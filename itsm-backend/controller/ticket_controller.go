@@ -176,17 +176,24 @@ func (tc *TicketController) UpdateTicket(c *gin.Context) {
 
 // GetTicket 获取工单详情
 func (tc *TicketController) GetTicket(c *gin.Context) {
-	ticketID, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
+	idParam := c.Param("id")
+	tenantID := c.GetInt("tenant_id")
+
+	var ticket *ticket.Ticket
+	var err error
+
+	ticketID, parseErr := strconv.Atoi(idParam)
+	if parseErr == nil && ticketID > 0 {
+		ticket, err = tc.ticketService.GetTicket(c.Request.Context(), ticketID, tenantID)
+	} else if idParam != "" {
+		ticket, err = tc.ticketService.GetTicketByNumber(c.Request.Context(), idParam, tenantID)
+	} else {
 		common.Fail(c, common.ParamErrorCode, "无效的工单ID")
 		return
 	}
 
-	tenantID := c.GetInt("tenant_id")
-
-	ticket, err := tc.ticketService.GetTicket(c.Request.Context(), ticketID, tenantID)
 	if err != nil {
-		tc.logger.Errorw("Failed to get ticket", "error", err, "ticket_id", ticketID, "tenant_id", tenantID)
+		tc.logger.Errorw("Failed to get ticket", "error", err, "id_param", idParam, "tenant_id", tenantID)
 		common.Fail(c, common.NotFoundCode, "工单不存在")
 		return
 	}
@@ -198,13 +205,23 @@ func (tc *TicketController) GetTicket(c *gin.Context) {
 
 // GetTicketSLAInfo 获取工单SLA信息
 func (tc *TicketController) GetTicketSLAInfo(c *gin.Context) {
-	ticketID, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		common.Fail(c, common.ParamErrorCode, "无效的工单ID")
-		return
-	}
-
+	idParam := c.Param("id")
 	tenantID := c.GetInt("tenant_id")
+
+	ticketID, parseErr := strconv.Atoi(idParam)
+	if parseErr != nil || ticketID <= 0 {
+		if idParam == "" {
+			common.Fail(c, common.ParamErrorCode, "无效的工单ID")
+			return
+		}
+		tkt, tktErr := tc.ticketService.GetTicketByNumber(c.Request.Context(), idParam, tenantID)
+		if tktErr != nil {
+			tc.logger.Errorw("Failed to resolve ticket for SLA", "error", tktErr, "id_param", idParam, "tenant_id", tenantID)
+			common.Fail(c, common.NotFoundCode, "工单不存在")
+			return
+		}
+		ticketID = tkt.ID
+	}
 
 	slaInfo, err := tc.ticketService.GetTicketSLAInfo(c.Request.Context(), ticketID, tenantID)
 	if err != nil {

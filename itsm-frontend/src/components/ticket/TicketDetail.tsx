@@ -124,8 +124,9 @@ export const TicketDetail: React.FC<{ id?: string }> = props => {
 };
 const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
   const params = useParams();
-  // 支持通过 props 传入 id，或通过 useParams 获取
-  const ticketId = parseInt((propId ?? (params?.ticketId as string)) || '');
+  const rawParam = (propId ?? (params?.ticketId as string)) || '';
+  const parsedId = /^\d+$/.test(rawParam) ? parseInt(rawParam, 10) : NaN;
+  const targetId = !isNaN(parsedId) && parsedId > 0 ? parsedId : rawParam;
   const currentUser = useAuthStore(state => state.user);
   const hasPermission = useAuthStore(state => state.hasPermission);
   const { message: antMessage } = App.useApp();
@@ -133,8 +134,9 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   const locked = useRef(false);
   const commandPending = useRef(false);
-  const resource = useTicketDetailResource(ticketId, () => commandPending.current);
+  const resource = useTicketDetailResource(targetId, () => commandPending.current);
   const { data: ticket, initialLoading: loading, error } = resource;
+  const ticketId = ticket?.id ?? (!isNaN(parsedId) && parsedId > 0 ? parsedId : 0);
   const refresh = useDetailRefresh()!;
   const refreshDetail = useCallback(() => { void refresh.refresh(); }, [refresh.refresh]);
   const fetchTicket = useCallback(async () => { await resource.reload({ afterWrite: true }); }, [resource.reload]);

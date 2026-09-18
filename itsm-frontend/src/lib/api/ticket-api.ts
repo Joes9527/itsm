@@ -47,7 +47,7 @@ export class TicketApi {
   }
 
   // Get ticket details
-  static async getTicket(id: number): Promise<Ticket> {
+  static async getTicket(id: number | string): Promise<Ticket> {
     return handleApiRequest(httpClient.get<Ticket>(`/api/v1/tickets/${id}`), {
       errorMessage: 'Failed to fetch ticket details',
     });
@@ -673,7 +673,7 @@ export class TicketApi {
   }
 
   // Get ticket SLA info
-  static async getTicketSLA(id: number): Promise<TicketSLAInfo> {
+  static async getTicketSLA(id: number | string): Promise<TicketSLAInfo> {
     return httpClient.get(`/api/v1/tickets/${id}/sla`);
   }
 }
@@ -711,7 +711,6 @@ export interface AppliedSLAPolicy {
 export interface TicketSLAInfo {
   slaStatus: "ok" | "warning" | "breached" | "not_required" | "configuration_missing";
   closedAt: string | null;
-
     ticketId: number;
     slaDefinitionId: number;
     slaName: string;

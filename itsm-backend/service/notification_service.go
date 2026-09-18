@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/notification"
@@ -29,6 +30,7 @@ func (s *NotificationService) CreateNotification(ctx context.Context, req *dto.C
 	if req.TenantID <= 0 {
 		return nil, fmt.Errorf("tenant_id 不能为空")
 	}
+	ctx = tenantctx.WithTenantID(ctx, req.TenantID)
 	_, err := s.client.User.Query().
 		Where(user.ID(req.UserID)).
 		Where(user.TenantID(req.TenantID)).
@@ -59,6 +61,7 @@ func (s *NotificationService) GetNotifications(ctx context.Context, req *dto.Get
 	if req.UserID <= 0 || req.TenantID <= 0 {
 		return nil, fmt.Errorf("用户或租户信息无效")
 	}
+	ctx = tenantctx.WithTenantID(ctx, req.TenantID)
 	if req.Page <= 0 {
 		req.Page = 1
 	}
@@ -111,6 +114,7 @@ func (s *NotificationService) GetNotifications(ctx context.Context, req *dto.Get
 
 // MarkNotificationRead 标记通知为已读
 func (s *NotificationService) MarkNotificationRead(ctx context.Context, req *dto.MarkNotificationReadRequest) error {
+	ctx = tenantctx.WithTenantID(ctx, req.TenantID)
 	_, err := s.client.Notification.UpdateOneID(req.NotificationID).
 		Where(notification.UserID(req.UserID), notification.TenantID(req.TenantID)).
 		SetRead(true).
@@ -128,6 +132,7 @@ func (s *NotificationService) MarkNotificationRead(ctx context.Context, req *dto
 
 // MarkAllNotificationsRead 标记所有通知为已读
 func (s *NotificationService) MarkAllNotificationsRead(ctx context.Context, req *dto.MarkAllNotificationsReadRequest) error {
+	ctx = tenantctx.WithTenantID(ctx, req.TenantID)
 	_, err := s.client.Notification.Update().
 		Where(notification.UserID(req.UserID)).
 		Where(notification.TenantID(req.TenantID)).
@@ -144,6 +149,7 @@ func (s *NotificationService) MarkAllNotificationsRead(ctx context.Context, req 
 
 // DeleteNotification 删除通知
 func (s *NotificationService) DeleteNotification(ctx context.Context, req *dto.DeleteNotificationRequest) error {
+	ctx = tenantctx.WithTenantID(ctx, req.TenantID)
 	err := s.client.Notification.DeleteOneID(req.NotificationID).
 		Where(notification.UserID(req.UserID), notification.TenantID(req.TenantID)).
 		Exec(ctx)
@@ -159,6 +165,7 @@ func (s *NotificationService) DeleteNotification(ctx context.Context, req *dto.D
 
 // MarkNotificationsRead 批量标记已读，只影响当前租户的当前用户。
 func (s *NotificationService) MarkNotificationsRead(ctx context.Context, notificationIDs []int, userID, tenantID int) (int, error) {
+	ctx = tenantctx.WithTenantID(ctx, tenantID)
 	ids := uniquePositiveIDs(notificationIDs)
 	if len(ids) == 0 {
 		return 0, fmt.Errorf("通知ID列表不能为空")
@@ -176,6 +183,7 @@ func (s *NotificationService) MarkNotificationsRead(ctx context.Context, notific
 
 // DeleteNotifications 批量删除，只影响当前租户的当前用户。
 func (s *NotificationService) DeleteNotifications(ctx context.Context, notificationIDs []int, userID, tenantID int) (int, error) {
+	ctx = tenantctx.WithTenantID(ctx, tenantID)
 	ids := uniquePositiveIDs(notificationIDs)
 	if len(ids) == 0 {
 		return 0, fmt.Errorf("通知ID列表不能为空")
@@ -191,6 +199,7 @@ func (s *NotificationService) DeleteNotifications(ctx context.Context, notificat
 
 // GetUnreadCount 获取未读通知数量
 func (s *NotificationService) GetUnreadCount(ctx context.Context, userID, tenantID int) (int, error) {
+	ctx = tenantctx.WithTenantID(ctx, tenantID)
 	count, err := s.client.Notification.Query().
 		Where(notification.UserID(userID)).
 		Where(notification.TenantID(tenantID)).
@@ -205,6 +214,7 @@ func (s *NotificationService) GetUnreadCount(ctx context.Context, userID, tenant
 
 // CreateSystemNotification 创建系统通知
 func (s *NotificationService) CreateSystemNotification(ctx context.Context, title, message, notificationType string, userIDs []int, tenantID int) error {
+	ctx = tenantctx.WithTenantID(ctx, tenantID)
 	ids := uniquePositiveIDs(userIDs)
 	if tenantID <= 0 || len(ids) == 0 {
 		return fmt.Errorf("租户和收件人不能为空")

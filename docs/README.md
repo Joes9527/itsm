@@ -43,6 +43,9 @@
 ## 核心文档
 
 - [从服务目录到工单流程与 SLA](./product/service-to-work-item-lifecycle.md)：模块职责、完整申请链路、SSL-VPN 示例和配置验收清单。
+- [SSLVPN Coding Agent 执行任务包](./testing/sslvpn-coding-agent-execution-guide.md)：使用测试手册前先登记授权、环境与角色分工，持续保存证据和续跑断点。
+- [SSLVPN UI 全流程测试手册](./testing/sslvpn-manual-lifecycle-runbook.md)：WSL/KAF 部署前置、自定义表单、审批链/BPMN、生命周期、查找和恢复；业务验收仅通过 UI。
+- [邮件建单与自动回复 UI 手册](./testing/email-ticket-ui-runbook.md)：真实邮箱发信、确认回信、原会话回复、附件、工程师通知与内部备注保密。
 - [SSLVPN WSL 部署与手工端到端验收](./deployment/sslvpn-wsl-deployment-and-manual-verification.md): 两仓配套部署、正常身份、双审批、授权验证与测试恢复。
 - [部署指南](./deployment.md): Docker Compose、生产部署、反向代理和发布部署建议。
 - [配置参考](./configuration.md): 环境变量、端口、数据库、Redis、AI 服务配置。
