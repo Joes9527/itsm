@@ -20,6 +20,7 @@ type Repository interface {
 	GetDepartmentTree(ctx context.Context, tenantID int) ([]*Department, error)
 	ListDepartmentChildren(ctx context.Context, tenantID, parentID int) ([]*DepartmentNode, error)
 	UpdateDepartment(ctx context.Context, d *Department) (*Department, error)
+	ApplyDepartmentUpdate(ctx context.Context, current *Department, req departmentUpdateRequest) (*Department, *departmentChange, error)
 	DeleteDepartment(ctx context.Context, id int, tenantID int) error
 
 	// Team

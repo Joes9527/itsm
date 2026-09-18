@@ -399,6 +399,11 @@ func (r *EntRepository) DeleteDepartment(ctx context.Context, id int, tenantID i
 	return err
 }
 
+// ApplyDepartmentUpdate 用部门数据的正常连接执行一次带校验与留痕语义的更新。
+func (r *EntRepository) ApplyDepartmentUpdate(ctx context.Context, current *Department, req departmentUpdateRequest) (*Department, *departmentChange, error) {
+	return applyDepartmentUpdate(ctx, r.client, current, req)
+}
+
 // Team methods
 
 func (r *EntRepository) CreateTeam(ctx context.Context, t *Team) (*Team, error) {
