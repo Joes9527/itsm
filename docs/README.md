@@ -50,10 +50,13 @@
 - [数据库说明](./database.md): 数据库迁移、备份和模型说明。
 - [运维手册](./operations.md): 日志、健康检查、备份、恢复和故障排查。
 - [CTI 治理受控启用清单](./operations/cti-governance-rollout-checklist.md): 迁移 048 的前置体检、唯一写入者、已发布目录补配清单、分阶段开关与暂停、回退与复验（**代码已交付、目标未启用**）。
+- [2026-09-17 dev 部署与配置变更记录（8080 / 3010）](./operations/2026-09-17-dev-deployment-record.md): 实际部署的制品与 sha、recipe 锚点调整、业务配置写入、验证证据、回滚边界与已知缺口。
 - [v1.0 GA 收口验收指南](./v1-ga-readiness.md): 默认能力、连接器、AI 审计和部署模式检查。
 - [文档命名与维护规范](./documentation-style-guide.md): 目录分层、命名规则和归档标准。
 
 ## 产品与架构
+
+- [ADR-003 流程定义删除的持久化语义与发布失败原因暴露（accepted）](./architecture/adr-003-bpmn-process-definition-deletion.md)：删除路径的事务边界、实例校验语义收窄、发布失败 cause 暴露的决策比选、回滚边界与独立复核状态。
 
 - [WorkItem 后续实施计划（代码与隔离旅程已验收，退役未完成）](./superpowers/plans/2026-09-11-workitem-next-stage.md)：后端五项任务、公共页面三项任务和跨域验收/退役两项任务的依赖与证据入口。
 
