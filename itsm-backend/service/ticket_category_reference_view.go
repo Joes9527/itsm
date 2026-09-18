@@ -92,18 +92,26 @@ const (
 // ctiReferenceKinds 是引用种类注册表。顺序稳定，便于前端与测试断言。
 var ctiReferenceKinds = []CTIReferenceKind{
 	{Kind: "catalog", Resource: "service_catalog", IDs: func(r CTIReferences) []int { return r.CatalogIDs }},
-	{Kind: "sla_definition", Resource: "sla",
+	{
+		Kind: "sla_definition", Resource: "sla",
 		IDs:   func(r CTIReferences) []int { return r.SLADefinitionIDs },
-		Names: ctiNamesFromSLADefinitions},
-	{Kind: "assignment_rule", Resource: "assignment_rule",
+		Names: ctiNamesFromSLADefinitions,
+	},
+	{
+		Kind: "assignment_rule", Resource: "assignment_rule",
 		IDs:   func(r CTIReferences) []int { return r.AssignmentRuleIDs },
-		Names: ctiNamesFromAssignmentRules},
-	{Kind: "automation_rule", Resource: "automation_rule",
+		Names: ctiNamesFromAssignmentRules,
+	},
+	{
+		Kind: "automation_rule", Resource: "automation_rule",
 		IDs:   func(r CTIReferences) []int { return r.AutomationRuleIDs },
-		Names: ctiNamesFromAutomationRules},
-	{Kind: "ticket_template", Resource: "ticket_template",
+		Names: ctiNamesFromAutomationRules,
+	},
+	{
+		Kind: "ticket_template", Resource: "ticket_template",
 		IDs:   func(r CTIReferences) []int { return r.TemplateIDs },
-		Names: ctiNamesFromTicketTemplates},
+		Names: ctiNamesFromTicketTemplates,
+	},
 	// 以下种类暂无所有者提供的名称契约，或属于历史字符串引用：
 	// 只报告"存在引用"，不提供明细。
 	{Kind: "process_binding", Resource: "", IDs: func(r CTIReferences) []int { return r.ProcessBindingIDs }},

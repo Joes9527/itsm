@@ -379,8 +379,86 @@ P 的 baseline 对 `preparationHistoricalTables` 中每张表的每行计算整�
 
 ---
 
-## 10. 下一步
 
+## 10. BL-CTI-02（创建入口分类名称槽位退役）
+
+### 11.1 问题
+
+创建工单时仍存在一套"按分类显示名称解析"的入口：`Incident.Category/Subcategory`、`Problem.Category`、`Change.Category`、`Generic.Category` 五个槽位，由 `service/ticket_category_creation.go` 按租户 + 名称（+ 父级）查节点。分类名称允许重名，因此该路径可能把分类**静默**落到与提交者意图不同的分支；它既不要求原因，也留不下完整路径，与"工单只保存最深节点 ID"的单一口径相冲突。
+
+### 11.2 证据
+
+- 前端创建页已只提交节点 ID（`tickets/create/page.tsx` 的 `cti: classificationInput(...)`；事件创建页同）。
+- KAF 走 intake 边界 `POST /api/v1/intake/work-items`，该边界只接受**已解析的分类 ID**（`handlers/intake/snapshot_repository.go` 明确拒绝其它 CTI 证据形态）。
+- 邮件建单不设置分类（`service/ticket_email_creation.go` 无任何分类字段），邮件单默认未分类。
+- KAF 侧契约模型仍**声明**名称槽位但其非测试代码未构造使用（KAF 仓库 `src/acp/contracts/workitem_intake.py`）。
+- 仓库内未发现任何以分类名称建单的客户端脚本或 CLI。
+
+### 11.3 目标与非目标
+
+- 目标：创建分类只接受最深节点 ID（`CTIInput` + 目录默认分类）；删除五个名称槽位与其解析分支；边界对名称字段**显式报错**（创建边界已启用"拒绝未知字段"）。
+- 非目标：不改专业子类型 `type`；不动模板、CMDB、知识库、AI 各自的 `category` 概念；不改目录申请流程。
+
+### 11.4 建议方向
+
+1. 删除五个名称槽位与 `ResolveCreationClassification` 内的名称解析分支，仅保留 `command.CTI` 与目录默认分类校验（含"重复同一最深节点兼容、不同路径冲突"规则）。
+2. 前端**请求**类型同步去掉名称槽位；响应类型按后端实际投影决定。
+3. KAF 仓库契约模型同步清理（KAF 仓库独立分支/PR）；因其未使用，可并行，KAF 部署不晚于 ITSM。
+4. 兼容性决策：直接删除、无过渡层；回滚为代码回退；不写共享库、无迁移。
+
+### 11.5 验收标准（未来）
+
+- 以名称建单在创建边界返回明确的未知字段错误；以节点 ID 建单成功且只保存最深节点。
+- KAF / 邮件 / CLI 三条实际通道回归通过（邮件单仍为未分类）。
+- 全量后端测试、契约与 RBAC 套件、前端类型检查通过。
+
+### 11.6 待决问题
+
+- 是否仍存在未登记的外部调用方以分类名称建单（需要维护者确认对接方清单）。
+- KAF 仓库契约清理的排期与部署顺序确认。
+
+### 11.7 参考
+
+实施计划（draft，本次未执行）：[creation classification id contract](../plans/2026-09-18-creation-classification-id-contract.md)。
+
+---
+
+## 11. BL-CTI-03（分类筛选按节点 ID 与查询参数白名单）
+
+### 11.1 问题
+
+工单列表、事件列表、事件监控、问题列表与看板统计仍支持按**分类显示名称**过滤。同名分类会造成多筛/少筛与口径串味，使 SLA 与统计报表不可信；分类名称变化还会改变历史筛选口径。
+
+### 11.2 证据
+
+名称过滤集中在：`service/incident_service.go`（列表与监控）、`service/incident_monitoring_service.go`、`handlers/problem/repository_impl.go`、`service/dashboard_service.go`、`dto/ticket_dto.go` 列表请求的 `Category string`。
+
+### 11.3 目标与非目标
+
+- 目标：筛选按最深节点 ID 匹配；查询参数做**白名单严格校验**，未知或已退役参数（含拼写错误）返回明确错误。
+- 非目标：模板列表的分类筛选（模板自身字段）、目录/知识/CMDB 的 `category`；"含下级"筛选另立需求。
+
+### 11.4 建议方向
+
+1. 列表/监控/看板请求以节点 ID 为唯一筛选输入，移除名称参数。
+2. 上述端点查询参数改为白名单校验（一步到位，不留两阶段兼容）。
+3. 前端筛选调用方与类型同步对齐；界面操作方式不变。
+
+### 11.5 验收标准（未来）
+
+- 未知/退役查询参数返回明确错误，而不是被忽略后返回错口径结果。
+- 同名分类场景下筛选结果唯一确定；接口行为与界面筛选保持一致。
+- 受影响端点的契约测试与前端类型检查通过。
+
+### 11.6 待决问题
+
+- 是否需要"包含下级"筛选（当前默认精确匹配、与规则条件默认一致）。
+- 与 `codex/fix/workitem-classification-id-contract`（PR #53）同区域文件，需在其合并后开工。
+
+---
+
+
+## 12. 下一步
 1. 由维护者/领域 owner 逐项审阅本草案，选择方向并关闭待决问题。
 2. 每项通过后单独产出 `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` 正式 spec。
 3. 再通过 `writing-plans` 生成实现计划与 TDD 步骤；未经批准不写生产代码/迁移。

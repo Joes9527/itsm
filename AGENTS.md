@@ -96,7 +96,7 @@ These decisions extend the contract above. Read the linked designs before changi
 
 The [CTI governance design](docs/superpowers/specs/2026-09-17-cti-governance-design.md) records the accepted direction and review clarifications. Read it before changing classification, catalog defaults or completion gates.
 
-**Code is delivered; no target is enabled.** The implementation exists on the CTI branch (PR #48) with unit, HTTP-contract and isolated-PostgreSQL evidence. Migration `048_cti_governance` has **not** been applied to any shared or production database, and the completion gate is **not** enabled for any tenant. Never describe this as "upgraded everywhere"; separate code delivery from target enablement in status reports and docs.
+**Code is delivered; no tenant is enabled.** The implementation landed through PR #48 with unit, HTTP-contract and isolated-PostgreSQL evidence, and the shared development database `itsm_config_baseline_20260908` received migration `048_cti_governance` during an authorized acceptance run. The completion gate remains **not enabled for any tenant**, and later classification work (for example PR #53) is still pending independent review. Never describe this as "upgraded everywhere"; separate code delivery, target migration and tenant enablement in status reports and docs.
 
 Contract points that follow from the design and must hold in every change:
 
@@ -107,6 +107,8 @@ Contract points that follow from the design and must hold in every change:
 - Rule `category_id` conditions are exact by default; subtree matching must be declared explicitly and unknown scopes fail closed. Reference listings expose names and counts only to callers holding that module's read permission, while reference-based maintenance protection always uses the unfiltered scan.
 
 Rollout, backfill, staged switches, pause and re-verification steps live in the [CTI governance rollout checklist](docs/operations/cti-governance-rollout-checklist.md); step-by-step execution evidence lives in the [implementation plan](docs/superpowers/plans/2026-09-17-cti-governance.md).
+
+Two related items are registered but **not implemented**: **BL-CTI-02** (retire the creation-time classification name slots so creation accepts only the deepest node id) and **BL-CTI-03** (classify list/monitoring/dashboard filters by node id with strict query-parameter validation). None of them writes to a shared database, runs a migration or deploys anything; see the [backlog design drafts](docs/superpowers/specs/2026-09-12-backlog-design-drafts.md).
 
 ## Required reading by task
 
