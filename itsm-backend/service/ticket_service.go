@@ -464,6 +464,10 @@ func (s *TicketService) UpdateTicket(ctx context.Context, cmd dto.TicketEditComm
 	// 这里不再按显示名称解析 —— 同名节点会让分类静默落到错误分支，且无法记录完整路径。
 	classificationChanged := false
 	var classificationBefore, classificationAfter []CTINode
+	if req.CategoryID == nil && strings.TrimSpace(req.ClassificationReason) != "" {
+		// 原因只在分类变化时有意义：单独提交原因属于无效命令，必须显式报错而不是被丢弃。
+		return empty, common.NewValidationError("classification reason requires a classification target", nil)
+	}
 	if req.CategoryID != nil {
 		target := *req.CategoryID
 		currentCategoryID := 0

@@ -150,3 +150,30 @@ func TestGenericTicketClassificationRejectionLeavesNoTrace(t *testing.T) {
 	require.Error(t, err)
 	require.Zero(t, f.client.Ticket.GetX(f.userCtx, item.ID).CategoryID)
 }
+
+// 只有原因、没有分类目标属于无效命令：必须显式报错，不能被静默丢弃。
+func TestGenericTicketClassificationRejectsReasonWithoutTarget(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	genericCloseGrantPermission(t, f)
+	repo := ticketrepo.NewEntRepository(f.client, f.engine.logger)
+	svc := NewTicketService(&TicketServiceConfig{Client: f.client, Repository: repo, Logger: f.engine.logger, Execution: executionfixture.Standard()})
+	svc.SetNotificationService(genericCloseNotificationService(f.client, f.engine.logger, executionfixture.Standard()))
+
+	item := f.client.Ticket.Create().
+		SetTenantID(f.tenant.ID).
+		SetRequesterID(f.actor.ID).
+		SetTitle("原因无目标").
+		SetTicketNumber("CTI-CMD-3").
+		SetRecordClass("generic").
+		SetStatus("new").
+		SetPriority("medium").
+		SaveX(f.userCtx)
+
+	_, err := svc.UpdateTicket(f.userCtx, dto.TicketEditCommand{
+		WorkItemID: item.ID,
+		Fields:     dto.TicketEditFields{ClassificationReason: "只有原因没有分类"},
+		Meta:       workitemmutation.Meta{TenantID: f.tenant.ID, ActorID: f.actor.ID, ExpectedVersion: item.Version, Source: "http", OperationID: "cti-reason-without-target"},
+	})
+	require.ErrorContains(t, err, "requires a classification target")
+	require.Zero(t, f.client.AuditLog.Query().Where(auditlog.OperationIDEQ("cti-reason-without-target")).CountX(f.userCtx))
+}
