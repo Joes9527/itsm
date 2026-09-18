@@ -4,12 +4,12 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Dropdown, App, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
+import { FileAddFilled } from '@ant-design/icons';
 import {
   HardDrive,
   UserCog,
   ShieldCheck,
   Clock,
-  ArrowRight,
   MoreHorizontal,
   Edit,
   Eye,
@@ -229,20 +229,23 @@ export const ServiceItemCard: React.FC<ServiceItemCardProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
+            <Button
+              type="primary"
+              size="small"
+              className="group/apply"
               onClick={e => {
                 e.stopPropagation();
                 router.push(`/service-catalog/request/${catalog.id}`);
               }}
-              className="inline-flex items-center gap-1.5 px-3 h-[29px] rounded-[6px] text-[12px] font-medium bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:bg-[var(--color-primary-hover)] text-white transition-colors duration-150 cursor-pointer group/btn"
+              icon={
+                <FileAddFilled
+                  aria-hidden="true"
+                  className="transition-transform duration-150 group-hover/apply:scale-110"
+                />
+              }
             >
-              <span>{t('serviceCatalog.applyService') || '申请服务'}</span>
-              <ArrowRight
-                size={13}
-                className="transition-transform duration-150 group-hover/btn:translate-x-0.5"
-              />
-            </button>
+              {t('serviceCatalog.applyService') || '申请服务'}
+            </Button>
 
             {showManageActions && (
               <Dropdown menu={{ items: actionItems }} trigger={['click']} placement="bottomRight">
@@ -346,20 +349,23 @@ export const ServiceItemCard: React.FC<ServiceItemCardProps> = ({
         </div>
 
         {/* 右侧：经典纯平暖橙申请按钮 (Clean Flat Orange Button) */}
-        <button
-          type="button"
+        <Button
+          type="primary"
+          size="small"
+          className="group/apply"
           onClick={e => {
             e.stopPropagation();
             router.push(`/service-catalog/request/${catalog.id}`);
           }}
-          className="inline-flex items-center gap-1.5 px-3 h-[29px] rounded-[6px] text-[12px] font-medium bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:bg-[var(--color-primary-hover)] text-white transition-colors duration-150 cursor-pointer group/btn"
+          icon={
+            <FileAddFilled
+              aria-hidden="true"
+              className="transition-transform duration-150 group-hover/apply:scale-110"
+            />
+          }
         >
-          <span>{t('serviceCatalog.applyService') || '申请服务'}</span>
-          <ArrowRight
-            size={13}
-            className="transition-transform duration-150 group-hover/btn:translate-x-0.5"
-          />
-        </button>
+          {t('serviceCatalog.applyService') || '申请服务'}
+        </Button>
       </div>
     </div>
   );
