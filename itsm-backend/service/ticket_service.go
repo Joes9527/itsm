@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	assignment "itsm-backend/handlers/common/workitemassignment"
 	"itsm-backend/handlers/shared/workflowcallback"
@@ -308,6 +309,7 @@ func (s *TicketService) UpdateTicket(ctx context.Context, cmd dto.TicketEditComm
 	m := cmd.Meta
 	id, tenantID := cmd.WorkItemID, m.TenantID
 	req := &cmd.Fields
+	req.AssignmentReason = strings.TrimSpace(req.AssignmentReason)
 	if s == nil || s.client == nil || s.repo == nil || s.execution == nil {
 		return empty, common.NewForbiddenError("ticket execution policy required")
 	}
@@ -414,6 +416,13 @@ func (s *TicketService) UpdateTicket(ctx context.Context, cmd dto.TicketEditComm
 		return empty, common.NewForbiddenError("工单已结束，无法编辑")
 	}
 
+	// The versioned command owns the transaction and acquires WorkItem before
+	// the workflow instance/tasks, matching task completion's lock order.
+	if req.Status != "" && ticket.Status(req.Status) != current.Status {
+		if err := EnforceGenericWorkflowTransitionTx(ctx, client, tenantID, id, req.Status); err != nil {
+			return empty, err
+		}
+	}
 	// 状态转换验证
 	if req.Status != "" && ticket.Status(req.Status) != current.Status {
 		if !current.CanTransitionTo(ticket.Status(req.Status)) {
@@ -511,8 +520,16 @@ func (s *TicketService) UpdateTicket(ctx context.Context, cmd dto.TicketEditComm
 	}
 
 	if req.AssigneeID != nil {
+		genericGate, gateErr := loadGenericWorkflowGate(ctx, client, tenantID, id, true)
+		if gateErr != nil {
+			return empty, gateErr
+		}
+		ownerChanged := current.AssigneeID == nil || *current.AssigneeID != *req.AssigneeID
+		if genericGate != nil && ownerChanged && (req.AssignmentReason == "" || utf8.RuneCountInString(req.AssignmentReason) > 4000) {
+			return empty, common.NewValidationError("assignmentReason must contain 1 to 4000 characters", nil)
+		}
 		err = assignment.WithLifecycleWriter(ctx, tx, s.directory, m.ActorID, tenantID, EnqueueWorkItemAssignment, func(writer *assignment.Writer, actor *ent.User) error {
-			assigned, err := writer.Apply(ctx, client, assignment.Command{WorkItemID: id, TenantID: tenantID, ActorID: actor.ID, ActorTenantID: actor.TenantID, AssigneeID: *req.AssigneeID, ExpectedVersion: m.ExpectedVersion, Source: m.Source})
+			assigned, err := writer.Apply(ctx, client, assignment.Command{WorkItemID: id, TenantID: tenantID, ActorID: actor.ID, ActorTenantID: actor.TenantID, AssigneeID: *req.AssigneeID, ExpectedVersion: m.ExpectedVersion, Source: m.Source, Reason: req.AssignmentReason})
 			if err == nil {
 				params.VersionAlreadyAdvanced = assigned.Version != m.ExpectedVersion
 				params.Version = assigned.Version

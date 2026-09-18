@@ -252,7 +252,7 @@ func loadGenericWorkflowGate(ctx context.Context, client *ent.Client, tenantID, 
 	for _, decision := range decisions {
 		for _, task := range gate.tasks {
 			node := genericWorkflowTaskNode(gate.process, task.TaskDefinitionKey)
-			if task.ID != decision.ProcessTaskID || node == nil || node.TaskPurpose != "approval" || task.Status != "completed" {
+			if task.ParentTaskID != "" || task.ID != decision.ProcessTaskID || node == nil || node.TaskPurpose != "approval" || task.Status != "completed" {
 				continue
 			}
 			if decision.Decision == "rejected" {

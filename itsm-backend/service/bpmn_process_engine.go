@@ -609,6 +609,10 @@ func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Conte
 		return nil, fmt.Errorf("解析BPMN失败: 流程定义不包含可执行流程")
 	}
 	process := definitions.Processes[0]
+	variables, genericGate, err := prepareGenericWorkflowCompletion(ctx, client, instance, task, variables)
+	if err != nil {
+		return nil, err
+	}
 	if err := e.validateWorkItemRecordClassInputWithClient(ctx, client, instance, variables); err != nil {
 		return nil, err
 	}
@@ -673,6 +677,13 @@ func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Conte
 	for key, value := range variables {
 		merged[key] = value
 	}
+	if genericGate != nil {
+		projectGenericWorkflowVariables(merged, genericGate)
+		if node := genericWorkflowTaskNode(process, task.TaskDefinitionKey); node != nil && node.TaskPurpose == "approval" {
+			// Decision input was admitted only by the scoped approval command.
+			merged["approvalResult"] = variables["approvalResult"]
+		}
+	}
 	updatedInstance, err := client.ProcessInstance.Update().Where(
 		processinstance.ID(instance.ID),
 		processinstance.TenantID(instance.TenantID),
@@ -712,13 +723,22 @@ func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Conte
 	// A synchronous callback is an effect gate: the task completion is durable,
 	// but the token remains on this user task until the outbox observes an
 	// applied/idempotent (or definition-declared optional) effect.
+	if genericGate != nil {
+		// Store the authorized decision before the graph consumes its projection.
+		// Any failure advancing the graph rolls back both records.
+		if err := txEngine.recordApprovalDecisionWithClient(ctx, client, instance, task, variables); err != nil {
+			return nil, err
+		}
+	}
 	if !synchronousCallback {
 		if err := txEngine.executeStep(ctx, instance, process, task.TaskDefinitionKey, merged); err != nil {
 			return nil, err
 		}
 	}
-	if err := txEngine.recordApprovalDecisionWithClient(ctx, client, instance, task, variables); err != nil {
-		return nil, err
+	if genericGate == nil {
+		if err := txEngine.recordApprovalDecisionWithClient(ctx, client, instance, task, variables); err != nil {
+			return nil, err
+		}
 	}
 	if task.AssigneeSource != "" {
 		if err := e.auditService.ForClient(client).recordBoundTaskTerminal(ctx, task, responsibleID, mutationActor.userID, mutationActor.userName, "bpmn_task_complete", "", taskVariablesBefore, mergedTaskVariables, mutationActor.metadata); err != nil {
@@ -3340,6 +3360,18 @@ func (s *bpmnProcessInstanceService) SetProcessInstanceVariables(ctx context.Con
 	if err := requireBPMNExecution(ctx, tx, s.execution, instance.TenantID, instance.ExecutionWorkItemID); err != nil {
 		return err
 	}
+	genericGate, err := rejectGenericWorkflowVariableUpdate(ctx, tx.Client(), instance, variables)
+	if err != nil {
+		return err
+	}
+	if genericGate != nil {
+		copied := make(map[string]interface{}, len(variables)+3)
+		for key, value := range variables {
+			copied[key] = value
+		}
+		projectGenericWorkflowVariables(copied, genericGate)
+		variables = copied
+	}
 	if err := ValidateBPMNProcessLifecycle(BPMNProcessCommandSetVariables, instance.Status); err != nil {
 		return err
 	}
@@ -4310,6 +4342,9 @@ func (s *bpmnTaskService) SetTaskVariables(ctx context.Context, taskID string, v
 	if err := ValidateBPMNTaskLifecycle(BPMNTaskCommandSetVariables, task.Status); err != nil {
 		return s.engine.commitTaskMutationRejected(ctx, tx, task, BPMNTaskCommandSetVariables)
 	}
+	if err := rejectGenericWorkflowTaskVariableUpdate(ctx, tx.Client(), task, participantVariables); err != nil {
+		return err
+	}
 	mergedVariables := mergeBPMNTaskVariables(task.TaskVariables, participantVariables)
 	actor, err := txEngine.loadLifecycleActor(ctx, tx.Client(), task, scope)
 	if err != nil {
@@ -4857,8 +4892,9 @@ func (s *bpmnTaskService) voteOnce(ctx context.Context, taskID string, req *Vote
 			"final_status":  status.Status,
 		})
 		parentTask.TaskVariables = summaryVariables
+		parentDecisionCtx := WithBPMNApprovalDecisionIntent(ctx, parentTask.TaskID, map[string]string{"approved": "approve", "rejected": "reject"}[status.Status], nil)
 		parentEffect, err = txEngine.completeAuthorizedTaskWithClient(
-			ctx, tx.Client(), parentTask,
+			parentDecisionCtx, tx.Client(), parentTask,
 			map[string]interface{}{"approvalResult": status.Status, "approved": status.Status == "approved"},
 			&executionKeys,
 		)
