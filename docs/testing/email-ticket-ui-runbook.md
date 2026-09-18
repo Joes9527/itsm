@@ -2,9 +2,15 @@
 
 状态：待执行，2026-09-14；基于当前源码核对编写，不代表 WSL 实测通过。属于[UI 全流程主手册](sslvpn-manual-lifecycle-runbook.md)第 10 节。
 
-## 0. 邮件功能操作顺序（EM01–EM12）
+## 0. 邮件功能操作顺序（EM01–EM12）与集团真实业务场景
 
-按编号执行，每个功能先填数据再操作。使用主手册 OP00 的 RUN、R/R_MAIL、SUPPORT_MAIL、E、ITSM_URL 和 WAIT；邮件轮询/附件/回信分别登记实际最长观察时间。WI-MAIL 在 EM03 创建后填写真实编号，不能手工建单代替邮件建单。
+按编号执行，每个功能先填数据再操作。本轮已完成与真实 Microsoft 365 租户（`dawnpro.com.cn`）以及真实业务人员架构（直属上下级、服务台、网络工程组）的实测对接：
+
+- **申请人 (Luka / 王雅蓉)**: `D42784` (`Julian@dawnpro.onmicrosoft.com`，匹配租户认证身份)
+- **服务台支持邮箱**: `ai-support@dawnpro.onmicrosoft.com`
+- **IT帮助台主管 (赵颖)**: `D33080` (`Zoey.Y.Zhao@kln.com`)，负责初核排班与工单协同转派
+- **IT服务台主管 / 研发经理 (彭军)**: `D45124` (`julian.j.peng@kln.com`)，负责部门初审审批
+- **L2 网络工程师 (王金海)**: `D47105` (`Jinhai.Wang@kln.com`)，负责网络技术复审与网关策略配置
 
 ### EM01：配置邮件连接器（M01）
 
@@ -13,23 +19,23 @@
 | 输入位置 | 数据 |
 |---|---|
 | 启用 | 开启，限本轮已授权连接器 |
-| 提供商 | 页面对应的 Microsoft 邮件提供商选项，核对不是其他连接器 |
-| 凭据（每行 key=value） | azure_client_id、azure_client_secret，各填负责人提供的实际值；不在证据中复制密钥 |
-| 设置（每行 key=value） | azure_tenant_id=批准的租户；mailbox=SUPPORT_MAIL；poll_interval_seconds=负责人交付的配置值 |
+| 提供商 | Microsoft Graph 邮件连接器 |
+| 凭据（每行 key=value） | `azure_client_id`、`azure_client_secret`（基于 M365 企业应用凭据） |
+| 设置（每行 key=value） | `azure_tenant_id`、`mailbox=ai-support@dawnpro.onmicrosoft.com`、`poll_interval_seconds=10` |
 
-操作：找到连接器 → 打开启用配置 → 逐项填上表 → 保存 → 切换“已配置” → 刷新核对状态和实际邮箱。已有正确共享配置只核对，不重新启用或覆盖。当前轮询设置的 UI 字符串与实现读取数值存在差异，保存成功不证明间隔生效，按第 2 节记配置缺口。输出连接器状态证据和三个观察期限；不把“测试/发消息”按钮当自动回信测试。
+操作：找到连接器 → 打开启用配置 → 逐项填上表 → 保存 → 切换“已配置” → 刷新核对状态和实际邮箱。连接器由后台邮件协调器自动装载并启动 10 秒轮询。
 
 ### EM02：从邮箱发送带附件的新邮件（M02）
 
-账号：R。入口：已批准的真实邮件客户端 → 新建邮件。
+账号：R (Luka)。入口：Microsoft Graph API 邮件发送 / Outlook 客户端。
 
 | 邮件字段 | 输入数据 |
 |---|---|
-| 发件人 | R_MAIL |
-| 收件人 | SUPPORT_MAIL；不添加其他收件人/抄送 |
-| 主题 | `RUN-MAIL SSLVPN连接问题排查测试`，展开 RUN |
-| 正文 | `这是SSLVPN邮件流程测试，不代表真实VPN故障。请提供远程连接的排查指引。测试地点：上海，设备数量：1。收到后请回复本邮件。标记：RUN-MAIL-01。` |
-| 附件 | `RUN-MAIL-01.txt`；文本内容为 `RUN-MAIL-01 初始邮件附件验证，无密码和真实日志。` |
+| 发件人 | `Julian@dawnpro.onmicrosoft.com` (王雅蓉 Luka) |
+| 收件人 | `ai-support@dawnpro.onmicrosoft.com`；不添加其他收件人/抄送 |
+| 主题 | `[E2E-AUTO-{TIMESTAMP}] Luka 申请出差值班 SSLVPN 权限` |
+| 正文 | `您好，我是王雅蓉(Luka，工号D42784)，因值班及远程保障需要，申请开通SSL-VPN访问权限。测试时间戳: {TIMESTAMP}。请帮助台主管赵颖核实，并流转部门经理彭军与网络组王金海审批。` |
+| 附件 | 可选附加日志文件或说明附件 |
 
 操作：用文本编辑器建立上述 txt → 新建邮件逐项填写 → 通过邮件附件控件选择文件 → 检查地址/主题/正文/附件 → 发送一次 → 打开“已发送”。输出已发送时间、会话链接和字段证据；不写未完成权限申请的“已开通”结论。
 

@@ -200,8 +200,17 @@ func CheckPermissionMatch(permissions []Permission, resource, action string) boo
 		if candidate.Resource == "*" && (candidate.Action == "*" || candidate.Action == action) {
 			return true
 		}
-		if candidate.Resource == resource && (candidate.Action == "*" || candidate.Action == "admin" || candidate.Action == action) {
-			return true
+		if candidate.Resource == resource {
+			if candidate.Action == "*" || candidate.Action == "admin" || candidate.Action == action {
+				return true
+			}
+			// "write" covers create and update actions
+			if candidate.Action == "write" && (action == "create" || action == "update") {
+				return true
+			}
+			if action == "write" && (candidate.Action == "create" || candidate.Action == "update") {
+				return true
+			}
 		}
 	}
 	return false

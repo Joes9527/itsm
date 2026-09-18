@@ -25,7 +25,7 @@ export class TicketApi {
   }
 
   // Get ticket details
-  static async getTicket(id: number): Promise<Ticket> {
+  static async getTicket(id: number | string): Promise<Ticket> {
     return handleApiRequest(httpClient.get<Ticket>(`/api/v1/tickets/${id}`), {
       errorMessage: 'Failed to fetch ticket details',
     });
@@ -653,7 +653,7 @@ export class TicketApi {
   }
 
   // Get ticket SLA info
-  static async getTicketSLA(id: number): Promise<{
+  static async getTicketSLA(id: number | string): Promise<{
     ticketId: number;
     slaDefinitionId: number;
     slaName: string;

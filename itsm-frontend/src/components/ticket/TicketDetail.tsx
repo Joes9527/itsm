@@ -117,8 +117,12 @@ const DISABLED_ACTION_CLASS = 'opacity-40 cursor-not-allowed pointer-events-auto
 
 export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
   const params = useParams();
-  // 支持通过 props 传入 id，或通过 useParams 获取
-  const ticketId = parseInt((propId ?? (params?.ticketId as string)) || '');
+  const rawParam = (propId ?? (params?.ticketId as string)) || '';
+  const parsedId = /^\d+$/.test(rawParam) ? parseInt(rawParam, 10) : NaN;
+  const [resolvedTicketId, setResolvedTicketId] = useState<number | null>(
+    !isNaN(parsedId) && parsedId > 0 ? parsedId : null
+  );
+  const ticketId = resolvedTicketId ?? (!isNaN(parsedId) && parsedId > 0 ? parsedId : 0);
   const currentUser = useAuthStore(state => state.user);
   const hasPermission = useAuthStore(state => state.hasPermission);
   const { message: antMessage } = App.useApp();
@@ -161,8 +165,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   // Get ticket details
   const fetchTicket = useCallback(async () => {
-    // Skip if ticketId is not a valid number
-    if (!ticketId || isNaN(ticketId) || ticketId <= 0) {
+    if (!rawParam) {
       setError('无效的工单ID');
       setLoading(false);
       return;
@@ -171,15 +174,19 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
     try {
       setLoading(true);
       setError(null);
-      const data = await TicketApi.getTicket(ticketId);
+      const queryId = !isNaN(parsedId) && parsedId > 0 ? parsedId : rawParam;
+      const data = await TicketApi.getTicket(queryId);
       setTicket(data);
+      if (data && data.id) {
+        setResolvedTicketId(data.id);
+      }
     } catch (error) {
       handleError(error, 'fetchTicket', '获取工单详情失败');
       setError(error instanceof Error ? error.message : 'Network error');
     } finally {
       setLoading(false);
     }
-  }, [ticketId, handleError]);
+  }, [rawParam, parsedId, handleError]);
 
   // Get users for assignment
   const fetchUsers = useCallback(async () => {
@@ -200,6 +207,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   // Get ticket SLA info
   const fetchSLAInfo = useCallback(async () => {
+    if (!ticketId) return;
     try {
       const data = await TicketApi.getTicketSLA(ticketId);
       setSlaInfo(data);
@@ -209,10 +217,10 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
   }, [ticketId]);
 
   useEffect(() => {
-    if (ticketId) {
+    if (rawParam) {
       fetchTicket();
     }
-  }, [ticketId, fetchTicket]);
+  }, [rawParam, fetchTicket]);
 
   useEffect(() => {
     if (ticketId) {

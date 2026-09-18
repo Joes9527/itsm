@@ -9,11 +9,22 @@
 | R 申请人 | `end_user_test` | 本租户 active 普通用户；申请目录、查看自己的工单；KAF workspace 普通 member | A 在用户管理搜索账号，核对租户、状态、实际邮箱；正常登录确认可申请和查看 |
 | M 一级主管 | `supervisor_test` | 角色 code `dept_manager`，同时属于候选组 `dept_manager` | 在角色管理和组管理分别核对；与 R 使用不同身份，一级待办可领取 |
 | N 二级网络审批人 | `lixin_test`（历史显示名“李昕/L2网络运维”） | 角色 code `network_eng`，同时属于候选组 `network_eng` | 一级通过后才出现二级待办；该显示名不是要求使用某位真实员工身份 |
+| D 三级 IT 总监审批人 | `it_director_test` | 角色 code `it_director`，支持 `assigneeRole="it_director"` 角色路由 | 二级网络审批通过后出现终审待办，支持在待办审批中心领取并终审批准 |
 | A ITSM 管理员 | 环境负责人指定的现有测试管理员，历史场景未提供本轮可靠登录名 | 用户/角色/组、目录字段、流程、审批链和连接器管理 | 登记真实账号安全引用，不默认使用 admin 或其他文档的默认密码 |
 | E 工单处理工程师 | 环境负责人指定；如需新建可采用 `sslvpn_engineer_test`（建议名，未创建） | 本轮对象读取、分派、评论、附件、通知及正式生命周期动作 | 与审批身份分开留证；由角色页面按实际能力配置，不一律授管理员 |
 | KAF 管理员 | 已获准的 Microsoft 登录邮箱 | workspace 和 KAF 管理；申请人不能借此身份测试 | 使用正常 Microsoft 登录，在可见个人资料/workspace 中确认身份；隐藏配置由 O 交接 |
 | O 运行/恢复负责人 | 环境负责人指定 | WSL/ITSM/KAF/Worker 准备，外部权限基线及恢复 | 登记负责人、管理门户和交接记录；不作为申请人/审批人替身 |
 | KAF 自动化主体 | `kaf_automation` 是所需独立技术身份；实际登录名由 O 确认 | 后台受限执行，属于目标租户 | 仅部署前置；不用于浏览器提单或审批，不在测试文档填写 token |
+
+### 1.1 集团-分公司真实业务人员清单 (来自 eHR "公司架构" 根节点真实组织树)
+
+| 业务角色 | 真实姓名 | 工号 | 归属部门 / 职位 | 账号/登录名 | 邮箱 (M365/实测) | 角色权限 / 审批权限 |
+|---|---|---|---|---|---|---|
+| **端到端提单人 (End User)** | 王雅蓉 (Luka) | `D42784` | 南宁嘉顺达物流有限公司 / IT帮助台专员 (直属主管: 赵颖) | `D42784` | `Julian@dawnpro.onmicrosoft.com` | `end_user`，通过 M365 向服务台发送邮件或自服务发起申请 |
+| **IT帮助台主管 (Helpdesk)** | 赵颖 (Zoey Zhao) | `D33080` | 嘉里大通物流有限公司 / IT帮助台主管 | `D33080` | `Zoey.Y.Zhao@kln.com` | `sd_manager`，接收邮件工单、初核排班与协同转派 |
+| **IT服务台主管 / 研发经理** | 彭军 (Julian Peng) | `D45124` | 嘉里物流联网有限公司 / 高级国际货代研发经理 | `D45124` | `julian.j.peng@kln.com` | 审批候选组 `dept_manager`，部门主管初审/审批协同 |
+| **L2 网络工程师** | 王金海 (Jinhai Wang) | `D47105` | 嘉里物流联网有限公司 / 助理国际货代研发经理 | `D47105` | `Jinhai.Wang@kln.com` | 角色 `network_eng`，网络技术复审与网关访问权限配置 |
+| **统一服务台支持邮箱** | Service Desk | - | 集团 IT 共享支持邮箱 | - | `ai-support@dawnpro.onmicrosoft.com` | Microsoft Graph API 轮询接入、自动建单与自动邮件回执 |
 
 历史设计曾建议 `dept_manager_test`、`network_eng_test`，而后续计划、报告和 fixture 使用 `supervisor_test`、`lixin_test`。本表以后者作为查找候选；不能同时创建两套同义账号，也不能假定设计中名字已部署。旧 C4 临时 actors 和用户 ID 不能当成本轮登录资料。
 
@@ -37,7 +48,7 @@
 | 目录浏览/申请 | 服务目录 | `/service-catalog` → `/service-catalog/request/{catalogId}` | R 搜索本轮 SSLVPN 目录并打开申请，ID 从页面取得 |
 | 工单查找与详情 | 工单列表/统一工作项入口（以实际菜单为准） | `/tickets` → `/tickets/{workItemId}` | R/E/M/N 搜索本轮编号；查看业务扩展参数、审批链、评论、附件、通知和历史 |
 | 服务请求列表 | 服务请求 → 服务请求列表 | `/service-requests` | R/E 点击原申请进入统一工单详情 |
-| 人工审批 | 审批入口（以实际侧栏名称为准） | `/approvals` | M/N 定位“上级领导初审”和网络二级复审，领取后批准/拒绝 |
+| 人工审批 | 审批入口（以实际侧栏名称为准） | `/approvals` | M/N/D 定位初审、网络复审及总监终审，领取后批准/拒绝 |
 | 审批链配置 | 系统管理 → 审批链 | `/admin/approval-chains` | A 核对配置；预解析审批链不能当作实际 BPMN 决策 |
 | 流程管理 | 系统管理 → 工作流 | `/admin/workflows` | A 查看目录所用流程与管理能力 |
 | 流程设计 | 工作流 → 流程设计器 | `/workflow/designer`；已有票据审批设计页 `/workflow/ticket-approval` | A 查看设计；这两个入口不是人工审批待办 |
