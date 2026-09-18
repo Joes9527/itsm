@@ -2313,23 +2313,29 @@ func (e *CustomProcessEngine) resolveFixedScopeAssignee(ctx context.Context, ins
 	if len(sources) == 0 {
 		return ""
 	}
-	resolver, appCtx := sources[0].resolver, &sources[0].context
-	approvers, err := resolver.Resolve(ctx, e.client, appCtx)
-	if err != nil || len(approvers) == 0 {
-		e.logger.Infow(
-			"固定范围审批人解析失败，转候选组兜底",
-			"resolverType", resolver.GetType(), "error", err,
-		)
-		return ""
+	// 一个节点可以同时声明多个固定范围。必须**按声明顺序逐个尝试**：
+	// 只取第一个会让其余声明被静默忽略——第一个来源恰好没配负责人时，
+	// 明明后面还有能解析出人的来源，任务却会落进兜底甚至派错人。
+	for i := range sources {
+		resolver, appCtx := sources[i].resolver, &sources[i].context
+		approvers, err := resolver.Resolve(ctx, e.client, appCtx)
+		if err != nil || len(approvers) == 0 {
+			e.logger.Infow(
+				"固定范围未解析到审批人，尝试下一个声明范围",
+				"resolverType", resolver.GetType(), "error", err,
+			)
+			continue
+		}
+		if requester != nil && approvers[0].UserID == requester.ID {
+			e.logger.Infow(
+				"固定范围解析出的审批人是申请人本人，尝试下一个声明范围",
+				"resolverType", resolver.GetType(), "requesterID", requester.ID,
+			)
+			continue
+		}
+		return strconv.Itoa(approvers[0].UserID)
 	}
-	if requester != nil && approvers[0].UserID == requester.ID {
-		e.logger.Infow(
-			"固定范围解析出的审批人是申请人本人，转候选组兜底，避免自己审批自己",
-			"resolverType", resolver.GetType(), "requesterID", requester.ID,
-		)
-		return ""
-	}
-	return strconv.Itoa(approvers[0].UserID)
+	return ""
 }
 
 // excludeUserFromCandidates 从 candidateGroups 展开出来的候选人显示名列表里剔除某个用户。
