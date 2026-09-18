@@ -222,6 +222,15 @@ These don't belong to a single release; they ship incrementally:
 ### Security
 
 - CodeQL + Trivy + govulncheck — landed v1.1
+- **Follow-up (open): remove the time-boxed `GO-2026-6452` govulncheck exclusion.**
+  `github.com/xuri/excelize/v2` has no fixed release yet (advisory published
+  2026-09-16: affected range starts at `0` with no `fixed` event; v2.11.0, the
+  newest release, is still affected). The workflow allows that single advisory and
+  warns; every other advisory stays fail-closed. **Done when** a fixed excelize
+  release exists and `.github/workflows/security.yml` runs plain
+  `govulncheck ./...` again. Impact meanwhile: a malformed workbook can panic the
+  operator-run CLI `itsm-backend/cmd/sync_ehr_master_data` (denial of service of
+  that CLI only; not reachable from the API surface).
 - Quarterly threat-model review
 - Annual pen-test
 
