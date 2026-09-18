@@ -127,12 +127,17 @@ func TestApprovalTaskFallsBackToTheGroupAndIsAudited(t *testing.T) {
 	assert.Contains(t, approvalTask.CandidateUsers, "e2e-backup2")
 }
 
-// 场景三（**如实记录现状，不是期望行为**）：流程变量里没有提单人时，引擎定位不到人，
-// 个人上级与部门负责人两条线都不会被尝试，只能落兜底组。
+// 场景三：流程变量里没有 `requester_id`，但实例有 `initiator`（release 就是这样）
+// → 必须回落到 initiator，仍然派给提单人的上级。
 //
-// release 流程正是这种情况。它把"审批不断流"的一个**前置条件**固定下来：该流程必须
-// 写入 requester_id。这条断言的作用是防止把现状误读成"已经全量打通"。
-func TestApprovalWithoutRequesterInVariablesCannotResolveAnyManager(t *testing.T) {
+// 背景（本次查明）：引擎里有**两个不同的人概念**——
+//   - `instance.Initiator`：谁触发了流程，由 resolveProcessInitiator 从请求上下文 /
+//     triggered_by 推出，覆盖很广（权限、事件/变更命令都在用）；
+//   - `variables.requester_id`：谁**提单**，只有工单进单等少数路径写入。
+//
+// 审批归属解析原**只**读后者，于是像 release 这种"有 initiator、没有 requester_id"的
+// 流程一律落兜底组。这不是数据缺失，而是解析用错了来源。
+func TestApprovalFallsBackToTheInstanceInitiatorWhenRequesterVariableIsMissing(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:e2e_no_requester?mode=memory&cache=shared&_fk=1")
 	t.Cleanup(func() { _ = client.Close() })
 	ctx := context.Background()
@@ -159,26 +164,112 @@ func TestApprovalWithoutRequesterInVariablesCannotResolveAnyManager(t *testing.T
 		SetName("直属上级").SetTenantID(tenant.ID).SetActive(true).Save(ctx)
 	require.NoError(t, err)
 
-	// 提单人**有**在职上级，但流程变量不告诉引擎谁是提单人。
+	// 提单人有在职上级；流程变量不写 requester_id，但实例的 initiator 就是他。
 	creator, err := client.User.Create().
 		SetUsername("e2e-creator3").SetEmail("e2e-creator3@test.com").SetPasswordHash("x").
-		SetName("有上级但不可见").SetTenantID(tenant.ID).SetActive(true).
+		SetName("靠 initiator 可见").SetTenantID(tenant.ID).SetActive(true).
 		SetManagerID(manager.ID).Save(ctx)
 	require.NoError(t, err)
 
 	approvalTask := driveReleaseToApprovalNode(t, client, ctx, tenant.ID, creator.ID, 0)
 
-	require.Empty(t, approvalTask.Assignee,
-		"拿不到提单人时无法解析任何负责人；这是 release 流程的现状，不是期望行为")
+	require.Equal(t, strconv.Itoa(manager.ID), approvalTask.Assignee,
+		"没有 requester_id 时必须回落到 instance.Initiator，仍然派给提单人的上级")
+	require.NotEqual(t, strconv.Itoa(backup.ID), approvalTask.Assignee, "不得落到兜底组")
+}
+
+// 场景四：**代提单**。客服（initiator）替用户（requester_id）提单时，
+// 审批必须派给**用户**的上级，而不是客服的上级。
+//
+// 这是"回落 initiator"不能反过来做的理由：`requester_id` 优先，不能被子级覆盖。
+func TestApprovalPrefersTheRequesterOverTheInitiatorWhenTheyDiffer(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:e2e_on_behalf?mode=memory&cache=shared&_fk=1")
+	t.Cleanup(func() { _ = client.Close() })
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().
+		SetName("代提单租户").SetCode("e2e-on-behalf").
+		SetDomain("e2e-on-behalf.example.com").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+
+	requesterManager := client.User.Create().
+		SetUsername("e2e-req-manager").SetEmail("e2e-req-manager@test.com").SetPasswordHash("x").
+		SetName("提单人上级").SetTenantID(tenant.ID).SetActive(true).SaveX(ctx)
+
+	agentManager := client.User.Create().
+		SetUsername("e2e-agent-manager").SetEmail("e2e-agent-manager@test.com").SetPasswordHash("x").
+		SetName("客服上级").SetTenantID(tenant.ID).SetActive(true).SaveX(ctx)
+
+	// 真正的提单人（工单是替他提的）
+	requester := client.User.Create().
+		SetUsername("e2e-requester").SetEmail("e2e-requester@test.com").SetPasswordHash("x").
+		SetName("真实提单人").SetTenantID(tenant.ID).SetActive(true).
+		SetManagerID(requesterManager.ID).SaveX(ctx)
+
+	// 代提单的客服（流程的 initiator）
+	agent := client.User.Create().
+		SetUsername("e2e-agent").SetEmail("e2e-agent@test.com").SetPasswordHash("x").
+		SetName("客服").SetTenantID(tenant.ID).SetActive(true).
+		SetManagerID(agentManager.ID).SaveX(ctx)
+
+	approvalTask := driveReleaseToApprovalNode(t, client, ctx, tenant.ID, agent.ID, requester.ID)
+
+	require.Equal(t, strconv.Itoa(requesterManager.ID), approvalTask.Assignee,
+		"代提单时必须派给**提单人**的上级")
+	require.NotEqual(t, strconv.Itoa(agentManager.ID), approvalTask.Assignee,
+		"不得派给代提单人的上级")
+}
+
+// 场景五：initiator 是 `system`（系统发起的流程，没有真实的人）→ 不能瞎派。
+func TestApprovalDoesNotResolveWhenTheInitiatorIsSystem(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:e2e_system_initiator?mode=memory&cache=shared&_fk=1")
+	t.Cleanup(func() { _ = client.Close() })
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().
+		SetName("系统发起租户").SetCode("e2e-system").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+
+	backup := client.User.Create().
+		SetUsername("e2e-backup5").SetEmail("e2e-backup5@test.com").SetPasswordHash("x").
+		SetName("兜底审批人").SetTenantID(tenant.ID).SetActive(true).SaveX(ctx)
+	_, err = client.Group.Create().
+		SetName(approvalFallbackCandidateGroup).
+		SetTenantID(tenant.ID).AddMemberIDs(backup.ID).Save(ctx)
+	require.NoError(t, err)
+
+	manager := client.User.Create().
+		SetUsername("e2e-manager5").SetEmail("e2e-manager5@test.com").SetPasswordHash("x").
+		SetName("直属上级").SetTenantID(tenant.ID).SetActive(true).SaveX(ctx)
+	creator := client.User.Create().
+		SetUsername("e2e-creator5").SetEmail("e2e-creator5@test.com").SetPasswordHash("x").
+		SetName("触发者").SetTenantID(tenant.ID).SetActive(true).
+		SetManagerID(manager.ID).SaveX(ctx)
+
+	approvalTask := driveReleaseToApprovalNodeWithInitiator(t, client, ctx, tenant.ID, creator.ID, "system")
+
+	require.Empty(t, approvalTask.Assignee, "system 不是真实的人，不得据此指派")
 	require.NotEqual(t, strconv.Itoa(manager.ID), approvalTask.Assignee)
+}
+
+// driveReleaseToApprovalNodeWithInitiator 与 driveReleaseToApprovalNode 相同，
+// 但把实例的 initiator 覆盖为指定值（用于模拟"系统发起"这类非人的发起者）。
+func driveReleaseToApprovalNodeWithInitiator(t *testing.T, client *ent.Client, ctx context.Context, tenantID, creatorID int, initiator string) *ent.ProcessTask {
+	t.Helper()
+	return driveReleaseToApprovalNodeOpts(t, client, ctx, tenantID, creatorID, 0, initiator)
 }
 
 // driveReleaseToApprovalNode 用真实模板与绑定把一张单推到审批节点，返回该审批任务。
 //
 // requesterInVariables > 0 时把 requester_id 写进流程变量——这正是**工单进单**所做的
-// （handlers/intake/service.go），也是引擎定位提单人的唯一来源（loadApprovalRequester）。
-// 传 0 表示不注入，用来复现 release 流程的现状。
+// （handlers/intake/service.go），也是"为谁提单"的权威来源；不注入时靠实例的 initiator
+// 定位人（release 流程的实情）。
 func driveReleaseToApprovalNode(t *testing.T, client *ent.Client, ctx context.Context, tenantID, creatorID, requesterInVariables int) *ent.ProcessTask {
+	t.Helper()
+	return driveReleaseToApprovalNodeOpts(t, client, ctx, tenantID, creatorID, requesterInVariables, "")
+}
+
+func driveReleaseToApprovalNodeOpts(t *testing.T, client *ent.Client, ctx context.Context, tenantID, creatorID, requesterInVariables int, initiatorOverride string) *ent.ProcessTask {
 	t.Helper()
 
 	_, err := NewBPMNTemplateService(client).LoadAndDeployTemplates(ctx, tenantID)
@@ -212,6 +303,10 @@ func driveReleaseToApprovalNode(t *testing.T, client *ent.Client, ctx context.Co
 		vars["requester_id"] = requesterInVariables // 与 intake 写入的形式一致
 		require.NoError(t, client.ProcessInstance.UpdateOneID(instance.ID).
 			SetVariables(vars).Exec(ctx))
+	}
+	if initiatorOverride != "" {
+		require.NoError(t, client.ProcessInstance.UpdateOneID(instance.ID).
+			SetInitiator(initiatorOverride).Exec(ctx))
 	}
 
 	// 技术评审 → 网关按 tech_review_pass 路由到 Activity_Approval

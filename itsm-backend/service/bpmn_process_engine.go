@@ -2093,10 +2093,34 @@ func (e *CustomProcessEngine) createDelegatedTask(ctx context.Context, instance 
 	return nil
 }
 
-// loadApprovalRequester 加载 taskPurpose="approval" 任务对应流程实例的申请人（requester_id
-// 流程变量指向的 User），找不到时返回 nil（调用方会退化到候选组兜底路径，不会报错阻塞流程）。
+// loadApprovalRequester 解析 taskPurpose="approval" 任务所属流程实例的"提单人"。
+//
+// 依次尝试两个来源（引擎里这是两个**不同**的人概念，不能混用）：
+//
+//  1. `requester_id` 流程变量——"**为谁**提单"。工单进单会写它
+//     （handlers/intake/service.go）；代提单时它与操作人不同，所以**必须优先**。
+//  2. `instance.Initiator`——"**谁触发**了流程"，由 resolveProcessInitiator 从请求
+//     上下文 / triggered_by 推出，覆盖面广得多（权限、事件/变更命令都在用）。
+//
+// 只用第 1 个来源是过去的问题：像 release 这类"有 initiator、没有 requester_id"的
+// 流程一律解析不到人，只能落兜底组——而引擎其实并不缺这个人。
+//
+// 两个来源都取不到（或 initiator 是 system）时返回 nil，调用方退化到候选组兜底路径，
+// 不报错、不阻塞流程，也**不瞎指派**。
 func (e *CustomProcessEngine) loadApprovalRequester(ctx context.Context, instance *ent.ProcessInstance, getUserID func(string) string) *ent.User {
-	idStr := getUserID("requester_id")
+	if requester := e.lookupTenantUser(ctx, instance.TenantID, getUserID("requester_id")); requester != nil {
+		return requester
+	}
+	// system 不是真实的人，据此指派会把审批派给莫名其妙的人。
+	if initiator := strings.TrimSpace(instance.Initiator); initiator != "" && initiator != "system" {
+		return e.lookupTenantUser(ctx, instance.TenantID, initiator)
+	}
+	return nil
+}
+
+// lookupTenantUser 按租户把字符串用户 ID 解析成 User；非法、不存在或跨租户都返回 nil。
+func (e *CustomProcessEngine) lookupTenantUser(ctx context.Context, tenantID int, rawID string) *ent.User {
+	idStr := strings.TrimSpace(rawID)
 	if idStr == "" {
 		return nil
 	}
@@ -2104,14 +2128,14 @@ func (e *CustomProcessEngine) loadApprovalRequester(ctx context.Context, instanc
 	if err != nil || id <= 0 {
 		return nil
 	}
-	requester, err := e.client.User.Query().
-		Where(user.IDEQ(id), user.TenantIDEQ(instance.TenantID)).
+	found, err := e.client.User.Query().
+		Where(user.IDEQ(id), user.TenantIDEQ(tenantID)).
 		Only(ctx)
 	if err != nil {
-		e.logger.Warnw("解析审批任务申请人失败", "requesterID", id, "tenantID", instance.TenantID, "error", err)
+		e.logger.Warnw("解析审批任务提单人失败", "userID", id, "tenantID", tenantID, "error", err)
 		return nil
 	}
-	return requester
+	return found
 }
 
 // resolveApprovalAssignee 解析审批任务的默认审批人，按"先往上找"的顺序：
