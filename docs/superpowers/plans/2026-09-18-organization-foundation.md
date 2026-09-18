@@ -91,16 +91,18 @@ SELECT * FROM _migration_clone_manifest;"
 
 Expected：出现清单行，含来源库名、时间与各表行数；`departments=7975`。
 
-- [ ] **Step 4: 拉齐结构到与 Dev 相同的 canonical 链**
+- [ ] **Step 4: 校验结构一致（这是校验，不是升级）**
 
-按 [数据迁移验证 Runbook](../../migrations/runbook-data-migration-validation.md) 与 [开发环境契约](../../development-environment.md#selected-schema-target-047) 的授权范围，使用 canonical Migrator 依次补齐到 Dev 的最高版本。
+`clone_itsm_migration_db.sh` 用的是 `CREATE DATABASE target TEMPLATE source`（失败时回退 `pg_dump`/`pg_restore`），属于**整库物理克隆**，`schema_migrations` 与全部表结构随源库一起过来。因此克隆完成后结构**应当已经等于 Dev**。
 
 ```bash
 docker exec -e PGPASSWORD=dev123 itsm-postgres-dev psql -U itsm_user -d itsm_migration_20260914 -P pager=off -t -A -c "
 SELECT max(version) FROM schema_migrations;"
 ```
 
-Expected：与 Step 1 记录的 Dev 值一致（2026-09-18 实测 Dev 为 `048_cti_governance`）。**不一致就是不通过，不许改库名或改标签掩盖。**
+Expected：与 Step 1 记录的 Dev 值一致（2026-09-18 实测 Dev 为 `048_cti_governance`）。
+
+**若不一致 = 克隆不忠实，一律停下来排查来源，不得用 `cmd/migrate -up` 去"补齐"**：该命令只应用已注册的 post-schema 迁移，不创建 Ent 基础结构，用它当升级手段会把库带进既非源、也非目标的中间态。也不许改库名或改标签掩盖。
 
 - [ ] **Step 5: 写证据文件并提交**
 
@@ -440,20 +442,29 @@ Expected: 生成成功，`ent/department` 出现索引相关代码，`go build` 
 // itsm-backend/migration/department_identity.go
 package migration
 
-import "itsm-backend/migrations"
-
+// DepartmentCodeTenantUniqueVersion 是 049 的版本号；SQL 由 migrations 包内的嵌入资产提供。
 const DepartmentCodeTenantUniqueVersion = "049_department_code_tenant_unique"
-
-//go:embed 路径不在此文件；SQL 通过 migrations 包常量读取
-var _ = migrations.DepartmentCodeTenantUniqueSQL
 ```
 
-> 实现时在 `itsm-backend/migrations/assets.go` 增加
-> `//go:embed 049_department_code_tenant_unique.sql`
-> `var DepartmentCodeTenantUniqueSQL string`，
-> 并在 `migration/migrations.go` 的 `RegisteredMigrations` 末尾（`WorkItemRetireVersion` 之前）加入
-> `{Version: DepartmentCodeTenantUniqueVersion, Description: "Enforce department code uniqueness per tenant"}`，
-> 同时在 `MigrationSQL` 的 switch 中返回该 SQL 与 verify SQL。
+`itsm-backend/migrations/assets.go` 追加：
+
+```go
+//go:embed 049_department_code_tenant_unique.sql
+var DepartmentCodeTenantUniqueSQL string
+```
+
+`itsm-backend/migration/migrations.go` 的 `RegisteredMigrations` 末尾（`WorkItemRetireVersion` 之前）追加：
+
+```go
+{Version: DepartmentCodeTenantUniqueVersion, Description: "Enforce department code uniqueness per tenant"},
+```
+
+并在同文件的 `MigrationSQL` switch 中追加分支：
+
+```go
+case DepartmentCodeTenantUniqueVersion:
+	return migrations.DepartmentCodeTenantUniqueSQL
+```
 
 ```bash
 cd /home/administrator/project/itsm/itsm-backend
