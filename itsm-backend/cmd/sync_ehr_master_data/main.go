@@ -247,23 +247,24 @@ func main() {
 				orgType = "warehouse"
 			}
 
-			c := client.Department.Create().
-				SetName(o.OrgName).
-				SetCode(o.OrgCode).
-				SetDescription(fmt.Sprintf("EHR UniqueID: %s", o.UniqueID)).
-				SetTenantID(tenantID).
-				SetAreaName("中国").
-				SetOrgType(orgType)
-
+			parentID := 0
 			if hasParent && parentEntID > 0 {
-				c.SetParentID(parentEntID)
+				parentID = parentEntID
 			}
 
-			created, err := c.Save(ctx)
+			upserted, err := upsertDepartment(ctx, client, departmentUpsertInput{
+				Name:        o.OrgName,
+				Code:        o.OrgCode,
+				Description: fmt.Sprintf("EHR UniqueID: %s", o.UniqueID),
+				AreaName:    "中国",
+				OrgType:     orgType,
+				ParentID:    parentID,
+				TenantID:    tenantID,
+			})
 			if err != nil {
-				log.Printf("Failed to create department %s (%s): %v", o.OrgName, o.OrgCode, err)
+				log.Printf("Failed to upsert department %s (%s): %v", o.OrgName, o.OrgCode, err)
 			} else {
-				codeToEntID[o.OrgCode] = created.ID
+				codeToEntID[o.OrgCode] = upserted.ID
 				insertedDeptCount++
 			}
 			progress = true
@@ -276,15 +277,16 @@ func main() {
 				if isWarehouse(o.OrgName) {
 					orgType = "warehouse"
 				}
-				created, err := client.Department.Create().
-					SetName(o.OrgName).
-					SetCode(o.OrgCode).
-					SetTenantID(tenantID).
-					SetAreaName("中国").
-					SetOrgType(orgType).
-					Save(ctx)
+				upserted, err := upsertDepartment(ctx, client, departmentUpsertInput{
+					Name:        o.OrgName,
+					Code:        o.OrgCode,
+					Description: fmt.Sprintf("EHR UniqueID: %s", o.UniqueID),
+					AreaName:    "中国",
+					OrgType:     orgType,
+					TenantID:    tenantID,
+				})
 				if err == nil {
-					codeToEntID[o.OrgCode] = created.ID
+					codeToEntID[o.OrgCode] = upserted.ID
 					insertedDeptCount++
 				}
 			}

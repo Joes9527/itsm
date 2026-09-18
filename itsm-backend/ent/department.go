@@ -37,6 +37,8 @@ type Department struct {
 	AreaName string `json:"area_name,omitempty"`
 	// 组织类型: department=行政部门, warehouse=仓库/物流节点
 	OrgType string `json:"org_type,omitempty"`
+	// 节点类型: company=公司, branch=分公司, department=部门, team=组；空串=未分类。与 org_type 的仓库维度并存，不是同一件事
+	NodeType string `json:"node_type,omitempty"`
 	// 软删除时间
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -138,7 +140,7 @@ func (*Department) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case department.FieldID, department.FieldManagerID, department.FieldParentID, department.FieldTenantID:
 			values[i] = new(sql.NullInt64)
-		case department.FieldName, department.FieldCode, department.FieldDescription, department.FieldAreaName, department.FieldOrgType:
+		case department.FieldName, department.FieldCode, department.FieldDescription, department.FieldAreaName, department.FieldOrgType, department.FieldNodeType:
 			values[i] = new(sql.NullString)
 		case department.FieldCreatedAt, department.FieldUpdatedAt, department.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -222,6 +224,12 @@ func (_m *Department) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field org_type", values[i])
 			} else if value.Valid {
 				_m.OrgType = value.String
+			}
+		case department.FieldNodeType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field node_type", values[i])
+			} else if value.Valid {
+				_m.NodeType = value.String
 			}
 		case department.FieldDeletedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -330,6 +338,9 @@ func (_m *Department) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("org_type=")
 	builder.WriteString(_m.OrgType)
+	builder.WriteString(", ")
+	builder.WriteString("node_type=")
+	builder.WriteString(_m.NodeType)
 	builder.WriteString(", ")
 	if v := _m.DeletedAt; v != nil {
 		builder.WriteString("deleted_at=")

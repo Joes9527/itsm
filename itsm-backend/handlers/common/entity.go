@@ -30,12 +30,34 @@ type Department struct {
 	Description string        `json:"description"`
 	AreaName    string        `json:"areaName"`
 	OrgType     string        `json:"orgType"`
+	NodeType    string        `json:"nodeType"`
 	ManagerID   int           `json:"managerId"`
 	ParentID    int           `json:"parentId"`
 	TenantID    int           `json:"tenantId"`
 	Children    []*Department `json:"children,omitempty"`
 	CreatedAt   time.Time     `json:"createdAt"`
 	UpdatedAt   time.Time     `json:"updatedAt"`
+}
+
+// DepartmentNode 是组织树的轻量投影：只含展示与展开所需字段。
+//
+// 全树近 8000 个节点，禁止把完整实体一次性下发给前端；前端按 parentId 逐层展开。
+type DepartmentNode struct {
+	ID          int    `json:"id"`
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	ParentID    int    `json:"parentId"`
+	NodeType    string `json:"nodeType"`
+	HasChildren bool   `json:"hasChildren"`
+}
+
+// DepartmentChildren 是"某父节点的直接下级"这一页结果。
+//
+// Truncated 为真表示还有下级没有返回。调用方**必须显式处理**这个标记，
+// 不能把一页当成完整列表——静默截断会让界面显示一棵看起来完整但实际缺失的树。
+type DepartmentChildren struct {
+	Items     []*DepartmentNode `json:"items"`
+	Truncated bool              `json:"truncated"`
 }
 
 // Team represents a group of users

@@ -206,6 +206,10 @@ func (s *Service) GetDepartmentTree(ctx context.Context, tenantID int) ([]*Depar
 	return s.repo.GetDepartmentTree(ctx, tenantID)
 }
 
+func (s *Service) ListDepartmentChildren(ctx context.Context, tenantID, parentID int) (*DepartmentChildren, error) {
+	return s.repo.ListDepartmentChildren(ctx, tenantID, parentID)
+}
+
 func (s *Service) ListDepartments(ctx context.Context, tenantID int) ([]*Department, error) {
 	return s.repo.ListDepartments(ctx, tenantID)
 }
