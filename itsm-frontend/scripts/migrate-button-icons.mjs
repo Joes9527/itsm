@@ -29,8 +29,12 @@ import { LUCIDE_TO_ANTD } from './button-icon-map.mjs';
 
 /**
  * 语义按上下文分叉的图标，本批不动，留给批次 2 定 glyph。
- * RotateCcw 在刷新场景该顺时针（ReloadOutlined），在重试场景该保持逆时针，
- * 靠图标名分不出来，硬转会做错一半。
+ * RotateCcw 在刷新场景该顺时针、在重试场景该保持逆时针，靠图标名分不出来，
+ * 硬转会做错一半。出图对照见 scripts/glyph-sheet.mjs，产物在 /tmp/glyph-sheet/index.html。
+ *
+ * 注意别再照搬映射表里 RotateCcw -> ReloadOutlined 那条：迁移已经把 RefreshCw 换成了
+ * SyncOutlined，现在 60 个按钮位在用它、ReloadOutlined 全仓 0 处。刷新到底用哪个
+ * glyph 是被这个既成事实约束的，属于待人工拍板项，不是这里能默认的。
  */
 const DEFERRED = new Set(['RotateCcw']);
 

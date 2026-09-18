@@ -48,6 +48,13 @@ jobs:
         working-directory: itsm-frontend
         # --forceExit: Jest 全量测试通过后进程因残留句柄不退出，导致 job 挂到 30min 超时
         run: npm test -- --runInBand --forceExit
+      - name: Button icon gate
+        working-directory: itsm-frontend
+        # 这个门禁用 node:test 跑，jest 的 testMatch 只覆盖 src/**，所以单独一步。
+        # 先跑门禁自身的单测（证明它会失败），再跑门禁。
+        run: |
+          npm run icons:test
+          npm run icons:check
       - name: Production build
         working-directory: itsm-frontend
         env:
