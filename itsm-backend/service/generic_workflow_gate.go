@@ -311,15 +311,14 @@ func genericWorkflowReceipt(ctx context.Context, client *ent.Client, item *ent.T
 // inside the owning versioned command transaction. It is also available to
 // legacy owners to detect and reject opted-in commands.
 //
-// WIRING STATUS: this branch defines the hook but no versioned command calls
-// it yet — ticket_service.go and ticket_escalation_command.go are not part of
-// this change, so nothing enforces a gated transition at runtime today. The
-// only production path into this file is the read-only projection
-// GenericWorkflowTaskGate below, which withholds the UI action. The callers
-// land in the sibling a3 lifecycle-gate / legacy-gates work; until they do, a
-// generic WorkItem can still be moved to resolved/closed through the ordinary
-// status command without tripping this rule. Do not read this function's
-// existence as enforcement.
+// WIRING STATUS: called by the versioned edit command (ticket_service.go) and
+// the escalation command (ticket_escalation_command.go), so a gated status
+// change on those paths is enforced. No legacy owner calls it yet —
+// ticket_workflow_service.go and updateTicketStatus write through their own
+// repository calls — so those paths can still move a generic WorkItem to
+// resolved or closed without tripping this rule. Those callers land in the
+// sibling a3 legacy-gates work; do not read this function's versioned callers
+// as covering them.
 func EnforceGenericWorkflowTransitionTx(ctx context.Context, client *ent.Client, tenantID, workItemID int, status string) error {
 	gate, err := loadGenericWorkflowGate(ctx, client, tenantID, workItemID, true)
 	if err != nil || gate == nil {
@@ -332,9 +331,8 @@ func EnforceGenericWorkflowTransitionTx(ctx context.Context, client *ent.Client,
 // inside a legacy (non-versioned) mutation transaction to refuse it for an
 // opted-in WorkItem.
 //
-// WIRING STATUS: same as EnforceGenericWorkflowTransitionTx above — defined
-// here, called by no legacy owner yet, so the legacy mutation paths it names
-// stay open. Callers land in the sibling a3 legacy-gates work.
+// WIRING STATUS: still called by no legacy owner, so the legacy mutation paths
+// it names stay open. Callers land in the sibling a3 legacy-gates work.
 func RejectGenericWorkflowLegacyMutationTx(ctx context.Context, client *ent.Client, tenantID, workItemID int) error {
 	gate, err := loadGenericWorkflowGate(ctx, client, tenantID, workItemID, true)
 	if err != nil {
