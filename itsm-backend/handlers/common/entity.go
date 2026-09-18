@@ -30,6 +30,7 @@ type Department struct {
 	Description string        `json:"description"`
 	AreaName    string        `json:"areaName"`
 	OrgType     string        `json:"orgType"`
+	NodeType    string        `json:"nodeType"`
 	ManagerID   int           `json:"managerId"`
 	ParentID    int           `json:"parentId"`
 	TenantID    int           `json:"tenantId"`

@@ -18,3 +18,8 @@ var ChangeProfessionalEvidenceSQL string
 //
 //go:embed 049_department_code_tenant_unique.sql
 var DepartmentCodeTenantUniqueSQL string
+
+// DepartmentNodeTypeSQL 让每个组织节点自带类型（公司/分公司/部门/组）。
+//
+//go:embed 050_department_node_type.sql
+var DepartmentNodeTypeSQL string

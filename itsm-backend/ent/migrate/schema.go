@@ -1234,6 +1234,7 @@ var (
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "area_name", Type: field.TypeString, Nullable: true},
 		{Name: "org_type", Type: field.TypeString, Nullable: true, Default: "department"},
+		{Name: "node_type", Type: field.TypeString, Nullable: true, Default: ""},
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
 		{Name: "parent_id", Type: field.TypeInt, Nullable: true},
 	}
@@ -1245,7 +1246,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "departments_departments_children",
-				Columns:    []*schema.Column{DepartmentsColumns[11]},
+				Columns:    []*schema.Column{DepartmentsColumns[12]},
 				RefColumns: []*schema.Column{DepartmentsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},

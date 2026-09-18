@@ -59,6 +59,7 @@ func toDeptDomain(e *ent.Department) *Department {
 		Description: e.Description,
 		AreaName:    e.AreaName,
 		OrgType:     e.OrgType,
+		NodeType:    e.NodeType,
 		ManagerID:   e.ManagerID,
 		ParentID:    e.ParentID,
 		TenantID:    e.TenantID,

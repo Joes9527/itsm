@@ -105,6 +105,11 @@ func OrgType(v string) predicate.Department {
 	return predicate.Department(sql.FieldEQ(FieldOrgType, v))
 }
 
+// NodeType applies equality check predicate on the "node_type" field. It's identical to NodeTypeEQ.
+func NodeType(v string) predicate.Department {
+	return predicate.Department(sql.FieldEQ(FieldNodeType, v))
+}
+
 // DeletedAt applies equality check predicate on the "deleted_at" field. It's identical to DeletedAtEQ.
 func DeletedAt(v time.Time) predicate.Department {
 	return predicate.Department(sql.FieldEQ(FieldDeletedAt, v))
@@ -663,6 +668,81 @@ func OrgTypeEqualFold(v string) predicate.Department {
 // OrgTypeContainsFold applies the ContainsFold predicate on the "org_type" field.
 func OrgTypeContainsFold(v string) predicate.Department {
 	return predicate.Department(sql.FieldContainsFold(FieldOrgType, v))
+}
+
+// NodeTypeEQ applies the EQ predicate on the "node_type" field.
+func NodeTypeEQ(v string) predicate.Department {
+	return predicate.Department(sql.FieldEQ(FieldNodeType, v))
+}
+
+// NodeTypeNEQ applies the NEQ predicate on the "node_type" field.
+func NodeTypeNEQ(v string) predicate.Department {
+	return predicate.Department(sql.FieldNEQ(FieldNodeType, v))
+}
+
+// NodeTypeIn applies the In predicate on the "node_type" field.
+func NodeTypeIn(vs ...string) predicate.Department {
+	return predicate.Department(sql.FieldIn(FieldNodeType, vs...))
+}
+
+// NodeTypeNotIn applies the NotIn predicate on the "node_type" field.
+func NodeTypeNotIn(vs ...string) predicate.Department {
+	return predicate.Department(sql.FieldNotIn(FieldNodeType, vs...))
+}
+
+// NodeTypeGT applies the GT predicate on the "node_type" field.
+func NodeTypeGT(v string) predicate.Department {
+	return predicate.Department(sql.FieldGT(FieldNodeType, v))
+}
+
+// NodeTypeGTE applies the GTE predicate on the "node_type" field.
+func NodeTypeGTE(v string) predicate.Department {
+	return predicate.Department(sql.FieldGTE(FieldNodeType, v))
+}
+
+// NodeTypeLT applies the LT predicate on the "node_type" field.
+func NodeTypeLT(v string) predicate.Department {
+	return predicate.Department(sql.FieldLT(FieldNodeType, v))
+}
+
+// NodeTypeLTE applies the LTE predicate on the "node_type" field.
+func NodeTypeLTE(v string) predicate.Department {
+	return predicate.Department(sql.FieldLTE(FieldNodeType, v))
+}
+
+// NodeTypeContains applies the Contains predicate on the "node_type" field.
+func NodeTypeContains(v string) predicate.Department {
+	return predicate.Department(sql.FieldContains(FieldNodeType, v))
+}
+
+// NodeTypeHasPrefix applies the HasPrefix predicate on the "node_type" field.
+func NodeTypeHasPrefix(v string) predicate.Department {
+	return predicate.Department(sql.FieldHasPrefix(FieldNodeType, v))
+}
+
+// NodeTypeHasSuffix applies the HasSuffix predicate on the "node_type" field.
+func NodeTypeHasSuffix(v string) predicate.Department {
+	return predicate.Department(sql.FieldHasSuffix(FieldNodeType, v))
+}
+
+// NodeTypeIsNil applies the IsNil predicate on the "node_type" field.
+func NodeTypeIsNil() predicate.Department {
+	return predicate.Department(sql.FieldIsNull(FieldNodeType))
+}
+
+// NodeTypeNotNil applies the NotNil predicate on the "node_type" field.
+func NodeTypeNotNil() predicate.Department {
+	return predicate.Department(sql.FieldNotNull(FieldNodeType))
+}
+
+// NodeTypeEqualFold applies the EqualFold predicate on the "node_type" field.
+func NodeTypeEqualFold(v string) predicate.Department {
+	return predicate.Department(sql.FieldEqualFold(FieldNodeType, v))
+}
+
+// NodeTypeContainsFold applies the ContainsFold predicate on the "node_type" field.
+func NodeTypeContainsFold(v string) predicate.Department {
+	return predicate.Department(sql.FieldContainsFold(FieldNodeType, v))
 }
 
 // DeletedAtEQ applies the EQ predicate on the "deleted_at" field.

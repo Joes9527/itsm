@@ -49,6 +49,10 @@ func (Department) Fields() []ent.Field {
 			Comment("组织类型: department=行政部门, warehouse=仓库/物流节点").
 			Optional().
 			Default("department"),
+		field.String("node_type").
+			Comment("节点类型: company=公司, branch=分公司, department=部门, team=组；空串=未分类。与 org_type 的仓库维度并存，不是同一件事").
+			Optional().
+			Default(""),
 		field.Time("deleted_at").
 			Comment("软删除时间").
 			Optional().

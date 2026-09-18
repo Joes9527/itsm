@@ -949,6 +949,10 @@ func init() {
 	departmentDescOrgType := departmentFields[9].Descriptor()
 	// department.DefaultOrgType holds the default value on creation for the org_type field.
 	department.DefaultOrgType = departmentDescOrgType.Default.(string)
+	// departmentDescNodeType is the schema descriptor for node_type field.
+	departmentDescNodeType := departmentFields[10].Descriptor()
+	// department.DefaultNodeType holds the default value on creation for the node_type field.
+	department.DefaultNodeType = departmentDescNodeType.Default.(string)
 	discoveryjobFields := schema.DiscoveryJob{}.Fields()
 	_ = discoveryjobFields
 	// discoveryjobDescSourceID is the schema descriptor for source_id field.
