@@ -341,6 +341,36 @@ listed here is preserved**; recreate a working copy with
 - **Evidence anchors:** the branch ref and the single added document.
 - **Status:** proposed
 
+### BL-CI-DOCS-PR-CHECKS — documentation- and frontend-only PRs cannot satisfy the required checks
+
+- **Outcome / persona:** a documentation-only or frontend-only PR can merge through the
+  normal path instead of an administrator override, so the three required checks keep
+  meaning what branch protection says they mean. (Persona: maintainer, reviewer.)
+- **Current state:** `main` requires `Lint`, `Build` and `Test`, but
+  `.github/workflows/backend-ci.yml` triggers on `pull_request` only for
+  `itsm-backend/**` and its own file. That path filter is deliberate — it exists so
+  documentation and frontend changes do not spend backend CI minutes — but a PR that
+  touches neither never starts those three jobs, so the required checks stay
+  unreported and the PR sits at `BLOCKED` with no way to become mergeable on its own.
+  Observed on #82 (documentation only), which merged through an administrator
+  override; #76, #79 and #80 are documentation PRs in the same position. Any
+  frontend-only PR hits it too.
+- **Scope:** choose one policy repository-wide and state it in the workflow — make the
+  three jobs run and short-circuit green for diffs that touch no backend file, or drop
+  `Lint` / `Build` / `Test` from the required set and name a workflow that always runs,
+  or declare that documentation PRs are administrator-merged by policy so the override
+  stops being an unrecorded exception.
+- **Non-goals:** do not spend backend CI minutes on documentation changes; do not
+  weaken the checks for `itsm-backend/**` changes; do not bundle this with a
+  documentation or frontend change.
+- **Acceptance criteria:** a documentation-only PR reaches a mergeable state without an
+  administrator override, and an `itsm-backend/**` change still runs the full backend
+  suite.
+- **Evidence anchors:** `.github/workflows/backend-ci.yml` (`on.pull_request.paths`);
+  `gh api repos/Joes9527/itsm/branches/main/protection --jq '.required_status_checks.contexts'`;
+  and PR #82's check rollup, where those three job names are absent.
+- **Status:** proposed
+
 ---
 
 ## 📊 Key Metrics
