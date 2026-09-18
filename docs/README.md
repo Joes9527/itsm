@@ -55,6 +55,14 @@
 
 ## 产品与架构
 
+- [ITSM 双机双 Agent 候选交付总计划](./superpowers/plans/2026-09-12-itsm-candidate-two-agent-delivery.md)
+
+- [ITSM 候选版本集成、验收与 WSL 交付设计（accepted）](./superpowers/specs/2026-09-12-itsm-candidate-integration-delivery-design.md)
+- [候选执行范围与启动生命周期设计（accepted）](./superpowers/specs/2026-09-12-itsm-candidate-execution-scope-design.md)
+- [PostgreSQL 鉴权状态权威设计（accepted）](./superpowers/specs/2026-09-12-itsm-candidate-auth-state-design.md)
+- [候选执行范围实施计划](./superpowers/plans/2026-09-12-itsm-candidate-execution-scope.md)
+- [候选鉴权状态实施计划](./superpowers/plans/2026-09-12-itsm-candidate-auth-state.md)
+
 - [WorkItem 后续实施计划（代码与隔离旅程已验收，退役未完成）](./superpowers/plans/2026-09-11-workitem-next-stage.md)：后端五项任务、公共页面三项任务和跨域验收/退役两项任务的依赖与证据入口。
 
 - [WorkItem 后续收敛设计（accepted，执行中）](./superpowers/specs/2026-09-11-workitem-convergence-next-stage-design.md)：后端契约、页面操作、跨域验收与退役门禁三批设计；包含已确认的三域转派和 backlog 边界。
