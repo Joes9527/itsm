@@ -1,7 +1,7 @@
 /**
  * 按钮图标门禁。
  *
- * 两条规则，都是 2026-09 那轮 lucide -> @ant-design/icons 迁移里用真金白银换来的：
+ * 四条规则，都是 2026-09 那轮 lucide -> @ant-design/icons 迁移里用真金白银换来的：
  *
  * 1. 按钮里的图标不许再来自 lucide-react。
  *    不是审美问题：antd 的 resetIcon() 只给 .ant-btn-icon > svg 设 display/color/
@@ -50,6 +50,18 @@
  * 这类条件／逻辑表达式以前看不见（批次 1 的 codemod 归类为「复杂形态，跳过」，
  * 门禁沿用了同一判定），那 11 处于 2026-09-18 由 migrate-icon-expressions.mjs 迁完，
  * 本门禁同步改成走**整棵 icon 表达式子树**。别再退回只看自闭合字面量。
+ *
+ * ⚠️ **仍未关闭的盲区：children 位置的图标**（2026-09-18 在真浏览器里发现，未修）。
+ * 本文件的图标判定只看 `icon` **属性**（`attrs.find(a => attrName(a) === 'icon')`），
+ * 所以 `<Button><Search size={17} /></Button>` 这种把图标当 children 传的写法**完全看不见**。
+ * 实测：应用页头有 7 个这样的 antd 按钮（search / bot / bell / moon / globe / ellipsis
+ * + 个人切换按钮的 shield 与 chevron-down），**每个已登录路由都渲染**；全仓 AST 探针
+ * 扫出 23 处、13 个文件（页头 6、installations 5、templates/TemplateList 2 等）。
+ * **但先别急着当成缺陷**：这 7 个全都有 aria-label + title，且全都显式定尺寸
+ * （14/16/17/18）——呈现属性就是想要的尺寸、实渲染也对得上，正好落在「显式定尺寸的
+ * lucide 从来没错」那一侧。所以差的**不是观感也不是无障碍，是一致性与门禁覆盖**。
+ * 要收的话，照规则 3/4 的做法做成 fail-closed（新出现即挂，逼作者内联或标注），
+ * 别做成白名单——白名单会随代码漂移。
  *
  * 用法:
  *   node scripts/check-button-icons.mjs          # 检查 src/，有违规退出码 1
