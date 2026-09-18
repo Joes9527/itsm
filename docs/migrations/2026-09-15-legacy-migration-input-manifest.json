@@ -1,0 +1,91 @@
+{
+  "generated_at": "2026-09-15T08:13:04.987855+00:00",
+  "source_root": "/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack",
+  "archive_root": "/home/administrator/.local/state/itsm-migration-archive-20260915",
+  "files": [
+    {
+      "name": "itsm_departments.json",
+      "path": "/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main/data/itsm_departments.json",
+      "sha256": "f8b3fbdaa12176724ee6d346d51dc1b74bde112142eeb82616b4c2d57af9283f",
+      "bytes": 3444130,
+      "mtime": "2026-08-04T08:21:43.591656",
+      "records": 5272,
+      "archived_to": "/home/administrator/.local/state/itsm-migration-archive-20260915/itsm_departments.json",
+      "archive_sha256_matches": true
+    },
+    {
+      "name": "itsm_users.json",
+      "path": "/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main/data/itsm_users.json",
+      "sha256": "fe794d35abcbffb90a4d5af999fbebb5a295b5cde6791681f1365209466007a6",
+      "bytes": 18502265,
+      "mtime": "2026-08-19T11:21:05.527188",
+      "records": 14393,
+      "archived_to": "/home/administrator/.local/state/itsm-migration-archive-20260915/itsm_users.json",
+      "archive_sha256_matches": true
+    },
+    {
+      "name": "itsm_categories.json",
+      "path": "/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main/data/itsm_categories.json",
+      "sha256": "4edd98ce0f49cf8bd08cc5c6ac5e99d7b323a27dfca3a06ede63e24608eaed76",
+      "bytes": 53787,
+      "mtime": "2026-08-04T08:21:43.518599",
+      "records": 96,
+      "archived_to": "/home/administrator/.local/state/itsm-migration-archive-20260915/itsm_categories.json",
+      "archive_sha256_matches": true
+    },
+    {
+      "name": "itsm_categories_tree.json",
+      "path": "/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main/data/itsm_categories_tree.json",
+      "sha256": "9ae056adf92b91e86d5ba1774b750ddd899edce9f1c78c2b6ff00c616d7d2e0f",
+      "bytes": 62134,
+      "mtime": "2026-08-04T08:21:43.523603",
+      "records": 1,
+      "archived_to": "/home/administrator/.local/state/itsm-migration-archive-20260915/itsm_categories_tree.json",
+      "archive_sha256_matches": true
+    }
+  ],
+  "copies_elsewhere": [
+    {
+      "path": "/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main/data/itsm_departments.json",
+      "sha256": "f8b3fbdaa12176724ee6d346d51dc1b74bde112142eeb82616b4c2d57af9283f",
+      "records": 5272,
+      "mtime": "2026-08-04T08:21:43.591656"
+    },
+    {
+      "path": "/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main.backup-20260704-2132/data/itsm_departments.json",
+      "sha256": "f8b3fbdaa12176724ee6d346d51dc1b74bde112142eeb82616b4c2d57af9283f",
+      "records": 5272,
+      "mtime": "2026-07-04T12:38:17.393457"
+    },
+    {
+      "path": "/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main.worktrees/ai-service-desk-presentation-revision/data/itsm_departments.json",
+      "sha256": "6ba5cda2f506b36e342b25201aa0ebf3e930614447d5def41bea69156748358f",
+      "records": 5272,
+      "mtime": "2026-09-01T18:03:32.584920"
+    },
+    {
+      "path": "/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-main.worktrees/install-superpower-skill/data/itsm_departments.json",
+      "sha256": "6ba5cda2f506b36e342b25201aa0ebf3e930614447d5def41bea69156748358f",
+      "records": 5272,
+      "mtime": "2026-09-01T17:57:27.330625"
+    },
+    {
+      "path": "/mnt/d/SynologyDrive/kerry/KAF_Migration_Pack/kaf-worktrees/kaf-delegation-transactional-delivery/data/itsm_departments.json",
+      "sha256": "f8b3fbdaa12176724ee6d346d51dc1b74bde112142eeb82616b4c2d57af9283f",
+      "records": 5272,
+      "mtime": "2026-08-29T21:03:38.447707"
+    }
+  ],
+  "cli_absence": {
+    "cmd/migrate_legacy_itsm": {
+      "directory_exists": false,
+      "files": null,
+      "git_history_entries": "(none)"
+    },
+    "cmd/migrate_legacy_users": {
+      "directory_exists": false,
+      "files": null,
+      "git_history_entries": "(none)"
+    }
+  }
+}
