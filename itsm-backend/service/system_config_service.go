@@ -273,6 +273,9 @@ func (s *SystemConfigService) InitDefaultConfigs(ctx context.Context, tenantID i
 		{Key: "maxFileSize", Value: "10", ValueType: "number", Category: "upload", Description: "最大文件大小(MB)"},
 		{Key: "passwordMinLength", Value: "6", ValueType: "number", Category: "security", Description: "密码最小长度"},
 		{Key: "loginMaxAttempts", Value: "5", ValueType: "number", Category: "security", Description: "登录失败次数限制"},
+		// 审批找不到人时的兜底候选组（组名，需在用户组里真实存在且有成员）。
+		// 给出默认行是为了让运维改得到：没有这一行，这个配置就等于只存在于代码里。
+		{Key: ApprovalFallbackGroupConfigKey, Value: approvalFallbackCandidateGroup, ValueType: "string", Category: "bpmn", Description: "审批无人可派时的兜底候选组名"},
 	}
 
 	for _, cfg := range defaultConfigs {

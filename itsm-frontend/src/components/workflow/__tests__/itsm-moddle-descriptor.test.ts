@@ -7,6 +7,9 @@ describe('ITSM BPMN moddle descriptor', () => {
     const properties = itsmModdleDescriptor.types[0].properties.map(property => property.name);
     expect(properties).toEqual(expect.arrayContaining([
       'assignee', 'assigneeRole', 'assigneeDeptId', 'assigneeGmChain', 'candidateUsers', 'candidateGroups', 'taskPurpose',
+      // 引擎支持但过去未声明的属性：未声明会在设计器保存时被丢掉。
+      'assigneeTeamId', 'assigneeProjectId', 'assigneeTempTeamId',
+      'assigneeDirectManager', 'assigneeManagerLevel',
       'approvalMode', 'approvalThreshold', 'rejectStrategy', 'timeoutAction',
       'allowDelegate', 'allowAddApprover', 'commentRequiredOnReject',
     ]));
