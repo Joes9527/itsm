@@ -1,5 +1,7 @@
 # 创建入口分类 ID 契约（P2）实施计划
 
+> 状态：**DRAFT / 已转为 backlog（BL-CTI-02）/ 本次未实施**。本计划仅记录任务拆解与渠道证据；实施需先由维护者确认 §9.6 的待决问题。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 创建分类只接受最深节点 ID（`CTIInput` + 目录默认分类），删除四条创建投影里的 5 个按显示名称解析的槽位及其解析分支。
