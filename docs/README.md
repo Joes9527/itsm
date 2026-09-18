@@ -22,6 +22,7 @@
 
 - [旧 ITSM 主数据迁移与当前目标验证：唯一续办清单](superpowers/plans/2026-09-15-migration-validation-ledger.md)：已完成、待补配置、运行阻塞、待验收及数据库清理边界。
 - [KAF / ITSM 本机 WSL 开发环境](development-environment.md)：开发／迁移验证双数据库约定、3010 → 8080 入口、版本与结构同步、启动来源和恢复边界。
+- [本地 PostgreSQL 数据库总清单](review/2026-09-14-postgresql-database-register.md)：实例、库名、用途、任务归属及待核项；操作边界见[开发环境状态](development-environment.md)。
 
 这个目录包含产品说明、部署运维、开发协作、测试报告和阶段性评审文档。为了避免新用户在大量历史文档中迷路，建议先从本页按角色阅读。
 
