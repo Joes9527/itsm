@@ -215,7 +215,9 @@ func loadGenericWorkflowGate(ctx context.Context, client *ent.Client, tenantID, 
 		if task.Status == "completed" {
 			if pre == WorkItemPrerequisiteInProgress {
 				note, _ := task.TaskVariables[WorkItemCompletionNote].(string)
-				gate.facts.Handled = strings.TrimSpace(note) != ""
+				if strings.TrimSpace(note) != "" {
+					gate.facts.Handled = true
+				}
 			}
 			if pre == WorkItemPrerequisiteResolved {
 				gate.facts.ResolveConfirmed = true
@@ -233,16 +235,29 @@ func loadGenericWorkflowGate(ctx context.Context, client *ent.Client, tenantID, 
 		if gate.instance.StartTime.After(since) {
 			since = gate.instance.StartTime
 		}
+		// Evidence is monotonic: a task only ever adds a fact. The contract allows
+		// several tasks to declare the same prerequisite, and each queries receipts
+		// from its own start time, so a later task's narrower window must not clear a
+		// receipt an earlier task already established.
 		switch pre {
 		case WorkItemPrerequisiteEscalated:
-			gate.facts.Escalated, err = genericWorkflowReceipt(ctx, client, item, "work_item.escalation.manual", "in_progress", since)
+			found, receiptErr := genericWorkflowReceipt(ctx, client, item, "work_item.escalation.manual", "in_progress", since)
+			if receiptErr != nil {
+				return nil, receiptErr
+			}
+			gate.facts.Escalated = gate.facts.Escalated || found
 		case WorkItemPrerequisiteResolved:
-			gate.facts.Resolved, err = genericWorkflowReceipt(ctx, client, item, "work_item.edit", "resolved", since)
+			found, receiptErr := genericWorkflowReceipt(ctx, client, item, "work_item.edit", "resolved", since)
+			if receiptErr != nil {
+				return nil, receiptErr
+			}
+			gate.facts.Resolved = gate.facts.Resolved || found
 		case WorkItemPrerequisiteClosed:
-			gate.facts.Closed, err = genericWorkflowReceipt(ctx, client, item, "work_item.edit", "closed", since)
-		}
-		if err != nil {
-			return nil, err
+			found, receiptErr := genericWorkflowReceipt(ctx, client, item, "work_item.edit", "closed", since)
+			if receiptErr != nil {
+				return nil, receiptErr
+			}
+			gate.facts.Closed = gate.facts.Closed || found
 		}
 	}
 	decisions, err := client.ProcessApprovalDecision.Query().Where(processapprovaldecision.TenantID(tenantID), processapprovaldecision.ProcessInstanceID(gate.instance.ID)).All(ctx)

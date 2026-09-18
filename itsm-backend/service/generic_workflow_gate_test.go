@@ -109,6 +109,47 @@ func TestGenericWorkflowReceiptRequiresCurrentStageSuccessfulTransition(t *testi
 	require.Error(t, err)
 }
 
+// A later stage must not erase evidence an earlier stage established. The contract
+// lets several tasks declare the same prerequisite, and each queries receipts from
+// its own start time, so the narrower window of a later task cannot clear a fact
+// that an earlier task already proved.
+func TestGenericWorkflowFactsAccumulateAcrossStages(t *testing.T) {
+	f, item, task := seedGenericGate(t, "resolved", "resolved")
+	item = f.client.Ticket.UpdateOne(item).SetResolution("verified repair").SaveX(f.userCtx)
+	instance := f.client.ProcessInstance.GetX(f.userCtx, task.ProcessInstanceID)
+
+	prerequisite := lifecycleMetadata("workItemPrerequisite", "resolved")
+	definition := `<definitions><process id="contract" isExecutable="true"><extensionElements>` +
+		lifecycleMetadata("workItemLifecycleContract", "generic_fulfillment_v1") +
+		`</extensionElements><startEvent id="start"/>` +
+		`<userTask id="first" ` + lifecycleOwnerAttrs + `><extensionElements>` + prerequisite + `</extensionElements></userTask>` +
+		`<userTask id="second" ` + lifecycleOwnerAttrs + `><extensionElements>` + prerequisite + `</extensionElements></userTask>` +
+		`<endEvent id="end"/><sequenceFlow id="a" sourceRef="start" targetRef="first"/>` +
+		`<sequenceFlow id="b" sourceRef="first" targetRef="second"/>` +
+		`<sequenceFlow id="c" sourceRef="second" targetRef="end"/></process></definitions>`
+	f.client.ProcessDefinition.UpdateOneID(instance.ProcessDefinitionID).SetBpmnXML([]byte(definition)).SaveX(f.userCtx)
+
+	// The first stage opens before the resolution receipt, the second after it.
+	first := time.Now().Add(-3 * time.Hour)
+	second := time.Now().Add(-2 * time.Hour)
+	f.client.ProcessInstance.UpdateOne(instance).SetStartTime(first).SaveX(f.userCtx)
+	f.client.ProcessTask.UpdateOneID(task.ID).SetTaskDefinitionKey("first").SetStatus("completed").
+		SetCreatedTime(first).SetCreatedAt(first).SaveX(f.userCtx)
+	f.client.ProcessTask.Create().SetTaskID("task-second-stage").SetProcessInstanceID(instance.ID).
+		SetProcessDefinitionKey(instance.ProcessDefinitionKey).SetTaskDefinitionKey("second").
+		SetTaskName("Second").SetStatus("completed").SetTenantID(f.tenant.ID).
+		SetCreatedTime(second).SetCreatedAt(second).SaveX(f.userCtx)
+	f.client.AuditLog.Create().SetTenantID(item.TenantID).SetUserID(f.actor.ID).SetResource("work_item").
+		SetPath(strconv.Itoa(item.ID)).SetAction("work_item.edit").SetMethod("ui").SetStatusCode(200).
+		SetOperationID("resolution-operation").SetRequestDigest(strings.Repeat("a", 64)).SetResultVersion(2).
+		SetResultStatus("resolved").SetRequestBody(`{"previousStatus":"in_progress"}`).
+		SetCreatedAt(first.Add(30 * time.Minute)).SaveX(f.userCtx)
+
+	gate, err := loadGenericWorkflowGate(f.userCtx, f.client, item.TenantID, item.ID, false)
+	require.NoError(t, err)
+	require.True(t, gate.facts.Resolved, "a later stage must not clear the receipt an earlier stage established")
+}
+
 func TestGenericWorkflowReadOnlyGateRequiresProspectiveNote(t *testing.T) {
 	f, _, task := seedGenericGate(t, "in_progress", "in_progress")
 	before := f.client.ProcessTask.GetX(f.userCtx, task.ID)
