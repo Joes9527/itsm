@@ -6,6 +6,8 @@
 
 - **组织与审批路由设计组（proposed，待评审，2026-09-18）**：[统一数据契约](superpowers/specs/2026-09-18-org-people-data-contract-design.md)（组织/部门/负责人/上级四个词的统一口径与两条取数轴）、[《组织》](superpowers/specs/2026-09-18-organization-model-design.md)、[《部门》](superpowers/specs/2026-09-18-department-management-unit-design.md)、[《人员与汇报线》](superpowers/specs/2026-09-18-people-reporting-line-design.md)、[《流程与路由》](superpowers/specs/2026-09-18-process-routing-migration-design.md)。**均为设计意图，不代表已实现或已迁移；无数据库写入授权。**
 
+- [组织基础实施计划（迁移前置 + 组织树，draft，未执行）](superpowers/plans/2026-09-18-organization-foundation.md)：5 个任务（克隆来源证明与结构拉齐、seed 隔离、编码租户内唯一与导入幂等、节点类型、组织树轻量懒加载）。**Task 1/2 含数据库写入，需单独授权；其余只改代码与迁移文件。**
+
 > **开发／迁移任务先读：[当前结构目标047](development-environment.md#selected-schema-target-047)及[实际数据库状态](superpowers/plans/2026-09-15-migration-validation-ledger.md#schema-target-status)。目标版本与已部署状态分开记录。**
 
 - [Ticket 详情体验统一实施计划](./superpowers/plans/2026-09-15-ticket-detail-experience-unification.md)：六项任务及最终复审完成；浏览器 7/7、最终并发回归 98/98，已提交 PR #35。
