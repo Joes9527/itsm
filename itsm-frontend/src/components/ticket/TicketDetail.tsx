@@ -49,6 +49,7 @@ import { isFinalStatus } from '@/lib/utils/workflow-state-machine';
 import { TicketStatus, TicketStatusConfig, getPriorityConfig } from '@/constants/taxonomy';
 import { ticketAttachmentAdapter } from '@/components/business/detail-tabs';
 import { ApprovalDecisionHistoryProvider } from '@/components/business/detail-tabs/ApprovalDecisionHistoryContext';
+import { WorkItemProcessTasksProvider } from '@/components/business/detail-tabs/WorkItemProcessTasksContext';
 import { useApprovalDecisionHistory } from '@/components/business/detail-tabs/useApprovalDecisionHistory';
 import { ApprovalMiniStepper } from '@/components/business/detail-tabs/ApprovalMiniStepper';
 import ServiceRequestPanel from './ServiceRequestPanel';
@@ -524,6 +525,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
 
   return (
     <ApprovalDecisionHistoryProvider ticketId={ticketId}>
+    <WorkItemProcessTasksProvider>
     <div className="w-full space-y-4 pt-4 text-foreground font-sans antialiased">
       {error && <DetailReadState error={error} loading={resource.loading} reload={resource.reload} />}
       {sla.error && <DetailReadState error={`SLA：${sla.error}`} loading={sla.loading} reload={sla.reload} />}
@@ -1287,6 +1289,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
         </Space>
       </Modal>
     </div>
+    </WorkItemProcessTasksProvider>
     </ApprovalDecisionHistoryProvider>
   );
 };

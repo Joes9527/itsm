@@ -390,6 +390,56 @@ listed here is preserved**; recreate a working copy with
 - **Evidence anchors:** PR #87 (the review round; the `_cn` declaration survey and the
   read-only `process_bindings` / `service_catalogs.process_definition_key` check recorded
   in its description).
+
+### BL-BPMN-UNROUTED-TASK-FALLBACK — stop silently assigning unrouted user tasks to the requester
+
+- **Outcome / persona:** an engineer can tell *why* a task landed on a given person.
+  Today a user task that declares no assignee routing is resolved at runtime by falling
+  back to `requester_id` → `triggered_by` → `assignee_id` → default, with no error, no
+  audit marker and no UI hint — which contradicts the contract's "unknown dispatch fails
+  closed" and "optional steps must be declared in advance and their skips audited and
+  observable". (Persona: process administrator, front-line engineer.)
+- **Current state:** confirmed on the shared development database on 2026-09-18.
+  `ticket_general_flow` 1.3.0's first user task `Activity_Assign` declared no routing, so
+  a generic WorkItem's first task was assigned to its own requester instead of the
+  configured dispatch group, and the instance then never reached `Gateway_Approval`.
+  The ticket detail page rendered the approval chain as an unexplained blank for that
+  reason (a second, independent cause on older rows — a legacy `business_type` vocabulary
+  written by an earlier build — is covered by the identity cutover, not by this item).
+  Republishing the template with a declared `assigneeTeamId` fixed that one node; the
+  fallback itself is unchanged. In the same
+  definition `Activity_Handle` and `Activity_Resolve` are reachable under generic intake
+  and still unrouted, and the pattern repeats across the other built-in templates
+  (`incident_emergency_flow`, `service_request_flow`, `ticket_urgent_flow`, …).
+- **Scope — needs a product decision first:** either (a) publication rejects a *reachable*
+  user task with no declared routing, extending the candidate-resolution check that
+  `ValidateDefinitionForPublication` applies only to catalog/binding publication today, or
+  (b) the fallback stays but becomes explicit — declared in the definition, logged, audited
+  with actor/source metadata and surfaced in the task view. Either way the built-in
+  templates get inventoried node by node, because "unreachable under this intake" is a
+  disposition too (declare it or remove it), not a reason to route it.
+- **Non-goals:** no change to the engine's generic resolution order as a side effect of this
+  item; no second assignment engine; no rewrite of historical `process_tasks`; no
+  replacement of the Incident / Problem / Change lifecycles.
+- **Owning module:** `itsm-backend/service` (BPMN publication validation and user-task
+  creation in the process engine) plus the built-in templates under `itsm-backend/service/bpmn/`.
+- **Dependencies / migration risk:** the publication validator is shared with the service
+  catalog and `process_bindings`, so tightening it can reject definitions that deploy today
+  in every tenant — it needs a compatibility decision and a per-template inventory before it
+  is enforced, and it interacts with `validateBPMNAssigneeSource`, which rejects
+  `assigneeSource=work_item_assignee` while a task carries a `serviceTaskType` (exactly the
+  shape `Activity_Handle` / `Activity_Resolve` have). Related work line:
+  BL-GENERIC-FULFILLMENT-GATE.
+- **Acceptance criteria:** (1) a reachable unrouted user task cannot be published silently —
+  it is either rejected or explicitly declared; (2) where the fallback is kept, the resulting
+  assignment is observable in log, audit metadata and the task view; (3) the built-in
+  templates are inventoried and every unrouted node is dispositioned; (4) PostgreSQL cases
+  cover both the rejected and the declared path.
+- **Evidence anchors:** the fallback branch in user-task creation in
+  `itsm-backend/service/bpmn_process_engine.go`; `ValidateDefinitionForPublication` in
+  `itsm-backend/service/bpmn_publication.go`; `validateBPMNAssigneeSource` in
+  `itsm-backend/service/bpmn_assignment_source.go`; the templates in
+  `itsm-backend/service/bpmn/`.
 - **Status:** proposed
 
 ---

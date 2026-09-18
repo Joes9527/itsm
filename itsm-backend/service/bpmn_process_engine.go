@@ -922,6 +922,12 @@ func (e *CustomProcessEngine) recordApprovalDecision(ctx context.Context, instan
 func (e *CustomProcessEngine) recordApprovalDecisionWithClient(ctx context.Context, client *ent.Client, instance *ent.ProcessInstance, task *ent.ProcessTask, variables map[string]interface{}) error {
 	action, _ := variables["approvalAction"].(string)
 	if action == "" {
+		// 非审批任务不带 approvalAction 是正常情况。但审批任务缺它就意味着这次审批
+		// 没有落成决策记录——静默返回会让审批历史凭空少一条，读路径只看到"无数据"，
+		// 与 AGENTS.md 的 fail-closed 要求相悖：不支持的组合必须报错或留下可见的阻塞状态。
+		if purpose, _ := task.TaskVariables["taskPurpose"].(string); purpose == "approval" {
+			return fmt.Errorf("审批任务 %s 完成时缺少 approvalAction，审批决策未记录", task.TaskID)
+		}
 		return nil
 	}
 	decision, _ := variables["approvalResult"].(string)
@@ -1935,19 +1941,47 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 		} else if task.AssigneeSource == "" && strings.TrimSpace(task.CandidateUsers) == "" && strings.TrimSpace(task.CandidateGroups) == "" {
 			// Explicit candidate routing stays unassigned until claimed. Unresolved
 			// configured candidates must not silently route fulfillment back to the requester.
-			// 优先使用 requester_id（工单申请人）
-			assignee = getUserID("requester_id")
-			// 其次使用 triggered_by（触发者）
-			if assignee == "" {
-				assignee = getUserID("triggered_by")
-			}
-			// 再其次使用 assignee_id
-			if assignee == "" {
-				assignee = getUserID("assignee_id")
-			}
-			// 如果还是没有，根据任务名称自动分配
-			if assignee == "" {
-				assignee = e.getDefaultAssigntee(ctx, instance, task)
+			//
+			// 固定范围组织路由（assigneeDeptId/assigneeTeamId/assigneeProjectId/assigneeTempTeamId）
+			// 同样是声明式配置，publication 也把非零值当作有效路由配置放行
+			// （bpmn_publication.go 的 "task requires candidate resolution configuration" 检查）。
+			// 但过去只有 taskPurpose="approval" 分支消费它，非审批任务声明了却仍然落进下面的
+			// requester 兜底——等于把任务静默派给申请人。
+			if len(fixedScopeApproverSources(task, instance.TenantID)) > 0 {
+				assignee = e.resolveFixedScopeAssignee(ctx, instance, nil, task)
+				if assignee == "" {
+					// 声明了路由却解析不出人（部门/团队/项目没配负责人）——这是配置缺失，
+					// 不是"没有声明路由"。保持未指派，让任务以可见的阻塞状态停在原地等人工派单；
+					// 一旦落进下面的申请人兜底，就等于把工单静默派回给提单人，与本节开头
+					// "Explicit candidate routing stays unassigned until claimed" 的语义相反。
+					e.logger.Warnw(
+						"用户任务声明的固定范围路由解析不到负责人，任务保持未指派",
+						"taskID", task.ID, "taskName", task.Name, "instanceID", instance.ID, "tenantID", instance.TenantID,
+					)
+				}
+			} else {
+				// 该任务没有声明任何路由，下面的兜底会把任务派给申请人。这属于配置缺失，
+				// 不是正常路径——记录一条可观测的告警，便于发现未声明路由的节点。
+				e.logger.Warnw(
+					"用户任务未声明处理人路由，按申请人兜底",
+					"taskID", task.ID, "taskName", task.Name, "instanceID", instance.ID, "tenantID", instance.TenantID,
+				)
+				// 优先使用 requester_id（工单申请人）
+				if assignee == "" {
+					assignee = getUserID("requester_id")
+				}
+				// 其次使用 triggered_by（触发者）
+				if assignee == "" {
+					assignee = getUserID("triggered_by")
+				}
+				// 再其次使用 assignee_id
+				if assignee == "" {
+					assignee = getUserID("assignee_id")
+				}
+				// 如果还是没有，根据任务名称自动分配
+				if assignee == "" {
+					assignee = e.getDefaultAssigntee(ctx, instance, task)
+				}
 			}
 		}
 	}

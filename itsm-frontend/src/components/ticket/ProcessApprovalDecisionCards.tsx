@@ -3,6 +3,7 @@
 import React from 'react';
 import { GitBranch } from 'lucide-react';
 import { useApprovalDecisionHistory } from '@/components/business/detail-tabs/useApprovalDecisionHistory';
+import { useApprovalAbsenceReason } from '@/components/business/detail-tabs/useApprovalAbsenceReason';
 import { DetailReadState } from '@/components/business/detail-tabs/DetailReadState';
 import type { ApprovalStepStatus } from '@/components/business/detail-tabs/types';
 
@@ -22,6 +23,7 @@ const statusBadge: Record<ApprovalStepStatus, { text: string; className: string 
 /** Read-only cards projected exclusively from BPMN ProcessApprovalDecision. */
 export const ProcessApprovalDecisionCards: React.FC<{ ticketId: number }> = ({ ticketId }) => {
   const { steps, loading, error, reload, ready } = useApprovalDecisionHistory(ticketId);
+  const reason = useApprovalAbsenceReason();
 
   return (
     <div className='space-y-3 pt-2 text-xs'>
@@ -31,6 +33,7 @@ export const ProcessApprovalDecisionCards: React.FC<{ ticketId: number }> = ({ t
         <div className='text-center py-6 text-muted'>
           <GitBranch className='w-8 h-8 mx-auto mb-2 text-muted' />
           <span>暂无审批决策记录</span>
+          {reason && <p className='mt-2 text-[12px] text-muted'>{reason}</p>}
         </div>
       )}
       {steps.map(step => {

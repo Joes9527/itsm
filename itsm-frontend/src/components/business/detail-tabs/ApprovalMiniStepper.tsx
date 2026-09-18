@@ -3,6 +3,7 @@
 import React from 'react';
 import { GitBranch } from 'lucide-react';
 import { useApprovalDecisionHistory } from './useApprovalDecisionHistory';
+import { useApprovalAbsenceReason } from './useApprovalAbsenceReason';
 import { DetailReadState } from './DetailReadState';
 import type { ApprovalStepStatus } from './types';
 
@@ -68,6 +69,7 @@ function formatStepTime(iso?: string): string {
  */
 export const ApprovalMiniStepper: React.FC<{ ticketId: number }> = ({ ticketId }) => {
   const { steps, loading, error, reload, ready } = useApprovalDecisionHistory(ticketId);
+  const reason = useApprovalAbsenceReason();
 
   return (
     <div className="bg-surface rounded-[8px] border border-border p-4 shadow-none space-y-3 text-xs">
@@ -79,7 +81,10 @@ export const ApprovalMiniStepper: React.FC<{ ticketId: number }> = ({ ticketId }
       <DetailReadState error={error} loading={loading} reload={reload} />
       {loading && !ready && <span>审批决策记录加载中...</span>}
       {ready && !error && !loading && steps.length === 0 ? (
-        <span className="text-muted text-xs">暂无审批决策记录</span>
+        <span className="block text-muted text-xs">
+          暂无审批决策记录
+          {reason && <span className="mt-1 block">{reason}</span>}
+        </span>
       ) : (
         <div className="space-y-2.5">
           {steps.map((step, idx) => {

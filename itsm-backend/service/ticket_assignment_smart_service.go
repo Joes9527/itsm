@@ -72,7 +72,7 @@ func (s *TicketAssignmentSmartService) AutoAssign(ctx context.Context, ticketID,
 			return err
 		}
 		if target == nil {
-			return fmt.Errorf("no eligible automatic assignee is available")
+			return fmt.Errorf("no active assignment rule matches this ticket")
 		}
 		_, err = NewWorkItemAssignmentWriter(session).Apply(ctx, session.Tx.Client(), assignment.Command{WorkItemID: item.ID, TenantID: tenantID, ActorID: session.Actor.ID, ActorTenantID: session.Actor.TenantID, AssigneeID: *target, ExpectedVersion: item.Version, Source: identity.Channel + ".ticket.auto_assign"})
 		return err

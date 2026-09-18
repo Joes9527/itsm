@@ -28,7 +28,20 @@ export default function ServiceCatalogApprovalChain({ ticketId }: ServiceCatalog
   useDetailRefreshEntry({ key: 'catalog-approval-chain', label: '目录审批链', reload: resource.reload, isWriting: () => false });
   const steps = resource.data || [];
   const feedback = <DetailReadState error={resource.error} loading={resource.loading} reload={resource.reload} />;
-  if (!steps.length) return feedback;
+  if (!steps.length) {
+    // 空数组和读取失败是两回事：过去这里只渲染一个刷新按钮，用户看不出"这个服务申请
+    // 本来就没有预解析审批链"。有错误时 DetailReadState 已经给出了原因，不叠加猜测。
+    return (
+      <div>
+        {feedback}
+        {resource.ready && !resource.error && !resource.loading && (
+          <p className="text-xs text-muted mb-4">
+            本服务申请提交时未匹配到审批链规则，因此没有预解析的审批步骤；实际审批以流程任务为准。
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <Card

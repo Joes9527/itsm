@@ -188,6 +188,15 @@ ITSM_ALLOW_DESTRUCTIVE_FRESH=true ITSM_FRESH_HOST="$DB_HOST" \
 go run -tags create_user main.go
 ```
 
+`go run main.go` **不是**受管实例的启动方式。两者读不同的 `config.yaml`，因而监听不同端口——不要把其中一个的结果当作另一个的证据：
+
+| 进程 | 读取的配置 | 端口 |
+| --- | --- | --- |
+| 你自己起的 `go run main.go` / `./itsm-backend` | 仓库内 `itsm-backend/config.yaml`（`server.port: 8090`） | 8090 |
+| 受管的 WSL 实例（由 `stack` 启动） | 启动 recipe 的 cwd 下的 `config.yaml`（当前 `server.port: 8080`） | 8080 |
+
+3010 前端的同源 `/api/*` 转发指向 **8080**（构建时的 `ITSM_BACKEND_URL`），所以只起一个 8090 的本地进程，3010 不会连上它。受管实例的身份、端口与恢复边界见[本地环境](development-environment.md)。
+
 WSL 嵌套 worktree 的发布构建应显式绑定 Git 来源：Go 的自动 VCS 探测可能取到父仓库，导致嵌入的提交与当前 worktree 不一致。先提交并验证工作树干净，在 `itsm-backend` 目录执行：
 
 ```bash

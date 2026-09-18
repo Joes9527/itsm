@@ -17,17 +17,11 @@ func (s *TicketAssignmentSmartService) prepareCreation(ctx context.Context, tx *
 	if err != nil || matched {
 		return target, err
 	}
-	assignment := *s.assignmentService
-	assignment.client = tx.Client()
-	var category *int
-	if item.CategoryID > 0 {
-		category = &item.CategoryID
-	}
-	result, err := assignment.selectAutoAssignment(ctx, &AssignmentRequest{TenantID: item.TenantID, Priority: item.Priority, CategoryID: category, AutoAssign: true})
-	if err != nil {
-		return nil, err
-	}
-	return result.AssignedTo, nil
+	// 没有命中任何 active 配置规则时不自动分配：工单保持未分配，交给流程的派单节点
+	// （ticket_general_flow 的 Activity_Assign）人工指派。这里不做打分兜底——那样候选池是
+	// 租户内全部 active 用户，无工单的人分数完全相同、同分按最小 user_id 裁决，会得到一个
+	// 与工单内容无关的固定"处理人"。需要自动分配时，由管理员显式配置 auto_assign 规则动作。
+	return nil, nil
 }
 
 func (s *TicketAssignmentSmartService) prepareConfiguredAssignment(ctx context.Context, tx *ent.Tx, item *ent.Ticket) (*int, bool, error) {

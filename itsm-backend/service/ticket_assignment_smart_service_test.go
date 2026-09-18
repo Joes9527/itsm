@@ -406,3 +406,58 @@ func TestTicketAssignmentService_GetMaxActiveTickets(t *testing.T) {
 		})
 	}
 }
+
+// prepareCreation 是创建期的处理人来源。没有 active 配置规则时必须保持未分配——
+// 过去的实现会在这里回落到打分算法：候选池是租户内全部 active 用户、技能/分类过滤是
+// 恒真的桩、无工单的人分数相同，同分再按最小 user_id 裁决，于是每张未显式指定处理人的
+// 工单都会落到同一个与工单内容无关的人身上。
+func TestTicketAssignmentSmartService_PrepareCreationRequiresConfiguredRule(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", testDSN())
+	defer client.Close()
+
+	logger := zaptest.NewLogger(t).Sugar()
+	smart := NewTicketAssignmentSmartService(client, logger, NewTicketAssignmentService(client, logger), NewTicketAssignmentRuleService(client, logger))
+
+	ctx := context.Background()
+	tenant, err := client.Tenant.Create().
+		SetName("Assign Tenant").SetCode("assign").SetDomain("assign.com").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+
+	requester, err := client.User.Create().
+		SetUsername("assign_requester").SetEmail("assign_requester@example.com").SetName("Requester").
+		SetPasswordHash("x").SetRole("end_user").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	// 这个候选人旧实现一定会选中（唯一 active 的零负载用户）。它的存在是"不再隐式分配"的反证。
+	agent, err := client.User.Create().
+		SetUsername("assign_agent").SetEmail("assign_agent@example.com").SetName("Agent").
+		SetPasswordHash("x").SetRole("agent").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	item := &ent.Ticket{
+		TenantID: tenant.ID, RequesterID: requester.ID, Title: "t", Description: "d",
+		Status: "new", Priority: "medium", RecordClass: "generic", DepartmentID: requester.DepartmentID,
+	}
+
+	tx, err := client.Tx(ctx)
+	require.NoError(t, err)
+	target, err := smart.prepareCreation(ctx, tx, item)
+	require.NoError(t, err)
+	require.NoError(t, tx.Rollback())
+	assert.Nil(t, target, "没有 active 分配规则时不应自动分配处理人")
+
+	ruleRule, err := client.TicketAssignmentRule.Create().
+		SetTenantID(tenant.ID).SetName("configured").
+		SetConditions([]map[string]interface{}{{"field": "priority", "operator": "equals", "value": "medium"}}).
+		SetActions(map[string]interface{}{"type": "user", "value": agent.ID}).Save(ctx)
+	require.NoError(t, err)
+	require.True(t, ruleRule.IsActive, "规则默认 active")
+
+	tx2, err := client.Tx(ctx)
+	require.NoError(t, err)
+	target, err = smart.prepareCreation(ctx, tx2, item)
+	require.NoError(t, err)
+	require.NoError(t, tx2.Rollback())
+	require.NotNil(t, target, "命中配置规则时应按规则分配")
+	assert.Equal(t, agent.ID, *target)
+}
