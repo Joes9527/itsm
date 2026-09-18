@@ -878,3 +878,21 @@ git commit -m "chore(organization): clear the dirty department manager value wit
 2. 员工与部门的归属迁移（挂到最细的组）：属《人员与汇报线》计划。
 3. 部门管理页前端：本计划只做后端契约，前端接线单独排期。
 4. **不新增 canonical 迁移**：因此不需要 `ControlledMigrationCatalog()` 三处同步（计划 1 的教训在此不适用）；若实现中确实需要新列，必须回到该三处同步流程。
+
+---
+
+## 执行中修正的计划缺陷（Task 1–5 实测，交给后续执行者）
+
+Task 1–5 已按本计划执行完毕。执行中暴露了 5 处计划文本与真实代码不符的地方，均已按实测修正；本节是给后续执行者的更正，**照抄计划原文的代码片段会失败**。
+
+| # | 计划原文 | 实际 | 处置 |
+| --- | --- | --- | --- |
+| 1 | 测试里 `client.User.Create()....SetPassword("x")` | User 的密码字段是 **`password_hash`**，setter 是 `SetPasswordHash`；不存在 `SetPassword` | 已改为 `SetPasswordHash("x")` |
+| 2 | 测试只设 `SetUsername/SetName` | `users.email` 是**必填**字段，缺它直接 `ent: missing required field "User.email"` | 已补 `SetEmail(...)` |
+| 3 | 测试直接用 `SetTenantID(1)` | `users` 对 `tenants` 有**外键**，测试库必须先建租户，否则 `FOREIGN KEY constraint failed` | 已加 `seedTenant()` 辅助（`tenant.TypeStandard` + `status="active"`），并在 `package common` 内复用 |
+| 4 | `parentID == 0 表示移到顶层`，实现里 `SetParentID(0)` | `departments.parent_id` 有**自引用外键**，写 0 会违反外键；库里顶层是 **NULL** | 实现改为 `SetNillableParentID(nil)`；API 仍用 0 作"顶层"的输入语义 |
+| 5 | 用 `Service.client` 接线 `applyDepartmentUpdate` | `Service.client` 是**受限系统池**（注释限定：凭据/会话/追加式认证审计），不应用于部门数据写入 | 改为 `EntRepository.ApplyDepartmentUpdate` + `Service` 透传，走部门数据的正常连接 |
+
+**另一处执行中的判断（非缺陷，但偏离了计划文本）**：计划的新 DTO 丢掉了旧的 `code` 字段。旧 API 支持改编码，静默丢弃会违反"不得静默 no-op"的契约，因此保留了 `code`（含租户内唯一性校验），只修"可清空负责人/父节点"这两个缺陷。
+
+**执行结果**：5 个 Task 全部完成；新增/更新 13 个测试（负责人校验 3、部分更新语义 5、子树人数 3、计划 1 遗留 2），`gofmt` 干净，`handlers/common` 与 `router` 测试通过。全量测试的失败集合与本分支基线**完全一致**（`authorization`、`controller` 各 1 个既有失败，由 PR #71 修复，本分支基线早于该 PR）。
