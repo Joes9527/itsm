@@ -211,6 +211,23 @@ func (h *Handler) ListDepartmentChildren(c *gin.Context) {
 	common.Success(c, children)
 }
 
+// GetDepartmentEmployeeCount 按子树统计在职员工数。
+// 只在详情/显式展开时调用——部门列表接口不得逐行调用（设计 §6 性能契约）。
+func (h *Handler) GetDepartmentEmployeeCount(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		common.ParamError(c, "invalid department id")
+		return
+	}
+	tenantID := c.GetInt("tenant_id")
+	count, err := h.svc.CountDepartmentSubtreeEmployees(c.Request.Context(), tenantID, id)
+	if err != nil {
+		common.InternalError(c, "统计部门人数失败: "+err.Error())
+		return
+	}
+	common.Success(c, gin.H{"departmentId": id, "employeeCount": count})
+}
+
 func (h *Handler) ListDepartments(c *gin.Context) {
 	tenantID := c.GetInt("tenant_id")
 	deps, err := h.svc.ListDepartments(c.Request.Context(), tenantID)

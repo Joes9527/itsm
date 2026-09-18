@@ -15,6 +15,9 @@ import (
 
 type EntRepository struct {
 	client *ent.Client
+	// subtreeBudget 覆盖子树遍历的节点预算；0 表示用 maxSubtreeNodes。
+	// 存在的意义是让"超预算"这条路径能被廉价地真正测到。
+	subtreeBudget int
 }
 
 func NewEntRepository(client *ent.Client) *EntRepository {

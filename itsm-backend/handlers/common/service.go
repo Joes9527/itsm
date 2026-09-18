@@ -215,6 +215,10 @@ func (s *Service) ApplyDepartmentUpdate(ctx context.Context, current *Department
 	return s.repo.ApplyDepartmentUpdate(ctx, current, req)
 }
 
+func (s *Service) CountDepartmentSubtreeEmployees(ctx context.Context, tenantID, departmentID int) (int, error) {
+	return s.repo.CountDepartmentSubtreeEmployees(ctx, tenantID, departmentID)
+}
+
 func (s *Service) ListDepartments(ctx context.Context, tenantID int) ([]*Department, error) {
 	return s.repo.ListDepartments(ctx, tenantID)
 }
