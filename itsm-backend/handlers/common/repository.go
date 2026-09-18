@@ -18,7 +18,10 @@ type Repository interface {
 	GetDepartment(ctx context.Context, id int, tenantID int) (*Department, error)
 	ListDepartments(ctx context.Context, tenantID int) ([]*Department, error)
 	GetDepartmentTree(ctx context.Context, tenantID int) ([]*Department, error)
+	ListDepartmentChildren(ctx context.Context, tenantID, parentID int) (*DepartmentChildren, error)
 	UpdateDepartment(ctx context.Context, d *Department) (*Department, error)
+	ApplyDepartmentUpdate(ctx context.Context, current *Department, req departmentUpdateRequest) (*Department, *departmentChange, error)
+	CountDepartmentSubtreeEmployees(ctx context.Context, tenantID, departmentID int) (int, error)
 	DeleteDepartment(ctx context.Context, id int, tenantID int) error
 
 	// Team

@@ -143,6 +143,20 @@ func (_c *DepartmentCreate) SetNillableOrgType(v *string) *DepartmentCreate {
 	return _c
 }
 
+// SetNodeType sets the "node_type" field.
+func (_c *DepartmentCreate) SetNodeType(v string) *DepartmentCreate {
+	_c.mutation.SetNodeType(v)
+	return _c
+}
+
+// SetNillableNodeType sets the "node_type" field if the given value is not nil.
+func (_c *DepartmentCreate) SetNillableNodeType(v *string) *DepartmentCreate {
+	if v != nil {
+		_c.SetNodeType(*v)
+	}
+	return _c
+}
+
 // SetDeletedAt sets the "deleted_at" field.
 func (_c *DepartmentCreate) SetDeletedAt(v time.Time) *DepartmentCreate {
 	_c.mutation.SetDeletedAt(v)
@@ -299,6 +313,10 @@ func (_c *DepartmentCreate) defaults() {
 		v := department.DefaultOrgType
 		_c.mutation.SetOrgType(v)
 	}
+	if _, ok := _c.mutation.NodeType(); !ok {
+		v := department.DefaultNodeType
+		_c.mutation.SetNodeType(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -395,6 +413,10 @@ func (_c *DepartmentCreate) createSpec() (*Department, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.OrgType(); ok {
 		_spec.SetField(department.FieldOrgType, field.TypeString, value)
 		_node.OrgType = value
+	}
+	if value, ok := _c.mutation.NodeType(); ok {
+		_spec.SetField(department.FieldNodeType, field.TypeString, value)
+		_node.NodeType = value
 	}
 	if value, ok := _c.mutation.DeletedAt(); ok {
 		_spec.SetField(department.FieldDeletedAt, field.TypeTime, value)
@@ -727,6 +749,24 @@ func (u *DepartmentUpsert) ClearOrgType() *DepartmentUpsert {
 	return u
 }
 
+// SetNodeType sets the "node_type" field.
+func (u *DepartmentUpsert) SetNodeType(v string) *DepartmentUpsert {
+	u.Set(department.FieldNodeType, v)
+	return u
+}
+
+// UpdateNodeType sets the "node_type" field to the value that was provided on create.
+func (u *DepartmentUpsert) UpdateNodeType() *DepartmentUpsert {
+	u.SetExcluded(department.FieldNodeType)
+	return u
+}
+
+// ClearNodeType clears the value of the "node_type" field.
+func (u *DepartmentUpsert) ClearNodeType() *DepartmentUpsert {
+	u.SetNull(department.FieldNodeType)
+	return u
+}
+
 // SetDeletedAt sets the "deleted_at" field.
 func (u *DepartmentUpsert) SetDeletedAt(v time.Time) *DepartmentUpsert {
 	u.Set(department.FieldDeletedAt, v)
@@ -971,6 +1011,27 @@ func (u *DepartmentUpsertOne) UpdateOrgType() *DepartmentUpsertOne {
 func (u *DepartmentUpsertOne) ClearOrgType() *DepartmentUpsertOne {
 	return u.Update(func(s *DepartmentUpsert) {
 		s.ClearOrgType()
+	})
+}
+
+// SetNodeType sets the "node_type" field.
+func (u *DepartmentUpsertOne) SetNodeType(v string) *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetNodeType(v)
+	})
+}
+
+// UpdateNodeType sets the "node_type" field to the value that was provided on create.
+func (u *DepartmentUpsertOne) UpdateNodeType() *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateNodeType()
+	})
+}
+
+// ClearNodeType clears the value of the "node_type" field.
+func (u *DepartmentUpsertOne) ClearNodeType() *DepartmentUpsertOne {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.ClearNodeType()
 	})
 }
 
@@ -1385,6 +1446,27 @@ func (u *DepartmentUpsertBulk) UpdateOrgType() *DepartmentUpsertBulk {
 func (u *DepartmentUpsertBulk) ClearOrgType() *DepartmentUpsertBulk {
 	return u.Update(func(s *DepartmentUpsert) {
 		s.ClearOrgType()
+	})
+}
+
+// SetNodeType sets the "node_type" field.
+func (u *DepartmentUpsertBulk) SetNodeType(v string) *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.SetNodeType(v)
+	})
+}
+
+// UpdateNodeType sets the "node_type" field to the value that was provided on create.
+func (u *DepartmentUpsertBulk) UpdateNodeType() *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.UpdateNodeType()
+	})
+}
+
+// ClearNodeType clears the value of the "node_type" field.
+func (u *DepartmentUpsertBulk) ClearNodeType() *DepartmentUpsertBulk {
+	return u.Update(func(s *DepartmentUpsert) {
+		s.ClearNodeType()
 	})
 }
 

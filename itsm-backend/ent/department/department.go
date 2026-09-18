@@ -34,6 +34,8 @@ const (
 	FieldAreaName = "area_name"
 	// FieldOrgType holds the string denoting the org_type field in the database.
 	FieldOrgType = "org_type"
+	// FieldNodeType holds the string denoting the node_type field in the database.
+	FieldNodeType = "node_type"
 	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
 	FieldDeletedAt = "deleted_at"
 	// EdgeParent holds the string denoting the parent edge name in mutations.
@@ -108,6 +110,7 @@ var Columns = []string{
 	FieldUpdatedAt,
 	FieldAreaName,
 	FieldOrgType,
+	FieldNodeType,
 	FieldDeletedAt,
 }
 
@@ -142,6 +145,8 @@ var (
 	UpdateDefaultUpdatedAt func() time.Time
 	// DefaultOrgType holds the default value on creation for the "org_type" field.
 	DefaultOrgType string
+	// DefaultNodeType holds the default value on creation for the "node_type" field.
+	DefaultNodeType string
 )
 
 // OrderOption defines the ordering options for the Department queries.
@@ -200,6 +205,11 @@ func ByAreaName(opts ...sql.OrderTermOption) OrderOption {
 // ByOrgType orders the results by the org_type field.
 func ByOrgType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldOrgType, opts...).ToFunc()
+}
+
+// ByNodeType orders the results by the node_type field.
+func ByNodeType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldNodeType, opts...).ToFunc()
 }
 
 // ByDeletedAt orders the results by the deleted_at field.

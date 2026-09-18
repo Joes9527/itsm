@@ -334,7 +334,6 @@ func ByProcessInstanceField(field string, opts ...sql.OrderTermOption) OrderOpti
 		sqlgraph.OrderByNeighborTerms(s, newProcessInstanceStep(), sql.OrderByField(field, opts...))
 	}
 }
-
 func newProcessInstanceStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
