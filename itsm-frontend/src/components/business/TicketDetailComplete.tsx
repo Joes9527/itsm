@@ -25,35 +25,17 @@ import {
   DatePicker,
 } from 'antd';
 import KnowledgeIntegration from './KnowledgeIntegration';
+import { User, Clock, MessageSquare, Paperclip, CheckCircle, AlertTriangle, TrendingUp, FileText, Eye, History, Workflow, Settings, MoreHorizontal, Star, Flag, Link, Calendar, Phone, Mail, MapPin, BookOpen } from 'lucide-react';
 import {
-  User,
-  Clock,
-  MessageSquare,
-  Paperclip,
-  Edit,
-  Save,
-  X,
-  CheckCircle,
-  AlertTriangle,
-  TrendingUp,
-  FileText,
-  Download,
-  Eye,
-  History,
-  Workflow,
-  Settings,
-  Plus,
-  Send,
-  MoreHorizontal,
-  Star,
-  Flag,
-  Link,
-  Calendar,
-  Phone,
-  Mail,
-  MapPin,
-  BookOpen,
-} from 'lucide-react';
+  CloseOutlined,
+  DownloadOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PaperClipOutlined,
+  PlusOutlined,
+  SaveOutlined,
+  SendOutlined,
+} from '@ant-design/icons';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
 
 const { TextArea } = Input;
@@ -413,15 +395,15 @@ export const TicketDetailComplete: React.FC<TicketDetailCompleteProps> = ({
               <>
                 {isEditing ? (
                   <>
-                    <Button type="primary" icon={<Save />} onClick={handleSave} loading={saving}>
+                    <Button type="primary" icon={<SaveOutlined aria-hidden="true" />} onClick={handleSave} loading={saving}>
                       保存
                     </Button>
-                    <Button icon={<X />} onClick={handleCancel}>
+                    <Button icon={<CloseOutlined aria-hidden="true" />} onClick={handleCancel}>
                       取消
                     </Button>
                   </>
                 ) : (
-                  <Button icon={<Edit />} onClick={() => setIsEditing(true)}>
+                  <Button icon={<EditOutlined aria-hidden="true" />} onClick={() => setIsEditing(true)}>
                     编辑
                   </Button>
                 )}
@@ -685,13 +667,13 @@ export const TicketDetailComplete: React.FC<TicketDetailCompleteProps> = ({
                         multiple
                         showUploadList={false}
                       >
-                        <Button icon={<Paperclip />} loading={uploading}>
+                        <Button icon={<PaperClipOutlined aria-hidden="true" />} loading={uploading}>
                           添加附件
                         </Button>
                       </Upload>
                       <Button
                         type="primary"
-                        icon={<Send />}
+                        icon={<SendOutlined aria-hidden="true" />}
                         onClick={handleAddComment}
                         disabled={!commentText.trim()}
                       >
@@ -732,7 +714,7 @@ export const TicketDetailComplete: React.FC<TicketDetailCompleteProps> = ({
                                   <Button
                                     type="link"
                                     size="small"
-                                    icon={<Download />}
+                                    icon={<DownloadOutlined aria-hidden="true" />}
                                     onClick={() => window.open(attachment.url, '_blank')}
                                   >
                                     下载
@@ -768,7 +750,7 @@ export const TicketDetailComplete: React.FC<TicketDetailCompleteProps> = ({
                     multiple
                     showUploadList={false}
                   >
-                    <Button icon={<Plus />} loading={uploading}>
+                    <Button icon={<PlusOutlined aria-hidden="true" />} loading={uploading}>
                       选择文件
                     </Button>
                   </Upload>
@@ -801,14 +783,14 @@ export const TicketDetailComplete: React.FC<TicketDetailCompleteProps> = ({
                         <div className="flex space-x-2">
                           <Button
                             type="text"
-                            icon={<Eye />}
+                            icon={<EyeOutlined aria-hidden="true" />}
                             onClick={() => window.open(attachment.url, '_blank')}
                           >
                             预览
                           </Button>
                           <Button
                             type="text"
-                            icon={<Download />}
+                            icon={<DownloadOutlined aria-hidden="true" />}
                             onClick={() => window.open(attachment.url, '_blank')}
                           >
                             下载

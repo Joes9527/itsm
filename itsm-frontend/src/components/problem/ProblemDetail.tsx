@@ -6,7 +6,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { App, Card, Tag, Button, Space, Skeleton, Typography, Tabs, Modal, Input } from 'antd';
-import { ArrowLeft, Search, Pencil } from 'lucide-react';
+import { Search, Pencil } from 'lucide-react';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useRouter, useParams } from 'next/navigation';
 
 import { ProblemApi } from '@/lib/api/';
@@ -139,7 +140,7 @@ const ProblemDetail: React.FC<ProblemDetailProps> = ({
       <Card styles={{ body: { padding: '16px 24px' } }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Space>
-            <Button icon={<ArrowLeft />} onClick={() => router.push('/problems')}>
+            <Button icon={<ArrowLeftOutlined aria-hidden="true" />} onClick={() => router.push('/problems')}>
               返回列表
             </Button>
             <Title level={4} style={{ margin: 0 }}>

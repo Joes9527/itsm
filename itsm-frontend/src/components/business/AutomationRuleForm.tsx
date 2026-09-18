@@ -23,7 +23,13 @@ import {
   message,
   Modal,
 } from 'antd';
-import { Plus, X, Save, Trash2, PlayCircle } from 'lucide-react';
+import {
+  CloseOutlined,
+  DeleteOutlined,
+  PlayCircleOutlined,
+  PlusOutlined,
+  SaveOutlined,
+} from '@ant-design/icons';
 import type { AutomationRule } from '@/lib/api/ticket-automation-rule-api';
 import { TicketAutomationRuleApi } from '@/lib/api/ticket-automation-rule-api';
 import { RULE_CONDITION_FIELDS, RuleConditionRow } from './RuleConditionRow';
@@ -187,7 +193,7 @@ export const AutomationRuleForm: React.FC<AutomationRuleFormProps> = ({
           {editingRule && (
             <Col span={12}>
               <Space>
-                <Button icon={<PlayCircle />} onClick={() => setTestModalVisible(true)}>
+                <Button icon={<PlayCircleOutlined aria-hidden="true" />} onClick={() => setTestModalVisible(true)}>
                   测试规则
                 </Button>
               </Space>
@@ -213,10 +219,10 @@ export const AutomationRuleForm: React.FC<AutomationRuleFormProps> = ({
                     size="small"
                     style={{ marginBottom: 8 }}
                     extra={
-                      <Button
+                      <Button aria-label="删除"
                         type="link"
                         danger
-                        icon={<Trash2 />}
+                        icon={<DeleteOutlined aria-hidden="true" />}
                         onClick={() => remove(field.name)}
                       />
                     }
@@ -235,7 +241,7 @@ export const AutomationRuleForm: React.FC<AutomationRuleFormProps> = ({
                   </Card>
                   );
                 })}
-                <Button type="dashed" onClick={() => add()} block icon={<Plus />}>
+                <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined aria-hidden="true" />}>
                   添加条件
                 </Button>
               </div>
@@ -261,10 +267,10 @@ export const AutomationRuleForm: React.FC<AutomationRuleFormProps> = ({
                       size="small"
                       style={{ marginBottom: 8 }}
                       extra={
-                        <Button
+                        <Button aria-label="删除"
                           type="link"
                           danger
-                          icon={<Trash2 />}
+                          icon={<DeleteOutlined aria-hidden="true" />}
                           onClick={() => remove(field.name)}
                         />
                       }
@@ -349,7 +355,7 @@ export const AutomationRuleForm: React.FC<AutomationRuleFormProps> = ({
                   type="dashed"
                   onClick={() => add({ type: 'set_category' })}
                   block
-                  icon={<Plus />}
+                  icon={<PlusOutlined aria-hidden="true" />}
                 >
                   添加动作
                 </Button>
@@ -360,10 +366,10 @@ export const AutomationRuleForm: React.FC<AutomationRuleFormProps> = ({
 
         <Form.Item>
           <Space>
-            <Button type="primary" htmlType="submit" icon={<Save />}>
+            <Button type="primary" htmlType="submit" icon={<SaveOutlined aria-hidden="true" />}>
               {editingRule ? '更新规则' : '创建规则'}
             </Button>
-            <Button onClick={onCancel} icon={<X />}>
+            <Button onClick={onCancel} icon={<CloseOutlined aria-hidden="true" />}>
               取消
             </Button>
           </Space>

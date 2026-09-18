@@ -20,7 +20,13 @@ import {
   Empty,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { Search, Plus, Pencil, Trash2, Eye, RefreshCw } from 'lucide-react';
+import { Search, RefreshCw } from 'lucide-react';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
@@ -190,24 +196,24 @@ const ProblemList: React.FC<ProblemListProps> = ({
       render: (_: unknown, record: Problem) => (
         <Space size="small">
           <Tooltip title="查看详情">
-            <Button
+            <Button aria-label="查看详情"
               type="text"
-              icon={<Eye />}
+              icon={<EyeOutlined aria-hidden="true" />}
               onClick={() => router.push(`/problems/${record.id}`)}
             />
           </Tooltip>
           <Tooltip title="编辑">
-            <Button
+            <Button aria-label="编辑"
               type="text"
-              icon={<Pencil />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => router.push(`/problems/${record.id}/edit`)}
             />
           </Tooltip>
           <Tooltip title="删除">
-            <Button
+            <Button aria-label="删除"
               type="text"
               danger
-              icon={<Trash2 />}
+              icon={<DeleteOutlined aria-hidden="true" />}
               onClick={() => handleDelete(record.id)}
             />
           </Tooltip>
@@ -226,7 +232,7 @@ const ProblemList: React.FC<ProblemListProps> = ({
           </div>
           <Button
             type="primary"
-            icon={<Plus />}
+            icon={<PlusOutlined aria-hidden="true" />}
             onClick={() => router.push('/problems/new')}
             size="large"
           >

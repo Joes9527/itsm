@@ -5,7 +5,8 @@
 
 import React from 'react';
 import { Card, Tabs, Breadcrumb, Button, Space, Tag, Typography, Result, Skeleton } from 'antd';
-import { ArrowLeft, History, Link, Network } from 'lucide-react';
+import { History, Link, Network } from 'lucide-react';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useParams, useRouter } from 'next/navigation';
 
 import { useCIDetail } from './hooks/useCIDetail';
@@ -138,7 +139,7 @@ export const CIDetail: React.FC = () => {
       <Card>
         <div style={{ marginBottom: 24 }}>
           <Button
-            icon={<ArrowLeft />}
+            icon={<ArrowLeftOutlined aria-hidden="true" />}
             onClick={() => router.push('/cmdb/ci')}
             style={{ marginBottom: 16 }}
           >

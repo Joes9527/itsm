@@ -14,7 +14,8 @@ import {
   App,
   Tooltip,
 } from 'antd';
-import { User, Eye, MessageSquare, Send } from 'lucide-react';
+import { User, Eye, MessageSquare } from 'lucide-react';
+import { SendOutlined } from '@ant-design/icons';
 import type { Ticket } from '@/lib/services/ticket-service';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -230,7 +231,7 @@ export const TicketCollaboration: React.FC<TicketCollaborationProps> = ({
               </Text>
               <Button
                 type="primary"
-                icon={<Send />}
+                icon={<SendOutlined aria-hidden="true" />}
                 onClick={handleSendMessage}
                 disabled={!newMessage.trim()}
               >

@@ -21,7 +21,8 @@ import {
   Modal,
   Input,
 } from 'antd';
-import { ArrowLeft, Clock, CheckCircle, Rocket, RotateCcw } from 'lucide-react';
+import { Clock, CheckCircle, Rocket, RotateCcw } from 'lucide-react';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useParams, useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
@@ -181,7 +182,7 @@ const ReleaseDetail: React.FC = () => {
       <Card>
         <div style={{ marginBottom: 24 }}>
           <Button
-            icon={<ArrowLeft />}
+            icon={<ArrowLeftOutlined aria-hidden="true" />}
             onClick={() => router.push('/releases')}
             style={{ marginBottom: 16 }}
           >

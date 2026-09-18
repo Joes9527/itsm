@@ -17,20 +17,8 @@ import {
   Switch,
   Tooltip,
 } from 'antd';
-import {
-  Activity,
-  TrendingUp,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  Users,
-  Server,
-  Database,
-  Globe,
-  Zap,
-  RefreshCw,
-  Bell,
-} from 'lucide-react';
+import { Activity, TrendingUp, AlertTriangle, CheckCircle, Clock, Users, Server, Database, Globe, Zap, Bell } from 'lucide-react';
+import { SyncOutlined } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
 
@@ -369,7 +357,7 @@ const RealTimeMonitoring: React.FC<RealTimeMonitoringProps> = ({
                 unCheckedChildren="手动"
               />
             </Tooltip>
-            <Button icon={<RefreshCw className="w-4 h-4" />} onClick={handleManualRefresh}>
+            <Button icon={<SyncOutlined aria-hidden="true" />} onClick={handleManualRefresh}>
               刷新
             </Button>
           </Space>

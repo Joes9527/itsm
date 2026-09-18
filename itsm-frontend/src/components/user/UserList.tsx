@@ -19,7 +19,13 @@ import {
   Col,
   Switch,
 } from 'antd';
-import { Filter, Plus, Pencil, Trash2, Download, UserIcon, Lock, Unlock, Eye, RotateCcw, Mail, Phone, AlertCircle, MoreHorizontal } from 'lucide-react';
+import { Pencil, Trash2, UserIcon, Lock, Unlock, Eye, RotateCcw, Mail, Phone, AlertCircle } from 'lucide-react';
+import {
+  DownloadOutlined,
+  FilterOutlined,
+  MoreOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import type { ColumnsType, TableProps } from 'antd/es/table';
 import type { MenuProps } from 'antd';
 import dayjs from 'dayjs';
@@ -409,7 +415,7 @@ const UserList: React.FC<UserListProps> = ({
       fixed: 'right',
       render: (_, record) => (
         <Dropdown menu={getActionMenu(record)} trigger={['click']}>
-          <Button type="text" icon={<MoreHorizontal />} />
+          <Button aria-label="更多操作" type="text" icon={<MoreOutlined aria-hidden="true" />} />
         </Dropdown>
       ),
     },
@@ -498,7 +504,7 @@ const UserList: React.FC<UserListProps> = ({
                   onSearch={handleSearch}
                   onChange={e => setSearchText(e.target.value)}
                 />
-                <Button icon={<Filter />} onClick={() => setShowFilters(!showFilters)}>
+                <Button icon={<FilterOutlined aria-hidden="true" />} onClick={() => setShowFilters(!showFilters)}>
                   筛选
                 </Button>
                 <Button icon={<RotateCcw />} onClick={() => fetchUsers()}>
@@ -514,12 +520,12 @@ const UserList: React.FC<UserListProps> = ({
                     <Button onClick={() => handleBatchAction('禁用')}>批量禁用</Button>
                   </>
                 )}
-                <Button icon={<Download />} onClick={handleExport}>
+                <Button icon={<DownloadOutlined aria-hidden="true" />} onClick={handleExport}>
                   导出
                 </Button>
                 <Button
                   type="primary"
-                  icon={<Plus />}
+                  icon={<PlusOutlined aria-hidden="true" />}
                   onClick={() => router.push('/users/new')}
                 >
                   新建用户

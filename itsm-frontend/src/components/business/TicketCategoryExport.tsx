@@ -15,16 +15,8 @@ import {
   message,
   Spin,
 } from 'antd';
-import {
-  Download,
-  FileSpreadsheet,
-  FileText,
-  FileSpreadsheet as FileCsv,
-  Database,
-  Settings,
-  CheckCircle,
-  FileSpreadsheet as FileExcel,
-} from 'lucide-react';
+import { FileSpreadsheet, FileText, FileSpreadsheet as FileCsv, Database, Settings, CheckCircle, FileSpreadsheet as FileExcel } from 'lucide-react';
+import { DownloadOutlined } from '@ant-design/icons';
 import {
   ticketCategoryService,
   type CategoryTreeItem,
@@ -431,7 +423,7 @@ const TicketCategoryExport: React.FC<TicketCategoryExportProps> = ({
                 type="primary"
                 htmlType="submit"
                 loading={exporting}
-                icon={<Download className="w-4 h-4" />}
+                icon={<DownloadOutlined aria-hidden="true" />}
               >
                 {exporting ? '导出中...' : '开始导出'}
               </Button>

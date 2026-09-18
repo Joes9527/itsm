@@ -5,13 +5,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { Card, Empty, Select, Input, Tag, Typography, Space, Divider, Alert, Button, Switch, Tooltip, Collapse, Badge } from 'antd';
-import {
-  User, Users, UserCheck, Hash, Tag as TagIcon, RefreshCw,
-  Code, Server, GitBranch, PlayCircle, Clock, FileText,
-  Webhook, Settings, MessageSquare, Mail, AlertTriangle,
-  Database, Link, Timer, MessageCircle, Radio, ChevronDown, ChevronRight,
-  Save, Undo, Redo, Info, Zap, Shield, Bell
-} from 'lucide-react';
+import { User, Users, UserCheck, Hash, Tag as TagIcon, Code, Server, GitBranch, PlayCircle, Clock, FileText, Webhook, Settings, MessageSquare, Mail, AlertTriangle, Database, Link, Timer, MessageCircle, Radio, ChevronDown, ChevronRight, Save, Undo, Redo, Info, Zap, Shield, Bell } from 'lucide-react';
+import { SyncOutlined } from '@ant-design/icons';
 import { GroupAPI, type Group } from '@/lib/api/group-api';
 
 // bpmn-js 事件定义最小类型（库本身类型较松）
@@ -167,7 +162,7 @@ export default function WorkflowNodeInspector({
               <Button
                 type="text"
                 size="small"
-                icon={<RefreshCw className="w-3 h-3" />}
+                icon={<SyncOutlined aria-hidden="true" />}
                 aria-label="重读节点属性"
                 onClick={onRefresh}
               />
@@ -464,7 +459,7 @@ export default function WorkflowNodeInspector({
           <Button
             type="text"
             size="small"
-            icon={<RefreshCw className="w-3 h-3" />}
+            icon={<SyncOutlined aria-hidden="true" />}
             onClick={onRefresh}
           >
             重读

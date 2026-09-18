@@ -4,7 +4,8 @@
 
 import React from 'react';
 import { Card, Row, Col, Select, Input, DatePicker, Button, Space } from 'antd';
-import { Search, RefreshCw } from 'lucide-react';
+import { Search } from 'lucide-react';
+import { SyncOutlined } from '@ant-design/icons';
 import type { SLAFilters } from '../types';
 import { STATUS_OPTIONS, SEVERITY_OPTIONS, TYPE_OPTIONS } from '../utils/sla-chart-config';
 
@@ -99,8 +100,8 @@ export const SLAFilterPanel: React.FC<SLAFilterPanelProps> = ({
               onChange={e => handleChange('search', e.target.value)}
               allowClear
             />
-            <Button
-              icon={<RefreshCw size={14} />}
+            <Button aria-label="刷新"
+              icon={<SyncOutlined aria-hidden="true" />}
               onClick={onRefresh}
               loading={loading}
             />

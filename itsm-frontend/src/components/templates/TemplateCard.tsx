@@ -19,7 +19,14 @@ import {
   Dropdown,
   type MenuProps,
 } from 'antd';
-import { Pencil, Trash2, Copy, User, FileText, Eye, Clock, AlertCircle, CheckCircle, Star, MoreHorizontal } from 'lucide-react';
+import { Pencil, Trash2, Copy, User, FileText, Eye, Clock, AlertCircle, CheckCircle, Star } from 'lucide-react';
+import {
+  CopyOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  MoreOutlined,
+} from '@ant-design/icons';
 import type { TicketTemplate } from '@/types/template';
 
 export interface TemplateCardProps {
@@ -170,10 +177,10 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
         </Space>
 
         <Dropdown menu={{ items: moreMenuItems }} trigger={['click']}>
-          <Button
+          <Button aria-label="更多操作"
             type="text"
             size="small"
-            icon={<MoreHorizontal />}
+            icon={<MoreOutlined aria-hidden="true" />}
             onClick={e => e.stopPropagation()}
           />
         </Dropdown>
@@ -285,9 +292,9 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
         {/* 右侧：操作按钮 */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <Tooltip title="查看">
-            <Button
+            <Button aria-label="查看"
               type="text"
-              icon={<Eye />}
+              icon={<EyeOutlined aria-hidden="true" />}
               onClick={e => {
                 e.stopPropagation();
                 onView?.(template);
@@ -295,9 +302,9 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
             />
           </Tooltip>
           <Tooltip title="编辑">
-            <Button
+            <Button aria-label="编辑"
               type="text"
-              icon={<Pencil />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={e => {
                 e.stopPropagation();
                 onEdit?.(template);
@@ -305,9 +312,9 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
             />
           </Tooltip>
           <Tooltip title="复制">
-            <Button
+            <Button aria-label="复制"
               type="text"
-              icon={<Copy />}
+              icon={<CopyOutlined aria-hidden="true" />}
               onClick={e => {
                 e.stopPropagation();
                 onDuplicate?.(template);
@@ -324,10 +331,10 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
             okText="确认"
             cancelText="取消"
           >
-            <Button
+            <Button aria-label="删除"
               type="text"
               danger
-              icon={<Trash2 />}
+              icon={<DeleteOutlined aria-hidden="true" />}
               onClick={e => e.stopPropagation()}
             />
           </Popconfirm>

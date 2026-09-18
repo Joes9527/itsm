@@ -25,7 +25,8 @@ import {
   Progress,
   Tooltip as AntTooltip,
 } from 'antd';
-import { ArrowUp, ArrowDown, Download, Calendar, Clock, RotateCcw, AlertTriangle, CheckCircle, BarChart3 } from 'lucide-react';
+import { ArrowUp, ArrowDown, Calendar, Clock, RotateCcw, AlertTriangle, CheckCircle, BarChart3 } from 'lucide-react';
+import { DownloadOutlined } from '@ant-design/icons';
 import {
   LineChart,
   Line,
@@ -280,7 +281,7 @@ export const TicketTrendPrediction: React.FC<TicketTrendPredictionProps> = ({
           </Title>
           <Space>
             <AntTooltip title="导出功能即将推出">
-              <Button icon={<Download />} disabled onClick={handleExport}>
+              <Button icon={<DownloadOutlined aria-hidden="true" />} disabled onClick={handleExport}>
                 导出报告
               </Button>
             </AntTooltip>

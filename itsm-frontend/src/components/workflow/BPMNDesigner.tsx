@@ -4,34 +4,26 @@ import styles from './BPMNDesigner.module.css';
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { MenuProps } from 'antd';
 import { Button, Tooltip, App, Input, Space, Dropdown } from 'antd';
+import { Search, AlignLeft, AlignCenter, AlignRight, PanelTop, Rows2, PanelBottom, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, Grid, Bug } from 'lucide-react';
 import {
-  Save,
-  PlayCircle,
-  ZoomIn,
-  ZoomOut,
-  Maximize,
-  Undo,
-  Redo,
-  Trash2,
-  FileJson,
-  Download,
-  Upload,
-  Search,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
-  PanelTop,
-  Rows2,
-  PanelBottom,
-  AlignHorizontalDistributeCenter,
-  AlignVerticalDistributeCenter,
-  Grid,
-  Copy,
-  ClipboardPaste,
-  ListChecks,
-  Settings,
-  Bug
-} from 'lucide-react';
+  AlignLeftOutlined,
+  CheckSquareOutlined,
+  ColumnWidthOutlined,
+  CopyOutlined,
+  DeleteOutlined,
+  DownloadOutlined,
+  FileTextOutlined,
+  FullscreenOutlined,
+  PlayCircleOutlined,
+  RedoOutlined,
+  SaveOutlined,
+  SettingOutlined,
+  SnippetsOutlined,
+  UndoOutlined,
+  UploadOutlined,
+  ZoomInOutlined,
+  ZoomOutOutlined,
+} from '@ant-design/icons';
 import BpmnModeler from 'bpmn-js/lib/Modeler';
 import itsmModdleDescriptor from './itsm-moddle-descriptor';
 import gridModule from 'diagram-js/lib/features/grid-snapping';
@@ -1096,28 +1088,28 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
         }}
       >
         <Tooltip title="保存 (Ctrl+S)" placement="right">
-          <Button type="text" icon={<Save size={18} />} onClick={handleSave} disabled={readOnly} />
+          <Button aria-label="保存" type="text" icon={<SaveOutlined aria-hidden="true" />} onClick={handleSave} disabled={readOnly} />
         </Tooltip>
         <Tooltip title="部署" placement="right">
-          <Button
+          <Button aria-label="部署"
             type="text"
-            icon={<PlayCircle size={18} />}
+            icon={<PlayCircleOutlined aria-hidden="true" />}
             onClick={handleDeploy}
             disabled={readOnly}
           />
         </Tooltip>
         <Tooltip title="撤销 (Ctrl+Z)" placement="right">
-          <Button
+          <Button aria-label="撤销"
             type="text"
-            icon={<Undo size={18} />}
+            icon={<UndoOutlined aria-hidden="true" />}
             onClick={handleUndo}
             disabled={readOnly || historyIndex <= 0}
           />
         </Tooltip>
         <Tooltip title="重做 (Ctrl+Y)" placement="right">
-          <Button
+          <Button aria-label="重做"
             type="text"
-            icon={<Redo size={18} />}
+            icon={<RedoOutlined aria-hidden="true" />}
             onClick={handleRedo}
             disabled={readOnly || historyIndex >= history.length - 1}
           />
@@ -1126,33 +1118,33 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
         <div style={{ height: 1, width: '80%', background: 'var(--color-border)', margin: '8px 0' }} />
 
         <Tooltip title="复制 (Ctrl+C)" placement="right">
-          <Button
+          <Button aria-label="复制"
             type="text"
-            icon={<Copy size={18} />}
+            icon={<CopyOutlined aria-hidden="true" />}
             onClick={handleCopy}
             disabled={readOnly || selectedElements.length === 0}
           />
         </Tooltip>
         <Tooltip title="粘贴 (Ctrl+V)" placement="right">
-          <Button
+          <Button aria-label="粘贴"
             type="text"
-            icon={<ClipboardPaste size={18} />}
+            icon={<SnippetsOutlined aria-hidden="true" />}
             onClick={handlePaste}
             disabled={readOnly}
           />
         </Tooltip>
         <Tooltip title="全选 (Ctrl+A)" placement="right">
-          <Button
+          <Button aria-label="全选"
             type="text"
-            icon={<ListChecks size={18} />}
+            icon={<CheckSquareOutlined aria-hidden="true" />}
             onClick={handleSelectAll}
             disabled={readOnly}
           />
         </Tooltip>
         <Tooltip title="删除 (Delete)" placement="right">
-          <Button
+          <Button aria-label="删除"
             type="text"
-            icon={<Trash2 size={18} />}
+            icon={<DeleteOutlined aria-hidden="true" />}
             onClick={handleDelete}
             disabled={readOnly || selectedElements.length === 0}
             danger
@@ -1163,13 +1155,13 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
 
         <Dropdown menu={{ items: alignMenuItems }} placement="bottomRight" trigger={['click']}>
           <Tooltip title="对齐" placement="right">
-            <Button type="text" icon={<AlignLeft size={18} />} disabled={selectedElements.length < 2 || readOnly} />
+            <Button aria-label="对齐" type="text" icon={<AlignLeftOutlined aria-hidden="true" />} disabled={selectedElements.length < 2 || readOnly} />
           </Tooltip>
         </Dropdown>
 
         <Dropdown menu={{ items: distributeMenuItems }} placement="bottomRight" trigger={['click']}>
           <Tooltip title="分布" placement="right">
-          <Button type="text" icon={<AlignHorizontalDistributeCenter size={18} />} disabled={selectedElements.length < 3 || readOnly} />
+          <Button aria-label="分布" type="text" icon={<ColumnWidthOutlined aria-hidden="true" />} disabled={selectedElements.length < 3 || readOnly} />
           </Tooltip>
         </Dropdown>
 
@@ -1177,20 +1169,20 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
 
         <Dropdown menu={{ items: settingsMenuItems }} placement="bottomRight" trigger={['click']}>
           <Tooltip title="设置" placement="right">
-            <Button type="text" icon={<Settings size={18} />} />
+            <Button aria-label="设置" type="text" icon={<SettingOutlined aria-hidden="true" />} />
           </Tooltip>
         </Dropdown>
 
         <Tooltip title="导出SVG" placement="right">
-          <Button type="text" icon={<Download size={18} />} onClick={handleExportSVG} />
+          <Button aria-label="导出SVG" type="text" icon={<DownloadOutlined aria-hidden="true" />} onClick={handleExportSVG} />
         </Tooltip>
         <Tooltip title="导出BPMN" placement="right">
-          <Button type="text" icon={<FileJson size={18} />} onClick={handleExportXML} />
+          <Button aria-label="导出BPMN" type="text" icon={<FileTextOutlined aria-hidden="true" />} onClick={handleExportXML} />
         </Tooltip>
         <Tooltip title="导入BPMN" placement="right">
-          <Button
+          <Button aria-label="导入BPMN"
             type="text"
-            icon={<Upload size={18} />}
+            icon={<UploadOutlined aria-hidden="true" />}
             onClick={() => fileInputRef.current?.click()}
           />
         </Tooltip>
@@ -1245,10 +1237,10 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
         }}
       >
         <Tooltip title="缩小">
-          <Button
+          <Button aria-label="缩小"
             type="text"
             size="small"
-            icon={<ZoomOut size={16} />}
+            icon={<ZoomOutOutlined aria-hidden="true" />}
             onClick={() => handleZoom(-0.1)}
           />
         </Tooltip>
@@ -1256,18 +1248,18 @@ const BPMNDesigner: React.FC<BPMNDesignerProps> = ({
           {Math.round(zoom * 100)}%
         </span>
         <Tooltip title="放大">
-          <Button
+          <Button aria-label="放大"
             type="text"
             size="small"
-            icon={<ZoomIn size={16} />}
+            icon={<ZoomInOutlined aria-hidden="true" />}
             onClick={() => handleZoom(0.1)}
           />
         </Tooltip>
         <Tooltip title="适应屏幕">
-          <Button
+          <Button aria-label="适应屏幕"
             type="text"
             size="small"
-            icon={<Maximize size={16} />}
+            icon={<FullscreenOutlined aria-hidden="true" />}
             onClick={handleZoomReset}
           />
         </Tooltip>

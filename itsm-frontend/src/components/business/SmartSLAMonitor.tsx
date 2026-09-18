@@ -17,20 +17,13 @@ import {
   Col,
   Spin,
 } from 'antd';
+import { Clock, AlertTriangle, CheckCircle, TrendingUp, TrendingDown, Bell, Eye, Pause, Play } from 'lucide-react';
 import {
-  Clock,
-  AlertTriangle,
-  CheckCircle,
-  TrendingUp,
-  TrendingDown,
-  Bell,
-  Settings,
-  Eye,
-  Zap,
-  RefreshCw,
-  Pause,
-  Play,
-} from 'lucide-react';
+  EyeOutlined,
+  SettingOutlined,
+  SyncOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons';
 import { useSLARealTime, formatSLARemainingTime, getSLAStatusColor } from '@/lib/hooks/useSLARealTime';
 
 const { Title, Text } = Typography;
@@ -277,7 +270,7 @@ export const SmartSLAMonitor: React.FC = () => {
             </Tooltip>
             <Tooltip title={`立即刷新 (当前间隔: ${Math.round(currentInterval / 1000)}秒)`}>
               <Button
-                icon={<RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />}
+                icon={<SyncOutlined aria-hidden="true" className={isRefreshing ? 'animate-spin' : ''} />}
                 size="small"
                 onClick={() => refreshNow()}
                 loading={isRefreshing}
@@ -290,7 +283,7 @@ export const SmartSLAMonitor: React.FC = () => {
                 上次更新: {lastRefresh.toLocaleTimeString()}
               </Text>
             )}
-            <Button icon={<Settings size={16} />} size="small">
+            <Button icon={<SettingOutlined aria-hidden="true" />} size="small">
               配置
             </Button>
           </Space>
@@ -445,10 +438,10 @@ export const SmartSLAMonitor: React.FC = () => {
                   </div>
                 </div>
                 <div className="mt-3 flex space-x-2">
-                  <Button size="small" icon={<Eye />}>
+                  <Button size="small" icon={<EyeOutlined aria-hidden="true" />}>
                     查看详情
                   </Button>
-                  <Button size="small" icon={<Zap />} type="primary">
+                  <Button size="small" icon={<ThunderboltOutlined aria-hidden="true" />} type="primary">
                     立即处理
                   </Button>
                 </div>
@@ -498,10 +491,10 @@ export const SmartSLAMonitor: React.FC = () => {
                   </div>
                 </div>
                 <div className="mt-3 flex space-x-2">
-                  <Button size="small" icon={<Eye />}>
+                  <Button size="small" icon={<EyeOutlined aria-hidden="true" />}>
                     查看详情
                   </Button>
-                  <Button size="small" icon={<Zap />} type="primary" danger>
+                  <Button size="small" icon={<ThunderboltOutlined aria-hidden="true" />} type="primary" danger>
                     紧急处理
                   </Button>
                 </div>

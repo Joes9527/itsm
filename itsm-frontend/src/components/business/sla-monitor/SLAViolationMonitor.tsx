@@ -5,7 +5,8 @@
 
 import React, { useEffect } from 'react';
 import { Card, Button, message, Space } from 'antd';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
+import { SyncOutlined } from '@ant-design/icons';
 
 import { useSLAViolations } from './hooks/useSLAViolations';
 import { useSLAStatisticsFrom } from './hooks/useSLAStatistics';
@@ -101,7 +102,7 @@ export const SLAViolationMonitor: React.FC<SLAViolationMonitorProps> = ({
         }
         extra={
           <Button
-            icon={<RefreshCw size={14} />}
+            icon={<SyncOutlined aria-hidden="true" />}
             onClick={handleRefresh}
             loading={isRefreshing}
           >

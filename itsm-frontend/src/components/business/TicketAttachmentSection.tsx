@@ -17,7 +17,12 @@ import {
   Tooltip,
   Empty,
 } from 'antd';
-import { Trash2, Download, File, Eye, Image, FileText, FileType, Sheet, Presentation, FileArchive } from 'lucide-react';
+import { File, Image, FileText, FileType, Sheet, Presentation, FileArchive } from 'lucide-react';
+import {
+  DeleteOutlined,
+  DownloadOutlined,
+  EyeOutlined,
+} from '@ant-design/icons';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
 import type { TicketAttachment } from '@/lib/api/ticket-attachment-api';
 import { TicketAttachmentApi } from '@/lib/api/ticket-attachment-api';
@@ -239,16 +244,16 @@ export const TicketAttachmentSection: React.FC<TicketAttachmentSectionProps> = (
               <List.Item
                 actions={[
                   <Tooltip title="预览" key="preview">
-                    <Button
+                    <Button aria-label="预览"
                       type="text"
-                      icon={<Eye />}
+                      icon={<EyeOutlined aria-hidden="true" />}
                       onClick={() => handlePreview(attachment)}
                     />
                   </Tooltip>,
                   <Tooltip title="下载" key="download">
-                    <Button
+                    <Button aria-label="下载"
                       type="text"
-                      icon={<Download />}
+                      icon={<DownloadOutlined aria-hidden="true" />}
                       onClick={() => handleDownload(attachment)}
                     />
                   </Tooltip>,
@@ -261,7 +266,7 @@ export const TicketAttachmentSection: React.FC<TicketAttachmentSectionProps> = (
                       cancelText={t('common.cancel')}
                     >
                       <Tooltip title={t('common.delete')}>
-                        <Button type="text" danger icon={<Trash2 />} />
+                        <Button aria-label="删除" type="text" danger icon={<DeleteOutlined aria-hidden="true" />} />
                       </Tooltip>
                     </Popconfirm>
                   ),

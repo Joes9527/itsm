@@ -22,7 +22,12 @@ import {
   Tag,
   message,
 } from 'antd';
-import { Plus, X, Save, Trash2 } from 'lucide-react';
+import {
+  CloseOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  SaveOutlined,
+} from '@ant-design/icons';
 import type { AssignmentRule } from '@/lib/api/ticket-assignment-api';
 import { RULE_CONDITION_FIELDS, RuleConditionRow } from './RuleConditionRow';
 
@@ -148,10 +153,10 @@ export const AssignmentRuleForm: React.FC<AssignmentRuleFormProps> = ({
                     size="small"
                     style={{ marginBottom: 8 }}
                     extra={
-                      <Button
+                      <Button aria-label="删除"
                         type="link"
                         danger
-                        icon={<Trash2 />}
+                        icon={<DeleteOutlined aria-hidden="true" />}
                         onClick={() => {
                           remove(field.name);
                         }}
@@ -172,7 +177,7 @@ export const AssignmentRuleForm: React.FC<AssignmentRuleFormProps> = ({
                   </Card>
                 );
               })}
-              <Button type="dashed" onClick={() => add()} block icon={<Plus />}>
+              <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined aria-hidden="true" />}>
                 添加条件
               </Button>
             </div>
@@ -218,10 +223,10 @@ export const AssignmentRuleForm: React.FC<AssignmentRuleFormProps> = ({
 
       <Form.Item>
         <Space>
-          <Button type="primary" htmlType="submit" icon={<Save />}>
+          <Button type="primary" htmlType="submit" icon={<SaveOutlined aria-hidden="true" />}>
             {editingRule ? '更新规则' : '创建规则'}
           </Button>
-          <Button onClick={onCancel} icon={<X />}>
+          <Button onClick={onCancel} icon={<CloseOutlined aria-hidden="true" />}>
             取消
           </Button>
         </Space>

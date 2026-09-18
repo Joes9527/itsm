@@ -6,7 +6,13 @@
 import React from 'react';
 import type { MenuProps} from 'antd';
 import { Button, Space, Tag, Breadcrumb, Typography, Dropdown, Tooltip } from 'antd';
-import { Save, Pencil, Download, Settings, History, Bug, Rocket, PlayCircle, CloudUpload, Bot } from 'lucide-react';
+import { Pencil, Download, Settings, History, Bug, Rocket, Bot } from 'lucide-react';
+import {
+  CloudUploadOutlined,
+  PlayCircleOutlined,
+  RobotOutlined,
+  SaveOutlined,
+} from '@ant-design/icons';
 import Link from 'next/link';
 import type { WorkflowDefinition } from './WorkflowTypes';
 
@@ -149,7 +155,7 @@ export default function WorkflowToolbar({
       <Space wrap>
         <Dropdown menu={{ items: aiMenuItems }} placement="bottomRight">
           <Tooltip title="AI辅助功能">
-            <Button icon={<Bot />}>
+            <Button icon={<RobotOutlined aria-hidden="true" />}>
               AI助手
             </Button>
           </Tooltip>
@@ -162,7 +168,7 @@ export default function WorkflowToolbar({
         </Dropdown>
 
         <Button
-          icon={<Save />}
+          icon={<SaveOutlined aria-hidden="true" />}
           loading={saving}
           onClick={() => onSave(currentXML)}
         >
@@ -172,7 +178,7 @@ export default function WorkflowToolbar({
         {workflow?.status !== 'active' && (
           <Button
             type="primary"
-            icon={<CloudUpload />}
+            icon={<CloudUploadOutlined aria-hidden="true" />}
             loading={deploying}
             onClick={() => onSaveAndDeploy(currentXML)}
           >
@@ -183,7 +189,7 @@ export default function WorkflowToolbar({
         {workflow?.status === 'active' && (
           <Button
             type="primary"
-            icon={<PlayCircle />}
+            icon={<PlayCircleOutlined aria-hidden="true" />}
             loading={deploying}
             onClick={onDeploy}
           >

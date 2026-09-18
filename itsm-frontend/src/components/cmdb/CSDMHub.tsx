@@ -3,19 +3,11 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { App, Button, Card, Col, Divider, Row, Space, Tag, Typography } from 'antd';
+import { Cloud, Database, GitBranch, Layers3, Plus, Shield, Server, SlidersHorizontal, Sparkles, Workflow } from 'lucide-react';
 import {
-  Cloud,
-  Database,
-  GitBranch,
-  Layers3,
-  Plus,
-  RefreshCw,
-  Shield,
-  Server,
-  SlidersHorizontal,
-  Sparkles,
-  Workflow,
-} from 'lucide-react';
+  StarOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 
 import { CMDBApi } from '@/lib/api/cmdb-api';
 import { ManagementPageHeader } from '@/components/ui/ManagementPageHeader';
@@ -370,10 +362,10 @@ export function CSDMHub() {
         description="围绕配置项、云资源、关系拓扑和数据质量的日常工作台。"
         actions={
           <Space wrap>
-            <Button icon={<RefreshCw className="h-4 w-4" />} loading={state.loading} onClick={load}>
+            <Button icon={<SyncOutlined aria-hidden="true" />} loading={state.loading} onClick={load}>
               刷新总览
             </Button>
-            <Button type="primary" icon={<Sparkles className="h-4 w-4" />} onClick={() => router.push('/cmdb/ci')}>
+            <Button type="primary" icon={<StarOutlined aria-hidden="true" />} onClick={() => router.push('/cmdb/ci')}>
               配置项工作台
             </Button>
           </Space>

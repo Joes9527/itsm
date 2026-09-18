@@ -32,6 +32,10 @@ import {
   Clock,
   AlertCircle,
 } from 'lucide-react';
+import {
+  EyeOutlined,
+  SendOutlined,
+} from '@ant-design/icons';
 import type {
   SendTicketNotificationRequest,
 } from '@/lib/api/ticket-notification-api';
@@ -230,7 +234,7 @@ const TicketNotificationContent: React.FC<TicketNotificationSectionProps> = ({
           )}
         </Space>
         {canSend && !resource.denied && (
-          <Button type="primary" icon={<Send />} disabled={!resource.ready || writing} onClick={() => setSendModalVisible(true)}>
+          <Button type="primary" icon={<SendOutlined aria-hidden="true" />} disabled={!resource.ready || writing} onClick={() => setSendModalVisible(true)}>
             发送通知
           </Button>
         )}
@@ -254,7 +258,7 @@ const TicketNotificationContent: React.FC<TicketNotificationSectionProps> = ({
                         <Button
                           type="text"
                           size="small"
-                          icon={<Eye />}
+                          icon={<EyeOutlined aria-hidden="true" />}
                           disabled={writing} onClick={() => handleMarkRead(notification.id)}
                         >
                           标记已读

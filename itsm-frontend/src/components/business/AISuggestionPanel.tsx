@@ -9,7 +9,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, Typography, Tag, Button, Space, Spin, Progress, Alert } from 'antd';
-import { Sparkles, Check, X, RefreshCw, AlertCircle } from 'lucide-react';
+import { Sparkles, AlertCircle } from 'lucide-react';
+import {
+  CheckOutlined,
+  CloseOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { aiTriage, type TriageResult } from '@/lib/api/ai-api';
 
 import { useAuthStore } from '@/lib/store/auth-store';
@@ -137,7 +142,7 @@ export function AISuggestionPanel({
           <Button
             type="link"
             size="small"
-            icon={<RefreshCw className="w-3 h-3" />}
+            icon={<SyncOutlined aria-hidden="true" />}
             onClick={handleRefresh}
           >
             重新分析
@@ -186,7 +191,7 @@ export function AISuggestionPanel({
           <Button
             type="link"
             size="small"
-            icon={<RefreshCw className="w-3 h-3" />}
+            icon={<SyncOutlined aria-hidden="true" />}
             onClick={handleRefresh}
           >
             重试
@@ -217,10 +222,10 @@ export function AISuggestionPanel({
         </Space>
       }
       extra={
-        <Button
+        <Button aria-label="关闭"
           type="text"
           size="small"
-          icon={<X className="w-3 h-3" />}
+          icon={<CloseOutlined aria-hidden="true" />}
           onClick={() => setCollapsed(!collapsed)}
         />
       }
@@ -285,13 +290,13 @@ export function AISuggestionPanel({
 
           {/* Action buttons */}
           <div className="flex justify-end gap-2">
-            <Button size="small" icon={<X className="w-3 h-3" />} onClick={handleDismiss}>
+            <Button size="small" icon={<CloseOutlined aria-hidden="true" />} onClick={handleDismiss}>
               忽略
             </Button>
             <Button
               type="primary"
               size="small"
-              icon={<Check className="w-3 h-3" />}
+              icon={<CheckOutlined aria-hidden="true" />}
               onClick={handleAccept}
             >
               采纳建议

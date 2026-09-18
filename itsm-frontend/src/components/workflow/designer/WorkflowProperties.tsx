@@ -23,6 +23,10 @@ import {
 
 const { Text } = Typography;
 import { Info } from 'lucide-react';
+import {
+  BranchesOutlined,
+  EyeOutlined,
+} from '@ant-design/icons';
 import { Eye, GitBranch, Users } from 'lucide-react';
 import type {
   WorkflowDefinition,
@@ -132,7 +136,7 @@ export default function WorkflowProperties({
           <h3 className="text-[15px] font-semibold mb-0">版本历史</h3>
           <Button
             type="primary"
-            icon={<GitBranch className="w-4 h-4" />}
+            icon={<BranchesOutlined aria-hidden="true" />}
             onClick={onShowVersionModal}
           >
             创建新版本
@@ -161,7 +165,7 @@ export default function WorkflowProperties({
                 <Space>
                   <Button
                     size="small"
-                    icon={<Eye className="w-3 h-3" />}
+                    icon={<EyeOutlined aria-hidden="true" />}
                     onClick={() => onSwitchVersion?.(version.id)}
                   >
                     查看

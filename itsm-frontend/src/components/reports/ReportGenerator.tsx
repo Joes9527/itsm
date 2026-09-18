@@ -18,15 +18,11 @@ import {
   Input,
   App,
 } from 'antd';
+import { BarChart3, PieChart, TrendingUp, Activity, FileText, Settings } from 'lucide-react';
 import {
-  BarChart3,
-  PieChart,
-  TrendingUp,
-  Activity,
-  FileText,
-  PlayCircle,
-  Settings,
-} from 'lucide-react';
+  PlayCircleOutlined,
+  SettingOutlined,
+} from '@ant-design/icons';
 import {
   TicketAnalyticsApi,
   type AnalyticsConfig,
@@ -224,14 +220,14 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({
               <Space>
                 <Button
                   type="primary"
-                  icon={<PlayCircle size={16} />}
+                  icon={<PlayCircleOutlined aria-hidden="true" />}
                   onClick={handleGeneratePreview}
                   loading={previewLoading}
                   disabled={loading || previewLoading}
                 >
                   预览
                 </Button>
-                <Button icon={<Settings size={16} />} onClick={handleApplyConfig}>
+                <Button icon={<SettingOutlined aria-hidden="true" />} onClick={handleApplyConfig}>
                   应用配置
                 </Button>
                 <Button onClick={handleReset}>重置</Button>

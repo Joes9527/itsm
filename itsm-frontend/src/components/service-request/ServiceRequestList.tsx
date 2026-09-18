@@ -9,7 +9,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { Table, Tag, Button, Card, Space, Tooltip, message, Empty } from 'antd';
-import { Eye, RefreshCw } from 'lucide-react';
+import {
+  EyeOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
@@ -110,9 +113,9 @@ const ServiceRequestList: React.FC = () => {
       render: (_: unknown, record: ServiceRequest) => (
         <Space size="small">
           <Tooltip title="查看详情">
-            <Button
+            <Button aria-label="查看详情"
               type="text"
-              icon={<Eye />}
+              icon={<EyeOutlined aria-hidden="true" />}
               className="text-foreground hover:!text-foreground hover:!bg-raised"
               onClick={() => router.push(`/tickets/${record.ticketId}`)}
             />
@@ -126,7 +129,7 @@ const ServiceRequestList: React.FC = () => {
     <Card className="rounded-[8px] shadow-none border border-border">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-[15px] font-semibold text-foreground">我的请求</h3>
-        <Button icon={<RefreshCw />} onClick={loadData}>
+        <Button icon={<SyncOutlined aria-hidden="true" />} onClick={loadData}>
           刷新
         </Button>
       </div>

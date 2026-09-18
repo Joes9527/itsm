@@ -22,7 +22,13 @@ import {
   Progress,
   Empty,
 } from 'antd';
-import { Search, Plus, Pencil, Eye, Key } from 'lucide-react';
+import { Key } from 'lucide-react';
+import {
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
@@ -220,7 +226,7 @@ const LicenseList: React.FC = () => {
           <Tooltip title="查看许可证详情">
             <Button
               type="text"
-              icon={<Eye />}
+              icon={<EyeOutlined aria-hidden="true" />}
               onClick={() => router.push(`/licenses/${record.id}`)}
               aria-label={`查看许可证 ${record.name || '详情'}`}
             />
@@ -228,7 +234,7 @@ const LicenseList: React.FC = () => {
           <Tooltip title="编辑许可证信息">
             <Button
               type="text"
-              icon={<Pencil />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => router.push(`/licenses/${record.id}/edit`)}
               aria-label={`编辑许可证 ${record.name || '详情'}`}
             />
@@ -320,13 +326,13 @@ const LicenseList: React.FC = () => {
           </Form.Item>
           <Form.Item>
             <Space>
-              <Button type="primary" icon={<Search />} onClick={handleSearch}>
+              <Button type="primary" icon={<SearchOutlined aria-hidden="true" />} onClick={handleSearch}>
                 搜索
               </Button>
               <Button onClick={handleReset}>重置</Button>
               <Button
                 type="primary"
-                icon={<Plus />}
+                icon={<PlusOutlined aria-hidden="true" />}
                 onClick={() => router.push('/licenses/new')}
               >
                 创建许可证

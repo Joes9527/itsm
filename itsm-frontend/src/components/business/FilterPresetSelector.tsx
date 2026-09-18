@@ -14,7 +14,8 @@ import {
   Tag,
   Checkbox,
 } from 'antd';
-import { Plus, Save, Pencil, Trash2, Star } from 'lucide-react';
+import { Save, Pencil, Trash2, Star } from 'lucide-react';
+import { PlusOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import type { TicketFilterState } from './TicketFilters';
 
@@ -274,7 +275,7 @@ export const FilterPresetSelector: React.FC<FilterPresetSelectorProps> = ({
               <div style={{ borderTop: '1px solid #f0f0f0', margin: '4px 0' }} />
               <Button
                 type="text"
-                icon={<Plus />}
+                icon={<PlusOutlined aria-hidden="true" />}
                 block
                 onClick={() => {
                   form.resetFields();

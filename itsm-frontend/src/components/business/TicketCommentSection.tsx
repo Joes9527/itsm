@@ -17,7 +17,12 @@ import {
   Tooltip,
   message,
 } from 'antd';
-import { Send, Edit, Trash2, User, AtSign, Lock, MessageSquare } from 'lucide-react';
+import { User, AtSign, Lock, MessageSquare } from 'lucide-react';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  SendOutlined,
+} from '@ant-design/icons';
 import type {
   TicketComment,
   CreateTicketCommentRequest} from '@/lib/api/ticket-comment-api';
@@ -219,7 +224,7 @@ export const TicketCommentSection: React.FC<TicketCommentSectionProps> = ({
               </Space>
               <Button
                 type="primary"
-                icon={<Send className="w-4 h-4" />}
+                icon={<SendOutlined aria-hidden="true" />}
                 onClick={handleAddComment}
                 loading={submitting}
                 disabled={!newComment.trim()}
@@ -324,7 +329,7 @@ export const TicketCommentSection: React.FC<TicketCommentSectionProps> = ({
                               <Button
                                 type="text"
                                 size="small"
-                                icon={<Edit className="w-3 h-3" />}
+                                icon={<EditOutlined aria-hidden="true" />}
                                 onClick={() => startEdit(comment)}
                               >
                                 {t('common.edit') || '编辑'}
@@ -341,7 +346,7 @@ export const TicketCommentSection: React.FC<TicketCommentSectionProps> = ({
                                   type="text"
                                   size="small"
                                   danger
-                                  icon={<Trash2 className="w-3 h-3" />}
+                                  icon={<DeleteOutlined aria-hidden="true" />}
                                 >
                                   {t('common.delete') || '删除'}
                                 </Button>

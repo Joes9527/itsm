@@ -2,7 +2,10 @@
 
 import React from 'react';
 import { Row, Col, Form, Input, Select, Switch, Button, Typography } from 'antd';
-import { Plus, Delete } from 'lucide-react';
+import {
+  DeleteOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 
 const { Text } = Typography;
 
@@ -72,12 +75,12 @@ export function CustomFieldsEditor({ name }: CustomFieldsEditorProps) {
                   </Form.Item>
                 </Col>
                 <Col span={1}>
-                  <Button type="text" danger icon={<Delete size={16} />} onClick={() => remove(fieldName)} aria-label="删除字段" />
+                  <Button type="text" danger icon={<DeleteOutlined aria-hidden="true" />} onClick={() => remove(fieldName)} aria-label="删除字段" />
                 </Col>
               </Row>
             ))}
             <Form.Item style={{ marginBottom: 0 }}>
-              <Button type="dashed" onClick={() => add({ type: 'text', required: false })} icon={<Plus size={16} />} block>
+              <Button type="dashed" onClick={() => add({ type: 'text', required: false })} icon={<PlusOutlined aria-hidden="true" />} block>
                 添加自定义字段
               </Button>
             </Form.Item>

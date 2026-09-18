@@ -2,7 +2,13 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Row, Col, Typography, Space, Button, Dropdown, Skeleton, Card } from 'antd';
-import { Filter, Download, Settings, RotateCcw, Maximize } from 'lucide-react';
+import { Settings, RotateCcw } from 'lucide-react';
+import {
+  DownloadOutlined,
+  FilterOutlined,
+  FullscreenOutlined,
+  SettingOutlined,
+} from '@ant-design/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
@@ -198,7 +204,7 @@ export const ResponsiveDashboard: React.FC<ResponsiveDashboardProps> = ({
           key="configure"
           type="text"
           size="small"
-          icon={<Settings />}
+          icon={<SettingOutlined aria-hidden="true" />}
           onClick={() => onWidgetConfigure(widget.id)}
           title="配置"
         />
@@ -269,7 +275,7 @@ export const ResponsiveDashboard: React.FC<ResponsiveDashboardProps> = ({
       </div>
       <Space>
         <Button
-          icon={<Filter />}
+          icon={<FilterOutlined aria-hidden="true" />}
           onClick={() => {
             /* 打开过滤器 */
           }}
@@ -286,7 +292,7 @@ export const ResponsiveDashboard: React.FC<ResponsiveDashboardProps> = ({
           刷新
         </Button>
         <Button
-          icon={<Download />}
+          icon={<DownloadOutlined aria-hidden="true" />}
           onClick={() => {
             /* 导出数据 */
           }}
@@ -315,11 +321,11 @@ export const ResponsiveDashboard: React.FC<ResponsiveDashboardProps> = ({
               ],
             }}
           >
-            <Button icon={<Settings />}>设置</Button>
+            <Button icon={<SettingOutlined aria-hidden="true" />}>设置</Button>
           </Dropdown>
         )}
         <Button
-          icon={<Maximize />}
+          icon={<FullscreenOutlined aria-hidden="true" />}
           onClick={() => {
             /* 进入全屏 */
           }}

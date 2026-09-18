@@ -18,7 +18,11 @@ import {
   Typography,
   message,
 } from 'antd';
-import { Search, Filter, Save, RotateCcw } from 'lucide-react';
+import { Search, Filter, RotateCcw } from 'lucide-react';
+import {
+  SaveOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
 import type { FormInstance } from 'antd';
 import dayjs from 'dayjs';
 import type { RangePickerProps } from 'antd/es/date-picker';
@@ -435,7 +439,7 @@ const TicketAdvancedSearch: React.FC<TicketAdvancedSearchProps> = ({
             <span>高级搜索</span>
           </div>
           <Space>
-            <Button size="small" icon={<Save />} onClick={saveSearch}>
+            <Button size="small" icon={<SaveOutlined aria-hidden="true" />} onClick={saveSearch}>
               保存搜索
             </Button>
           </Space>
@@ -480,7 +484,7 @@ const TicketAdvancedSearch: React.FC<TicketAdvancedSearchProps> = ({
         {/* 操作按钮 */}
         <div className="flex flex-wrap gap-3 justify-between items-center mt-6">
           <Space>
-            <Button type="primary" icon={<Search />} htmlType="submit" loading={loading}>
+            <Button type="primary" icon={<SearchOutlined aria-hidden="true" />} htmlType="submit" loading={loading}>
               搜索
             </Button>
             <Button icon={<RotateCcw />} onClick={handleReset}>

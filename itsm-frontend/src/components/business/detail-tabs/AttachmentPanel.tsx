@@ -4,18 +4,13 @@ import { useDetailRefreshEntry } from '@/components/business/detail-tabs/DetailR
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Upload, Button, App, Typography, Progress, Modal, Space, Empty, Spin, Alert } from 'antd';
 import type { RcFile } from 'antd/es/upload/interface';
+import { File as FileIcon, Image as ImageIcon, FileText, Music, Video, Archive } from 'lucide-react';
 import {
-  File as FileIcon,
-  Image as ImageIcon,
-  FileText,
-  Music,
-  Video,
-  Archive,
-  Download,
-  Eye,
-  Trash2,
-  Upload as UploadIcon,
-} from 'lucide-react';
+  DeleteOutlined,
+  DownloadOutlined,
+  EyeOutlined,
+  UploadOutlined,
+} from '@ant-design/icons';
 import { useDetailIdentity, useDetailResource } from './useDetailResource';
 import { DetailReadState } from './DetailReadState';
 import type { AttachmentAdapter, AttachmentItem, TargetType } from './types';
@@ -274,7 +269,7 @@ const AttachmentPanelContent: React.FC<AttachmentPanelProps> = ({
             customRequest={customRequest as never}
             accept={accept}
           >
-            <Button icon={<UploadIcon size={14} />} loading={uploading}>
+            <Button icon={<UploadOutlined aria-hidden="true" />} loading={uploading}>
               上传附件
             </Button>
           </Upload>
@@ -308,13 +303,13 @@ const AttachmentPanelContent: React.FC<AttachmentPanelProps> = ({
               </Text>
               <Space wrap size='small'>
                 {adapter.preview && isPreviewable(item.mimeType) && (
-                  <Button size='small' icon={<Eye size={14} />} onClick={() => handlePreview(item)}>
+                  <Button size='small' icon={<EyeOutlined aria-hidden="true" />} onClick={() => handlePreview(item)}>
                     预览
                   </Button>
                 )}
                 <Button
                   size='small'
-                  icon={<Download size={14} />}
+                  icon={<DownloadOutlined aria-hidden="true" />}
                   onClick={() => handleDownload(item)}
                 >
                   下载
@@ -323,7 +318,7 @@ const AttachmentPanelContent: React.FC<AttachmentPanelProps> = ({
                   <Button
                     size='small'
                     danger
-                    icon={<Trash2 size={14} />}
+                    icon={<DeleteOutlined aria-hidden="true" />}
                     onClick={() => handleDelete(item)}
                   >
                     删除

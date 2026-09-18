@@ -5,7 +5,11 @@
 
 import React from 'react';
 import { Form, Select, DatePicker, Input, Button, Space, Card, Tag } from 'antd';
-import { Search, Filter, X } from 'lucide-react';
+import { Search, Filter } from 'lucide-react';
+import {
+  CloseOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
 import type { TicketFilters } from '@/types/ticket';
 
 const { RangePicker } = DatePicker;
@@ -214,10 +218,10 @@ export const TicketsFiltersPanel: React.FC<TicketsFiltersPanelProps> = ({
 
         {/* 操作按钮 */}
         <div className="flex justify-end space-x-2 mt-4">
-          <Button icon={<X />} onClick={handleReset}>
+          <Button icon={<CloseOutlined aria-hidden="true" />} onClick={handleReset}>
             重置
           </Button>
-          <Button type="primary" icon={<Search />} onClick={onSearch} loading={loading}>
+          <Button type="primary" icon={<SearchOutlined aria-hidden="true" />} onClick={onSearch} loading={loading}>
             搜索
           </Button>
         </div>

@@ -19,7 +19,13 @@ import {
   Empty,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { Search, Plus, Pencil, Trash2, Download, Eye, RotateCcw } from 'lucide-react';
+import { Search, Eye, RotateCcw } from 'lucide-react';
+import {
+  DeleteOutlined,
+  DownloadOutlined,
+  EditOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
@@ -303,7 +309,7 @@ const CIList: React.FC = () => {
           <Tooltip title="编辑">
             <Button
               type="text"
-              icon={<Pencil />}
+              icon={<EditOutlined aria-hidden="true" />}
               aria-label="编辑"
               onClick={() => router.push(`/cmdb/cis/${record.id}/edit`)}
             />
@@ -312,7 +318,7 @@ const CIList: React.FC = () => {
             <Button
               type="text"
               danger
-              icon={<Trash2 />}
+              icon={<DeleteOutlined aria-hidden="true" />}
               aria-label="删除"
               onClick={() => handleDelete(record.id)}
             />
@@ -332,7 +338,7 @@ const CIList: React.FC = () => {
         <Space wrap>
           <Button
             type="primary"
-            icon={<Plus />}
+            icon={<PlusOutlined aria-hidden="true" />}
             onClick={() => router.push('/cmdb/cis/create')}
           >
             录入资产
@@ -385,10 +391,10 @@ const CIList: React.FC = () => {
               已选择 <strong>{selectedRowKeys.length}</strong> 项
             </span>
             <Space>
-              <Button size="small" icon={<Download />} onClick={handleExport}>
+              <Button size="small" icon={<DownloadOutlined aria-hidden="true" />} onClick={handleExport}>
                 导出
               </Button>
-              <Button size="small" danger icon={<Trash2 />} onClick={handleBatchDelete}>
+              <Button size="small" danger icon={<DeleteOutlined aria-hidden="true" />} onClick={handleBatchDelete}>
                 批量删除
               </Button>
             </Space>

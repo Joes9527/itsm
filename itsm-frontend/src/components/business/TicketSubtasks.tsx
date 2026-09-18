@@ -20,7 +20,15 @@ import {
   Popconfirm,
   Timeline,
 } from 'antd';
-import { Plus, Pencil, Trash2, Clock, Link, CheckCircle, BarChart3, List, GanttChart } from 'lucide-react';
+import { Clock, Link, CheckCircle, BarChart3 } from 'lucide-react';
+import {
+  ClockCircleOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+  ProjectOutlined,
+  UnorderedListOutlined,
+} from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { Ticket } from '@/lib/services/ticket-service';
 import { getStatusConfig, getPriorityConfig } from '@/lib/constants/ticket-constants';
@@ -252,7 +260,7 @@ export const TicketSubtasks: React.FC<TicketSubtasksProps> = ({
               <Button
                 type="link"
                 size="small"
-                icon={<Pencil />}
+                icon={<EditOutlined aria-hidden="true" />}
                 onClick={() => handleOpenModal(record)}
               >
                 编辑
@@ -261,7 +269,7 @@ export const TicketSubtasks: React.FC<TicketSubtasksProps> = ({
                 title="确定要删除这个子任务吗？"
                 onConfirm={() => handleDelete(record.id)}
               >
-                <Button type="link" size="small" danger icon={<Trash2 />}>
+                <Button type="link" size="small" danger icon={<DeleteOutlined aria-hidden="true" />}>
                   删除
                 </Button>
               </Popconfirm>
@@ -402,28 +410,28 @@ export const TicketSubtasks: React.FC<TicketSubtasksProps> = ({
             <Button.Group>
               <Button
                 type={viewMode === 'list' ? 'primary' : 'default'}
-                icon={<List />}
+                icon={<UnorderedListOutlined aria-hidden="true" />}
                 onClick={() => setViewMode('list')}
               >
                 列表
               </Button>
               <Button
                 type={viewMode === 'gantt' ? 'primary' : 'default'}
-                icon={<GanttChart />}
+                icon={<ProjectOutlined aria-hidden="true" />}
                 onClick={() => setViewMode('gantt')}
               >
                 甘特图
               </Button>
               <Button
                 type={viewMode === 'timeline' ? 'primary' : 'default'}
-                icon={<Clock />}
+                icon={<ClockCircleOutlined aria-hidden="true" />}
                 onClick={() => setViewMode('timeline')}
               >
                 时间线
               </Button>
             </Button.Group>
             {canEdit && (
-              <Button type="primary" icon={<Plus />} onClick={() => handleOpenModal()}>
+              <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={() => handleOpenModal()}>
                 创建子任务
               </Button>
             )}

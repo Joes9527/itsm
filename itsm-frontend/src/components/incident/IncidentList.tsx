@@ -21,7 +21,12 @@ import {
   Empty,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { Search, Plus, Pencil, Eye, RefreshCw } from 'lucide-react';
+import { Search, RefreshCw } from 'lucide-react';
+import {
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
@@ -168,16 +173,16 @@ const IncidentList: React.FC = () => {
       render: (_: unknown, record: Incident) => (
         <Space size="small">
           <Tooltip title="查看详情">
-            <Button
+            <Button aria-label="查看详情"
               type="text"
-              icon={<Eye />}
+              icon={<EyeOutlined aria-hidden="true" />}
               onClick={() => router.push(`/incidents/${record.id}`)}
             />
           </Tooltip>
           <Tooltip title="编辑">
-            <Button
+            <Button aria-label="编辑"
               type="text"
-              icon={<Pencil />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => router.push(`/incidents/${record.id}/edit`)}
             />
           </Tooltip>
@@ -209,7 +214,7 @@ const IncidentList: React.FC = () => {
         <div className="flex-1 text-left sm:text-right">
           <Button
             type="primary"
-            icon={<Plus />}
+            icon={<PlusOutlined aria-hidden="true" />}
             onClick={() => router.push('/incidents/create')}
           >
             新建事件

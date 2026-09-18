@@ -44,7 +44,11 @@ import {
   AreaChart,
   Area,
 } from 'recharts';
-import { Filter, Save, Download, Settings, RotateCcw, CheckCircle, BarChart3, Table2 } from 'lucide-react';
+import { Filter, Save, RotateCcw, CheckCircle, BarChart3, Table2 } from 'lucide-react';
+import {
+  DownloadOutlined,
+  SettingOutlined,
+} from '@ant-design/icons';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import dayjs from 'dayjs';
@@ -346,7 +350,7 @@ export const TicketDeepAnalytics: React.FC<TicketDeepAnalyticsProps> = ({
           </Title>
           <Space>
             <Button
-              icon={<Settings />}
+              icon={<SettingOutlined aria-hidden="true" />}
               onClick={() => {
                 form.setFieldsValue(config);
                 setConfigModalVisible(true);
@@ -356,7 +360,7 @@ export const TicketDeepAnalytics: React.FC<TicketDeepAnalyticsProps> = ({
             </Button>
             {canExport && (
               <AntTooltip title="导出功能即将推出">
-                <Button icon={<Download />} disabled onClick={handleExport}>
+                <Button icon={<DownloadOutlined aria-hidden="true" />} disabled onClick={handleExport}>
                   导出
                 </Button>
               </AntTooltip>

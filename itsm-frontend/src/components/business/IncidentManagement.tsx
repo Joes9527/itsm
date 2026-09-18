@@ -38,7 +38,14 @@ import {
   Progress,
   Empty,
 } from 'antd';
-import { Search, Filter, Plus, Pencil, Trash2, User, UserPlus, Eye, Settings, Calendar, Clock, RotateCcw, Bell, Link, Info, AlertTriangle, AlertCircle, CheckCircle, XCircle, BarChart3 } from 'lucide-react';
+import { Search, Filter, Plus, Pencil, Trash2, User, Settings, Calendar, Clock, RotateCcw, Bell, Link, Info, AlertTriangle, AlertCircle, CheckCircle, XCircle, BarChart3 } from 'lucide-react';
+import {
+  BarChartOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+  UserAddOutlined,
+} from '@ant-design/icons';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/zh-cn';
@@ -288,9 +295,9 @@ export const IncidentManagement: React.FC = () => {
       render: (_: unknown, record: Incident) => (
         <Space>
           <Tooltip title="查看详情">
-            <Button
+            <Button aria-label="查看详情"
               type="text"
-              icon={<Eye />}
+              icon={<EyeOutlined aria-hidden="true" />}
               onClick={() => {
                 setSelectedIncident(record);
                 setDetailVisible(true);
@@ -298,9 +305,9 @@ export const IncidentManagement: React.FC = () => {
             />
           </Tooltip>
           <Tooltip title="编辑">
-            <Button
+            <Button aria-label="编辑"
               type="text"
-              icon={<Pencil />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => {
                 setSelectedIncident(record);
                 setCreateVisible(true);
@@ -308,9 +315,9 @@ export const IncidentManagement: React.FC = () => {
             />
           </Tooltip>
           <Tooltip title="分配">
-            <Button
+            <Button aria-label="分配"
               type="text"
-              icon={<UserPlus />}
+              icon={<UserAddOutlined aria-hidden="true" />}
               onClick={() => {
                 setSelectedIncident(record);
                 setAssignVisible(true);
@@ -334,10 +341,10 @@ export const IncidentManagement: React.FC = () => {
             <Text type="secondary">管理和监控IT事件，确保系统稳定运行</Text>
           </div>
           <Space>
-            <Button icon={<BarChart3 />} onClick={() => setMonitoringVisible(true)}>
+            <Button icon={<BarChartOutlined aria-hidden="true" />} onClick={() => setMonitoringVisible(true)}>
               监控面板
             </Button>
-            <Button type="primary" icon={<Plus />} onClick={() => setCreateVisible(true)}>
+            <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={() => setCreateVisible(true)}>
               创建事件
             </Button>
           </Space>
@@ -430,7 +437,7 @@ export const IncidentManagement: React.FC = () => {
             />
           </Col>
           <Col span={2}>
-            <Button icon={<RotateCcw />} onClick={fetchIncidents} loading={loading} />
+            <Button aria-label="刷新" icon={<RotateCcw />} onClick={fetchIncidents} loading={loading} />
           </Col>
         </Row>
       </Card>
@@ -547,7 +554,7 @@ const IncidentDetailDrawer: React.FC<{
       onClose={onClose}
       extra={
         <Space>
-          <Button icon={<Pencil />}>编辑</Button>
+          <Button icon={<EditOutlined aria-hidden="true" />}>编辑</Button>
           <Button icon={<RotateCcw />} onClick={fetchIncidentDetails}>
             刷新
           </Button>

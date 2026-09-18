@@ -21,21 +21,11 @@ import {
   Tooltip,
   message,
 } from 'antd';
+import { TrendingUp, TrendingDown, BarChart3, PieChart, Activity, Target, Users, Clock, CheckCircle, AlertTriangle, Zap, Filter } from 'lucide-react';
 import {
-  TrendingUp,
-  TrendingDown,
-  BarChart3,
-  PieChart,
-  Activity,
-  Target,
-  Users,
-  Clock,
-  CheckCircle,
-  AlertTriangle,
-  Zap,
-  Filter,
-  Download,
-} from 'lucide-react';
+  DotChartOutlined,
+  DownloadOutlined,
+} from '@ant-design/icons';
 import {
   TicketAnalyticsApi,
   type AnalyticsConfig,
@@ -316,7 +306,7 @@ const AdvancedAnalytics: React.FC<AdvancedAnalyticsProps> = ({ tenantId }) => {
       <Card
         title="数据分析控制台"
         extra={
-          <Button icon={<Download />} onClick={() => message.info('导出功能即将推出')}>
+          <Button icon={<DownloadOutlined aria-hidden="true" />} onClick={() => message.info('导出功能即将推出')}>
             导出报告
           </Button>
         }
@@ -374,7 +364,7 @@ const AdvancedAnalytics: React.FC<AdvancedAnalyticsProps> = ({ tenantId }) => {
           </Form.Item>
 
           <Form.Item>
-            <Button type="primary" icon={<Activity />} onClick={loadKPIData}>
+            <Button type="primary" icon={<DotChartOutlined aria-hidden="true" />} onClick={loadKPIData}>
               刷新数据
             </Button>
           </Form.Item>

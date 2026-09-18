@@ -3,7 +3,8 @@
 import React from 'react';
 import { Alert, Button, Dropdown, Popconfirm, Space, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
-import { ChevronDown, X } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
+import { CloseOutlined } from '@ant-design/icons';
 
 /**
  * 单个批量动作定义。
@@ -179,7 +180,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           <Button
             size="small"
             type="text"
-            icon={<X size={14} />}
+            icon={<CloseOutlined aria-hidden="true" />}
             onClick={onClear}
             disabled={loading}
           >

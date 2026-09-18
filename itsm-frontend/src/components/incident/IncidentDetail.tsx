@@ -35,20 +35,11 @@ import {
   Spin,
   Alert,
 } from 'antd';
+import { ArrowUp, ArrowRight, Save, Pencil, FileText, Clock, AlertCircle, CheckCircle, Plug, AreaChart, Siren } from 'lucide-react';
 import {
-  ArrowUp,
-  ArrowRight,
-  Plus,
-  Save,
-  Pencil,
-  FileText,
-  Clock,
-  AlertCircle,
-  CheckCircle,
-  Plug,
-  AreaChart,
-  Siren,
-} from 'lucide-react';
+  EditOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import { useRouter, useParams } from 'next/navigation';
 import dayjs from 'dayjs';
 
@@ -719,7 +710,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
         <Card
           title='基本信息'
           extra={
-            <Button type='link' icon={<Pencil />} onClick={handleEditCategory}>
+            <Button type='link' icon={<EditOutlined aria-hidden="true" />} onClick={handleEditCategory}>
               编辑分类
             </Button>
           }
@@ -788,7 +779,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
                 </Space>
               }
               extra={
-                <Button type='link' icon={<Pencil />} onClick={handleEditRootCause}>
+                <Button type='link' icon={<EditOutlined aria-hidden="true" />} onClick={handleEditRootCause}>
                   {rootCauseData?.id ? '编辑' : '添加'}
                 </Button>
               }
@@ -834,7 +825,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
                 </Descriptions>
               ) : (
                 <Empty description='暂无根因分析' image={Empty.PRESENTED_IMAGE_SIMPLE}>
-                  <Button type='primary' icon={<Plus />} onClick={handleEditRootCause}>
+                  <Button type='primary' icon={<PlusOutlined aria-hidden="true" />} onClick={handleEditRootCause}>
                     添加根因分析
                   </Button>
                 </Empty>
@@ -861,7 +852,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
                 </Space>
               }
               extra={
-                <Button type='link' icon={<Pencil />} onClick={handleEditImpact}>
+                <Button type='link' icon={<EditOutlined aria-hidden="true" />} onClick={handleEditImpact}>
                   {impactData?.id ? '编辑' : '添加'}
                 </Button>
               }
@@ -910,7 +901,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
                 </Descriptions>
               ) : (
                 <Empty description='暂无影响评估' image={Empty.PRESENTED_IMAGE_SIMPLE}>
-                  <Button type='primary' icon={<Plus />} onClick={handleEditImpact}>
+                  <Button type='primary' icon={<PlusOutlined aria-hidden="true" />} onClick={handleEditImpact}>
                     添加影响评估
                   </Button>
                 </Empty>
@@ -933,7 +924,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
                 </Space>
               }
               extra={
-                <Button type='link' icon={<Pencil />} onClick={handleEditCategory}>
+                <Button type='link' icon={<EditOutlined aria-hidden="true" />} onClick={handleEditCategory}>
                   编辑
                 </Button>
               }
@@ -966,7 +957,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
                 </Descriptions>
               ) : (
                 <Empty description='暂无事件分类' image={Empty.PRESENTED_IMAGE_SIMPLE}>
-                  <Button type='primary' icon={<Plus />} onClick={handleEditCategory}>
+                  <Button type='primary' icon={<PlusOutlined aria-hidden="true" />} onClick={handleEditCategory}>
                     添加事件分类
                   </Button>
                 </Empty>

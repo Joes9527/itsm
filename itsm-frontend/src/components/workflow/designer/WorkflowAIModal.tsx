@@ -20,7 +20,13 @@ import {
   Tag,
   Typography,
 } from 'antd';
-import { AlertTriangle, CheckCircle, XCircle, Bug, Rocket, Send, Bot } from 'lucide-react';
+import { AlertTriangle, CheckCircle, XCircle, Bug, Rocket, Bot } from 'lucide-react';
+import {
+  BugOutlined,
+  RobotOutlined,
+  RocketOutlined,
+  SendOutlined,
+} from '@ant-design/icons';
 import { getBpmnDesignerApi } from './WorkflowCanvas';
 import {
   BPMNAIApi,
@@ -418,18 +424,18 @@ export default function WorkflowAIModal({
                     type="default"
                     onClick={handlePreviewProcess}
                     loading={previewLoading}
-                    icon={<Bot />}
+                    icon={<RobotOutlined aria-hidden="true" />}
                   >
                     预览结构
                   </Button>
                   <Button
                     onClick={handleLoadTemplateSuggestions}
                     loading={templateLoading}
-                    icon={<Rocket />}
+                    icon={<RocketOutlined aria-hidden="true" />}
                   >
                     推荐模板
                   </Button>
-                  <Button type="primary" htmlType="submit" loading={loading} icon={<Send />}>
+                  <Button type="primary" htmlType="submit" loading={loading} icon={<SendOutlined aria-hidden="true" />}>
                     生成流程
                   </Button>
                 </Space>
@@ -540,7 +546,7 @@ export default function WorkflowAIModal({
             </Paragraph>
             
             <div className="mb-4">
-              <Button type="primary" onClick={handleGetSuggestions} loading={loading} icon={<Bot />}>
+              <Button type="primary" onClick={handleGetSuggestions} loading={loading} icon={<RobotOutlined aria-hidden="true" />}>
                 获取优化建议
               </Button>
             </div>
@@ -606,7 +612,7 @@ export default function WorkflowAIModal({
             </Paragraph>
             
             <div className="mb-4">
-              <Button type="primary" onClick={handleComplianceCheck} loading={loading} icon={<Bug />}>
+              <Button type="primary" onClick={handleComplianceCheck} loading={loading} icon={<BugOutlined aria-hidden="true" />}>
                 开始合规检查
               </Button>
             </div>

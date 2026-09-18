@@ -25,7 +25,11 @@ import {
   Statistic,
   Tooltip,
 } from 'antd';
-import { Search, Download, FileText, Clock, RotateCcw, Link, AlertTriangle, CheckCircle, BarChart3 } from 'lucide-react';
+import { FileText, Clock, RotateCcw, Link, AlertTriangle, CheckCircle, BarChart3 } from 'lucide-react';
+import {
+  DownloadOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { TicketRootCauseApi } from '@/lib/api/ticket-root-cause-api';
@@ -245,7 +249,7 @@ export const TicketRootCauseAnalysis: React.FC<TicketRootCauseAnalysisProps> = (
           <Space>
             <Button
               type="primary"
-              icon={<Search />}
+              icon={<SearchOutlined aria-hidden="true" />}
               onClick={performAnalysis}
               loading={analyzing}
             >
@@ -253,7 +257,7 @@ export const TicketRootCauseAnalysis: React.FC<TicketRootCauseAnalysisProps> = (
             </Button>
             <Tooltip title="导出功能即将推出">
               <Button
-                icon={<Download />}
+                icon={<DownloadOutlined aria-hidden="true" />}
                 disabled
                 onClick={() => antMessage.info('导出功能即将推出，敬请期待')}
               >

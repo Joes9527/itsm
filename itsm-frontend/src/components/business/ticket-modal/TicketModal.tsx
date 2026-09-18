@@ -5,7 +5,11 @@
 
 import React, { useEffect, useState } from 'react';
 import { Modal, Form, Button, Input, Select, message } from 'antd';
-import { Plus, Edit, BookOpen, Save } from 'lucide-react';
+import { Plus, Edit, BookOpen } from 'lucide-react';
+import {
+  PlusOutlined,
+  SaveOutlined,
+} from '@ant-design/icons';
 import type { Ticket } from '@/lib/services/ticket-service';
 import { useI18n } from '@/lib/i18n';
 
@@ -164,7 +168,7 @@ export const TicketTemplateModal: React.FC<TicketTemplateModalProps> = React.mem
               </div>
               <Button
                 type="primary"
-                icon={<Plus size={16} />}
+                icon={<PlusOutlined aria-hidden="true" />}
                 onClick={() => {
                   setEditingTemplate(null);
                   templateForm.resetFields();
@@ -204,7 +208,7 @@ export const TicketTemplateModal: React.FC<TicketTemplateModalProps> = React.mem
             <Button
               key="save"
               type="primary"
-              icon={<Save size={16} />}
+              icon={<SaveOutlined aria-hidden="true" />}
               onClick={handleSaveTemplate}
             >
               保存

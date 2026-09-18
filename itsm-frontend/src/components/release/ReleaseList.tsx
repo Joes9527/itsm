@@ -23,7 +23,13 @@ import {
   Empty,
   Grid,
 } from 'antd';
-import { Search, Plus, Pencil, Eye, Rocket } from 'lucide-react';
+import { Rocket } from 'lucide-react';
+import {
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
@@ -227,7 +233,7 @@ const ReleaseList: React.FC = () => {
           <Tooltip title="查看发布详情">
             <Button
               type="text"
-              icon={<Eye />}
+              icon={<EyeOutlined aria-hidden="true" />}
               href={`/releases/${record.id}`}
               aria-label={`查看发布 ${record.title || record.releaseNumber || '详情'}`}
             />
@@ -235,7 +241,7 @@ const ReleaseList: React.FC = () => {
           <Tooltip title="编辑发布信息">
             <Button
               type="text"
-              icon={<Pencil />}
+              icon={<EditOutlined aria-hidden="true" />}
               href={`/releases/${record.id}/edit`}
               aria-label={`编辑发布 ${record.title || record.releaseNumber || '详情'}`}
             />
@@ -253,7 +259,7 @@ const ReleaseList: React.FC = () => {
         actions={
           <Button
             type="primary"
-            icon={<Plus />}
+            icon={<PlusOutlined aria-hidden="true" />}
             onClick={() => router.push('/releases/new')}
           >
             创建发布
@@ -336,7 +342,7 @@ const ReleaseList: React.FC = () => {
           </Form.Item>
           <Form.Item>
             <Space wrap>
-              <Button type="primary" icon={<Search />} onClick={handleSearch}>
+              <Button type="primary" icon={<SearchOutlined aria-hidden="true" />} onClick={handleSearch}>
                 搜索
               </Button>
               <Button onClick={handleReset}>重置</Button>
