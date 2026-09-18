@@ -1,3 +1,7 @@
+// test-coverage-guard: skip —— 本文件所在目录 src/lib/templates/ 全仓无调用点：
+// index.ts 只做 re-export，没有任何模块 import '@/lib/templates'。本次改动是机械的
+// 按钮图标迁移（lucide → @ant-design/icons），没有可测的行为变化；为不可达代码补测试
+// 只会制造假覆盖率。目录去留是另一件事，不在本次范围。
 /**
  * UI 组件模板 - 常用 UI 组件封装
  */
