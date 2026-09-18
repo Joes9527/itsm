@@ -533,6 +533,10 @@ func TestBPMNBoundAssignmentExplainsExecuteDenial(t *testing.T) {
 		t.Run(strconv.FormatBool(execute), func(t *testing.T) {
 			f := newBPMNAuthorizationFixture(t)
 			_, task := seedBoundAssignment(t, f, "ui-denial")
+			// Match production creation of a callback-free fulfillment task.
+			// The minimal authorization fixture has no matching XML node.
+			descriptor := f.engine.callbackDescriptor("", "", "")
+			task = f.client.ProcessTask.UpdateOne(task).SetCallbackHandlerID(descriptor.HandlerID).SaveX(f.userCtx)
 			grants := []string{"service_request", "read", "task", "read"}
 			if execute {
 				grants = append(grants, "service_request", "provision", "task", "update")

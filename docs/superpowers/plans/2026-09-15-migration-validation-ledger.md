@@ -11,14 +11,15 @@
 
 ## 当前结构目标与实际状态
 
-**统一目标：[047_bpmn_assignment_source](../../development-environment.md#selected-schema-target-047)。** 2026-09-16 09:10 CST 只读刷新：Dev与旧对照库可查询，原隔离验证容器已停止；下表区分本次与历史证据。本次不执行升级或切库。
+**统一目标：[047_bpmn_assignment_source](../../development-environment.md#selected-schema-target-047)。** 2026-09-16执行后状态如下；具体制品与未完成门槛见[四阶段执行证据](#two-database-execution)。
 
 | 对象 | 最后核验结构 | 目标／状态 |
 | --- | --- | --- |
-| 实际Dev：`itsm_config_baseline_20260908` | 031 | **目标047，尚未升级**；禁止恢复旧后端来适配031 |
-| 旧对照库：`itsm_migration_20260914` | 本次账本最高019、14条 | 不能认定为当前031 Dev的完整克隆；保留对照，克隆来源待原始恢复证据核定 |
-| 前次8080目标：`itsm_ga_ready` | 046（09-15历史核验） | 09-16所属容器已停止，未重新查询；保留既有成果，不能描述为当前在线目标 |
-| Dev升级预演副本 | 047 | P037及普通迁移已验证，原数据保全；副本已归档移除，不能写成Dev已升级或8080已切换 |
+| 实际Dev：`itsm_config_baseline_20260908` | 047、39条真实回执 | 已升级，R038未执行；3010→8080已指向Dev，登录成功，readiness200、普通工单创建/评论/转派通过；任务回调推进失败，UI验收未完成 |
+| 长期验证克隆（同ITSM数据库、独立schema） | 尚未创建 | 维护者已否决新增PG容器；schema克隆准入及权限隔离待实现，禁止改原P回执 |
+| 旧对照库：`itsm_migration_20260914` | 09-16执行前账本最高019、14条 | 不等同当时031 Dev完整克隆；仍保留，待成果及备份门槛满足后清理 |
+| 前次8080目标：`itsm_ga_ready` | 046（09-15历史核验） | 所属容器已停止，保留成果；不是当前在线目标 |
+| 本次Dev升级预演副本 | 047 | 152张原表字段/数据比对一致；临时恢复容器尚未退出。此前09-15副本已归档移除，与本次副本不同 |
 
 047解决所选代码的结构要求；19条旧流程绑定属于配置兼容问题，两者分别跟踪。038退休不属于恢复Dev的必经步骤。后端、前端、数据库结构和运行配置必须分别核验，不能用其中一个版本号代替全部状态。
 
@@ -35,9 +36,9 @@
 | 数据对象 | 角色 |
 | --- | --- |
 | 旧系统抽取与 manifest | 迁移源；记录时间、来源和摘要 |
-| itsm_config_baseline_20260908 | 切换前实际 Dev 数据库，保留可恢复基线 |
+| itsm_config_baseline_20260908 | 当前 Dev 数据库，已前向升级至047并保留升级前恢复基线 |
 | itsm | 较早新 ITSM 开发库；不是旧系统本体，不用它的计数代替当前 Dev |
-| itsm_migration_20260914 | 历史克隆对照样本；09-16账本最高019，来源不等同当前031 Dev，不能作为新模型准入证明 |
+| itsm_migration_20260914 | 历史克隆对照样本；09-16账本最高019，来源不等同升级前031 Dev，不能作为新模型准入证明 |
 | itsm_ga_ready | 新模型隔离迁移目标；保全身份数据并填入规范配置，不是 Dev 全量克隆，也不称正式 GA |
 | gb_replay_review / ga_acl_rehearsal_20260915 | 恢复、重放及权限验证副本，不是业务环境 |
 
@@ -489,19 +490,27 @@ WSL最终副本与角色已归档到既有私有证据目录，最终副本dump 
 
 ## 四阶段执行清单（2026-09-16，设计已确认）
 
-**状态：计划 ready；实际环境执行未开始。** 本节取代此前续办顺序，沿用U1–U4、C1/C3/C4、R1/V4/V5作为证据索引，不另建平行任务表。
+**状态：执行中（2026-09-16）。原 Dev 已完成 P037 与普通迁移至047；3010→8080 已连接 Dev，尚未完成 UI 验收与两库清理。** 本节取代此前续办顺序，沿用U1–U4、C1/C3/C4、R1/V4/V5作为证据索引，不另建平行任务表。
 
-**Goal：** 恢复当前新代码的日常Dev，建立可追溯验证克隆，保全身份、业务配置及迁移成果，最终只保留两个长期ITSM业务库。
+**Goal：** 恢复当前新代码的日常Dev，建立可追溯验证克隆，保全身份、业务配置及迁移成果，最终只保留Dev与验证两个长期ITSM数据目标，按最新指示使用同库不同schema。
 
-**Architecture：** 原Dev前向升级，验证库从验收Dev克隆；3010→8080一次只使用一个完整profile。数据库写入串行，角色/缓存/存储/会话/消费者按目标隔离。
+**Architecture：** 原Dev前向升级，验证schema从验收Dev克隆；3010→8080一次只使用一个完整profile。数据库写入串行，角色/缓存/存储/会话/消费者按目标隔离。
 
 **Tech stack：** 现有Go规范Migrator、领域服务、PostgreSQL、WSL stack管理器、Python迁移Toolkit、Next.js UI。
 
 > 执行Agent按已批准设计逐阶段推进，可使用executing-plans或subagent-driven-development组织任务；本段不授权跳过证据门槛。独立只读审查可并行，共享写入只由一个负责人执行。
 
+### 执行Agent接续入口（2026-09-16）
+
+维护者已委托本轮设计，后续自行分派其他Agent执行。先交付[任务包A：Dev流程恢复](2026-09-16-dev-workflow-recovery.md)，同步可做[任务包B：schema克隆](2026-09-16-schema-validation-clone.md)的只读分析/隔离实现。共享迁移、克隆和清理按门槛串行；B若新增规范迁移须显式更新结构目标，不能把047永久写死。任务包是实施步骤，不替代本清单的实际状态；本次仅文档，不代表任何新增功能或共享变更已经完成。
+
+**任务包文档复核（2026-09-16）：** 独立审查发现并已修正文档中的5项缺口：A完成事务与blocked区别、非空/类型验证、任务查询零写入；B准入升级生命周期设计门槛、阶段2完整验收依赖。复查未发现新的阻塞性歧义。A1/A2可窄范围实现；A3须先冻结流程制品审查；B1及B2/B3设计验证可开始，schema克隆不能报告为端到端实施就绪。两计划已补阶段阅读表与任务准入/交付门槛，AGENTS/CLAUDE同步入口。本结论仅为文档边界复核，不代表代码、环境或业务通过。
+
+**后续设计补齐（2026-09-16，取代上段“B仅可做设计”状态）：** 维护者要求全部设计由当前设计负责人完成。新增[完整实施合同](../specs/2026-09-16-dev-schema-execution-contract.md)，冻结实际definition65派生图（只读XML摘要已核对）、领域门禁、旧callback现有blocked处置、clone表/CLI/pin/升级及撤销刷新、现有演练rename+有限模板恢复、candidate scope schema适配及Toolkit受限JWT。独立复核修正Up前结构自锁和trigger校验遗漏后通过所审条款。A/B现可依此实现，不再要求执行Agent补详细设计；共享执行仍须既定验收门槛。本次只有文档和只读核验，未修改运行环境。
+
 ### 全局约束与文件职责
 
-- Dev：`itsm-postgres-dev / itsm_config_baseline_20260908`；验证克隆：同实例独立库`itsm_migration_validation`（未创建）。不得以改库名代替来源核验。
+- Dev：`itsm-postgres-dev / itsm_config_baseline_20260908 / public`；验证克隆按维护者最新指示使用同一数据库内独立schema（未创建）。不新增PG容器，不再采用原异库名方案；具体准入及权限隔离方案见[更新后的设计](../specs/2026-09-16-dev-restoration-two-database-design.md)。
 - 所选代码结构目标047；P037及尚缺普通032–036、039–047按规范依赖执行，R038排除；旧SQL/校验和/真实回执不改，禁止Ent叠加补表和应用owner权限。
 - 身份、组织、权限、密码及业务配置保留；测试数据先分类；824与6条cloud绑定保留停用；旧ITSM ticket及历史流程不迁。
 - 后端工具：`itsm-backend/cmd/migrate/main.go`、`migration/work_item_preparation.go`、`cmd/check_workitem_cutover/main.go`只复用；领域操作复用现有服务。发现代码缺口才建独立修复并测试，不直接改库绕过。
@@ -528,10 +537,10 @@ WSL最终副本与角色已归档到既有私有证据目录，最终副本dump 
 
 - [ ] 用最终候选制品在恢复副本运行规范只读`migrate -status`、`-dry-run`、`-prepare-workitem -dry-run`，绑定实际目标及新证据。CLI通过受保护CWD配置定位，不臆造DSN参数。
 - [ ] 复用已验证迁移路径，在副本补验本次配置、测试数据及角色差异；运行结构、保留基线、绑定路由与领域终止检查。不得把一次性且锁定旧容器的终止预演程序改目标用于真实Dev。
-- [ ] 建立维护窗口，停止相关写入/消费者；再次核对Dev身份与备份一致性。范围或源状态变化时补验受影响项。
-- [ ] 执行已审P证据提交和规范普通升级；仅使用此次真实目标证据，日志记录返回码/回执，不自动执行R038或重放已执行022/027。
-- [ ] 通过领域路径终止已确认废弃活动流程，按验证方案整理测试关联；应用已审绑定适配/停用并记录前后状态。保留自定义定义，未知类型不得继续可调度。
-- [ ] 配置匹配的runtime/system/inspection身份及执行绑定，撤销临时权限；使用完整Dev profile启动当前新代码，校验实际连接而非仅recipe。
+- [x] 建立维护窗口，停止相关写入/消费者；再次核对Dev身份与备份一致性。范围或源状态变化时补验受影响项。
+- [x] 执行已审P证据提交和规范普通升级；仅使用此次真实目标证据，日志记录返回码/回执，不自动执行R038或重放已执行022/027。
+- [x] 通过领域路径终止已确认废弃活动流程，按验证方案整理测试关联；应用已审绑定适配/停用并记录前后状态。保留自定义定义，未知类型不得继续可调度。
+- [x] 配置匹配的runtime/system/inspection身份及执行绑定，撤销临时权限；使用完整Dev profile启动当前新代码，校验实际连接而非仅recipe。
 - [ ] 验证迁移/结构、角色隔离、身份及配置保全、readiness、登录与代表性通用工单/变更/服务请求UI；检查旧绑定不能错误竞争路由，待适配能力显式列出。
 - [ ] 记录已恢复Dev制品与profile、允许重新开放开发写入的时间，更新环境入口。失败按设计的开放前/开放后恢复规则处理，不长期退回旧代码。
 
@@ -539,9 +548,11 @@ WSL最终副本与角色已归档到既有私有证据目录，最终副本dump 
 
 ### 阶段3：建立克隆并复用迁移成果（U4、C1/C3/C4、R1/V4/V5）
 
+**最新方向：** 本阶段及阶段4原有“验证库/两个库”用语按同库内Dev/验证两个schema数据目标理解；原独立库名只是历史提议。具体实施步骤须先补齐schema克隆准入与隔离设计，不直接照旧步骤恢复或删除。
+
 输入：阶段2验收基线、现有源manifest/工具/成果。输出：唯一可用验证库与可重复验证过程。
 
-- [ ] 核验Toolkit实际分支与主干差异；未集成则单独评审集成，运行既有离线测试`python3 -m pytest scripts/__tests__ -q`及`python3 -m scripts.migration self-test`，不让离线检查连接共享库。
+- [x] 核验Toolkit实际分支与主干差异；未集成则单独评审集成，运行既有离线测试`python3 -m pytest scripts/__tests__ -q`及`python3 -m scripts.migration self-test`，不让离线检查连接共享库。
 - [ ] 从已验收Dev一致性快照恢复具名验证库；保存来源/时间/摘要，校验迁移结构、身份及关联。建立独立profile，阻止复制过来的凭据/绑定意外连回Dev，禁用未获准后台外发。
 - [ ] 保全原ga/replay五批映射、制品、真实收据和身份工具结果；按稳定业务键比较新克隆，列出一致、缺失、冲突及排除对象。
 - [ ] 用户/组织先执行现有`verify`与`verify-profile`；需补建时先dry-run。配置用既有适用批次工具生成差异方案，不盲跑全量seed、不复制旧收据、不默认补示例对象。
@@ -552,14 +563,73 @@ WSL最终副本与角色已归档到既有私有证据目录，最终副本dump 
 
 ### 阶段4：清理与最终交付
 
-输入：两个目标库验收结果、旧成果保全、具名清理清单。输出：两个长期业务库与最终状态。
+输入：Dev/验证两个schema验收结果、旧成果保全、具名清理清单。输出：同库两个长期schema目标与最终状态。
 
 - [ ] 重新检查每个待删库及专属资源的消费者、成果、备份恢复证明；先迁移依赖；清单外对象不删除。
-- [ ] 分批归档删除旧ITSM业务/测试库及无共享依赖的专属容器/卷；每批核对目标库仍可用。禁止名称通配删除，禁止删除共享Dev PG实例或卷。
+- [ ] 分批归档删除旧ITSM业务/测试库及无共享依赖的专属容器/卷；每批核对Dev/验证schema仍可用。禁止名称通配删除，禁止删除共享Dev PG实例或卷。
 - [ ] 临时恢复/测试资源用完退出；归档旧recipe和说明，当前文档只指向Dev与迁移验证两个profile。必要迁移证据不因清理丢失。
-- [ ] 盘点所有维护范围内ITSM实例，包括已停止容器，确认仅两个长期ITSM业务库；备份文件及PG系统库不计入。若仍有阻塞对象，不宣称清理完成。
+- [ ] 盘点所有维护范围内ITSM实例，包括已停止容器，确认仅同库内Dev/验证两个长期ITSM数据目标，历史ITSM数据库已按清单退出；备份文件及PG系统库不计入。若仍有阻塞对象，不宣称清理完成。
 - [ ] 最终核验日常入口连接Dev及两个目标身份/版本，记录保留库、已删对象、备份位置和未覆盖能力；环境无新变化时不重复全套UI测试。
+
+### 本次执行证据（2026-09-16）
+
+本节是当前状态；前文09-15及09-16执行前的031、入口停止等观察保留为历史，不再代表实时环境。
+
+- **恢复基线：** 私有证据目录 `/home/administrator/.local/state/itsm-dev-restoration-20260916`。`dev-before.dump` SHA-256 `53c9864ef99d3e08ed073264e2bc5b81eb4a31ca45d77c52d56d08343ee67c5e`。隔离恢复核对152张原表及身份/配置；副本升级后再核对原字段/行一致。附件9个物理文件恢复比对一致，但尚无MinIO API恢复验收，不扩大证明范围。
+- **真实Dev升级：** `itsm-postgres-dev / itsm_config_baseline_20260908 / public` 已有39条真实回执，最高047；P037及14条普通迁移成功，R038未执行。原24条回执及152张原表字段/数据核对一致；临时owner权限已撤销。见 `actual-upgrade-result.json`、`actual-*` 与 `rehearsal-independent-review.json`。
+- **运行入口：** 3010前端源 `2988819c94cfcfb69cee5b0d1dfbe69ee0fb8c9b`、build `DNEHNrmCuLdDvWw3kgnCI`（显式构建WSL8080通知地址）；8080源 `fc8de9d3626bd61e9f046085e4cde8c43d6432e4`，制品SHA-256 `1fc38aaa0bcfd62361c0bf9fa5d30ecf2f8ea758246755c0e845f991a8e7b6af`，含已合并PR44/45。实际连接为Dev app/system及独立inspection `itsm_dev_inspection_20260916`；Redis DB11、附件桶 `itsm-uploads`。使用development模式，未配置LLM不等于AI已可用。消费者启用outbox、callback与event audit；notification及外部能力仍关闭，日常完整流程尚未宣布验收通过。
+- **登录与准入：** 3010浏览器登录成功；PR45经独立审查、CI和部署后，readiness返回200，schema047、baseline1.0.0，单次观测约0.27秒。R038仍未执行，未伪造回执或扩大权限。
+- **测试流程处置：** 实例7、8、9、10经现有领域API逐条终止，全部读取验证为terminated；保留历史与领域审计。执行前锁定3010/8080实际PID、启动时间、制品、配置、上游及Dev身份，并核对无未决callback。私有 `domain-termination-before.json` 和四份 `domain-termination-after-*.json` 保存结果。没有删除工单/历史数据。
+- **配置已处理与待适配：** 19条旧绑定已通过具备CAS与审计的领域API逐条停用并保留；7条generic/change替代已创建，完整字段及定义摘要回读核验通过（`binding-apply-journal.jsonl`）。源16的自动任务不受支持；服务请求源5/13/687/823存在专业完成及分支配置缺口，连同824和6条cloud保留停用待适配，不能报告为业务验收成功。
+- **工具：** PR43已修复实体选择、租户范围与失败退出码问题并合并；91项离线测试通过、1项live anchor跳过，独立复审无剩余阻塞；未运行真实数据回填。`--apply`尚不满足API/数据库目标绑定，不宣称可直接回填。
+- **克隆方向已纠正、实现仍阻塞：** 维护者否决新增PG容器，指定同ITSM数据库、不同schema；独立PG建议撤回，不再等待其选择。长期ITSM/KAF单实例双逻辑库整合计划继续有效。源码`verifyPreparationReceipt`同时校验database/schema，现有`DB_SCHEMA`配置不能代替schema克隆准入；需保留原回执并补齐可审计的来源/目标证明及跨schema隔离验证。验证schema尚未创建，旧成果库和临时恢复容器未清理，不能声称已收敛到两个数据目标。
+- **创建阻塞及配置修复：** 普通工单UI最初返回500且事务回滚；默认Graph目标被停用，无法冻结邮件通知目标。配置Dev专用本地SMTP接收器后，同一表单成功创建工单29。`itsm-dev-mailpit`仅发布127.0.0.1:1025/8025，无relay；镜像固定`axllent/mailpit@sha256:df6c2541907e1be6fac21f509927cf6ed771617a1f4b361ef66d97bd05593d2d`。合成邮件接收验证通过；应用notification仍disabled，工单29邮件intent待处理且attempt0，站内通知已落地。原用户偏好与企业connector不改；这不是外部邮件发送验收。
+- **UI实际边界：** 工单29（`DEV-RESTORE-20260916-GENERIC-01`）已通过创建、详情、评论、带原因转派至验收人、刷新及合成附件上传/下载；下载文件逐字节比对一致，SHA-256 `5e65df006000f6ed998847c0931fd0c1b76c8ca5fe849a2e60c9dcf35109f0a3`。流程27使用`generic:29`。UI完成任务33后，任务记录completed，但callback2仍pending/handler_error，流程未推进。本条记FAIL，不将任务提交/完成当流程成功。已定位：definition65的Activity_Assign回调要求assignee_id，但任务完成UI没有该输入，契约只标正整数未标required，导致空payload被接受后反复失败。只读纯handler复现一致；instance旧快照assignee2不能替代当前工单owner1，更不能补写冻结回调伪造用户选择。Activity_Resolve另需验证new_status输入。现有API没有带修正输入的callback恢复入口，实例终止也拒绝未决callback；保留实例27/任务33/回调2，不手改payload或重置任务。配置候选是新定义版本使用现有无handler fulfillment + work_item_assignee模式；若继续保留assign回调则需补UI/API必填表单契约，两者尚未取代已接受设计。当前数据恢复另需受审计方案。
+
+### 本次实现证据（2026-09-16，恢复演练延伸：A1/A2）
+
+本节记录开发恢复包 A 的实施与核对结果；A3/A4 未开始，前文 FAIL 项（流程27/任务33/callback2）状态不变。
+
+- **A1 契约失败先于任务完成：** 提交 `c3bcf597`（`fix(bpmn): reject missing actor assign input before task completion`）。新增 `CallbackActionContract.NonEmptyStringFields`/`RejectInvalidUserInput`；`normalizeBPMNCallbackContractPayload` 用类型化 `bpmnCallbackUserInputError` 区分"可修正输入错误"与"定义缺陷"；入队分双变体 `BuildCallbackEnqueuePlan`（冻结→blocked，行为不变）与 `BuildCallbackEnqueuePlanForActorCompletion`（actor→拒绝），后者接在 `completeAuthorizedTaskWithClient` 内、`ProcessInstance` 变量合并与 `ProcessTask.SetStatus(completed)` 之前，同一 `RepeatableRead` 事务。`assign` 声明必填 `assignee_id`；`update_status` **不设**必填（`updateTicketStatus` 有合法默认 `in_progress`），其更严格要求归入新合同门禁（A3）。
+- **A1 范围更正（重要）：** A1 只关闭**新故障的产生路径**，**不中断**已存在回调的重试。领取路径 `filterPersistedBPMNCallbackPayload` 失败仍落 `handler_error` 重试；§2.3 要求冻结回调收敛为现有 `handler_contract` **blocked**，属 **A4**。因此流程27/任务33/回调2 现状**未变**，不得报告为已修复。
+- **A1 真实事务验证：** `service/bpmn_assign_input_postgres_test.go`（`integration_postgres`，独立 schema + 结束 DROP，一次性 `postgres:16-alpine`@36444，用后即删）。4 例通过：缺参拒绝、重复拒绝无副作用、并发拒绝无部分写入、跨租户拒绝。**反向验证**：临时还原调用点后前 3 例 FAIL（`An error is expected but got nil`），证明其确守 A1；跨租户例两种行为均 PASS，守的是既有租户隔离边界，**非 A1 证据**。
+- **A2 简单入口不提供必然失败的完成：** 提交 `6c76881c`。`taskUIActions` 在**已持久化描述符**声明 `RejectInvalidUserInput` 时不再授予 `Complete` 并给出 reason；判定为**纯行读取**，不调用会补写描述符的 `descriptorForProcessTask`；不可解析的 handler/action 失败关闭；有固定回退与无回调任务保持可完成。**前端无需改动**：`TicketProcessTasks.tsx:81` 已由 `uiActions.complete` 门控、`:78` 已渲染 `reason`、`:128` 在标志为假时拒绝执行，未硬编码 handler 名。
+- **测试与验证：** 提交 `77300ab7`（并发/租户负例）。`go test ./service ./service/bpmn` 全通过；真实 PG 4 例通过；前端 `npm run test:unit -- --runTestsByPath src/components/ticket/__tests__/TicketProcessTasks.test.tsx src/lib/api/__tests__/bpmn-workflow-api.test.ts` 达 `Tests: 44 passed, 44 total`（真实执行，非 `passWithNoTests`），`npm run type-check` 无错误；本 PR 前端改动文件数为 0，故在装有依赖的 worktree 运行等效。
+- **交付状态：** PR #47（`codex/chore/dev-restoration-schema-validation`，基于 `origin/main` `b8ac9639` 并已 `--no-ff` 合入设计分支 `8af8321b`，集成提交 `f1f31b38`）。**未合并**；设计 PR #46 未合并，**建议先合 #46**。BPMN 与权限边界改动**尚缺独立复核**，实现者不得自审通过。
+- **未决：** A2 门控对"固定配置已满足输入"的 `assign` 任务可能误禁用；完成 payload 取自请求变量、`task.TaskVariables` 不参与 enqueue，故该机制确切来源未确认。按"报告差异、不自行更换方案"挂起待设计确认。
+- **定义源核对（A3 门槛，已通过）：** tenant1 definition65 `key=ticket_general_flow`、`version=1.3.0`、`tenant=1`、`deployed_at=2026-08-21T05:22:01.495923+00:00`；按设计方冻结配方 `digest_xml` 实测 SHA-256 `6d7c436bb06acfef500df259d9b82e605b53b08bbf18dc8b33f8e48939d6a893` **与冻结基线完全一致**。
+- **冻结配方（务必复用，避免重犯误判）：** `process_definitions.bpmn_xml` 存 **base64**；基线摘要为 `sha256(base64decode(bpmn_xml))`，见证据目录 `itsm-dev-bindings-apply.py` 的 `digest_xml`（该脚本自带 `definition hash drift` 断言）。对同一对象改用 `jsonb::text` 或"解码后 XML 文本"计算会得到 `9166698a…` / `dc01d828…`，**均非基线**。此前一次"SHA 不一致"结论即因此口径错误，已更正，源并未漂移。
+- **内容指纹核对：** 解码 XML 含 assign、条件审批、handle、条件 escalate、resolve、notify_requester 及 `Flow_Reject`；`EndEvent_1` 名为"工单关闭"且**无关闭命令**——与合同 §2.1 描述的配置缺陷逐项吻合，源未被改动。
+- **绑定核对（不按命名猜测）：** `id=825 tenant=1 generic ticket_general_flow ver=1 active default=false prio=0`；`id=827 tenant=1 generic ticket_general_flow ver=1 active default=true prio=10`；`id=830 tenant=2 generic ticket_general_flow ver=1 active default=true prio=0`。generic 绑定全集仅此 3 条；绑定表 35 行、max_id=831。tenant1 切换目标 825/827、tenant2 保留 830 与合同一致。另存一份**未执行**的旧绑定计划（状态 `U3_DRAFT_7_GENERIC_CHANGE_CREATES_19_DEACTIVATIONS_SR_DEFERRED_NOT_EXECUTED`），其 `sourceBindingId=1` 属另一工作线，不冲突。
+- **运行入口纠偏：** 3010 曾因手工启动而脱离 stack 权威（记录 PID 消失、端口被手工 PID 占用）。已停手工进程并用 `stack stop/start itsm-web` 重新接管：`running (PID 1503435)`、`source_revision=2988819c94cfcfb69cee5b0d1dfbe69ee0fb8c9b`、`build_id=DNEHNrmCuLdDvWw3kgnCI`，`/login` 与 `/api/v1/health` 均 200。运行操作此后只经 stack。
 
 ### 验证、审查与汇报纪律
 
 每阶段只汇报“完成／验证／阻塞／下一步”，在本节勾选并链接脱敏证据。已有相同源码/目标/条件的证据复用，变更和失败才补验；代码修复按影响范围跑测试。配置清理、真实写入和删除清单在各自门槛进行独立审查，共享操作不并行。文档交付完成不勾选任何环境执行项。
+
+### 2026-09-16 包1 决策记录与 A3 范围评估（对齐后）
+
+- **口径更正：** Dev 当前为 **047**（39 回执，最高 `047_bpmn_assignment_source`），**非 048**；048 既无回执也无对应实例。
+- **库用途（据 PR #46 背景与现有文档）：** `itsm_config_baseline_20260908` = 真实初始 Dev（3010→8080→Dev，身份与业务配置保留）；`itsm_migration_20260914` = 为迁移旧 ITSM 数据做的**同实例克隆**（019 代，**非**当前 Dev 副本）。`docs/migrations/2026-09-14-schema-ledger-reconciliation-plan.md:162` 将其记为"同实例克隆库"先例。该文档的库状态表**已过时**（彼时 Dev 记 24 回执/031；表内 `itsm_candidate` 现已不存在）→ **缺一份现行库用途台账**。
+- **包映射与进度：** PR #46 包1（修复 Dev 流程阻塞）= 本清单的 A1/A2/A3/A4。A1 `c3bcf597`、A2 `6c76881c`、负例 `77300ab7` 已交付并验证（PR #47）。A3（新流程版本+路由切换+UI 验收）与 A4（冻结回调保留式处置）未完成。包1 验收要求"新建普通工单能完成处理、解决、关闭"，**A1/A2 单独不满足该验收**。
+- **破环口径（设计方裁定）：采 (i)。** A3 不以隔离目标演练替代，改为 **Dev 内自证**：新 key 先创建（惰性，无绑定即无路由影响）→ Dev 合成工单走通 → 切 825/827 → 再验证 → 失败用现有领域 API（CAS+审计）切回；判据为"是否优于当前已坏的现状"。依据：定义解析按 `key`+`is_active`（`service/bpmn_version_service.go:690-709`），且 825/827 均为显式 `ver=1`。
+- **已批准：** 允许在 Dev 创建**未绑定**的 `ticket_general_flow_v2` v1.0.0，作为演练与验收输入。
+- **已决策：** 流程级 metaData 保留 `category/description` 并对齐 `version`，**移除**其中误导的 `service_task_type`/`action`（引擎不解析流程级 `extensionElements`，但仓库多个内置模板沿用该写法）。**流程27 保留**为冻结失败样本。
+- **A3 范围评估（显著大于 A1/A2，须分次实现并逐段独立复核）：**
+  - §2.1 新图：`Activity_Assign` 改无handler fulfillment（`assigneeSource=work_item_assignee`，名"确认接单"）；`Gateway_ApprovalResult` 的拒绝分支改指**新增 `EndEvent_Rejected`**（修正原 `Flow_Reject` 直接进处理）；`Activity_Handle`/`Activity_Escalate`/`Activity_Resolve` 改 owner-bound 且需对应领域 receipt/状态；`Activity_NotifyRequester` 移除旧 `ticket_task` 通知回调；**新增 `Activity_Close`**；`EndEvent_1` 更名"流程完成"。
+  - §2.2 门禁：新增定义级 `workItemLifecycleContract=generic_fulfillment_v1` 与任务级 `workItemPrerequisite=assigned|in_progress|escalated|resolved|closed`，**发布期拒绝**未知值/专业class/handler 混用；同一事务纯规则门禁（建议 `service/generic_workflow_gate.go`），BPMN 命令、只读 UI actions 与 Ticket 领域命令共用；锁序 WorkItem→instance→task，CAS/operation receipt 去重；拒绝客户端改写 `approval_required`/`need_escalate`/`approvalResult`；旧定义沿用原逻辑。
+  - **必修缺陷：** 网关条件语法——定义写 `<bpmn:body>${...}</bpmn:body>`，而 `BPMNConditionExpression.Expression` 的 tag 为 `xml:",chardata"`（`service/bpmn_types.go:355-358`），消费点 `bpmn_process_engine.go:1182/2498/2516`，故 definition65 的**三个网关当前均不可用**。
+- **待办：** A3 实现与切换、A4、库用途台账补记、以及三处较早库以 **KAF 命名**迁移为头（`019_kaf_execution_integrity_rls`）的血统确认。
+- **执行交接：** 包1 的实施交接（背景／基线／进度／环境事实／陷阱／A3 步骤2–8 插入点／阻塞）见 [包1（Dev 流程阻塞修复）实施交接](./2026-09-16-package-a-handoff.md)。该文是执行交接，状态以本台账为准。
+
+
+### 2026-09-17 接手独立复核与 A2 修正
+
+- **实况核验：** 只读核对真实8080配置、二进制摘要、PG活动连接与数据，仍为 Dev public/39条回执/047，运行源 fc8de9d3，接手源427bed03；A1/A2未部署。工单29 open、流程27 running、任务33 completed，callback2 pending/handler_error且缺assignee_id，本次快照attempt286（运行中会继续变化）。实例7–10 terminated；19停用绑定和7个generic/change_request替代一致。
+- **环境边界：** Dev PG仍有6个非系统库，均无migration_validation；三个旧019库的非系统schema数（含public）分别1153/1020/1111。旧恢复演练容器仍运行，旧容器/库并未全部清理；本次未操作共享数据或运行服务。019血统、备份可恢复性与完整消费者清理范围未在此复验。
+- **独立复核发现：** A1未发现阻塞问题；A2误将生产无回调标记 __no_user_task_callback__ 当未知handler（P1），历史空描述符assign仍显示必然失败Complete（P2）。原固定配置assign疑虑未找到支持路径，不能按假设补入owner或旧变量。
+- **修正：** 无回调标记保留正常授权完成；历史空描述符按task tenant→instance→固定definition只读解析，未知/缺失/解析失败显式不授予Complete，不调用会持久化descriptor的命令辅助方法。assign仍需输入，update_status既有默认行为保留。A1代码未更改。
+- **测试证据：** 生产无回调标记测试在修复前失败（Should be true）；历史assign/unknown_action在修复前失败（expected false, actual true）。新增测试核对GET不写描述符、时间及版本。权限测试的简化夹具缺XML节点，已仅调整该用例为生产无回调标记，保留所有权限断言。最终执行 go test ./service ./service/bpmn -count=1 -timeout=180s 全通过（42.019s / 2.527s），使用Go1.25.14；未降低go.mod要求。
+- **独立审查：** 独立审查Agent已复核A1/A2原范围、两项修正及A3承载澄清；测试由执行方实际运行，审查者未重复运行。不能将这项审查扩大为A3/A4实现或UI验收。
+- **A3裁定：** 承载方式及可信变量规则见[实施合同§2.2](../specs/2026-09-16-dev-schema-execution-contract.md#22-单一流程约束和生命周期门禁)，取代交接§7待确认项。采用流程级ExtensionElements和实例固定不可变定义引用，不新增定义快照副本。
+- **仍未完成：** A3合同/门禁/新图/路由/UI、A4冻结回调blocked处置、包2–4。本次未运行真实PG事务测试、浏览器验收、迁移或部署；原A1 PG证据仅作为已有证据保留，不能声称本轮重跑。

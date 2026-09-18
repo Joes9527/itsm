@@ -1,12 +1,12 @@
 # KAF / ITSM maintained WSL development environment
 
-Status: maintained operational contract, updated 2026-09-15. The maintainer selected **3010 as the ITSM frontend port**. Deployment filenames containing `ga`, `candidate`, or `prod` do not establish environment identity or release acceptance. This environment is named **WSL development**.
+Status: maintained operational contract, updated 2026-09-16. The maintainer selected **3010 as the ITSM frontend port**. Deployment filenames containing `ga`, `candidate`, or `prod` do not establish environment identity or release acceptance. This environment is named **WSL development**.
 
 > Before changing Dev, read the [verified Dev031/main047 divergence analysis](review/2026-09-16-dev-schema-divergence-report.md). The maintainer accepted the [restoration design](superpowers/specs/2026-09-16-dev-restoration-two-database-design.md); use the [four-stage execution checklist](superpowers/plans/2026-09-15-migration-validation-ledger.md#two-database-execution) and its evidence gates instead of historical proposals. The selected code/schema compatibility target remains047.
 
 ## Selected schema target: 047
 
-**Current development and migration-validation target, confirmed 2026-09-15: `047_bpmn_assignment_source`.** Both Dev and the migration-validation database must support this selected current-code schema. Do not choose an older backend to accommodate a database at 031 or 046. This is the target contract, not a statement that either live database has already been upgraded.
+**Current development and migration-validation target, confirmed 2026-09-15: `047_bpmn_assignment_source`.** Both Dev and the migration-validation database must support this selected current-code schema. Do not choose an older backend to accommodate a database at 031 or 046. The original Dev completed its canonical upgrade on 2026-09-16. The validation clone has not been created; see the current execution evidence below.
 
 | Decision | Authority for the current task |
 | --- | --- |
@@ -20,6 +20,14 @@ Status: maintained operational contract, updated 2026-09-15. The maintainer sele
 047 adds the persisted, immutable `process_tasks.assignee_source` contract for explicitly bound WorkItem-assignee tasks. It does not turn historical tasks into bound tasks, repair process routing configuration, import legacy data, or establish business acceptance. The canonical [migration registry](../itsm-backend/migration/migrations.go) and [047 SQL](../itsm-backend/migrations/047_bpmn_assignment_source.sql) define the structure; the [assignment report](review/2026-09-15-work-item-task-assignment-report.md) defines the associated behavior and evidence.
 
 For coding agents: start from this selected target and the current source registry. Treat later sections describing earlier port/candidate work and older migration numbers as historical or feature-specific evidence. If a later task intentionally advances beyond047, update this target and its linked execution ledger together; do not silently freeze development at047 or silently deploy a newer schema. Matching the maximum receipt number alone does not prove that required migrations, privileges, configuration and UI paths are valid.
+
+## Current execution status (2026-09-16)
+
+3010 → 8080 currently targets `itsm-postgres-dev / itsm_config_baseline_20260908 / public`, with39 actual migration receipts through047 and no R038. Readiness returns200. Browser login, generic creation, comments and reassignment pass; task callback advancement currently fails. Restoration and full UI acceptance remain in progress. Core outbox/callback/audit consumers run; notification delivery and external workers remain disabled.
+
+The Dev email profile explicitly targets loopback-only SMTP capture (1025, with local capture UI8025); this is a test dependency, not another ITSM application environment. No enterprise connector or user notification preference was changed. Pending delivery intents remain recorded; enabling notification delivery requires its own explicit scope and acceptance.
+
+The traceable validation clone has not been created. The maintainer rejected an additional PostgreSQL container and selected **one ITSM database with separate Dev and validation schemas**. Existing Dev remains in its current schema. `DB_SCHEMA` support alone is insufficient: preparation receipts also bind the schema, so clone admission and cross-schema isolation require a reviewed implementation. The earlier independent-PG proposal is withdrawn. The long-term [ITSM/KAF consolidation plan](superpowers/plans/2026-09-14-itsm-kaf-task-3-pg-consolidation.md) still places the two products in separate logical databases on one PostgreSQL instance; it has not been executed by this task. See the [updated restoration design](superpowers/specs/2026-09-16-dev-restoration-two-database-design.md). Historical comparison databases remain until cleanup gates pass. Exact artifacts, actions and remaining gates are maintained only in the [execution ledger](superpowers/plans/2026-09-15-migration-validation-ledger.md#two-database-execution).
 
 ## Endpoint ownership
 
@@ -53,6 +61,53 @@ Windows host: `192.168.31.66`. SSH reaches Ubuntu WSL as `administrator`, port `
 - A schema-changing task includes dependency-aware upgrade and verification for both roles. If either database lags, record a blocking gap and complete its upgrade before using the new code there. Do not report results from different code/schema contracts as equivalent acceptance.
 - **Do not restore or retain old application code as the solution for switching back to Dev.** Preserve Dev data and service stability by planning a compatible upgrade. “Keep Dev stable” does not mean freezing its schema indefinitely.
 - A source merge is not a deployment. Select and verify a concrete frontend/backend release together; do not automatically deploy every new main commit or blindly run all migrations.
+
+### Work item definition digest (frozen recipe)
+
+`process_definitions.bpmn_xml` stores the BPMN XML **base64-encoded**. The frozen
+definition digest is `sha256(base64decode(bpmn_xml))`.
+
+The reference implementation is `digest_xml` in
+`/home/administrator/.local/state/itsm-dev-restoration-20260916/itsm-dev-bindings-apply.py`,
+which also asserts `definition hash drift` against the reviewed binding plan.
+
+Do not compute this digest from `bpmn_xml::text` nor from the decoded XML text.
+For tenant1 definition 65 those two encodings yield `9166698a...` and
+`dc01d828...`, while the frozen baseline is `6d7c436b...`. A mismatch caused by
+the wrong encoding is **not** evidence of source drift: re-check with the recipe
+above before reporting a discrepancy.
+
+Verified 2026-09-16 for tenant1 definition 65: `key=ticket_general_flow`,
+`version=1.3.0`, `tenant=1`,
+`sha256=6d7c436bb06acfef500df259d9b82e605b53b08bbf18dc8b33f8e48939d6a893`, matching
+the frozen baseline. Binding IDs must be re-read from `process_bindings` rather
+than assumed from naming.
+
+### Database inventory (verified 2026-09-16)
+
+Labels describe purpose, not lineage. Re-read this table against `pg_database`
+rather than trusting a name, and never assume "migration" means "the current Dev
+copy".
+
+| Database | Purpose | Ledger head | defs/bindings/tickets | Notes |
+| --- | --- | --- | --- | --- |
+| `itsm_config_baseline_20260908` | **The real Dev target** (3010 → 8080 → here) | `047_bpmn_assignment_source`, 39 receipts | 75/35/33 | Identity, permissions and business configuration preserved. |
+| `itsm` | Original pre-split database: the shared `public` schema plus a very large number of leftover per-test schemas | `019_kaf_execution_integrity_rls` | 68/28/18 | KAF-named head; lineage unresolved, see open items. |
+| `itsm_baseline_20260908` | Earlier baseline copy of the same generation as `itsm` | `019_kaf_execution_integrity_rls` | 68/28/18 | Created 2026-09-08. |
+| `itsm_migration_20260914` | Same-instance clone made for the legacy ITSM data migration; the documented precedent for "rehearse on a clone" | `019_kaf_execution_integrity_rls`, 14 receipts | 68/28/18 | **Not** a copy of the current Dev (047), so it cannot serve as the "verified Dev clone" the validation role requires. |
+| `itsm_p1_integration_verify_20260901` | Older integration verification target, already cleaned | `022_drop_professional_extension_shared_fields` | 20/9/0 | Not in use. |
+| `itsm_intake_test` | Unversioned intake test database | no `schema_migrations` | 1/1/1 | Documented as a dangerous unversioned state. |
+
+Open items:
+
+- The three databases that share an `019_kaf_execution_integrity_rls` head record
+  their history under **KAF** migration names, while Dev records **ITSM** names.
+  Resolve which product's history each one actually holds before using any of
+  them as a validation or clone source.
+- `itsm_candidate` (38 receipts, `046_auth_token_state`) still appears in the
+  2026-09-14 reconciliation table but no longer exists.
+- No database on this instance has a `migration_validation` schema, so the
+  two-database design's validation area remains uncreated.
 
 ### Three separate workstreams
 
