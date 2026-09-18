@@ -225,6 +225,7 @@ func (h *Handler) CreateDepartment(c *gin.Context) {
 		Name        string `json:"name" binding:"required"`
 		Code        string `json:"code" binding:"required"`
 		Description string `json:"description"`
+		NodeType    string `json:"nodeType"`
 		ManagerID   int    `json:"managerId"`
 		ParentID    int    `json:"parentId"`
 	}
@@ -238,6 +239,7 @@ func (h *Handler) CreateDepartment(c *gin.Context) {
 		Name:        req.Name,
 		Code:        req.Code,
 		Description: req.Description,
+		NodeType:    req.NodeType,
 		ManagerID:   req.ManagerID,
 		ParentID:    req.ParentID,
 		TenantID:    tenantID,
@@ -261,6 +263,7 @@ func (h *Handler) UpdateDepartment(c *gin.Context) {
 		Name        string `json:"name"`
 		Code        string `json:"code"`
 		Description string `json:"description"`
+		NodeType    string `json:"nodeType"`
 		ManagerID   int    `json:"managerId"`
 		ParentID    int    `json:"parentId"`
 	}
@@ -284,6 +287,15 @@ func (h *Handler) UpdateDepartment(c *gin.Context) {
 	}
 	if req.Description != "" {
 		existing.Description = req.Description
+	}
+	if req.NodeType != "" {
+		// 类型词汇表与创建路径同一把权威；未知取值在写入前 fail-closed。
+		nodeType, err := NormalizeDepartmentNodeType(req.NodeType)
+		if err != nil {
+			common.ParamError(c, err.Error())
+			return
+		}
+		existing.NodeType = nodeType
 	}
 	if req.ManagerID != 0 {
 		existing.ManagerID = req.ManagerID
