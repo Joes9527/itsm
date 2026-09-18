@@ -12,6 +12,8 @@
 
 - [人员与汇报线实施计划（上级校验 + 迁移落位，draft，未执行）](superpowers/plans/2026-09-18-people-reporting-line.md)：6 个任务（上级写入校验：自引用/成环/跨租户/非在职、导入跳过非法值并计数、只读盘点、上级四类处置、员工落位到最细组、KAF 上游字段前置条件）。**Task 4/5 含数据库写入，需单独授权；Task 5 依赖 node_type 已赋值。**
 
+- [流程与路由迁移实施计划（5 种找人方式 + 生产口径重算，draft，未执行）](superpowers/plans/2026-09-18-process-routing-migration.md)：7 个任务（解析契约与元数据、直属上级与第 N 级、修复多来源只取首个、兜底组可配置且必留痕、发布校验 fail-closed、生产 1085 条路由可表达性重算、设计器 5 种方式）。**仅 Task 6 读生产导出与目标库，只读；不新增 canonical 迁移。**
+
 > **开发／迁移任务先读：[当前结构目标047](development-environment.md#selected-schema-target-047)及[实际数据库状态](superpowers/plans/2026-09-15-migration-validation-ledger.md#schema-target-status)。目标版本与已部署状态分开记录。**
 
 - [Ticket 详情体验统一实施计划](./superpowers/plans/2026-09-15-ticket-detail-experience-unification.md)：六项任务及最终复审完成；浏览器 7/7、最终并发回归 98/98，已提交 PR #35。
