@@ -91,4 +91,20 @@ describe('NotificationWSService cookie-only ticket authentication', () => {
     await expect(service.connect()).rejects.toThrow('unauthorized');
     expect(FakeWebSocket.instances).toHaveLength(0);
   });
+
+  it('derives the backend WebSocket URL from the page host when NEXT_PUBLIC_WS_URL is unset', async () => {
+    delete process.env.NEXT_PUBLIC_WS_URL;
+    const service = new NotificationWSService();
+    const connecting = service.connect();
+    await Promise.resolve();
+    FakeWebSocket.instances[0].open();
+    await connecting;
+
+    const url = FakeWebSocket.instances[0].url;
+    expect(url).toBe(
+      `ws://${window.location.hostname}:8080/api/v1/ws/notifications?ticket=short-lived-ticket`
+    );
+    // 回归护栏：旧兜底值 ws://localhost:8090 端口错误，且从局域网客户端看指向客户端自己
+    expect(url).not.toContain('8090');
+  });
 });
