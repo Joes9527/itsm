@@ -6,6 +6,7 @@ import (
 	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/ent"
+	"itsm-backend/ent/ticket"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -55,11 +56,29 @@ func requireWorkItemPermission(action string, collaboration bool) gin.HandlerFun
 		}
 		client := clientInterface.(*ent.Client)
 
-		id, err := strconv.Atoi(c.Param("id"))
-		if err != nil {
-			common.Fail(c, common.ParamErrorCode, "无效的工单ID")
-			c.Abort()
-			return
+		idParam := c.Param("id")
+		id, err := strconv.Atoi(idParam)
+		if err != nil || id <= 0 {
+			if idParam == "" {
+				common.Fail(c, common.ParamErrorCode, "无效的工单ID")
+				c.Abort()
+				return
+			}
+			tkt, tktErr := client.Ticket.Query().
+				Where(ticket.TicketNumber(idParam), ticket.TenantID(tenantID)).
+				Only(c.Request.Context())
+			if tktErr != nil {
+				common.Fail(c, common.ParamErrorCode, "无效的工单ID")
+				c.Abort()
+				return
+			}
+			id = tkt.ID
+			for i, p := range c.Params {
+				if p.Key == "id" {
+					c.Params[i].Value = strconv.Itoa(id)
+					break
+				}
+			}
 		}
 
 		if collaboration {
