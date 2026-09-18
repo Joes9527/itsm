@@ -20,7 +20,14 @@ import {
   Empty,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { Search, Plus, Pencil, Trash2, Eye, RefreshCw } from 'lucide-react';
+import { Search } from 'lucide-react';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
@@ -199,7 +206,7 @@ const ChangeList: React.FC<ChangeListProps> = ({ showHeader = true, search, stat
           <Tooltip title="查看详情">
             <Button
               type="text"
-              icon={<Eye />}
+              icon={<EyeOutlined aria-hidden="true" />}
               href={`/changes/${record.id}`}
               aria-label={`查看变更 ${record.title}`}
             />
@@ -207,16 +214,16 @@ const ChangeList: React.FC<ChangeListProps> = ({ showHeader = true, search, stat
           <Tooltip title="编辑">
             <Button
               type="text"
-              icon={<Pencil />}
+              icon={<EditOutlined aria-hidden="true" />}
               href={`/changes/${record.id}/edit`}
               aria-label={`编辑变更 ${record.title}`}
             />
           </Tooltip>
           <Tooltip title="删除">
-            <Button
+            <Button aria-label="删除"
               type="text"
               danger
-              icon={<Trash2 />}
+              icon={<DeleteOutlined aria-hidden="true" />}
               onClick={() => handleDelete(record.id, record.title)}
             />
           </Tooltip>
@@ -235,7 +242,7 @@ const ChangeList: React.FC<ChangeListProps> = ({ showHeader = true, search, stat
           </div>
           <Button
             type="primary"
-            icon={<Plus />}
+            icon={<PlusOutlined aria-hidden="true" />}
             onClick={() => router.push('/changes/new')}
             size="large"
           >
@@ -271,7 +278,7 @@ const ChangeList: React.FC<ChangeListProps> = ({ showHeader = true, search, stat
               <Button type="primary" onClick={handleSearch}>
                 查询
               </Button>
-              <Button icon={<RefreshCw />} onClick={loadData} />
+              <Button aria-label="刷新" icon={<SyncOutlined aria-hidden="true" />} onClick={loadData} />
             </Space>
           </Form.Item>
         </Form>

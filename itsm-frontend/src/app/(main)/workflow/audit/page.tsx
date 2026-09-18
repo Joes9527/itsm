@@ -16,15 +16,11 @@ import {
   Timeline,
   message,
 } from 'antd';
+import { Search, Filter, Clock, User, Activity } from 'lucide-react';
 import {
-  Search,
-  RefreshCw,
-  Eye,
-  Filter,
-  Clock,
-  User,
-  Activity,
-} from 'lucide-react';
+  EyeOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 
 import type {
   ProcessAuditLog,
@@ -218,7 +214,7 @@ export default function AuditLogsPage() {
           <Button
             type="link"
             size="small"
-            icon={<Eye size={14} />}
+            icon={<EyeOutlined aria-hidden="true" />}
             onClick={() => setSelectedLog(record)}
           >
             {t('common.view') || '详情'}
@@ -254,7 +250,7 @@ export default function AuditLogsPage() {
         <h1 className="text-[24px] font-semibold">
           {t('bpmn.audit.title') || 'BPMN审计日志'}
         </h1>
-        <Button icon={<RefreshCw size={16} />} onClick={fetchLogs}>
+        <Button icon={<SyncOutlined aria-hidden="true" />} onClick={fetchLogs}>
           {t('common.refresh') || '刷新'}
         </Button>
       </div>

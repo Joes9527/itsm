@@ -16,18 +16,13 @@ import { UserApi } from '@/lib/api/user-api';
 import type { Ticket } from '@/lib/api/api-config';
 import type { User } from '@/lib/api/user-api';
 import type { TicketPriority } from '@/types/ticket';
+import { ArrowLeft, AlertCircle, XCircle, UserCheck, Edit, Trash2, Users, Clock } from 'lucide-react';
 import {
-  ArrowLeft,
-  AlertCircle,
-  XCircle,
-  UserCheck,
-  Edit,
-  Save,
-  X,
-  Trash2,
-  Users,
-  Clock,
-} from 'lucide-react';
+  CloseOutlined,
+  DeleteOutlined,
+  SaveOutlined,
+  TeamOutlined,
+} from '@ant-design/icons';
 import Link from 'next/link';
 import {
   Button,
@@ -1029,7 +1024,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
           <Form.Item className='mb-0'>
             <Space className='w-full justify-end'>
               <Button
-                icon={<X />}
+                icon={<CloseOutlined aria-hidden="true" />}
                 onClick={() => {
                   setAssignModalVisible(false);
                   assignForm.resetFields();
@@ -1037,7 +1032,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
               >
                 取消
               </Button>
-              <Button type='primary' htmlType='submit' icon={<Save />} loading={assigning}>
+              <Button type='primary' htmlType='submit' icon={<SaveOutlined aria-hidden="true" />} loading={assigning}>
                 确认分配
               </Button>
             </Space>
@@ -1147,7 +1142,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
           <Form.Item className='mb-0'>
             <Space className='w-full justify-end'>
               <Button
-                icon={<X />}
+                icon={<CloseOutlined aria-hidden="true" />}
                 onClick={() => {
                   setEditModalVisible(false);
                   editForm.resetFields();
@@ -1155,7 +1150,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
               >
                 取消
               </Button>
-              <Button type='primary' htmlType='submit' icon={<Save />} loading={updating}>
+              <Button type='primary' htmlType='submit' icon={<SaveOutlined aria-hidden="true" />} loading={updating}>
                 保存修改
               </Button>
             </Space>
@@ -1226,7 +1221,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
           <Form.Item className='mb-0'>
             <Space className='w-full justify-end'>
               <Button
-                icon={<X />}
+                icon={<CloseOutlined aria-hidden="true" />}
                 onClick={() => {
                   setCCModalVisible(false);
                   ccForm.resetFields();
@@ -1234,7 +1229,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
               >
                 取消
               </Button>
-              <Button type='primary' htmlType='submit' icon={<Users />} loading={ccing}>
+              <Button type='primary' htmlType='submit' icon={<TeamOutlined aria-hidden="true" />} loading={ccing}>
                 确认抄送
               </Button>
             </Space>
@@ -1285,7 +1280,7 @@ const TicketDetailContent: React.FC<{ id?: string }> = ({ id: propId }) => {
             type='primary'
             onClick={handleDeleteConfirm}
             loading={deleting}
-            icon={<Trash2 size={14} />}
+            icon={<DeleteOutlined aria-hidden="true" />}
           >
             确认删除
           </Button>

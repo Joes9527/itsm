@@ -14,7 +14,13 @@ import {
   Progress,
   message,
 } from 'antd';
-import { Plus, Pencil, Trash2, RefreshCw, Briefcase } from 'lucide-react';
+import { Briefcase } from 'lucide-react';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { PageContainer } from '@/app/components/PageContainer';
 import type { Project } from '@/lib/services/project-service';
 import { projectService } from '@/lib/services/project-service';
@@ -137,11 +143,11 @@ export default function ProjectsPage() {
       key: 'action',
       render: (_: unknown, record: Project) => (
         <Space size="middle">
-          <Button type="text" icon={<Pencil />} onClick={() => handleEdit(record)} />
-          <Button
+          <Button aria-label="编辑" type="text" icon={<EditOutlined aria-hidden="true" />} onClick={() => handleEdit(record)} />
+          <Button aria-label="删除"
             type="text"
             danger
-            icon={<Trash2 />}
+            icon={<DeleteOutlined aria-hidden="true" />}
             onClick={() => handleDelete(record)}
           />
         </Space>
@@ -203,13 +209,13 @@ export default function ProjectsPage() {
         breadcrumb: { items: [{ title: '首页' }, { title: '项目管理' }] },
       }}
       extra={[
-        <Button key="refresh" icon={<RefreshCw />} onClick={fetchProjects} loading={fetching}>
+        <Button key="refresh" icon={<SyncOutlined aria-hidden="true" />} onClick={fetchProjects} loading={fetching}>
           刷新
         </Button>,
         <Button
           key="create"
           type="primary"
-          icon={<Plus />}
+          icon={<PlusOutlined aria-hidden="true" />}
           onClick={() => {
             setEditingProject(null);
             form.resetFields();

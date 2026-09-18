@@ -2,7 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { Layout, Button, Drawer } from 'antd';
-import { ArrowLeft, Menu } from 'lucide-react';
+import {
+  ArrowLeftOutlined,
+  MenuOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
@@ -68,9 +71,9 @@ export function AppLayout({
     <Layout hasSider style={{ minHeight: '100vh' }}>
       {/* 移动端顶部菜单按钮 */}
       {isMobile && (
-        <Button
+        <Button aria-label="打开菜单"
           type="text"
-          icon={<Menu />}
+          icon={<MenuOutlined aria-hidden="true" />}
           onClick={() => setMobileDrawerVisible(true)}
           style={{
             position: 'fixed',
@@ -132,7 +135,7 @@ export function AppLayout({
           {/* 返回按钮 */}
           {showBackButton && (
             <div style={{ marginBottom: LAYOUT_CONFIG.spacing.md }}>
-              <Button icon={<ArrowLeft size={16} />} onClick={() => router.back()} size="small">
+              <Button icon={<ArrowLeftOutlined aria-hidden="true" />} onClick={() => router.back()} size="small">
                 返回
               </Button>
             </div>

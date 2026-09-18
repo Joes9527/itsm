@@ -33,6 +33,28 @@ const DEFAULT_CONFIG: Required<NotificationWSConfig> = {
   heartbeatInterval: 30000,
 };
 
+/**
+ * 后端 WebSocket 端口。HTTP 请求走 Next 的 rewrite 代理，但 WebSocket 的 upgrade
+ * 无法被 rewrite 代理；后端用 WEBSOCKET_ALLOWED_ORIGINS 显式放行前端 origin，
+ * 因此浏览器直连后端端口。
+ */
+const BACKEND_WS_PORT = 8080;
+
+/**
+ * 解析 WebSocket 地址。NEXT_PUBLIC_WS_URL 由构建期内联，配置了就以它为准；
+ * 否则按当前页面的主机名推导，使同一份产物在 localhost 与局域网地址下都指向正确后端。
+ * 仅在浏览器中调用（connect() 会先发 HTTP 请求，本身就跑在客户端）。
+ */
+function resolveNotificationWsUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_WS_URL;
+  if (configured) {
+    return configured;
+  }
+  const { protocol, hostname } = window.location;
+  const scheme = protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${scheme}//${hostname}:${BACKEND_WS_PORT}/api/v1/ws/notifications`;
+}
+
 class NotificationWSService {
   private ws: WebSocket | null = null;
   private reconnectAttempts = 0;
@@ -68,8 +90,7 @@ class NotificationWSService {
       this.isManualDisconnect = false;
 
       // 获取 WebSocket URL
-      const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8090/api/v1/ws/notifications';
-      const url = `${wsUrl}?ticket=${encodeURIComponent(ticket)}`;
+      const url = `${resolveNotificationWsUrl()}?ticket=${encodeURIComponent(ticket)}`;
 
       // 清理旧连接
       this.cleanup();

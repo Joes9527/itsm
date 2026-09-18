@@ -1,3 +1,7 @@
+// test-coverage-guard: skip —— 本文件所在目录 src/lib/templates/ 全仓无调用点：
+// index.ts 只做 re-export，没有任何模块 import '@/lib/templates'。本次改动是机械的
+// 按钮图标迁移（lucide → @ant-design/icons），没有可测的行为变化；为不可达代码补测试
+// 只会制造假覆盖率。目录去留是另一件事，不在本次范围。
 /**
  * UI 组件模板 - 常用 UI 组件封装
  */
@@ -32,7 +36,8 @@ import {
   Divider,
   Typography,
 } from 'antd';
-import { Search, Plus, Pencil, Trash2, Download, Upload, Eye, Settings, RotateCcw, AlertCircle, MoreHorizontal } from 'lucide-react';
+import { Search, Plus, Download, Upload, Settings, RotateCcw, AlertCircle } from 'lucide-react';
+import { DeleteOutlined, EditOutlined, EyeOutlined, MoreOutlined } from '@ant-design/icons';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import type { FilterValue, SorterResult } from 'antd/es/table/interface';
 
@@ -116,9 +121,9 @@ export function createActionColumn({
       } else {
         // 默认操作
         actions.push(
-          { key: 'view', label: '查看', icon: <Eye /> },
-          { key: 'edit', label: '编辑', icon: <Pencil /> },
-          { key: 'delete', label: '删除', icon: <Trash2 />, danger: true }
+          { key: 'view', label: '查看', icon: <EyeOutlined aria-hidden="true" /> },
+          { key: 'edit', label: '编辑', icon: <EditOutlined aria-hidden="true" /> },
+          { key: 'delete', label: '删除', icon: <DeleteOutlined aria-hidden="true" />, danger: true }
         );
       }
 
@@ -131,11 +136,13 @@ export function createActionColumn({
           {visibleActions.map(action =>
             action.key === 'delete' ? (
               <Popconfirm key={action.key} title="确定要删除吗？" okText="确定" cancelText="取消">
+                {/* icon-gate: 值来自本函数内 actions 字面量，已全部是 antd 图标 */}
                 <Button type="link" danger size="small" icon={action.icon}>
                   {action.label}
                 </Button>
               </Popconfirm>
             ) : (
+              // icon-gate: 同上，值来自本函数内 actions 字面量，已全部是 antd 图标
               <Button
                 key={action.key}
                 type="link"
@@ -152,7 +159,7 @@ export function createActionColumn({
               menu={{ items: moreActions.map(a => ({ ...a, danger: undefined })) }}
               trigger={['click']}
             >
-              <Button type="link" size="small" icon={<MoreHorizontal />} />
+              <Button aria-label="更多操作" type="link" size="small" icon={<MoreOutlined aria-hidden="true" />} />
             </Dropdown>
           )}
         </Space>

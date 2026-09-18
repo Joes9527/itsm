@@ -1,3 +1,6 @@
+// test-coverage-guard: skip —— 理由同 src/lib/templates/ui.tsx：本目录全仓无调用点
+// （index.ts 只做 re-export，无人 import '@/lib/templates'）。本次只是机械的按钮图标
+// 迁移，没有可测的行为变化；为不可达代码补测试只会制造假覆盖率。
 /**
  * 标准列表页面模板
  */
@@ -6,7 +9,10 @@
 
 import { useState } from 'react';
 import { Table, Button, Space, message, Card } from 'antd';
-import { Plus, RotateCcw } from 'lucide-react';
+import {
+  PlusOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 
 interface DataItem {
@@ -70,10 +76,10 @@ export function createListPage<T extends DataItem>(config: {
         title={`${config.name}管理`}
         extra={
           <Space>
-            <Button icon={<RotateCcw />} onClick={loadData}>
+            <Button icon={<SyncOutlined aria-hidden="true" />} onClick={loadData}>
               刷新
             </Button>
-            <Button type="primary" icon={<Plus />}>
+            <Button type="primary" icon={<PlusOutlined aria-hidden="true" />}>
               新建{config.name}
             </Button>
           </Space>

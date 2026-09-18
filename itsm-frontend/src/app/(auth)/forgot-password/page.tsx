@@ -2,7 +2,11 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Mail, ArrowLeft, CheckCircle, Shield } from 'lucide-react';
+import { Mail, CheckCircle } from 'lucide-react';
+import {
+  ArrowLeftOutlined,
+  SafetyOutlined,
+} from '@ant-design/icons';
 import { useI18n } from '@/lib/i18n/useI18n';
 import {
   Typography,
@@ -105,7 +109,7 @@ export default function ForgotPasswordPage() {
                   type="link"
                   className="mb-4"
                   onClick={() => setSubmitted(false)}
-                  icon={<ArrowLeft size={14} />}
+                  icon={<ArrowLeftOutlined aria-hidden="true" />}
                 >
                   {t('auth.forgotPassword.backToLogin')}
                 </Button>
@@ -205,7 +209,7 @@ export default function ForgotPasswordPage() {
               size="middle"
               className="w-full h-[34px] rounded-[6px] text-[13px]"
               disabled={loading}
-              icon={<Shield size={14} />}
+              icon={<SafetyOutlined aria-hidden="true" />}
             >
               SSO 企业登录
             </Button>

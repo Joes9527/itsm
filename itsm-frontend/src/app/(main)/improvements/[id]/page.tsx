@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, Descriptions, Tag, Button, Skeleton, Result, Space, App } from 'antd';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useParams, useRouter } from 'next/navigation';
 import { TicketApi } from '@/lib/api/ticket-api';
 
@@ -83,7 +83,7 @@ const ImprovementDetailPage = () => {
     <div className="min-h-full bg-page p-[16px] text-[13px] text-foreground md:p-[24px]">
       <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
         <Button
-          icon={<ArrowLeft />}
+          icon={<ArrowLeftOutlined aria-hidden="true" />}
           onClick={() => router.push('/improvements')}
           type="text"
         >

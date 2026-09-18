@@ -278,6 +278,17 @@ describe('Design System - Theme', () => {
     expect(themeConfig.token.colorText).toBe('#D2D9E2');
   });
 
+  it('takes button icon geometry from the shared icon tokens', async () => {
+    const { getAntdTheme } = await import('../theme');
+    const tokens = (await import('@/design-system/theme-tokens.json')).default;
+    const button = getAntdTheme(false).components!.Button;
+
+    expect(button!.onlyIconSize).toBe(tokens.sizes.icon);
+    expect(button!.onlyIconSizeSM).toBe(tokens.sizes.icon);
+    expect(button!.onlyIconSizeLG).toBe(tokens.sizes.icon);
+    expect(button!.iconGap).toBe(tokens.sizes.iconGap);
+  });
+
   it('generateCSSVariables returns light CSS variables', async () => {
     const { generateCSSVariables } = await import('../theme');
     const vars = generateCSSVariables(false);

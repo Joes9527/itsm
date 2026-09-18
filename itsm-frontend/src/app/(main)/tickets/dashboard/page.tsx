@@ -21,15 +21,11 @@ import {
   message,
   Spin,
 } from 'antd';
+import { TrendingUp, Clock, AlertTriangle, CheckCircle, FileText } from 'lucide-react';
 import {
-  TrendingUp,
-  Clock,
-  AlertTriangle,
-  CheckCircle,
-  FileText,
-  RefreshCw,
-  Download,
-} from 'lucide-react';
+  DownloadOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import type { DashboardOverviewResponse } from '@/lib/services/analytics-service';
 import { dashboardService } from '@/lib/services/analytics-service';
 import { ticketService } from '@/lib/services/ticket-service';
@@ -310,7 +306,7 @@ const TicketDashboardPage = () => {
               { value: 'management', label: '管理团队' },
             ]}
           />
-          <Button icon={<RefreshCw size={16} />} onClick={loadDashboardData}>
+          <Button icon={<SyncOutlined aria-hidden="true" />} onClick={loadDashboardData}>
             刷新
           </Button>
         </Space>
@@ -538,10 +534,10 @@ const TicketDashboardPage = () => {
               { value: '90d', label: '最近90天' },
             ]}
           />
-          <Button icon={<RefreshCw size={16} />} onClick={loadDashboardData}>
+          <Button icon={<SyncOutlined aria-hidden="true" />} onClick={loadDashboardData}>
             刷新
           </Button>
-          <Button icon={<Download size={16} />} onClick={handleExport}>
+          <Button icon={<DownloadOutlined aria-hidden="true" />} onClick={handleExport}>
             导出报表
           </Button>
         </Space>

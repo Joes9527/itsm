@@ -1,16 +1,11 @@
 'use client';
 
+import { Edit, Trash2, Users, UserCheck, Key, UserX } from 'lucide-react';
 import {
-  Plus,
-  Edit,
-  Trash2,
-  MoreHorizontal,
-  Users,
-  UserCheck,
-  Download,
-  Key,
-  UserX,
-} from 'lucide-react';
+  DownloadOutlined,
+  MoreOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -391,7 +386,7 @@ const UserManagement: React.FC = () => {
             ],
           }}
         >
-          <Button type="text" icon={<MoreHorizontal size={16} />} aria-label="更多操作" />
+          <Button type="text" icon={<MoreOutlined aria-hidden="true" />} aria-label="更多操作" />
         </Dropdown>
       ),
     },
@@ -488,13 +483,13 @@ const UserManagement: React.FC = () => {
                 <Space>
                   <Button
                     type="primary"
-                    icon={<Plus size={16} />}
+                    icon={<PlusOutlined aria-hidden="true" />}
                     onClick={() => setIsCreateModalVisible(true)}
                   >
                     新建用户
                   </Button>
                   <Button
-                    icon={<Download size={16} />}
+                    icon={<DownloadOutlined aria-hidden="true" />}
                     onClick={() => {
                       // 导出用户数据
                       const exportData = users.map(user => ({

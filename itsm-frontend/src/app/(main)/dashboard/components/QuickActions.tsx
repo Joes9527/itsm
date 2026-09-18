@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { Card, Row, Col, Button, Empty, Spin, App } from 'antd';
-import { ArrowRight, Plus, FileText, AlertTriangle, TrendingUp, Zap } from 'lucide-react';
+import { Plus, FileText, AlertTriangle, TrendingUp, Zap } from 'lucide-react';
+import { ArrowRightOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import type { QuickAction } from '../types/dashboard.types';
 
@@ -106,7 +107,7 @@ const EnterpriseQuickActionCard: React.FC<{
                 color: action.color,
                 borderColor: action.color,
               }}
-              icon={<ArrowRight />}
+              icon={<ArrowRightOutlined aria-hidden="true" />}
               iconPlacement='end'
               onClick={e => {
                 e.stopPropagation();

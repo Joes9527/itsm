@@ -3,7 +3,8 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { User, Lock, ArrowRight, Ticket, BookOpen, BrainCircuit } from 'lucide-react';
+import { User, Lock, Ticket, BookOpen, BrainCircuit } from 'lucide-react';
+import { ArrowRightOutlined } from '@ant-design/icons';
 
 function MicrosoftIcon() {
   return (
@@ -196,7 +197,7 @@ function LoginForm() {
             loading={loading}
             size='middle'
             className='w-full h-[34px] rounded-[6px] text-[13px] font-semibold'
-            icon={<ArrowRight size={14} />}
+            icon={<ArrowRightOutlined aria-hidden="true" />}
           >
             {loading ? t('auth.login.loggingIn') : t('auth.login.loginButton')}
           </Button>

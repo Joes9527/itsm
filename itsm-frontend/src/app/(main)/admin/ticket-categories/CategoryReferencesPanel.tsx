@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, Empty, Pagination, Skeleton, Space, Tag, Typography } from 'antd';
-import { RefreshCw } from 'lucide-react';
+import { SyncOutlined } from '@ant-design/icons';
 import Link from 'next/link';
 import {
   CTIReferenceGroup,
@@ -87,7 +87,7 @@ export function CategoryReferencesPanel({ categoryId, loadReferences }: Category
         message="引用查询失败"
         description={error}
         action={
-          <Button size="small" icon={<RefreshCw size={14} />} onClick={() => void load()}>
+          <Button size="small" icon={<SyncOutlined aria-hidden="true" />} onClick={() => void load()}>
             重试
           </Button>
         }

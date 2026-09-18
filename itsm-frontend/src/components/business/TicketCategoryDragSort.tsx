@@ -3,19 +3,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Tree, Button, message, Modal, Spin, Alert, Space, Typography, Card, Tooltip } from 'antd';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import { GripVertical, Folder, FolderOpen, FileText } from 'lucide-react';
 import {
-  GripVertical,
-  Save,
-  RefreshCw,
-  Undo,
-  Folder,
-  FolderOpen,
-  FileText,
-  ArrowUp,
-  ArrowDown,
-  ArrowLeft,
-  ArrowRight,
-} from 'lucide-react';
+  ArrowDownOutlined,
+  ArrowLeftOutlined,
+  ArrowRightOutlined,
+  ArrowUpOutlined,
+  SaveOutlined,
+  SyncOutlined,
+  UndoOutlined,
+} from '@ant-design/icons';
 import {
   ticketCategoryService,
   type CategoryTreeItem,
@@ -393,7 +390,7 @@ const TicketCategoryDragSort: React.FC<TicketCategoryDragSortProps> = ({
             <Space>
               <Tooltip title="刷新数据">
                 <Button
-                  icon={<RefreshCw className="w-4 h-4" />}
+                  icon={<SyncOutlined aria-hidden="true" />}
                   onClick={handleRefresh}
                   disabled={loading}
                 >
@@ -404,7 +401,7 @@ const TicketCategoryDragSort: React.FC<TicketCategoryDragSortProps> = ({
               {hasChanges && (
                 <>
                   <Tooltip title="重置更改">
-                    <Button icon={<Undo className="w-4 h-4" />} onClick={handleReset}>
+                    <Button icon={<UndoOutlined aria-hidden="true" />} onClick={handleReset}>
                       重置
                     </Button>
                   </Tooltip>
@@ -412,7 +409,7 @@ const TicketCategoryDragSort: React.FC<TicketCategoryDragSortProps> = ({
                   <Tooltip title="保存更改">
                     <Button
                       type="primary"
-                      icon={<Save className="w-4 h-4" />}
+                      icon={<SaveOutlined aria-hidden="true" />}
                       onClick={handleSave}
                       loading={saving}
                     >
@@ -472,35 +469,35 @@ const TicketCategoryDragSort: React.FC<TicketCategoryDragSortProps> = ({
 
                           <Space size="small">
                             <Tooltip title="上移">
-                              <Button
+                              <Button aria-label="上移"
                                 size="small"
-                                icon={<ArrowUp className="w-3 h-3" />}
+                                icon={<ArrowUpOutlined aria-hidden="true" />}
                                 onClick={() => moveNode('up', category.id)}
                                 disabled={index === 0}
                               />
                             </Tooltip>
 
                             <Tooltip title="下移">
-                              <Button
+                              <Button aria-label="下移"
                                 size="small"
-                                icon={<ArrowDown className="w-3 h-3" />}
+                                icon={<ArrowDownOutlined aria-hidden="true" />}
                                 onClick={() => moveNode('down', category.id)}
                                 disabled={index === categories.length - 1}
                               />
                             </Tooltip>
 
                             <Tooltip title="提升层级">
-                              <Button
+                              <Button aria-label="提升层级"
                                 size="small"
-                                icon={<ArrowLeft className="w-3 h-3" />}
+                                icon={<ArrowLeftOutlined aria-hidden="true" />}
                                 onClick={() => moveNode('left', category.id)}
                               />
                             </Tooltip>
 
                             <Tooltip title="降低层级">
-                              <Button
+                              <Button aria-label="降低层级"
                                 size="small"
-                                icon={<ArrowRight className="w-3 h-3" />}
+                                icon={<ArrowRightOutlined aria-hidden="true" />}
                                 onClick={() => moveNode('right', category.id)}
                                 disabled={index === 0}
                               />

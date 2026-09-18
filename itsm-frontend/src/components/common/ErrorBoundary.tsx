@@ -3,7 +3,11 @@
 import type { ErrorInfo, ReactNode } from 'react';
 import React, { Component } from 'react';
 import { Result, Button, Card } from 'antd';
-import { RefreshCw, Home, Bug } from 'lucide-react';
+import {
+  BugOutlined,
+  HomeOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { handleErrorBoundary } from '@/lib/hooks/useErrorHandler';
 
 interface ErrorBoundaryState {
@@ -140,7 +144,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 <Button
                   key="retry"
                   type="primary"
-                  icon={<RefreshCw size={16} />}
+                  icon={<SyncOutlined aria-hidden="true" />}
                   onClick={this.handleRetry}
                   className="mr-2"
                 >
@@ -148,13 +152,13 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 </Button>,
                 <Button
                   key="home"
-                  icon={<Home size={16} />}
+                  icon={<HomeOutlined aria-hidden="true" />}
                   onClick={this.handleGoHome}
                   className="mr-2"
                 >
                   返回首页
                 </Button>,
-                <Button key="report" icon={<Bug size={16} />} onClick={this.handleReportBug}>
+                <Button key="report" icon={<BugOutlined aria-hidden="true" />} onClick={this.handleReportBug}>
                   报告问题
                 </Button>,
               ]}

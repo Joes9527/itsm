@@ -25,7 +25,11 @@ import {
   Tag,
   Divider,
 } from 'antd';
-import { ArrowLeft, Clock, Send } from 'lucide-react';
+import { Clock } from 'lucide-react';
+import {
+  ArrowLeftOutlined,
+  SendOutlined,
+} from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
 import type { ServiceItem, CreateServiceRequestRequest } from '@/types/service-catalog';
@@ -202,7 +206,7 @@ export default function ServiceCatalogRequestPage() {
       <CreationAttempts creation={creation} />
       <Card>
         <Space className="mb-4">
-          <Button icon={<ArrowLeft />} onClick={() => router.push('/service-catalog')}>
+          <Button icon={<ArrowLeftOutlined aria-hidden="true" />} onClick={() => router.push('/service-catalog')}>
             返回
           </Button>
           <Title level={3} style={{ fontSize: 24, fontWeight: 600, margin: 0 }}>
@@ -469,7 +473,7 @@ export default function ServiceCatalogRequestPage() {
               <Button
                 type="primary"
                 htmlType="submit"
-                icon={<Send />}
+                icon={<SendOutlined aria-hidden="true" />}
                 loading={loading}
                 disabled={fetching || !catalog || !!fetchError || incompatibleAnswers.length > 0}
               >

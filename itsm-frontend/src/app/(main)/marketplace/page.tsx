@@ -9,7 +9,7 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Button } from 'antd';
 import { Input } from '@/components/ui/Input';
 import {
   Select,
@@ -163,7 +163,7 @@ const MarketplacePage = () => {
           <p className="mt-1 text-[12px] text-muted">发现和安装连接器、AI技能和扩展插件，提升IT服务管理效率</p>
         </div>
         <Link href="/installations">
-          <Button variant="default">
+          <Button type="primary">
             <PlusCircle className="h-4 w-4 mr-2" />
             我的应用
           </Button>
@@ -282,7 +282,7 @@ const MarketplacePage = () => {
                 </div>
               </div>
               <Link href={`/marketplace/${item.id}`}>
-                <Button size="sm">详情</Button>
+                <Button type="primary" size="small">详情</Button>
               </Link>
             </CardFooter>
           </Card>

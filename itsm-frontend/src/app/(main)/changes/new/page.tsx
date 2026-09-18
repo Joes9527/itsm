@@ -20,7 +20,7 @@ import {
   Space,
   Typography,
 } from 'antd';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import { ChangeApi, type ChangeRequest } from '@/lib/api/change-api';
 import { useI18n } from '@/lib/i18n';
@@ -129,7 +129,7 @@ const CreateChangePage: React.FC = () => {
       <div className="mb-6">
         <Button
           type="link"
-          icon={<ArrowLeft size={16} />}
+          icon={<ArrowLeftOutlined aria-hidden="true" />}
           onClick={() => router.back()}
           className="!px-0"
         >

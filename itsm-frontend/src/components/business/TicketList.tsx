@@ -17,7 +17,12 @@ import {
   Menu,
   App,
 } from 'antd';
-import { ChevronDown, Search, Filter, Plus, Pencil, Trash2, Download, User, Eye, Clock } from 'lucide-react';
+import { ChevronDown, Search, Filter, Pencil, Trash2, User, Eye, Clock } from 'lucide-react';
+import {
+  DeleteOutlined,
+  DownloadOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import { TicketApi } from '@/lib/api/ticket-api';
 import type { Ticket, TicketFilterParams, ListTicketsParams } from '@/lib/services/ticket-service';
 import { useAuthStore } from '@/lib/store/auth-store';
@@ -371,17 +376,17 @@ export const TicketList: React.FC<TicketListProps> = ({ onTicketSelect, onRefres
         <Space>
           <Button
             type="primary"
-            icon={<Plus />}
+            icon={<PlusOutlined aria-hidden="true" />}
             onClick={() => onTicketSelect?.({} as Ticket)}
           >
             新建工单
           </Button>
           {selectedRowKeys.length > 0 && (
             <>
-              <Button icon={<Download />} onClick={() => handleBatchAction('export')} loading={batchLoading}>
+              <Button icon={<DownloadOutlined aria-hidden="true" />} onClick={() => handleBatchAction('export')} loading={batchLoading}>
                 导出选中
               </Button>
-              <Button danger icon={<Trash2 />} onClick={() => handleBatchAction('delete')} loading={batchLoading}>
+              <Button danger icon={<DeleteOutlined aria-hidden="true" />} onClick={() => handleBatchAction('delete')} loading={batchLoading}>
                 删除选中
               </Button>
             </>

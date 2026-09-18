@@ -24,26 +24,12 @@ import {
   Modal,
   Tooltip,
 } from 'antd';
+import { User, Mail, Phone, Building, Shield, Bell, Camera, Edit, Ticket, Clock, CheckCircle, Star, Settings, Lock, LogOut, Activity } from 'lucide-react';
 import {
-  User,
-  Mail,
-  Phone,
-  Building,
-  Shield,
-  Bell,
-  Key,
-  Camera,
-  Save,
-  Edit,
-  Ticket,
-  Clock,
-  CheckCircle,
-  Star,
-  Settings,
-  Lock,
-  LogOut,
-  Activity,
-} from 'lucide-react';
+  KeyOutlined,
+  SaveOutlined,
+  SettingOutlined,
+} from '@ant-design/icons';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { UserApi } from '@/lib/api/user-api';
 import { TicketApi } from '@/lib/api/ticket-api';
@@ -391,9 +377,9 @@ export default function ProfilePage() {
                 }}
               >
                 {/* 编辑按钮 */}
-                <Button
+                <Button aria-label="编辑资料"
                   type="text"
-                  icon={<Settings size={18} />}
+                  icon={<SettingOutlined aria-hidden="true" />}
                   onClick={() => setEditing(!editing)}
                   style={{
                     position: 'absolute',
@@ -632,7 +618,7 @@ export default function ProfilePage() {
                             <Button
                               type="primary"
                               htmlType="submit"
-                              icon={<Save size={16} />}
+                              icon={<SaveOutlined aria-hidden="true" />}
                               style={{
                                 background: DESIGN.colors.gradient.primary,
                                 boxShadow: DESIGN.shadows.glow(DESIGN.colors.accent),
@@ -762,7 +748,7 @@ export default function ProfilePage() {
                           <Button
                             type="primary"
                             htmlType="submit"
-                            icon={<Save size={16} />}
+                            icon={<SaveOutlined aria-hidden="true" />}
                             loading={prefsLoading}
                             style={{
                               background: DESIGN.colors.gradient.primary,
@@ -870,7 +856,7 @@ export default function ProfilePage() {
                               </div>
                             </div>
                             <Button
-                              icon={<Key size={16} />}
+                              icon={<KeyOutlined aria-hidden="true" />}
                               onClick={() => setPasswordModalVisible(true)}
                             >
                               修改

@@ -2,7 +2,11 @@
 
 import React from 'react';
 import { Card, List, Tag, Button, Badge, Dropdown, Menu, Avatar, Space, Tooltip } from 'antd';
-import { MoreHorizontal, Eye, Clock, User } from 'lucide-react';
+import { Clock, User } from 'lucide-react';
+import {
+  EyeOutlined,
+  MoreOutlined,
+} from '@ant-design/icons';
 import type { RecentTicket } from '@/lib/hooks/useDashboardData';
 
 interface TicketListCardProps {
@@ -105,7 +109,7 @@ export const TicketListCard: React.FC<TicketListCardProps> = ({
             trigger={['click']}
             placement="bottomRight"
           >
-            <Button type="text" icon={<MoreHorizontal size={16} />} aria-label="更多选项" />
+            <Button type="text" icon={<MoreOutlined aria-hidden="true" />} aria-label="更多选项" />
           </Dropdown>
         ) : null
       }
@@ -120,8 +124,9 @@ export const TicketListCard: React.FC<TicketListCardProps> = ({
               <Button
                 key="view"
                 type="text"
-                icon={<Eye size={14} />}
+                icon={<EyeOutlined aria-hidden="true" />}
                 size="small"
+                aria-label="查看详情"
                 className="text-blue-500 hover:text-blue-600"
                 onClick={e => {
                   e.stopPropagation();

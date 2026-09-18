@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { Drawer, Typography, Button } from 'antd';
-import { Bell, CheckCheck, ArrowRight, Ticket, AlertTriangle, Zap } from 'lucide-react';
+import { Bell, ArrowRight, Ticket, AlertTriangle, Zap } from 'lucide-react';
+import { CheckOutlined } from '@ant-design/icons';
 import type { TicketNotification } from '@/lib/api/ticket-notification-api';
 import { useRouter } from 'next/navigation';
 import { DESIGN } from '@/design-system/tokens';
@@ -203,7 +204,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
           {unreadCount > 0 && (
             <Button
               type="link"
-              icon={<CheckCheck size={16} />}
+              icon={<CheckOutlined aria-hidden="true" />}
               onClick={onMarkAllAsRead}
               style={{ color: DESIGN.colors.accent }}
             >

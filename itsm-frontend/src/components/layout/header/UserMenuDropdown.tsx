@@ -4,6 +4,7 @@ import React from 'react';
 import { Dropdown, Avatar, Button } from 'antd';
 import type { MenuProps } from 'antd';
 import { User, Settings, LogOut } from 'lucide-react';
+import { UserOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { DESIGN } from '@/design-system/tokens';
@@ -27,7 +28,7 @@ export const UserMenuDropdown: React.FC<UserMenuDropdownProps> = ({
     return (
       <Button
         type='primary'
-        icon={<User size={16} />}
+        icon={<UserOutlined aria-hidden="true" />}
         onClick={() => router.push('/login')}
         style={{
           borderRadius: DESIGN.radius.md,

@@ -26,7 +26,13 @@ import {
   Modal,
   type MenuProps,
 } from 'antd';
-import { Search as SearchIcon, Filter, Plus, X, Check, Trash2, Download, Upload, LayoutGrid, RotateCcw, List, ArrowUpDown, Star, MoreHorizontal } from 'lucide-react';
+import { Search as SearchIcon, Filter, X, Check, Trash2, Download, Upload, LayoutGrid, List, ArrowUpDown, Star } from 'lucide-react';
+import {
+  CheckOutlined,
+  MoreOutlined,
+  PlusOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { TemplateCard } from './TemplateCard';
 import type { TicketTemplate, TemplateListQuery, TemplateVisibility } from '@/types/template';
 import {
@@ -294,13 +300,13 @@ export const TemplateList: React.FC<TemplateListProps> = ({
               {selectedIds.length > 0 && (
                 <>
                   <Badge count={selectedIds.length} showZero>
-                    <Button icon={<Check />} onClick={handleSelectAll}>
+                    <Button icon={<CheckOutlined aria-hidden="true" />} onClick={handleSelectAll}>
                       {selectedIds.length === templates.length ? '取消全选' : '全选'}
                     </Button>
                   </Badge>
 
                   <Dropdown menu={{ items: batchMenuItems }} trigger={['click']}>
-                    <Button icon={<MoreHorizontal />}>批量操作</Button>
+                    <Button icon={<MoreOutlined aria-hidden="true" />}>批量操作</Button>
                   </Dropdown>
                 </>
               )}
@@ -314,12 +320,12 @@ export const TemplateList: React.FC<TemplateListProps> = ({
                 </Radio.Button>
               </Radio.Group>
 
-              <Button icon={<RotateCcw />} onClick={() => refetch()}>
+              <Button icon={<SyncOutlined aria-hidden="true" />} onClick={() => refetch()}>
                 刷新
               </Button>
 
               {showActions && (
-                <Button type="primary" icon={<Plus />} onClick={onCreateClick}>
+                <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={onCreateClick}>
                   创建模板
                 </Button>
               )}
@@ -334,7 +340,7 @@ export const TemplateList: React.FC<TemplateListProps> = ({
           <Card>
             <Empty description="暂无模板" image={Empty.PRESENTED_IMAGE_SIMPLE}>
               {showActions && (
-                <Button type="primary" icon={<Plus />} onClick={onCreateClick}>
+                <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={onCreateClick}>
                   创建第一个模板
                 </Button>
               )}

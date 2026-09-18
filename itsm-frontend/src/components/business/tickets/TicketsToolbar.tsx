@@ -5,7 +5,13 @@
 
 import React from 'react';
 import { Button, Space, Dropdown, Tooltip } from 'antd';
-import { Plus, Trash2, Download, RotateCcw, MoreHorizontal } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
+import {
+  DownloadOutlined,
+  MoreOutlined,
+  PlusOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 
 export interface TicketsToolbarProps {
@@ -101,7 +107,7 @@ export const TicketsToolbar: React.FC<TicketsToolbarProps> = ({
         {/* 刷新按钮 */}
         <Tooltip title="刷新数据">
           <Button
-            icon={<RotateCcw className={loading ? 'animate-spin' : ''} />}
+            icon={<SyncOutlined aria-hidden="true" className={loading ? 'animate-spin' : ''} />}
             onClick={onRefresh}
             loading={loading}
             data-testid="refresh-button"
@@ -113,7 +119,7 @@ export const TicketsToolbar: React.FC<TicketsToolbarProps> = ({
         {/* 导出按钮 */}
         {canExport && (
           <Tooltip title="导出工单">
-            <Button icon={<Download />} onClick={onExport}>
+            <Button icon={<DownloadOutlined aria-hidden="true" />} onClick={onExport}>
               导出
             </Button>
           </Tooltip>
@@ -122,20 +128,20 @@ export const TicketsToolbar: React.FC<TicketsToolbarProps> = ({
         {/* 批量操作按钮（仅在有选中项时显示） */}
         {selectedCount > 0 && (
           <Dropdown menu={{ items: batchMenuItems }} placement="bottomRight">
-            <Button icon={<MoreHorizontal />}>批量操作</Button>
+            <Button icon={<MoreOutlined aria-hidden="true" />}>批量操作</Button>
           </Dropdown>
         )}
 
         {/* 创建工单按钮 */}
         {canCreate && (
-          <Button type="primary" icon={<Plus />} onClick={onCreate}>
+          <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={onCreate}>
             创建工单
           </Button>
         )}
 
         {/* 更多操作 */}
         <Dropdown menu={{ items: moreMenuItems }} placement="bottomRight">
-          <Button icon={<MoreHorizontal />} />
+          <Button icon={<MoreOutlined aria-hidden="true" />} aria-label="更多操作" />
         </Dropdown>
       </Space>
     </div>

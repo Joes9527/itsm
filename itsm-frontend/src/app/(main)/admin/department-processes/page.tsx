@@ -22,7 +22,11 @@ import {
   Popconfirm,
 } from 'antd';
 import Link from 'next/link';
-import { Building2, Plus, RefreshCw, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Building2, CheckCircle, AlertTriangle } from 'lucide-react';
+import {
+  PlusOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import type { ProcessBinding } from '@/lib/api/process-binding-api';
 import { ProcessBindingApi } from '@/lib/api/process-binding-api';
 import type { Department } from '@/lib/services/department-service';
@@ -248,10 +252,10 @@ export default function DepartmentProcessPage() {
                 {/* Actions */}
                 <Card size="small" style={{ marginBottom: 16 }}>
                   <Space>
-                    <Button type="primary" icon={<Plus />} onClick={() => setShowInitModal(true)}>
+                    <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={() => setShowInitModal(true)}>
                       Initialize Default Templates
                     </Button>
-                    <Button icon={<RefreshCw />} onClick={() => loadDeptProcesses(selectedDeptId)}>
+                    <Button icon={<SyncOutlined aria-hidden="true" />} onClick={() => loadDeptProcesses(selectedDeptId)}>
                       Refresh
                     </Button>
                   </Space>

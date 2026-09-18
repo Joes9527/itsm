@@ -25,18 +25,11 @@ import {
   Checkbox,
 } from 'antd';
 import { useRouter } from 'next/navigation';
+import { LayoutDashboard, Zap, LineChart, TrendingUp, Ticket, BookOpen, Database, Compass } from 'lucide-react';
 import {
-  RefreshCw,
-  Settings,
-  LayoutDashboard,
-  Zap,
-  LineChart,
-  TrendingUp,
-  Ticket,
-  BookOpen,
-  Database,
-  Compass,
-} from 'lucide-react';
+  SettingOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { KPICards } from './components/KPICards';
 import { ChartsSection } from './components/ChartsSection';
 import { QuickActions } from './components/QuickActions';
@@ -229,7 +222,7 @@ export default function DashboardPage() {
           type='primary'
           size='middle'
           onClick={() => refresh()}
-          icon={<RefreshCw />}
+          icon={<SyncOutlined aria-hidden="true" />}
           className='h-[34px] rounded-[6px]'
         >
           重新加载
@@ -278,7 +271,7 @@ export default function DashboardPage() {
 
           <Button
             type='default'
-            icon={<RefreshCw className={loading ? 'animate-spin' : ''} />}
+            icon={<SyncOutlined aria-hidden="true" className={loading ? 'animate-spin' : ''} />}
             onClick={() => refresh()}
             loading={loading}
           >
@@ -287,7 +280,7 @@ export default function DashboardPage() {
 
           <Button
             type='default'
-            icon={<Settings />}
+            icon={<SettingOutlined aria-hidden="true" />}
             onClick={() => setSettingsOpen(true)}
           >
             设置

@@ -6,7 +6,10 @@ import { classificationInput, classificationUpdate } from '@/components/work-ite
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Button, Card, Form, Input, Select, App, Row, Col, Space, Divider } from 'antd';
-import { ArrowLeft, Save } from 'lucide-react';
+import {
+  ArrowLeftOutlined,
+  SaveOutlined,
+} from '@ant-design/icons';
 import { ProblemApi } from '@/lib/api/problem-api';
 import { useI18n } from '@/lib/i18n';
 
@@ -93,7 +96,7 @@ export default function ProblemEditPage() {
       <div className="mb-6">
         <Button
           type="link"
-          icon={<ArrowLeft />}
+          icon={<ArrowLeftOutlined aria-hidden="true" />}
           onClick={() => router.back()}
           style={{ paddingLeft: 0, color: 'var(--color-text-secondary)' }}
         >
@@ -185,7 +188,7 @@ export default function ProblemEditPage() {
 
           <Form.Item>
             <Space>
-              <Button type="primary" htmlType="submit" icon={<Save />} loading={loading}>
+              <Button type="primary" htmlType="submit" icon={<SaveOutlined aria-hidden="true" />} loading={loading}>
                 保存
               </Button>
               <Button onClick={handleCancel}>取消</Button>

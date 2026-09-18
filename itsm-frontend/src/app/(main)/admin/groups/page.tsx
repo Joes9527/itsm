@@ -19,17 +19,13 @@ import {
   Badge,
 } from 'antd';
 import type { TablePaginationConfig } from 'antd';
+import { Search, UserPlus, Users, User as UserIcon, X, Check } from 'lucide-react';
 import {
-  Edit,
-  Plus,
-  Search,
-  Trash2,
-  UserPlus,
-  Users,
-  User as UserIcon,
-  X,
-  Check,
-} from 'lucide-react';
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+  TeamOutlined,
+} from '@ant-design/icons';
 import BusinessStatsGrid from '@/components/common/BusinessStatsGrid';
 import { GroupAPI, type Group } from '@/lib/api/group-api';
 import { UserApi, type User } from '@/lib/api/user-api';
@@ -265,7 +261,7 @@ const GroupManagement: React.FC = () => {
       width: 120,
       render: (_: unknown, record: Group) => (
         <Badge count={record.members?.length || 0} showZero color="blue">
-          <Button type="link" icon={<Users size={16} />} onClick={() => openMemberModal(record)}>
+          <Button type="link" icon={<TeamOutlined aria-hidden="true" />} onClick={() => openMemberModal(record)}>
             管理
           </Button>
         </Badge>
@@ -300,7 +296,7 @@ const GroupManagement: React.FC = () => {
           <Button
             type="link"
             size="small"
-            icon={<Users size={14} />}
+            icon={<TeamOutlined aria-hidden="true" />}
             onClick={() => openMemberModal(record)}
           >
             成员
@@ -308,7 +304,7 @@ const GroupManagement: React.FC = () => {
           <Button
             type="link"
             size="small"
-            icon={<Edit size={14} />}
+            icon={<EditOutlined aria-hidden="true" />}
             onClick={() => openEditModal(record)}
           >
             编辑
@@ -317,7 +313,7 @@ const GroupManagement: React.FC = () => {
             type="link"
             size="small"
             danger
-            icon={<Trash2 size={14} />}
+            icon={<DeleteOutlined aria-hidden="true" />}
             onClick={() => handleDelete(record)}
           >
             删除
@@ -336,7 +332,7 @@ const GroupManagement: React.FC = () => {
           </Title>
           <Text type="secondary">管理用户组基础信息，为后续成员关系和审批候选组提供组织基础。</Text>
         </div>
-        <Button type="primary" icon={<Plus size={16} />} onClick={openCreateModal}>
+        <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={openCreateModal}>
           新建用户组
         </Button>
       </div>

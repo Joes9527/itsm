@@ -4,7 +4,8 @@
 
 import React from 'react';
 import { Button } from 'antd';
-import { Edit, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
+import { EditOutlined } from '@ant-design/icons';
 import type { TicketTemplate } from '../types';
 
 interface TemplateCardProps {
@@ -34,7 +35,7 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
         <div className="flex gap-2">
           <Button
             size="small"
-            icon={<Edit size={14} />}
+            icon={<EditOutlined aria-hidden="true" />}
             onClick={() => onEdit(template)}
           >
             编辑

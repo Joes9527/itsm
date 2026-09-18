@@ -7,7 +7,8 @@ import { DetailReadState } from '@/components/business/detail-tabs/DetailReadSta
 
 import { useRouter } from 'next/navigation';
 import { Button, Empty, message } from 'antd';
-import { PlayCircle, ExternalLink } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
+import { PlayCircleOutlined } from '@ant-design/icons';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
 import { serviceRequestAPI } from '@/lib/api/service-request-api';
 import type { ProvisioningTask } from '@/lib/api/service-request-api';
@@ -129,7 +130,7 @@ function ServiceRequestPanelContent({ ticketId }: ServiceRequestPanelProps) {
         {!fulfillmentLabel && (
           <Button
             type="primary"
-            icon={<PlayCircle size={14} />}
+            icon={<PlayCircleOutlined aria-hidden="true" />}
             loading={starting}
             onClick={handleStartProvisioning}
             disabled={!request.actions?.provision?.allowed}

@@ -20,7 +20,8 @@ import {
   Radio,
   Checkbox,
 } from 'antd';
-import { Eye, AlertCircle, Rocket } from 'lucide-react';
+import { Eye, AlertCircle } from 'lucide-react';
+import { RocketOutlined } from '@ant-design/icons';
 import { BatchOperationType } from '@/types/batch-operations';
 import {
   useBatchAssignMutation,
@@ -335,7 +336,7 @@ export const BatchOperationModal: React.FC<BatchOperationModalProps> = ({
           <Button
             key="submit"
             type="primary"
-            icon={<Rocket />}
+            icon={<RocketOutlined aria-hidden="true" />}
             loading={mutation.isPending}
             disabled={mutation.isPending || ticketIds.length === 0}
             onClick={handleSubmit}

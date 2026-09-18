@@ -16,17 +16,11 @@ import {
   Tooltip,
 } from 'antd';
 import type { UploadFile, UploadChangeParam } from 'antd/es/upload';
+import { FileSpreadsheet, FileText, CheckCircle, XCircle, Info, AlertTriangle, Upload } from 'lucide-react';
 import {
-  Download,
-  FileSpreadsheet,
-  FileText,
-  CheckCircle,
-  XCircle,
-  Info,
-  AlertTriangle,
-  FileSpreadsheet as FileExcel,
-  Upload,
-} from 'lucide-react';
+  DownloadOutlined,
+  FileExcelOutlined,
+} from '@ant-design/icons';
 import {
   ticketCategoryService,
   type CreateCategoryRequest,
@@ -252,10 +246,10 @@ const TicketCategoryImport: React.FC<TicketCategoryImportProps> = ({
         {/* 模板下载 */}
         <Card size="small" title="下载导入模板">
           <Space>
-            <Button icon={<Download className="w-4 h-4" />} onClick={downloadTemplate}>
+            <Button icon={<DownloadOutlined aria-hidden="true" />} onClick={downloadTemplate}>
               下载CSV模板
             </Button>
-            <Button icon={<FileExcel className="w-4 h-4" />} onClick={downloadExcelTemplate}>
+            <Button icon={<FileExcelOutlined aria-hidden="true" />} onClick={downloadExcelTemplate}>
               下载Excel模板
             </Button>
           </Space>

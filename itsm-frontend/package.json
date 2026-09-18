@@ -32,6 +32,8 @@
     "audit:ui": "node tools/generate-ui-audit-inventory.mjs",
     "theme:generate": "node scripts/generate-theme-tokens.mjs",
     "theme:check": "node scripts/generate-theme-tokens.mjs --check",
+    "icons:check": "node scripts/check-button-icons.mjs",
+    "icons:test": "node --test scripts/__tests__/check-button-icons.test.mjs",
     "predev": "npm run theme:generate",
     "prebuild": "npm run theme:generate",
     "pretype-check": "npm run theme:check"

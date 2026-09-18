@@ -19,7 +19,12 @@ import {
   Tooltip,
   Alert,
 } from 'antd';
-import { Plus, Edit, Delete, PlayCircle, PauseCircle, Settings } from 'lucide-react';
+import { PlayCircle, PauseCircle, Settings } from 'lucide-react';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import type {
   AutomationRule,
   CreateAutomationRuleRequest,
@@ -186,7 +191,7 @@ const AutomationRulesPage: React.FC = () => {
       render: (_: unknown, record: AutomationRule) => (
         <Space>
           <Tooltip title="编辑">
-            <Button size="small" icon={<Edit size={14} />} onClick={() => handleEdit(record)} />
+            <Button aria-label="编辑" size="small" icon={<EditOutlined aria-hidden="true" />} onClick={() => handleEdit(record)} />
           </Tooltip>
           <Popconfirm
             title="确定要删除这个规则吗？"
@@ -195,7 +200,7 @@ const AutomationRulesPage: React.FC = () => {
             cancelText="取消"
           >
             <Tooltip title="删除">
-              <Button size="small" danger icon={<Delete size={14} />} />
+              <Button aria-label="删除" size="small" danger icon={<DeleteOutlined aria-hidden="true" />} />
             </Tooltip>
           </Popconfirm>
         </Space>
@@ -213,7 +218,7 @@ const AutomationRulesPage: React.FC = () => {
             </Title>
             <Text type="secondary">配置自动化规则来简化工单处理流程</Text>
           </div>
-          <Button type="primary" icon={<Plus size={16} />} onClick={handleCreate}>
+          <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={handleCreate}>
             创建规则
           </Button>
         </div>
@@ -299,15 +304,15 @@ const AutomationRulesPage: React.FC = () => {
                       <Form.Item {...restField} name={[name, 'value']} noStyle>
                         <Input placeholder="值" style={{ width: 150 }} />
                       </Form.Item>
-                      <Button
+                      <Button aria-label="删除"
                         type="text"
                         danger
-                        icon={<Delete size={14} />}
+                        icon={<DeleteOutlined aria-hidden="true" />}
                         onClick={() => remove(name)}
                       />
                     </Space>
                   ))}
-                  <Button type="dashed" onClick={() => add()} block icon={<Plus size={14} />}>
+                  <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined aria-hidden="true" />}>
                     添加条件
                   </Button>
                 </>
@@ -337,15 +342,15 @@ const AutomationRulesPage: React.FC = () => {
                           rows={1}
                         />
                       </Form.Item>
-                      <Button
+                      <Button aria-label="删除"
                         type="text"
                         danger
-                        icon={<Delete size={14} />}
+                        icon={<DeleteOutlined aria-hidden="true" />}
                         onClick={() => remove(name)}
                       />
                     </Space>
                   ))}
-                  <Button type="dashed" onClick={() => add()} block icon={<Plus size={14} />}>
+                  <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined aria-hidden="true" />}>
                     添加动作
                   </Button>
                 </>

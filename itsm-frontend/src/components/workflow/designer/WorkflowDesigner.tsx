@@ -6,7 +6,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Layout, Tabs, Form, Modal, Tag, Button, Space, Typography, Switch, App } from 'antd';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { History, AlertTriangle, CheckCircle, XCircle, Bug, GitCompare } from 'lucide-react';
+import { History, AlertTriangle, CheckCircle, XCircle, GitCompare } from 'lucide-react';
+import { BugOutlined } from '@ant-design/icons';
 import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 import { UserApi } from '@/lib/api/user-api';
 import { RoleAPI } from '@/lib/api/role-api';
@@ -863,7 +864,7 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
                       <Space>
                         <Button
                           type='primary'
-                          icon={<Bug />}
+                          icon={<BugOutlined aria-hidden="true" />}
                           onClick={() => validateWorkflow(true)}
                           loading={validating}
                         >

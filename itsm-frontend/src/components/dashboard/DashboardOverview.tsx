@@ -18,18 +18,8 @@ import {
   Spin,
   message,
 } from 'antd';
-import {
-  TrendingUp,
-  User as UserIcon,
-  Clock,
-  CheckCircle,
-  AlertTriangle,
-  Trophy,
-  Users,
-  BarChart3,
-  RefreshCw,
-  FileText,
-} from 'lucide-react';
+import { TrendingUp, User as UserIcon, Clock, CheckCircle, AlertTriangle, Trophy, Users, BarChart3, FileText } from 'lucide-react';
+import { SyncOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -357,7 +347,7 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           <h2 style={{ margin: 0 }}>仪表盘概览</h2>
         </Col>
         <Col>
-          <Button icon={<RefreshCw />} onClick={fetchStats} loading={loading}>
+          <Button icon={<SyncOutlined aria-hidden="true" />} onClick={fetchStats} loading={loading}>
             刷新数据
           </Button>
         </Col>

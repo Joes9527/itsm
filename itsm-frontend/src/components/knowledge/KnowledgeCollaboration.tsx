@@ -20,22 +20,14 @@ import {
   Popover,
   Timeline,
 } from 'antd';
+import { Users, MessageSquare, Eye, Edit3, Share2, Lock, Unlock, Clock, User, Bell, HelpCircle } from 'lucide-react';
 import {
-  Users,
-  MessageSquare,
-  Eye,
-  Edit3,
-  Save,
-  Share2,
-  Lock,
-  Unlock,
-  Clock,
-  User,
-  GitBranch,
-  Send,
-  Bell,
-  HelpCircle,
-} from 'lucide-react';
+  BranchesOutlined,
+  MessageOutlined,
+  SaveOutlined,
+  SendOutlined,
+  ShareAltOutlined,
+} from '@ant-design/icons';
 import { format } from 'date-fns';
 
 const { Title, Text } = Typography;
@@ -284,30 +276,30 @@ const KnowledgeCollaboration: React.FC<KnowledgeCollaborationProps> = ({
         <Space>
           <Tooltip title="查看评论">
             <Badge count={comments.filter(c => !c.resolved).length}>
-              <Button
+              <Button aria-label="查看评论"
                 type={showComments ? 'primary' : 'default'}
-                icon={<MessageSquare className="w-4 h-4" />}
+                icon={<MessageOutlined aria-hidden="true" />}
                 onClick={() => setShowComments(!showComments)}
               />
             </Badge>
           </Tooltip>
 
           <Tooltip title="分享文档">
-            <Button icon={<Share2 className="w-4 h-4" />} onClick={() => setShowShareModal(true)} />
+            <Button aria-label="分享文档" icon={<ShareAltOutlined aria-hidden="true" />} onClick={() => setShowShareModal(true)} />
           </Tooltip>
 
           <Tooltip title="版本历史功能即将推出">
-            <Button
-              icon={<GitBranch className="w-4 h-4" />}
+            <Button aria-label="版本历史"
+              icon={<BranchesOutlined aria-hidden="true" />}
               disabled
               onClick={() => message.info('版本历史功能即将推出，敬请期待')}
             />
           </Tooltip>
 
           <Tooltip title="保存文档">
-            <Button
+            <Button aria-label="保存文档"
               type="primary"
-              icon={<Save className="w-4 h-4" />}
+              icon={<SaveOutlined aria-hidden="true" />}
               onClick={() => onSave?.('document content')}
             />
           </Tooltip>
@@ -354,7 +346,7 @@ const KnowledgeCollaboration: React.FC<KnowledgeCollaborationProps> = ({
               />
               <Button
                 type="primary"
-                icon={<Send className="w-4 h-4" />}
+                icon={<SendOutlined aria-hidden="true" />}
                 onClick={handleAddComment}
                 disabled={!newComment.trim()}
               >

@@ -21,15 +21,13 @@ import {
   Statistic,
   Empty,
 } from 'antd';
+import { Edit, Users, User, Search } from 'lucide-react';
 import {
-  Plus,
-  Edit,
-  Trash2,
-  Users,
-  RefreshCw,
-  User,
-  Search,
-} from 'lucide-react';
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { Team, CreateTeamRequest } from '@/lib/services/team-service';
 import { teamService } from '@/lib/services/team-service';
@@ -204,9 +202,9 @@ export default function TeamManagement() {
       width: 150,
       render: (_: unknown, record: Team) => (
         <Space size="small">
-          <Button
+          <Button aria-label="编辑"
             type="text"
-            icon={<Edit size={16} />}
+            icon={<EditOutlined aria-hidden="true" />}
             onClick={() => handleEdit(record)}
           />
           <Popconfirm
@@ -216,7 +214,7 @@ export default function TeamManagement() {
             okText="确认"
             cancelText="取消"
           >
-            <Button type="text" danger icon={<Trash2 size={16} />} />
+            <Button aria-label="删除" type="text" danger icon={<DeleteOutlined aria-hidden="true" />} />
           </Popconfirm>
         </Space>
       ),
@@ -268,7 +266,7 @@ export default function TeamManagement() {
           />
           <Button
             type="primary"
-            icon={<Plus size={16} />}
+            icon={<PlusOutlined aria-hidden="true" />}
             onClick={() => {
               setSelectedTeam(null);
               form.resetFields();
@@ -278,7 +276,7 @@ export default function TeamManagement() {
             新建团队
           </Button>
           <Button
-            icon={<RefreshCw size={16} />}
+            icon={<SyncOutlined aria-hidden="true" />}
             onClick={() => loadTeams()}
             loading={fetching}
           >

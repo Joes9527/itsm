@@ -24,7 +24,12 @@ import {
   Typography,
   message as antdMessage,
 } from 'antd';
-import { Bot, Eraser, LoaderCircle, Send, StopCircle, User } from 'lucide-react';
+import { Bot, LoaderCircle, User } from 'lucide-react';
+import {
+  ClearOutlined,
+  SendOutlined,
+  StopOutlined,
+} from '@ant-design/icons';
 
 import { AIApi, aiChatStream, type RagAnswer } from '@/lib/api/ai-api';
 
@@ -194,11 +199,11 @@ const AIChat: React.FC = () => {
       extra={
         <Space>
           {streaming ? (
-            <Button size="small" danger icon={<StopCircle size={14} />} onClick={handleStop}>
+            <Button size="small" danger icon={<StopOutlined aria-hidden="true" />} onClick={handleStop}>
               停止生成
             </Button>
           ) : null}
-          <Button size="small" icon={<Eraser size={14} />} onClick={handleClear} disabled={streaming}>
+          <Button size="small" icon={<ClearOutlined aria-hidden="true" />} onClick={handleClear} disabled={streaming}>
             清空对话
           </Button>
         </Space>
@@ -296,7 +301,7 @@ const AIChat: React.FC = () => {
           />
           <Button
             type="primary"
-            icon={<Send size={14} />}
+            icon={<SendOutlined aria-hidden="true" />}
             onClick={handleSend}
             loading={streaming}
             disabled={streaming || !query.trim()}

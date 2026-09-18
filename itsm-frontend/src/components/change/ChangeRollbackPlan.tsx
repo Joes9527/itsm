@@ -33,6 +33,7 @@ import {
   PauseCircle,
   StopCircle,
 } from 'lucide-react';
+import { FileTextOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 
 const { Title, Text, Paragraph } = Typography;
@@ -386,7 +387,7 @@ const ChangeRollbackPlan: React.FC<ChangeRollbackPlanProps> = ({
             <Space>
               <Text type="secondary">总预计时间: {getTotalRollbackTime()} 分钟</Text>
               {!readOnly && (
-                <Button type="dashed" icon={<FileText />} onClick={addRollbackStep}>
+                <Button type="dashed" icon={<FileTextOutlined aria-hidden="true" />} onClick={addRollbackStep}>
                   添加步骤
                 </Button>
               )}

@@ -2,7 +2,10 @@
 
 import React, { useState, useCallback, useMemo } from 'react';
 import { Card, Select, Button, Space, Tag, Spin, message, Drawer, Descriptions, Empty } from 'antd';
-import { RotateCcw, ExternalLink } from 'lucide-react';
+import {
+  ExportOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import type { Node, Edge, NodeTypes} from 'reactflow';
 import ReactFlow, { Controls, Background, useNodesState, useEdgesState, MarkerType, BackgroundVariant, Handle, Position } from 'reactflow';
@@ -199,7 +202,7 @@ export default function TopologyPage() {
             options={ciList.map(ci => ({ value: ci.id, label: ci.name + ' (' + ci.type + ')' }))} allowClear />
           <Select placeholder="关系深度" value={depth} onChange={setDepth} style={{ width: 120 }}
             options={[{ value: 1, label: '1 层' }, { value: 2, label: '2 层' }, { value: 3, label: '3 层' }, { value: 4, label: '4 层' }]} />
-          <Button icon={<RotateCcw />} onClick={loadTopology} loading={loading} disabled={!selectedCI}>刷新</Button>
+          <Button icon={<SyncOutlined aria-hidden="true" />} onClick={loadTopology} loading={loading} disabled={!selectedCI}>刷新</Button>
           {highlightNodeId && <Tag color="blue" closable onClose={() => setHighlightNodeId(null)}>已高亮直接上下游（点击空白处取消）</Tag>}
         </Space>
       </Card>
@@ -223,7 +226,7 @@ export default function TopologyPage() {
           <Button
             type="primary"
             size="small"
-            icon={<ExternalLink className="w-3.5 h-3.5" />}
+            icon={<ExportOutlined aria-hidden="true" className="w-3.5 h-3.5" />}
             onClick={() => router.push(`/cmdb/cis/${selectedNodeData.id}`)}
           >
             查看 CI 详情

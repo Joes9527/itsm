@@ -15,7 +15,8 @@ import {
   App,
   Dropdown,
 } from 'antd';
-import { Search as SearchIcon, Filter, Plus, Save, Pencil, Eye, Settings, Share2, MoreHorizontal } from 'lucide-react';
+import { Search as SearchIcon, Filter, Plus, Save, Pencil, Eye, Share2, MoreHorizontal } from 'lucide-react';
+import { SettingOutlined } from '@ant-design/icons';
 import type { MenuProps, DropDownProps } from 'antd';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -490,7 +491,7 @@ export function UnifiedKanbanBoard<T>({
               }}
               trigger={['click']}
             >
-              <Button icon={<Settings />}>视图设置</Button>
+              <Button icon={<SettingOutlined aria-hidden="true" />}>视图设置</Button>
             </Dropdown>
           </div>
         </div>

@@ -4,7 +4,12 @@ import React from 'react';
 import { Table, Button, Space, Dropdown, Badge, message } from 'antd';
 import type { TablePaginationConfig } from 'antd/es/table';
 import type { MenuProps } from 'antd';
-import { Eye, Edit, MoreHorizontal, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
+import {
+  EditOutlined,
+  EyeOutlined,
+  MoreOutlined,
+} from '@ant-design/icons';
 import type { Change} from '@/lib/services/change-service';
 import { changeService } from '@/lib/services/change-service';
 import { getStatusColor, getPriorityColor } from '@/lib/utils/color-tokens';
@@ -133,7 +138,7 @@ export const ChangeList: React.FC<ChangeListProps> = ({
         <Space size="small">
           <Button
             type="text"
-            icon={<Eye size={16} />}
+            icon={<EyeOutlined aria-hidden="true" />}
             className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
             title="查看详情"
             onClick={() => {
@@ -142,7 +147,7 @@ export const ChangeList: React.FC<ChangeListProps> = ({
           />
           <Button
             type="text"
-            icon={<Edit size={16} />}
+            icon={<EditOutlined aria-hidden="true" />}
             className="text-green-600 hover:text-green-800 hover:bg-green-50"
             title="编辑变更"
             onClick={() => {
@@ -175,7 +180,7 @@ export const ChangeList: React.FC<ChangeListProps> = ({
           >
             <Button
               type="text"
-              icon={<MoreHorizontal size={16} />}
+              icon={<MoreOutlined aria-hidden="true" />}
               className="text-gray-600 hover:text-gray-800 hover:bg-gray-50"
               title="更多操作"
               onClick={e => e.preventDefault()}

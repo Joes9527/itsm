@@ -6,7 +6,12 @@
 
 import React, { useState, useCallback } from 'react';
 import { Card, Row, Col, Input, Select, DatePicker, Button, Space } from 'antd';
-import { Search as SearchIcon, RefreshCw, Filter, Plus } from 'lucide-react';
+import { Search as SearchIcon } from 'lucide-react';
+import {
+  FilterOutlined,
+  PlusOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import type { ApprovalChainFilters as ApprovalChainFiltersType } from '@/types/approval-chain';
 import { useDebouncedCallback } from '@/lib/component-utils';
 import dayjs from 'dayjs';
@@ -137,14 +142,14 @@ export function ApprovalChainFilters({
           </div>
           <Space>
             {onCreateChain && (
-              <Button type="primary" icon={<Plus className="w-4 h-4" />} onClick={onCreateChain}>
+              <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={onCreateChain}>
                 新建审批链
               </Button>
             )}
-            <Button icon={<RefreshCw className="w-4 h-4" />} onClick={onRefresh} loading={loading}>
+            <Button icon={<SyncOutlined aria-hidden="true" />} onClick={onRefresh} loading={loading}>
               刷新
             </Button>
-            <Button icon={<Filter className="w-4 h-4" />} onClick={handleReset}>
+            <Button icon={<FilterOutlined aria-hidden="true" />} onClick={handleReset}>
               重置
             </Button>
           </Space>

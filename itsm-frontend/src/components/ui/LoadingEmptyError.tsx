@@ -2,7 +2,11 @@
 
 import React from 'react';
 import { Button, Result, Spin, Typography } from 'antd';
-import { RotateCcw, Plus, FileText, AlertTriangle, User, Database, Settings } from 'lucide-react';
+import { FileText, AlertTriangle, User, Database, Settings } from 'lucide-react';
+import {
+  PlusOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { useI18n } from '@/lib/i18n/useI18n';
 
 const { Text, Title } = Typography;
@@ -181,7 +185,7 @@ export const LoadingEmptyError: React.FC<LoadingEmptyErrorProps> = ({
           {config.description}
         </Text>
         {config.showAction !== false && config.actionText && config.onAction && (
-          <Button type="primary" icon={<Plus size={16} />} onClick={config.onAction}>
+          <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={config.onAction}>
             {config.actionText}
           </Button>
         )}
@@ -213,7 +217,7 @@ export const LoadingEmptyError: React.FC<LoadingEmptyErrorProps> = ({
           extra={
             <div className="flex gap-2">
               {config.showRetry && (
-                <Button type="primary" icon={<RotateCcw size={16} />} onClick={config.onAction}>
+                <Button type="primary" icon={<SyncOutlined aria-hidden="true" />} onClick={config.onAction}>
                   {config.actionText}
                 </Button>
               )}

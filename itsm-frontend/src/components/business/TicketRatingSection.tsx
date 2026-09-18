@@ -16,6 +16,7 @@ import {
   Empty,
 } from 'antd';
 import { Star, MessageSquare, CheckCircle, Clock } from 'lucide-react';
+import { StarOutlined } from '@ant-design/icons';
 import type {
   TicketRating,
   SubmitTicketRatingRequest} from '@/lib/api/ticket-rating-api';
@@ -222,7 +223,7 @@ export const TicketRatingSection: React.FC<TicketRatingSectionProps> = ({
             <Button
               type="primary"
               size="large"
-              icon={<Star />}
+              icon={<StarOutlined aria-hidden="true" />}
               onClick={() => setShowRatingModal(true)}
               className="bg-gradient-to-r from-yellow-400 to-orange-500 border-0 hover:from-yellow-500 hover:to-orange-600"
             >

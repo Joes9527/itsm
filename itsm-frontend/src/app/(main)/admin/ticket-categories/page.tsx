@@ -9,7 +9,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Col, Modal, Row, Typography, message } from 'antd';
-import { Plus } from 'lucide-react';
+import { PlusOutlined } from '@ant-design/icons';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
 import { TicketCategoryApi, type TicketCategory } from '@/lib/api/ticket-category-api';
 import { CommonApi } from '@/lib/api/common-api';
@@ -198,7 +198,7 @@ const TicketCategoryManagementPage = () => {
           </div>
           <Button
             type="primary"
-            icon={<Plus size={16} />}
+            icon={<PlusOutlined aria-hidden="true" />}
             onClick={() => setEditor({ mode: 'create', category: null, lockedParent: null })}
           >
             创建一级分类

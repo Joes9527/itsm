@@ -46,6 +46,8 @@
     "narrow": 1200,
     "button": 34,
     "buttonSmall": 29,
+    "icon": 16,
+    "iconGap": 8,
     "buttonRadius": 6,
     "cardRadius": 8,
     "cardPadding": 16

@@ -2,7 +2,11 @@
 
 import React, { useMemo, useCallback } from 'react';
 import { Spin, Empty, Alert, Button, Card, Space, Typography } from 'antd';
-import { RefreshCw, Wifi, WifiOff, AlertCircle, Inbox } from 'lucide-react';
+import { WifiOff, AlertCircle, Inbox } from 'lucide-react';
+import {
+  SyncOutlined,
+  WifiOutlined,
+} from '@ant-design/icons';
 
 const { Text, Title } = Typography;
 
@@ -136,11 +140,11 @@ const LoadingStateManagerComponent: React.FC<LoadingStateManagerProps> = ({
 
           {showRetry && onRetry && !isMaxRetriesReached && (
             <Space>
-              <Button type="primary" icon={<RefreshCw size={16} />} onClick={handleRetry}>
+              <Button type="primary" icon={<SyncOutlined aria-hidden="true" />} onClick={handleRetry}>
                 重试
               </Button>
               {isNetworkError && (
-                <Button icon={<Wifi size={16} />} onClick={handleRefresh}>
+                <Button icon={<WifiOutlined aria-hidden="true" />} onClick={handleRefresh}>
                   刷新页面
                 </Button>
               )}
@@ -278,7 +282,7 @@ const SimpleErrorComponent: React.FC<{
     <AlertCircle className="text-red-500 mb-2" size={32} />
     <Text className="text-gray-600 mb-4">{message}</Text>
     {onRetry && (
-      <Button type="primary" size="small" icon={<RefreshCw size={14} />} onClick={onRetry}>
+      <Button type="primary" size="small" icon={<SyncOutlined aria-hidden="true" />} onClick={onRetry}>
         重试
       </Button>
     )}

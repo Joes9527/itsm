@@ -20,7 +20,8 @@ import {
   Divider,
   Tag,
 } from 'antd';
-import { Plus, Save, Pencil, Trash2, Eye, Settings, Share2 } from 'lucide-react';
+import { Plus, Save, Pencil, Trash2, Eye, Share2 } from 'lucide-react';
+import { SettingOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import type { TicketView, CreateTicketViewRequest } from '@/lib/api/ticket-view-api';
 import { TicketViewApi } from '@/lib/api/ticket-view-api';
@@ -253,7 +254,7 @@ export const TicketViewSelector: React.FC<TicketViewSelectorProps> = ({
 
         {currentView && (
           <Dropdown menu={{ items: getViewMenuItems(currentView) }} trigger={['click']}>
-            <Button icon={<Settings />}>管理</Button>
+            <Button icon={<SettingOutlined aria-hidden="true" />}>管理</Button>
           </Dropdown>
         )}
       </Space>

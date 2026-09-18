@@ -1,22 +1,17 @@
 'use client';
 
+import { Pause, Play, AlertCircle, GitBranch, BarChart3, Activity, Users, Settings, CheckCircle, Edit, Eye, Search } from 'lucide-react';
 import {
-  Pause,
-  Play,
-  Copy,
-  AlertCircle,
-  GitBranch,
-  BarChart3,
-  Activity,
-  Users,
-  Settings,
-  CheckCircle,
-  Edit,
-  Eye,
-  Trash2,
-  Search,
-  Plus,
-} from 'lucide-react';
+  BranchesOutlined,
+  CopyOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
+  PlusOutlined,
+  SettingOutlined,
+} from '@ant-design/icons';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -469,22 +464,22 @@ const WorkflowManagement = () => {
           <Tooltip title="查看详情">
             <Button
               type="text"
-              icon={<Eye className="w-4 h-4" />}
+              icon={<EyeOutlined aria-hidden="true" />}
               aria-label="查看详情"
               onClick={() => handleViewDetail(record)}
             />
           </Tooltip>
           <Tooltip title="设计流程">
-            <Button
+            <Button aria-label="设计流程"
               type="text"
-              icon={<GitBranch className="w-4 h-4" />}
+              icon={<BranchesOutlined aria-hidden="true" />}
               onClick={() => router.push(`/workflow/designer?id=${record.key}`)}
             />
           </Tooltip>
           <Tooltip title="编辑元数据">
             <Button
               type="text"
-              icon={<Edit className="w-4 h-4" />}
+              icon={<EditOutlined aria-hidden="true" />}
               aria-label="编辑元数据"
               onClick={() => {
                 setSelectedWorkflow(record);
@@ -496,19 +491,20 @@ const WorkflowManagement = () => {
           <Tooltip title="复制">
             <Button
               type="text"
-              icon={<Copy className="w-4 h-4" />}
+              icon={<CopyOutlined aria-hidden="true" />}
               aria-label="复制工作流"
               onClick={() => handleDuplicate(record)}
             />
           </Tooltip>
           <Tooltip title={record.status === WORKFLOW_STATUS.ACTIVE ? '停用' : '启用'}>
             <Button
+              aria-label={record.status === WORKFLOW_STATUS.ACTIVE ? '停用' : '启用'}
               type="text"
               icon={
                 record.status === WORKFLOW_STATUS.ACTIVE ? (
-                  <Pause className="w-4 h-4" />
+                  <PauseCircleOutlined aria-hidden="true" />
                 ) : (
-                  <Play className="w-4 h-4" />
+                  <PlayCircleOutlined aria-hidden="true" />
                 )
               }
               onClick={() => handleStatusToggle(record.id)}
@@ -525,7 +521,7 @@ const WorkflowManagement = () => {
             <Button
               type="text"
               danger
-              icon={<Trash2 className="w-4 h-4" />}
+              icon={<DeleteOutlined aria-hidden="true" />}
               aria-label="删除工作流"
             />
           </Popconfirm>
@@ -641,20 +637,20 @@ const WorkflowManagement = () => {
                   cancelText="取消"
                   okType="danger"
                 >
-                  <Button danger icon={<Trash2 className="w-4 h-4" />}>
+                  <Button danger icon={<DeleteOutlined aria-hidden="true" />}>
                     批量删除 ({selectedRowKeys.length})
                   </Button>
                 </Popconfirm>
               )}
               <Button
-                icon={<Settings className="w-4 h-4" />}
+                icon={<SettingOutlined aria-hidden="true" />}
                 onClick={() => router.push('/admin/process-routing')}
               >
                 绑定规则
               </Button>
               <Button
                 type="primary"
-                icon={<Plus className="w-4 h-4" />}
+                icon={<PlusOutlined aria-hidden="true" />}
                 onClick={() => {
                   setSelectedWorkflow(null);
                   form.resetFields();
@@ -887,7 +883,7 @@ const WorkflowManagement = () => {
             <div className="mt-6">
               <Button
                 type="primary"
-                icon={<GitBranch />}
+                icon={<BranchesOutlined aria-hidden="true" />}
                 onClick={() => {
                   window.open(`/workflow/designer?id=${selectedWorkflow.key}`, '_blank');
                 }}

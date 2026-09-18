@@ -16,7 +16,8 @@ import {
 } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
-import { AlertTriangle, CheckCircle, Clock, RefreshCw } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { SyncOutlined } from '@ant-design/icons';
 
 import type { SLAViolation, ProcessMetrics } from '@/lib/api/bpmn-dashboard-api';
 import BPMNDashboardApi from '@/lib/api/bpmn-dashboard-api';
@@ -177,7 +178,7 @@ export default function SLAMonitoringPage() {
       <div className='flex justify-between items-center'>
         <h1 className='text-[24px] font-semibold'>{t('bpmn.sla.title') || 'BPMN SLA监控'}</h1>
         <Button
-          icon={<RefreshCw size={16} />}
+          icon={<SyncOutlined aria-hidden="true" />}
           onClick={() => {
             fetchViolations();
             fetchProcessMetrics();

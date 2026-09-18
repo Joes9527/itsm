@@ -5,7 +5,7 @@
 import React from 'react';
 import { Form, Card, Upload, Alert, Button } from 'antd';
 import type { TicketFormValues, User } from '../types';
-import { FileText } from 'lucide-react';
+import { FileTextOutlined } from '@ant-design/icons';
 
 interface TicketPreviewStepProps {
   form: any;
@@ -70,7 +70,7 @@ export const TicketPreviewStep: React.FC<TicketPreviewStepProps> = ({
           maxCount={5}
           accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
         >
-          <Button icon={<FileText size={16} />}>上传附件</Button>
+          <Button icon={<FileTextOutlined aria-hidden="true" />}>上传附件</Button>
         </Upload>
       </Form.Item>
     </div>

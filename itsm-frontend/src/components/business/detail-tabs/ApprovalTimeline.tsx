@@ -2,7 +2,12 @@
 
 import React, { useEffect, useState } from 'react';
 import { Timeline, Typography, Tag, Space, Button, Modal, Input, App, Empty, Select } from 'antd';
-import { CheckCircle, XCircle, Timer, ArrowRight } from 'lucide-react';
+import { CheckCircle, XCircle, Timer } from 'lucide-react';
+import {
+  ArrowRightOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+} from '@ant-design/icons';
 import type { ApprovalStep, ApprovalStepStatus, ApprovalActionInput } from './types';
 import { UserApi } from '@/lib/api/user-api';
 
@@ -213,19 +218,19 @@ export const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({
           {onApprove && (
             <Button
               type="primary"
-              icon={<CheckCircle size={14} />}
+              icon={<CheckCircleOutlined aria-hidden="true" />}
               onClick={() => openModal('approve')}
             >
               通过
             </Button>
           )}
           {onReject && (
-            <Button danger icon={<XCircle size={14} />} onClick={() => openModal('reject')}>
+            <Button danger icon={<CloseCircleOutlined aria-hidden="true" />} onClick={() => openModal('reject')}>
               拒绝
             </Button>
           )}
           {onDelegate && (
-            <Button icon={<ArrowRight size={14} />} onClick={() => openModal('delegate')}>
+            <Button icon={<ArrowRightOutlined aria-hidden="true" />} onClick={() => openModal('delegate')}>
               委派
             </Button>
           )}

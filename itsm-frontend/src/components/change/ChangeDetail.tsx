@@ -22,7 +22,8 @@ import {
   App,
   Alert,
 } from 'antd';
-import { ArrowLeft, CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle, XCircle } from 'lucide-react';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useParams, useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
@@ -205,7 +206,7 @@ const ChangeDetail: React.FC<ChangeDetailProps> = ({ id: propId, onChangeLoaded 
       <Card>
         <div style={{ marginBottom: 24 }}>
           <Button
-            icon={<ArrowLeft />}
+            icon={<ArrowLeftOutlined aria-hidden="true" />}
             onClick={() => router.push('/changes')}
             style={{ marginBottom: 16 }}
           >

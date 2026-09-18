@@ -16,18 +16,15 @@ import {
   type MenuProps,
 } from 'antd';
 import type { MenuProps as AntdMenuProps } from 'antd';
+import { Search, Table, LayoutGrid, Settings } from 'lucide-react';
 import {
-  Plus,
-  Search,
-  Filter,
-  RotateCcw,
-  Download,
-  MoreVertical,
-  Table,
-  LayoutGrid,
-  Bell,
-  Settings,
-} from 'lucide-react';
+  BellOutlined,
+  DownloadOutlined,
+  EllipsisOutlined,
+  FilterOutlined,
+  PlusOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useDebounce } from '@/lib/component-utils';
 
@@ -341,7 +338,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
               {/* 预警按钮 */}
               {alertBadge !== undefined && onAlertClick && (
                 <Button
-                  icon={<Bell />}
+                  icon={<BellOutlined aria-hidden="true" />}
                   onClick={onAlertClick}
                   className={alertBadge > 0 ? 'text-orange-500' : ''}
                 >
@@ -358,7 +355,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
               {primaryAction && (
                 <Button
                   type="primary"
-                  icon={primaryAction.icon || <Plus />}
+                  icon={primaryAction.icon || <PlusOutlined aria-hidden="true" />}
                   onClick={primaryAction.onClick}
                   size="small"
                 >
@@ -369,7 +366,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
               {/* 更多操作下拉菜单 */}
               {extraActions.length > 0 && (
                 <Dropdown menu={{ items: actionMenuItems }} placement="bottomRight">
-                  <Button icon={<MoreVertical />} />
+                  <Button icon={<EllipsisOutlined aria-hidden="true" />} aria-label="更多操作" />
                 </Dropdown>
               )}
             </Space>
@@ -411,7 +408,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
               {/* 筛选按钮 */}
               {filters && (
                 <Button
-                  icon={<Filter />}
+                  icon={<FilterOutlined aria-hidden="true" />}
                   onClick={filters.onToggle}
                   type={filters.visible ? 'primary' : 'default'}
                 >
@@ -420,12 +417,12 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
               )}
 
               {/* 刷新按钮 */}
-              <Button icon={<RotateCcw />} onClick={() => window.location.reload()}>
+              <Button icon={<SyncOutlined aria-hidden="true" />} onClick={() => window.location.reload()}>
                 刷新
               </Button>
 
               {/* 导出按钮 */}
-              <Button icon={<Download />}>导出</Button>
+              <Button icon={<DownloadOutlined aria-hidden="true" />}>导出</Button>
             </Space>
           </div>
 
@@ -495,7 +492,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
                 数据加载失败，并非暂无数据，请检查网络后重试
               </Text>
               {onRetry && (
-                <Button type="primary" icon={<RotateCcw className="h-4 w-4" />} onClick={onRetry}>
+                <Button type="primary" icon={<SyncOutlined aria-hidden="true" />} onClick={onRetry}>
                   重试
                 </Button>
               )}
@@ -537,10 +534,11 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
       {primaryAction && (
         <div className="fixed bottom-6 right-6 z-50 md:hidden">
           <Button
+            aria-label={primaryAction.label}
             type="primary"
             shape="circle"
             size="large"
-            icon={primaryAction.icon || <Plus />}
+            icon={primaryAction.icon || <PlusOutlined aria-hidden="true" />}
             onClick={primaryAction.onClick}
             className="shadow-none hover:scale-110 transition-transform"
           />

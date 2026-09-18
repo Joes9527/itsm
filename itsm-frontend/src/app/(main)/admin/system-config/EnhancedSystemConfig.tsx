@@ -5,31 +5,11 @@
  * 添加更多功能标签和改进的响应式设计
  */
 
+import { Mail, Network, Globe, Database, MemoryStick, Settings, Shield, Clock, Cpu, Bell, FileText, Lock, Monitor, Smartphone, Cloud, Server, Database as DatabaseIcon, Key, UserCheck, Webhook, Slack } from 'lucide-react';
 import {
-  RefreshCw,
-  Save,
-  Mail,
-  Network,
-  Globe,
-  Database,
-  MemoryStick,
-  Settings,
-  Shield,
-  Clock,
-  Cpu,
-  Bell,
-  FileText,
-  Lock,
-  Monitor,
-  Smartphone,
-  Cloud,
-  Server,
-  Database as DatabaseIcon,
-  Key,
-  UserCheck,
-  Webhook,
-  Slack,
-} from 'lucide-react';
+  ClearOutlined,
+  SaveOutlined,
+} from '@ant-design/icons';
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -941,12 +921,12 @@ export default function EnhancedSystemConfiguration() {
               配置管理
             </Title>
             <Space>
-              <Button icon={<RefreshCw className="w-4 h-4" />} onClick={handleReset}>
+              <Button icon={<ClearOutlined aria-hidden="true" />} onClick={handleReset}>
                 重置
               </Button>
               <Button
                 type="primary"
-                icon={<Save className="w-4 h-4" />}
+                icon={<SaveOutlined aria-hidden="true" />}
                 loading={isSaving}
                 onClick={handleSave}
               >

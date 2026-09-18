@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Alert, Button, Empty, Input, Space, Tag, Tree, Typography } from 'antd';
-import { Plus } from 'lucide-react';
+import { PlusOutlined } from '@ant-design/icons';
 import type { TicketCategory } from '@/lib/api/ticket-category-api';
 import {
   buildCategoryTree,
@@ -64,7 +64,7 @@ export function CategoryTreePanel({
             size="small"
             type="text"
             aria-label={`为 ${node.name} 新增下级分类`}
-            icon={<Plus size={12} />}
+            icon={<PlusOutlined aria-hidden="true" />}
             onClick={event => {
               event.stopPropagation();
               onAddChild(node);

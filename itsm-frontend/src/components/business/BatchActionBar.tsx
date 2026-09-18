@@ -3,7 +3,8 @@
 import React from 'react';
 import { Alert, Button, Dropdown, Popconfirm, Space, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
-import { ChevronDown, X } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
+import { CloseOutlined } from '@ant-design/icons';
 
 /**
  * 单个批量动作定义。
@@ -95,6 +96,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
 
   const renderActionButton = (action: BatchAction) => {
     const btn = (
+      // icon-gate: 图标由调用方经 actions[].icon 传入，本组件无法约束；调用点自查
       <Button
         size="small"
         type={action.type || 'default'}
@@ -119,6 +121,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           okButtonProps={{ danger: true }}
           disabled={action.disabled || loading}
         >
+          {/* icon-gate: 同上，危险操作分支用的是同一个调用方传入的图标 */}
           <Button
             size="small"
             type={action.type || 'default'}
@@ -179,7 +182,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           <Button
             size="small"
             type="text"
-            icon={<X size={14} />}
+            icon={<CloseOutlined aria-hidden="true" />}
             onClick={onClear}
             disabled={loading}
           >

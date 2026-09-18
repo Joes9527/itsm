@@ -18,7 +18,13 @@ import {
   message,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { Delete, Edit, FlaskConical, Plus, RefreshCw } from 'lucide-react';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  ExperimentOutlined,
+  PlusOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import type {
   ActionConfig,
   AssignmentRule,
@@ -283,14 +289,14 @@ export default function AssignmentRulesPage() {
       render: (_, record) => (
         <div className="flex items-center gap-2">
           <Tooltip title="测试">
-            <Button
+            <Button aria-label="测试"
               size="small"
-              icon={<FlaskConical size={14} />}
+              icon={<ExperimentOutlined aria-hidden="true" />}
               onClick={() => openTestModal(record)}
             />
           </Tooltip>
           <Tooltip title="编辑">
-            <Button size="small" icon={<Edit size={14} />} onClick={() => openEditModal(record)} />
+            <Button aria-label="编辑" size="small" icon={<EditOutlined aria-hidden="true" />} onClick={() => openEditModal(record)} />
           </Tooltip>
           <Popconfirm
             title="确认删除该分配规则？"
@@ -300,7 +306,7 @@ export default function AssignmentRulesPage() {
             onConfirm={() => deleteRule(record.id)}
           >
             <Tooltip title="删除">
-              <Button size="small" danger icon={<Delete size={14} />} />
+              <Button aria-label="删除" size="small" danger icon={<DeleteOutlined aria-hidden="true" />} />
             </Tooltip>
           </Popconfirm>
         </div>
@@ -320,9 +326,9 @@ export default function AssignmentRulesPage() {
           </div>
           <div className="flex items-center gap-2">
             <Tooltip title="刷新">
-              <Button icon={<RefreshCw size={16} />} onClick={loadRules} />
+              <Button aria-label="刷新" icon={<SyncOutlined aria-hidden="true" />} onClick={loadRules} />
             </Tooltip>
-            <Button type="primary" icon={<Plus size={16} />} onClick={openCreateModal}>
+            <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={openCreateModal}>
               创建规则
             </Button>
           </div>

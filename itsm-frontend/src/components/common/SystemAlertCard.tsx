@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { Card, Alert, List, Badge, Button } from 'antd';
-import { AlertTriangle, Bell, X } from 'lucide-react';
+import { AlertTriangle, Bell } from 'lucide-react';
+import { CloseOutlined } from '@ant-design/icons';
 import type { SystemAlert } from '@/lib/hooks/useDashboardData';
 
 interface SystemAlertCardProps {
@@ -93,10 +94,10 @@ export const SystemAlertCard: React.FC<SystemAlertCardProps> = ({
                         </div>
                       </div>
                       {onDismiss && (
-                        <Button
+                        <Button aria-label="关闭"
                           type="text"
                           size="small"
-                          icon={<X size={14} />}
+                          icon={<CloseOutlined aria-hidden="true" />}
                           onClick={() => onDismiss(alert.message)}
                           className="text-gray-400 hover:text-gray-600"
                         />

@@ -18,15 +18,8 @@ import {
 } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
-import {
-  Activity,
-  Clock,
-  CheckCircle,
-  AlertTriangle,
-  XCircle,
-  BarChart3,
-  RefreshCw,
-} from 'lucide-react';
+import { Activity, Clock, CheckCircle, AlertTriangle, XCircle, BarChart3 } from 'lucide-react';
+import { SyncOutlined } from '@ant-design/icons';
 
 import type { DashboardMetrics } from '@/lib/api/bpmn-dashboard-api';
 import BPMNDashboardApi, { ProcessStat, TaskStat, TrendPoint } from '@/lib/api/bpmn-dashboard-api';
@@ -165,7 +158,7 @@ export default function BPMNDashboardPage() {
             }}
             value={[dateRange[0], dateRange[1]]}
           />
-          <Button icon={<RefreshCw size={16} />} onClick={fetchMetrics}>
+          <Button icon={<SyncOutlined aria-hidden="true" />} onClick={fetchMetrics}>
             {t('common.refresh') || '刷新'}
           </Button>
         </Space>

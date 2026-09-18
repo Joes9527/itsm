@@ -1,17 +1,14 @@
 'use client';
 
+import { Timer, CheckCircle, Clock, Edit, Target, TrendingUp, Eye, Search } from 'lucide-react';
 import {
-  Timer,
-  CheckCircle,
-  Clock,
-  Edit,
-  Target,
-  TrendingUp,
-  Eye,
-  Trash2,
-  Plus,
-  Search,
-} from 'lucide-react';
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 
 import React, { useState, useEffect } from 'react';
 import { SLAApi, SLADefinition as APISLADefinition } from '@/lib/api/sla-api';
@@ -327,16 +324,16 @@ const SLADefinitionManagement = () => {
       render: (_: unknown, record: SLADefinition) => (
         <Space>
           <Tooltip title="查看详情">
-            <Button
+            <Button aria-label="查看详情"
               type="text"
-              icon={<Eye className="w-4 h-4" />}
+              icon={<EyeOutlined aria-hidden="true" />}
               onClick={() => handleViewDetail(record)}
             />
           </Tooltip>
           <Tooltip title="编辑">
-            <Button
+            <Button aria-label="编辑"
               type="text"
-              icon={<Edit className="w-4 h-4" />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => {
                 setSelectedSLA(record);
                 form.setFieldsValue(record);
@@ -346,12 +343,13 @@ const SLADefinitionManagement = () => {
           </Tooltip>
           <Tooltip title={record.status === 'active' ? '停用' : '启用'}>
             <Button
+              aria-label={record.status === 'active' ? '停用' : '启用'}
               type="text"
               icon={
                 record.status === 'active' ? (
-                  <Clock className="w-4 h-4" />
+                  <ClockCircleOutlined aria-hidden="true" />
                 ) : (
-                  <CheckCircle className="w-4 h-4" />
+                  <CheckCircleOutlined aria-hidden="true" />
                 )
               }
               onClick={() => handleStatusToggle(record.id)}
@@ -365,7 +363,7 @@ const SLADefinitionManagement = () => {
             cancelText="取消"
             okType="danger"
           >
-            <Button type="text" danger icon={<Trash2 className="w-4 h-4" />} />
+            <Button aria-label="删除" type="text" danger icon={<DeleteOutlined aria-hidden="true" />} />
           </Popconfirm>
         </Space>
       ),
@@ -485,7 +483,7 @@ const SLADefinitionManagement = () => {
           <Col xs={24} md={4} className="text-right">
             <Button
               type="primary"
-              icon={<Plus className="w-4 h-4" />}
+              icon={<PlusOutlined aria-hidden="true" />}
               onClick={() => {
                 setSelectedSLA(null);
                 form.resetFields();

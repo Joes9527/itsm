@@ -1,18 +1,12 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Layout, Button, Tooltip, Badge, Dropdown, message, Breadcrumb } from 'antd';
 import {
-  PanelLeftClose,
-  PanelLeftOpen,
-  Bell,
-  Bot,
-  Globe,
-  Moon,
-  MoreHorizontal,
-  Search,
-  Sun,
-} from 'lucide-react';
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+} from '@ant-design/icons';
+import { Layout, Button, Tooltip, Badge, Dropdown, message, Breadcrumb } from 'antd';
+import { Bell, Bot, Globe, Moon, MoreHorizontal, Search, Sun } from 'lucide-react';
 import { useTheme } from '@/lib/design-system/theme';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/lib/store/auth-store';
@@ -252,7 +246,7 @@ export const Header: React.FC<HeaderProps> = ({
           {showSidebarToggle && (
             <Button
               type='text'
-              icon={collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+              icon={collapsed ? <MenuUnfoldOutlined aria-hidden="true" /> : <MenuFoldOutlined aria-hidden="true" />}
               onClick={() => onCollapse(!collapsed)}
               aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
               title={collapsed ? '展开侧边栏' : '收起侧边栏'}

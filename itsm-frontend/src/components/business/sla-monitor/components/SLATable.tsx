@@ -4,7 +4,11 @@
 
 import React from 'react';
 import { Table, Tag, Space, Button } from 'antd';
-import { Eye, CheckCircle, XCircle } from 'lucide-react';
+import {
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  EyeOutlined,
+} from '@ant-design/icons';
 import type { SLAViolation } from '../types';
 
 interface SLATableProps {
@@ -99,9 +103,9 @@ export const SLATable: React.FC<SLATableProps> = ({
       fixed: 'right',
       render: (_: any, record: SLAViolation) => (
         <Space size="small">
-          <Button
+          <Button aria-label="查看"
             size="small"
-            icon={<Eye />}
+            icon={<EyeOutlined aria-hidden="true" />}
             onClick={() => onView(record)}
           />
           {record.status === 'open' && (
@@ -109,7 +113,7 @@ export const SLATable: React.FC<SLATableProps> = ({
               <Button
                 size="small"
                 type="primary"
-                icon={<CheckCircle />}
+                icon={<CheckCircleOutlined aria-hidden="true" />}
                 onClick={() => onAcknowledge(record)}
               >
                 确认
@@ -117,7 +121,7 @@ export const SLATable: React.FC<SLATableProps> = ({
               <Button
                 size="small"
                 danger
-                icon={<XCircle />}
+                icon={<CloseCircleOutlined aria-hidden="true" />}
                 onClick={() => onResolve(record)}
               >
                 解决

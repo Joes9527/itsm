@@ -21,7 +21,15 @@ import {
   Rate,
   Input,
 } from 'antd';
-import { ArrowLeft, Pencil, User, Folder, Calendar, CheckCircle, Archive, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { User, Folder, Calendar } from 'lucide-react';
+import {
+  ArrowLeftOutlined,
+  CheckCircleOutlined,
+  DislikeOutlined,
+  EditOutlined,
+  InboxOutlined,
+  LikeOutlined,
+} from '@ant-design/icons';
 import { useParams, useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
@@ -190,14 +198,14 @@ const ArticleDetail: React.FC = () => {
               marginBottom: 16,
             }}
           >
-            <Button icon={<ArrowLeft />} onClick={() => router.push('/knowledge')}>
+            <Button icon={<ArrowLeftOutlined aria-hidden="true" />} onClick={() => router.push('/knowledge')}>
               返回列表
             </Button>
             <Space>
               {status === KnowledgeStatus.DRAFT && (
                 <Button
                   type="primary"
-                  icon={<CheckCircle />}
+                  icon={<CheckCircleOutlined aria-hidden="true" />}
                   onClick={handlePublish}
                   loading={actionLoading === 'publish'}
                 >
@@ -206,7 +214,7 @@ const ArticleDetail: React.FC = () => {
               )}
               {status === KnowledgeStatus.PUBLISHED && (
                 <Button
-                  icon={<CheckCircle />}
+                  icon={<CheckCircleOutlined aria-hidden="true" />}
                   onClick={handleUnpublish}
                   loading={actionLoading === 'unpublish'}
                 >
@@ -214,7 +222,7 @@ const ArticleDetail: React.FC = () => {
                 </Button>
               )}
               <Button
-                icon={<Archive />}
+                icon={<InboxOutlined aria-hidden="true" />}
                 onClick={handleArchive}
                 loading={actionLoading === 'archive'}
               >
@@ -222,7 +230,7 @@ const ArticleDetail: React.FC = () => {
               </Button>
               <Button
                 type="primary"
-                icon={<Pencil />}
+                icon={<EditOutlined aria-hidden="true" />}
                 onClick={() => router.push(`/knowledge/articles/${article.id}/edit`)}
               >
                 编辑文章
@@ -285,14 +293,14 @@ const ArticleDetail: React.FC = () => {
                         <Text strong>这篇文章对您有帮助吗？</Text>
                         <Space>
                           <Button
-                            icon={<ThumbsUp size={14} />}
+                            icon={<LikeOutlined aria-hidden="true" />}
                             onClick={() => handleFeedback(true)}
                             type={helpful === true ? 'primary' : 'default'}
                           >
                             有帮助
                           </Button>
                           <Button
-                            icon={<ThumbsDown size={14} />}
+                            icon={<DislikeOutlined aria-hidden="true" />}
                             onClick={() => handleFeedback(false)}
                             type={helpful === false ? 'primary' : 'default'}
                           >

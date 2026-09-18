@@ -2,7 +2,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { App, Alert, Button, Input, Modal, Spin, Tag } from 'antd';
-import { CheckCircle, XCircle, Clock, ShieldCheck } from 'lucide-react';
+import { Clock, ShieldCheck } from 'lucide-react';
+import {
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+} from '@ant-design/icons';
 import Link from 'next/link';
 import { useApprovalTasks } from '@/components/approvals/useApprovalTasks';
 import { BPMNWorkflowApi, type UserTask } from '@/lib/api/bpmn-workflow-api';
@@ -179,7 +183,7 @@ export const ManagerPendingApprovals: React.FC = () => {
                   setRejectingTaskId(item.id);
                   setRejectComment('');
                 }}
-                icon={<XCircle size={14} />}
+                icon={<CloseCircleOutlined aria-hidden="true" />}
               >
                 驳回
               </Button>
@@ -190,7 +194,7 @@ export const ManagerPendingApprovals: React.FC = () => {
                 disabled={loading || !!error || Object.values(actionLoading).some(Boolean)}
                 onClick={() => handleDecision(item.id, 'approve')}
                 className=""
-                icon={<CheckCircle size={14} />}
+                icon={<CheckCircleOutlined aria-hidden="true" />}
               >
                 同意批准
               </Button>

@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Lock, CheckCircle, AlertCircle, ArrowRight } from 'lucide-react';
+import { Lock, CheckCircle, AlertCircle } from 'lucide-react';
+import { ArrowRightOutlined } from '@ant-design/icons';
 import { useI18n } from '@/lib/i18n/useI18n';
 import {
   Typography,
@@ -280,7 +281,7 @@ function ResetPasswordContent() {
                   size="middle"
                   className="w-full h-[34px] rounded-[6px] text-[13px] font-semibold"
                   loading={loading}
-                  icon={<ArrowRight size={14} />}
+                  icon={<ArrowRightOutlined aria-hidden="true" />}
                 >
                   {loading
                     ? t('auth.resetPassword.resetting')

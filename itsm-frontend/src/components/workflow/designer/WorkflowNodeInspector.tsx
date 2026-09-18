@@ -5,13 +5,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { Card, Empty, Select, Input, InputNumber, Tag, Typography, Space, Divider, Alert, Button, Switch, Tooltip, Collapse, Badge } from 'antd';
-import {
-  User, Users, UserCheck, Hash, Tag as TagIcon, RefreshCw,
-  Code, Server, GitBranch, PlayCircle, Clock, FileText,
-  Webhook, Settings, MessageSquare, Mail, AlertTriangle,
-  Database, Link, Timer, MessageCircle, Radio, ChevronDown, ChevronRight,
-  Save, Undo, Redo, Info, Zap, Shield, Bell
-} from 'lucide-react';
+// RefreshCw 已随图标迁移移除（两处「重读节点属性」改用 SyncOutlined），main 侧仅为保留原样，
+// 合并后本文件不再引用它——留着会被 noUnusedLocals / ESLint 判为未使用。
+import { User, Users, UserCheck, Hash, Tag as TagIcon, Code, Server, GitBranch, PlayCircle, Clock, FileText, Webhook, Settings, MessageSquare, Mail, AlertTriangle, Database, Link, Timer, MessageCircle, Radio, ChevronDown, ChevronRight, Save, Undo, Redo, Info, Zap, Shield, Bell } from 'lucide-react';
+import { SyncOutlined } from '@ant-design/icons';
 import { GroupAPI, type Group } from '@/lib/api/group-api';
 
 // bpmn-js 事件定义最小类型（库本身类型较松）
@@ -167,7 +164,7 @@ export default function WorkflowNodeInspector({
               <Button
                 type="text"
                 size="small"
-                icon={<RefreshCw className="w-3 h-3" />}
+                icon={<SyncOutlined aria-hidden="true" />}
                 aria-label="重读节点属性"
                 onClick={onRefresh}
               />
@@ -497,7 +494,7 @@ export default function WorkflowNodeInspector({
           <Button
             type="text"
             size="small"
-            icon={<RefreshCw className="w-3 h-3" />}
+            icon={<SyncOutlined aria-hidden="true" />}
             onClick={onRefresh}
           >
             重读

@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Space, message, Pagination, Select } from 'antd';
 import {
-  Plus,
   RotateCcw,
   Download,
   Bug,
@@ -11,6 +10,7 @@ import {
   ScanSearch,
   CircleCheckBig,
 } from 'lucide-react';
+import { PlusOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import {
   BusinessPageTemplate,
@@ -320,7 +320,7 @@ export default function ProblemListPage() {
       primaryAction={{
         label: '新建问题',
         onClick: handleCreate,
-        icon: <Plus className="w-4 h-4" />,
+        icon: <PlusOutlined aria-hidden="true" />,
       }}
 
       extraActions={[
