@@ -44,6 +44,38 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 - 若结构迁移不可兼容，恢复到发布前备份，在隔离环境验证后再恢复服务。
 - 恢复完成后先运行 migration verify，再执行初始化 `verify`；不得直接绕过 readiness。
 
+## 已存在租户的 ticket_types 定向补齐
+
+已完成 bootstrap 的目标可以单独补齐产品默认业务子类型。此入口不是首次
+bootstrap，也不替代初始化引擎、迁移验证或 readiness；它不创建租户、账号或
+角色，不调用 `itil-core` 或其他 seed，不修改初始化／迁移账本。
+
+在 `itsm-backend` 目录使用经核对的配置文件和数据库环境变量运行：
+
+```bash
+go run ./cmd/initialize_ticket_types --tenant-id <existing-tenant-id> --actor-id <existing-admin-id>
+go run ./cmd/initialize_ticket_types --tenant-id <existing-tenant-id> --actor-id <existing-admin-id> --apply
+```
+
+未指定 `--apply` 时仅执行只读计划，输出实际 database/schema、租户和操作者
+ID、产品默认清单摘要、待建／保留／自定义 code。核对环境和计划后再显式 apply。
+凭据继续使用既有环境变量或 secret-file 配置，不写进命令参数或计划结果。
+
+定向入口从数据库重新读取现有活跃租户及本租户活跃操作者，通过现有实时
+RBAC 校验 `system_config:update`，不信任调用方声称的管理员名称或角色。
+apply 在一个 serializable 事务中重新校验权限和全部冲突，再补齐缺少的默认
+code，并在同一事务写入 `ticket_types.initialize` 审计。任一插入、并发冲突、
+审计或提交失败均不会提交部分配置；失败后先复核原因，再重新运行计划。
+
+默认定义只维护在 `pkg/seeder/ticket_types.go`，bootstrap 和此入口共同消费。
+已存在的默认 code 必须与产品配置一致，包括状态、SLA／审批／自动分配开关
+及规则配置；差异会拒绝整批，不覆盖管理员自定义。其他 code 保留。历史 ID、
+创建人、时间戳和使用次数不被重写；部分初始化可以补缺，完整重跑不新增类型。
+
+验证应读取真实 `ticket_types` 并核对现有 `TicketService.Prepare` 的 code／ID
+解析；旧静态 `/ticket-types` 查询不能作为本次补齐证据。Prepare 层验证不代表
+完整工单创建、审批、SLA 或运行环境准入已经验收。
+
 ## 发布证据
 
 归档以下内容：release version、migration 状态与 checksum、初始化 run ID、六组件版本与

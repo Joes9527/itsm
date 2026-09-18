@@ -1,0 +1,9 @@
+{
+  "database": "unconnected_test_fixture",
+  "schema": "public",
+  "ga_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "code_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "actor": "offline-test",
+  "source_id": "offline-fixture",
+  "expected_pre_state_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+}
