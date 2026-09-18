@@ -39,6 +39,18 @@ type Department struct {
 	UpdatedAt   time.Time     `json:"updatedAt"`
 }
 
+// DepartmentNode 是组织树的轻量投影：只含展示与展开所需字段。
+//
+// 全树近 8000 个节点，禁止把完整实体一次性下发给前端；前端按 parentId 逐层展开。
+type DepartmentNode struct {
+	ID          int    `json:"id"`
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	ParentID    int    `json:"parentId"`
+	NodeType    string `json:"nodeType"`
+	HasChildren bool   `json:"hasChildren"`
+}
+
 // Team represents a group of users
 type Team struct {
 	ID          int       `json:"id"`

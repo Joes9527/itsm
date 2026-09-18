@@ -291,6 +291,76 @@ func (r *EntRepository) GetDepartmentTree(ctx context.Context, tenantID int) ([]
 	return roots, nil
 }
 
+const maxDepartmentChildren = 500
+
+// ListDepartmentChildren 只返回直接下级，且只带展示必需字段。
+// 全树近 8000 个节点，禁止把完整实体一次性下发给前端。
+//
+// 注意 parent_id 是可空列：根节点在库里是 NULL 而不是 0，
+// 所以 parentID==0 必须显式查 NULL，否则根节点一个都取不到。
+func (r *EntRepository) ListDepartmentChildren(ctx context.Context, tenantID, parentID int) ([]*DepartmentNode, error) {
+	parentPredicate := department.ParentIDEQ(parentID)
+	if parentID == 0 {
+		parentPredicate = department.Or(
+			department.ParentIDIsNil(),
+			department.ParentIDEQ(0),
+		)
+	}
+
+	rows, err := r.client.Department.Query().
+		Where(
+			department.TenantID(tenantID),
+			parentPredicate,
+			department.DeletedAtIsNil(),
+		).
+		Order(ent.Asc(department.FieldCode)).
+		Limit(maxDepartmentChildren + 1).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) > maxDepartmentChildren {
+		rows = rows[:maxDepartmentChildren]
+	}
+
+	parentIDs := make([]int, 0, len(rows))
+	for _, row := range rows {
+		parentIDs = append(parentIDs, row.ID)
+	}
+
+	withChildren := map[int]struct{}{}
+	if len(parentIDs) > 0 {
+		childRows, err := r.client.Department.Query().
+			Where(
+				department.TenantID(tenantID),
+				department.ParentIDIn(parentIDs...),
+				department.DeletedAtIsNil(),
+			).
+			Select(department.FieldParentID).
+			All(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, child := range childRows {
+			withChildren[child.ParentID] = struct{}{}
+		}
+	}
+
+	result := make([]*DepartmentNode, 0, len(rows))
+	for _, row := range rows {
+		_, hasChildren := withChildren[row.ID]
+		result = append(result, &DepartmentNode{
+			ID:          row.ID,
+			Code:        row.Code,
+			Name:        row.Name,
+			ParentID:    row.ParentID,
+			NodeType:    row.NodeType,
+			HasChildren: hasChildren,
+		})
+	}
+	return result, nil
+}
+
 func (r *EntRepository) UpdateDepartment(ctx context.Context, d *Department) (*Department, error) {
 	exists, err := r.client.Department.Query().
 		Where(department.Code(d.Code), department.TenantID(d.TenantID), department.DeletedAtIsNil(), department.IDNEQ(d.ID)).

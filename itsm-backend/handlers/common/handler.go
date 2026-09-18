@@ -193,6 +193,23 @@ func (h *Handler) GetDepartmentTree(c *gin.Context) {
 	common.Success(c, tree)
 }
 
+// ListDepartmentChildren 按父节点返回直接下级（轻量投影）。
+// 全树近 8000 个节点，前端应逐层展开而不是一次拉全树。
+func (h *Handler) ListDepartmentChildren(c *gin.Context) {
+	tenantID := c.GetInt("tenant_id")
+	parentID, err := strconv.Atoi(c.DefaultQuery("parentId", "0"))
+	if err != nil || parentID < 0 {
+		common.ValidationErrorResponse(c, "parentId 必须是非负整数")
+		return
+	}
+	children, err := h.svc.ListDepartmentChildren(c.Request.Context(), tenantID, parentID)
+	if err != nil {
+		common.InternalError(c, "获取下级部门失败: "+err.Error())
+		return
+	}
+	common.Success(c, children)
+}
+
 func (h *Handler) ListDepartments(c *gin.Context) {
 	tenantID := c.GetInt("tenant_id")
 	deps, err := h.svc.ListDepartments(c.Request.Context(), tenantID)
