@@ -430,6 +430,7 @@ func main() {
 	log.Println("Starting Direct Supervisor Linking...")
 	linkedSupervisorCount := 0
 	skippedSupervisorCount := 0
+	pendingLinks := make(map[string]managerLink, len(activePersons))
 	for _, p := range activePersons {
 		selfID, ok := empIDToUserID[p.EmpID]
 		if !ok || p.Supervisor == "" {
@@ -452,11 +453,18 @@ func main() {
 			skippedSupervisorCount++
 			continue
 		}
-		if err := client.User.UpdateOneID(selfID).SetManagerID(managerID).Exec(ctx); err != nil {
-			log.Printf("Failed to link supervisor for %s -> %s: %v", p.EmpID, supervisorEmpID, err)
-			continue
-		}
-		linkedSupervisorCount++
+		// 先收集，统一交给 linkManagers 校验后写入：那里的校验与 API 写入路径
+		// 用的是同一个权威（service.ValidateUserManager），不在这里另写一套。
+		pendingLinks[p.EmpID] = managerLink{SelfID: selfID, ManagerID: managerID}
 	}
+
+	// 非法值（上级非在职/跨租户/成环/本人不存在）会被跳过并计数，
+	// 不会因为脏数据把整批导入打断。
+	invalidSupervisorCount, err := linkManagers(ctx, client, tenantID, pendingLinks)
+	if err != nil {
+		log.Printf("Failed to link supervisors: %v", err)
+	}
+	linkedSupervisorCount = len(pendingLinks) - invalidSupervisorCount
+	skippedSupervisorCount += invalidSupervisorCount
 	log.Printf("Direct Supervisor Linking Complete! Linked: %d, Skipped: %d", linkedSupervisorCount, skippedSupervisorCount)
 }
