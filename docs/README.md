@@ -22,6 +22,8 @@
 
 - [原Dev恢复与双数据库收敛设计（accepted）](superpowers/specs/2026-09-16-dev-restoration-two-database-design.md)：四阶段交付、保留边界、最终两个业务库与恢复规则。
 
+- [通用履约门禁设计（draft，待维护者确认）](superpowers/specs/2026-09-18-generic-fulfillment-gate-design.md)：`generic_fulfillment_v1` 契约的声明方式、作用域边界（仅 `recordClass=generic` 且定义显式声明）、创建期探测与冻结、启动期冻结证据准入、完成期阶段门禁；源码在分支 `codex/feat/generic-fulfillment-gate`，未合并未部署。
+
 - [Dev031与主干047分离原因及Agent接续指引](review/2026-09-16-dev-schema-divergence-report.md)：双重核验结论；解决路径待设计讨论，不代表迁移授权。
 
 - [WorkItem 任务分配：实现决策、验证证据与后续顺序](./review/2026-09-15-work-item-task-assignment-report.md)
