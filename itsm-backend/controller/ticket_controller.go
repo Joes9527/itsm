@@ -183,17 +183,24 @@ func (tc *TicketController) GetTicket(c *gin.Context) {
 	var err error
 
 	ticketID, parseErr := strconv.Atoi(idParam)
-	if parseErr == nil && ticketID > 0 {
-		ticket, err = tc.ticketService.GetTicket(c.Request.Context(), ticketID, tenantID)
-	} else if idParam != "" {
+	byNumber := parseErr != nil || ticketID <= 0
+	if byNumber {
+		if idParam == "" {
+			common.Fail(c, common.ParamErrorCode, "无效的工单ID")
+			return
+		}
 		ticket, err = tc.ticketService.GetTicketByNumber(c.Request.Context(), idParam, tenantID)
 	} else {
-		common.Fail(c, common.ParamErrorCode, "无效的工单ID")
-		return
+		ticket, err = tc.ticketService.GetTicket(c.Request.Context(), ticketID, tenantID)
 	}
 
 	if err != nil {
 		tc.logger.Errorw("Failed to get ticket", "error", err, "id_param", idParam, "tenant_id", tenantID)
+		// 非数字入参解析不到工单号属参数错误，与 workitem_rbac 中间件的语义保持一致。
+		if byNumber {
+			common.Fail(c, common.ParamErrorCode, "无效的工单ID")
+			return
+		}
 		common.Fail(c, common.NotFoundCode, "工单不存在")
 		return
 	}
@@ -217,7 +224,7 @@ func (tc *TicketController) GetTicketSLAInfo(c *gin.Context) {
 		tkt, tktErr := tc.ticketService.GetTicketByNumber(c.Request.Context(), idParam, tenantID)
 		if tktErr != nil {
 			tc.logger.Errorw("Failed to resolve ticket for SLA", "error", tktErr, "id_param", idParam, "tenant_id", tenantID)
-			common.Fail(c, common.NotFoundCode, "工单不存在")
+			common.Fail(c, common.ParamErrorCode, "无效的工单ID")
 			return
 		}
 		ticketID = tkt.ID
