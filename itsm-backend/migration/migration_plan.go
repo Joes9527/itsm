@@ -74,6 +74,7 @@ func ControlledMigrationCatalog() []MigrationDefinition {
 	add(known[AuthTokenStateVersion], StageOrdinary)
 	add(known["047_bpmn_assignment_source"], StageOrdinary)
 	add(known[CTIGovernanceVersion], StageOrdinary)
+	add(known[DepartmentCodeTenantUniqueVersion], StageOrdinary)
 	// Candidate infrastructure does not change the immutable retirement contract:
 	// old valid R receipts must remain upgradeable without a future 039 receipt.
 	catalog = append(catalog, MigrationDefinition{
@@ -178,7 +179,7 @@ func validateControlledLedger(catalog []MigrationDefinition, applied []Migration
 		seen[m.Version] = true
 	}
 	if !seen[WorkItemPrepareVersion] {
-		if seen[CandidateExecutionScopeVersion] || seen[SLAAlertNotificationVersion] || seen[ToolInvocationExecutionScopeVersion] || seen[ToolExecutionAuthorityLockVersion] || seen[ToolExecutionAuthorizationLockVersion] || seen[NotificationConnectorTargetVersion] || seen[NotificationEmailTargetVersion] || seen[AuthTokenStateVersion] || seen["047_bpmn_assignment_source"] || seen[CTIGovernanceVersion] {
+		if seen[CandidateExecutionScopeVersion] || seen[SLAAlertNotificationVersion] || seen[ToolInvocationExecutionScopeVersion] || seen[ToolExecutionAuthorityLockVersion] || seen[ToolExecutionAuthorizationLockVersion] || seen[NotificationConnectorTargetVersion] || seen[NotificationEmailTargetVersion] || seen[AuthTokenStateVersion] || seen["047_bpmn_assignment_source"] || seen[CTIGovernanceVersion] || seen[DepartmentCodeTenantUniqueVersion] {
 			return nil, fmt.Errorf("candidate execution scope requires preparation")
 		}
 		// Never derive this order from the new active/legacy classification: removing

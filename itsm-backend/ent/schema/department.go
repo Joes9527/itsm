@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
 )
 
 // Department holds the schema definition for the Department entity.
@@ -52,6 +53,16 @@ func (Department) Fields() []ent.Field {
 			Comment("软删除时间").
 			Optional().
 			Nillable(),
+	}
+}
+
+// Indexes of the Department.
+//
+// 组织编码是节点的稳定业务键，必须在一个租户内唯一：否则导入重跑会产生
+// 同名重复节点，组织树无法区分，审批找人也会选错分支。
+func (Department) Indexes() []ent.Index {
+	return []ent.Index{
+		index.Fields("tenant_id", "code").Unique(),
 	}
 }
 

@@ -19,11 +19,12 @@ func TestCandidateScopeMigrationDoesNotRequireRetirement(t *testing.T) {
 	}
 	p, err := PlanMigrations(catalog, controlledReceipts(applied), OpUp, nil)
 	require.NoError(t, err)
-	require.Len(t, p.Executable, 10)
+	require.Len(t, p.Executable, 11)
 	require.Equal(t, AuthTokenStateVersion, p.Executable[7].Version)
 	require.Equal(t, ToolExecutionAuthorityLockVersion, p.Executable[3].Version)
 	require.Equal(t, "039_candidate_execution_scope", p.Executable[0].Version)
 	require.Equal(t, CTIGovernanceVersion, p.Executable[9].Version)
+	require.Equal(t, DepartmentCodeTenantUniqueVersion, p.Executable[10].Version)
 	require.NotEmpty(t, GetMigrationSQL("039_candidate_execution_scope"))
 	for _, d := range catalog {
 		if d.Migration.Version == "039_candidate_execution_scope" {
@@ -44,9 +45,10 @@ func TestCandidateScopeUpgradeAcceptsPreviouslyRetiredLedger(t *testing.T) {
 	applied = append(applied, Migration{Version: WorkItemPrepareVersion}, Migration{Version: WorkItemRetireVersion})
 	p, err := PlanMigrations(ControlledMigrationCatalog(), controlledReceipts(applied), OpUp, nil)
 	require.NoError(t, err)
-	require.Len(t, p.Executable, 10)
+	require.Len(t, p.Executable, 11)
 	require.Equal(t, AuthTokenStateVersion, p.Executable[7].Version)
 	require.Equal(t, ToolExecutionAuthorityLockVersion, p.Executable[3].Version)
 	require.Equal(t, "039_candidate_execution_scope", p.Executable[0].Version)
 	require.Equal(t, CTIGovernanceVersion, p.Executable[9].Version)
+	require.Equal(t, DepartmentCodeTenantUniqueVersion, p.Executable[10].Version)
 }

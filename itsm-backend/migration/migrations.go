@@ -470,6 +470,7 @@ var RegisteredMigrations = []Migration{
 	{Version: AuthTokenStateVersion, Description: "Persist append-only token revocation and refresh consumption authority"},
 	{Version: "047_bpmn_assignment_source", Description: "Persist immutable BPMN WorkItem assignment source"},
 	{Version: CTIGovernanceVersion, Description: "Scope ticket category code uniqueness to the tenant and persist the Service Catalog default CTI reference", RollbackSQL: ctiGovernanceDevelopmentResetSQL},
+	{Version: DepartmentCodeTenantUniqueVersion, Description: "Enforce department code uniqueness per tenant"},
 	{Version: WorkItemRetireVersion, Description: "Retire WorkItem legacy structures with controlled evidence"},
 }
 
@@ -1151,6 +1152,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number
 		return kafActionRequestDigestSQL
 	case "047_bpmn_assignment_source":
 		return bpmnAssignmentSourceSQL
+	case DepartmentCodeTenantUniqueVersion:
+		return migrations.DepartmentCodeTenantUniqueSQL
 	case "030_catalog_access_policy_result":
 		return catalogAccessPolicyResultSQL
 	case "029_catalog_target_class_authority":

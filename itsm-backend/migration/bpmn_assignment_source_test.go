@@ -11,8 +11,9 @@ import (
 func TestBPMNAssignmentSourceMigrationRegistered(t *testing.T) {
 	const version = "047_bpmn_assignment_source"
 	// 047 keeps its place: later ordinary migrations append after it and before retirement.
-	require.Equal(t, version, RegisteredMigrations[len(RegisteredMigrations)-3].Version)
-	require.Equal(t, CTIGovernanceVersion, RegisteredMigrations[len(RegisteredMigrations)-2].Version)
+	require.Equal(t, version, RegisteredMigrations[len(RegisteredMigrations)-4].Version)
+	require.Equal(t, CTIGovernanceVersion, RegisteredMigrations[len(RegisteredMigrations)-3].Version)
+	require.Equal(t, DepartmentCodeTenantUniqueVersion, RegisteredMigrations[len(RegisteredMigrations)-2].Version)
 	require.Equal(t, WorkItemRetireVersion, RegisteredMigrations[len(RegisteredMigrations)-1].Version)
 	asset, err := os.ReadFile("../migrations/" + version + ".sql")
 	require.NoError(t, err)
@@ -39,16 +40,24 @@ func TestBPMNAssignmentSourceMigrationRejectsUnsupportedAndConflictingBindings(t
 
 func TestBPMNAssignmentSourceAppendPreservesExistingRetirementReceipt(t *testing.T) {
 	catalog := ControlledMigrationCatalog()
+	// prior 是"缺少追加尾部"的账本：047 及其之后追加的普通迁移全部排除，
+	// 它们必须能在同一个批次里按顺序执行完。
+	tail := map[string]bool{
+		"047_bpmn_assignment_source":      true,
+		CTIGovernanceVersion:              true,
+		DepartmentCodeTenantUniqueVersion: true,
+	}
 	var prior []Migration
 	for _, definition := range catalog {
-		if definition.Migration.Version != "047_bpmn_assignment_source" && definition.Migration.Version != CTIGovernanceVersion {
+		if !tail[definition.Migration.Version] {
 			prior = append(prior, definition.Migration)
 		}
 	}
 	plan, err := PlanMigrations(catalog, controlledReceipts(prior), OpUp, nil)
 	require.NoError(t, err)
-	require.Len(t, plan.Executable, 2)
+	require.Len(t, plan.Executable, 3)
 	require.Equal(t, "047_bpmn_assignment_source", plan.Executable[0].Version)
 	require.Equal(t, CTIGovernanceVersion, plan.Executable[1].Version)
+	require.Equal(t, DepartmentCodeTenantUniqueVersion, plan.Executable[2].Version)
 	require.Empty(t, plan.PendingManual)
 }

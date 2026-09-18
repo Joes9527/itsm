@@ -13,3 +13,8 @@ var ProblemInvestigationCompletionSQL string
 
 //go:embed 20260911_change_professional_evidence.sql
 var ChangeProfessionalEvidenceSQL string
+
+// DepartmentCodeTenantUniqueSQL 是同时可独立执行的受审迁移脚本。
+//
+//go:embed 049_department_code_tenant_unique.sql
+var DepartmentCodeTenantUniqueSQL string

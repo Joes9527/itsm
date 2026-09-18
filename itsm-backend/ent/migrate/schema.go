@@ -1250,6 +1250,13 @@ var (
 				OnDelete:   schema.SetNull,
 			},
 		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "department_tenant_id_code",
+				Unique:  true,
+				Columns: []*schema.Column{DepartmentsColumns[5], DepartmentsColumns[2]},
+			},
+		},
 	}
 	// DiscoveryJobsColumns holds the columns for the "discovery_jobs" table.
 	DiscoveryJobsColumns = []*schema.Column{
