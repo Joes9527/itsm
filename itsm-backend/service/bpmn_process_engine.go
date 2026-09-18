@@ -2114,13 +2114,31 @@ func (e *CustomProcessEngine) loadApprovalRequester(ctx context.Context, instanc
 	return requester
 }
 
-// resolveApprovalAssignee 把申请人所在部门（含祖先部门递归）的负责人解析为审批任务的
-// assignee。复用 service/approver.DeptManagerResolver（已有、已测试、已被 legacy 审批链
-// approval_service.go:940 使用的部门->负责人查询），不重新实现部门递归逻辑。
-// 解析失败，或者解析出的负责人正好是申请人自己（避免部门负责人审批自己提交的工单），
-// 都返回空字符串——调用方会转入 candidateGroups 兜底路径。
+// resolveApprovalAssignee 解析审批任务的默认审批人，按"先往上找"的顺序：
+//
+//  1. 申请人**自己的上级**（个人汇报链 users.manager_id）
+//  2. 申请人所在部门（含祖先部门递归）**的负责人**（departments.manager_id）
+//
+// 这个顺序是本设计最关键的一处修正：生产库里个人汇报线已填 7045/7872（89.5%），
+// 而部门负责人线是 0/7975（0%）。过去默认只查第 2 条线，等于**走了一条空的数据线**，
+// 于是绝大多数单子解析不到审批人、直接落兜底组——这正是"审批不断流"要解决的问题
+// （也是最初报告里"first-hop personal manager 未被消费"的修复点）。
+//
+// 复用 service/approver 下已有且已测试的两个 resolver（DirectManagerResolver、
+// DeptManagerResolver），不重新实现链上溯与部门递归逻辑。
+//
+// 任一步解析出的负责人正好是申请人自己（避免自己审批自己），或两步都解析不到，
+// 都返回空——调用方会转入 candidateGroups 兜底路径（兜底必留痕）。
 func (e *CustomProcessEngine) resolveApprovalAssignee(ctx context.Context, instance *ent.ProcessInstance, requester *ent.User) string {
-	if requester == nil || requester.DepartmentID == 0 {
+	if requester == nil {
+		return ""
+	}
+	// 第一优先：申请人自己的上级。
+	if ownManager := e.resolveDirectManagerAssignee(ctx, instance, requester, 0); ownManager != "" {
+		return ownManager
+	}
+	// 第二优先：部门负责人（保留原有行为，作为组织这条轴的补充）。
+	if requester.DepartmentID == 0 {
 		return ""
 	}
 	approvers, err := approver.NewDeptManagerResolver().Resolve(ctx, e.client, &approver.ApproverContext{
