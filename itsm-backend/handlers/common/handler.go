@@ -2,6 +2,7 @@ package common
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 
 	"itsm-backend/authentication"
@@ -210,6 +211,23 @@ func (h *Handler) ListDepartmentChildren(c *gin.Context) {
 	common.Success(c, children)
 }
 
+// GetDepartmentEmployeeCount 按子树统计在职员工数。
+// 只在详情/显式展开时调用——部门列表接口不得逐行调用（设计 §6 性能契约）。
+func (h *Handler) GetDepartmentEmployeeCount(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		common.ParamError(c, "invalid department id")
+		return
+	}
+	tenantID := c.GetInt("tenant_id")
+	count, err := h.svc.CountDepartmentSubtreeEmployees(c.Request.Context(), tenantID, id)
+	if err != nil {
+		common.InternalError(c, "统计部门人数失败: "+err.Error())
+		return
+	}
+	common.Success(c, gin.H{"departmentId": id, "employeeCount": count})
+}
+
 func (h *Handler) ListDepartments(c *gin.Context) {
 	tenantID := c.GetInt("tenant_id")
 	deps, err := h.svc.ListDepartments(c.Request.Context(), tenantID)
@@ -259,55 +277,45 @@ func (h *Handler) UpdateDepartment(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Name        string `json:"name"`
-		Code        string `json:"code"`
-		Description string `json:"description"`
-		NodeType    string `json:"nodeType"`
-		ManagerID   int    `json:"managerId"`
-		ParentID    int    `json:"parentId"`
-	}
+	var req departmentUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		common.ParamError(c, "参数错误: "+err.Error())
 		return
 	}
 
 	tenantID := c.GetInt("tenant_id")
-	// 先读取现有部门，避免部分更新时把 name/code 覆盖为空
 	existing, err := h.svc.GetDepartment(c.Request.Context(), id, tenantID)
 	if err != nil || existing == nil {
 		common.NotFound(c, "部门不存在")
 		return
 	}
-	if req.Name != "" {
-		existing.Name = req.Name
+	result, change, err := h.svc.ApplyDepartmentUpdate(c.Request.Context(), existing, req)
+	if err != nil {
+		common.ParamError(c, "更新部门失败: "+err.Error())
+		return
 	}
-	if req.Code != "" {
-		existing.Code = req.Code
-	}
-	if req.Description != "" {
-		existing.Description = req.Description
-	}
-	if req.NodeType != "" {
-		// 类型词汇表与创建路径同一把权威；未知取值在写入前 fail-closed。
-		nodeType, err := NormalizeDepartmentNodeType(req.NodeType)
-		if err != nil {
-			common.ParamError(c, err.Error())
+	if change.Changed {
+		// 变更留痕：谁、改了哪个部门、负责人/上级的前后值、为什么。
+		// 只记标识与原因，不记个人信息正文。
+		payload := fmt.Sprintf(
+			`{"departmentId":%d,"managerFrom":%d,"managerTo":%d,"parentFrom":%d,"parentTo":%d,"reason":%q}`,
+			id, change.ManagerFrom, change.ManagerTo, change.ParentFrom, change.ParentTo, change.Reason,
+		)
+		if err := h.svc.LogActivity(c.Request.Context(), &AuditLog{
+			TenantID:    tenantID,
+			UserID:      c.GetInt("user_id"),
+			RequestID:   c.GetString("request_id"),
+			IP:          c.ClientIP(),
+			Resource:    "department",
+			Action:      "department.updated",
+			Path:        c.Request.URL.Path,
+			Method:      c.Request.Method,
+			StatusCode:  200,
+			RequestBody: payload,
+		}); err != nil {
+			common.InternalError(c, "更新部门已生效，但审计写入失败: "+err.Error())
 			return
 		}
-		existing.NodeType = nodeType
-	}
-	if req.ManagerID != 0 {
-		existing.ManagerID = req.ManagerID
-	}
-	if req.ParentID != 0 {
-		existing.ParentID = req.ParentID
-	}
-	existing.TenantID = tenantID
-	result, err := h.svc.UpdateDepartment(c.Request.Context(), existing)
-	if err != nil {
-		common.InternalError(c, "更新部门失败: "+err.Error())
-		return
 	}
 	common.Success(c, result)
 }

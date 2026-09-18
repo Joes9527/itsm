@@ -1248,6 +1248,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 			{
 				org.GET("/departments/tree", middleware.RequirePermission("department", "read"), config.CommonHandler.GetDepartmentTree)
 				org.GET("/departments/children", middleware.RequirePermission("department", "read"), config.CommonHandler.ListDepartmentChildren)
+				org.GET("/departments/:id/employee-count", middleware.RequirePermission("department", "read"), config.CommonHandler.GetDepartmentEmployeeCount)
 				org.GET("/departments/:id", middleware.RequirePermission("department", "read"), config.CommonHandler.GetDepartment)
 				org.POST("/departments", middleware.RequirePermission("department", "create"), config.CommonHandler.CreateDepartment)
 				org.PUT("/departments/:id", middleware.RequirePermission("department", "update"), config.CommonHandler.UpdateDepartment)
@@ -1306,6 +1307,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				tenant.GET("/departments", middleware.RequirePermission("department", "read"), config.CommonHandler.ListDepartments)
 				tenant.GET("/departments/tree", middleware.RequirePermission("department", "read"), config.CommonHandler.GetDepartmentTree)
 				tenant.GET("/departments/children", middleware.RequirePermission("department", "read"), config.CommonHandler.ListDepartmentChildren)
+				tenant.GET("/departments/:id/employee-count", middleware.RequirePermission("department", "read"), config.CommonHandler.GetDepartmentEmployeeCount)
 				tenant.GET("/teams", middleware.RequirePermission("team", "read"), config.CommonHandler.ListTeams)
 				tenant.GET("/tags", middleware.RequirePermission("tag", "read"), config.CommonHandler.ListTags)
 			}
