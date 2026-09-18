@@ -1,0 +1,355 @@
+{
+  "mode": "verify",
+  "generated_at": "2026-09-15T09:42:48.217723+00:00",
+  "profile": "scripts/migration/profiles/legacy-itsm-2026-08.yaml",
+  "profile_name": "legacy-itsm-2026-08",
+  "record_drift": {
+    "departments": {
+      "declared": 5272,
+      "actual": 5272
+    },
+    "users": {
+      "declared": 14393,
+      "actual": 14393
+    }
+  },
+  "entities": {
+    "departments": {
+      "matched": 4975,
+      "only_source": 297,
+      "only_target": 3000,
+      "unattributed": 3000,
+      "field_checks": {
+        "checked": false,
+        "reason": "departments declare no field_checks in the 2026-08 profile"
+      },
+      "structure": {
+        "roots": 7960,
+        "root_samples": [
+          "1",
+          "11D010G",
+          "11D010G01",
+          "11D010G0101",
+          "11D010G010104"
+        ],
+        "unresolved_parents": 7935,
+        "unresolved_samples": [
+          "11D010G",
+          "11D010G01",
+          "11D010G0101",
+          "11D010G010104",
+          "11D010G010105"
+        ],
+        "cycles": 15,
+        "internal_codes": 3526,
+        "prefix_levels": {
+          "internal_codes": 3526,
+          "code_lengths": {
+            "21": 168,
+            "17": 1505,
+            "15": 2858,
+            "13": 1690,
+            "19": 560,
+            "11": 713,
+            "9": 281,
+            "3": 2,
+            "23": 53,
+            "16": 6,
+            "7": 53,
+            "22": 16,
+            "5": 15,
+            "2": 10,
+            "20": 31,
+            "18": 2,
+            "6": 4,
+            "24": 5,
+            "8": 1,
+            "10": 1,
+            "1": 1
+          }
+        }
+      }
+    },
+    "users": {
+      "matched": 7767,
+      "only_source": 1243,
+      "only_target": 113,
+      "unattributed": 113,
+      "field_checks": {
+        "name": {
+          "rule": "equals",
+          "matched": 7833,
+          "mismatched": 1,
+          "unresolvable": 0,
+          "match_rate": 0.9999,
+          "mismatch_sample": [
+            [
+              "sha256:1e37b20f",
+              "sha256:0a3fe94c",
+              "sha256:6424e237"
+            ]
+          ]
+        },
+        "email": {
+          "rule": "rewrite_local_part",
+          "matched": 4975,
+          "mismatched": 2859,
+          "unresolvable": 0,
+          "match_rate": 0.6351,
+          "mismatch_sample": [
+            [
+              "sha256:c8b454b0",
+              "sha256:1a566a0f",
+              "sha256:4403bd81"
+            ],
+            [
+              "sha256:0cd28639",
+              "sha256:7818609a",
+              "sha256:e8ecf871"
+            ],
+            [
+              "sha256:968fcac2",
+              "sha256:5761dfe1",
+              "sha256:9ff9eaf7"
+            ],
+            [
+              "sha256:5be2f2b9",
+              "sha256:977fb093",
+              "sha256:25eb385a"
+            ],
+            [
+              "sha256:acf4f74b",
+              "sha256:9631976a",
+              "sha256:9ddc0e63"
+            ],
+            [
+              "sha256:cdbf786d",
+              "sha256:d4645c66",
+              "sha256:b45c0fed"
+            ],
+            [
+              "sha256:81cf922c",
+              "sha256:5ca3b382",
+              "sha256:d247de10"
+            ],
+            [
+              "sha256:17b8b83e",
+              "sha256:20b0e672",
+              "sha256:313e505e"
+            ],
+            [
+              "sha256:60f4c888",
+              "sha256:b5fd1b8d",
+              "sha256:4c9e27fb"
+            ],
+            [
+              "sha256:5dfeae67",
+              "sha256:fdf7fe0a",
+              "sha256:231c6e27"
+            ],
+            [
+              "sha256:163d079a",
+              "sha256:c48b7972",
+              "sha256:1e1ecc8e"
+            ],
+            [
+              "sha256:df2b7ab0",
+              "sha256:f15a8b60",
+              "sha256:1e666fb3"
+            ],
+            [
+              "sha256:592797b6",
+              "sha256:653f20c6",
+              "sha256:65d04d04"
+            ],
+            [
+              "sha256:1c27b541",
+              "sha256:67998f02",
+              "sha256:842cfe79"
+            ],
+            [
+              "sha256:956357f9",
+              "sha256:64b9a26d",
+              "sha256:9d7e9719"
+            ],
+            [
+              "sha256:b64c4f35",
+              "sha256:951a38ac",
+              "sha256:48c0e86e"
+            ],
+            [
+              "sha256:195ba026",
+              "sha256:0bd9bdfb",
+              "sha256:a49b0810"
+            ],
+            [
+              "sha256:2ebfb710",
+              "sha256:d6c4d1fb",
+              "sha256:a15795c2"
+            ],
+            [
+              "sha256:32f3e404",
+              "sha256:64b9a26d",
+              "sha256:6140167c"
+            ],
+            [
+              "sha256:4bad6940",
+              "sha256:dfc3191c",
+              "sha256:99612ed1"
+            ]
+          ]
+        },
+        "active": {
+          "rule": "map",
+          "matched": 7767,
+          "mismatched": 67,
+          "unresolvable": 0,
+          "match_rate": 0.9914,
+          "mismatch_sample": [
+            [
+              "sha256:59b47c51",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:0469fcb3",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:ddf44adf",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:a0cc13b5",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:e921d268",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:e12c8331",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:b891cbce",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:bbb25721",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:ac28c90d",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:adecada6",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:b9314820",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:b98185fb",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:deecf029",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:473ccfc0",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:76226d7e",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:76e2a8d9",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:dff22037",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:48b63306",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:6914c3e7",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ],
+            [
+              "sha256:95e3dc30",
+              "sha256:fcbcf165",
+              "sha256:b5bea41b"
+            ]
+          ]
+        },
+        "manager": {
+          "rule": "unresolvable",
+          "matched": 0,
+          "mismatched": 0,
+          "unresolvable": 7834,
+          "match_rate": null,
+          "mismatch_sample": []
+        }
+      },
+      "structure": {
+        "duplicate_usernames": 0,
+        "foreign_tenant_rows": 1,
+        "non_bcrypt_rows": 1,
+        "total_rows": 7880
+      }
+    }
+  },
+  "lineage": {
+    "departments": {
+      "itsm (DEV)": {
+        "matched": 4975,
+        "only_source": 297,
+        "only_target": 3000
+      },
+      "itsm_baseline_20260908": {
+        "matched": 4975,
+        "only_source": 297,
+        "only_target": 3000
+      }
+    },
+    "users": {
+      "itsm (DEV)": {
+        "matched": 7750,
+        "only_source": 1260,
+        "only_target": 84
+      },
+      "itsm_baseline_20260908": {
+        "matched": 7750,
+        "only_source": 1260,
+        "only_target": 84
+      }
+    }
+  },
+  "exit_code": 3
+}

@@ -747,6 +747,11 @@ func NewApplication() *Application {
 		log.Fatalf("Invalid outbox delivery worker configuration: %v", err)
 	}
 	wireEmailMsgraphConnector(client, intakeApplication, triageService, connectorController, sugar)
+
+	// 从数据库恢复已配置的连接器（如 msgraph-email），避免进程重启后丢失，并启动已启用连接器的后台任务（如邮件轮询）
+	if err := connectorController.LoadAll(tenantctx.SystemContext(context.Background(), "bootstrap:connectors", "load configured tenant connector registrations")); err != nil {
+		sugar.Warnw("Failed to restore connectors from DB", "error", err)
+	}
 	feishuController := controller.NewFeishuController(connectorManager, feishuSyncService, marketplaceSvc, sugar)
 
 	// Analytics & Prediction Controllers

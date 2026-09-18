@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -112,4 +113,16 @@ func TestValidateCTICorrectionTargetRejectsBadInputs(t *testing.T) {
 	require.ErrorContains(t, err, "owning transaction")
 	_, err = ValidateCTICorrectionTargetTx(ctx, tx, 0, ids[2], CTICorrectionTargetPolicy{})
 	require.ErrorIs(t, err, ErrCTIPathOutsideTenant)
+}
+
+// 原因长度上限在服务层校验（覆盖工具/队列等非 HTTP 调用方）；按字符数计，边界包含 500。
+func TestRequireCTICorrectionReasonEnforcesServiceLevelLength(t *testing.T) {
+	require.NoError(t, RequireCTICorrectionReason(strings.Repeat("a", 500), true))
+	require.NoError(t, RequireCTICorrectionReason(strings.Repeat("归", 500), true))
+	require.ErrorContains(t, RequireCTICorrectionReason(strings.Repeat("a", 501), true), "at most 500")
+	require.ErrorContains(t, RequireCTICorrectionReason(strings.Repeat("归", 501), true), "at most 500")
+	// 只有空白等价于未填写
+	require.ErrorContains(t, RequireCTICorrectionReason("   \t ", true), "reason is required")
+	// 未发生变更时不校验
+	require.NoError(t, RequireCTICorrectionReason(strings.Repeat("a", 501), false))
 }

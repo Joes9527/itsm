@@ -1,14 +1,105 @@
 # SSLVPN：WSL 部署与手工端到端验收
 
+> 本轮业务验收仅通过 UI，另含[邮件建单与自动回复](../testing/email-ticket-ui-runbook.md)。本文的部署命令属于独立环境准备；保留的 C4/API 验证脚本不属于本轮 UI 执行步骤，不能用于补成页面 PASS。历史邮件禁用设置仅代表原 C4 范围，邮件路线须单独准备启用的邮件连接器和真实测试邮箱。
+
+> 2026-09-14 手工测试入口更新：先读[第 0 节](#wsl-dev-entry)，再执行[全流程测试手册](../testing/sslvpn-manual-lifecycle-runbook.md)。新手册覆盖自定义字段配置/快照/版本、两种受理入口、审批、履约、关闭检查与查找。人工待办入口已核对为 `/approvals`；`/workflow/ticket-approval` 是设计器。本次为源码与文档核对，没有重新部署或实测 WSL。
+
 > 2026-09-08 维护补充：目录整理已完成，运行版本未升级。当前 ITSM API 使用 `intake-catalog-discovery-v2`，交付对应尚未进入本地 main 的 `7c114b3e` 修复；仅从 main 重建可能丢失修复。先读[当前开发环境与交付约束](../development-environment.md)，本手册正式升级流程需单独规划。
 
-状态：运行手册；命令与契约按 2026-09-08 两仓 SSLVPN 最终 feature 代码核对。本文提供操作步骤，**不表示新一轮部署、正常 Azure SSO 或真实授权已执行**。最终发布版本以两仓合并后的 `origin/main` SHA 为准。
+状态：运行手册；第 0 节及审批/表单/版本入口于 2026-09-14 按本地代码更新，其余 C4 环境事实保留 2026-09-08 的两仓交付记录。本文提供操作步骤，**不表示新一轮部署、正常 Azure SSO 或真实授权已执行**。实际部署使用两仓经核对的兼容 SHA，并保留当前运行专用修复；不能仅因 origin/main 更新就覆盖运行版本。
 
 配套交付 PR：[ITSM #10](https://github.com/Joes9527/itsm/pull/10)、[KAF #214](https://github.com/DawnproIN/kaf/pull/214)。部署前确认两者均已合并，再按第 3 节读取真实 main SHA；PR 已创建不等于已经合并。
 
 适用主路径：在 `192.168.31.66` 的 WSL 建立两个新的部署 worktree，使用原 C4 隔离依赖和数据库，替换本次验收环境的应用进程，重新建立正常登录、身份映射、目录和审批配置，再由用户手工验收。保留原 feature、数据库历史和 ART 证据。
 
 权威业务范围见[已确认设计](../superpowers/specs/2026-09-05-sslvpn-kaf-intake-end-to-end-design.md)、[验证完成契约](../contracts/kaf-verified-access-completion.md)及[历史验收报告](../review/2026-09-05-sslvpn-end-to-end-verification-report.md)。成功含义是“指定 Graph 用户组授权经查询确认、ITSM 原子记录结果、KAF 展示同一申请结果”。VPN 登录、网段连通、到期自动回收、Teams/WeCom 不在本轮范围。申请有效期是记录的期限，不是自动撤权承诺。
+
+<a id="wsl-dev-entry"></a>
+
+## 0. WSL 日常开发环境测试入口（2026-09-14）
+
+**从当前已部署 Dev 环境开始，不先重做 C4 部署。**后文第 1–8 节保留原 C4 隔离部署路线，含 36446 数据库、36570/36574 应用端口等；它们不等于日常 Dev 的运行配置。2026-09-08 的日常入口为 ITSM 3001/8080、KAF 5173/8000，实际值必须执行前重新核对。不要把两组数据库、端口或账号混用。
+
+### 0.1 先决定复用还是部署
+
+1. 运行负责人读取[本机开发环境](../development-environment.md)，登记两仓运行 SHA、二进制来源、配置路径、依赖库、端口与 Worker。
+2. 已有版本满足本轮功能且健康检查通过：复用应用，直接进入本手册第 5 节的身份/workspace/目录核对，再执行测试主手册。**复用也要检查 KAF 与 Worker，不能只看 ITSM 前端可打开。**
+3. 需要升级：先核对原运行专用修复是否包含在目标版本，准备成套 ITSM/KAF 发布与回滚记录。仅 Git HEAD 一致或 `main` 最新不足以证明旧修复已保留。
+4. 环境未准备好：走独立部署路径，先登记新的 host/port/database/Redis DB 与授权对象；原 C4 配置只能用于已确认仍可用的 C4 隔离环境，不作为日常 Dev 默认值。
+
+本机已有 `dev-services.py check/status/up` 只检查/启动四应用，不安装 KAF 依赖、不迁移 schema、不更新源码，也不管理 Worker。`up` 不能代替部署或 readiness 验收。
+
+### 0.2 必要升级的操作顺序（含 KAF）
+
+每行执行后核对证据再继续。使用独立发布目录与受限配置文件，运行路径/端口按本轮登记表填写；不直接修改固定运行副本的源码或整份导入历史 `.env`。
+
+| 顺序 | 操作 | 执行入口与放行依据 |
+|---|---|---|
+| 1 | 保存原运行基线与备份 | 保存实际 binary、依赖版本、私有 launch/env、SHA 和数据库恢复证据；只保存到受限目录 |
+| 2 | 准备两个发布 worktree | 第 3 节的独立 worktree 方法；起点采用本轮确认的兼容提交，不覆盖原 checkout；确认没有丢失未合并运行修复 |
+| 3 | 构建 ITSM API/Worker 与前端 | 在新 ITSM 发布目录执行第 3 节的两条 Go build 与前端 npm ci；保留输出哈希 |
+| 4 | 安装 KAF 运行环境 | 新 KAF 发布目录中 `uv sync --frozen`；其 frontend 目录中 `npm ci`；使用该 worktree 的 `.venv`，不复用旧虚拟环境猜测兼容 |
+| 5 | 配置两端连接与身份 | 按 4.2、4.4、5.2–5.4 的配置项建立本轮私有文件，端口/数据库全部替换为本轮实际目标；KAF `ITSM_KAF_URL`、`ITSM_INTAKE_URL` 均指向本轮 ITSM API base |
+| 6 | 正式数据库升级（确需时） | 协调停止目标消费者并备份；ITSM 走正式 InitializeStorage，KAF 走 `acp.infrastructure.schema_management`；owner 与运行 app 身份分开；不得对日常库套用 C4 owner 配置 |
+| 7 | 启动 ITSM 与 KAF gateway/两前端 | 使用下面的启动模板；先核对旧队列，避免新 KAF 启动后处理来源不明的历史任务 |
+| 8 | 登录、workspace 与 Procedure | KAF Microsoft 登录、真实成员/映射、完整 settings 保留、Procedure/RAG 回读、LLM 工具确认卡；精确要求见 5.2–5.4 |
+| 9 | Worker 就绪 | 按第 6 节启动本轮配置的 Worker，或核对已运行实例；健康端口不同，目标库/HMAC/gateway 一致，不重复启动未知消费者 |
+| 10 | 放行业务测试 | 主手册 D01–D06 完成，再依次做字段、拒绝、正常履约；health 不证明业务成功 |
+
+KAF owner 升级命令模式如下。这里 `KAF_RELEASE`、`KAF_OWNER_ENV` 为本轮发布目录和专用 owner 配置文件绝对路径，由负责人预先设置；不是仓库自带的环境变量名。该命令会升级数据库，仅在上表第 6 步条件满足时执行：
+
+```bash
+test -n "$KAF_RELEASE" && test -d "$KAF_RELEASE/.venv"
+test -n "$KAF_OWNER_ENV" && test -f "$KAF_OWNER_ENV"
+cd "$KAF_RELEASE"
+env -i PATH="$PATH" LANG=C.UTF-8 ENV_FILE="$KAF_OWNER_ENV" \
+  "$KAF_RELEASE/.venv/bin/python" -m acp.infrastructure.schema_management
+```
+
+逐条执行，任何检查失败即停止。目标 revision 以所选 KAF 版本的 `docs/kaf2/operations/database-provisioning.md` 和迁移链为准；后文 038 是原交付要求，不能替代新版本完整 schema 检查。常驻应用保持 `ALLOW_STARTUP_SCHEMA_MANAGEMENT=false`、`ALLOW_STARTUP_CONFIG_SEED=false`，不通过放宽检查启动。
+
+### 0.3 启动模板和跨浏览器连通
+
+由负责人提前登记并在各自终端设置：`KAF_RELEASE`（KAF 发布目录）、`KAF_APP_ENV`（app 配置文件）、`ITSM_RELEASE`（ITSM 发布目录）、`ITSM_API_PORT`、`ITSM_WEB_PORT`。以下 gateway 8000/前端 5173 与已核对的 KAF Vite proxy 匹配；若改端口，必须同时修改部署配置中的 proxy、SSO 回调及跨端连接。
+
+KAF gateway（独立终端）：
+
+```bash
+test -n "$KAF_RELEASE" && test -d "$KAF_RELEASE/.venv"
+test -n "$KAF_APP_ENV" && test -f "$KAF_APP_ENV"
+cd "$KAF_RELEASE"
+env -i PATH="$PATH" LANG=C.UTF-8 ENV_FILE="$KAF_APP_ENV" \
+  "$KAF_RELEASE/.venv/bin/python" -m uvicorn acp.main:app --host 127.0.0.1 --port 8000
+```
+
+KAF 前端（另一个终端；事先完成 npm ci）：
+
+```bash
+cd "$KAF_RELEASE/frontend"
+npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
+```
+
+ITSM 前端（另一个终端；API 已使用本轮私有配置启动）：
+
+```bash
+test -n "$ITSM_API_PORT" && test -n "$ITSM_WEB_PORT"
+cd "$ITSM_RELEASE/itsm-frontend"
+NEXT_PUBLIC_API_URL='' ITSM_BACKEND_URL="http://127.0.0.1:$ITSM_API_PORT" \
+  npm run dev -- --hostname 127.0.0.1 --port "$ITSM_WEB_PORT"
+```
+
+API 与 Worker 的启动模式见 5.1 和第 6 节，必须使用本轮实际 binary/config，不能照搬原 C4 数据库配置。四个前端/API 与 Worker 是不同进程；停机和回滚逐一核对 PID/exe/cwd 后操作，不用全局 kill。失败时保存错误和已完成 schema 版本，回退消费者前核对数据兼容，不假定迁移全程自动回滚。
+
+KAF Vite `/api`、`/ws`、`/health` 代理 gateway 8000；浏览器必须还能访问 Azure 回调地址。Windows 使用 localhost forwarding；Mac 的 localhost 指向 Mac，可按 5.1 的 SSH 隧道模式转发**本轮** ITSM 前端、KAF 前端和 callback 端口。如果使用历史日常端口，ITSM 的隧道改为 `-L 3001:127.0.0.1:3001`，不要仍打开 C4 的 36574。有端口冲突时先协调，不杀其他服务。
+
+### 0.4 KAF 发布后必须核对的配置
+
+- `IT_BACKEND=graph`，Graph `AZURE_*` 为本轮允许的实际目录身份；与 Azure SSO 能否成功分别核对。
+- `ITSM_INTAKE_*` 与 ITSM providers.json 匹配；`ITSM_KAF_*` 对应当前 ITSM API、有效 automation token 与 Worker HMAC。
+- workspace `itsm_tenant_id`、`delegated_access_procedures`、真实成员、工具和模型配置正确；更新 settings 前保留完整对象。
+- `graph_vpn_access_grant` Procedure 包含一个 `itsm_approval` gate 和 `ad_grant_vpn_access`；目标来自审批快照。
+- Procedure 发布优先回读现有版本；如需 ingest，按 5.4 的完整内容同步约束执行，不能把仅含一个文件的目录作为全量源覆盖。
+- 正常登录、目标目录可见、五类自定义字段受理/保存、审批后委派和验证完成均需实测；成功页面不代替外部证据。
 
 ## 1. 先确认要做什么
 
@@ -378,12 +469,14 @@ ITSM 管理员在 `/admin/service-catalogs` 找到本租户 SSLVPN 目录。C4 �
 3. `accessPolicy.provider=graph`，`externalSystem` 与上一节的 workspace binding、Graph mapping 完全相同；`groupId` 为固定 Dev security group Object ID；`durationField` 为该 select 的真实 name。目标来自管理员策略，申请者卡片不能覆盖 subject/group。
 4. 保存后读取实际 policy ID/version；不要假设仍是历史 ID 5。更新目录使用 `PUT /service-catalogs/{id}`，body 必须有刚读取的 `expectedCatalogVersion`，只提交要改的字段；409 时重读确认，不自动覆盖。
 5. BPMN 源使用 [`sslvpn_approval_flow.bpmn`](../../itsm-backend/service/bpmn/sslvpn_approval_flow.bpmn)，发布副本将唯一 `CATALOG_ACCESS_POLICY_REQUIRED` 换成**本目录 policy ID 的十进制文本**。不改旧实例定义，不用 XML version 文本推断数据库 definition ID。
-6. 通过 `/workflow/versions` 或 `POST /bpmn/versions` 发布新版本，字段为 `processDefinitionKey`、`name`、`bpmnXml`、`changeLog`；再 `PUT /bpmn/versions/{key}/{returned-version}/activate`。若尚无模板 key，用 `/admin/workflows` 的模板 owner 先建立模板；不要直接写 process_definitions 表。
+6. 使用管理员 API `POST /api/v1/bpmn/versions` 发布新版本，字段为 `processDefinitionKey`、`name`、`bpmnXml`、`changeLog`；再 `PUT /api/v1/bpmn/versions/{key}/{returned-version}/activate`，或在 `/workflow/versions` 选择该 key 后激活返回版本。版本页目前主要用于查看/激活，不把它写成 XML 新版本上传入口。若尚无模板 key，用 `/admin/workflows` 的模板 owner 先建立模板；不要直接写 process_definitions 表。
 7. 目录 `processDefinitionKey=sslvpn_approval_flow`，显式绑定已激活正式版本；读取落库 XML 核对配置后 SHA256。必须包含主管与网络两级、两个拒绝分支、`kaf_delegate / external_group_grant`、本 policy ref，以及 `complete_bpmn_task,record_execution_failure` 两种 allowed actions。内容不符不得继续。
 
 目录存在配置相互依赖时，先保持 disabled 保存 policy 与字段，再发布绑定该 policy 的版本，最后带新 `expectedCatalogVersion` 启用目录；发布 owner 拒绝某一步时先查确切缺失项，不删校验或加 `no_process`。旧 C4 catalog 10 是其他租户合成目录，不能为本申请启用；原已批准/unknown 实例仍使用其冻结定义。
 
 最终以请求者正常 KAF 会话读取目录契约：只看到本人可申请目录和有效期选项；更改目录后卡片需重新读取版本，不能继续提交过期确认快照。
+
+2026-09-14 UI 核对补充：`/admin/service-catalogs` 的自定义字段支持 text/textarea/number/date/select，但 `serviceType=access` 和完整 accessPolicy 没有对应可视化配置入口；需要上述管理员 API。Select 输入框修改后生成同值 label/value，不能直接用“30天”覆盖策略中的 `30d`。完整字段样例、条件更新请求体、保存回读和历史快照测试见[主手册第 4 节](../testing/sslvpn-manual-lifecycle-runbook.md#form-configuration)。UI 编辑后还需重新核对审批开关、类型、策略和 process key。
 
 ## 6. Worker 与开始验收的最后门禁
 
@@ -421,7 +514,7 @@ curl -fsS http://127.0.0.1:8000/health
 1. 请求者在 KAF `it-support` 新会话输入“我要申请 SSLVPN 访问权限，用于远程办公”。按对话补充原因、选择目录规定的有效期。
 2. 在**原确认卡**核对服务、原因、有效期、当前身份，只确认一次。等待创建回执；记录 KAF session/card/action ID、ITSM WorkItem ID 和唯一编号。没有编号就先排错，不再新建一张申请绕过。
 3. 点击原回执详情，在 ITSM 查看同编号专业 Service Request。应显示等待主管审批，不能显示“权限已开通”。
-4. 主管在 `/workflow/ticket-approval` 按该唯一编号定位一级任务，核对请求者/原因/有效期，**先领取，再拒绝**，输入可识别的测试原因。
+4. 主管在 `/approvals` 按业务单据编号及流程 key 定位一级任务，打开关联 WorkItem 核对请求者/原因/有效期和自定义字段，**先领取，再拒绝**，输入可识别的测试原因。该列表当前只请求前 100 条并过滤待办，未找到时由管理员核对任务分页；`/workflow/ticket-approval` 是设计器，不能用于领取审批。
 5. 请求者刷新 ITSM 详情，再在 KAF 原卡“刷新详情”，离开并重开同会话，确认都显示该编号拒绝。网络审批/委派任务没有产生，Graph 审计或受控 transport 证据证明本轮 0 add，不能只凭页面拒绝推断无外部写入。
 
 ### 7.2 再做一次批准路径

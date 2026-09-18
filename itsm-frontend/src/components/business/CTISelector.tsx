@@ -12,7 +12,7 @@
  * 用户报障、坐席补齐、管理端配置复用同一个组件，仅通过 props 决定展示深度。
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Cascader, Space, Typography } from 'antd';
 import { useAuthStore } from '@/lib/store/auth-store';
 import {
@@ -83,6 +83,8 @@ export function isCTIComplete(pathIds: number[] | undefined, requiredDepth: 0 | 
   return (pathIds?.length ?? 0) >= CTI_COMPLETE_LEVEL;
 }
 
+const EMPTY_CATEGORIES: TicketCategory[] = [];
+
 export function CTISelector({
   value,
   onChange,
@@ -131,13 +133,27 @@ export function CTISelector({
   const selectedPath = value && paths.has(value) ? paths.get(value) : undefined;
   const complete = isCTIComplete(selectedPath, requiredDepth);
 
-  useEffect(() => {
-    onValidityChange?.(complete);
-  }, [complete, onValidityChange]);
+  // 通知回调一律通过 ref 取最新实现：回调身份变化不得驱动 effect。使用方以同一个组件
+  // 内联函数传参时，"通知 → setState → 新回调 → 再通知"会形成无限更新环（React 报
+  // "Maximum update depth exceeded"，并使整个测试套件挂起）。
+  const onValidityChangeRef = useRef(onValidityChange);
+  const onStateChangeRef = useRef(onStateChange);
+  onValidityChangeRef.current = onValidityChange;
+  onStateChangeRef.current = onStateChange;
 
   useEffect(() => {
-    onStateChange?.({ categories: categories ?? [], loading, error });
-  }, [categories, loading, error, onStateChange]);
+    onValidityChangeRef.current?.(complete);
+  }, [complete]);
+
+  // 上报值保持引用稳定：状态等价时不得产生新对象/新数组，使用方按引用判等即可跳过更新。
+  const reportedState = useMemo(
+    () => ({ categories: categories ?? EMPTY_CATEGORIES, loading, error }),
+    [categories, loading, error]
+  );
+
+  useEffect(() => {
+    onStateChangeRef.current?.(reportedState);
+  }, [reportedState]);
 
   const handleChange = useCallback(
     (path?: (number | string)[]) => {

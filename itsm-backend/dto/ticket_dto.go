@@ -46,18 +46,21 @@ type CreateTicketRequest struct {
 
 // UpdateTicketRequest 更新工单请求
 type TicketEditFields struct {
-	Title       string                 `json:"title" binding:"omitempty,min=2,max=200"`
-	Description string                 `json:"description" binding:"omitempty,min=10,max=5000"`
-	Priority    string                 `json:"priority" binding:"omitempty,oneof=low medium high critical"`
-	Status      string                 `json:"status" binding:"omitempty,oneof=new open assigned in_progress pending resolved closed cancelled approved rejected"`
-	Type        string                 `json:"type" binding:"omitempty,oneof=incident service_request change ticket problem improvement"`
-	Category    string                 `json:"category" binding:"omitempty"`
-	CategoryID  *int                   `json:"categoryId,omitempty"`
-	AssigneeID  *int                   `json:"assigneeId"`
-	RequesterID int                    `json:"requesterId"` // 创建人ID
-	Tags        []string               `json:"tags"`
-	Resolution  string                 `json:"resolution" binding:"omitempty"`
-	FormFields  map[string]interface{} `json:"formFields"`
+	Title       string `json:"title" binding:"omitempty,min=2,max=200"`
+	Description string `json:"description" binding:"omitempty,min=10,max=5000"`
+	Priority    string `json:"priority" binding:"omitempty,oneof=low medium high critical"`
+	Status      string `json:"status" binding:"omitempty,oneof=new open assigned in_progress pending resolved closed cancelled approved rejected"`
+	Type        string `json:"type" binding:"omitempty,oneof=incident service_request change ticket problem improvement"`
+	// 分类只接受最深节点 ID：不再有按显示名称解析的字段（CTI 治理契约，单一权威）。
+	CategoryID *int `json:"categoryId,omitempty"`
+	// ClassificationReason 是分类纠正原因：分类确实变化（设置或清空）时必填。
+	// omitempty 保证未使用该字段的既有载荷摘要不变（重放/幂等契约）。
+	ClassificationReason string                 `json:"classificationReason,omitempty" binding:"omitempty,max=500"`
+	AssigneeID           *int                   `json:"assigneeId"`
+	RequesterID          int                    `json:"requesterId"` // 创建人ID
+	Tags                 []string               `json:"tags"`
+	Resolution           string                 `json:"resolution" binding:"omitempty"`
+	FormFields           map[string]interface{} `json:"formFields"`
 }
 
 // UpdateTicketRequest is the untrusted HTTP payload; identity is supplied by the boundary.

@@ -951,7 +951,7 @@ func TestTicketService_UpdateTicketPersistsTypeCategoryAndTags(t *testing.T) {
 	tenant := createNamedTestTenant(t, ctx, client, "update-contract")
 	otherTenant := createNamedTestTenant(t, ctx, client, "update-contract-other")
 	user := createNamedTestUser(t, ctx, client, tenant.ID, "update-contract-user")
-	category, err := client.TicketCategory.Create().SetName("Software").SetCode("update-software").SetTenantID(tenant.ID).Save(ctx)
+	category, err := client.TicketCategory.Create().SetName("Software").SetCode("update-software").SetLevel(1).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 	foreignCategory, err := client.TicketCategory.Create().SetName("Foreign").SetCode("update-foreign").SetTenantID(otherTenant.ID).Save(ctx)
 	require.NoError(t, err)
@@ -963,7 +963,7 @@ func TestTicketService_UpdateTicketPersistsTypeCategoryAndTags(t *testing.T) {
 
 	require.NoError(t, configureEntryTicketEdit(ctx, client, tenant.ID, user.ID))
 
-	updated, err := service.UpdateTicket(ctx, editCommandForTest(created.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{Type: "improvement", CategoryID: &category.ID, Tags: []string{"backend", "backend", "customer"}}, Meta: workitemmutation.Meta{ActorID: user.ID, ExpectedVersion: created.Version}}, tenant.ID))
+	updated, err := service.UpdateTicket(ctx, editCommandForTest(created.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{Type: "improvement", CategoryID: &category.ID, ClassificationReason: "首次归类", Tags: []string{"backend", "backend", "customer"}}, Meta: workitemmutation.Meta{ActorID: user.ID, ExpectedVersion: created.Version}}, tenant.ID))
 	require.NoError(t, err)
 	assert.Equal(t, "improvement", client.Ticket.GetX(ctx, updated.WorkItemID).GenericSubtype)
 	require.Equal(t, "generic", client.Ticket.GetX(ctx, updated.WorkItemID).RecordClass)
@@ -975,15 +975,15 @@ func TestTicketService_UpdateTicketPersistsTypeCategoryAndTags(t *testing.T) {
 	require.Len(t, entity.Edges.Tags, 2)
 
 	zero := 0
-	cleared, err := service.UpdateTicket(ctx, editCommandForTest(created.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{CategoryID: &zero, Tags: []string{}}, Meta: workitemmutation.Meta{ActorID: user.ID, ExpectedVersion: updated.Version}}, tenant.ID))
+	cleared, err := service.UpdateTicket(ctx, editCommandForTest(created.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{CategoryID: &zero, ClassificationReason: "撤回归类", Tags: []string{}}, Meta: workitemmutation.Meta{ActorID: user.ID, ExpectedVersion: updated.Version}}, tenant.ID))
 	require.NoError(t, err)
 	assert.Zero(t, client.Ticket.GetX(ctx, cleared.WorkItemID).CategoryID)
 	entity, err = client.Ticket.Query().Where(entTicket.IDEQ(created.ID)).WithTags().Only(ctx)
 	require.NoError(t, err)
 	assert.Empty(t, entity.Edges.Tags)
 
-	_, err = service.UpdateTicket(ctx, editCommandForTest(created.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{CategoryID: &foreignCategory.ID}, Meta: workitemmutation.Meta{ActorID: user.ID, ExpectedVersion: cleared.Version}}, tenant.ID))
-	require.ErrorContains(t, err, "工单分类不存在")
+	_, err = service.UpdateTicket(ctx, editCommandForTest(created.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{CategoryID: &foreignCategory.ID, ClassificationReason: "跨租户尝试"}, Meta: workitemmutation.Meta{ActorID: user.ID, ExpectedVersion: cleared.Version}}, tenant.ID))
+	require.ErrorContains(t, err, "not available in this tenant")
 }
 
 func TestTicketService_DeleteTicket(t *testing.T) {

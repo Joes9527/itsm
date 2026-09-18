@@ -1,8 +1,10 @@
 package controller
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -22,6 +24,7 @@ import (
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	"go.uber.org/zap"
 )
 
@@ -82,6 +85,23 @@ func (tc *TicketController) CreateTicket(c *gin.Context) {
 	tc.createFromRequest(c, req)
 }
 
+// bindStrictTicketEditJSON 绑定工单编辑载荷并拒绝未知字段。
+//
+// 仓库既有边界（intake / change / service catalog）同样使用 DisallowUnknownFields：
+// 已退役或拼错的字段必须显式报错，不能被静默忽略 —— 否则调用方会误以为分类等字段已生效。
+func bindStrictTicketEditJSON(c *gin.Context, target any) error {
+	raw, err := c.GetRawData()
+	if err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err = decoder.Decode(target); err != nil {
+		return err
+	}
+	return binding.Validator.ValidateStruct(target)
+}
+
 // UpdateTicket 更新工单
 func (tc *TicketController) UpdateTicket(c *gin.Context) {
 	ticketID, err := strconv.Atoi(c.Param("id"))
@@ -91,7 +111,7 @@ func (tc *TicketController) UpdateTicket(c *gin.Context) {
 	}
 
 	var req dto.UpdateTicketRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := bindStrictTicketEditJSON(c, &req); err != nil {
 		common.Fail(c, common.ParamErrorCode, "请求参数错误: "+err.Error())
 		return
 	}
@@ -156,17 +176,24 @@ func (tc *TicketController) UpdateTicket(c *gin.Context) {
 
 // GetTicket 获取工单详情
 func (tc *TicketController) GetTicket(c *gin.Context) {
-	ticketID, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
+	idParam := c.Param("id")
+	tenantID := c.GetInt("tenant_id")
+
+	var ticket *ticket.Ticket
+	var err error
+
+	ticketID, parseErr := strconv.Atoi(idParam)
+	if parseErr == nil && ticketID > 0 {
+		ticket, err = tc.ticketService.GetTicket(c.Request.Context(), ticketID, tenantID)
+	} else if idParam != "" {
+		ticket, err = tc.ticketService.GetTicketByNumber(c.Request.Context(), idParam, tenantID)
+	} else {
 		common.Fail(c, common.ParamErrorCode, "无效的工单ID")
 		return
 	}
 
-	tenantID := c.GetInt("tenant_id")
-
-	ticket, err := tc.ticketService.GetTicket(c.Request.Context(), ticketID, tenantID)
 	if err != nil {
-		tc.logger.Errorw("Failed to get ticket", "error", err, "ticket_id", ticketID, "tenant_id", tenantID)
+		tc.logger.Errorw("Failed to get ticket", "error", err, "id_param", idParam, "tenant_id", tenantID)
 		common.Fail(c, common.NotFoundCode, "工单不存在")
 		return
 	}
@@ -178,13 +205,23 @@ func (tc *TicketController) GetTicket(c *gin.Context) {
 
 // GetTicketSLAInfo 获取工单SLA信息
 func (tc *TicketController) GetTicketSLAInfo(c *gin.Context) {
-	ticketID, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		common.Fail(c, common.ParamErrorCode, "无效的工单ID")
-		return
-	}
-
+	idParam := c.Param("id")
 	tenantID := c.GetInt("tenant_id")
+
+	ticketID, parseErr := strconv.Atoi(idParam)
+	if parseErr != nil || ticketID <= 0 {
+		if idParam == "" {
+			common.Fail(c, common.ParamErrorCode, "无效的工单ID")
+			return
+		}
+		tkt, tktErr := tc.ticketService.GetTicketByNumber(c.Request.Context(), idParam, tenantID)
+		if tktErr != nil {
+			tc.logger.Errorw("Failed to resolve ticket for SLA", "error", tktErr, "id_param", idParam, "tenant_id", tenantID)
+			common.Fail(c, common.NotFoundCode, "工单不存在")
+			return
+		}
+		ticketID = tkt.ID
+	}
 
 	slaInfo, err := tc.ticketService.GetTicketSLAInfo(c.Request.Context(), ticketID, tenantID)
 	if err != nil {
@@ -934,7 +971,7 @@ func (tc *TicketController) UpdateSubtask(c *gin.Context) {
 	}
 
 	var req dto.UpdateTicketRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := bindStrictTicketEditJSON(c, &req); err != nil {
 		common.Fail(c, common.ParamErrorCode, "请求参数错误: "+err.Error())
 		return
 	}

@@ -25,6 +25,11 @@ export function middleware(request: NextRequest) {
   const redirect = authPageRedirect(pathname, hasSession);
   if (redirect) return NextResponse.redirect(new URL(redirect, request.url));
 
+  // 工单编号直接访问兼容：/TKT-202609-000070 -> /tickets/TKT-202609-000070
+  if (/^\/TKT-[A-Za-z0-9-]+$/i.test(pathname)) {
+    return NextResponse.redirect(new URL(`/tickets${pathname}`, request.url));
+  }
+
   // 根路径：已登录跳转工作台，未登录直接跳转登录页（不再展示介绍页）
   if (pathname === '/') {
     return NextResponse.redirect(new URL(hasSession ? '/dashboard' : '/login', request.url));

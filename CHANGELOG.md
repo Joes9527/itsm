@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **工单分类写入收敛为单一口径（调用方可见）** — 通用工单编辑（`PUT /api/v1/tickets/:id` 与子任务编辑）不再接受按分类**显示名称**提交的 `category` 字段：分类只接受最深节点 ID（`categoryId`，`0` 表示清空），且分类确实变化时必须提交 `classificationReason`（原因与前后完整三级路径写入既有操作回执）。编辑载荷现在**拒绝未知字段**：仍发送 `category`、拼错字段或 `userId` 等身份字段会收到明确的 400 错误，而不再被静默忽略。涉及外部集成（KAF/邮件/CLI 均使用节点 ID 或默认未分类，无需改动；如有自研脚本按名称提交，请改为节点 ID）。设计记录：`docs/superpowers/specs/2026-09-17-cti-governance-design.md` §8.C。
+
 - **统一 WorkItem 领域模型（Incident/Problem/Change）** — Incident、Problem、Change 创建时改为在同一事务内建对应的 `tickets` 行（`record_class`）并回填 `work_item_id`；BPMN `businessId`/`businessKey` 三个域统一收敛为 WorkItem ID，不再各自用专业主键；Problem↔Ticket、Change↔Ticket 的关联从旧的 JSON 字段/ent edge 迁移到结构化的 `WorkItemRelation` 表。ServiceRequest 因为 `ticket_id` 从建表起就必填，不需要同等改造。设计文档：`docs/superpowers/specs/2026-08-26-unified-work-item-model-design.md`；执行记录：`docs/superpowers/specs/2026-08-26-unified-work-item-multi-agent-execution-plan.md`。
   - **已知遗留问题**：`tickets.ticket_number` 仍是全局唯一索引而非 `(tenant_id, ticket_number)` 复合唯一，Ticket/Incident/Problem/Change 四条按租户维度计数的生成器之间仍有撞号可能，尚未修复。
   - **未执行的收尾项**：`ticket_type` 表上的旧审批字段（`approval_workflow_id`/`approval_chain`）清理、`tickets` 是否物理改名为 `work_items` 的决策。

@@ -1,6 +1,6 @@
 import { prepareTicketEdit, isTicketEditConflict } from '../ticket-edit';
 import { creationReceipt, creationOptions, creationHttpOptions } from '../creation.test-utils';
-import { TicketApi } from '../ticket-api';
+import { TicketApi, type TicketEditPayload } from '../ticket-api';
 import { httpClient } from '../http-client';
 import { handleApiRequest } from '../base-api-handler';
 
@@ -75,16 +75,45 @@ describe('TicketApi', () => {
 
   describe('updateTicket', () => {
     it.each([undefined, 0, -1, 1.5, NaN])('rejects missing or invalid edit version %s before HTTP', async version => {
-      await expect(TicketApi.updateTicket(1, { title: 'Updated', version } as any)).rejects.toThrow('工单版本');
+      // 故意传入非法版本：运行期必须先于 HTTP 拒绝。
+      const invalid = { title: 'Updated', version } as unknown as TicketEditPayload;
+      await expect(TicketApi.updateTicket(1, invalid)).rejects.toThrow('工单版本');
       expect(mockPut).not.toHaveBeenCalled();
     });
 
     it('should update ticket', async () => {
-      const data = { title: 'Updated', version: 4, operationId: 'edit-test' };
+      const data: TicketEditPayload = { title: 'Updated', version: 4, operationId: 'edit-test' };
       const expected = { id: 1, title: 'Updated' };
       mockPut.mockResolvedValue(expected);
-      const result = await TicketApi.updateTicket(1, data as any);
+      const result = await TicketApi.updateTicket(1, data);
       expect(result).toEqual(expected);
+    });
+
+    it('sends the classification as the deepest node id together with its reason', async () => {
+      mockPut.mockResolvedValue({ id: 1 });
+      const payload: TicketEditPayload = {
+        categoryId: 42,
+        classificationReason: '现场归类有误',
+        version: 7,
+        operationId: 'edit-classification',
+      };
+
+      await TicketApi.updateTicket(1, payload);
+
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/tickets/1', payload);
+      const body = mockPut.mock.calls[0][1] as Record<string, unknown>;
+      expect(body.categoryId).toBe(42);
+      expect(body.classificationReason).toBe('现场归类有误');
+      // 退役的按名称字段不得出现在载荷中（后端编辑边界会拒绝未知字段）。
+      expect(body).not.toHaveProperty('category');
+    });
+
+    it('rejects the retired name field at compile time', () => {
+      // 分类只接受最深节点 ID：多写 category 的载荷无法通过类型检查（npm run type-check 保证），
+      // 运行期同样失败关闭。若有人把 category 加回契约，这里的 @ts-expect-error 会变成未使用而报错。
+      // @ts-expect-error category 已退役，分类只接受 categoryId
+      const retired: TicketEditPayload = { category: 'network', version: 1, operationId: 'op' };
+      expect(retired).toBeDefined();
     });
   });
 

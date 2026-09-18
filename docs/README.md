@@ -22,6 +22,7 @@
 
 - [旧 ITSM 主数据迁移与当前目标验证：唯一续办清单](superpowers/plans/2026-09-15-migration-validation-ledger.md)：已完成、待补配置、运行阻塞、待验收及数据库清理边界。
 - [KAF / ITSM 本机 WSL 开发环境](development-environment.md)：开发／迁移验证双数据库约定、3010 → 8080 入口、版本与结构同步、启动来源和恢复边界。
+- [本地 PostgreSQL 数据库总清单](review/2026-09-14-postgresql-database-register.md)：实例、库名、用途、任务归属及待核项；操作边界见[开发环境状态](development-environment.md)。
 
 这个目录包含产品说明、部署运维、开发协作、测试报告和阶段性评审文档。为了避免新用户在大量历史文档中迷路，建议先从本页按角色阅读。
 
@@ -42,6 +43,9 @@
 ## 核心文档
 
 - [从服务目录到工单流程与 SLA](./product/service-to-work-item-lifecycle.md)：模块职责、完整申请链路、SSL-VPN 示例和配置验收清单。
+- [SSLVPN Coding Agent 执行任务包](./testing/sslvpn-coding-agent-execution-guide.md)：使用测试手册前先登记授权、环境与角色分工，持续保存证据和续跑断点。
+- [SSLVPN UI 全流程测试手册](./testing/sslvpn-manual-lifecycle-runbook.md)：WSL/KAF 部署前置、自定义表单、审批链/BPMN、生命周期、查找和恢复；业务验收仅通过 UI。
+- [邮件建单与自动回复 UI 手册](./testing/email-ticket-ui-runbook.md)：真实邮箱发信、确认回信、原会话回复、附件、工程师通知与内部备注保密。
 - [SSLVPN WSL 部署与手工端到端验收](./deployment/sslvpn-wsl-deployment-and-manual-verification.md): 两仓配套部署、正常身份、双审批、授权验证与测试恢复。
 - [部署指南](./deployment.md): Docker Compose、生产部署、反向代理和发布部署建议。
 - [配置参考](./configuration.md): 环境变量、端口、数据库、Redis、AI 服务配置。
@@ -53,6 +57,14 @@
 - [文档命名与维护规范](./documentation-style-guide.md): 目录分层、命名规则和归档标准。
 
 ## 产品与架构
+
+- [ITSM 双机双 Agent 候选交付总计划](./superpowers/plans/2026-09-12-itsm-candidate-two-agent-delivery.md)
+
+- [ITSM 候选版本集成、验收与 WSL 交付设计（accepted）](./superpowers/specs/2026-09-12-itsm-candidate-integration-delivery-design.md)
+- [候选执行范围与启动生命周期设计（accepted）](./superpowers/specs/2026-09-12-itsm-candidate-execution-scope-design.md)
+- [PostgreSQL 鉴权状态权威设计（accepted）](./superpowers/specs/2026-09-12-itsm-candidate-auth-state-design.md)
+- [候选执行范围实施计划](./superpowers/plans/2026-09-12-itsm-candidate-execution-scope.md)
+- [候选鉴权状态实施计划](./superpowers/plans/2026-09-12-itsm-candidate-auth-state.md)
 
 - [WorkItem 后续实施计划（代码与隔离旅程已验收，退役未完成）](./superpowers/plans/2026-09-11-workitem-next-stage.md)：后端五项任务、公共页面三项任务和跨域验收/退役两项任务的依赖与证据入口。
 
