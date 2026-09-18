@@ -82,6 +82,12 @@ func TestIntakeGenericCreationRejectsMalformedRulesAndRollsBackEffects(t *testin
 		t.Run(fault, func(t *testing.T) {
 			f := newUnifiedIntakeFixture(t, configuredCreationTicketOwner)
 			ctx := tenantctx.WithTenantID(context.Background(), f.identity.TenantID)
+			// 处理人必须显式指定，不能依赖创建期的隐式自动分配：未命中 active 配置规则时工单
+			// 保持未分配，而创建通知只在 item.AssigneeID > 0 时发出（ticket_creation_effects.go）。
+			// 没有处理人就没有 TicketNotification 写入，notification write 注入的故障不会被触发，
+			// 用例会退化成"创建成功"，失去它要验证的原子回滚语义。
+			assignee := f.client.User.Create().SetTenantID(f.identity.TenantID).SetUsername("handler").SetName("Handler").SetEmail("handler@example.test").SetPasswordHash("unused").SetRole("agent").SaveX(ctx)
+			f.command.AssigneeID = &assignee.ID
 			actions := []map[string]interface{}{{"type": "set_priority", "priority": "high"}}
 			if fault == "unknown action" {
 				actions = append(actions, map[string]interface{}{"type": "unknown"})
