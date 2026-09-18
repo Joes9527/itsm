@@ -4,6 +4,8 @@
 
 - [CTI 三级分类与目录、完成质量设计（accepted，未实现）](superpowers/specs/2026-09-17-cti-governance-design.md)：已确认业务方向、两阶段范围、历史兼容与验收；不是部署证据。
 
+- **组织与审批路由设计组（proposed，待评审，2026-09-18）**：[统一数据契约](superpowers/specs/2026-09-18-org-people-data-contract-design.md)（组织/部门/负责人/上级四个词的统一口径与两条取数轴）、[《组织》](superpowers/specs/2026-09-18-organization-model-design.md)、[《部门》](superpowers/specs/2026-09-18-department-management-unit-design.md)、[《人员与汇报线》](superpowers/specs/2026-09-18-people-reporting-line-design.md)、[《流程与路由》](superpowers/specs/2026-09-18-process-routing-migration-design.md)。**均为设计意图，不代表已实现或已迁移；无数据库写入授权。**
+
 > **开发／迁移任务先读：[当前结构目标047](development-environment.md#selected-schema-target-047)及[实际数据库状态](superpowers/plans/2026-09-15-migration-validation-ledger.md#schema-target-status)。目标版本与已部署状态分开记录。**
 
 - [Ticket 详情体验统一实施计划](./superpowers/plans/2026-09-15-ticket-detail-experience-unification.md)：六项任务及最终复审完成；浏览器 7/7、最终并发回归 98/98，已提交 PR #35。
@@ -104,6 +106,7 @@
 - [角色视角测试方案](./testing/role-based-product-test-plan.md)
 - [测试用例目录](./testing/test-cases/README.md)
 - [系统功能评审清单](./review/system-function-review-checklist-2026-07-01.md)
+- [旧 ITSM / KAF EHR / 新 ITSM 数据对账与全景审计（只读，2026-09-18）](./review/2026-09-18-legacy-ehr-new-itsm-data-reconciliation.md)：组织/人员、领导与汇报线、流程与路由、分类/字典/SLA 的跨源缺口清单与证据；含旧 ITSM 生产口径重抓摘要（流程 144/模型 23/路由 1085）。**只读对账，非迁移授权或目标启用证据。**
 
 历史测试报告与阶段性评审（模块功能复盘、浏览器 E2E/功能测试报告、深度业务测试报告、前端 UX
 Review、商用就绪验收报告等）已移入 [archive](./archive/README.md)，仅作历史记录，不代表当前状态。
