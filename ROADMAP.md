@@ -264,34 +264,49 @@ listed here is preserved**; recreate a working copy with
   its process or close without the evidence that process requires, and an engineer
   must be able to see *why* a task cannot be completed yet.
   (Persona: process administrator, front-line engineer.)
-- **Scope — six candidate implementations, none merged:**
-
-  | Branch | Business coverage | Commits | Pushed | Merge-ability into current main |
-  |:---|:---|---:|:---:|:---|
-  | `codex/fix/a3-start-contract` | admit generic workflows from frozen creation evidence; reject reserved public inputs | 25 | no | clean (40 files, +2725) |
-  | `codex/fix/a3-contract-pipeline` | validate the fulfilment definition contract (one process per lifecycle contract) | 21 | no | clean (27 files, +2013) |
-  | `codex/fix/a3-lifecycle-gate` | lifecycle evidence gate before completion | 25 | no | clean (37 files, +3058) |
-  | `codex/fix/a3-legacy-gates` | reject legacy mutations for gated generic workflows | 24 | no | conflict in `service/ticket_service.go` |
-  | `codex/fix/a4-blocked-ui` | surface callback block reasons in ticket task views | 21 | no | clean (27 files, +1858) |
-  | `codex/fix/a4-frozen-callback` | block invalid frozen-callback input before execution | 20 | no | clean (21 files, +1775) |
-
+- **Shipped 2026-09-18 — five of the six cuts merged to `main` through PR #77
+  (merge `1c52edce`):** the start contract, the definition-contract pipeline, the
+  lifecycle evidence gate, the blocked-reason task view, and the frozen-callback
+  input check. The command side is wired inside the existing transactions — the
+  versioned edit command, the escalation command and task completion all enforce the
+  gate — so a generic WorkItem on those paths can no longer be pushed to
+  `resolved` / `closed` without its evidence. The binding contract is now
+  [AGENTS.md § Generic fulfillment gate contract](AGENTS.md#generic-fulfillment-gate-contract);
+  the detailed design is PR #76, still open and awaiting maintainer confirmation.
+- **What remains — the legacy command paths, fix not written:**
+  `RejectGenericWorkflowLegacyMutationTx` still has no production caller, and both
+  `TicketService.updateTicketStatus` and `TicketLifecycleService.UpdateTicketStatus`
+  write through their own repository calls rather than the versioned command. Those
+  two screen only `incident` / `problem` / `change_request` and the legacy status
+  graph, so `generic` passes both and can still reach `resolved` and then `closed`
+  without tripping the gate, through `PUT /api/tickets/:id/status`,
+  `POST /api/tickets/:id/{assign,resolve,close}` and
+  `POST /api/tickets/workflow/{accept,withdraw,forward,resolve,close,reopen}`.
+  A cut exists as `4e932063` on the local branch `codex/fix/a3-legacy-gates`, but
+  that branch was never pushed and conflicts with current `main` in
+  `service/ticket_service.go`; re-derive the fix rather than assuming it can be
+  picked up.
 - **Non-goals:** no second approval engine, no change to the BPMN engine core, no
   replacement of the Incident / Problem / Change lifecycles.
 - **Owning module:** `itsm-backend/service` (BPMN fulfilment and WorkItem command
   boundaries) and the `itsm-frontend` task view; evidence keeps using each domain's
   existing audit channel.
-- **Dependencies / migration risk:** must agree with the existing `process_bindings`
-  and lifecycle-contract wording. The six branches are different cuts of the same
-  business goal, so one must be chosen as the base and the others explicitly
-  accepted or dropped before any merge; each needs a rebase onto current main.
+- **Dependencies / migration risk:** must keep agreeing with `process_bindings` and
+  the lifecycle-contract wording. The remaining cut moves command transaction
+  boundaries, so it needs the WorkItem regression suites re-run rather than a
+  rebase-and-merge.
 - **Acceptance criteria:** (1) a generic fulfilment record cannot be closed without
   the required evidence, and the rejection reason is readable; (2) the task view
   shows the block reason; (3) Incident / Problem / Change behaviour and their
   regression tests are unchanged; (4) PostgreSQL lifecycle cases exist for the gate.
-- **Evidence anchors:** the branch refs above (`git log -1 <branch>` for the last
-  commit); re-check the remaining delta before merging with
-  `git merge-tree --write-tree origin/main <branch>`.
-- **Status:** proposed
+  (1)–(4) hold for the versioned command paths; they do **not** yet hold for the
+  legacy endpoints named above.
+- **Evidence anchors:** PR #77 / merge `1c52edce`; for the remaining cut, a
+  **local-only** ref (`git log -1 codex/fix/a3-legacy-gates` — never pushed, so it
+  does not exist on the remote) plus
+  `git merge-tree --write-tree origin/main codex/fix/a3-legacy-gates`.
+- **Status:** partially shipped — enforced on the versioned command paths; the
+  legacy-path cut is unscheduled and is a recorded, not a covered, gap.
 
 ### BL-AGENT-GUIDANCE-CONVERGENCE — finish the agent guidance and shared-convention refactor
 
