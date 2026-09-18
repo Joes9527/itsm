@@ -131,12 +131,22 @@
 
 ### 5.2 覆盖率门禁
 
-**当前 CI 没有覆盖率百分比门禁。** 本节原先给出"service 60% / controller 40% / 新增代码 70% 最低覆盖率"与"下降超过 10% 阻止合并"，但仓库从未配置过这样的关卡。
+**当前 CI 没有任何测试覆盖率百分比门禁。** 本节原先给出的"service 60% / controller 40% / 新增代码 70% 最低覆盖率"与"下降超过 10% 阻止合并"，是对一套**已被删除的**机制的漂移描述，而不是纯属虚构——所以照抄本节旧文的数字同样是错的，两边都要以当前实际为准。
+
+被删除的机制（2026-07-15 之前）：
+
+| 工作流 | 规则 | 级别 |
+|:---|:---|:---|
+| `coverage-diff.yml` | 新增/修改行的增量覆盖率 ≥ 60% | `::error::` 阻塞 |
+| `ga-gate.yml` G1 | 整体覆盖率 ≥ 1%（v1.0 floor） | `::error::` 阻塞 |
+| `ga-gate.yml` G1 | 整体覆盖率 ≥ 70% | 仅 `::warning::` |
+
+`294397a7`（ci: consolidate GitHub Actions workflows）删除了 `coverage-diff.yml`，并把阈值判断从 `backend-ci.yml` 与 `ga-gate.yml` 一并移除。此后 `ga-gate.yml` 不再提及覆盖率；`backend-ci.yml` 只跑测试并上传 `coverage.out`，不设门槛。
 
 实际存在的两道相关检查，管的是不同的事：
 
 - `test-coverage-guard.yml`：**改了受管源码就必须有对应测试文件**，是文件映射检查，不是百分比门槛。
-- `acl-gate.yml`：触及 router 文件的 PR 的 ACL 覆盖门禁，与测试覆盖率无关。
+- `acl-gate.yml`：触及 router 文件的 PR 的 ACL 覆盖门禁（要求 100%），与测试覆盖率无关。
 
 覆盖率阶段目标以 [`contributing.md`](./contributing.md) 为准：v1.0 GA 阶段为 ≥1% 防退化 floor（实测 2%），70% 仅作 `::warning::`；v1.1 目标 40%+，v2.0 目标 70%+。
 

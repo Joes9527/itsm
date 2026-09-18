@@ -209,7 +209,7 @@ go test $(go list ./... | grep -vE '^itsm-backend/migrations$|^itsm-backend/migr
 
 版本必须钉死：`gofumpt` 用 v0.11.0；`staticcheck` 用 **v0.6.1**，因为 `staticcheck@latest`（v0.7.0）会在 ent 生成的 `migrations/passwordresettoken.go` 与同名目录 `migrations/passwordresettoken/` 上误报，v0.5.x 又太旧、无法在 Go 1.25 上构建。
 
-`migrations/...` 被这两个 job 排除，原因相同：ent 为每个 schema 同时生成 `migrations/<schema>.go`（main 包）和 `migrations/<schema>/`（子包），冷缓存下加载器会对 `migrations/client.go` 这类手写调用方误报 "does not contain package"。ent 生成的代码在生成期审查、不靠 lint，也没有自己的 `_test.go`，排除不损失覆盖率。
+`migrations/...` 被这两个 job 排除，原因相同：ent 为每个 schema 同时生成 `migrations/<schema>.go`（main 包）和 `migrations/<schema>/`（子包），冷缓存下加载器会对 `migrations/client.go` 这类手写调用方误报 "does not contain package"。ent 生成的代码在生成期审查、不靠 lint，也没有自己的 `_test.go`，排除不损失覆盖率。注意两者粒度不同：`staticcheck` 排除整个 `migrations/`，Test job 只点名 4 个包——复制命令时照抄，不要顺手"统一"。
 
 前端对应口径见上文 `npm run lint:check` 与 `npm run type-check`。仓库根目录的 `.golangci-lint.yml` **未接入任何 workflow**，其自身注释要求显式 `--config` 才生效；当前 CI 不使用 golangci-lint。
 
