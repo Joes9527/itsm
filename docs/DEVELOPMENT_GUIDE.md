@@ -188,6 +188,31 @@ ITSM_ALLOW_DESTRUCTIVE_FRESH=true ITSM_FRESH_HOST="$DB_HOST" \
 go run -tags create_user main.go
 ```
 
+CI 的格式、静态检查与测试口径（`.github/workflows/backend-ci.yml`）是**全仓库硬门禁**。本地按同一口径复现：
+
+```bash
+cd itsm-backend
+
+go install mvdan.cc/gofumpt@v0.11.0                      # 与 CI 同版本
+"$(go env GOPATH)/bin/gofumpt" -l .                      # 检查
+"$(go env GOPATH)/bin/gofumpt" -w .                      # 修复
+
+go install honnef.co/go/tools/cmd/staticcheck@v0.6.1     # 版本钉死，见下
+"$(go env GOPATH)/bin/staticcheck" \
+  $(go list ./... | grep -v -e '^itsm-backend/migrations$' -e '^itsm-backend/migrations/')
+
+# Test job 口径：排除 ent 生成的 4 个 migrations 包
+go test $(go list ./... | grep -vE '^itsm-backend/migrations$|^itsm-backend/migrations/hook$|^itsm-backend/migrations/enttest$|^itsm-backend/migrations/predicate$')
+```
+
+`gofumpt` 扫 `itsm-backend` **整个目录**：任何一个文件不合格式，整个 Lint job 就失败，与这个分支改了什么无关。`staticcheck` **不是** `go vet`，两者不能互相代替——CI 只跑前者。
+
+版本必须钉死：`gofumpt` 用 v0.11.0；`staticcheck` 用 **v0.6.1**，因为 `staticcheck@latest`（v0.7.0）会在 ent 生成的 `migrations/passwordresettoken.go` 与同名目录 `migrations/passwordresettoken/` 上误报，v0.5.x 又太旧、无法在 Go 1.25 上构建。
+
+`migrations/...` 被这两个 job 排除，原因相同：ent 为每个 schema 同时生成 `migrations/<schema>.go`（main 包）和 `migrations/<schema>/`（子包），冷缓存下加载器会对 `migrations/client.go` 这类手写调用方误报 "does not contain package"。ent 生成的代码在生成期审查、不靠 lint，也没有自己的 `_test.go`，排除不损失覆盖率。注意两者粒度不同：`staticcheck` 排除整个 `migrations/`，Test job 只点名 4 个包——复制命令时照抄，不要顺手"统一"。
+
+前端对应口径见上文 `npm run lint:check` 与 `npm run type-check`。仓库根目录的 `.golangci-lint.yml` **未接入任何 workflow**，其自身注释要求显式 `--config` 才生效；当前 CI 不使用 golangci-lint。
+
 WSL 嵌套 worktree 的发布构建应显式绑定 Git 来源：Go 的自动 VCS 探测可能取到父仓库，导致嵌入的提交与当前 worktree 不一致。先提交并验证工作树干净，在 `itsm-backend` 目录执行：
 
 ```bash

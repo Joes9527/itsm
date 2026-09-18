@@ -41,45 +41,14 @@
 
 ```
 .github/
-└── PULL_REQUEST_TEMPLATE.md
+└── pull_request_template.md
 ```
 
 ### 2.2 模板内容
 
-```markdown
-## 概述
-<!-- 简短描述这次改动解决了什么问题 -->
+模板以 `.github/pull_request_template.md` 为准，**本规范不复制其内容**：一项规则只维护一个权威来源，复制出来的第二份必然漂移（这里曾长期写着 CI 并不运行的 `golangci-lint`）。
 
-## 改动类型
-- [ ] 新功能 (New Feature)
-- [ ] Bug 修复 (Bug Fix)
-- [ ] 重构 (Refactor)
-- [ ] 文档 (Documentation)
-- [ ] 性能优化 (Performance)
-- [ ] 测试 (Test)
-
-## 改动范围
-<!-- 影响的模块/服务 -->
-
-## 自检清单
-<!-- 在提交前确保已完成 -->
-- [ ] 代码符合 golangci-lint / ESLint 规范
-- [ ] 新功能有对应的单元测试
-- [ ] 改动已更新相关文档
-- [ ] 无敏感信息泄露（API Key、密码等）
-
-## 依赖变更
-<!-- 是否有新增依赖 -->
-- 新增依赖: [列表]
-- 移除依赖: [列表]
-
-## 相关 Issue
-<!-- 关联的任务/Issue -->
-Closes #
-
-## 审查重点（可选）
-<!-- 特别希望审查者关注的地方 -->
-```
+模板承载治理文档要求的字段——任务准入（[`agent-engineering-governance.md`](./agent-engineering-governance.md) §7）：单一目标与不在范围内的部分、影响范围、**是否写入共享数据库/执行迁移/改 RLS**、验证方式与完成条件、已知依赖与冲突分支；以及 PR 必述项（§5）：目标、影响范围、验证证据、风险与未验证项。
 
 ## 3. 检查清单
 
@@ -156,84 +125,30 @@ Closes #
 
 ### 5.1 GitHub Actions 工作流
 
-```yaml
-# .github/workflows/ci.yml
-name: CI
+本规范**不复制 workflow 定义**。当前实际运行的 workflow 及其作用见[文档索引](./README.md)的「CI/CD 与发布」一节。
 
-on:
-  pull_request:
-    branches: [main, develop]
-
-jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-      - name: Run Go vet
-        run: go vet ./...
-
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-      - name: Run tests with coverage
-        run: |
-          go test -coverprofile=coverage.out ./...
-          go tool cover -func=coverage.out
-      - name: Upload coverage
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage
-          path: coverage.out
-
-  frontend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install dependencies
-        run: npm ci
-      - name: Run ESLint
-        run: npm run lint
-      - name: Run type check
-        run: npm run type-check
-
-  build:
-    runs-on: ubuntu-latest
-    needs: [lint, test, frontend]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build Docker image
-        run: docker build -t itsm:${{ github.sha }} .
-```
+本节原有一份 `# .github/workflows/ci.yml` 示例，但**该文件不存在**，且其描述的检查与仓库实际运行的不一致：示例用 `golangci-lint` 与 `go vet`，实际 CI 跑的是 `gofumpt` 与 `staticcheck`。后端格式、静态检查与测试命令的权威说明在 [`DEVELOPMENT_GUIDE.md`](./DEVELOPMENT_GUIDE.md) §1。
 
 ### 5.2 覆盖率门禁
 
-| 模块 | 最低覆盖率 | 目标覆盖率 |
-|------|------------|------------|
-| service 层 | 60% | 80% |
-| controller 层 | 40% | 60% |
-| 新增代码 | 70% | 85% |
+**当前 CI 没有任何测试覆盖率百分比门禁。** 本节原先给出的"service 60% / controller 40% / 新增代码 70% 最低覆盖率"与"下降超过 10% 阻止合并"，是对一套**已被删除的**机制的漂移描述，而不是纯属虚构——所以照抄本节旧文的数字同样是错的，两边都要以当前实际为准。
 
-**覆盖率下降处理：**
-- 覆盖率下降 > 10%：阻止合并
-- 覆盖率下降 5-10%：需要说明理由
-- 覆盖率下降 < 5%：可合并
+被删除的机制（2026-07-15 之前）：
+
+| 工作流 | 规则 | 级别 |
+|:---|:---|:---|
+| `coverage-diff.yml` | 新增/修改行的增量覆盖率 ≥ 60% | `::error::` 阻塞 |
+| `ga-gate.yml` G1 | 整体覆盖率 ≥ 1%（v1.0 floor） | `::error::` 阻塞 |
+| `ga-gate.yml` G1 | 整体覆盖率 ≥ 70% | 仅 `::warning::` |
+
+`294397a7`（ci: consolidate GitHub Actions workflows）删除了 `coverage-diff.yml`，并把阈值判断从 `backend-ci.yml` 与 `ga-gate.yml` 一并移除。此后 `ga-gate.yml` 不再提及覆盖率；`backend-ci.yml` 只跑测试并上传 `coverage.out`，不设门槛。
+
+实际存在的两道相关检查，管的是不同的事：
+
+- `test-coverage-guard.yml`：**改了受管源码就必须有对应测试文件**，是文件映射检查，不是百分比门槛。
+- `acl-gate.yml`：触及 router 文件的 PR 的 ACL 覆盖门禁（要求 100%），与测试覆盖率无关。
+
+覆盖率阶段目标以 [`contributing.md`](./contributing.md) 为准：v1.0 GA 阶段为 ≥1% 防退化 floor（实测 2%），70% 仅作 `::warning::`；v1.1 目标 40%+，v2.0 目标 70%+。
 
 ### 5.3 PR Size 检查
 
@@ -252,7 +167,7 @@ jobs:
 ### 6.1 审查者不在场
 
 **解决方案：**
-1. 紧急修复可先合并后审查
+1. 紧急修复可先合并后审查——**但有例外**：涉及 WorkItem、RBAC、tenant/MSP、BPMN、数据库迁移、连接器、AI 工具调用或安全边界的变更，必须由独立审查者或维护者复核，没有"先合并后审"的快捷方式（[`agent-engineering-governance.md`](./agent-engineering-governance.md) §7）
 2. 使用 GitHub 的 "Require review from Code Owners" 功能
 3. 每日站会同步代码审查状态
 
@@ -287,19 +202,25 @@ jobs:
 
 ## 7. 实施检查表
 
-- [ ] 创建 `.github/PULL_REQUEST_TEMPLATE.md`
-- [ ] 配置 GitHub Actions CI 流程
-- [ ] 配置 golangci-lint 在 CI 中运行
-- [ ] 配置前端 ESLint + type-check 在 CI 中运行
-- [ ] 设置覆盖率门禁（可选）
+前四项是"建立流程"的动作，本仓库已完成，但**工具口径与当初设想不同**，已按实际更正：
+
+- [x] PR 模板已存在：`.github/pull_request_template.md`；其字段覆盖面见 §2.2
+- [x] GitHub Actions CI 已配置，见[文档索引](./README.md)的「CI/CD 与发布」；后端用 `gofumpt` + `staticcheck`，**不使用 golangci-lint**
+- [x] 前端 ESLint + type-check 已在 `frontend-ci.yml` 中运行
+- [ ] 覆盖率**百分比**门禁未配置，当前阶段口径见 §5.2
+
+以下为团队习惯项：
+
 - [ ] 团队成员熟悉检查清单
 - [ ] 建立每日/每周代码审查习惯
 
 ## 8. 附录
 
-### 8.1 golangci-lint 配置文件
+### 8.1 Go 静态检查配置
 
-详见项目根目录 `.golangci.yml`
+CI **不使用 golangci-lint**，因此没有生效的 golangci-lint 配置。仓库根的 `.golangci-lint.yml` 是既有的未接入文件：它自身的注释要求以 `--config .golangci-lint.yml` 显式指定才生效，而没有任何 workflow 这样做。
+
+生效的 Go 检查是 `gofumpt` 与 `staticcheck`，两者都没有独立配置文件，版本在 workflow 中钉死，见 [`DEVELOPMENT_GUIDE.md`](./DEVELOPMENT_GUIDE.md) §1。
 
 ### 8.2 ESLint 配置
 
@@ -307,6 +228,6 @@ jobs:
 
 ### 8.3 相关文档
 
-- [团队技术提升指导](./team-tech-improvement-guide.md)
+- [团队技术提升指导](../team-tech-improvement-guide.md)
 - [Go 代码规范](https://go.dev/wiki/CodeReviewComments)
 - [Google Go Style Guide](https://google.github.io/styleguide/go/)
