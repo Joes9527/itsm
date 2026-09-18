@@ -45,6 +45,7 @@ jest.mock('@/lib/api/http-client', () => ({
 // Imports happen after mocks so the component picks them up.
 import WorkflowNodeInspector from '@/components/workflow/designer/WorkflowNodeInspector';
 import { UserApi } from '@/lib/api/user-api';
+import { buildWorkItemAssigneePatch } from '@/components/workflow/designer/work-item-assignment-policy';
 
 function buildUserTaskSelection(overrides?: Record<string, unknown>): BpmnNodeSelection {
   return {
@@ -271,5 +272,79 @@ describe('WorkflowNodeInspector — 审批语义 panel', () => {
     const patch = onUpdateProperties.mock.calls[0][1];
     expect(create).toHaveBeenCalledWith('bpmn:ExtensionElements', { values: [unknown] });
     expect(patch.extensionElements.values).toEqual([unknown]);
+  });
+});
+
+/**
+ * 直属上级审批（assigneeDirectManager / assigneeManagerLevel）。
+ *
+ * 这是"审批不断流"最直接的配置入口：引擎在默认路径上优先派给提交人自己的上级
+ * （生产库里个人汇报线已填 89.5%，而部门负责人线是 0%）。在它出现在设计器之前，
+ * 这个后端能力业务根本配不出来。
+ */
+describe('直属上级审批 (assigneeDirectManager)', () => {
+  function directManagerBlock(): HTMLElement {
+    const heading = screen.getByText(/直属上级审批（个人汇报链）/);
+    const block = heading.closest('div');
+    if (!block) {
+      throw new Error('direct-manager panel block not found');
+    }
+    return block as HTMLElement;
+  }
+
+  it('打开开关时设置方式与层级，并清掉其余全部找人方式', async () => {
+    const onUpdateProperties = jest.fn().mockReturnValue(true);
+    render(<WorkflowNodeInspector selection={buildUserTaskSelection({ taskPurpose: 'approval' })} onUpdateProperties={onUpdateProperties} />);
+
+    const sw = await within(directManagerBlock()).findByRole('switch');
+    fireEvent.click(sw);
+
+    expect(onUpdateProperties).toHaveBeenCalledWith('Task_Approve', expect.objectContaining({
+      assigneeDirectManager: true,
+      assigneeManagerLevel: 0,
+      // 其余方式必须被清掉：引擎只认一个，两个并存会被发布校验拒绝
+      assignee: '',
+      assigneeRole: '',
+      assigneeDeptId: undefined,
+      assigneeTeamId: undefined,
+      assigneeProjectId: undefined,
+      assigneeTempTeamId: undefined,
+      assigneeGmChain: undefined,
+    }));
+  });
+
+  it('开启后显示层级输入，0 表示直属上级', async () => {
+    const onUpdateProperties = jest.fn().mockReturnValue(true);
+    render(<WorkflowNodeInspector selection={buildUserTaskSelection({ taskPurpose: 'approval',
+      assigneeDirectManager: true,
+      assigneeManagerLevel: 2,
+    })} onUpdateProperties={onUpdateProperties} />);
+
+    expect(await screen.findByText('再往上第 2 级')).toBeInTheDocument();
+  });
+
+  it('只改层级时不清掉开关本身', async () => {
+    const onUpdateProperties = jest.fn().mockReturnValue(true);
+    render(<WorkflowNodeInspector selection={buildUserTaskSelection({ taskPurpose: 'approval',
+      assigneeDirectManager: true,
+      assigneeManagerLevel: 0,
+    })} onUpdateProperties={onUpdateProperties} />);
+
+    const block = directManagerBlock();
+    const level = await within(block).findByRole('spinbutton');
+    fireEvent.change(level, { target: { value: '3' } });
+
+    expect(onUpdateProperties).toHaveBeenLastCalledWith('Task_Approve', expect.objectContaining({
+      assigneeManagerLevel: 3,
+    }));
+    // 不能顺手把 assigneeDirectManager 清成 undefined
+    const lastPatch = onUpdateProperties.mock.calls[onUpdateProperties.mock.calls.length - 1][1];
+    expect(lastPatch).not.toHaveProperty('assigneeDirectManager');
+  });
+
+  it('绑定工单当前处理人时清掉直属上级方式（两种方式不得并存）', () => {
+    const patch = buildWorkItemAssigneePatch({ assigneeDirectManager: true, assigneeManagerLevel: 3 });
+    expect(patch.assigneeDirectManager).toBeUndefined();
+    expect(patch.assigneeManagerLevel).toBeUndefined();
   });
 });
