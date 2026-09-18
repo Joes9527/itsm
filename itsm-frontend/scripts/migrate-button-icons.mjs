@@ -92,8 +92,9 @@ function hasRealChildren(el) {
     if (ts.isJsxText(child)) {
       if (child.text.trim()) return true;
     } else if (ts.isJsxExpression(child)) {
-      // {/* 注释 */} 或 {undefined} 不算内容
-      if (child.expression && !ts.isJsxEmptyExpression(child.expression)) return true;
+      // {/* 注释 */} 的 expression 是 undefined（TS 6 已移除 isJsxEmptyExpression，
+      // 不要再加那个判断——它不存在）。{undefined} 会算作内容，属保守方向。
+      if (child.expression) return true;
     } else {
       return true;
     }
@@ -117,7 +118,9 @@ function planIcon(node, sf, lucideLocal) {
     return { ok: false, reason: `图标 ${tag} 不是自闭合元素，无法安全替换` };
   }
   const exported = lucideLocal.get(tag);
-  if (!exported) return { ok: false, reason: `图标 ${tag} 不是从 lucide-react 导入的` };
+  // 不是 lucide 图标 ≠ 出错：可能是已经迁过的 antd 图标，也可能是本地自定义组件
+  // （如 login 页的 MicrosoftIcon）。这一类只跳过，不当作需要人工处理。
+  if (!exported) return { ok: false, reason: `NOT_LUCIDE: ${tag} 不是从 lucide-react 导入的，跳过` };
 
   if (DEFERRED.has(exported)) {
     return { ok: false, reason: `DEFERRED: ${exported} 的语义按上下文分叉，留给批次 2` };
@@ -222,7 +225,11 @@ function processFile(file, { write }) {
             report.push({
               file,
               line: lineOf(sf, el),
-              level: plan.reason.startsWith('DEFERRED') ? 'deferred' : 'error',
+              level: plan.reason.startsWith('DEFERRED')
+                ? 'deferred'
+                : plan.reason.startsWith('NOT_LUCIDE')
+                  ? 'skip'
+                  : 'error',
               msg: plan.reason,
             });
           } else {
