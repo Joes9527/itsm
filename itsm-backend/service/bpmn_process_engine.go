@@ -1888,6 +1888,14 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 				if assignee == "" {
 					assignee = e.resolveApprovalAssignee(ctx, instance, approvalRequester)
 				}
+			case task.AssigneeDirectManager:
+				// 模式 A/B：提单人的直属上级（level=0）或沿链再往上第 N 级。
+				// 未命中时**先往上找**（退到组织的轴：申请人部门负责人），
+				// 再失败才由调用方落兜底组——与设计"先往上找，最后兜底"一致。
+				assignee = e.resolveDirectManagerAssignee(ctx, instance, approvalRequester, task.AssigneeManagerLevel)
+				if assignee == "" {
+					assignee = e.resolveApprovalAssignee(ctx, instance, approvalRequester)
+				}
 			default:
 				// 都没声明：解析申请人自己所在部门的负责人（这次会话早前已经做的部分）
 				assignee = e.resolveApprovalAssignee(ctx, instance, approvalRequester)
@@ -2164,6 +2172,37 @@ func (e *CustomProcessEngine) resolveGmChainAssignee(ctx context.Context, instan
 		return ""
 	}
 	return strconv.Itoa(gm.UserID)
+}
+
+// resolveDirectManagerAssignee 沿申请人自己的**个人汇报链**解析"直属上级"或"再往上第 N 级"。
+//
+// 解析器内部会跳过非在职的上级继续上溯；未命中（链到顶 / 既有脏环 / 租户内查不到）
+// 返回空，调用方会先退到组织的轴、再落兜底组。解析出的审批人若是申请人本人，
+// 同样按未命中处理——避免自己审批自己。
+func (e *CustomProcessEngine) resolveDirectManagerAssignee(ctx context.Context, instance *ent.ProcessInstance, requester *ent.User, level int) string {
+	if requester == nil {
+		return ""
+	}
+	approvers, err := approver.NewDirectManagerResolver(level).Resolve(ctx, e.client, &approver.ApproverContext{
+		TenantID:    instance.TenantID,
+		RequesterID: requester.ID,
+	})
+	if err != nil || len(approvers) == 0 {
+		e.logger.Infow(
+			"未在汇报链上解析到审批人，继续往上找",
+			"requesterID", requester.ID, "level", level, "error", err,
+		)
+		return ""
+	}
+	manager := approvers[0]
+	if manager.UserID == requester.ID {
+		e.logger.Infow(
+			"汇报链解析出的审批人是申请人本人，继续往上找",
+			"requesterID", requester.ID, "level", level,
+		)
+		return ""
+	}
+	return strconv.Itoa(manager.UserID)
 }
 
 // resolveRoleCandidates 查询该租户下所有 active 且（主角色等于 roleCode，或通过

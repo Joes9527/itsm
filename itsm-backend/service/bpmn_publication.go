@@ -99,8 +99,11 @@ func (e *CustomProcessEngine) ValidateDefinitionForPublication(ctx context.Conte
 			if t.TaskPurpose == "approval" {
 				approvals++
 			}
-			if t.AssigneeSource == "" && strings.TrimSpace(t.Assignee) == "" && strings.TrimSpace(t.CandidateUsers) == "" && strings.TrimSpace(t.CandidateGroups) == "" && strings.TrimSpace(t.AssigneeRole) == "" && !t.AssigneeGmChain && t.AssigneeDeptId <= 0 && t.AssigneeTeamId <= 0 && t.AssigneeProjectId <= 0 && t.AssigneeTempTeamId <= 0 {
+			if t.AssigneeSource == "" && strings.TrimSpace(t.Assignee) == "" && strings.TrimSpace(t.CandidateUsers) == "" && strings.TrimSpace(t.CandidateGroups) == "" && strings.TrimSpace(t.AssigneeRole) == "" && !t.AssigneeGmChain && !t.AssigneeDirectManager && t.AssigneeDeptId <= 0 && t.AssigneeTeamId <= 0 && t.AssigneeProjectId <= 0 && t.AssigneeTempTeamId <= 0 {
 				return &bpmn.PublicationConfigurationError{Message: fmt.Sprintf("task %q requires candidate resolution configuration", t.ID)}
+			}
+			if t.AssigneeDirectManager && t.AssigneeManagerLevel < 0 {
+				return &bpmn.PublicationConfigurationError{Message: fmt.Sprintf("task %q requires a non-negative manager level", t.ID)}
 			}
 			for _, source := range fixedScopeApproverSources(t, tenantID) {
 				candidates, err := source.resolver.Resolve(ctx, client, &source.context)
