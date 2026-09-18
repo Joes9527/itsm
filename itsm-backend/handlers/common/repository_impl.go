@@ -15,6 +15,9 @@ import (
 
 type EntRepository struct {
 	client *ent.Client
+	// childrenPageSize 覆盖单页下级数量上限；0 表示用 maxDepartmentChildren。
+	// 存在的意义是让"超限必须标记 Truncated"这条路径能被廉价地真正测到。
+	childrenPageSize int
 }
 
 func NewEntRepository(client *ent.Client) *EntRepository {
@@ -208,12 +211,18 @@ func (r *EntRepository) CreateDepartment(ctx context.Context, d *Department) (*D
 	if exists {
 		return nil, fmt.Errorf("department code already exists: %s", d.Code)
 	}
+	// 类型词汇表的唯一权威在此把关：任何调用方都不得写入无法解释的类型。
+	nodeType, err := NormalizeDepartmentNodeType(d.NodeType)
+	if err != nil {
+		return nil, err
+	}
 	builder := r.client.Department.Create().
 		SetName(d.Name).
 		SetCode(d.Code).
 		SetDescription(d.Description).
 		SetManagerID(d.ManagerID).
-		SetTenantID(d.TenantID)
+		SetTenantID(d.TenantID).
+		SetNodeType(nodeType)
 
 	if d.ParentID != 0 {
 		builder.SetParentID(d.ParentID)
@@ -293,12 +302,24 @@ func (r *EntRepository) GetDepartmentTree(ctx context.Context, tenantID int) ([]
 
 const maxDepartmentChildren = 500
 
+// departmentChildrenLimit 返回单页下级数量的上限。
+// 测试可设小值走同一条代码路径（与 subtreeNodeBudget 同风格）。
+func (r *EntRepository) departmentChildrenLimit() int {
+	if r.childrenPageSize > 0 {
+		return r.childrenPageSize
+	}
+	return maxDepartmentChildren
+}
+
 // ListDepartmentChildren 只返回直接下级，且只带展示必需字段。
 // 全树近 8000 个节点，禁止把完整实体一次性下发给前端。
 //
+// 单页装不下时**显式**返回 Truncated=true，绝不静默丢弃多余行。
 // 注意 parent_id 是可空列：根节点在库里是 NULL 而不是 0，
 // 所以 parentID==0 必须显式查 NULL，否则根节点一个都取不到。
-func (r *EntRepository) ListDepartmentChildren(ctx context.Context, tenantID, parentID int) ([]*DepartmentNode, error) {
+func (r *EntRepository) ListDepartmentChildren(ctx context.Context, tenantID, parentID int) (*DepartmentChildren, error) {
+	limit := r.departmentChildrenLimit()
+
 	parentPredicate := department.ParentIDEQ(parentID)
 	if parentID == 0 {
 		parentPredicate = department.Or(
@@ -307,6 +328,7 @@ func (r *EntRepository) ListDepartmentChildren(ctx context.Context, tenantID, pa
 		)
 	}
 
+	// 多取一行用于探测"还有更多"，多出的那一行不返回但会体现在 Truncated 上。
 	rows, err := r.client.Department.Query().
 		Where(
 			department.TenantID(tenantID),
@@ -314,13 +336,14 @@ func (r *EntRepository) ListDepartmentChildren(ctx context.Context, tenantID, pa
 			department.DeletedAtIsNil(),
 		).
 		Order(ent.Asc(department.FieldCode)).
-		Limit(maxDepartmentChildren + 1).
+		Limit(limit + 1).
 		All(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if len(rows) > maxDepartmentChildren {
-		rows = rows[:maxDepartmentChildren]
+	truncated := len(rows) > limit
+	if truncated {
+		rows = rows[:limit]
 	}
 
 	parentIDs := make([]int, 0, len(rows))
@@ -358,7 +381,7 @@ func (r *EntRepository) ListDepartmentChildren(ctx context.Context, tenantID, pa
 			HasChildren: hasChildren,
 		})
 	}
-	return result, nil
+	return &DepartmentChildren{Items: result, Truncated: truncated}, nil
 }
 
 func (r *EntRepository) UpdateDepartment(ctx context.Context, d *Department) (*Department, error) {
@@ -371,12 +394,18 @@ func (r *EntRepository) UpdateDepartment(ctx context.Context, d *Department) (*D
 	if exists {
 		return nil, fmt.Errorf("department code already exists: %s", d.Code)
 	}
+	// 与创建路径同一把权威：类型词汇表只在这里解释。
+	nodeType, err := NormalizeDepartmentNodeType(d.NodeType)
+	if err != nil {
+		return nil, err
+	}
 	builder := r.client.Department.UpdateOneID(d.ID).
 		Where(department.TenantID(d.TenantID), department.DeletedAtIsNil()).
 		SetName(d.Name).
 		SetCode(d.Code).
 		SetDescription(d.Description).
-		SetManagerID(d.ManagerID)
+		SetManagerID(d.ManagerID).
+		SetNodeType(nodeType)
 
 	if d.ParentID != 0 {
 		builder.SetParentID(d.ParentID)

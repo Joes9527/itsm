@@ -51,6 +51,15 @@ type DepartmentNode struct {
 	HasChildren bool   `json:"hasChildren"`
 }
 
+// DepartmentChildren 是"某父节点的直接下级"这一页结果。
+//
+// Truncated 为真表示还有下级没有返回。调用方**必须显式处理**这个标记，
+// 不能把一页当成完整列表——静默截断会让界面显示一棵看起来完整但实际缺失的树。
+type DepartmentChildren struct {
+	Items     []*DepartmentNode `json:"items"`
+	Truncated bool              `json:"truncated"`
+}
+
 // Team represents a group of users
 type Team struct {
 	ID          int       `json:"id"`
