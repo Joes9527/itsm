@@ -48,14 +48,31 @@ const RESET = [
   { name: 'RestOutlined', note: '沙漏/休息语义，不建议', tone: 'cand' },
 ];
 
-const KEEP = [
-  { name: 'RotateCcw', note: '逆时针 —— 保留给「重试」（3 处）与「版本回滚」（2 处）', lucide: true },
+/**
+ * 批次 2 落地后还剩 7 个按钮位是 lucide 的 RotateCcw。它们的语义都对（逆时针），
+ * 所以批次 2 按「只换 glyph」的契约没碰；但库没换，antd 的尺寸继承就仍然不生效。
+ * 这三节是给这 7 个位的选型对照。
+ */
+const RETRY = [
+  { name: 'RotateCcw', note: '当前：lucide 逆时针（迁移时按 DEFERRED 跳过）', lucide: true, tone: 'current' },
+  { name: 'SyncOutlined', note: '与「刷新」同形。重试本来就是「再执行一次」，UI 上不区分是常规做法（Gmail/Chrome 都这样）', tone: 'cand' },
+  { name: 'RedoOutlined', note: '顺时针重做，偏「重做上一步操作」', tone: 'cand' },
+  { name: 'ReloadOutlined', note: '顺时针重载，目前全仓 0 处在用', tone: 'cand' },
+  { name: 'UndoOutlined', note: '逆时针撤销，偏「回到上一步」而不是「再来一次」', tone: 'cand' },
+];
+
+const ROLLBACK = [
+  { name: 'RotateCcw', note: '当前：lucide 逆时针（迁移时按 DEFERRED 跳过）', lucide: true, tone: 'current' },
+  { name: 'RollbackOutlined', note: '回退箭头，名字就是「回滚」—— 用于「回滚」「恢复到此版本」', tone: 'cand' },
+  { name: 'UndoOutlined', note: '逆时针撤销，形状最接近现在的 RotateCcw', tone: 'cand' },
+  { name: 'HistoryOutlined', note: '时钟回溯，偏「历史记录」而不是「执行回滚」', tone: 'cand' },
+  { name: 'RestOutlined', note: '沙漏/休息语义，不建议', tone: 'cand' },
 ];
 
 const btn = (iconHtml, { size = 'md', type = 'default', label = '' } = {}) =>
   `<span class="btn btn-${size} btn-${type}">${iconHtml}${label ? `<span class="lbl">${label}</span>` : ''}</span>`;
 
-function row(item, html) {
+function row(item, html, label) {
   return `
     <div class="row row-${item.tone || 'cand'}">
       <div class="glyph">${html}</div>
@@ -65,15 +82,19 @@ function row(item, html) {
       </div>
       <div class="samples">
         <div class="sample"><span class="cap">纯图标 · small 29px</span>${btn(html, { size: 'sm', type: 'primary' })}</div>
-        <div class="sample"><span class="cap">带文字 · small</span>${btn(html, { size: 'sm', type: 'primary', label: '刷新' })}</div>
-        <div class="sample"><span class="cap">带文字 · middle 34px</span>${btn(html, { size: 'md', type: 'default', label: '刷新' })}</div>
+        <div class="sample"><span class="cap">带文字 · small</span>${btn(html, { size: 'sm', type: 'primary', label })}</div>
+        <div class="sample"><span class="cap">带文字 · middle 34px</span>${btn(html, { size: 'md', type: 'default', label })}</div>
       </div>
     </div>`;
 }
 
-const refreshRows = REFRESH.map(c => row(c, icon(c.name))).join('');
-const resetRows = RESET.map(c => row(c, icon(c.name))).join('');
-const keepRows = (await Promise.all(KEEP.map(async c => row(c, await lucideIcon(c.name))))).join('');
+const renderRows = async (list, label) =>
+  (await Promise.all(list.map(async c => row(c, c.lucide ? await lucideIcon(c.name) : icon(c.name), label)))).join('');
+
+const refreshRows = await renderRows(REFRESH, '刷新');
+const resetRows = await renderRows(RESET, '重置');
+const retryRows = await renderRows(RETRY, '重试');
+const rollbackRows = await renderRows(ROLLBACK, '回滚');
 
 const html = `<!doctype html>
 <html lang="zh-CN">
@@ -159,11 +180,23 @@ const html = `<!doctype html>
   </p>
   <div class="card">${resetRows}</div>
 
-  <h2>三、保持不动</h2>
+  <h2>三、重试：3 处，语义是对的但库没换</h2>
   <p class="lede">
-    这几个位置的逆时针箭头是对的，迁移时已按 DEFERRED 跳过，不参与本次选型。
+    <code>error.tsx</code>、<code>BusinessPageTemplate.tsx:493</code>、
+    <code>LoadingEmptyError.tsx:217</code>。逆时针箭头做「重试」不算错，所以批次 2 按
+    「只换 glyph」的契约没碰。但它们<strong>仍在 lucide 上</strong>——lucide 把
+    <code>width/height</code> 写成 SVG 呈现属性，永远赢过 antd 的继承，所以这 3 个按钮
+    还是带着整个改动要消除的那个尺寸问题。
   </p>
-  <div class="card">${keepRows}</div>
+  <div class="card">${retryRows}</div>
+
+  <h2>四、回滚 / 恢复：4 处，同上</h2>
+  <p class="lede">
+    <code>ReleaseDetail.tsx:392</code>（回滚，danger）、<code>workflow/versions/page.tsx:153</code>（回滚）、
+    <code>ArticleVersionControl.tsx:188</code>（恢复到此版本，纯图标）、
+    <code>notifications/page.tsx:718</code>（恢复默认）。
+  </p>
+  <div class="card">${rollbackRows}</div>
 </div>
 </body>
 </html>`;

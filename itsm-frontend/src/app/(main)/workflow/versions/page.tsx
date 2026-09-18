@@ -2,12 +2,12 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { App, Button, Card, Descriptions, Modal, Select, Space, Table, Tag } from 'antd';
-import { RotateCcw } from 'lucide-react';
 import {
   DiffOutlined,
   DownloadOutlined,
   EyeOutlined,
   PlayCircleOutlined,
+  RollbackOutlined,
   SyncOutlined,
 } from '@ant-design/icons';
 import { useSearchParams } from 'next/navigation';
@@ -150,7 +150,7 @@ export default function WorkflowVersionsPage() {
             />
             <Button
               type="text"
-              icon={<RotateCcw className="h-4 w-4" />}
+              icon={<RollbackOutlined aria-hidden="true" />}
               aria-label={`回滚到版本 v${record.version}`}
               onClick={() => {
                 modal.confirm({

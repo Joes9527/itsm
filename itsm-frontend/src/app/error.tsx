@@ -2,8 +2,10 @@
 
 import React, { useEffect } from 'react';
 import { Result, Button } from 'antd';
-import { RotateCcw } from 'lucide-react';
-import { DashboardOutlined } from '@ant-design/icons';
+import {
+  DashboardOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { getDefaultHomePath } from '@/config/persona/persona-config';
 import { useAuthStore } from '@/lib/store/auth-store';
@@ -33,7 +35,7 @@ export default function Error({
         title={<span className="text-[24px] font-semibold">页面出错了</span>}
         subTitle="抱歉，页面遇到了一个意外错误。请尝试重试或返回仪表盘。"
         extra={[
-          <Button key="retry" type="primary" icon={<RotateCcw />} onClick={() => reset()}>
+          <Button key="retry" type="primary" icon={<SyncOutlined aria-hidden="true" />} onClick={() => reset()}>
             重试
           </Button>,
           <Button

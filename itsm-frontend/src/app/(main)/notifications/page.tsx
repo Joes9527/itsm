@@ -24,10 +24,11 @@ import {
   Tooltip,
   Popconfirm,
 } from 'antd';
-import { Bell, Mail, MessageSquare, Smartphone, Settings, CheckCircle, Clock, RotateCcw, Search, Filter, Wifi, WifiOff } from 'lucide-react';
+import { Bell, Mail, MessageSquare, Smartphone, Settings, CheckCircle, Clock, Search, Filter, Wifi, WifiOff } from 'lucide-react';
 import {
   DeleteOutlined,
   EyeOutlined,
+  RollbackOutlined,
   SyncOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -715,7 +716,7 @@ export default function NotificationsPage() {
         <Card>
           <div className='mb-4 flex items-center justify-between'>
             <Title level={4}>{t('notifications.preferences')}</Title>
-            <Button icon={<RotateCcw className='h-4 w-4' />} onClick={handleResetPreferences}>
+            <Button icon={<RollbackOutlined aria-hidden="true" />} onClick={handleResetPreferences}>
               {t('notifications.resetDefault')}
             </Button>
           </div>

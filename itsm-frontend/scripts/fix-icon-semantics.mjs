@@ -41,6 +41,31 @@ const RESET_TEXT = /重置|清空|清除/;
 /** i18n key 形态的「恢复默认」 */
 const RESTORE_KEY = /resetDefault|restoreDefault|resetToDefault/i;
 
+/**
+ * 批次 2b：7 个「语义本来就对、只是库还没换」的按钮位。
+ *
+ * 这批**不靠文案/处理函数推断**——是 2026-09-18 人工看对照页逐个选定的
+ * （对照页见 scripts/glyph-sheet.mjs 第三、四节）。所以用白名单：文件 -> 目标 glyph。
+ * 每个文件必须**恰好命中 1 处** lucide 的 RotateCcw 按钮图标；不按行号认（行号会随
+ * 别的改动漂），多一处少一处都拒绝改动并报出来。
+ *
+ * 为什么不并进上面那套启发式：上面那批是「语义倒置」，判定能从证据推出来；
+ * 这批是「语义正确、换个库」，只有人看过图才能定。两种性质不能混在一个判定函数里。
+ */
+const EXPLICIT = [
+  { file: 'src/app/error.tsx', to: 'SyncOutlined', what: '重试' },
+  { file: 'src/components/layout/BusinessPageTemplate.tsx', to: 'SyncOutlined', what: '重试' },
+  { file: 'src/components/ui/LoadingEmptyError.tsx', to: 'SyncOutlined', what: '重试' },
+  { file: 'src/components/release/ReleaseDetail.tsx', to: 'RollbackOutlined', what: '回滚' },
+  { file: 'src/app/(main)/workflow/versions/page.tsx', to: 'RollbackOutlined', what: '回滚' },
+  {
+    file: 'src/components/knowledge/ArticleVersionControl.tsx',
+    to: 'RollbackOutlined',
+    what: '恢复到此版本',
+  },
+  { file: 'src/app/(main)/notifications/page.tsx', to: 'RollbackOutlined', what: '恢复默认' },
+];
+
 /** 只影响布局的 class，换 antd 后由 token 接管，应当剥掉 */
 const LAYOUT_CLASS = [
   /^[wh]-\d+$/,
@@ -171,7 +196,7 @@ function classify({ text, ariaLabel, title, handler, icon }) {
   return { action: 'skip', why: `图标 ${icon} 但不像重置（文案「${hay}」），不动` };
 }
 
-function processFile(file) {
+function processFile(file, explicitTo) {
   const src = readFileSync(file, 'utf8');
   const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 
@@ -186,6 +211,8 @@ function processFile(file) {
 
   const rows = [];
   const visits = [];
+  /** 文件里所有「按钮 + lucide 图标」的位点，供批次 2b 的白名单核对 */
+  const lucideSites = [];
   const lineOf = n => sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1;
 
   const visit = node => {
@@ -206,6 +233,7 @@ function processFile(file) {
       if (iconEl) {
         const tag = iconEl.tagName.getText(sf);
         const exported = lucideNames.get(tag) || tag; // antd 图标直接用标签名
+        if (lucideNames.has(tag)) lucideSites.push({ iconEl, tag, exported });
         const get = n => attrs.find(a => attrName(a) === n);
         // 可访问名称常写成模板字符串：aria-label={`回滚到版本 v${record.version}`}。
         // 取字面量头部即可——判定靠中文动作词，变量尾部不会含这些词。
@@ -247,6 +275,12 @@ function processFile(file) {
           icon: exported,
         });
 
+        // 幂等：目标 glyph 和现状相同就没什么可做的（重复跑一遍不该再报一遍）。
+        // 例：TicketAdvancedSearch 的重置已经是 ClearOutlined，再判一次还是 reset。
+        if ((verdict.action === 'refresh' || verdict.action === 'reset') && verdict.to === exported) {
+          verdict = { action: 'skip', why: `已经是 ${exported}，无需改动` };
+        }
+
         // 要落盘的位点再看一眼图标自身的属性：有没法安全保留的东西就退回「拒绝改动」。
         let kept = [];
         if (verdict.action === 'refresh' || verdict.action === 'reset') {
@@ -267,6 +301,57 @@ function processFile(file) {
   };
   visit(sf);
 
+  // ---- 批次 2b：白名单位点 ----
+  if (explicitTo) {
+    // 启发式那套永远不碰 RotateCcw（判定结果只有 keep/unknown），所以两边不会撞车
+    const hits = lucideSites.filter(s => s.exported === 'RotateCcw');
+    if (hits.length !== 1) {
+      rows.push({
+        file,
+        line: 0,
+        icon: 'RotateCcw',
+        tag: 'RotateCcw',
+        action: 'unknown',
+        why: `白名单要求恰好 1 处 lucide RotateCcw 按钮图标，实际找到 ${hits.length} 处，拒绝改动`,
+      });
+    } else {
+      const site = hits[0];
+      const attrs = iconAttrs(site.iconEl, sf);
+      if (!attrs.ok) {
+        rows.push({
+          file,
+          line: lineOf(site.iconEl),
+          icon: 'RotateCcw',
+          tag: site.tag,
+          action: 'unknown',
+          why: `人工选型 -> ${explicitTo} 被拒：${attrs.reason}`,
+        });
+      } else {
+        // 启发式对同一个位点已经报过一次「推不出意图」（如 LoadingEmptyError 的
+        // config.onAction）。人工选型覆盖它，同一处别报两遍。
+        const at = lineOf(site.iconEl);
+        for (let i = rows.length - 1; i >= 0; i--) if (rows[i].line === at) rows.splice(i, 1);
+
+        rows.push({
+          file,
+          line: at,
+          icon: 'RotateCcw',
+          tag: site.tag,
+          action: 'explicit',
+          to: explicitTo,
+          why: `人工选型 -> ${explicitTo}`,
+        });
+        visits.push({
+          iconEl: site.iconEl,
+          tag: site.tag,
+          to: explicitTo,
+          from: 'RotateCcw',
+          kept: attrs.kept,
+        });
+      }
+    }
+  }
+
   return { src, sf, rows, visits, lucide, antd };
 }
 
@@ -277,10 +362,26 @@ const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 const allRows = [];
 const plan = [];
 
+const explicitByFile = new Map(EXPLICIT.map(e => [e.file, e]));
+
 for (const file of walk(path.join(root, 'src'))) {
-  const { src, sf, rows, visits, lucide, antd } = processFile(file);
+  const entry = explicitByFile.get(path.relative(root, file));
+  if (entry && entry.to === 'RotateCcw') {
+    throw new Error(`白名单把 ${entry.file} 指到 RotateCcw —— 那正是要换掉的图标，写错了`);
+  }
+  const { src, sf, rows, visits, lucide, antd } = processFile(file, entry?.to);
   allRows.push(...rows);
   if (visits.length) plan.push({ file, src, sf, visits, lucide, antd });
+}
+
+// 白名单里的文件必须都真的命中了（改名/移动/行内结构变了都会在这里露出来）。
+// 漏一个就整体停下不落盘——半个白名单比没有白名单更糟。
+const seen = new Set(allRows.filter(r => r.action === 'explicit').map(r => path.relative(root, r.file)));
+const missed = EXPLICIT.filter(e => !seen.has(e.file));
+if (missed.length) {
+  for (const e of missed) console.error(`✗ 白名单没命中：${e.file}（${e.what}）—— 文件改名了？还是图标已不是 lucide RotateCcw？`);
+  console.error('拒绝落盘。');
+  process.exit(1);
 }
 
 const rel = f => path.relative(root, f);
@@ -288,6 +389,10 @@ const by = a => allRows.filter(r => r.action === a);
 
 for (const r of by('refresh')) console.log(`刷新  ${rel(r.file)}:${r.line}  ${r.icon} -> ${r.to}   [${r.why}]`);
 for (const r of by('reset')) console.log(`重置  ${rel(r.file)}:${r.line}  ${r.icon} -> ${r.to}   [${r.why}]`);
+if (by('explicit').length) {
+  console.log('\n批次 2b（人工选型，白名单）：');
+  for (const r of by('explicit')) console.log(`  ${rel(r.file)}:${r.line}  ${r.icon} -> ${r.to}`);
+}
 console.log(`\n保持不动 ${by('keep').length} 处：`);
 for (const r of by('keep')) console.log(`  ${rel(r.file)}:${r.line}  ${r.icon}   [${r.why}]`);
 
@@ -296,7 +401,10 @@ if (by('unknown').length) {
   for (const r of by('unknown')) console.log(`  ${rel(r.file)}:${r.line}  ${r.why}`);
 }
 
-console.log(`\n合计：刷新 ${by('refresh').length} | 重置 ${by('reset').length} | 不动 ${by('keep').length} | 待判 ${by('unknown').length}`);
+console.log(
+  `\n合计：刷新 ${by('refresh').length} | 重置 ${by('reset').length} | 批次2b ${by('explicit').length}` +
+    ` | 不动 ${by('keep').length} | 待判 ${by('unknown').length}`
+);
 
 if (!write) {
   console.log('\n（干跑，加 --write 落盘）');

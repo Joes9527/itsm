@@ -21,8 +21,11 @@ import {
   Modal,
   Input,
 } from 'antd';
-import { Clock, CheckCircle, Rocket, RotateCcw } from 'lucide-react';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { Clock, CheckCircle, Rocket } from 'lucide-react';
+import {
+  ArrowLeftOutlined,
+  RollbackOutlined,
+} from '@ant-design/icons';
 import { useParams, useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
@@ -389,7 +392,7 @@ const ReleaseDetail: React.FC = () => {
             </Button>
           )}
           {['in-progress', 'completed', 'failed'].includes(release.status) && (
-            <Button danger icon={<RotateCcw />} onClick={requestRollback}>
+            <Button danger icon={<RollbackOutlined aria-hidden="true" />} onClick={requestRollback}>
               回滚
             </Button>
           )}

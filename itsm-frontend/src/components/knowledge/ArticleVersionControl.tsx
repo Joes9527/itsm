@@ -20,10 +20,11 @@ import {
   message,
   Spin,
 } from 'antd';
-import { GitBranch, History, RotateCcw, GitCommit, User, Calendar, FileText, AlertTriangle, CheckCircle } from 'lucide-react';
+import { GitBranch, History, GitCommit, User, Calendar, FileText, AlertTriangle, CheckCircle } from 'lucide-react';
 import {
   EyeOutlined,
   MergeOutlined,
+  RollbackOutlined,
 } from '@ant-design/icons';
 import { KnowledgeBaseApi } from '@/lib/api/knowledge-base-api';
 import type { ArticleVersion } from '@/types/knowledge-base';
@@ -185,7 +186,7 @@ const ArticleVersionControl: React.FC<ArticleVersionControlProps> = ({
                 description={`确定要恢复到版本 ${record.version} 吗？`}
                 onConfirm={() => handleRestoreVersion(record.version)}
               >
-                <Button aria-label="恢复到此版本" type="text" icon={<RotateCcw className="w-4 h-4 text-orange-500" />} />
+                <Button aria-label="恢复到此版本" type="text" icon={<RollbackOutlined aria-hidden="true" className="text-orange-500" />} />
               </Popconfirm>
             </Tooltip>
           )}
