@@ -3,16 +3,13 @@
 import React, { useMemo, useCallback, useState } from 'react';
 import { List } from 'react-window';
 import { Checkbox, Button, Space, Tooltip, Dropdown, Badge, Avatar } from 'antd';
+import { FileText, Users, TrendingUp, AlertTriangle } from 'lucide-react';
 import {
-  FileText,
-  Eye,
-  Edit,
-  Activity,
-  Users,
-  TrendingUp,
-  AlertTriangle,
-  MoreHorizontal,
-} from 'lucide-react';
+  DotChartOutlined,
+  EditOutlined,
+  EyeOutlined,
+  MoreOutlined,
+} from '@ant-design/icons';
 import type {
   Ticket} from '../../lib/services/ticket-service';
 import {
@@ -224,18 +221,18 @@ const TicketRow: React.FC<{
             <Button
               type="text"
               size="small"
-              icon={<Eye size={16} />}
+              icon={<EyeOutlined aria-hidden="true" />}
               onClick={() => window.open(`/tickets/${ticket.id}`)}
             />
           </Tooltip>
           <Tooltip title="Edit">
-            <Button type="text" size="small" icon={<Edit size={16} />} onClick={handleEdit} />
+            <Button type="text" size="small" icon={<EditOutlined aria-hidden="true" />} onClick={handleEdit} />
           </Tooltip>
           <Tooltip title="View Activity Log">
             <Button
               type="text"
               size="small"
-              icon={<Activity size={16} />}
+              icon={<DotChartOutlined aria-hidden="true" />}
               onClick={handleViewActivity}
             />
           </Tooltip>
@@ -255,7 +252,7 @@ const TicketRow: React.FC<{
             }}
             trigger={['click']}
           >
-            <Button type="text" size="small" icon={<MoreHorizontal size={16} />} />
+            <Button type="text" size="small" icon={<MoreOutlined aria-hidden="true" />} aria-label="更多操作" />
           </Dropdown>
         </Space>
       </div>

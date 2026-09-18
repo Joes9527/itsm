@@ -17,17 +17,16 @@ import {
   Col,
   Divider,
 } from 'antd';
+import { RotateCcw, AlertCircle } from 'lucide-react';
 import {
-  Filter,
-  Plus,
-  Pencil,
-  Trash2,
-  Download,
-  Eye,
-  RotateCcw,
-  AlertCircle,
-  CheckCircle,
-} from 'lucide-react';
+  CheckCircleOutlined,
+  DeleteOutlined,
+  DownloadOutlined,
+  EditOutlined,
+  EyeOutlined,
+  FilterOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import type { ColumnsType, TableProps, TablePaginationConfig } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { useRouter } from 'next/navigation';
@@ -417,7 +416,7 @@ const TicketList: React.FC<TicketListProps> = ({
                 <Button
                   type="text"
                   aria-label="查看工单"
-                  icon={<Eye size={16} />}
+                  icon={<EyeOutlined aria-hidden="true" />}
                   onClick={() => openTicket(record)}
                 />
               </Tooltip>
@@ -425,7 +424,7 @@ const TicketList: React.FC<TicketListProps> = ({
                 <Button
                   type="text"
                   aria-label="编辑工单"
-                  icon={<Pencil size={16} />}
+                  icon={<EditOutlined aria-hidden="true" />}
                   onClick={() => router.push(`/tickets/${record.id}?mode=edit`)}
                 />
               </Tooltip>
@@ -434,7 +433,7 @@ const TicketList: React.FC<TicketListProps> = ({
                   <Button
                     type="text"
                     aria-label="关闭工单"
-                    icon={<CheckCircle size={16} />}
+                    icon={<CheckCircleOutlined aria-hidden="true" />}
                     onClick={() => handleClose(record)}
                   />
                 </Tooltip>
@@ -481,7 +480,7 @@ const TicketList: React.FC<TicketListProps> = ({
                   style={{ width: 300 }}
                   allowClear
                 />
-                <Button icon={<Filter />} onClick={() => setShowFilters(!showFilters)}>
+                <Button icon={<FilterOutlined aria-hidden="true" />} onClick={() => setShowFilters(!showFilters)}>
                   过滤器
                 </Button>
                 <Button icon={<RotateCcw />} onClick={handleRefresh} loading={loading}>
@@ -492,16 +491,16 @@ const TicketList: React.FC<TicketListProps> = ({
             <Col>
               <Space>
                 {selectedTickets.size > 0 && (
-                  <Button danger icon={<Trash2 />} onClick={handleBatchDelete}>
+                  <Button danger icon={<DeleteOutlined aria-hidden="true" />} onClick={handleBatchDelete}>
                     批量删除 ({selectedTickets.size})
                   </Button>
                 )}
-                <Button icon={<Download />} onClick={handleExport}>
+                <Button icon={<DownloadOutlined aria-hidden="true" />} onClick={handleExport}>
                   导出
                 </Button>
                 <Button
                   type="primary"
-                  icon={<Plus />}
+                  icon={<PlusOutlined aria-hidden="true" />}
                   onClick={() => router.push('/tickets/create')}
                 >
                   创建工单

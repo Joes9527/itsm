@@ -16,18 +16,13 @@ import {
   type MenuProps,
 } from 'antd';
 import type { MenuProps as AntdMenuProps } from 'antd';
+import { Plus, Search, RotateCcw, Table, LayoutGrid, Settings } from 'lucide-react';
 import {
-  Plus,
-  Search,
-  Filter,
-  RotateCcw,
-  Download,
-  MoreVertical,
-  Table,
-  LayoutGrid,
-  Bell,
-  Settings,
-} from 'lucide-react';
+  BellOutlined,
+  DownloadOutlined,
+  EllipsisOutlined,
+  FilterOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useDebounce } from '@/lib/component-utils';
 
@@ -341,7 +336,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
               {/* 预警按钮 */}
               {alertBadge !== undefined && onAlertClick && (
                 <Button
-                  icon={<Bell />}
+                  icon={<BellOutlined aria-hidden="true" />}
                   onClick={onAlertClick}
                   className={alertBadge > 0 ? 'text-orange-500' : ''}
                 >
@@ -369,7 +364,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
               {/* 更多操作下拉菜单 */}
               {extraActions.length > 0 && (
                 <Dropdown menu={{ items: actionMenuItems }} placement="bottomRight">
-                  <Button icon={<MoreVertical />} />
+                  <Button icon={<EllipsisOutlined aria-hidden="true" />} aria-label="更多操作" />
                 </Dropdown>
               )}
             </Space>
@@ -411,7 +406,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
               {/* 筛选按钮 */}
               {filters && (
                 <Button
-                  icon={<Filter />}
+                  icon={<FilterOutlined aria-hidden="true" />}
                   onClick={filters.onToggle}
                   type={filters.visible ? 'primary' : 'default'}
                 >
@@ -425,7 +420,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
               </Button>
 
               {/* 导出按钮 */}
-              <Button icon={<Download />}>导出</Button>
+              <Button icon={<DownloadOutlined aria-hidden="true" />}>导出</Button>
             </Space>
           </div>
 
