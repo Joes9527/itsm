@@ -1,0 +1,155 @@
+> **2026-09-14 审查后执行约束：** 本文原 S1–S9 命令记录原始交付过程；重新执行必须使用下述“审查后重放契约”，不能直接复制旧生成器命令。首期按单租户功能收口，不开展 MSP 产品扩展；旧路由经用户确认后续处理，首期使用现有分派与规范流程。历史工单等排除范围不变。
+
+# 旧 ITSM 配置主数据迁移 操作手册（可复用）
+
+- 状态：draft，供维护者复核；随任务二执行更新，不替代 G-A/G-B 门禁。
+- 日期：2026-09-14。
+- 目的：把「旧 ITSM 配置主数据 → 新 ITSM」的**全部操作、判定规则、命令与证据**记录成可复用流程，使下一次迁移照本执行即可复现。
+- 关联：[GAP 与解决方案 spec](../superpowers/specs/2026-09-14-legacy-config-migration-gap-and-solution-design.md)、[映射与日历工作簿](../review/2026-09-14-config-mapping-workbook.md)、[CTI 节点分流工作表](../review/2026-09-14-cti-mapping-worksheet.md)、[原 G-B 交接](../review/2026-09-14-workitem-config-migration-handoff.md)。
+
+## 0. 复用原则
+
+1. **单一权威**：新 ITSM 为权威；旧侧只作映射来源，禁止按名称自动合并。
+2. **身份固定**：每次迁移先固定源 manifest 摘要、目标制品摘要、`GARevision`、目标库身份与指纹；任一变化发布新修订，不沿用旧检查点。
+3. **混合树分流**：旧 CTI 不是纯分类树，必须按节点语义分流（见 §2），禁止整树当分类。
+4. **不静默**：未知枚举、孤立引用、租户错配、无落点配置显式阻塞或列差额，不静默丢弃/发明字段。
+5. **只提交脱敏证据**：原始 dump/凭据/PII 留在受保护目录，仓库只存计数与摘要。
+
+## 1. 操作步骤与命令
+
+| 步骤 | 命令（KAF worktree） | 产物 |
+| --- | --- | --- |
+| S1 抽取 | `ITSM_URL=… ITSM_USERNAME=… ITSM_PASSWORD=… .venv/bin/python scripts/fetch_itsm_master_data.py` | `data/legacy_itsm/<env>/*.json` + `manifest.json` |
+| S2 核验完整性 | `.venv/bin/python scripts/verify_legacy_master_data.py --dir data/legacy_itsm/<env> --json-out <evidence>.json` | 10/10 资源 sha256/行数一致 |
+| S3 源冲突 | `.venv/bin/python scripts/report_legacy_config_conflicts.py --legacy-dir data/legacy_itsm/<env> --as-of <cutoff> --out <md> --json-out <json>` | blockers/conflicts 清单 |
+| S3.1 授权对象解析 | `.venv/bin/python scripts/fetch_legacy_identity_objects.py --authz …/cti_authorized.json --out-dir data/legacy_itsm/identity --summary-out <json>`（只读；PII 落 gitignored 目录） | `authorizedType`→对象类型解析 |
+| S4 差异对照 | `.venv/bin/python scripts/diff_legacy_vs_new_itsm.py --legacy-dir … --out itsm/docs/migrations/<date>-diff.md` | 名称匹配口径（仅数量级参考） |
+| S5 节点分流 | 见 §2（本手册规则） | CTI 工作表 |
+| S6 目标核验 | 只读核对目标容器/库/schema/制品/账本/Phase1 行数（见 §4） | 核验记录 |
+| S7 批次 dry-run | 生成变更/拒绝/重绑清单，审查后执行 | 批次清单 |
+| S8 写入与校验 | 单事务 + 检查点（见 §5） | 批次回执 |
+| S9 业务验收 | 新建可追踪验收记录（与迁移清单隔离） | 验收记录 |
+
+## 2. 旧 CTI 节点类型判定模型（核心）
+
+旧树混了多种语义；按节点分流到不同目标维度：
+
+| 节点类型 | 判定特征 | 目标维度 | 批量 |
+| --- | --- | --- | --- |
+| `business_system` | 根为 `企业应用系统` 子树；或平铺系统名（含"系统/平台"、`*BI`） | CMDB CI（`ci_type=business_system`），开单时以 `ci_ids` 选择，**不进分类树** | B1a |
+| `ticket_category` | `OA申请` 子树（服务/动作）；动作型节点（如 `K3.5数据变更`） | `ticket_categories`，键用 seed `code` | B1b |
+| `org_location` | `本地系统-*支持中心` 及其地点子节点 | Phase 1 部门/地点（不重导） | B1c |
+| `infra_ci` | `基础架构`（网络/服务器/数据库） | CMDB CI（infra 类型） | B1d |
+| `exclude` | `test`、`test2`、`其他` | 不迁 | — |
+| `UNKNOWN` | 其余（本次：无，`KOMS主客户实施` 已归 `business_system`） | 待确认，阻塞相关批次 | — |
+
+> 判定以 `cti_tree.json` 的 `parentId/ctiName` 树形为准；同名节点以 `ctiId` 区分，不得按名合并。
+
+## 3. 映射规则
+
+- **分类**：`ticket_category` 节点 → seed `ticket_categories`（182；键 `code`）；无候选者业务确认后补建（`code/itsm_type/default_priority/sla_tier/parent_code`）。
+- **业务系统**：`business_system` 节点 → CMDB `business_system` CI（名称、环境、关键度按旧树层级/业务确认）；**不写入分类**。
+- **优先级**：P0→`urgent`/`P1`、P1→`high`/`P2`、P2→`medium`/`P3`、P3→`low`/`P4`；旧分钟数不迁移；`ticket_templates.priority` 逐项归一化。
+- **SLA**：以 seed 7 条为准；不按旧 ID。
+- **日历**：`sla_definitions.business_hours`（`work_days/start_time/end_time/time_zone/holiday_list`）；2024–2026 全国基线已展开（89 假日/19 补班）；**午休时段、周末补班、时区键未消费 = 能力差额**。
+- **矩阵**：`priority_matrix` → `ticket_automation_rules`（conditions=影响/紧急，actions=设优先级），需确认条件字段与命中顺序。
+- **路由**：`cti_authorized` → `ticket_assignment_rules`，保留 `ctiId/definitionId/taskDefKey/moduleId/租户/authorizedType/authorizedId`；`authorizedType{0,2}` 语义与 14 孤立 `ctiId`（118 路由）先处置。
+- **模块**：IN→incident、SR→service_request_item、SERVER→generic、KN→知识库（排除 WorkItem）。
+
+## 4. 目标核验（每次写入前）
+
+只读核对并记录：
+- 容器/镜像 `sha256`、库/schema、owner、PG 版本、扩展；
+- `schema_migrations` 条数与 head（本次 36 / `046_auth_token_state`，无 R038）；
+- Phase 1 行数不变量（tenants 2 / departments 7975 / users 7862 / roles 36 / permissions 349 / role_permissions 1414 / user_roles 7 / external_identities 2）；
+- 目标规范配置与业务表为空（本批前）；
+- 单一写入者与窗口确认。
+
+## 5. 批次、幂等与中断恢复契约
+
+- 依赖顺序：B0 规范配置 seed → B1 分类/资产/组织/基础设施分流 → B2 字典字段 → B3 优先级/矩阵 → B4 SLA 日历 → B5 路由 → B6 模块/流程对照。
+- 幂等键：`(source_system, resource_type, source_tenant_namespace, source_tenant_id, source_id, module_scope, target_tenant)`；一对多字典另带目标实体/字段。
+- 每批单事务 + 成功检查点原子提交；记录源 sha256、映射修订、插入/更新/拒绝、前后摘要；失败整体回滚且不推进检查点。
+- 提交后回执丢失：读检查点核对摘要，一致返回既有结果，不重复写；不确定则阻塞人工核验。
+- 源/映射摘要变化拒绝复用旧检查点。
+
+## 6. 证据与文档清单（仓库内）
+
+| 文档 | 作用 |
+| --- | --- |
+| 本手册 | 可复用流程与判定规则 |
+| `docs/superpowers/specs/2026-09-14-legacy-config-migration-gap-and-solution-design.md` | GAP 台账与决策 D1–D4 |
+| `docs/review/2026-09-14-config-mapping-workbook.md` | 优先级/SLA 日历/模块/批次 |
+| `docs/review/2026-09-14-cti-mapping-worksheet.md` | CTI 节点分流与逐节点映射 |
+| `docs/review/2026-09-14-dictionary-option-reconciliation.md` | 字典→字段选项对账（已覆盖/差额/未接纳） |
+| `docs/migrations/2026-09-14-b0-seed-admission-dry-run.md` | B0 规范 seed 准入 dry-run（纳入/排除/依赖/契约） |
+| `docs/review/2026-09-14-b0-seed-admission-evidence.md` | B0 执行证据（计数/完整性/幂等/不变量） |
+| `docs/review/2026-09-14-process-init-evidence.md` | 规范流程初始化批次执行证据（20 模板 + 7 绑定） |
+| `docs/review/2026-09-14-b1-landing-evidence.md` | B1 分类/资产落位证据 + 旧 ctiId→目标 CI 映射 |
+| `docs/review/2026-09-14-b2-dictionary-landing-evidence.md` | B2 字典选项落地证据（追加/归并/排除） |
+| `docs/review/2026-09-14-b4-sla-calendar-evidence.md` | B4 SLA 日历证据 + 能力差额（时区/午休/补班） |
+| `docs/review/2026-09-14-b3-priority-matrix-ledger.md` | B3 优先级/矩阵台账（BLOCKED + 能力差额） |
+| `docs/review/2026-09-14-b6-module-mapping-evidence.md` | B6 模块→recordClass 对照 + `ticket_types` 差额登记 |
+| `docs/review/2026-09-14-b5-routing-dry-run.md` | B5 路由 dry-run（可表达性 14/720 + 阻塞项） |
+| `docs/review/2026-09-14-b5-open-items-resolution.md` | B5 未决项处置（20 用户 id / 14 孤立 ctiId → void） |
+| `docs/review/2026-09-14-workitem-config-migration-handoff.md` | G-B 交接（消费固定 GARevision） |
+
+## 7. 决策日志
+
+| 编号 | 决策 | 来源 |
+| --- | --- | --- |
+| D1 | 新 ITSM 分类为唯一权威，旧 CTI 仅映射来源 | 用户确认 |
+| D2 | 以新 SLA 为准，旧分钟数记差异 | 用户确认 |
+| D3 | 用 `business_hours` JSON，不新增日历表 | 用户确认 |
+| D4 | 规范配置来源 = 固定制品 seed `0788a9bb` | 用户确认 |
+| S5 | 旧 CTI 混合树按节点类型分流（业务系统→CMDB CI，服务→分类） | 用户确认 |
+| S5.1 | 服务分类节点：AD账户申请→`ACC-AD-001`、O365邮箱账户申请→`COL-MAIL-001`、SSLVPN账号申请→`NET-VPN-001`、K3.5数据变更→`APP-IL-DAT-002`；邮箱导出/业务系统账号/业务系统服务→新建正式分类；`OA申请` 父容器→排除 | 用户确认 |
+| S5.2 | 配置字典按 **seed 选项集对账**：关联组精确对账（已覆盖 5 / 差额 37），其余 178 组未接纳；不整包导入。差额逐项建议（归并/新增选项/排除）**已全部采纳** | 用户确认 |
+| S6 | 路由授权语义：只读补抽 `sysUser/sysRole/sysGroup`；`authorizedType=0`→**角色**（82/82 命中 `roleId`）、`=2`→**用户**（570 行命中 `userId`；68 行/20 个 ID 未命中，阻塞相关路由） | 用户确认 + 实测 |
+| S7 | B0 准入固定 seed 规范配置（分类/SLA/目录/字段/CI类型/标签/视图等）；**`process_bindings` 拆出 B0** 至独立流程初始化批次；`departments/teams/roles` 与历史数据排除 | 用户确认 |
+| S8 | `sla_policies`(3) 与 `incident_categories`(8) **均未接纳**；事件分类概念映射到 182 树已有 38 个 `itsm_type=Incident` 分类（B0 §3.1），不新增扁平节点 | 用户确认 |
+| S9 | **B0 已执行**：`generate_seed_sql.py` 生成幂等 SQL，备份+回滚预演+单事务写入 `itsm_ga_ready`（租户 1）；结果 分类182/模板10/字段59/SLA7/目录8/CI9/标准变更3/KE1(占位)/标签4/视图5；幂等复跑 0 新增；Phase 1 不变量与账本不变 | 用户授权 + 实测 |
+| S10 | **流程初始化批次已执行**：`generate_process_sql.py` 复刻 `deployTemplate`，部署 20 个内嵌模板（源=候选工作区 bpmn，经逐字节校验与制品一致）+ 7 条 `process_bindings`；悬空绑定 0、坏 XML 0、幂等复跑 0 新增 | 用户确认 + 实测 |
+| S11 | **B1 分类/资产落位已执行**：46 个叶子（43 业务系统 + 3 基础设施）建 CMDB CI（legacy id 存 `attributes`），新建 3 分类 `COL-MAIL-004`/`ACC-LCM-003`/`APP-GEN-SVC-001`；7 容器不建 CI、17 地点归 Phase 1、4 排除；幂等复跑 0 新增。含过程修正（名称尾部竖线已纠正并加回归测试） | 用户确认 + 实测 |
+| S12 | **B2 字典选项落地已执行**：追加 25 个选项（`target_system` 9→16 ×3 模板；`service_type` 6→8；`operation` 5→7）；归并/排除仅登记不写；jsonb 包含性守卫，幂等复跑 0 新增 | 用户确认 + 实测 |
+| S13 | **B4 SLA 日历已写入**：7 条 `sla_definitions.business_hours` = 周一至五 **09:00–18:00** + 89 假日（2024=28/2025=28/2026=33）+ `Asia/Shanghai`；19 补班日单独登记。**截止计算验收 BLOCKED**：时区不消费、午休/补班不可表达（G7） | 用户确认 + 实测 |
+| S14 | **B3 记 BLOCKED**（不写目标）：优先级矩阵无持久化/无 API、维度 4×4 无模块；规则不支持 impact/urgency。交付 P0–P3 归一化映射与 86 条矩阵台账（`docs/review/2026-09-14-b3-priority-matrix-ledger.md`），列出 4 项产品决策 | 用户确认 + 实测 |
+| S15 | **B6 对照完成，无写入**：旧模块→recordClass（IN→incident、SR→service_request_item、SERVER→generic、KN→排除、问题→problem、变更→change_request）与目标一致；`ticket_types` 空表登记为"产品内置默认未初始化"差额（非旧数据迁移，本任务不迁工单历史） | 用户确认 + 实测 |
+| S16 | **B5 dry-run 完成，不写入**：规则条件仅支持 status/priority/category_id/department_id/requester_id/assignee_id，动作仅 user/round_robin/load_balance（无角色）。720 条路由仅 **14** 条落在已映射分类上可近似，**706 条不可表达**；82 条角色路由动作不支持；14 个孤立 ctiId/118 条无目标；可表达子集仍缺旧→新用户 id 映射 | 用户确认 + 实测 |
+| S17 | **B5 未决项已处置**：20 个 `authorizedId` 在全量 `sys_user`(12,387) 中不存在（已删除用户）→ 68 条路由 **void**；14 个孤立 ctiId 不在 CTI 树(82) 中（已删除节点）→ 118 条路由 **void**；可表达子集由 14 降至 **9** 条（需旧→新用户 id 映射） | 用户确认 + 实测 |
+
+## 7.1 删除/排除登记（不得在后续批次再纳入）
+
+| 对象 | ctiId | 处置 | 日期 | 依据 |
+| --- | --- | --- | --- | --- |
+| `OA申请`（父容器） | `6217e2ebb22b4ef890d0af9af31c8f7a` | 迁移排除/删除，不写入目标；**不改动旧源数据** | 2026-09-14 | 用户确认 |
+| 20 个已批准排除的用户 id（68 条路由的 `authorizedId`） | — | **失效（void，已确认）**，不迁移；详见 `docs/review/2026-09-14-b5-open-items-resolution.md` | 2026-09-14 | 全量 `sys_user`(12,387) 比对 |
+| 14 个已批准排除的 CTI 节点（118 条路由） | 见处置文档 | **失效（void，已确认）**，不迁移 | 2026-09-14 | 全量 CTI 树(82) 比对 |
+
+
+R8 修订：上述批准对象的唯一机器可读范围为[批准范围 JSON](../review/2026-09-14-routing-void-approval.json)，说明见[处置修订](../review/2026-09-14-b5-open-items-resolution.md)。68与118条集合交集4条，排除并集182，剩余538。现有身份快照缺历史分页manifest，缺失不等于已证明删除；本轮固定的是既有批准范围。后续来源、输入摘要或对象范围变化须重新评估，不能沿用计数自动扩展排除。
+
+## 8. 下一次迁移复用清单
+
+- [ ] 换 `ITSM_URL` 重跑 S1–S3，比对 manifest 摘要。
+- [ ] 固定新目标制品/库身份与 `GARevision`。
+- [ ] 复用 §2 节点类型判定与 §3 映射规则；仅复核有变化的企业口径。
+- [ ] 按 §5 批次与幂等契约执行；每批留证。
+- [ ] 更新本手册的决策日志与证据清单。
+
+## 审查后重放契约（R1–R8）
+
+以下约束适用于修复后的五个 ITSM SQL 生成器。原始已执行批次没有原子收据；不得给既有目标补造历史，也不得为取得收据清空目标。
+
+1. 固定运行时配置源（G-A 的 `0788a9bb196ab37a8389b3f366bed9877b2f72c3` seed 与 BPMN）及生成器修订。生成器工作树的同名 seed 不一定与固定制品一致。
+2. 每批独立保存 `--batch-context <json>`：`database`、`schema`、完整 `ga_revision`、完整 `code_revision`、`actor`、`source_id`、`expected_pre_state_sha256`。生成器还将实际输入文件的字节摘要纳入上下文；不要填凭据。
+3. 保持该批原输入参数，加 `--preflight-out <sql>`（同时给 `--out <batch.sql>`）。在明确的目标数据库、schema 中以只读事务执行预检 SQL；审核对象及状态后，将输出摘要写入该批 context。预检本身不是准入，也不会生成执行 SQL。
+4. 去掉 `--preflight-out` 后生成执行 SQL。复核目标、单一写入窗口、备份和回滚预演，再执行。执行 SQL 将数据与 `config_migration_control.receipts` 收据放在同一事务，校验目标、预状态、源及映射，并锁定本批涉及的表。
+5. 立即使用**同一 SQL / 同一 context**重试，确认收据和结果不变。源、映射、上下文或已写对象漂移时拒绝自动执行。不要通过改写原 context 或收据来消除错误。
+6. 按 B0 → 规范流程 → B1 → B2 → B4 顺序执行。后续批次可能合法改变早期批次对象；此后重跑早期批次会拒绝漂移。所谓幂等证据是每批提交后的同制品即时重试，不是任意顺序反复覆盖。
+7. B0 / 流程 / B1 首次执行遇无收据的已有目标对象会拒绝；B2 / B4 必须与已审预状态一致。B4 只处理固定七个 SLA 身份，不更新操作员后增 SLA。
+8. `config_migration_control` 是工具收据 schema，不是 Ent 迁移账本或 P037 初始化账本。该 schema 的创建必须包含在目标准入与权限评审中，不能据工具测试宣称 G-A 自动延续。本次验证先使用独立恢复夹具 `gb-remediation-test-pg-20260914/gb_replay_review`。
+
+KAF 身份抽取工具修复固定在 `e6fd8a50368a15505c98c8826dee5af975cef5c2`。`fetch_legacy_identity_objects.py` 必须提供 `--authz-manifest`，并验证来源环境、URL、文件摘要、完整分页与身份清单。旧身份缓存缺少完整性 manifest，不能当作完整抽取，不补造 manifest，也不据此认定源记录已删除。历史批准排除范围只按 [固定 void 批准输入](../review/2026-09-14-routing-void-approval.json) 消费。
+
+用户已确认：优先级以新规范为准，无法确定的旧规则保留差异；旧路由本期不迁移。此范围决定不能代替人工分派、规范流程、SLA 与新建业务的实际验收。

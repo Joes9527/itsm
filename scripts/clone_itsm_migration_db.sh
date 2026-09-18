@@ -45,8 +45,8 @@ info() { echo "$*"; }
 
 validate_sql_identifier() {
   local label="$1" value="$2"
-  if [[ ! "$value" =~ ^[A-Za-z_][A-Za-z0-9_]{0,62}$ ]]; then
-    reject "invalid ${label}: '${value}' (expected [A-Za-z_][A-Za-z0-9_]{0,62})"
+  if [[ ! "$value" =~ ^[a-z_][a-z0-9_]{0,62}$ ]]; then
+    reject "invalid ${label}: '${value}' (expected lowercase [a-z_][a-z0-9_]{0,62})"
   fi
 }
 

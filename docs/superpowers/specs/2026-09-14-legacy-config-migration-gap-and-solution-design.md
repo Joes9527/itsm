@@ -38,12 +38,12 @@
 
 | # | 现状（旧 → 新样本） | GAP 与解决方案 |
 | --- | --- | --- |
-| G1 | CTI 82 节点 → 分类 183（9/38/136） | 归一化名称重叠 0 不能证明无语义映射。14 个孤立 ctiId 涉及 118 条路由。业务确认映射/补建/排除；补建前确认父层级及 code/itsm_type/default_priority/sla_tier，缺父阻塞 |
+| G1 | CTI 82 节点 → 分类 183（9/38/136） | **旧 CTI 为混合树，须按节点类型分流**（用户确认）：业务系统→CMDB `business_system`（开单选 `ci_ids`，不进分类）；服务/动作→`ticket_categories`（键 seed `code`）；组织/地点→Phase 1；基础架构→CMDB CI；test/其他排除。本次分流：业务系统 49、服务分类 8、地点 17、基础设施 4、排除 4。归一化名称重叠 0 不能证明无语义映射。14 个孤立 ctiId 涉及 118 条路由。补建前确认父子层级及 code/itsm_type/default_priority/sla_tier，缺父阻塞。见 [操作手册](../migrations/2026-09-14-legacy-config-migration-playbook.md) §2 与 [CTI 分流工作表](../review/2026-09-14-cti-mapping-worksheet.md) |
 | G2 | 字典 988 项/183 组 → field_definitions 131（模板122/目录9） | 全局字典与实体字段选项结构不同，原 label 覆盖率不足1%。仅迁在用且有明确目标实体/字段的项；保留 value/label 语义与一对多落点，无目标者显式差额，不能存入任意 JSON |
 | G3 | P0–P3 共15行，按模块 → 多套词汇 | 旧 P0→urgent/P1、P1→high/P2、P2→medium/P3、P3→low/P4 分别对应 SLA 词汇/分类分级；目标字段按固定代码契约确认。模板 low/medium/P2/P3/P4 等值逐项归一化，不能对不同语义字段盲目全局替换 |
 | G4 | 旧 SLA 按模块分钟不同 → 样本14条（原报告分为1–7与8–14两组） | 以新配置数值为准。按租户、业务键、完整配置及引用关系判重，记录合并、引用重绑和保留理由；不固定“保留id 1–7”，不跨租户去重，目标 ID 独立生成 |
 | G5 | 优先级矩阵86条 → 无专用矩阵表 | 仅当既有 ticket_automation_rules 支持条件字段、触发时机及 set_priority 语义时映射；保留模块/租户作用域，明确多规则命中顺序及冲突处理，不能未经确认采用最后写入胜出。不能表达者阻塞或经批准排除 |
-| G6 | 路由720条 → 样本 ticket_assignment_rules 为空 | 保留并核对 ctiId、definitionId、流程版本、taskDefKey、moduleId、租户、authorizedType/authorizedId。不能直接压成“分类→指派”；只有既有规则/流程绑定能完整表达时才映射。14个孤立ctiId/118条路由、未知枚举、身份缺失与冲突均阻塞相关批次 |
+| G6 | 路由720条 → 样本 ticket_assignment_rules 为空 | 保留并核对 ctiId、definitionId、流程版本、taskDefKey、moduleId、租户、authorizedType/authorizedId。不能直接压成“分类→指派”；只有既有规则/流程绑定能完整表达时才映射。**已解析授权语义**（2026-09-14 只读补抽 `sysUser/sysRole/sysGroup`）：`authorizedType=0`→角色（82/82 命中 `sysRole.roleId`）、`authorizedType=2`→用户（570 行命中 `sysUser.userId`，68 行/20 个 ID 未命中，无法在任何字段匹配→阻塞相关路由）。14个孤立ctiId/118条路由与身份缺失仍阻塞相关批次 |
 | G7 | holidays 611天（2018-08-05..2023-12-31）→ 样本 business_hours 空、exclude_* false | 全国基线见§3.2。当前解析器未消费 time_zone，固定星期＋排除日期不能直接表达周末补班；exclude_holidays/exclude_weekends 亦未在截止计算中消费。按 G-A 固定制品复核，无法完整表达时相关验收阻塞，不以填 JSON 代替计算验证 |
 | G8 | 模块4（IN/SR/KN/SERVER）→ ticket_types 12＋recordClass | 层次不同，模块到专业类/业务类型须显式确认。KN 不属 WorkItem；不通过改类型转换专业生命周期 |
 | G9 | 流程145定义/25key/24模型 → process_definitions 68 | 仅对照路由引用的8个 definitionId 到获准的新流程key/版本/任务节点，不导入旧 BPMN。G-A 目标尚无规范流程配置，先明确其初始化依赖；无对应者阻塞或经批准排除 |
