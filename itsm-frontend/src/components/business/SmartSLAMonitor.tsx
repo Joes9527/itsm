@@ -17,9 +17,11 @@ import {
   Col,
   Spin,
 } from 'antd';
-import { Clock, AlertTriangle, CheckCircle, TrendingUp, TrendingDown, Bell, Eye, Pause, Play } from 'lucide-react';
+import { Clock, AlertTriangle, CheckCircle, TrendingUp, TrendingDown, Bell, Eye } from 'lucide-react';
 import {
   EyeOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
   SettingOutlined,
   SyncOutlined,
   ThunderboltOutlined,
@@ -261,7 +263,7 @@ export const SmartSLAMonitor: React.FC = () => {
             )}
             <Tooltip title={isPaused ? '恢复自动刷新' : '暂停自动刷新'}>
               <Button
-                icon={isPaused ? <Play size={16} /> : <Pause size={16} />}
+                icon={isPaused ? <PlayCircleOutlined aria-hidden="true" /> : <PauseCircleOutlined aria-hidden="true" />}
                 size="small"
                 onClick={isPaused ? resume : pause}
               >

@@ -16,12 +16,13 @@ import {
   type MenuProps,
 } from 'antd';
 import type { MenuProps as AntdMenuProps } from 'antd';
-import { Plus, Search, RotateCcw, Table, LayoutGrid, Settings } from 'lucide-react';
+import { Search, Table, LayoutGrid, Settings } from 'lucide-react';
 import {
   BellOutlined,
   DownloadOutlined,
   EllipsisOutlined,
   FilterOutlined,
+  PlusOutlined,
   SyncOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
@@ -354,7 +355,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
               {primaryAction && (
                 <Button
                   type="primary"
-                  icon={primaryAction.icon || <Plus />}
+                  icon={primaryAction.icon || <PlusOutlined aria-hidden="true" />}
                   onClick={primaryAction.onClick}
                   size="small"
                 >
@@ -491,7 +492,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
                 数据加载失败，并非暂无数据，请检查网络后重试
               </Text>
               {onRetry && (
-                <Button type="primary" icon={<RotateCcw className="h-4 w-4" />} onClick={onRetry}>
+                <Button type="primary" icon={<SyncOutlined aria-hidden="true" />} onClick={onRetry}>
                   重试
                 </Button>
               )}
@@ -533,10 +534,11 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
       {primaryAction && (
         <div className="fixed bottom-6 right-6 z-50 md:hidden">
           <Button
+            aria-label={primaryAction.label}
             type="primary"
             shape="circle"
             size="large"
-            icon={primaryAction.icon || <Plus />}
+            icon={primaryAction.icon || <PlusOutlined aria-hidden="true" />}
             onClick={primaryAction.onClick}
             className="shadow-none hover:scale-110 transition-transform"
           />

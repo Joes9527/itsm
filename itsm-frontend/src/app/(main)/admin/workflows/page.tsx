@@ -7,6 +7,8 @@ import {
   DeleteOutlined,
   EditOutlined,
   EyeOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
   PlusOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
@@ -496,12 +498,13 @@ const WorkflowManagement = () => {
           </Tooltip>
           <Tooltip title={record.status === WORKFLOW_STATUS.ACTIVE ? '停用' : '启用'}>
             <Button
+              aria-label={record.status === WORKFLOW_STATUS.ACTIVE ? '停用' : '启用'}
               type="text"
               icon={
                 record.status === WORKFLOW_STATUS.ACTIVE ? (
-                  <Pause className="w-4 h-4" />
+                  <PauseCircleOutlined aria-hidden="true" />
                 ) : (
-                  <Play className="w-4 h-4" />
+                  <PlayCircleOutlined aria-hidden="true" />
                 )
               }
               onClick={() => handleStatusToggle(record.id)}

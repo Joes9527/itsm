@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button, Space, message, Pagination, Badge, Modal, Select, Input, Form } from 'antd';
 import {
-  Plus,
   RotateCcw,
   Download,
   UserPlus,
@@ -15,6 +14,7 @@ import {
   TriangleAlert,
   Clock3,
 } from 'lucide-react';
+import { PlusOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import {
   BusinessPageTemplate,
@@ -483,7 +483,7 @@ export default function IncidentsPage() {
       primaryAction={{
         label: '新建事件',
         onClick: handleCreate,
-        icon: <Plus className="w-4 h-4" />,
+        icon: <PlusOutlined aria-hidden="true" />,
       }}
 
       extraActions={[

@@ -1,7 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { SyncOutlined } from '@ant-design/icons';
+import {
+  FullscreenExitOutlined,
+  FullscreenOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import {
   Card,
   Row,
@@ -21,7 +25,7 @@ import {
   message,
   App,
 } from 'antd';
-import { Clock, Bell, AlertTriangle, CheckCircle, XCircle, Maximize, Minimize, Activity, Target, Zap, BarChart3 } from 'lucide-react';
+import { Clock, Bell, AlertTriangle, CheckCircle, XCircle, Activity, Target, Zap, BarChart3 } from 'lucide-react';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import SLAApi from '@/lib/api/sla-api';
@@ -323,7 +327,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
             刷新
           </Button>
           <Button
-            icon={isFullscreen ? <Minimize /> : <Maximize />}
+            icon={isFullscreen ? <FullscreenExitOutlined aria-hidden="true" /> : <FullscreenOutlined aria-hidden="true" />}
             onClick={handleFullscreen}
             size={isFullscreen ? 'large' : 'middle'}
             style={{

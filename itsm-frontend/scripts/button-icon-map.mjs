@@ -171,12 +171,18 @@ export const LUCIDE_TO_ANTD = {
   PanelLeftOpen: "MenuUnfoldOutlined",
   PanelRight: "VerticalRightOutlined",
   Paperclip: "PaperClipOutlined",
+  // Pause/Play 必须成对。原来 Play 指向 CaretRightOutlined（光秃三角），和这里的
+  // PauseCircleOutlined（带圈竖条）摆在一起不是一对——一个带圈一个不带圈。
+  // 2026-09-18 改成 PlayCircleOutlined，对齐仓里的既成用法：PlayCircleOutlined 10 个文件、
+  // PauseCircleOutlined 3 个文件，且 BatchProgressModal.tsx:177/179 的「继续/暂停」按钮
+  // 正是这对。注意 CaretRightOutlined 在仓里仍有 1 处（TestRunner.tsx:105「运行所有测试」），
+  // 那是「执行」语义的独立按钮、没有暂停对偶，由作者手写，不受本表管辖——别把它也改过来。
   Pause: "PauseCircleOutlined",
   PauseCircle: "PauseCircleOutlined",
   Pencil: "EditOutlined",
   Phone: "PhoneOutlined",
   PieChart: "PieChartOutlined",
-  Play: "CaretRightOutlined",
+  Play: "PlayCircleOutlined",
   PlayCircle: "PlayCircleOutlined",
   Plug: "ApiOutlined",
   Plus: "PlusOutlined",

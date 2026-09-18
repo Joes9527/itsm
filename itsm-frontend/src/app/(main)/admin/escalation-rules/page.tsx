@@ -2,6 +2,8 @@
 
 import { Zap, ArrowUp, Mail, Phone, Megaphone, Activity, Timer, CheckCircle, Clock, Edit, MessageSquare, Bell, Eye, Search, Target } from 'lucide-react';
 import {
+  CheckCircleOutlined,
+  ClockCircleOutlined,
   CopyOutlined,
   DeleteOutlined,
   EditOutlined,
@@ -416,12 +418,13 @@ const EscalationRuleManagement = () => {
           </Tooltip>
           <Tooltip title={record.status === 'active' ? '停用' : '启用'}>
             <Button
+              aria-label={record.status === 'active' ? '停用' : '启用'}
               type="text"
               icon={
                 record.status === 'active' ? (
-                  <Clock className="w-4 h-4" />
+                  <ClockCircleOutlined aria-hidden="true" />
                 ) : (
-                  <CheckCircle className="w-4 h-4" />
+                  <CheckCircleOutlined aria-hidden="true" />
                 )
               }
               onClick={() => handleStatusToggle(record.id)}

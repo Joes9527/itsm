@@ -26,6 +26,7 @@ import {
   EditOutlined,
   EyeOutlined,
   MoreOutlined,
+  StarOutlined,
 } from '@ant-design/icons';
 import type { TicketTemplate } from '@/types/template';
 
@@ -134,9 +135,10 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
           <h3 className="text-base font-semibold m-0 flex-1 pr-2 line-clamp-2">{template.name}</h3>
           <Tooltip title={isFavorite ? '取消收藏' : '收藏'}>
             <Button
+              aria-label={isFavorite ? '取消收藏' : '收藏'}
               type="text"
               size="small"
-              icon={isFavorite ? <Star style={{ color: '#faad14' }} /> : <Star />}
+              icon={isFavorite ? <StarOutlined aria-hidden="true" style={{ color: '#faad14' }} /> : <StarOutlined aria-hidden="true" />}
               onClick={handleFavoriteClick}
             />
           </Tooltip>
@@ -243,9 +245,10 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
             </div>
             <Tooltip title={isFavorite ? '取消收藏' : '收藏'}>
               <Button
+                aria-label={isFavorite ? '取消收藏' : '收藏'}
                 type="text"
                 size="small"
-                icon={isFavorite ? <Star style={{ color: '#faad14' }} /> : <Star />}
+                icon={isFavorite ? <StarOutlined aria-hidden="true" style={{ color: '#faad14' }} /> : <StarOutlined aria-hidden="true" />}
                 onClick={handleFavoriteClick}
               />
             </Tooltip>

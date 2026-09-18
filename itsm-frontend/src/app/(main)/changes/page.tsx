@@ -4,10 +4,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Calendar as AntCalendar, message, Pagination, Select, Card, Empty, Tag, Spin } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
-import { CheckCircle2, ClipboardList, Clock, Download, Plus, RefreshCw, RotateCcw } from 'lucide-react';
+import { CheckCircle2, ClipboardList, Clock, Download, RefreshCw, RotateCcw } from 'lucide-react';
 import {
   AppstoreOutlined,
   CalendarOutlined,
+  PlusOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
@@ -461,7 +462,7 @@ export default function ChangesPage() {
       primaryAction={{
         label: '新建变更',
         onClick: handleCreate,
-        icon: <Plus className="w-4 h-4" />,
+        icon: <PlusOutlined aria-hidden="true" />,
       }}
 
       extraActions={[

@@ -18,6 +18,21 @@
  * 继续用 lucide）；no-restricted-syntax 的选择器解析不了「这个图标是不是来自 lucide」。
  * 为什么不用根目录的 check-engineering-contracts.js：那是全文件正则，对 JSX 不适用。
  *
+ * ⚠️ 已知盲区（2026-09-18 实测，别把它当成「全仓都干净了」）：
+ * 本门禁只检查**字面写在 `icon={...}` 里的**图标。`icon={action.icon}` 这种把值
+ * 从 props / 对象字面量传进来的形态它看不见，而仓里确实有这种位点：
+ * `<Button icon={action.icon}>` 共 6 个渲染点（lib/templates/ui.tsx:135/144、
+ * BatchActionBar.tsx:103/127、CSDMHub.tsx:104、ApprovalChainTable.tsx:221），
+ * 图标值来自同文件或调用方的对象字面量。**其中有多少是 lucide 尚未测准**——
+ * 仓里 `icon:` 对象字面量共 264 处 / 56 文件，但绝大多数是统计卡片、Tab、
+ * 空状态图标而非按钮图标，要精确区分得做数据流分析，本门禁不做。
+ * 所以「门禁通过」的正确读法是「**在字面形态里**没有违规」。
+ *
+ * 曾经的另一个盲区已经关掉：`icon={cond ? <A /> : <B />}`、`icon={x || <Plus />}`
+ * 这类条件／逻辑表达式以前看不见（批次 1 的 codemod 归类为「复杂形态，跳过」，
+ * 门禁沿用了同一判定），那 11 处于 2026-09-18 由 migrate-icon-expressions.mjs 迁完，
+ * 本门禁同步改成走**整棵 icon 表达式子树**。别再退回只看自闭合字面量。
+ *
  * 用法:
  *   node scripts/check-button-icons.mjs          # 检查 src/，有违规退出码 1
  *   node scripts/check-button-icons.mjs --json   # 机器可读
@@ -28,14 +43,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
-/**
- * 批次 2 待定 glyph 的图标，暂时豁免规则 1。
- * RotateCcw 在刷新场景该顺时针、在重试场景该保持逆时针，靠图标名分不出来，
- * 硬转会做错一半——等 glyph 选型落地后**删除这个集合**，不要让它长住。
- * 现在剩下的 40 处全部是 DEFERRED，所以豁免是收敛的；一旦有人新增 RotateCcw
- * 按钮图标，规则 2 仍然会管，且这批清理完成后这里会归零。
- */
-const PENDING = new Set(['RotateCcw']);
+// 门禁没有豁免集。曾经有过一个（批次 2 待定的 RotateCcw），2026-09-18 那 7 处
+// 「重试 / 回滚」选型落地后已删除——留一个长期豁免集等于给门禁开个永久窟窿，
+// 而这 7 个按钮恰恰还带着整个改动要消除的尺寸问题。别再把它加回来。
 
 const attrName = a => (ts.isJsxAttribute(a) && ts.isIdentifier(a.name) ? a.name.text : null);
 
@@ -67,6 +77,17 @@ function hasRealChildren(el) {
     } else return true;
   }
   return false;
+}
+
+/** 表达式子树里所有 JSX 元素节点（含表达式自身） */
+function jsxNodesIn(expr) {
+  const found = [];
+  const walk = n => {
+    if (ts.isJsxSelfClosingElement(n) || ts.isJsxElement(n)) found.push(n);
+    ts.forEachChild(n, walk);
+  };
+  walk(expr);
+  return found;
 }
 
 /**
@@ -112,14 +133,16 @@ export function findViolations(fileName, src) {
       const names = new Set(attrs.map(attrName).filter(Boolean));
 
       const iconAttr = attrs.find(a => attrName(a) === 'icon');
-      const expr = iconAttr?.initializer;
-      const iconEl =
-        expr && ts.isJsxExpression(expr) && expr.expression && ts.isJsxSelfClosingElement(expr.expression)
-          ? expr.expression
-          : null;
-      const exported = iconEl ? lucide.get(iconEl.tagName.getText(sf)) : null;
+      const init = iconAttr?.initializer;
+      const expr = init && ts.isJsxExpression(init) ? init.expression : null;
 
-      if (exported && !PENDING.has(exported)) {
+      // 走**整棵** icon 表达式子树。`icon={cond ? <A /> : <B />}`、`icon={x || <Plus />}`
+      // 里的图标一样是按钮图标、一样带着尺寸问题，只看自闭合字面量会漏掉它们。
+      const lucideIcons = expr
+        ? jsxNodesIn(expr).filter(n => lucide.has(n.tagName.getText(sf)))
+        : [];
+
+      for (const iconEl of lucideIcons) {
         out.push({
           line: lineOf(iconEl),
           rule: 'lucide-button-icon',
@@ -127,15 +150,17 @@ export function findViolations(fileName, src) {
         });
       }
 
-      // 纯图标按钮的可访问名称：只要还是 lucide 图标，迁移后就会失去名字，所以现在就报
-      if (exported && !hasRealChildren(node)) {
+      // 纯图标按钮的可访问名称：只要还是 lucide 图标，迁移后就会失去名字，所以现在就报。
+      // 一个按钮只报一次，不按图标个数重复报。
+      if (lucideIcons.length && !hasRealChildren(node)) {
         const hasLabel =
           names.has('aria-label') || names.has('title') || names.has('aria-labelledby') || wrappedInTooltip(node);
         if (!hasLabel) {
+          const which = [...new Set(lucideIcons.map(i => i.tagName.getText(sf)))].join('/');
           out.push({
-            line: lineOf(iconEl),
+            line: lineOf(lucideIcons[0]),
             rule: 'no-accessible-name',
-            msg: `纯图标按钮（${iconEl.tagName.getText(sf)}）没有可访问名称，需补 aria-label / title / Tooltip`,
+            msg: `纯图标按钮（${which}）没有可访问名称，需补 aria-label / title / Tooltip`,
           });
         }
       }

@@ -1,8 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import {
+  CheckOutlined,
+  CopyOutlined,
+} from '@ant-design/icons';
 import { Button, Tag, Spin, message } from 'antd';
-import { Sparkles, Check, Copy, ExternalLink, Lightbulb, FileText } from 'lucide-react';
+import { Sparkles, ExternalLink, Lightbulb, FileText } from 'lucide-react';
 import { AIConfidenceBadge } from '@/components/ai/AIConfidenceBadge';
 
 interface SolutionItem {
@@ -115,7 +119,7 @@ export const AISimilarSolutionsPanel: React.FC<AISimilarSolutionsPanelProps> = (
                   size="small"
                   type={appliedId === item.id ? 'default' : 'primary'}
                   onClick={() => handleApply(item)}
-                  icon={appliedId === item.id ? <Check size={13} /> : <Copy size={13} />}
+                  icon={appliedId === item.id ? <CheckOutlined aria-hidden="true" /> : <CopyOutlined aria-hidden="true" />}
                   className="text-[12px] h-[29px]"
                 >
                   {appliedId === item.id ? '已引用' : '引用为回复方案'}
