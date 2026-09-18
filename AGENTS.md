@@ -92,6 +92,55 @@ These decisions extend the contract above. Read the linked designs before changi
 - **Bound fulfillment tasks:** explicit `assigneeSource=work_item_assignee` uses the current WorkItem owner, with no second mutable task owner. This binding does not replace approval/requester/candidate participation rules. Freeze terminal responsible person and actual actor; missing evidence never falls back to the current owner. Preserve professional command authorization, operation receipts, reason/version and tenant/MSP/execution scope; one transactional owner write, audit and Outbox. Do not rewrite old runs. [Binding design](docs/superpowers/specs/2026-09-14-work-item-task-assignment-design.md), [decisions and evidence](docs/review/2026-09-15-work-item-task-assignment-report.md).
 - **Controlled retirement:** preserve historical SQL/checksums and truthful receipts. Separate transactional structure preparation from full business acceptance and controlled retirement; all migration write paths, including rollback/reset, enforce stage dependencies. Read-only classification precedes bootstrap writes. General pre-preparation active-process retirement remains unaccepted while BL-WI-PROCESS-AUDIT-CONTINUITY is deferred. Successor rereview must not be represented as independent third-party review. Real target deployment/retirement and environment deletion require separate authorization; isolated or dedicated-database evidence does not grant it. [Design](docs/superpowers/specs/2026-09-11-workitem-controlled-retirement-design.md), [plan and validation evidence](docs/superpowers/plans/2026-09-11-workitem-controlled-retirement.md).
 
+## Generic fulfillment gate contract
+
+`generic_fulfillment_v1` is the lifecycle contract a BPMN process opts into with
+`<bpmn:metaData name="workItemLifecycleContract">generic_fulfillment_v1</bpmn:metaData>` on
+`<process>`. Its scope is exactly `recordClass=generic` **and** a definition that declares the
+contract, and nothing wider: a definition that does not declare it is not gated, and a generic
+WorkItem is not gated without it. Each stage declares its own prerequisite with
+`workItemPrerequisite` (`assigned`, `in_progress`, `escalated`, `resolved`, `closed`).
+
+**Code is delivered and the command side is wired.** The gate merged through PR #77 (merge
+`1c52edce`, 2026-09-18). Creation probes the contract and freezes it without re-validating the
+definition; start admits a generic workflow only from frozen creation evidence; the versioned
+edit command and the escalation command enforce `EnforceGenericWorkflowTransitionTx` inside
+their own transaction; task completion runs `prepareGenericWorkflowCompletion` and persists the
+approval decision before advancing the graph. Only `in_progress`, `resolved`, `closed` and
+`manual_escalation` are gated — every other target status passes through, so do not widen that
+switch to "block anything unusual".
+
+Contract points that must hold in every change:
+
+- Evidence is monotonic: a task only ever adds a fact. Several tasks may declare the same
+  prerequisite and each reads receipts from its own start window, so a later stage must never
+  clear what an earlier stage established.
+- `approval_required`, `need_escalate` and `approvalResult` are reserved. Never accept them from
+  a caller, and mint the approval decision intent only at the controller-validated decision
+  boundary and the vote aggregate — never from request fields.
+- An opted-in WorkItem that changes owner requires a bounded `assignmentReason`, recorded with
+  the operation receipt.
+- Unknown, unparseable or invalid definitions fail closed, and a generic WorkItem's transitions
+  are judged by this contract rather than by a second status rule.
+
+**Known gap — the legacy mutation paths still bypass the gate.**
+`RejectGenericWorkflowLegacyMutationTx` has no production caller, and both
+`TicketService.updateTicketStatus` (`service/ticket_service.go`) and
+`TicketLifecycleService.UpdateTicketStatus` (`service/ticket_lifecycle_service.go`) write through
+their own repository calls instead of the versioned command. Those two screen only
+`incident`/`problem`/`change_request` (`rejectProfessionalTicketMutation`) and the legacy status
+graph, and `generic` passes both, so a generic WorkItem can still reach `resolved` and then
+`closed` without tripping the contract through:
+`PUT /api/tickets/:id/status`, `POST /api/tickets/:id/{assign,resolve,close}` and
+`POST /api/tickets/workflow/{accept,withdraw,forward,resolve,close,reopen}`. Do not read the
+versioned callers as covering them. A cut of the fix exists as commit `4e932063` on the branch
+`codex/fix/a3-legacy-gates`, but that branch was never pushed and `ROADMAP.md` lists it as
+conflicting in `service/ticket_service.go`. Treat the fix as unwritten: re-derive it against
+current `main` instead of assuming it can be picked up.
+
+The detailed design is PR #76, still open and awaiting maintainer confirmation. It is not yet on
+`main`, so this section is the binding statement until it lands.
+
 ## CTI governance contract
 
 The [CTI governance design](docs/superpowers/specs/2026-09-17-cti-governance-design.md) records the accepted direction and review clarifications. Read it before changing classification, catalog defaults or completion gates.
@@ -118,6 +167,7 @@ Two related items are registered but **not implemented**: **BL-CTI-02** (retire 
 | API, DTO, frontend, naming | [Shared engineering conventions](docs/engineering-conventions.md) |
 | Local services, database, migration, deployment | [Development guide](docs/DEVELOPMENT_GUIDE.md), [command reference](docs/dev-commands-reference.md); for maintained Windows/WSL instances, [local environment](docs/development-environment.md) first |
 | WorkItem fields, creation, lifecycle, relations | Contract above, owning domain code, and [WorkItem design](docs/superpowers/specs/2026-08-26-unified-work-item-model-design.md) with its status caveat |
+| Generic BPMN fulfilment, lifecycle and completion gates | Contract above, `itsm-backend/service/generic_workflow_gate.go`; PR #76 holds the detailed design |
 | KAF/delegated execution and completion | [Verified completion contract](docs/contracts/kaf-verified-access-completion.md) and owning Service Request/BPMN services |
 | Review and real user-path verification | [Code review guide](docs/code-review-guide.md), [E2E guide](docs/e2e-testing-guide.md) |
 | Product scope and current decisions | [Root roadmap](ROADMAP.md), [documentation index](docs/README.md); reconcile stale status against current evidence |
