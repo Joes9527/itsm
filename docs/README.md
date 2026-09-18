@@ -8,6 +8,8 @@
 
 - [组织基础实施计划（迁移前置 + 组织树，draft，未执行）](superpowers/plans/2026-09-18-organization-foundation.md)：5 个任务（克隆来源证明与结构拉齐、seed 隔离、编码租户内唯一与导入幂等、节点类型、组织树轻量懒加载）。**Task 1/2 含数据库写入，需单独授权；其余只改代码与迁移文件。**
 
+- [部门管理单元实施计划（负责人 + 子树人数，draft，未执行）](superpowers/plans/2026-09-18-department-management-unit.md)：5 个任务（记录"停用=删除"的已接受偏离、负责人写入校验、可清空负责人与换父并留痕、有界子树人数、脏负责人值清除）。**Task 5 含数据库写入，需单独授权；本计划不新增 canonical 迁移。**
+
 > **开发／迁移任务先读：[当前结构目标047](development-environment.md#selected-schema-target-047)及[实际数据库状态](superpowers/plans/2026-09-15-migration-validation-ledger.md#schema-target-status)。目标版本与已部署状态分开记录。**
 
 - [Ticket 详情体验统一实施计划](./superpowers/plans/2026-09-15-ticket-detail-experience-unification.md)：六项任务及最终复审完成；浏览器 7/7、最终并发回归 98/98，已提交 PR #35。
