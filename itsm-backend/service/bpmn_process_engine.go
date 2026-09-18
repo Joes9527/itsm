@@ -1924,7 +1924,13 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 	// 也没有声明 candidateGroups），兜底用固定候选组，保证任务始终有机会被领取。
 	candidateGroupsToExpand := task.CandidateGroups
 	if task.TaskPurpose == "approval" && assignee == "" && len(roleCandidates) == 0 && strings.TrimSpace(candidateGroupsToExpand) == "" {
-		candidateGroupsToExpand = approvalFallbackCandidateGroup
+		// 兜底组按租户可配置（系统配置键 bpmnApprovalFallbackGroup），未配置则用默认组。
+		candidateGroupsToExpand = e.approvalFallbackGroup(ctx, instance.TenantID)
+		// 走到兜底说明前面都没解析到人。**留痕**：审计里必须能回答"当时为什么派给了兜底组"，
+		// 只打日志不算留痕。留不下痕就不放行兜底（同库写入，失败即意味着库不健康）。
+		if err := e.recordApprovalFallback(ctx, instance, approvalRequester, task, candidateGroupsToExpand); err != nil {
+			return fmt.Errorf("审批任务 %s 落到兜底组但留痕失败，拒绝继续: %w", task.ID, err)
+		}
 	}
 
 	// 展开 candidateGroups 为具体用户，合并到 candidate_users。
