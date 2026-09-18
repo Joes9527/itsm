@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
@@ -66,7 +67,14 @@ func (Department) Fields() []ent.Field {
 // 同名重复节点，组织树无法区分，审批找人也会选错分支。
 func (Department) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("tenant_id", "code").Unique(),
+		// 与迁移 049 保持一致：**部分**唯一索引，软删除的行不占用编码。
+		//
+		// 这两处必须同形，否则测试与生产会分叉：Ent 生成的非部分索引会让"软删除后
+		// 复用同一编码"在 sqlite 测试里直接违反约束，而生产（已应用 049 的部分索引）
+		// 是允许的——于是软删除相关的行为在测试里永远覆盖不到。
+		index.Fields("tenant_id", "code").
+			Unique().
+			Annotations(entsql.IndexWhere("deleted_at IS NULL")),
 	}
 }
 

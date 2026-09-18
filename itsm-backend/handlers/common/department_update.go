@@ -17,6 +17,7 @@ type departmentUpdateRequest struct {
 	Name        *string `json:"name"`
 	Code        *string `json:"code"`
 	Description *string `json:"description"`
+	NodeType    *string `json:"nodeType"`
 	ManagerID   *int    `json:"managerId"`
 	ParentID    *int    `json:"parentId"`
 	Reason      string  `json:"reason"`
@@ -52,6 +53,19 @@ func applyDepartmentUpdate(ctx context.Context, client *ent.Client, current *Dep
 	descriptionChanged := req.Description != nil && *req.Description != current.Description
 	codeChanged := req.Code != nil && *req.Code != current.Code
 
+	// 节点类型必须参与"是否发生变更"的判定，否则"只改类型"会被判成无变更而提前返回，
+	// 类型**静默不落库**。校验也放在这里（早于提前返回），未知取值一律 fail-closed，
+	// 不会因为"其它字段都没变"而被悄悄放过。
+	nodeTypeChanged := false
+	if req.NodeType != nil {
+		normalized, err := NormalizeDepartmentNodeType(*req.NodeType)
+		if err != nil {
+			return nil, nil, err
+		}
+		req.NodeType = &normalized
+		nodeTypeChanged = normalized != current.NodeType
+	}
+
 	if codeChanged {
 		// 保留既有"改编码"能力（旧 API 支持），但必须沿用租户内唯一约束。
 		exists, err := client.Department.Query().
@@ -83,7 +97,7 @@ func applyDepartmentUpdate(ctx context.Context, client *ent.Client, current *Dep
 		change.ParentTo = *req.ParentID
 	}
 
-	change.Changed = nameChanged || descriptionChanged || codeChanged ||
+	change.Changed = nameChanged || descriptionChanged || codeChanged || nodeTypeChanged ||
 		change.ManagerFrom != change.ManagerTo ||
 		change.ParentFrom != change.ParentTo
 	if !change.Changed {
@@ -102,6 +116,15 @@ func applyDepartmentUpdate(ctx context.Context, client *ent.Client, current *Dep
 	}
 	if req.Description != nil {
 		update = update.SetDescription(*req.Description)
+	}
+	if req.NodeType != nil {
+		// 节点类型与创建路径共用同一把权威；未知取值在写入前 fail-closed，
+		// 不把它悄悄存成空串或原样落库。
+		nodeType, err := NormalizeDepartmentNodeType(*req.NodeType)
+		if err != nil {
+			return nil, nil, err
+		}
+		update = update.SetNodeType(nodeType)
 	}
 	if req.ManagerID != nil {
 		update = update.SetManagerID(*req.ManagerID)

@@ -243,6 +243,7 @@ func (h *Handler) CreateDepartment(c *gin.Context) {
 		Name        string `json:"name" binding:"required"`
 		Code        string `json:"code" binding:"required"`
 		Description string `json:"description"`
+		NodeType    string `json:"nodeType"`
 		ManagerID   int    `json:"managerId"`
 		ParentID    int    `json:"parentId"`
 	}
@@ -256,6 +257,7 @@ func (h *Handler) CreateDepartment(c *gin.Context) {
 		Name:        req.Name,
 		Code:        req.Code,
 		Description: req.Description,
+		NodeType:    req.NodeType,
 		ManagerID:   req.ManagerID,
 		ParentID:    req.ParentID,
 		TenantID:    tenantID,
@@ -287,7 +289,6 @@ func (h *Handler) UpdateDepartment(c *gin.Context) {
 		common.NotFound(c, "部门不存在")
 		return
 	}
-
 	result, change, err := h.svc.ApplyDepartmentUpdate(c.Request.Context(), existing, req)
 	if err != nil {
 		common.ParamError(c, "更新部门失败: "+err.Error())

@@ -98,3 +98,34 @@ func TestApplyDepartmentUpdateCanMoveANodeToTheTopLevel(t *testing.T) {
 	require.True(t, change.Changed)
 	require.Equal(t, 0, change.ParentTo, "moving to the top level must be expressible")
 }
+
+// 节点类型必须能通过更新路径改写，且与创建路径共用同一把权威。
+//
+// 这条用例是合并 #70 与 #72 时补的：#70 把 nodeType 加在内联请求结构体里，
+// #72 换成了 departmentUpdateRequest 且**没有**该字段——若按单边解决冲突，
+// 节点类型的更新能力会被静默丢掉。本用例保证它被保留下来。
+func TestApplyDepartmentUpdateCanChangeTheNodeType(t *testing.T) {
+	client, ctx, _, child := deptFixture(t, "file:deptupd_nodetype?mode=memory&cache=shared&_fk=1")
+	repo := NewEntRepository(client)
+
+	// 只改类型、不给原因：必须被拒（与其它变更一致的留痕要求）
+	nodeType := orgNodeDepartment
+	_, _, err := repo.ApplyDepartmentUpdate(ctx, child, departmentUpdateRequest{NodeType: &nodeType})
+	require.Error(t, err, "节点类型变更同样需要原因")
+
+	updated, change, err := repo.ApplyDepartmentUpdate(ctx, child, departmentUpdateRequest{
+		NodeType: &nodeType, Reason: "组织类型纠正",
+	})
+	require.NoError(t, err)
+	require.Equal(t, orgNodeDepartment, updated.NodeType)
+	require.True(t, change.Changed, "只改节点类型也必须被判为一次变更，否则会被提前返回而静默不落库")
+
+	// 未知取值必须在写入前 fail-closed，而不是原样落库或静默存成空串。
+	bad := "集团"
+	_, _, err = repo.ApplyDepartmentUpdate(ctx, updated, departmentUpdateRequest{NodeType: &bad})
+	require.Error(t, err)
+
+	reloaded, err := repo.GetDepartment(ctx, child.ID, 1)
+	require.NoError(t, err)
+	require.Equal(t, orgNodeDepartment, reloaded.NodeType, "非法更新不得改动已存类型")
+}

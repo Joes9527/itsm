@@ -32,8 +32,8 @@ func TestDeleteDepartmentRerootsChildrenOfATopLevelNode(t *testing.T) {
 	// 而且它必须真的能在树上取到——这才是"变成顶级节点"的实际含义
 	roots, err := repo.ListDepartmentChildren(ctx, 1, 0)
 	require.NoError(t, err)
-	codes := make([]string, 0, len(roots))
-	for _, r := range roots {
+	codes := make([]string, 0, len(roots.Items))
+	for _, r := range roots.Items {
 		codes = append(codes, r.Code)
 	}
 	require.Contains(t, codes, "D1A", "上提后的子节点必须作为顶层节点可见")
@@ -62,8 +62,8 @@ func TestDeleteDepartmentRerootsChildrenToTheGrandparent(t *testing.T) {
 
 	children, err := repo.ListDepartmentChildren(ctx, 1, grand.ID)
 	require.NoError(t, err)
-	require.Len(t, children, 1)
-	require.Equal(t, "M1A01", children[0].Code)
+	require.Len(t, children.Items, 1)
+	require.Equal(t, "M1A01", children.Items[0].Code)
 }
 
 // 删除叶子节点仍然可用（没有下级可重挂）。
@@ -80,7 +80,7 @@ func TestDeleteDepartmentStillWorksForALeaf(t *testing.T) {
 
 	roots, err := repo.ListDepartmentChildren(ctx, 1, 0)
 	require.NoError(t, err)
-	require.Empty(t, roots, "被删除的叶子不应再出现在树里")
+	require.Empty(t, roots.Items, "被删除的叶子不应再出现在树里")
 }
 
 // 跨租户不得删除、也不得改动别人租户的父子关系。

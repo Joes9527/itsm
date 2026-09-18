@@ -1256,6 +1256,9 @@ var (
 				Name:    "department_tenant_id_code",
 				Unique:  true,
 				Columns: []*schema.Column{DepartmentsColumns[5], DepartmentsColumns[2]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "deleted_at IS NULL",
+				},
 			},
 		},
 	}
