@@ -4,22 +4,11 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Dropdown, App, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
-import { FileAddFilled } from '@ant-design/icons';
 import {
-  HardDrive,
-  UserCog,
-  ShieldCheck,
-  Clock,
-  MoreHorizontal,
-  Edit,
-  Eye,
-  Server,
-  Database,
-  Globe,
-  KeyRound,
-  FileCheck2,
-  Zap,
-} from 'lucide-react';
+  FileAddFilled,
+  MoreOutlined,
+} from '@ant-design/icons';
+import { HardDrive, UserCog, ShieldCheck, Clock, Edit, Eye, Server, Database, Globe, KeyRound, FileCheck2, Zap } from 'lucide-react';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
 import type { ServiceItem } from '@/types/service-catalog';
 import { useI18n } from '@/lib/i18n';
@@ -249,12 +238,12 @@ export const ServiceItemCard: React.FC<ServiceItemCardProps> = ({
 
             {showManageActions && (
               <Dropdown menu={{ items: actionItems }} trigger={['click']} placement="bottomRight">
-                <Button
+                <Button aria-label="更多操作"
                   size="middle"
                   className="!h-8 !w-8 !p-0 !rounded-[8px] !border-border text-muted hover:text-foreground flex items-center justify-center"
                   onClick={e => e.stopPropagation()}
                   loading={deleting}
-                  icon={<MoreHorizontal size={15} />}
+                  icon={<MoreOutlined aria-hidden="true" />}
                 />
               </Dropdown>
             )}
@@ -295,13 +284,13 @@ export const ServiceItemCard: React.FC<ServiceItemCardProps> = ({
 
           {showManageActions && (
             <Dropdown menu={{ items: actionItems }} trigger={['click']} placement="bottomRight">
-              <Button
+              <Button aria-label="更多操作"
                 type="text"
                 size="small"
                 className="!h-6 !w-6 !p-0 text-muted hover:text-foreground flex items-center justify-center rounded"
                 onClick={e => e.stopPropagation()}
                 loading={deleting}
-                icon={<MoreHorizontal size={14} />}
+                icon={<MoreOutlined aria-hidden="true" />}
               />
             </Dropdown>
           )}

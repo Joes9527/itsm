@@ -7,7 +7,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { Button, Space, message } from 'antd';
-import { Archive, Send } from 'lucide-react';
+import {
+  InboxOutlined,
+  SendOutlined,
+} from '@ant-design/icons';
 import { useParams } from 'next/navigation';
 import ArticleDetail from '@/components/knowledge/ArticleDetail';
 import { KnowledgeBaseApi } from '@/lib/api/knowledge-base-api';
@@ -57,7 +60,7 @@ export default function KnowledgeArticleDetailPage() {
         {status === ArticleStatus.PUBLISHED ? (
           <Button
             danger
-            icon={<Archive size={16} />}
+            icon={<InboxOutlined aria-hidden="true" />}
             loading={submitting}
             onClick={() => updatePublishStatus(false)}
           >
@@ -66,7 +69,7 @@ export default function KnowledgeArticleDetailPage() {
         ) : (
           <Button
             type="primary"
-            icon={<Send size={16} />}
+            icon={<SendOutlined aria-hidden="true" />}
             loading={submitting}
             onClick={() => updatePublishStatus(true)}
           >

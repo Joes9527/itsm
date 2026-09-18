@@ -31,7 +31,8 @@ import {
   Tag,
   Typography,
 } from 'antd';
-import { Search, Clock, AlertTriangle, BarChart3, Zap, Rocket } from 'lucide-react';
+import { Search, Clock, AlertTriangle, BarChart3, Zap } from 'lucide-react';
+import { RocketOutlined } from '@ant-design/icons';
 import { useEffect, useMemo, useState } from 'react';
 import { BPMNMonitoringApi, type BottleneckTask } from '@/lib/api/bpmn-monitoring-api';
 import { BPMNDashboardApi, type ProcessStat } from '@/lib/api/bpmn-dashboard-api';
@@ -285,7 +286,7 @@ export default function BottlenecksPage() {
             ]}
           />
           <Button
-            icon={<Rocket />}
+            icon={<RocketOutlined aria-hidden="true" />}
             onClick={() => {
               if (keyword) setSelectedProcess(keyword);
             }}

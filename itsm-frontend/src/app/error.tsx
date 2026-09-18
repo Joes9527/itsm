@@ -2,7 +2,8 @@
 
 import React, { useEffect } from 'react';
 import { Result, Button } from 'antd';
-import { LayoutDashboard, RotateCcw } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
+import { DashboardOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { getDefaultHomePath } from '@/config/persona/persona-config';
 import { useAuthStore } from '@/lib/store/auth-store';
@@ -37,7 +38,7 @@ export default function Error({
           </Button>,
           <Button
             key="dashboard"
-            icon={<LayoutDashboard />}
+            icon={<DashboardOutlined aria-hidden="true" />}
             onClick={() => router.push(getDefaultHomePath(useAuthStore.getState().user?.role))}
           >
             返回仪表盘

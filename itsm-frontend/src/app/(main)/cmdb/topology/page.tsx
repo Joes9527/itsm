@@ -2,7 +2,8 @@
 
 import React, { useState, useCallback, useMemo } from 'react';
 import { Card, Select, Button, Space, Tag, Spin, message, Drawer, Descriptions, Empty } from 'antd';
-import { RotateCcw, ExternalLink } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
+import { ExportOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import type { Node, Edge, NodeTypes} from 'reactflow';
 import ReactFlow, { Controls, Background, useNodesState, useEdgesState, MarkerType, BackgroundVariant, Handle, Position } from 'reactflow';
@@ -223,7 +224,7 @@ export default function TopologyPage() {
           <Button
             type="primary"
             size="small"
-            icon={<ExternalLink className="w-3.5 h-3.5" />}
+            icon={<ExportOutlined aria-hidden="true" className="w-3.5 h-3.5" />}
             onClick={() => router.push(`/cmdb/cis/${selectedNodeData.id}`)}
           >
             查看 CI 详情

@@ -1,17 +1,12 @@
 'use client';
 
+import { Timer, CheckCircle, Clock, Edit, Target, TrendingUp, Eye, Search } from 'lucide-react';
 import {
-  Timer,
-  CheckCircle,
-  Clock,
-  Edit,
-  Target,
-  TrendingUp,
-  Eye,
-  Trash2,
-  Plus,
-  Search,
-} from 'lucide-react';
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 
 import React, { useState, useEffect } from 'react';
 import { SLAApi, SLADefinition as APISLADefinition } from '@/lib/api/sla-api';
@@ -327,16 +322,16 @@ const SLADefinitionManagement = () => {
       render: (_: unknown, record: SLADefinition) => (
         <Space>
           <Tooltip title="查看详情">
-            <Button
+            <Button aria-label="查看详情"
               type="text"
-              icon={<Eye className="w-4 h-4" />}
+              icon={<EyeOutlined aria-hidden="true" />}
               onClick={() => handleViewDetail(record)}
             />
           </Tooltip>
           <Tooltip title="编辑">
-            <Button
+            <Button aria-label="编辑"
               type="text"
-              icon={<Edit className="w-4 h-4" />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => {
                 setSelectedSLA(record);
                 form.setFieldsValue(record);
@@ -365,7 +360,7 @@ const SLADefinitionManagement = () => {
             cancelText="取消"
             okType="danger"
           >
-            <Button type="text" danger icon={<Trash2 className="w-4 h-4" />} />
+            <Button aria-label="删除" type="text" danger icon={<DeleteOutlined aria-hidden="true" />} />
           </Popconfirm>
         </Space>
       ),
@@ -485,7 +480,7 @@ const SLADefinitionManagement = () => {
           <Col xs={24} md={4} className="text-right">
             <Button
               type="primary"
-              icon={<Plus className="w-4 h-4" />}
+              icon={<PlusOutlined aria-hidden="true" />}
               onClick={() => {
                 setSelectedSLA(null);
                 form.resetFields();

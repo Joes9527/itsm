@@ -1,25 +1,13 @@
 'use client';
 
+import { Zap, ArrowUp, Mail, Phone, Megaphone, Activity, Timer, CheckCircle, Clock, Edit, MessageSquare, Bell, Eye, Search, Target } from 'lucide-react';
 import {
-  Copy,
-  Zap,
-  ArrowUp,
-  Mail,
-  Phone,
-  Megaphone,
-  Activity,
-  Timer,
-  CheckCircle,
-  Clock,
-  Edit,
-  MessageSquare,
-  Bell,
-  Eye,
-  Plus,
-  Search,
-  Trash2,
-  Target,
-} from 'lucide-react';
+  CopyOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 
 import React, { useState, useEffect } from 'react';
 import { SLAApi } from '@/lib/api/sla-api';
@@ -402,16 +390,16 @@ const EscalationRuleManagement = () => {
       render: (_: unknown, record: EscalationRule) => (
         <Space>
           <Tooltip title="查看详情">
-            <Button
+            <Button aria-label="查看详情"
               type="text"
-              icon={<Eye className="w-4 h-4" />}
+              icon={<EyeOutlined aria-hidden="true" />}
               onClick={() => handleViewDetail(record)}
             />
           </Tooltip>
           <Tooltip title="编辑">
-            <Button
+            <Button aria-label="编辑"
               type="text"
-              icon={<Edit className="w-4 h-4" />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => {
                 setSelectedRule(record);
                 form.setFieldsValue(record);
@@ -420,9 +408,9 @@ const EscalationRuleManagement = () => {
             />
           </Tooltip>
           <Tooltip title="复制">
-            <Button
+            <Button aria-label="复制"
               type="text"
-              icon={<Copy className="w-4 h-4" />}
+              icon={<CopyOutlined aria-hidden="true" />}
               onClick={() => handleDuplicate(record)}
             />
           </Tooltip>
@@ -447,7 +435,7 @@ const EscalationRuleManagement = () => {
             cancelText="取消"
             okType="danger"
           >
-            <Button type="text" danger icon={<Trash2 className="w-4 h-4" />} />
+            <Button aria-label="删除" type="text" danger icon={<DeleteOutlined aria-hidden="true" />} />
           </Popconfirm>
         </Space>
       ),
@@ -566,7 +554,7 @@ const EscalationRuleManagement = () => {
           <Col xs={24} md={6} className="text-right">
             <Button
               type="primary"
-              icon={<Plus className="w-4 h-4" />}
+              icon={<PlusOutlined aria-hidden="true" />}
               onClick={() => {
                 setSelectedRule(null);
                 form.resetFields();

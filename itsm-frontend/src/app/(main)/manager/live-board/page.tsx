@@ -2,18 +2,8 @@
 
 import React, { useState } from 'react';
 import { Card, Button, Tag, Progress, message, Avatar } from 'antd';
-import {
-  Activity,
-  AlertTriangle,
-  Users,
-  Clock,
-  Sparkles,
-  Flame,
-  UserCheck,
-  ArrowUpRight,
-  ShieldAlert,
-  Send,
-} from 'lucide-react';
+import { Activity, AlertTriangle, Users, Clock, Flame, UserCheck, ArrowUpRight, ShieldAlert, Send } from 'lucide-react';
+import { StarOutlined } from '@ant-design/icons';
 import { AIConfidenceBadge } from '@/components/ai/AIConfidenceBadge';
 
 const MOCK_TEAM_MEMBERS = [
@@ -54,7 +44,7 @@ export default function ManagerLiveBoardPage() {
         <div className="flex items-center gap-2">
           <Button
             type="primary"
-            icon={<Sparkles size={15} />}
+            icon={<StarOutlined aria-hidden="true" />}
             loading={dispatchLoading}
             onClick={handleAutoDispatch}
             className="font-semibold text-[12px] h-[34px] shadow-none"

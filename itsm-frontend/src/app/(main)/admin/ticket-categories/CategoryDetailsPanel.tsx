@@ -2,7 +2,12 @@
 
 import React from 'react';
 import { Button, Descriptions, Empty, Space, Switch, Tabs, Tag, Typography } from 'antd';
-import { Copy, Delete, Edit, Plus } from 'lucide-react';
+import {
+  CopyOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import type { TicketCategory } from '@/lib/api/ticket-category-api';
 import { canAddChild, flattenCategoryTree } from './categoryTreeUtils';
 import { CategoryReferencesPanel } from './CategoryReferencesPanel';
@@ -62,18 +67,18 @@ export function CategoryDetailsPanel({
       ) : null}
 
       <Space wrap>
-        <Button type="primary" icon={<Edit size={14} />} onClick={() => onEdit(category)}>
+        <Button type="primary" icon={<EditOutlined aria-hidden="true" />} onClick={() => onEdit(category)}>
           编辑
         </Button>
         {canAddChild(category.level) ? (
-          <Button icon={<Plus size={14} />} onClick={() => onAddChild(category)}>
+          <Button icon={<PlusOutlined aria-hidden="true" />} onClick={() => onAddChild(category)}>
             新增下级
           </Button>
         ) : null}
-        <Button icon={<Copy size={14} />} onClick={() => onCopy(category)}>
+        <Button icon={<CopyOutlined aria-hidden="true" />} onClick={() => onCopy(category)}>
           复制
         </Button>
-        <Button danger icon={<Delete size={14} />} onClick={() => onDelete(category)}>
+        <Button danger icon={<DeleteOutlined aria-hidden="true" />} onClick={() => onDelete(category)}>
           删除
         </Button>
       </Space>

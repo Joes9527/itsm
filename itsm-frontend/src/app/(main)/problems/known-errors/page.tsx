@@ -21,7 +21,15 @@ import {
   Empty,
   Tooltip,
 } from 'antd';
-import { Search, Plus, Pencil, Trash2, Eye, RotateCcw, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { Search, RotateCcw, AlertCircle, XCircle } from 'lucide-react';
+import {
+  CheckCircleOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { KEDBResponse, KEDBStatsResponse } from '@/lib/api/kedb-api';
 import { KEDBApi } from '@/lib/api/kedb-api';
@@ -265,27 +273,27 @@ export default function KnownErrorsPage() {
       render: (_, record) => (
         <Space size="small">
           <Tooltip title="查看详情">
-            <Button
+            <Button aria-label="查看详情"
               type="link"
               size="small"
-              icon={<Eye />}
+              icon={<EyeOutlined aria-hidden="true" />}
               onClick={() => handleView(record)}
             />
           </Tooltip>
           <Tooltip title="编辑">
-            <Button
+            <Button aria-label="编辑"
               type="link"
               size="small"
-              icon={<Pencil />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => handleEdit(record)}
             />
           </Tooltip>
           {record.status === 'draft' && (
             <Tooltip title="晋升为正式已知错误">
-              <Button
+              <Button aria-label="晋升为正式已知错误"
                 type="link"
                 size="small"
-                icon={<CheckCircle />}
+                icon={<CheckCircleOutlined aria-hidden="true" />}
                 onClick={() => handlePromote(record.id)}
               />
             </Tooltip>
@@ -298,7 +306,7 @@ export default function KnownErrorsPage() {
             cancelText="取消"
           >
             <Tooltip title="删除">
-              <Button type="link" size="small" danger icon={<Trash2 />} />
+              <Button aria-label="删除" type="link" size="small" danger icon={<DeleteOutlined aria-hidden="true" />} />
             </Tooltip>
           </Popconfirm>
         </Space>
@@ -403,7 +411,7 @@ export default function KnownErrorsPage() {
               ))}
             </Select>
             <Space>
-              <Button type="primary" icon={<Search />} onClick={handleSearch}>
+              <Button type="primary" icon={<SearchOutlined aria-hidden="true" />} onClick={handleSearch}>
                 搜索
               </Button>
               <Button onClick={handleReset}>重置</Button>
@@ -415,7 +423,7 @@ export default function KnownErrorsPage() {
         <Card
           title="已知错误列表"
           extra={
-            <Button type="primary" icon={<Plus />} onClick={handleAdd}>
+            <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={handleAdd}>
               新建已知错误
             </Button>
           }

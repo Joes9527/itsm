@@ -16,7 +16,12 @@ import {
   Typography,
   Tabs,
 } from 'antd';
-import { Pencil, Eye, Clock, MessageSquare, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { Pencil, Clock, MessageSquare, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import {
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  EyeOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { SafeContent } from '@/components/common/SafeContent';
@@ -194,7 +199,7 @@ export default function KnowledgeReviewListPage() {
         <Space>
           <Button
             type="link"
-            icon={<Eye />}
+            icon={<EyeOutlined aria-hidden="true" />}
             onClick={() => {
               setSelectedArticle(record);
               setDetailModalVisible(true);
@@ -206,7 +211,7 @@ export default function KnowledgeReviewListPage() {
             <>
               <Button
                 type="link"
-                icon={<CheckCircle />}
+                icon={<CheckCircleOutlined aria-hidden="true" />}
                 onClick={() => {
                   setSelectedArticle(record);
                   setReviewAction('approve');
@@ -218,7 +223,7 @@ export default function KnowledgeReviewListPage() {
               <Button
                 type="link"
                 danger
-                icon={<XCircle />}
+                icon={<CloseCircleOutlined aria-hidden="true" />}
                 onClick={() => {
                   setSelectedArticle(record);
                   setReviewAction('reject');

@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Typography, Row, Col, Statistic, Button, Space, Select, Tabs, Table, Tag, Progress, Tooltip, message } from 'antd';
 import { SLAMonitorDashboard } from '@/components/business/SLAMonitorDashboard';
-import { AlertTriangle, CheckCircle, Clock, RefreshCw, LineChart } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, LineChart } from 'lucide-react';
+import { SyncOutlined } from '@ant-design/icons';
 import { SLAApi } from '@/lib/api/sla-api';
 
 const { Title, Text } = Typography;
@@ -235,7 +236,7 @@ const SLAMonitorPage = () => {
             ]}
           />
           <Button
-            icon={<RefreshCw className="w-4 h-4" />}
+            icon={<SyncOutlined aria-hidden="true" />}
             onClick={() => fetchStats()}
           >
             刷新

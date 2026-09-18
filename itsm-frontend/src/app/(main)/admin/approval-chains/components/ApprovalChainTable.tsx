@@ -6,7 +6,12 @@
 
 import React, { useMemo, useCallback } from 'react';
 import { Table, Tag, Button, Space, Tooltip, Dropdown, Switch } from 'antd';
-import { Edit, Trash2, Eye, MoreHorizontal, Play, Pause, Copy } from 'lucide-react';
+import { Edit, Trash2, Eye, Play, Pause, Copy } from 'lucide-react';
+import {
+  EditOutlined,
+  EyeOutlined,
+  MoreOutlined,
+} from '@ant-design/icons';
 import type { ApprovalChain } from '@/types/approval-chain';
 import { ApprovalChainFilters } from '@/types/approval-chain';
 import type { TableColumn, ActionButton } from '@/types/common';
@@ -145,23 +150,23 @@ export function ApprovalChainTable({
           return (
             <Space>
               <Tooltip title="查看详情">
-                <Button
+                <Button aria-label="查看详情"
                   type="text"
-                  icon={<Eye className="w-4 h-4" />}
+                  icon={<EyeOutlined aria-hidden="true" />}
                   onClick={() => onView(record)}
                   size="small"
                 />
               </Tooltip>
               <Tooltip title="编辑">
-                <Button
+                <Button aria-label="编辑"
                   type="text"
-                  icon={<Edit className="w-4 h-4" />}
+                  icon={<EditOutlined aria-hidden="true" />}
                   onClick={() => onEdit(record)}
                   size="small"
                 />
               </Tooltip>
               <Dropdown menu={menuProps} trigger={['click']}>
-                <Button type="text" icon={<MoreHorizontal className="w-4 h-4" />} size="small" />
+                <Button aria-label="更多操作" type="text" icon={<MoreOutlined aria-hidden="true" />} size="small" />
               </Dropdown>
             </Space>
           );

@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, Row, Col, Statistic, Typography, Button, Space, message } from 'antd';
-import { Package, CheckCircle, Clock, AlertTriangle, Plus } from 'lucide-react';
+import { Package, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { PlusOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import AssetList from '@/components/asset/AssetList';
 import { AssetApi } from '@/lib/api/asset-api';
@@ -52,7 +53,7 @@ export default function AssetsPage() {
         </div>
         <Button
           type="primary"
-          icon={<Plus className="w-4 h-4" />}
+          icon={<PlusOutlined aria-hidden="true" />}
           size="large"
           onClick={() => router.push('/assets/new')}
         >

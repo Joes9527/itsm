@@ -2,7 +2,12 @@
 
 import React, { Suspense, useState, useEffect, useCallback } from 'react';
 import { Card, Typography, Space, Button, Tabs, Badge, Skeleton } from 'antd';
-import { Search, Plus, LayoutGrid, Bell, Table } from 'lucide-react';
+import { Plus, LayoutGrid, Bell, Table } from 'lucide-react';
+import {
+  BellOutlined,
+  PlusOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import TicketList from '@/components/ticket/TicketList';
@@ -156,7 +161,7 @@ function TicketsPageContent() {
             </div>
             <Space wrap>
               <Button
-                icon={<Search size={16} />}
+                icon={<SearchOutlined aria-hidden="true" />}
                 onClick={() => {
                   const newShow = !showAdvancedSearch;
                   setShowAdvancedSearch(newShow);
@@ -173,7 +178,7 @@ function TicketsPageContent() {
               </Button>
               <Badge count={ticketStats.overdue} size="small">
                 <Button
-                  icon={<Bell size={16} />}
+                  icon={<BellOutlined aria-hidden="true" />}
                   onClick={() => {
                     setActiveTab('list');
                     router.push('/tickets?tab=list', { scroll: false });
@@ -183,7 +188,7 @@ function TicketsPageContent() {
                 </Button>
               </Badge>
               <Link href="/tickets/create">
-                <Button type="primary" icon={<Plus size={16} />}>
+                <Button type="primary" icon={<PlusOutlined aria-hidden="true" />}>
                   新建工单
                 </Button>
               </Link>
@@ -290,11 +295,11 @@ function TicketsPageContent() {
       {/* 快捷操作浮动按钮 */}
       <div className="fixed bottom-6 right-6 z-50">
         <Space orientation="vertical" size="middle">
-          <Button
+          <Button aria-label="新建"
             type="primary"
             shape="circle"
             size="large"
-            icon={<Plus size={16} />}
+            icon={<PlusOutlined aria-hidden="true" />}
             onClick={() => router.push('/tickets/create')}
             className="shadow-lg hover:scale-110 transition-transform"
           />

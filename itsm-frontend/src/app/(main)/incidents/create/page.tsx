@@ -9,7 +9,8 @@ import { classificationInput } from '@/components/work-item/classification';
 
 import React, { useState, useEffect } from 'react';
 import { Button, Card, Form, Input, Select, Space, Row, Col, message, Tabs, Typography, Divider, Tag, Spin } from 'antd';
-import { ArrowLeft, Search, X } from 'lucide-react';
+import { Search, X } from 'lucide-react';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { IncidentAPI } from '@/lib/api/incident-api';
 import type { ConfigurationItem } from '@/types/biz/cmdb';
@@ -143,7 +144,7 @@ export default function CreateIncidentPage() {
       <div className="mb-6">
         <Button
           type="link"
-          icon={<ArrowLeft />}
+          icon={<ArrowLeftOutlined aria-hidden="true" />}
           onClick={() => router.back()}
           style={{ paddingLeft: 0 }}
         >

@@ -6,7 +6,10 @@ import { CreationRequester } from '@/components/work-item/CreationRequester';
 
 import React, { useState } from 'react';
 import { Card, Form, Input, Select, Button, App, Space } from 'antd';
-import { ArrowLeft, Save } from 'lucide-react';
+import {
+  ArrowLeftOutlined,
+  SaveOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { TicketApi } from '@/lib/api/ticket-api';
 import { useI18n } from '@/lib/i18n';
@@ -42,7 +45,7 @@ const NewImprovementPage = () => {
       <CreationAttempts creation={creation} />
       <Card>
         <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-          <Button icon={<ArrowLeft />} onClick={() => router.push('/improvements')} type="text">
+          <Button icon={<ArrowLeftOutlined aria-hidden="true" />} onClick={() => router.push('/improvements')} type="text">
             返回列表
           </Button>
           <h2 className="text-[24px] font-semibold text-foreground">新建改进计划</h2>
@@ -78,7 +81,7 @@ const NewImprovementPage = () => {
                 <Button
                   type="primary"
                   htmlType="submit"
-                  icon={<Save />}
+                  icon={<SaveOutlined aria-hidden="true" />}
                   loading={loading}
                 >
                   保存

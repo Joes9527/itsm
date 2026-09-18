@@ -1,19 +1,12 @@
 'use client';
 
+import { Plus, Edit, Menu as MenuIcon, Eye, EyeOff, Power, PowerOff, Search, Link as LinkIcon, Hash } from 'lucide-react';
 import {
-  Plus,
-  Edit,
-  Trash2,
-  Menu as MenuIcon,
-  Eye,
-  EyeOff,
-  Power,
-  PowerOff,
-  RefreshCw,
-  Search,
-  Link as LinkIcon,
-  Hash,
-} from 'lucide-react';
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -329,9 +322,9 @@ export default function MenuManagementPage() {
       render: (_: unknown, record) => (
         <Space size="small">
           <Tooltip title="编辑">
-            <Button
+            <Button aria-label="编辑"
               type="text"
-              icon={<Edit className="w-4 h-4" />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => openEdit(record)}
             />
           </Tooltip>
@@ -344,7 +337,7 @@ export default function MenuManagementPage() {
             okButtonProps={{ danger: true }}
           >
             <Tooltip title="删除">
-              <Button type="text" danger icon={<Trash2 className="w-4 h-4" />} />
+              <Button aria-label="删除" type="text" danger icon={<DeleteOutlined aria-hidden="true" />} />
             </Tooltip>
           </Popconfirm>
         </Space>
@@ -446,13 +439,13 @@ export default function MenuManagementPage() {
           <Col xs={24} md={6} lg={10} className="text-right">
             <Space>
               <Button
-                icon={<RefreshCw className="w-4 h-4" />}
+                icon={<SyncOutlined aria-hidden="true" />}
                 onClick={loadMenus}
                 loading={loading}
               >
                 刷新
               </Button>
-              <Button type="primary" icon={<Plus className="w-4 h-4" />} onClick={openCreate}>
+              <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={openCreate}>
                 新建菜单
               </Button>
             </Space>

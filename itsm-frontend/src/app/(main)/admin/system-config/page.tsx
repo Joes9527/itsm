@@ -1,18 +1,10 @@
 'use client';
 
+import { Mail, Network, Globe, Database, MemoryStick, Settings, Shield, Clock, Cpu } from 'lucide-react';
 import {
-  RefreshCw,
-  Save,
-  Mail,
-  Network,
-  Globe,
-  Database,
-  MemoryStick,
-  Settings,
-  Shield,
-  Clock,
-  Cpu,
-} from 'lucide-react';
+  SaveOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -604,12 +596,12 @@ export default function SystemConfiguration() {
               配置管理
             </Title>
             <Space>
-              <Button icon={<RefreshCw className="w-4 h-4" />} onClick={handleReset}>
+              <Button icon={<SyncOutlined aria-hidden="true" />} onClick={handleReset}>
                 重置
               </Button>
               <Button
                 type="primary"
-                icon={<Save className="w-4 h-4" />}
+                icon={<SaveOutlined aria-hidden="true" />}
                 loading={isSaving}
                 onClick={handleSave}
               >

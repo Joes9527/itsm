@@ -15,7 +15,7 @@ import {
   Alert,
   Spin,
 } from 'antd';
-import { Plus } from 'lucide-react';
+import { PlusOutlined } from '@ant-design/icons';
 import MSPService from '@/lib/services/msp-service';
 import { UserApi } from '@/lib/api/user-api';
 import type { MSPAllocation, CreateAllocationRequest } from '@/types/msp';
@@ -180,7 +180,7 @@ export default function MSPManagementPage() {
       <Card
         title="MSP 分配管理"
         extra={
-          <Button type="primary" icon={<Plus />} onClick={() => setModalVisible(true)}>
+          <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={() => setModalVisible(true)}>
             新建分配
           </Button>
         }

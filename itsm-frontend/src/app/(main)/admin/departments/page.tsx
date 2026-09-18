@@ -20,7 +20,13 @@ import {
   Statistic,
   Empty,
 } from 'antd';
-import { Plus, Edit, Trash2, Users, RefreshCw, Search, Folder, FileText } from 'lucide-react';
+import { Edit, Users, Search, Folder, FileText } from 'lucide-react';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { Department, CreateDepartmentRequest } from '@/lib/services/department-service';
 import { departmentService } from '@/lib/services/department-service';
@@ -241,7 +247,7 @@ export default function DepartmentManagement() {
       width: 120,
       render: (_: unknown, record: Department) => (
         <Space size="small">
-          <Button type="text" icon={<Edit size={16} />} onClick={() => handleEdit(record)} />
+          <Button aria-label="编辑" type="text" icon={<EditOutlined aria-hidden="true" />} onClick={() => handleEdit(record)} />
           <Popconfirm
             title="确认删除"
             description={`确定要删除部门"${record.name}"吗？`}
@@ -249,7 +255,7 @@ export default function DepartmentManagement() {
             okText="确认"
             cancelText="取消"
           >
-            <Button type="text" danger icon={<Trash2 size={16} />} />
+            <Button aria-label="删除" type="text" danger icon={<DeleteOutlined aria-hidden="true" />} />
           </Popconfirm>
         </Space>
       ),
@@ -280,7 +286,7 @@ export default function DepartmentManagement() {
             />
             <Button
               type="primary"
-              icon={<Plus size={16} />}
+              icon={<PlusOutlined aria-hidden="true" />}
               onClick={() => {
                 setSelectedDepartment(null);
                 form.resetFields();
@@ -293,7 +299,7 @@ export default function DepartmentManagement() {
               新建部门
             </Button>
             <Button
-              icon={<RefreshCw size={16} />}
+              icon={<SyncOutlined aria-hidden="true" />}
               onClick={() => loadDepartments()}
               loading={fetching}
             >

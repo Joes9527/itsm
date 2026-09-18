@@ -30,18 +30,13 @@ import {
   Tooltip,
   DatePicker,
 } from 'antd';
+import { Search, FolderOpen, AlertTriangle, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import {
-  Plus,
-  Search,
-  Edit,
-  Delete,
-  PlayCircle,
-  FolderOpen,
-  AlertTriangle,
-  Clock,
-  CheckCircle,
-  AlertCircle,
-} from 'lucide-react';
+  DeleteOutlined,
+  EditOutlined,
+  PlayCircleOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import type { StandardChange } from '@/lib/api/standard-change-api';
 import { StandardChangeApi } from '@/lib/api/standard-change-api';
@@ -282,13 +277,13 @@ export default function StandardChangesPage() {
           <Tooltip title='从模板创建变更'>
             <Button
               type='link'
-              icon={<PlayCircle size={14} />}
+              icon={<PlayCircleOutlined aria-hidden="true" />}
               aria-label='从模板创建变更'
               onClick={() => handleInstantiate(record)}
             />
           </Tooltip>
           <Tooltip title='编辑'>
-            <Button type='link' icon={<Edit size={14} />} onClick={() => handleEdit(record)} />
+            <Button aria-label="编辑" type='link' icon={<EditOutlined aria-hidden="true" />} onClick={() => handleEdit(record)} />
           </Tooltip>
           <Popconfirm
             title='确定要删除此模板吗？'
@@ -297,7 +292,7 @@ export default function StandardChangesPage() {
             cancelText='取消'
           >
             <Tooltip title='删除'>
-              <Button type='link' danger icon={<Delete size={14} />} />
+              <Button aria-label="删除" type='link' danger icon={<DeleteOutlined aria-hidden="true" />} />
             </Tooltip>
           </Popconfirm>
         </Space>
@@ -314,7 +309,7 @@ export default function StandardChangesPage() {
             <h1 className='text-[24px] font-semibold text-foreground'>标准变更库</h1>
             <p className='mt-1 text-[12px] text-muted'>管理预批准的标准变更模板</p>
           </div>
-          <Button type='primary' icon={<Plus size={16} />} onClick={handleCreate}>
+          <Button type='primary' icon={<PlusOutlined aria-hidden="true" />} onClick={handleCreate}>
             新建模板
           </Button>
         </div>

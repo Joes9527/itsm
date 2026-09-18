@@ -16,7 +16,12 @@ import {
   App,
   Tooltip,
 } from 'antd';
-import { Search, Plus, Eye, RotateCcw, Link } from 'lucide-react';
+import { RotateCcw, Link } from 'lucide-react';
+import {
+  EyeOutlined,
+  PlusOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
 import dayjs from 'dayjs';
 
 import { CMDBApi } from '@/lib/api/cmdb-api';
@@ -221,9 +226,9 @@ export default function CloudResourcePage() {
       render: (_: unknown, record: CloudResource) => (
         <Space>
           <Tooltip title='查看详情'>
-            <Button
+            <Button aria-label="查看详情"
               type='text'
-              icon={<Eye />}
+              icon={<EyeOutlined aria-hidden="true" />}
               onClick={() => handleViewDetail(record)}
               size='small'
             />
@@ -326,7 +331,7 @@ export default function CloudResourcePage() {
             <Space>
               <Button
                 type='primary'
-                icon={<Search />}
+                icon={<SearchOutlined aria-hidden="true" />}
                 onClick={() => loadResources(1, pagination.pageSize)}
               >
                 查询
@@ -409,7 +414,7 @@ export default function CloudResourcePage() {
           <Button
             key='create'
             type='primary'
-            icon={<Plus />}
+            icon={<PlusOutlined aria-hidden="true" />}
             onClick={() => {
               if (selectedRow) {
                 router.push(`/cmdb/cis/create?cloudResourceRefId=${selectedRow.id}`);

@@ -2,7 +2,12 @@
 
 import React from 'react';
 import { Table, Tag, Button, Space, Dropdown, message, Modal } from 'antd';
-import { Eye, Edit, MoreHorizontal, AlertTriangle, Trash2 } from 'lucide-react';
+import { AlertTriangle, Trash2 } from 'lucide-react';
+import {
+  EditOutlined,
+  EyeOutlined,
+  MoreOutlined,
+} from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import dayjs from 'dayjs';
 import type { Incident } from '@/lib/api/types';
@@ -285,7 +290,7 @@ export const IncidentList: React.FC<IncidentListProps> = ({
             <Button
               type="text"
               size="small"
-              icon={<Eye size={16} />}
+              icon={<EyeOutlined aria-hidden="true" />}
               href={`/incidents/${record.id}`}
               aria-label={`查看事件 ${record.title}`}
               className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-0 rounded-lg transition-all duration-200 p-2"
@@ -294,7 +299,7 @@ export const IncidentList: React.FC<IncidentListProps> = ({
             <Button
               type="text"
               size="small"
-              icon={<Edit size={16} />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => onEdit(record)}
               aria-label={`编辑事件 ${record.title}`}
               className="text-green-600 hover:text-green-700 hover:bg-green-50 border-0 rounded-lg transition-all duration-200 p-2"
@@ -304,7 +309,7 @@ export const IncidentList: React.FC<IncidentListProps> = ({
               <Button
                 type="text"
                 size="small"
-                icon={<MoreHorizontal size={16} />}
+                icon={<MoreOutlined aria-hidden="true" />}
                 className="text-gray-600 hover:text-gray-700 hover:bg-gray-50 border-0 rounded-lg transition-all duration-200 p-2"
                 title={t('incidents.moreActions')}
                 onClick={e => e.preventDefault()}

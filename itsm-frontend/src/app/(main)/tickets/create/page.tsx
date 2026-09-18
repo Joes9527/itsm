@@ -29,7 +29,11 @@ import {
   Collapse,
 } from 'antd';
 import type { TreeDataNode } from 'antd';
-import { ArrowLeft, FileText, ChevronRight, Sparkles, FolderOpen } from 'lucide-react';
+import { FileText, ChevronRight, Sparkles, FolderOpen } from 'lucide-react';
+import {
+  ArrowLeftOutlined,
+  StarOutlined,
+} from '@ant-design/icons';
 import { TicketApi } from '@/lib/api/ticket-api';
 import { buildTicketFormFields } from './ticket-form-fields';
 import { TicketCategoryApi, type TicketCategory } from '@/lib/api/ticket-category-api';
@@ -456,7 +460,7 @@ export default function CreateTicketPage() {
         {/* 页面头部 */}
         <Card>
           <Space align="center" style={{ width: '100%' }}>
-            <Button icon={<ArrowLeft className="w-4 h-4" />} onClick={() => router.back()}>
+            <Button icon={<ArrowLeftOutlined aria-hidden="true" />} onClick={() => router.back()}>
               返回
             </Button>
             <div style={{ flex: 1 }}>
@@ -784,7 +788,7 @@ export default function CreateTicketPage() {
                   </Spin>
                   <Button
                     type="default"
-                    icon={<Sparkles className="w-4 h-4" />}
+                    icon={<StarOutlined aria-hidden="true" />}
                     onClick={handleAITriage}
                     loading={aiLoading}
                     className="mt-2"

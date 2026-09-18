@@ -24,23 +24,12 @@ import {
   Tooltip,
   Popconfirm,
 } from 'antd';
+import { Bell, Mail, MessageSquare, Smartphone, Settings, CheckCircle, Clock, RotateCcw, Search, Filter, Wifi, WifiOff } from 'lucide-react';
 import {
-  Bell,
-  Mail,
-  MessageSquare,
-  Smartphone,
-  Settings,
-  CheckCircle,
-  Clock,
-  Eye,
-  RotateCcw,
-  Search,
-  Filter,
-  Delete,
-  Wifi,
-  WifiOff,
-  RefreshCw,
-} from 'lucide-react';
+  DeleteOutlined,
+  EyeOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type {
   TicketNotification,
@@ -492,7 +481,7 @@ export default function NotificationsPage() {
                   key='read'
                   type='link'
                   size='small'
-                  icon={<Eye className='w-4 h-4' />}
+                  icon={<EyeOutlined aria-hidden="true" />}
                   onClick={e => {
                     e.stopPropagation();
                     handleMarkRead(notification.id);
@@ -513,7 +502,7 @@ export default function NotificationsPage() {
                   type='link'
                   size='small'
                   danger
-                  icon={<Delete className='w-4 h-4' />}
+                  icon={<DeleteOutlined aria-hidden="true" />}
                   onClick={e => e.stopPropagation()}
                 >
                   {t('notifications.delete')}
@@ -629,7 +618,7 @@ export default function NotificationsPage() {
         />
       </Col>
       <Col xs={24} md={2}>
-        <Button icon={<RefreshCw className='w-4 h-4' />} onClick={loadNotifications}>
+        <Button icon={<SyncOutlined aria-hidden="true" />} onClick={loadNotifications}>
           {t('workflow.refresh')}
         </Button>
       </Col>
@@ -668,7 +657,7 @@ export default function NotificationsPage() {
                   description={t('notifications.deleteRead')}
                   onConfirm={handleClearAll}
                 >
-                  <Button danger icon={<Delete className='h-4 w-4' />}>
+                  <Button danger icon={<DeleteOutlined aria-hidden="true" />}>
                     {t('notifications.clearAll')}
                   </Button>
                 </Popconfirm>
@@ -819,7 +808,7 @@ export default function NotificationsPage() {
               <WifiOff className='h-5 w-5 text-red-500' />
             )}
           </Tooltip>
-          <Button icon={<RefreshCw className='h-4 w-4' />} onClick={loadNotifications}>
+          <Button icon={<SyncOutlined aria-hidden="true" />} onClick={loadNotifications}>
             {t('workflow.refresh')}
           </Button>
         </Space>

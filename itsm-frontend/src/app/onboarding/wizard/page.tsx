@@ -24,7 +24,8 @@ import {
   Tag,
   Alert,
 } from 'antd';
-import { LayoutGrid, CheckCircle, PlusCircle, Database, Rocket, Bot } from 'lucide-react';
+import { LayoutGrid, PlusCircle, Database, Rocket, Bot } from 'lucide-react';
+import { CheckCircleOutlined } from '@ant-design/icons';
 import { getDefaultHomePath } from '@/config/persona/persona-config';
 import { useAuthStore } from '@/lib/store/auth-store';
 
@@ -114,7 +115,7 @@ export default function FirstRunWizard({ initialStep, onFinish }: WizardProps) {
             </Button>
             <Space>
               {currentIndex > 0 && <Button onClick={goPrev}>上一步</Button>}
-              <Button type="primary" onClick={goNext} icon={<CheckCircle />}>
+              <Button type="primary" onClick={goNext} icon={<CheckCircleOutlined aria-hidden="true" />}>
                 {currentIndex === STEPS.length - 1 ? '完成' : '下一步'}
               </Button>
             </Space>

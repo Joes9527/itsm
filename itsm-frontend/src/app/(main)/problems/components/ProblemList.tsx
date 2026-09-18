@@ -3,7 +3,12 @@
 import React from 'react';
 import { Table, Tag, Button, Space, Dropdown, Tooltip, message } from 'antd';
 import type { MenuProps } from 'antd';
-import { Eye, Edit, MoreHorizontal, AlertTriangle, Trash2 } from 'lucide-react';
+import { AlertTriangle, Trash2 } from 'lucide-react';
+import {
+  EditOutlined,
+  EyeOutlined,
+  MoreOutlined,
+} from '@ant-design/icons';
 import type { ProblemStatus, ProblemPriority} from '@/constants/problem';
 import { ProblemStatusLabels, ProblemPriorityLabels } from '@/constants/problem';
 import type { Problem } from '@/lib/api/problem-api';
@@ -203,19 +208,19 @@ export const ProblemList: React.FC<ProblemListProps> = ({
       render: (_: unknown, record: Problem) => (
         <Space size="small">
           <Tooltip title="查看详情">
-            <Button
+            <Button aria-label="查看详情"
               type="text"
               size="small"
-              icon={<Eye size={16} />}
+              icon={<EyeOutlined aria-hidden="true" />}
               onClick={() => router.push(`/problems/${record.id}`)}
               className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md transition-colors duration-200"
             />
           </Tooltip>
           <Tooltip title="编辑问题">
-            <Button
+            <Button aria-label="编辑问题"
               type="text"
               size="small"
-              icon={<Edit size={16} />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => router.push(`/problems/${record.id}/edit`)}
               className="text-green-600 hover:text-green-800 hover:bg-green-50 rounded-md transition-colors duration-200"
             />
@@ -245,10 +250,10 @@ export const ProblemList: React.FC<ProblemListProps> = ({
             placement="bottomRight"
           >
             <Tooltip title="更多操作">
-              <Button
+              <Button aria-label="更多操作"
                 type="text"
                 size="small"
-                icon={<MoreHorizontal size={16} />}
+                icon={<MoreOutlined aria-hidden="true" />}
                 className="text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-md transition-colors duration-200"
               />
             </Tooltip>

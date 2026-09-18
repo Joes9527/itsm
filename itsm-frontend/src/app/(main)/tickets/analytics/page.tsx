@@ -34,7 +34,8 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { RotateCcw, FileSpreadsheet, TrendingUp, TrendingDown } from 'lucide-react';
+import { RotateCcw, TrendingUp, TrendingDown } from 'lucide-react';
+import { FileExcelOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import type { TicketAnalyticsResponse } from '@/lib/services/analytics-service';
@@ -244,7 +245,7 @@ const TicketAnalytics: React.FC = () => {
               刷新数据
             </Button>
             <Button
-              icon={<FileSpreadsheet />}
+              icon={<FileExcelOutlined aria-hidden="true" />}
               onClick={() => handleExport('excel')}
               loading={exporting}
             >

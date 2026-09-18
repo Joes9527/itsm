@@ -2,7 +2,11 @@
 
 import React from 'react';
 import { App, Badge, Button, Card, Col, Row, Space, Table, Tabs, Tag, Typography } from 'antd';
-import { Cloud, Database, RefreshCw, Server, Sparkles } from 'lucide-react';
+import { Cloud, Database, Server, Sparkles } from 'lucide-react';
+import {
+  DatabaseOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 
 import { CMDBApi } from '@/lib/api/cmdb-api';
 import { ManagementPageHeader } from '@/components/ui/ManagementPageHeader';
@@ -209,10 +213,10 @@ export default function ServiceGraphRegistryPage() {
         description="把发现源、云服务、云账号和发现历史放到同一张接入注册表里，为 Service Graph 提供统一入口。"
         actions={
           <Space wrap>
-            <Button icon={<RefreshCw className="h-4 w-4" />} loading={loading} onClick={load}>
+            <Button icon={<SyncOutlined aria-hidden="true" />} loading={loading} onClick={load}>
               刷新
             </Button>
-            <Button type="primary" href="/cmdb/relationships" icon={<Database className="h-4 w-4" />}>
+            <Button type="primary" href="/cmdb/relationships" icon={<DatabaseOutlined aria-hidden="true" />}>
               去关系图谱
             </Button>
           </Space>

@@ -32,7 +32,8 @@ import {
   Divider,
   Typography,
 } from 'antd';
-import { Search, Plus, Pencil, Trash2, Download, Upload, Eye, Settings, RotateCcw, AlertCircle, MoreHorizontal } from 'lucide-react';
+import { Search, Plus, Pencil, Trash2, Download, Upload, Eye, Settings, RotateCcw, AlertCircle } from 'lucide-react';
+import { MoreOutlined } from '@ant-design/icons';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import type { FilterValue, SorterResult } from 'antd/es/table/interface';
 
@@ -152,7 +153,7 @@ export function createActionColumn({
               menu={{ items: moreActions.map(a => ({ ...a, danger: undefined })) }}
               trigger={['click']}
             >
-              <Button type="link" size="small" icon={<MoreHorizontal />} />
+              <Button aria-label="更多操作" type="link" size="small" icon={<MoreOutlined aria-hidden="true" />} />
             </Dropdown>
           )}
         </Space>

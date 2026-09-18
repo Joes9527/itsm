@@ -24,21 +24,15 @@ import {
   Radio,
 } from 'antd';
 import type { RadioChangeEvent } from 'antd';
+import { AlertTriangle, BookOpen, CheckCircle, Workflow, RefreshCw, Search, FileText, Tag as TagIcon } from 'lucide-react';
 import {
-  AlertTriangle,
-  BookOpen,
-  CheckCircle,
-  Plus,
-  Edit,
-  Delete,
-  Copy,
-  Eye,
-  Workflow,
-  RefreshCw,
-  Search,
-  FileText,
-  Tag as TagIcon,
-} from 'lucide-react';
+  CopyOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { TicketApi } from '@/lib/api/ticket-api';
 import { CustomFieldsEditor } from '@/components/common/CustomFieldsEditor';
 // AppLayout is handled by layout.tsx
@@ -285,7 +279,7 @@ const TicketTemplatesPage = () => {
         <Tooltip title="View template" key="view">
           <Button
             type="text"
-            icon={<Eye size={16} />}
+            icon={<EyeOutlined aria-hidden="true" />}
             onClick={() => router.push(`/tickets/templates/${template.id}`)}
             aria-label="查看模板详情"
           />
@@ -293,7 +287,7 @@ const TicketTemplatesPage = () => {
         <Tooltip title="Edit template" key="edit">
           <Button
             type="text"
-            icon={<Edit size={16} />}
+            icon={<EditOutlined aria-hidden="true" />}
             onClick={() => handleEditTemplate(template)}
             aria-label="编辑模板"
           />
@@ -301,7 +295,7 @@ const TicketTemplatesPage = () => {
         <Tooltip title="Copy template" key="copy">
           <Button
             type="text"
-            icon={<Copy size={16} />}
+            icon={<CopyOutlined aria-hidden="true" />}
             onClick={() => handleCopyTemplate(template)}
             aria-label="复制模板"
           />
@@ -313,7 +307,7 @@ const TicketTemplatesPage = () => {
             okText="Confirm"
             cancelText="Cancel"
           >
-            <Button type="text" danger icon={<Delete size={16} />} aria-label="删除模板" />
+            <Button type="text" danger icon={<DeleteOutlined aria-hidden="true" />} aria-label="删除模板" />
           </Popconfirm>
         </Tooltip>,
       ]}
@@ -422,19 +416,19 @@ const TicketTemplatesPage = () => {
           <Space>
             <Button
               type="text"
-              icon={<Eye size={16} />}
+              icon={<EyeOutlined aria-hidden="true" />}
               onClick={() => router.push(`/tickets/templates/${template.id}`)}
               aria-label="查看模板详情"
             />
             <Button
               type="text"
-              icon={<Edit size={16} />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => handleEditTemplate(template)}
               aria-label="编辑模板"
             />
             <Button
               type="text"
-              icon={<Copy size={16} />}
+              icon={<CopyOutlined aria-hidden="true" />}
               onClick={() => handleCopyTemplate(template)}
               aria-label="复制模板"
             />
@@ -444,7 +438,7 @@ const TicketTemplatesPage = () => {
               okText="Confirm"
               cancelText="Cancel"
             >
-              <Button type="text" danger icon={<Delete size={16} />} aria-label="删除模板" />
+              <Button type="text" danger icon={<DeleteOutlined aria-hidden="true" />} aria-label="删除模板" />
             </Popconfirm>
           </Space>
         </div>
@@ -465,12 +459,12 @@ const TicketTemplatesPage = () => {
           </p>
         </div>
         <Space>
-          <Button icon={<RefreshCw size={16} />} onClick={loadTemplates} aria-label="刷新模板列表">
+          <Button icon={<SyncOutlined aria-hidden="true" />} onClick={loadTemplates} aria-label="刷新模板列表">
             Refresh
           </Button>
           <Button
             type="primary"
-            icon={<Plus size={16} />}
+            icon={<PlusOutlined aria-hidden="true" />}
             onClick={handleCreateTemplate}
             aria-label="新建模板"
           >

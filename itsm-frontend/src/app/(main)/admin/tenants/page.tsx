@@ -1,20 +1,14 @@
 'use client';
 
+import { Building2, AlertCircle, CheckCircle, Clock, Plus, Search, Edit, Users, Calendar } from 'lucide-react';
 import {
-  Building2,
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  Plus,
-  Search,
-  Edit,
-  Trash2,
-  Eye,
-  Users,
-  Calendar,
-  PauseCircle,
-  PlayCircle,
-} from 'lucide-react';
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 
 import React, { useState, useEffect } from 'react';
 import dayjs from 'dayjs';
@@ -288,32 +282,32 @@ export default function TenantManagement() {
       render: (_: unknown, record: Tenant) => (
         <Space size="small">
           <Tooltip title="编辑">
-            <Button
+            <Button aria-label="编辑"
               type="text"
-              icon={<Edit className="w-4 h-4" />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => openTenantModal(record)}
             />
           </Tooltip>
           <Tooltip title="查看">
-            <Button
+            <Button aria-label="查看"
               type="text"
-              icon={<Eye className="w-4 h-4" />}
+              icon={<EyeOutlined aria-hidden="true" />}
               onClick={() => openTenantModal(record, true)}
             />
           </Tooltip>
           {record.status === 'active' ? (
             <Tooltip title="暂停租户">
-              <Button
+              <Button aria-label="暂停租户"
                 type="text"
-                icon={<PauseCircle className="w-4 h-4" />}
+                icon={<PauseCircleOutlined aria-hidden="true" />}
                 onClick={() => handleChangeTenantStatus(record, 'suspended')}
               />
             </Tooltip>
           ) : (
             <Tooltip title="恢复租户">
-              <Button
+              <Button aria-label="恢复租户"
                 type="text"
-                icon={<PlayCircle className="w-4 h-4" />}
+                icon={<PlayCircleOutlined aria-hidden="true" />}
                 onClick={() => handleChangeTenantStatus(record, 'active')}
               />
             </Tooltip>
@@ -326,7 +320,7 @@ export default function TenantManagement() {
             cancelText="取消"
           >
             <Tooltip title="删除">
-              <Button type="text" danger icon={<Trash2 className="w-4 h-4" />} />
+              <Button aria-label="删除" type="text" danger icon={<DeleteOutlined aria-hidden="true" />} />
             </Tooltip>
           </Popconfirm>
         </Space>
@@ -433,7 +427,7 @@ export default function TenantManagement() {
           <Col xs={24} md={4} lg={8} className="text-right">
             <Button
               type="primary"
-              icon={<Plus className="w-4 h-4" />}
+              icon={<PlusOutlined aria-hidden="true" />}
               onClick={() => {
                 openTenantModal(null);
               }}

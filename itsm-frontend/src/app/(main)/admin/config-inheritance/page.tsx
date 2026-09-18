@@ -20,7 +20,12 @@ import {
   message,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { GitBranch, Plus, RefreshCw, Search } from 'lucide-react';
+import { GitBranch } from 'lucide-react';
+import {
+  PlusOutlined,
+  SearchOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import type { DomainConfig, EffectiveConfig } from '@/lib/api/domain-config-api';
 import { DomainConfigApi } from '@/lib/api/domain-config-api';
 
@@ -159,10 +164,10 @@ export default function ConfigInheritancePage() {
             title="配置列表"
             extra={
               <Space>
-                <Button icon={<RefreshCw size={16} />} onClick={loadConfigs} loading={loading}>
+                <Button icon={<SyncOutlined aria-hidden="true" />} onClick={loadConfigs} loading={loading}>
                   刷新
                 </Button>
-                <Button type="primary" icon={<Plus size={16} />} onClick={() => setModalOpen(true)}>
+                <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={() => setModalOpen(true)}>
                   新增配置
                 </Button>
               </Space>
@@ -197,7 +202,7 @@ export default function ConfigInheritancePage() {
                   </Form.Item>
                 </Col>
               </Row>
-              <Button block type="primary" icon={<Search size={16} />} loading={previewLoading} onClick={handlePreview}>
+              <Button block type="primary" icon={<SearchOutlined aria-hidden="true" />} loading={previewLoading} onClick={handlePreview}>
                 解析有效配置
               </Button>
             </Form>

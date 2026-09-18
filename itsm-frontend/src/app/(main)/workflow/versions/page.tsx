@@ -2,7 +2,14 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { App, Button, Card, Descriptions, Modal, Select, Space, Table, Tag } from 'antd';
-import { Diff, Download, Eye, PlayCircle, RefreshCw, RotateCcw } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
+import {
+  DiffOutlined,
+  DownloadOutlined,
+  EyeOutlined,
+  PlayCircleOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { useSearchParams } from 'next/navigation';
 
 import { FilterToolbarCard } from '@/components/ui/FilterToolbarCard';
@@ -115,13 +122,13 @@ export default function WorkflowVersionsPage() {
           <Space>
             <Button
               type="text"
-              icon={<Eye className="h-4 w-4" />}
+              icon={<EyeOutlined aria-hidden="true" />}
               aria-label={`查看版本 v${record.version} 详情`}
               onClick={() => setSelectedVersion(record)}
             />
             <Button
               type="text"
-              icon={<PlayCircle className="h-4 w-4" />}
+              icon={<PlayCircleOutlined aria-hidden="true" />}
               aria-label={`激活版本 v${record.version}`}
               onClick={() => {
                 modal.confirm({
@@ -166,7 +173,7 @@ export default function WorkflowVersionsPage() {
             />
             <Button
               type="text"
-              icon={<Diff className="h-4 w-4" />}
+              icon={<DiffOutlined aria-hidden="true" />}
               aria-label={`比较版本 v${record.version} 与最新版本`}
               onClick={async () => {
                 const latestVersion = versions[0];
@@ -245,10 +252,10 @@ export default function WorkflowVersionsPage() {
         }
         actions={
           <>
-            <Button icon={<RefreshCw className="h-4 w-4" />} onClick={loadVersions}>
+            <Button icon={<SyncOutlined aria-hidden="true" />} onClick={loadVersions}>
               刷新
             </Button>
-            <Button icon={<Download className="h-4 w-4" />} disabled>
+            <Button icon={<DownloadOutlined aria-hidden="true" />} disabled>
               导出版本
             </Button>
           </>

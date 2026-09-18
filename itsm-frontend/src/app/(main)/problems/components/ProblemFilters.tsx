@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Card, Row, Col, Input, Select, Button } from 'antd';
-import { RefreshCw } from 'lucide-react';
+import { SyncOutlined } from '@ant-design/icons';
 import { ProblemStatus } from '@/constants/problem';
 
 const { Search: SearchInput } = Input;
@@ -69,7 +69,7 @@ export const ProblemFilters: React.FC<ProblemFiltersProps> = ({
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">操作</label>
             <Button
-              icon={<RefreshCw size={20} />}
+              icon={<SyncOutlined aria-hidden="true" />}
               onClick={onRefresh}
               loading={loading}
               size="large"
