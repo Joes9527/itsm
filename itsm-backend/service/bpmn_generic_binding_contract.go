@@ -6,10 +6,18 @@ import (
 	creation "itsm-backend/handlers/common/workitemcreation"
 )
 
+// genericBindingConfig detects whether a stored definition opts into the generic
+// fulfillment contract and returns its trusted flags.
+//
+// Creation references a definition that publication already validated, so it does not
+// re-validate that definition here. A definition which does not parse cannot declare the
+// contract: it contributes no flags and creation keeps the behavior it had before this
+// contract existed. Re-validating at creation would instead reject every definition the
+// parser refuses, for every record class, which this contract does not own.
 func genericBindingConfig(definition *ent.ProcessDefinition, recordClass string, overrides map[string]interface{}) (*GenericFulfillmentConfig, error) {
 	parsed, err := NewBPMNParser().ParseXML(definition.BpmnXML)
 	if err != nil {
-		return nil, err
+		return nil, nil
 	}
 	if err = ValidateWorkItemLifecycleRecordClass(parsed, recordClass); err != nil {
 		return nil, err

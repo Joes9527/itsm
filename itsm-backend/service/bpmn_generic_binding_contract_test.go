@@ -63,3 +63,36 @@ func TestGenericPublicBindingAdmission(t *testing.T) {
 		})
 	}
 }
+
+// A definition that declares no lifecycle contract is outside this gate's scope, whatever
+// its record class. Creation references such a definition the way it did before the contract
+// existed: it resolves, and it freezes no flags. Re-validating the definition at creation
+// instead rejected every definition the parser refuses, for every record class.
+func TestGenericCreationBindingIgnoresDefinitionsWithoutTheContract(t *testing.T) {
+	for _, class := range []string{"generic", "incident", "problem", "change_request", "service_request_item", "catalog_task"} {
+		for _, definition := range []struct {
+			name, xml string
+		}{
+			{"parser-rejected", "<definitions/>"},
+			{"malformed", "<definitions><process"},
+		} {
+			t.Run(class+"/"+definition.name, func(t *testing.T) {
+				f := newBPMNAuthorizationFixture(t)
+				f.definition = f.definition.Update().SetBpmnXML([]byte(definition.xml)).SetProcessVariables(map[string]interface{}{"approval_required": true, "need_escalate": true}).SaveX(context.Background())
+				tx, err := f.client.Tx(context.Background())
+				require.NoError(t, err)
+				defer tx.Rollback()
+				plan := creation.NewPlan(creation.ResolvedIntake{RecordClass: class, Identity: creation.Identity{TenantID: f.tenant.ID}, Command: creation.CreateWorkItemCommand{FormValues: map[string]interface{}{}}}, "open", "medium", "web")
+				binding, _, err := NewProcessBindingService(f.client).ResolveCreationWorkflow(context.Background(), tx, plan, f.definition.Key)
+				require.NoError(t, err)
+				require.Equal(t, f.definition.ID, *binding.DefinitionID)
+				// The definition declares no contract, so its process variables are not
+				// frozen: approval_required keeps the plan default and need_escalate is
+				// never written. Freezing them would let a contractless definition set
+				// trusted branch flags for every record class.
+				require.Equal(t, false, plan.WorkflowVariables["approval_required"])
+				require.NotContains(t, plan.WorkflowVariables, "need_escalate")
+			})
+		}
+	}
+}
