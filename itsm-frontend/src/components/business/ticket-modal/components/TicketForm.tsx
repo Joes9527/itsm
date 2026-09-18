@@ -5,7 +5,12 @@
 
 import React from 'react';
 import { Form, Steps, Button, Input, Select, DatePicker, Row, Col, Avatar } from 'antd';
-import { Plus, ArrowLeft, ArrowRight, CheckCircle } from 'lucide-react';
+import {
+  ArrowLeftOutlined,
+  ArrowRightOutlined,
+  CheckCircleOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import { useI18n } from '@/lib/i18n';
 
 import { useTicketForm } from '../hooks/useTicketForm';
@@ -56,7 +61,7 @@ export const TicketForm: React.FC<TicketFormProps> = ({
             <Button
               onClick={handlePrev}
               size="large"
-              icon={<ArrowLeft size={16} />}
+              icon={<ArrowLeftOutlined aria-hidden="true" />}
               className="rounded-lg border-gray-200 hover:border-gray-300 transition-colors duration-200"
             >
               上一步
@@ -76,7 +81,7 @@ export const TicketForm: React.FC<TicketFormProps> = ({
               type="primary"
               onClick={handleNext}
               size="large"
-              icon={<ArrowRight size={16} />}
+              icon={<ArrowRightOutlined aria-hidden="true" />}
               className="rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 border-0 shadow-md hover:shadow-lg transition-all duration-200"
             >
               下一步
@@ -87,7 +92,7 @@ export const TicketForm: React.FC<TicketFormProps> = ({
               onClick={handleSubmit}
               size="large"
               loading={loading}
-              icon={<CheckCircle size={16} />}
+              icon={<CheckCircleOutlined aria-hidden="true" />}
               className="rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 border-0 shadow-md hover:shadow-lg transition-all duration-200"
             >
               提交工单
@@ -232,7 +237,7 @@ const EditingForm: React.FC<EditingFormProps> = ({
             size="large"
             loading={loading}
             className="rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 border-0 shadow-md hover:shadow-lg transition-all duration-200"
-            icon={<Plus size={16} />}
+            icon={<PlusOutlined aria-hidden="true" />}
           >
             保存修改
           </Button>

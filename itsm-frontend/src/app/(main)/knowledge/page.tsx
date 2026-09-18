@@ -18,18 +18,11 @@ import {
   Input,
   Empty,
 } from 'antd';
+import { BookOpen, FileText, Eye, CheckCircle, Clock, Star, MessageCircle, Search, Sparkles } from 'lucide-react';
 import {
-  BookOpen,
-  FileText,
-  Eye,
-  CheckCircle,
-  Plus,
-  Clock,
-  Star,
-  MessageCircle,
-  Search,
-  Sparkles,
-} from 'lucide-react';
+  PlusOutlined,
+  StarOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import ArticleList from '@/components/knowledge/ArticleList';
 import { KnowledgeBaseApi } from '@/lib/api/knowledge-base-api';
@@ -287,14 +280,14 @@ export default function KnowledgePage() {
             onSearch={handleAISearch}
             loading={aiSearchLoading}
             enterButton={
-              <Button type="text" icon={<Sparkles className="w-4 h-4 text-yellow-500" />} />
+              <Button aria-label="AI 搜索" type="text" icon={<StarOutlined aria-hidden="true" className="text-yellow-500" />} />
             }
             style={{ width: 300 }}
             onPressEnter={handleAISearch}
           />
           <Button
             type="primary"
-            icon={<Plus className="w-4 h-4" />}
+            icon={<PlusOutlined aria-hidden="true" />}
             size="large"
             onClick={() => router.push('/knowledge/articles/new')}
           >

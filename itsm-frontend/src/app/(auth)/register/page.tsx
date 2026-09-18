@@ -2,17 +2,11 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Mail, Lock, User, Building2, Phone, AlertCircle, Shield } from 'lucide-react';
 import {
-  Mail,
-  Lock,
-  User,
-  Building2,
-  Phone,
-  ArrowRight,
-  CheckCircle,
-  AlertCircle,
-  Shield,
-} from 'lucide-react';
+  ArrowRightOutlined,
+  CheckCircleOutlined,
+} from '@ant-design/icons';
 import { useI18n } from '@/lib/i18n/useI18n';
 import {
   Typography,
@@ -196,7 +190,7 @@ export default function RegisterPage() {
                       type="primary"
                       onClick={handleNextStep}
                       className="w-full"
-                      icon={<ArrowRight size={14} />}
+                      icon={<ArrowRightOutlined aria-hidden="true" />}
                     >
                       下一步
                     </Button>
@@ -280,7 +274,7 @@ export default function RegisterPage() {
                         htmlType="submit"
                         loading={loading}
                         className="flex-1"
-                        icon={<CheckCircle size={14} />}
+                        icon={<CheckCircleOutlined aria-hidden="true" />}
                       >
                         {loading
                           ? t('auth.register.registering')

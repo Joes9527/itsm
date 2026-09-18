@@ -3,7 +3,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { App, Button, Card, Descriptions, Form, Input, Modal, Select, Space, Table, Tag, Tabs, Timeline, Empty, Badge } from 'antd';
-import { Eye, PauseCircle, PlayCircle, RefreshCw, StopCircle, Clock, User, FileText, MessageSquare, Rocket } from 'lucide-react';
+import { Clock, User, FileText, MessageSquare } from 'lucide-react';
+import {
+  EyeOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
+  RocketOutlined,
+  StopOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 
 import { FilterToolbarCard } from '@/components/ui/FilterToolbarCard';
 import { LoadingEmptyError } from '@/components/ui/LoadingEmptyError';
@@ -305,7 +313,7 @@ export default function WorkflowInstancesPage() {
           <Space size="small">
             <Button 
               type="text" 
-              icon={<Eye className="h-4 w-4" />} 
+              icon={<EyeOutlined aria-hidden="true" />} 
               onClick={() => handleViewDetail(record)}
               size="small"
             >
@@ -315,7 +323,7 @@ export default function WorkflowInstancesPage() {
               <>
                 <Button
                   type="text"
-                  icon={<PauseCircle className="h-4 w-4" />}
+                  icon={<PauseCircleOutlined aria-hidden="true" />}
                   onClick={() => {
                     modal.confirm({
                       title: '暂停流程实例',
@@ -340,7 +348,7 @@ export default function WorkflowInstancesPage() {
                 <Button
                   type="text"
                   danger
-                  icon={<StopCircle className="h-4 w-4" />}
+                  icon={<StopOutlined aria-hidden="true" />}
                   onClick={() => {
                     modal.confirm({
                       title: '终止流程实例',
@@ -368,7 +376,7 @@ export default function WorkflowInstancesPage() {
             {record.status === 'suspended' && (
               <Button
                 type="text"
-                icon={<PlayCircle className="h-4 w-4" />}
+                icon={<PlayCircleOutlined aria-hidden="true" />}
                 onClick={() => {
                   modal.confirm({
                     title: '恢复流程实例',
@@ -637,10 +645,10 @@ export default function WorkflowInstancesPage() {
         }
         actions={
           <Space>
-            <Button type="primary" icon={<Rocket className="h-4 w-4" />} onClick={openStartModal}>
+            <Button type="primary" icon={<RocketOutlined aria-hidden="true" />} onClick={openStartModal}>
               发起流程
             </Button>
-            <Button icon={<RefreshCw className="h-4 w-4" />} onClick={loadData}>
+            <Button icon={<SyncOutlined aria-hidden="true" />} onClick={loadData}>
               刷新
             </Button>
           </Space>

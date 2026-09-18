@@ -24,7 +24,13 @@ import {
   Alert,
 } from 'antd';
 import Link from 'next/link';
-import { Plus, Edit, Delete, Copy, Search, Settings } from 'lucide-react';
+import { Search, Settings } from 'lucide-react';
+import {
+  CopyOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import type {
   ProcessBinding,
   ProcessBindingPayload} from '@/lib/api/process-binding-api';
@@ -266,18 +272,18 @@ export default function ProcessRoutingPage() {
       key: 'actions',
       render: (_: any, record: ProcessRoutingRule) => (
         <Space>
-          <Tooltip title="Edit">
-            <Button size="small" icon={<Edit />} onClick={() => handleEdit(record)} />
+          <Tooltip title="编辑">
+            <Button aria-label="编辑" size="small" icon={<EditOutlined aria-hidden="true" />} onClick={() => handleEdit(record)} />
           </Tooltip>
-          <Tooltip title="Duplicate">
-            <Button size="small" icon={<Copy />} onClick={() => handleDuplicate(record)} />
+          <Tooltip title="复制">
+            <Button aria-label="复制" size="small" icon={<CopyOutlined aria-hidden="true" />} onClick={() => handleDuplicate(record)} />
           </Tooltip>
           <Popconfirm
-            title="Are you sure you want to delete this rule?"
+            title="确定要删除这条路由规则吗？"
             onConfirm={() => handleDelete(record.id)}
           >
-            <Tooltip title="Delete">
-              <Button size="small" danger icon={<Delete />} />
+            <Tooltip title="删除">
+              <Button aria-label="删除" size="small" danger icon={<DeleteOutlined aria-hidden="true" />} />
             </Tooltip>
           </Popconfirm>
         </Space>
@@ -349,7 +355,7 @@ export default function ProcessRoutingPage() {
               prefix={<Search />}
               style={{ width: 200 }}
             />
-            <Button type="primary" icon={<Plus />} onClick={() => setShowModal(true)}>
+            <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={() => setShowModal(true)}>
               Add Rule
             </Button>
           </Space>

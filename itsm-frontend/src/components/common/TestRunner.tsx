@@ -2,7 +2,8 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { Card, Button, Progress, Tag, Collapse, Alert, Statistic, Row, Col } from 'antd';
-import { Play, CheckCircle, XCircle, Clock, AlertTriangle, FileText, Code } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, AlertTriangle, FileText, Code } from 'lucide-react';
+import { CaretRightOutlined } from '@ant-design/icons';
 
 const { Panel } = Collapse;
 
@@ -101,7 +102,7 @@ export const TestRunner: React.FC = () => {
         <Button
           type="primary"
           size="large"
-          icon={<Play size={16} />}
+          icon={<CaretRightOutlined aria-hidden="true" />}
           onClick={runAllTests}
           loading={state.isRunning}
           disabled={state.isRunning}

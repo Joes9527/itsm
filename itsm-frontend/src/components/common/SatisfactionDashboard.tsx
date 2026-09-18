@@ -22,26 +22,11 @@ import {
   Divider,
   message,
 } from 'antd';
+import { Smile, Meh, Frown, TrendingUp, TrendingDown, Star, MessageSquare, Users, Clock, Filter, BarChart3, Heart, ThumbsUp, ThumbsDown, AlertTriangle, CheckCircle } from 'lucide-react';
 import {
-  Smile,
-  Meh,
-  Frown,
-  TrendingUp,
-  TrendingDown,
-  Star,
-  MessageSquare,
-  Users,
-  Clock,
-  Filter,
-  Download,
-  Eye,
-  BarChart3,
-  Heart,
-  ThumbsUp,
-  ThumbsDown,
-  AlertTriangle,
-  CheckCircle,
-} from 'lucide-react';
+  DownloadOutlined,
+  EyeOutlined,
+} from '@ant-design/icons';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -277,7 +262,7 @@ export const SatisfactionDashboard: React.FC = () => {
       title: '操作',
       key: 'action',
       render: (record: unknown) => (
-        <Button size="small" icon={<Eye />}>
+        <Button size="small" icon={<EyeOutlined aria-hidden="true" />}>
           查看详情
         </Button>
       ),
@@ -317,7 +302,7 @@ export const SatisfactionDashboard: React.FC = () => {
               onChange={value => setTimeRange([value, timeRange[1]])}
               style={{ width: 100 }}
              options={[{ value: "7d", label: "7天" }, { value: "30d", label: "30天" }, { value: "90d", label: "90天" }]} />
-            <Button icon={<Download />} size="small">
+            <Button icon={<DownloadOutlined aria-hidden="true" />} size="small">
               导出报告
             </Button>
           </Space>

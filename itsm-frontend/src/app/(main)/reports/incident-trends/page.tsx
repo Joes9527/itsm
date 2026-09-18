@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { SyncOutlined } from '@ant-design/icons';
 import { Card, Row, Col, Select, DatePicker, Space, Typography, Spin, App, Statistic } from 'antd';
 import {
   LineChart,
@@ -183,7 +184,7 @@ const IncidentTrendsPage = () => {
           </Col>
           <Col>
             <Space>
-              <Button icon={<RotateCcw />} onClick={loadData}>
+              <Button icon={<SyncOutlined aria-hidden="true" />} onClick={loadData}>
                 刷新数据
               </Button>
             </Space>

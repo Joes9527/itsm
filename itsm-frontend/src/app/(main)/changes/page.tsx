@@ -4,18 +4,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Calendar as AntCalendar, message, Pagination, Select, Card, Empty, Tag, Spin } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
+import { CheckCircle2, ClipboardList, Clock, Download, RefreshCw, RotateCcw } from 'lucide-react';
 import {
-  Calendar,
-  CheckCircle2,
-  ClipboardList,
-  Clock,
-  Download,
-  LayoutGrid,
-  Plus,
-  RefreshCw,
-  RotateCcw,
-  Search,
-} from 'lucide-react';
+  AppstoreOutlined,
+  CalendarOutlined,
+  PlusOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import {
   BusinessPageTemplate,
@@ -467,7 +462,7 @@ export default function ChangesPage() {
       primaryAction={{
         label: '新建变更',
         onClick: handleCreate,
-        icon: <Plus className="w-4 h-4" />,
+        icon: <PlusOutlined aria-hidden="true" />,
       }}
 
       extraActions={[
@@ -501,21 +496,21 @@ export default function ChangesPage() {
       <div className="flex gap-2 mb-4">
         <Button
           type={activeView === 'list' ? 'primary' : 'default'}
-          icon={<Search className="w-4 h-4" />}
+          icon={<SearchOutlined aria-hidden="true" />}
           onClick={() => setActiveView('list')}
         >
           列表视图
         </Button>
         <Button
           type={activeView === 'kanban' ? 'primary' : 'default'}
-          icon={<LayoutGrid className="w-4 h-4" />}
+          icon={<AppstoreOutlined aria-hidden="true" />}
           onClick={() => setActiveView('kanban')}
         >
           看板视图
         </Button>
         <Button
           type={activeView === 'calendar' ? 'primary' : 'default'}
-          icon={<Calendar className="w-4 h-4" />}
+          icon={<CalendarOutlined aria-hidden="true" />}
           onClick={() => setActiveView('calendar')}
         >
           日历视图

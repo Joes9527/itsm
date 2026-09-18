@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { Card, Space, Typography, List, Tag, Avatar, theme, Button } from 'antd';
-import { Activity, AlertCircle, CheckCircle, RefreshCw, XCircle } from 'lucide-react';
+import { Activity, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { SyncOutlined } from '@ant-design/icons';
 import { useI18n } from '@/lib/i18n';
 
 const { Title, Text } = Typography;
@@ -108,7 +109,7 @@ export const SystemHealth: React.FC = () => {
           <Tag color="gold">示例数据</Tag>
         </Space>
       }
-      extra={<Button type="text" icon={<RefreshCw className="w-4 h-4" />} size="small" />}
+      extra={<Button aria-label="刷新" type="text" icon={<SyncOutlined aria-hidden="true" />} size="small" />}
     >
       <div style={{ marginBottom: token.marginLG }}>
         <Space align="center" size="large">

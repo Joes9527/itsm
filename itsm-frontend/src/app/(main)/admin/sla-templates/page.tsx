@@ -32,7 +32,12 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
-import { Download, Eye, CheckCircle, Rocket } from 'lucide-react';
+import { CheckCircle, Rocket } from 'lucide-react';
+import {
+  DownloadOutlined,
+  EyeOutlined,
+  RocketOutlined,
+} from '@ant-design/icons';
 import { useEffect, useMemo, useState } from 'react';
 import {
   SLATemplateApi,
@@ -214,7 +219,7 @@ export default function SLATemplatesPage() {
       render: (_: unknown, t: SLATemplate) => (
         <Space>
           <Tooltip title="查看模板详情">
-            <Button type="text" icon={<Eye />} onClick={() => setDetail(t)} />
+            <Button aria-label="查看模板详情" type="text" icon={<EyeOutlined aria-hidden="true" />} onClick={() => setDetail(t)} />
           </Tooltip>
           <Popconfirm
             title={`确认将模板「${t.name}」安装到当前租户？`}
@@ -226,7 +231,7 @@ export default function SLATemplatesPage() {
             <Button
               type="primary"
               size="small"
-              icon={<Download />}
+              icon={<DownloadOutlined aria-hidden="true" />}
               loading={installingKey === t.key}
             >
               安装
@@ -302,7 +307,7 @@ export default function SLATemplatesPage() {
           >
             <Button
               type="primary"
-              icon={<Rocket />}
+              icon={<RocketOutlined aria-hidden="true" />}
               loading={installingKey === '__ALL__'}
               disabled={templates.filter(t => t.recommended).length === 0}
             >

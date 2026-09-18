@@ -1,18 +1,10 @@
 'use client';
 
+import { Globe, BarChart3, Activity, Settings, Key, Layers, CheckCircle, Shield, Search } from 'lucide-react';
 import {
-  RefreshCw,
-  Save,
-  Globe,
-  BarChart3,
-  Activity,
-  Settings,
-  Key,
-  Layers,
-  CheckCircle,
-  Shield,
-  Search,
-} from 'lucide-react';
+  ClearOutlined,
+  SaveOutlined,
+} from '@ant-design/icons';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -724,12 +716,12 @@ const PermissionConfiguration = () => {
               <Button onClick={handleInitPermissions} loading={saving}>
                 初始化权限字典
               </Button>
-              <Button icon={<RefreshCw className="w-4 h-4" />} onClick={handleReset}>
+              <Button icon={<ClearOutlined aria-hidden="true" />} onClick={handleReset}>
                 重置
               </Button>
               <Button
                 type="primary"
-                icon={<Save className="w-4 h-4" />}
+                icon={<SaveOutlined aria-hidden="true" />}
                 loading={saving}
                 onClick={handleSave}
                 disabled={!hasChanges || !selectedRoleId}

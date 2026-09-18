@@ -22,16 +22,13 @@ import {
   Tooltip,
   Skeleton,
 } from 'antd';
+import { CheckCircle, Clock, Hand, GitBranch, ExternalLink } from 'lucide-react';
 import {
-  CheckCircle,
-  Clock,
-  RotateCcw,
-  Check,
-  X,
-  Hand,
-  GitBranch,
-  ExternalLink,
-} from 'lucide-react';
+  CheckOutlined,
+  CloseOutlined,
+  DragOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import Link from 'next/link';
 import { BPMNWorkflowApi, type UserTask } from '@/lib/api/bpmn-workflow-api';
 import { useAuthStore } from '@/lib/store/auth-store';
@@ -246,7 +243,7 @@ export default function ApprovalsCenterPage() {
           {!record.assignee && (
             <Button
               size="small"
-              icon={<Hand className="w-3 h-3" />}
+              icon={<DragOutlined aria-hidden="true" />}
               loading={claiming === record.id}
               disabled={submitting || claiming !== null || !!resource.error || taskLoading}
               onClick={() => handleClaim(record)}
@@ -257,7 +254,7 @@ export default function ApprovalsCenterPage() {
           <Button
             type="primary"
             size="small"
-            icon={<Check className="w-3 h-3" />}
+            icon={<CheckOutlined aria-hidden="true" />}
             disabled={submitting || claiming !== null || !!resource.error || taskLoading}
             onClick={() => openDecision(record, 'approve')}
             className="!bg-green-500 !border-green-500 hover:!bg-green-600 hover:!border-green-600"
@@ -267,7 +264,7 @@ export default function ApprovalsCenterPage() {
           <Button
             danger
             size="small"
-            icon={<X className="w-3 h-3" />}
+            icon={<CloseOutlined aria-hidden="true" />}
             disabled={submitting || claiming !== null || !!resource.error || taskLoading}
             onClick={() => openDecision(record, 'reject')}
           >
@@ -302,7 +299,7 @@ export default function ApprovalsCenterPage() {
           </div>
         </div>
         <Button
-          icon={<RotateCcw className={taskLoading ? 'animate-spin' : ''} />}
+          icon={<SyncOutlined aria-hidden="true" className={taskLoading ? 'animate-spin' : ''} />}
           onClick={handleRefresh}
           loading={taskLoading}
         >

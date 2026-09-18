@@ -6,6 +6,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { SyncOutlined } from '@ant-design/icons';
 import {
   Card,
   Button,
@@ -23,7 +24,7 @@ import {
   Spin,
   message,
 } from 'antd';
-import { RotateCcw, AlertTriangle, Maximize, ZoomIn, ZoomOut, Network } from 'lucide-react';
+import { AlertTriangle, Maximize, ZoomIn, ZoomOut, Network } from 'lucide-react';
 import type { Node, Edge, NodeProps } from 'reactflow';
 import ReactFlow, {
   Background,
@@ -295,7 +296,7 @@ const TopologyGraphViewInner: React.FC<TopologyGraphViewProps> = ({
             />
             <Tooltip title='刷新'>
               <Button
-                icon={<RotateCcw />}
+                icon={<SyncOutlined aria-hidden="true" />}
                 onClick={loadTopology}
                 loading={loading}
                 disabled={loading}

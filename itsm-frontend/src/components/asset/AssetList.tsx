@@ -22,7 +22,13 @@ import {
   Empty,
   message,
 } from 'antd';
-import { Search, Plus, Pencil, Eye, Monitor } from 'lucide-react';
+import { Monitor } from 'lucide-react';
+import {
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
@@ -227,7 +233,7 @@ const AssetList: React.FC<AssetListProps> = ({ showActions = true }) => {
           <Tooltip title="查看资产详情">
             <Button
               type="text"
-              icon={<Eye />}
+              icon={<EyeOutlined aria-hidden="true" />}
               onClick={() => router.push(`/assets/${record.id}`)}
               aria-label={`查看资产 ${record.name || record.assetNumber}`}
             />
@@ -235,7 +241,7 @@ const AssetList: React.FC<AssetListProps> = ({ showActions = true }) => {
           <Tooltip title="编辑资产信息">
             <Button
               type="text"
-              icon={<Pencil />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => router.push(`/assets/${record.id}/edit`)}
               aria-label={`编辑资产 ${record.name || record.assetNumber}`}
             />
@@ -319,14 +325,14 @@ const AssetList: React.FC<AssetListProps> = ({ showActions = true }) => {
           </Form.Item>
           <Form.Item>
             <Space>
-              <Button type="primary" icon={<Search />} onClick={handleSearch}>
+              <Button type="primary" icon={<SearchOutlined aria-hidden="true" />} onClick={handleSearch}>
                 搜索
               </Button>
               <Button onClick={handleReset}>重置</Button>
               {showActions && (
                 <Button
                   type="primary"
-                  icon={<Plus />}
+                  icon={<PlusOutlined aria-hidden="true" />}
                   onClick={() => router.push('/assets/new')}
                 >
                   创建资产

@@ -24,6 +24,7 @@ import {
   message,
 } from 'antd';
 import { User, Info, CheckCircle, Zap } from 'lucide-react';
+import { ThunderboltOutlined } from '@ant-design/icons';
 import type {
   AssignRecommendation,
   AutoAssignResponse} from '@/lib/api/ticket-assignment-api';
@@ -145,7 +146,7 @@ export const SmartAssignmentModal: React.FC<SmartAssignmentModalProps> = ({
               <Text strong>快速操作</Text>
               <Button
                 type="primary"
-                icon={<Zap />}
+                icon={<ThunderboltOutlined aria-hidden="true" />}
                 size="large"
                 block
                 loading={autoAssigning}

@@ -3,7 +3,12 @@
 import type { ErrorInfo, ReactNode } from 'react';
 import React, { Component } from 'react';
 import { Button, Result, Typography } from 'antd';
-import { RefreshCw, Home, Bug } from 'lucide-react';
+import { Bug } from 'lucide-react';
+import {
+  BugOutlined,
+  HomeOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 
 const { Paragraph, Text } = Typography;
 
@@ -101,16 +106,16 @@ class ErrorBoundary extends Component<Props, State> {
                 <Button
                   key="reload"
                   type="primary"
-                  icon={<RefreshCw />}
+                  icon={<SyncOutlined aria-hidden="true" />}
                   onClick={this.handleReload}
                   size="large"
                 >
                   Reload Page
                 </Button>,
-                <Button key="home" icon={<Home />} onClick={this.handleGoHome} size="large">
+                <Button key="home" icon={<HomeOutlined aria-hidden="true" />} onClick={this.handleGoHome} size="large">
                   Back to Home
                 </Button>,
-                <Button key="report" icon={<Bug />} onClick={this.handleReportError} size="large">
+                <Button key="report" icon={<BugOutlined aria-hidden="true" />} onClick={this.handleReportError} size="large">
                   Report Issue
                 </Button>,
               ]}

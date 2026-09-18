@@ -3,7 +3,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Alert, Button, Card, Col, Empty, Row, Space, Spin, Statistic, Tag, Tooltip } from 'antd';
-import { AlertTriangle, Download, RefreshCw } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
+import {
+  DownloadOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { SLAApi, type SLAComplianceReport } from '@/lib/api/sla-api';
 
@@ -101,8 +105,8 @@ export default function SLAPage() {
         </div>
         <Space wrap>
           {refreshedAt && <span className="text-[11px] text-muted">更新于 {dayjs(refreshedAt).format('HH:mm:ss')}</span>}
-          <Button icon={<RefreshCw size={16} />} loading={loading} onClick={() => void loadData()}>刷新</Button>
-          <Button type="primary" danger icon={<Download size={16} />} onClick={exportReport}>导出 SLA 违约报告</Button>
+          <Button icon={<SyncOutlined aria-hidden="true" />} loading={loading} onClick={() => void loadData()}>刷新</Button>
+          <Button type="primary" danger icon={<DownloadOutlined aria-hidden="true" />} onClick={exportReport}>导出 SLA 违约报告</Button>
         </Space>
       </div>
 

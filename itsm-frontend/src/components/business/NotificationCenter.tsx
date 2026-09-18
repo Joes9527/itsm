@@ -29,26 +29,12 @@ import {
   Alert,
   Empty,
 } from 'antd';
+import { Bell, Mail, MessageSquare, Smartphone, Settings, FileText, History, Plus, Send, CheckCircle, Clock, AlertCircle, Filter, Download, Eye } from 'lucide-react';
 import {
-  Bell,
-  Mail,
-  MessageSquare,
-  Smartphone,
-  Settings,
-  FileText,
-  History,
-  Edit,
-  Trash2,
-  Plus,
-  Send,
-  CheckCircle,
-  Clock,
-  AlertCircle,
-  Filter,
-  Download,
-  Eye,
-  Copy,
-} from 'lucide-react';
+  CopyOutlined,
+  DeleteOutlined,
+  EditOutlined,
+} from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { TicketNotificationApi } from '@/lib/api/ticket-notification-api';
 import { PRODUCT_CAPABILITIES } from '@/config/product-capabilities';
@@ -442,7 +428,7 @@ const NotificationCenter: React.FC<{
             okText="确认"
             cancelText="取消"
           >
-            <Button size="small" danger icon={<Trash2 className="w-3 h-3" />} />
+            <Button aria-label="删除" size="small" danger icon={<DeleteOutlined aria-hidden="true" />} />
           </Popconfirm>
         </Space>
       ),
@@ -525,7 +511,7 @@ const NotificationCenter: React.FC<{
         <Space size="small">
           <Button
             size="small"
-            icon={<Edit className="w-3 h-3" />}
+            icon={<EditOutlined aria-hidden="true" />}
             onClick={() => {
               setSelectedTemplate(record);
               form.setFieldsValue(record);
@@ -536,7 +522,7 @@ const NotificationCenter: React.FC<{
           </Button>
           <Button
             size="small"
-            icon={<Copy className="w-3 h-3" />}
+            icon={<CopyOutlined aria-hidden="true" />}
             onClick={() => {
               const newTemplate = { ...record, id: Date.now(), name: `${record.name}_副本` };
               setTemplates(prev => [...prev, newTemplate]);
@@ -617,7 +603,7 @@ const NotificationCenter: React.FC<{
           </Button>
           <Button
             size="small"
-            icon={<Edit className="w-3 h-3" />}
+            icon={<EditOutlined aria-hidden="true" />}
             onClick={() => {
               setSelectedChannel(record);
               channelForm.setFieldsValue(record);

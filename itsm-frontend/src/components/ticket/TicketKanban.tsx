@@ -21,17 +21,11 @@ import {
   Form,
   App,
 } from 'antd';
+import { Filter, Pencil, Trash2, User, Calendar, Clock, ArrowUpDown } from 'lucide-react';
 import {
-  Filter,
-  Plus,
-  Pencil,
-  Trash2,
-  User,
-  Calendar,
-  Clock,
-  ArrowUpDown,
-  MoreHorizontal,
-} from 'lucide-react';
+  MoreOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -228,7 +222,7 @@ const TicketKanban: React.FC<TicketKanbanProps> = ({ onTicketSelect }) => {
         }}
         actions={[
           <Dropdown key="more" menu={{ items: getTicketMenu(ticket) }} trigger={['click']}>
-            <Button type="text" icon={<MoreHorizontal />} size="small" />
+            <Button aria-label="更多操作" type="text" icon={<MoreOutlined aria-hidden="true" />} size="small" />
           </Dropdown>,
         ]}
       >
@@ -346,7 +340,7 @@ const TicketKanban: React.FC<TicketKanbanProps> = ({ onTicketSelect }) => {
           </Col>
           <Col>
             <Space>
-              <Button type="primary" icon={<Plus />} onClick={() => router.push('/tickets/create')}>
+              <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={() => router.push('/tickets/create')}>
                 新建工单
               </Button>
             </Space>

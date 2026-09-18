@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { Alert, App, Button } from 'antd';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useRouter, useParams } from 'next/navigation';
 import ProblemDetail from '@/components/problem/ProblemDetail';
 import { ProblemApi, type Problem } from '@/lib/api/problem-api';
@@ -122,7 +122,7 @@ export default function ProblemDetailPage() {
         <div style={{ marginBottom: 16 }}>
           <Button
             type='link'
-            icon={<ArrowLeft />}
+            icon={<ArrowLeftOutlined aria-hidden="true" />}
             onClick={() => router.back()}
             style={{ paddingLeft: 0, color: 'var(--color-text-secondary)' }}
           >

@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { Dropdown, Button, List, Empty, Tooltip } from 'antd';
-import { Clock, X } from 'lucide-react';
+import { Clock } from 'lucide-react';
+import { CloseOutlined } from '@ant-design/icons';
 import { useRecentVisitStore } from '@/lib/store/recent-visit-store';
 import { useRouter } from 'next/navigation';
 
@@ -55,10 +56,10 @@ export const RecentVisitDropdown: React.FC = () => {
               >
                 {visit.title}
               </div>
-              <Button
+              <Button aria-label="关闭"
                 type="text"
                 size="small"
-                icon={<X size={12} />}
+                icon={<CloseOutlined aria-hidden="true" />}
                 onClick={(e) => {
                   e.stopPropagation();
                   removeVisit(visit.path);

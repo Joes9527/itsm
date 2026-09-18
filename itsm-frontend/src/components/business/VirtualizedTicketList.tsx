@@ -3,16 +3,13 @@
 import React, { useMemo, useCallback, useState } from 'react';
 import { List } from 'react-window';
 import { Checkbox, Button, Space, Tooltip, Dropdown, Badge, Avatar } from 'antd';
+import { FileText, Users, TrendingUp, AlertTriangle } from 'lucide-react';
 import {
-  FileText,
-  Eye,
-  Edit,
-  Activity,
-  Users,
-  TrendingUp,
-  AlertTriangle,
-  MoreHorizontal,
-} from 'lucide-react';
+  DotChartOutlined,
+  EditOutlined,
+  EyeOutlined,
+  MoreOutlined,
+} from '@ant-design/icons';
 import type {
   Ticket} from '../../lib/services/ticket-service';
 import {
@@ -220,34 +217,36 @@ const TicketRow: React.FC<{
       {/* 操作按钮 */}
       <div className="w-48 flex justify-center">
         <Space size="small">
-          <Tooltip title="View Details">
+          <Tooltip title="查看详情">
             <Button
               type="text"
               size="small"
-              icon={<Eye size={16} />}
+              icon={<EyeOutlined aria-hidden="true" />}
               onClick={() => window.open(`/tickets/${ticket.id}`)}
+              aria-label="查看详情"
             />
           </Tooltip>
-          <Tooltip title="Edit">
-            <Button type="text" size="small" icon={<Edit size={16} />} onClick={handleEdit} />
+          <Tooltip title="编辑">
+            <Button type="text" size="small" icon={<EditOutlined aria-hidden="true" />} onClick={handleEdit} aria-label="编辑" />
           </Tooltip>
-          <Tooltip title="View Activity Log">
+          <Tooltip title="查看活动日志">
             <Button
               type="text"
               size="small"
-              icon={<Activity size={16} />}
+              icon={<DotChartOutlined aria-hidden="true" />}
               onClick={handleViewActivity}
+              aria-label="查看活动日志"
             />
           </Tooltip>
           <Dropdown
             menu={{
               items: [
-                { key: 'assign', label: 'Assign Handler', icon: <Users size={16} /> },
-                { key: 'escalate', label: 'Escalate Ticket', icon: <TrendingUp size={16} /> },
+                { key: 'assign', label: '分派处理人', icon: <Users size={16} /> },
+                { key: 'escalate', label: '升级工单', icon: <TrendingUp size={16} /> },
                 { type: 'divider' },
                 {
                   key: 'delete',
-                  label: 'Delete Ticket',
+                  label: '删除工单',
                   icon: <AlertTriangle size={16} />,
                   danger: true,
                 },
@@ -255,7 +254,7 @@ const TicketRow: React.FC<{
             }}
             trigger={['click']}
           >
-            <Button type="text" size="small" icon={<MoreHorizontal size={16} />} />
+            <Button type="text" size="small" icon={<MoreOutlined aria-hidden="true" />} aria-label="更多操作" />
           </Dropdown>
         </Space>
       </div>

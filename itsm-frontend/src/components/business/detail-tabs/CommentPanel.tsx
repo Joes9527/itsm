@@ -2,7 +2,12 @@
 import { useDetailRefreshEntry } from '@/components/business/detail-tabs/DetailRefreshContext';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Send, Edit, Trash2, MessageSquare, AtSign, User } from 'lucide-react';
+import { MessageSquare, AtSign, User } from 'lucide-react';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  SendOutlined,
+} from '@ant-design/icons';
 import { Card, Typography, Button, Input, Avatar, Tag as AntTag, App } from 'antd';
 import { UserSelect } from '@/components/common/UserSelect';
 import type { CommentAdapter, CommentItem, TargetType } from './types';
@@ -203,7 +208,7 @@ const CommentPanelContent: React.FC<CommentPanelProps> = ({
             <div className='flex justify-end'>
               <Button
                 type='primary'
-                icon={<Send size={14} />}
+                icon={<SendOutlined aria-hidden="true" />}
                 onClick={handleAddComment}
                 disabled={!newComment.trim()}
                 loading={submitting}
@@ -267,7 +272,7 @@ const CommentPanelContent: React.FC<CommentPanelProps> = ({
                       <Button
                         type='link'
                         size='small'
-                        icon={<Edit className='w-3 h-3' />}
+                        icon={<EditOutlined aria-hidden="true" />}
                         onClick={() => startEditComment(comment)}
                       >
                         编辑
@@ -278,7 +283,7 @@ const CommentPanelContent: React.FC<CommentPanelProps> = ({
                         type='link'
                         size='small'
                         danger
-                        icon={<Trash2 className='w-3 h-3' />}
+                        icon={<DeleteOutlined aria-hidden="true" />}
                         onClick={() => {
                           const current = resource.capture();
                           confirmation.current = modal.confirm({

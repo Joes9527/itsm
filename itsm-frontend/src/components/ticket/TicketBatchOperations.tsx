@@ -18,7 +18,8 @@ import {
   Typography,
   Checkbox,
 } from 'antd';
-import { Trash2, Download, User as UserIcon, Bell, CheckCircle, Tag, Flag, MoreHorizontal } from 'lucide-react';
+import { Trash2, Download, User as UserIcon, Bell, CheckCircle, Tag, Flag } from 'lucide-react';
+import { MoreOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import type { Ticket, TicketStatus, TicketPriority } from '@/lib/api/types';
 import { TicketAPI } from '@/lib/api/ticket-api';
@@ -389,7 +390,7 @@ const TicketBatchOperations: React.FC<TicketBatchOperationsProps> = ({
           </div>
 
           <Dropdown menu={{ items: menuItems, onClick: handleMenuClick }} placement="bottomRight">
-            <Button type="primary" icon={<MoreHorizontal />} loading={loading}>
+            <Button type="primary" icon={<MoreOutlined aria-hidden="true" />} loading={loading}>
               批量操作
             </Button>
           </Dropdown>

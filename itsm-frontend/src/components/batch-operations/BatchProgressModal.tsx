@@ -7,7 +7,12 @@
 
 import React from 'react';
 import { Modal, Progress, Space, Button, Alert, Statistic, Row, Col, List, Tag, Spin } from 'antd';
-import { Download, CheckCircle, XCircle, PlayCircle, PauseCircle, Square } from 'lucide-react';
+import { Download, CheckCircle, XCircle } from 'lucide-react';
+import {
+  BorderOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
+} from '@ant-design/icons';
 import { useBatchOperationProgressQuery } from '@/lib/hooks/useBatchOperations';
 import { BatchOperationStatus } from '@/types/batch-operations';
 
@@ -169,11 +174,11 @@ export const BatchProgressModal: React.FC<BatchProgressModalProps> = ({
           {isRunning && (
             <Space>
               {isPaused ? (
-                <Button icon={<PlayCircle />}>继续</Button>
+                <Button icon={<PlayCircleOutlined aria-hidden="true" />}>继续</Button>
               ) : (
-                <Button icon={<PauseCircle />}>暂停</Button>
+                <Button icon={<PauseCircleOutlined aria-hidden="true" />}>暂停</Button>
               )}
-              <Button danger icon={<Square />}>
+              <Button danger icon={<BorderOutlined aria-hidden="true" />}>
                 取消
               </Button>
             </Space>

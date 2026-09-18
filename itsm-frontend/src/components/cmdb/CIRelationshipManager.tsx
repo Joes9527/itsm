@@ -24,7 +24,11 @@ import {
   Row,
   Col,
 } from 'antd';
-import { Plus, Trash2, Eye, Link, Network } from 'lucide-react';
+import { Eye, Link, Network } from 'lucide-react';
+import {
+  DeleteOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import dayjs from 'dayjs';
 
 import {
@@ -324,7 +328,7 @@ const CIRelationshipManager: React.FC<CIRelationshipManagerProps> = ({
               <Button
                 type='text'
                 danger
-                icon={<Trash2 />}
+                icon={<DeleteOutlined aria-hidden="true" />}
                 size='small'
                 loading={deletingId === record.id}
                 aria-label='删除关系'
@@ -389,10 +393,10 @@ const CIRelationshipManager: React.FC<CIRelationshipManagerProps> = ({
         }
         extra={
           <Space>
-            <Button type='primary' icon={<Plus />} onClick={() => handleOpenCreate('outgoing')}>
+            <Button type='primary' icon={<PlusOutlined aria-hidden="true" />} onClick={() => handleOpenCreate('outgoing')}>
               添加出向关系
             </Button>
-            <Button icon={<Plus />} onClick={() => handleOpenCreate('incoming')}>
+            <Button icon={<PlusOutlined aria-hidden="true" />} onClick={() => handleOpenCreate('incoming')}>
               添加入向关系
             </Button>
           </Space>

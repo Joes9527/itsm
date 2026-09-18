@@ -1,21 +1,16 @@
 'use client';
 
+import { AlertCircle, BookOpen, CheckCircle, Filter, Search, Plus, Clock } from 'lucide-react';
 import {
-  RefreshCw,
-  AlertCircle,
-  Download,
-  Upload,
-  BookOpen,
-  CheckCircle,
-  Filter,
-  Search,
-  Plus,
-  Clock,
-  Eye,
-  Edit,
-  Trash2,
-  MoreHorizontal,
-} from 'lucide-react';
+  DeleteOutlined,
+  DownloadOutlined,
+  EditOutlined,
+  EyeOutlined,
+  MoreOutlined,
+  PlusOutlined,
+  SyncOutlined,
+  UploadOutlined,
+} from '@ant-design/icons';
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -506,12 +501,12 @@ const ServiceCatalogManagement = () => {
       render: (_: unknown, record: ServiceItem) => (
         <Space>
           <Tooltip title='查看详情'>
-            <Button type='text' icon={<Eye className='w-4 h-4' />} size='small' />
+            <Button aria-label="查看详情" type='text' icon={<EyeOutlined aria-hidden="true" />} size='small' />
           </Tooltip>
           <Tooltip title='编辑'>
-            <Button
+            <Button aria-label="编辑"
               type='text'
-              icon={<Edit className='w-4 h-4' />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => handleEdit(record)}
               size='small'
             />
@@ -523,7 +518,7 @@ const ServiceCatalogManagement = () => {
             cancelText='取消'
           >
             <Tooltip title='删除'>
-              <Button type='text' icon={<Trash2 className='w-4 h-4' />} danger size='small' />
+              <Button aria-label="删除" type='text' icon={<DeleteOutlined aria-hidden="true" />} danger size='small' />
             </Tooltip>
           </Popconfirm>
           <Dropdown
@@ -555,7 +550,7 @@ const ServiceCatalogManagement = () => {
               ],
             }}
           >
-            <Button type='text' icon={<MoreHorizontal className='w-4 h-4' />} size='small' />
+            <Button aria-label="更多操作" type='text' icon={<MoreOutlined aria-hidden="true" />} size='small' />
           </Dropdown>
         </Space>
       ),
@@ -688,7 +683,7 @@ const ServiceCatalogManagement = () => {
             <Space>
               <Button
                 type='primary'
-                icon={<Plus className='w-4 h-4' />}
+                icon={<PlusOutlined aria-hidden="true" />}
                 onClick={() => {
                   setEditingCatalog(null);
                   form.resetFields();
@@ -697,11 +692,11 @@ const ServiceCatalogManagement = () => {
               >
                 新建服务目录
               </Button>
-              <Button icon={<Upload className='w-4 h-4' />}>导入</Button>
-              <Button icon={<Download className='w-4 h-4' />} onClick={handleExport}>
+              <Button icon={<UploadOutlined aria-hidden="true" />}>导入</Button>
+              <Button icon={<DownloadOutlined aria-hidden="true" />} onClick={handleExport}>
                 导出
               </Button>
-              <Button icon={<RefreshCw className='w-4 h-4' />} onClick={fetchCatalogs}>
+              <Button icon={<SyncOutlined aria-hidden="true" />} onClick={fetchCatalogs}>
                 刷新
               </Button>
             </Space>

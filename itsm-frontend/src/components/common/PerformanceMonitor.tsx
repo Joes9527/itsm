@@ -13,18 +13,8 @@ import {
   Space,
   Button,
 } from 'antd';
-import {
-  Activity,
-  Cpu,
-  HardDrive,
-  Wifi,
-  Clock,
-  AlertTriangle,
-  CheckCircle,
-  TrendingUp,
-  TrendingDown,
-  RefreshCw,
-} from 'lucide-react';
+import { Activity, Cpu, HardDrive, Wifi, Clock, AlertTriangle, CheckCircle, TrendingUp, TrendingDown } from 'lucide-react';
+import { SyncOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;
 
@@ -231,10 +221,10 @@ export const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
               <Activity size={16} />
               <span>系统监控</span>
             </div>
-            <Button
+            <Button aria-label="刷新"
               type="text"
               size="small"
-              icon={<RefreshCw size={14} />}
+              icon={<SyncOutlined aria-hidden="true" />}
               loading={loading}
               onClick={fetchMetrics}
             />
@@ -305,10 +295,10 @@ export const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
                       最后更新: {lastUpdate.toLocaleTimeString()}
                     </Text>
                   )}
-                  <Button
+                  <Button aria-label="刷新"
                     type="text"
                     size="small"
-                    icon={<RefreshCw size={14} />}
+                    icon={<SyncOutlined aria-hidden="true" />}
                     loading={loading}
                     onClick={fetchMetrics}
                   />

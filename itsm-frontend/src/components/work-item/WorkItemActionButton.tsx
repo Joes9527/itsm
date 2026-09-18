@@ -24,6 +24,9 @@ export function WorkItemActionButton({
   const reasonId = `work-item-action-${actionName}-reason`;
   return (
     <Space size={4}>
+      {/* icon-gate: 整个 button props 包由调用方传入。本组件无法约束图标来源，
+          调用方（IncidentDetail / ProblemDetail / ChangeActions）每次往 button.icon
+          里放图标时都要自己确认用的是 @ant-design/icons 而不是 lucide。 */}
       <Button
         {...button}
         disabled={!action.allowed || button.disabled === true}

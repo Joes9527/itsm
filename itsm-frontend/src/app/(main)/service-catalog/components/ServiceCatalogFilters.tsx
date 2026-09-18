@@ -2,7 +2,10 @@
 
 import React from 'react';
 import { Card, Row, Col, Input, Select, Button, Tooltip } from 'antd';
-import { RefreshCw, PlusCircle } from 'lucide-react';
+import {
+  PlusCircleOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { useI18n } from '@/lib/i18n';
 import type { CIType, CloudService } from '@/types/biz/cmdb';
 
@@ -89,7 +92,7 @@ export const ServiceCatalogFilters: React.FC<ServiceCatalogFiltersProps> = ({
         <Col xs={24} sm={12} md={2}>
           <Tooltip title="刷新列表">
             <Button
-              icon={<RefreshCw size={20} />}
+              icon={<SyncOutlined aria-hidden="true" />}
               onClick={onRefresh}
               aria-label="刷新服务目录"
               size="large"
@@ -102,7 +105,7 @@ export const ServiceCatalogFilters: React.FC<ServiceCatalogFiltersProps> = ({
         <Col xs={24} sm={12} md={2}>
           <Button
             type="primary"
-            icon={<PlusCircle size={20} />}
+            icon={<PlusCircleOutlined aria-hidden="true" />}
             size="large"
             style={{ width: '100%' }}
             onClick={onCreateService}

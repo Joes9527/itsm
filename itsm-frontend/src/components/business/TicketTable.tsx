@@ -2,7 +2,7 @@
 
 import React, { useCallback, useState } from 'react';
 import { Button, Space, Badge, Table, Empty } from 'antd';
-import { AlertTriangle } from 'lucide-react';
+import { WarningOutlined } from '@ant-design/icons';
 import type {
   Ticket} from '../../lib/services/ticket-service';
 import {
@@ -118,7 +118,7 @@ export const TicketTable: React.FC<TicketTableProps> = React.memo(
               size="large"
               onClick={handleBatchDelete}
               className="rounded-lg hover:shadow-md transition-all duration-200"
-              icon={<AlertTriangle size={16} />}
+              icon={<WarningOutlined aria-hidden="true" />}
             >
               批量删除 ({selectedRowKeys.length})
             </Button>

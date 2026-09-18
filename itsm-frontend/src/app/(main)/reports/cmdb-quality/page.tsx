@@ -14,7 +14,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { RotateCcw } from 'lucide-react';
+import { SyncOutlined } from '@ant-design/icons';
 
 import { CMDBApi } from '@/lib/api/cmdb-api';
 
@@ -271,7 +271,7 @@ const CMDBQualityReport = () => {
             <Text className="text-muted">配置项数据质量监控</Text>
           </Col>
           <Col>
-            <Button icon={<RotateCcw />} onClick={loadData} loading={loading}>
+            <Button icon={<SyncOutlined aria-hidden="true" />} onClick={loadData} loading={loading}>
               刷新数据
             </Button>
           </Col>

@@ -2,7 +2,11 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Table, Tag, Button, Space, Select, App, Modal, Descriptions, Divider } from 'antd';
-import { Trash2, Eye, AlertTriangle, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { AlertTriangle, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import {
+  DeleteOutlined,
+  EyeOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { ChangeApi, type PIRResponse, type PIROverallResult } from '@/lib/api/change-api';
@@ -161,7 +165,7 @@ export default function PIRListPage() {
         <Space>
           <Button
             type='link'
-            icon={<Eye />}
+            icon={<EyeOutlined aria-hidden="true" />}
             onClick={() => {
               setSelectedPIR(record);
               setDetailModalVisible(true);
@@ -172,7 +176,7 @@ export default function PIRListPage() {
           <Button
             type='link'
             danger
-            icon={<Trash2 />}
+            icon={<DeleteOutlined aria-hidden="true" />}
             onClick={async () => {
               try {
                 const [detail, currentPIR] = await Promise.all([

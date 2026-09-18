@@ -29,7 +29,11 @@ import {
   Empty,
   Tooltip,
 } from 'antd';
-import { Plus, Pencil, Trash2, FileText, Clock, Link, CheckCircle, FlaskConical, BookOpen, ClipboardCheck } from 'lucide-react';
+import { Pencil, Trash2, FileText, Clock, Link, CheckCircle, FlaskConical, BookOpen, ClipboardCheck } from 'lucide-react';
+import {
+  BookOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useParams } from 'next/navigation';
 
@@ -543,7 +547,7 @@ const ProblemInvestigationTab: React.FC<ProblemInvestigationTabProps> = ({
           title="调查步骤"
           extra={
             summary?.investigation && (
-              <Button type="primary" icon={<Plus />} onClick={() => setStepModalOpen(true)}>
+              <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={() => setStepModalOpen(true)}>
                 添加步骤
               </Button>
             )
@@ -581,7 +585,7 @@ const ProblemInvestigationTab: React.FC<ProblemInvestigationTabProps> = ({
             !summary?.rootCauseAnalysis && (
               <Button
                 type="primary"
-                icon={<Plus />}
+                icon={<PlusOutlined aria-hidden="true" />}
                 onClick={() => setRootCauseModalOpen(true)}
               >
                 开始分析
@@ -646,7 +650,7 @@ const ProblemInvestigationTab: React.FC<ProblemInvestigationTabProps> = ({
             summary?.investigation && (
               <Button
                 type="primary"
-                icon={<Plus />}
+                icon={<PlusOutlined aria-hidden="true" />}
                 onClick={() => setSolutionModalOpen(true)}
               >
                 添加方案
@@ -686,7 +690,7 @@ const ProblemInvestigationTab: React.FC<ProblemInvestigationTabProps> = ({
               (summary?.solutions && summary.solutions.length > 0)) && (
               <Button
                 type="primary"
-                icon={<BookOpen />}
+                icon={<BookOutlined aria-hidden="true" />}
                 onClick={() => setKnowledgeModalOpen(true)}
               >
                 沉淀到知识库

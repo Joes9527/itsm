@@ -21,21 +21,14 @@ import {
   Form,
   Checkbox,
 } from 'antd';
+import { Link, Merge, Search, Filter, Minus, AlertTriangle, CheckCircle, Clock, Users, FileText } from 'lucide-react';
 import {
-  Link,
-  Unlink,
-  Merge,
-  Search,
-  Filter,
-  Eye,
-  Plus,
-  Minus,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  Users,
-  FileText,
-} from 'lucide-react';
+  DisconnectOutlined,
+  EyeOutlined,
+  LinkOutlined,
+  MergeCellsOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -258,14 +251,14 @@ export const TicketAssociation: React.FC = () => {
         <Space>
           <Button
             size="small"
-            icon={<Eye />}
+            icon={<EyeOutlined aria-hidden="true" />}
             onClick={() => window.open(`/tickets/${record.id}`, '_blank')}
           >
             查看
           </Button>
           <Button
             size="small"
-            icon={<Link />}
+            icon={<LinkOutlined aria-hidden="true" />}
             onClick={() => {
               setSelectedTickets([record.id]);
               setShowRelationModal(true);
@@ -323,7 +316,7 @@ export const TicketAssociation: React.FC = () => {
       title: '操作',
       key: 'action',
       render: (_: unknown, record: TicketRelation) => (
-        <Button size="small" danger icon={<Unlink />} onClick={() => removeRelation(record.id)}>
+        <Button size="small" danger icon={<DisconnectOutlined aria-hidden="true" />} onClick={() => removeRelation(record.id)}>
           移除
         </Button>
       ),
@@ -344,14 +337,14 @@ export const TicketAssociation: React.FC = () => {
         extra={
           <Space>
             <Button
-              icon={<Plus />}
+              icon={<PlusOutlined aria-hidden="true" />}
               onClick={() => setShowRelationModal(true)}
               disabled={selectedTickets.length !== 2}
             >
               创建关联
             </Button>
             <Button
-              icon={<Merge />}
+              icon={<MergeCellsOutlined aria-hidden="true" />}
               onClick={() => setShowMergeModal(true)}
               disabled={selectedTickets.length < 2}
             >
@@ -445,10 +438,10 @@ export const TicketAssociation: React.FC = () => {
                     </Text>
                   </div>
                   <Space>
-                    <Button size="small" icon={<Eye />}>
+                    <Button size="small" icon={<EyeOutlined aria-hidden="true" />}>
                       查看
                     </Button>
-                    <Button size="small" type="primary" icon={<Merge />}>
+                    <Button size="small" type="primary" icon={<MergeCellsOutlined aria-hidden="true" />}>
                       合并
                     </Button>
                   </Space>

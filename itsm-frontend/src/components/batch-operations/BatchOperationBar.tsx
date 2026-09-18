@@ -7,7 +7,16 @@
 
 import React, { useState } from 'react';
 import { Space, Button, Dropdown, Badge, Tooltip, type MenuProps } from 'antd';
-import { X, Check, Pencil, Trash2, Download, UserPlus, XCircle, Tags, MoreHorizontal } from 'lucide-react';
+import { Check, Pencil, XCircle, Tags } from 'lucide-react';
+import {
+  CloseCircleOutlined,
+  CloseOutlined,
+  DeleteOutlined,
+  DownloadOutlined,
+  EditOutlined,
+  MoreOutlined,
+  UserAddOutlined,
+} from '@ant-design/icons';
 import { BatchOperationModal } from './BatchOperationModal';
 import { BatchOperationType } from '@/types/batch-operations';
 
@@ -139,7 +148,7 @@ export const BatchOperationBar: React.FC<BatchOperationBarProps> = ({
           {/* 批量分配 */}
           <Tooltip title="批量分配">
             <Button
-              icon={<UserPlus />}
+              icon={<UserAddOutlined aria-hidden="true" />}
               onClick={() => handleOpenModal(BatchOperationType.ASSIGN)}
               disabled={isOverLimit}
             >
@@ -150,7 +159,7 @@ export const BatchOperationBar: React.FC<BatchOperationBarProps> = ({
           {/* 批量更新状态 */}
           <Tooltip title="批量更新状态">
             <Button
-              icon={<Pencil />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => handleOpenModal(BatchOperationType.UPDATE_STATUS)}
               disabled={isOverLimit}
             >
@@ -161,7 +170,7 @@ export const BatchOperationBar: React.FC<BatchOperationBarProps> = ({
           {/* 批量更新优先级 */}
           <Tooltip title="批量更新优先级">
             <Button
-              icon={<Pencil />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => handleOpenModal(BatchOperationType.UPDATE_PRIORITY)}
               disabled={isOverLimit}
             >
@@ -172,7 +181,7 @@ export const BatchOperationBar: React.FC<BatchOperationBarProps> = ({
           {/* 批量关闭 */}
           <Tooltip title="批量关闭">
             <Button
-              icon={<XCircle />}
+              icon={<CloseCircleOutlined aria-hidden="true" />}
               onClick={() => handleOpenModal(BatchOperationType.CLOSE)}
               disabled={isOverLimit}
             >
@@ -183,7 +192,7 @@ export const BatchOperationBar: React.FC<BatchOperationBarProps> = ({
           {/* 批量导出 */}
           <Tooltip title="批量导出">
             <Button
-              icon={<Download />}
+              icon={<DownloadOutlined aria-hidden="true" />}
               onClick={() => handleOpenModal(BatchOperationType.EXPORT)}
               disabled={isOverLimit}
             >
@@ -193,7 +202,7 @@ export const BatchOperationBar: React.FC<BatchOperationBarProps> = ({
 
           {/* 更多操作 */}
           <Dropdown menu={{ items: moreMenuItems }} trigger={['click']}>
-            <Button icon={<MoreHorizontal />} disabled={isOverLimit}>
+            <Button icon={<MoreOutlined aria-hidden="true" />} disabled={isOverLimit}>
               更多
             </Button>
           </Dropdown>
@@ -202,7 +211,7 @@ export const BatchOperationBar: React.FC<BatchOperationBarProps> = ({
           <Tooltip title="批量删除">
             <Button
               danger
-              icon={<Trash2 />}
+              icon={<DeleteOutlined aria-hidden="true" />}
               onClick={() => handleOpenModal(BatchOperationType.DELETE)}
               disabled={isOverLimit}
             >
@@ -211,7 +220,7 @@ export const BatchOperationBar: React.FC<BatchOperationBarProps> = ({
           </Tooltip>
 
           {/* 取消选择 */}
-          <Button icon={<X />} onClick={onClearSelection}>
+          <Button icon={<CloseOutlined aria-hidden="true" />} onClick={onClearSelection}>
             取消
           </Button>
         </Space>

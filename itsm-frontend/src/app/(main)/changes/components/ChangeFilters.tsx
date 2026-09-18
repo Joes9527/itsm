@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Card, Row, Col, Input, Select, Button } from 'antd';
-import { RefreshCw } from 'lucide-react';
+import { SyncOutlined } from '@ant-design/icons';
 
 const { Search: SearchInput } = Input;
 
@@ -56,7 +56,7 @@ export const ChangeFilters: React.FC<ChangeFiltersProps> = ({
         </Col>
         <Col xs={24} sm={12} md={4}>
           <Button
-            icon={<RefreshCw size={20} />}
+            icon={<SyncOutlined aria-hidden="true" />}
             onClick={onFetchChanges}
             loading={loading}
             size="large"

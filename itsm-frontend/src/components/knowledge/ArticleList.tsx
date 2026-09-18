@@ -22,7 +22,12 @@ import {
   Alert,
   Skeleton,
 } from 'antd';
-import { Search, Plus, Pencil, Trash2, Eye, RotateCcw } from 'lucide-react';
+import { Search, Eye, RotateCcw } from 'lucide-react';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
@@ -172,17 +177,17 @@ const ArticleList: React.FC<ArticleListProps> = ({ showHeader = true }) => {
       render: (_: unknown, record: KnowledgeArticle) => (
         <Space size="small">
           <Tooltip title="编辑">
-            <Button
+            <Button aria-label="编辑"
               size="small"
-              icon={<Pencil />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => router.push(`/knowledge/articles/${record.id}/edit`)}
               style={{ backgroundColor: '#F06820', color: '#fff', border: 'none' }}
             />
           </Tooltip>
           <Tooltip title="删除">
-            <Button
+            <Button aria-label="删除"
               size="small"
-              icon={<Trash2 />}
+              icon={<DeleteOutlined aria-hidden="true" />}
               onClick={() => handleDelete(record.id)}
               style={{ backgroundColor: '#ef4444', color: '#fff', border: 'none' }}
             />
@@ -202,7 +207,7 @@ const ArticleList: React.FC<ArticleListProps> = ({ showHeader = true }) => {
           </div>
           <Button
             type="primary"
-            icon={<Plus />}
+            icon={<PlusOutlined aria-hidden="true" />}
             onClick={() => router.push('/knowledge/articles/new')}
             size="large"
           >

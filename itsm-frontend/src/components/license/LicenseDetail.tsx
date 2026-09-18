@@ -19,7 +19,11 @@ import {
   message,
   Typography,
 } from 'antd';
-import { ArrowLeft, User as UserIcon, Key } from 'lucide-react';
+import { User as UserIcon, Key } from 'lucide-react';
+import {
+  ArrowLeftOutlined,
+  UserOutlined,
+} from '@ant-design/icons';
 import { useParams, useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
@@ -148,7 +152,7 @@ const LicenseDetail: React.FC = () => {
       <Card>
         <div style={{ marginBottom: 24 }}>
           <Button
-            icon={<ArrowLeft />}
+            icon={<ArrowLeftOutlined aria-hidden="true" />}
             onClick={() => router.push('/licenses')}
             style={{ marginBottom: 16 }}
           >
@@ -280,7 +284,7 @@ const LicenseDetail: React.FC = () => {
           </Button>
           {license.status === 'active' && license.availableQuantity > 0 && (
             <Button
-              icon={<UserIcon />}
+              icon={<UserOutlined aria-hidden="true" />}
               onClick={() => {
                 loadUsers();
                 setAssignModalVisible(true);

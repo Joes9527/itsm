@@ -15,7 +15,8 @@ import {
   message,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { ArrowLeft, FileText } from 'lucide-react';
+import { FileText } from 'lucide-react';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useParams, useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
@@ -118,7 +119,7 @@ export default function TicketTemplateDetailPage() {
   return (
     <Space orientation="vertical" size="large" style={{ width: '100%' }}>
       <Card>
-        <Button icon={<ArrowLeft size={16} />} onClick={() => router.push('/tickets/templates')}>
+        <Button icon={<ArrowLeftOutlined aria-hidden="true" />} onClick={() => router.push('/tickets/templates')}>
           返回模板列表
         </Button>
         <div className="mt-4 flex items-start justify-between">

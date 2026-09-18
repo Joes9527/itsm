@@ -2,7 +2,10 @@
 
 import React from 'react';
 import { Result, Button } from 'antd';
-import { LayoutDashboard, Home } from 'lucide-react';
+import {
+  DashboardOutlined,
+  HomeOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { getDefaultHomePath } from '@/config/persona/persona-config';
 import { useAuthStore } from '@/lib/store/auth-store';
@@ -24,12 +27,12 @@ export default function NotFound() {
           <Button
             key="dashboard"
             type="primary"
-            icon={<LayoutDashboard />}
+            icon={<DashboardOutlined aria-hidden="true" />}
             onClick={() => router.push(getDefaultHomePath(useAuthStore.getState().user?.role))}
           >
             返回仪表盘
           </Button>,
-          <Button key="home" icon={<Home />} onClick={() => router.push('/')}>
+          <Button key="home" icon={<HomeOutlined aria-hidden="true" />} onClick={() => router.push('/')}>
             返回首页
           </Button>,
         ]}

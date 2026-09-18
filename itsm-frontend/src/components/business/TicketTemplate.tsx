@@ -23,20 +23,14 @@ import {
   Upload,
   Checkbox,
 } from 'antd';
+import { FileText, Settings, Save, CheckCircle, AlertTriangle, Info, Upload as UploadIcon } from 'lucide-react';
 import {
-  Plus,
-  Edit,
-  Delete,
-  Copy,
-  Eye,
-  FileText,
-  Settings,
-  Save,
-  CheckCircle,
-  AlertTriangle,
-  Info,
-  Upload as UploadIcon,
-} from 'lucide-react';
+  CopyOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import { LoadingEmptyError } from '../ui/LoadingEmptyError';
 import { LoadingSkeleton } from '../ui/LoadingSkeleton';
 
@@ -352,9 +346,9 @@ export const TicketTemplate: React.FC<TicketTemplateProps> = ({
             </Button>
           )}
           <Tooltip title="查看详情">
-            <Button
+            <Button aria-label="查看详情"
               size="small"
-              icon={<Eye size={14} />}
+              icon={<EyeOutlined aria-hidden="true" />}
               onClick={() => {
                 setEditingTemplate(record);
                 setDrawerVisible(true);
@@ -362,16 +356,16 @@ export const TicketTemplate: React.FC<TicketTemplateProps> = ({
             />
           </Tooltip>
           <Tooltip title="编辑">
-            <Button
+            <Button aria-label="编辑"
               size="small"
-              icon={<Edit size={14} />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => handleEditTemplate(record)}
             />
           </Tooltip>
           <Tooltip title="复制">
-            <Button
+            <Button aria-label="复制"
               size="small"
-              icon={<Copy size={14} />}
+              icon={<CopyOutlined aria-hidden="true" />}
               onClick={() => handleCopyTemplate(record)}
             />
           </Tooltip>
@@ -381,7 +375,7 @@ export const TicketTemplate: React.FC<TicketTemplateProps> = ({
             okText="确定"
             cancelText="取消"
           >
-            <Button size="small" danger icon={<Delete size={14} />} />
+            <Button aria-label="删除" size="small" danger icon={<DeleteOutlined aria-hidden="true" />} />
           </Popconfirm>
         </Space>
       ),
@@ -418,7 +412,7 @@ export const TicketTemplate: React.FC<TicketTemplateProps> = ({
             <Text type="secondary">管理和配置工单创建模板，提高工单处理效率</Text>
           </div>
           {mode === 'manage' && (
-            <Button type="primary" icon={<Plus size={16} />} onClick={handleCreateTemplate}>
+            <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={handleCreateTemplate}>
               创建模板
             </Button>
           )}

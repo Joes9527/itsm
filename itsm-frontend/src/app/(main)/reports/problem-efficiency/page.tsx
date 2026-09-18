@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { SyncOutlined } from '@ant-design/icons';
 import {
   Card,
   Row,
@@ -206,7 +207,7 @@ const ProblemEfficiencyPage = () => {
             <Text className="text-muted">问题处理效率监控</Text>
           </Col>
           <Col>
-            <Button icon={<RotateCcw />} onClick={loadData}>
+            <Button icon={<SyncOutlined aria-hidden="true" />} onClick={loadData}>
               刷新数据
             </Button>
           </Col>

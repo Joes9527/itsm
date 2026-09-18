@@ -26,7 +26,13 @@ import {
   Empty,
   Divider,
 } from 'antd';
-import { Plus, Pencil, Trash2, Eye, Clock, Link, Share2, AlertTriangle, CheckCircle, BarChart3, GitBranch } from 'lucide-react';
+import { Clock, Link, Share2, AlertTriangle, CheckCircle, BarChart3, GitBranch } from 'lucide-react';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -310,7 +316,7 @@ export const TicketDependencyManager: React.FC<TicketDependencyManagerProps> = (
             <Button
               type="link"
               size="small"
-              icon={<Eye />}
+              icon={<EyeOutlined aria-hidden="true" />}
               onClick={() => {
                 // 跳转到工单详情页
                 window.open(`/tickets/${record.targetTicketId}`, '_blank');
@@ -324,7 +330,7 @@ export const TicketDependencyManager: React.FC<TicketDependencyManagerProps> = (
               <Button
                 type="link"
                 size="small"
-                icon={<Pencil />}
+                icon={<EditOutlined aria-hidden="true" />}
                 onClick={() => {
                   setEditingDependency(record);
                   form.setFieldsValue(record);
@@ -337,7 +343,7 @@ export const TicketDependencyManager: React.FC<TicketDependencyManagerProps> = (
                 title="确定要删除这个依赖关系吗？"
                 onConfirm={() => handleDeleteDependency(record.id)}
               >
-                <Button type="link" size="small" danger icon={<Trash2 />}>
+                <Button type="link" size="small" danger icon={<DeleteOutlined aria-hidden="true" />}>
                   删除
                 </Button>
               </Popconfirm>
@@ -496,7 +502,7 @@ export const TicketDependencyManager: React.FC<TicketDependencyManagerProps> = (
                     {canManage && (
                       <Button
                         type="primary"
-                        icon={<Plus />}
+                        icon={<PlusOutlined aria-hidden="true" />}
                         onClick={() => {
                           setEditingDependency(null);
                           form.resetFields();
@@ -518,7 +524,7 @@ export const TicketDependencyManager: React.FC<TicketDependencyManagerProps> = (
                       {canManage && (
                         <Button
                           type="primary"
-                          icon={<Plus />}
+                          icon={<PlusOutlined aria-hidden="true" />}
                           onClick={() => {
                             setEditingDependency(null);
                             form.resetFields();

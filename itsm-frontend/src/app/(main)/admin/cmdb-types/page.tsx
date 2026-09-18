@@ -1,16 +1,12 @@
 'use client';
 
+import { Database, Search, CheckCircle, AlertCircle, Layers } from 'lucide-react';
 import {
-  RefreshCw,
-  Database,
-  Plus,
-  Search,
-  Edit,
-  Trash2,
-  CheckCircle,
-  AlertCircle,
-  Layers,
-} from 'lucide-react';
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -329,9 +325,9 @@ const CMDBTypesManagement = () => {
       render: (_: unknown, record: CIType) => (
         <Space>
           <Tooltip title='编辑'>
-            <Button
+            <Button aria-label="编辑"
               type='text'
-              icon={<Edit className='w-4 h-4' />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => handleEdit(record)}
               size='small'
             />
@@ -344,7 +340,7 @@ const CMDBTypesManagement = () => {
             cancelText='取消'
           >
             <Tooltip title='删除'>
-              <Button type='text' icon={<Trash2 className='w-4 h-4' />} danger size='small' />
+              <Button aria-label="删除" type='text' icon={<DeleteOutlined aria-hidden="true" />} danger size='small' />
             </Tooltip>
           </Popconfirm>
         </Space>
@@ -428,7 +424,7 @@ const CMDBTypesManagement = () => {
             <Space>
               <Button
                 type='primary'
-                icon={<Plus className='w-4 h-4' />}
+                icon={<PlusOutlined aria-hidden="true" />}
                 onClick={() => {
                   setEditingType(null);
                   setHasUnsupportedSchema(false);
@@ -439,7 +435,7 @@ const CMDBTypesManagement = () => {
               >
                 新建CI类型
               </Button>
-              <Button icon={<RefreshCw className='w-4 h-4' />} onClick={fetchCITypes}>
+              <Button icon={<SyncOutlined aria-hidden="true" />} onClick={fetchCITypes}>
                 刷新
               </Button>
             </Space>
@@ -646,7 +642,7 @@ const CMDBTypesManagement = () => {
                   <Button
                     type='dashed'
                     block
-                    icon={<Plus className='w-4 h-4' />}
+                    icon={<PlusOutlined aria-hidden="true" />}
                     onClick={() =>
                       add({
                         key: '',

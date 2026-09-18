@@ -24,22 +24,13 @@ import {
   App,
   message,
 } from 'antd';
+import { Play, Eye, Upload, GitBranch, Users, Clock, CheckCircle, AlertCircle, Settings, FileText, Zap } from 'lucide-react';
 import {
-  ArrowLeft,
-  Save,
-  Play,
-  Eye,
-  Download,
-  Upload,
-  GitBranch,
-  Users,
-  Clock,
-  CheckCircle,
-  AlertCircle,
-  Settings,
-  FileText,
-  Zap,
-} from 'lucide-react';
+  ArrowLeftOutlined,
+  DownloadOutlined,
+  EyeOutlined,
+  SaveOutlined,
+} from '@ant-design/icons';
 import { useRouter, useSearchParams } from 'next/navigation';
 import BPMNDesigner from '@/components/workflow/BPMNDesigner';
 import { useI18n } from '@/lib/i18n';
@@ -412,7 +403,7 @@ const TicketApprovalWorkflowPage = () => {
         <div className='px-[16px] md:px-[24px] py-[16px]'>
           <div className='flex flex-wrap gap-[14px] items-center justify-between'>
             <div className='flex items-center gap-[14px]'>
-              <Button icon={<ArrowLeft className='w-4 h-4' />} onClick={handleCancel}>
+              <Button icon={<ArrowLeftOutlined aria-hidden="true" />} onClick={handleCancel}>
                 {t('workflow.backToWorkflowList')}
               </Button>
               <Divider type='vertical' />
@@ -427,18 +418,18 @@ const TicketApprovalWorkflowPage = () => {
 
             <Space>
               <Button
-                icon={<Eye className='w-4 h-4' />}
+                icon={<EyeOutlined aria-hidden="true" />}
                 onClick={handlePreview}
                 disabled={!workflow}
               >
                 {t('workflow.preview')}
               </Button>
-              <Button icon={<Download className='w-4 h-4' />} disabled={!workflow}>
+              <Button icon={<DownloadOutlined aria-hidden="true" />} disabled={!workflow}>
                 {t('workflow.export')}
               </Button>
               <Button
                 type='primary'
-                icon={<Save className='w-4 h-4' />}
+                icon={<SaveOutlined aria-hidden="true" />}
                 disabled={!workflow}
                 onClick={() => setSaveModalVisible(true)}
               >

@@ -3,7 +3,14 @@
 import React, { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Button, Card, Empty, Input, Select, Space, Spin, Typography } from 'antd';
-import { Bell, BookOpen, Clock3, Filter, LayoutGrid, Search, Table, Zap } from 'lucide-react';
+import { Bell, BookOpen, Clock3, Search, Zap } from 'lucide-react';
+import {
+  AppstoreOutlined,
+  BellOutlined,
+  FilterOutlined,
+  TableOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons';
 import { useServiceCatalogData } from './hooks/useServiceCatalogData';
 import { ServiceItemCard } from './components/ServiceItemCard';
 
@@ -119,16 +126,16 @@ export default function ServiceCatalogPage() {
 
             <Space wrap>
               <Button
-                icon={<Filter size={16} />}
+                icon={<FilterOutlined aria-hidden="true" />}
                 onClick={() => setShowAdvancedFilters(current => !current)}
                 aria-expanded={showAdvancedFilters}
               >
                 高级筛选
               </Button>
               <Link href="/approvals">
-                <Button icon={<Bell size={16} />}>我的审批</Button>
+                <Button icon={<BellOutlined aria-hidden="true" />}>我的审批</Button>
               </Link>
-              <Button type="primary" icon={<Zap size={16} />} onClick={jumpToCatalogList}>
+              <Button type="primary" icon={<ThunderboltOutlined aria-hidden="true" />} onClick={jumpToCatalogList}>
                 发起申请
               </Button>
             </Space>
@@ -244,7 +251,7 @@ export default function ServiceCatalogPage() {
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 type={viewMode === 'grid' ? 'primary' : 'default'}
-                icon={<LayoutGrid size={16} />}
+                icon={<AppstoreOutlined aria-hidden="true" />}
                 onClick={() => setViewMode('grid')}
                 aria-pressed={viewMode === 'grid'}
               >
@@ -252,7 +259,7 @@ export default function ServiceCatalogPage() {
               </Button>
               <Button
                 type={viewMode === 'list' ? 'primary' : 'default'}
-                icon={<Table size={16} />}
+                icon={<TableOutlined aria-hidden="true" />}
                 onClick={() => setViewMode('list')}
                 aria-pressed={viewMode === 'list'}
               >

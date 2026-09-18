@@ -1,17 +1,11 @@
 'use client';
 
+import { Edit, Shield, Users, Settings, Key, CheckCircle, XCircle, Search } from 'lucide-react';
 import {
-  Plus,
-  Edit,
-  Trash2,
-  Shield,
-  Users,
-  Settings,
-  Key,
-  CheckCircle,
-  XCircle,
-  Search,
-} from 'lucide-react';
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -373,9 +367,9 @@ export default function RoleManagement() {
       render: (_: unknown, record: RoleItem) => (
         <Space size="small">
           <Tooltip title="编辑">
-            <Button
+            <Button aria-label="编辑"
               type="text"
-              icon={<Edit className="w-4 h-4" />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => {
                 setSelectedRole(record);
                 // 设置表单值
@@ -407,7 +401,7 @@ export default function RoleManagement() {
             cancelText="取消"
           >
             <Tooltip title="删除">
-              <Button type="text" danger icon={<Trash2 className="w-4 h-4" />} />
+              <Button aria-label="删除" type="text" danger icon={<DeleteOutlined aria-hidden="true" />} />
             </Tooltip>
           </Popconfirm>
         </Space>
@@ -619,7 +613,7 @@ export default function RoleManagement() {
               </Button>
               <Button
                 type="primary"
-                icon={<Plus className="w-4 h-4" />}
+                icon={<PlusOutlined aria-hidden="true" />}
                 onClick={() => {
                   setSelectedRole(null);
                   form.resetFields();

@@ -14,7 +14,13 @@ import {
   Tooltip,
   message,
 } from 'antd';
-import { Plus, Pencil, Trash2, User, RefreshCw } from 'lucide-react';
+import { User } from 'lucide-react';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { PageContainer } from '@/app/components/PageContainer';
 import type { Team } from '@/lib/services/team-service';
 import { teamService } from '@/lib/services/team-service';
@@ -111,11 +117,11 @@ export default function TeamsPage() {
       key: 'action',
       render: (_: unknown, record: Team) => (
         <Space size="middle">
-          <Button type="text" icon={<Pencil />} onClick={() => handleEdit(record)} />
-          <Button
+          <Button aria-label="编辑" type="text" icon={<EditOutlined aria-hidden="true" />} onClick={() => handleEdit(record)} />
+          <Button aria-label="删除"
             type="text"
             danger
-            icon={<Trash2 />}
+            icon={<DeleteOutlined aria-hidden="true" />}
             onClick={() => handleDelete(record)}
           />
         </Space>
@@ -183,13 +189,13 @@ export default function TeamsPage() {
         },
       }}
       extra={[
-        <Button key="refresh" icon={<RefreshCw />} onClick={fetchTeams} loading={fetching}>
+        <Button key="refresh" icon={<SyncOutlined aria-hidden="true" />} onClick={fetchTeams} loading={fetching}>
           {t('common.refresh')}
         </Button>,
         <Button
           key="create"
           type="primary"
-          icon={<Plus />}
+          icon={<PlusOutlined aria-hidden="true" />}
           onClick={() => {
             setEditingTeam(null);
             form.resetFields();

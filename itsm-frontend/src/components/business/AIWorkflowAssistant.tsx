@@ -15,18 +15,8 @@ import {
   Tooltip,
   Divider,
 } from 'antd';
-import {
-  Bot,
-  Zap,
-  Lightbulb,
-  TrendingUp,
-  Clock,
-  CheckCircle,
-  AlertTriangle,
-  Brain,
-  Workflow,
-  BookOpen,
-} from 'lucide-react';
+import { Bot, Zap, Lightbulb, TrendingUp, Clock, CheckCircle, AlertTriangle, Workflow, BookOpen } from 'lucide-react';
+import { ExperimentOutlined } from '@ant-design/icons';
 import { aiTriage, aiSearchKB, aiSimilarIncidents } from '@/lib/api/ai-api';
 
 const { TextArea } = Input;
@@ -213,7 +203,7 @@ export const AIWorkflowAssistant: React.FC<AIWorkflowAssistantProps> = ({
 
           <Button
             type="primary"
-            icon={<Brain />}
+            icon={<ExperimentOutlined aria-hidden="true" />}
             loading={loading}
             onClick={handleAnalyze}
             disabled={!title.trim()}

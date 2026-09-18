@@ -20,7 +20,11 @@ import {
   message,
   Typography,
 } from 'antd';
-import { ArrowLeft, User as UserIcon, Monitor, MapPin } from 'lucide-react';
+import { Monitor, MapPin } from 'lucide-react';
+import {
+  ArrowLeftOutlined,
+  UserOutlined,
+} from '@ant-design/icons';
 import { useParams, useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
@@ -160,7 +164,7 @@ const AssetDetail: React.FC = () => {
       <Card>
         <div style={{ marginBottom: 24 }}>
           <Button
-            icon={<ArrowLeft />}
+            icon={<ArrowLeftOutlined aria-hidden="true" />}
             onClick={() => router.push('/assets')}
             style={{ marginBottom: 16 }}
           >
@@ -252,7 +256,7 @@ const AssetDetail: React.FC = () => {
           </Button>
           {asset.status === 'available' && (
             <Button
-              icon={<UserIcon />}
+              icon={<UserOutlined aria-hidden="true" />}
               onClick={() => {
                 loadUsers();
                 setAssignModalVisible(true);

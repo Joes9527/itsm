@@ -77,6 +77,8 @@ export const AuthButton = forwardRef<HTMLButtonElement, AuthButtonProps>(
     const antdSize = size === 'lg' ? 'large' : size === 'sm' ? 'small' : 'middle';
 
     return (
+      // icon-gate: 其余 props（含 icon?: React.ReactNode）整包透传给 antd Button。
+      // 本组件目前全仓无调用点；将来启用时，调用方要自己确认传入的是 @ant-design/icons。
       <Button
         ref={ref}
         type={type}

@@ -3,19 +3,19 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { App, Button, Card, Col, Divider, Row, Space, Tag, Typography } from 'antd';
+import { Cloud, Database, GitBranch, Layers3, Plus, Shield, SlidersHorizontal, Sparkles, Workflow } from 'lucide-react';
 import {
-  Cloud,
-  Database,
-  GitBranch,
-  Layers3,
-  Plus,
-  RefreshCw,
-  Shield,
-  Server,
-  SlidersHorizontal,
-  Sparkles,
-  Workflow,
-} from 'lucide-react';
+  BranchesOutlined,
+  CloudOutlined,
+  ClusterOutlined,
+  ControlOutlined,
+  DatabaseOutlined,
+  HddOutlined,
+  PartitionOutlined,
+  SafetyOutlined,
+  StarOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 
 import { CMDBApi } from '@/lib/api/cmdb-api';
 import { ManagementPageHeader } from '@/components/ui/ManagementPageHeader';
@@ -107,6 +107,7 @@ function HubCard({ title, description, accent, icon, metrics, actions, onAction 
 
       <div className="flex flex-wrap gap-2">
         {actions.map(action => (
+          // icon-gate: 值来自本文件 hubCards 的 actions 字面量，已全部是 antd 图标
           <Button
             key={action.href}
             icon={action.icon}
@@ -252,9 +253,9 @@ export function CSDMHub() {
         { label: '发现源', value: state.counts.discoverySources, color: 'cyan' },
       ],
       actions: [
-        { label: 'CI 类型管理', href: '/admin/cmdb-types', icon: <Database className="h-4 w-4" /> },
-        { label: '云服务目录', href: '/cmdb/cloud-services', icon: <Cloud className="h-4 w-4" /> },
-        { label: '云账号管理', href: '/cmdb/cloud-accounts', icon: <Shield className="h-4 w-4" /> },
+        { label: 'CI 类型管理', href: '/admin/cmdb-types', icon: <DatabaseOutlined aria-hidden="true" /> },
+        { label: '云服务目录', href: '/cmdb/cloud-services', icon: <CloudOutlined aria-hidden="true" /> },
+        { label: '云账号管理', href: '/cmdb/cloud-accounts', icon: <SafetyOutlined aria-hidden="true" /> },
       ],
     },
     {
@@ -268,9 +269,9 @@ export function CSDMHub() {
         { label: '关系层', value: '已拆分', color: 'gold' },
       ],
       actions: [
-        { label: '配置项工作台', href: '/cmdb/ci', icon: <Server className="h-4 w-4" /> },
-        { label: '关系管理', href: '/cmdb/relationships', icon: <GitBranch className="h-4 w-4" /> },
-        { label: '服务目录', href: '/service-catalog', icon: <Workflow className="h-4 w-4" /> },
+        { label: '配置项工作台', href: '/cmdb/ci', icon: <HddOutlined aria-hidden="true" /> },
+        { label: '关系管理', href: '/cmdb/relationships', icon: <BranchesOutlined aria-hidden="true" /> },
+        { label: '服务目录', href: '/service-catalog', icon: <PartitionOutlined aria-hidden="true" /> },
       ],
     },
     {
@@ -284,10 +285,10 @@ export function CSDMHub() {
         { label: '拓扑', value: '可视化', color: 'gold' },
       ],
       actions: [
-        { label: '图谱注册中心', href: '/cmdb/registry', icon: <Sparkles className="h-4 w-4" /> },
-        { label: '拓扑视图', href: '/cmdb/topology', icon: <GitBranch className="h-4 w-4" /> },
-        { label: '云资源列表', href: '/cmdb/cloud-resources', icon: <Cloud className="h-4 w-4" /> },
-        { label: '对账中心', href: '/cmdb/reconciliation', icon: <SlidersHorizontal className="h-4 w-4" /> },
+        { label: '图谱注册中心', href: '/cmdb/registry', icon: <ClusterOutlined aria-hidden="true" /> },
+        { label: '拓扑视图', href: '/cmdb/topology', icon: <BranchesOutlined aria-hidden="true" /> },
+        { label: '云资源列表', href: '/cmdb/cloud-resources', icon: <CloudOutlined aria-hidden="true" /> },
+        { label: '对账中心', href: '/cmdb/reconciliation', icon: <ControlOutlined aria-hidden="true" /> },
       ],
     },
   ];
@@ -370,10 +371,10 @@ export function CSDMHub() {
         description="围绕配置项、云资源、关系拓扑和数据质量的日常工作台。"
         actions={
           <Space wrap>
-            <Button icon={<RefreshCw className="h-4 w-4" />} loading={state.loading} onClick={load}>
+            <Button icon={<SyncOutlined aria-hidden="true" />} loading={state.loading} onClick={load}>
               刷新总览
             </Button>
-            <Button type="primary" icon={<Sparkles className="h-4 w-4" />} onClick={() => router.push('/cmdb/ci')}>
+            <Button type="primary" icon={<StarOutlined aria-hidden="true" />} onClick={() => router.push('/cmdb/ci')}>
               配置项工作台
             </Button>
           </Space>

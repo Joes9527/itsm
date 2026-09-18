@@ -24,7 +24,11 @@ import {
   Badge,
   message,
 } from 'antd';
-import { Plus, Trash2, Link, AlertCircle, CheckCircle, XCircle, GitBranch, ArrowLeftRight } from 'lucide-react';
+import { Link, AlertCircle, CheckCircle, XCircle, GitBranch, ArrowLeftRight } from 'lucide-react';
+import {
+  DeleteOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import {
   useTicketRelationsQuery,
   useCreateRelationMutation,
@@ -125,7 +129,7 @@ export const RelationPanel: React.FC<RelationPanelProps> = ({
     if (!relations || relations.length === 0) {
       return (
         <Empty description="暂无关联工单" image={Empty.PRESENTED_IMAGE_SIMPLE}>
-          <Button type="primary" icon={<Plus />} onClick={() => setModalVisible(true)}>
+          <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} onClick={() => setModalVisible(true)}>
             添加关联
           </Button>
         </Empty>
@@ -162,7 +166,7 @@ export const RelationPanel: React.FC<RelationPanelProps> = ({
                   okText="确认"
                   cancelText="取消"
                 >
-                  <Button type="link" danger size="small" icon={<Trash2 />}>
+                  <Button type="link" danger size="small" icon={<DeleteOutlined aria-hidden="true" />}>
                     删除
                   </Button>
                 </Popconfirm>,
@@ -234,7 +238,7 @@ export const RelationPanel: React.FC<RelationPanelProps> = ({
       extra={
         <Button
           type="primary"
-          icon={<Plus />}
+          icon={<PlusOutlined aria-hidden="true" />}
           onClick={() => setModalVisible(true)}
           size="small"
         >

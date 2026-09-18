@@ -18,7 +18,13 @@ import {
   Switch,
   Empty,
 } from 'antd';
-import { Plus, Pencil, Trash2, RotateCcw, Bell } from 'lucide-react';
+import {
+  BellOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
@@ -131,24 +137,24 @@ const SLAList: React.FC = () => {
       render: (_: unknown, record: SLADefinition) => (
         <Space size="small">
           <Tooltip title="编辑">
-            <Button
+            <Button aria-label="编辑"
               type="text"
-              icon={<Pencil />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => router.push(`/sla/definitions/${record.id}/edit`)}
             />
           </Tooltip>
           <Tooltip title="预警规则">
-            <Button
+            <Button aria-label="预警规则"
               type="text"
-              icon={<Bell />}
+              icon={<BellOutlined aria-hidden="true" />}
               onClick={() => router.push(`/sla/definitions/${record.id}/alerts`)}
             />
           </Tooltip>
           <Tooltip title="删除">
-            <Button
+            <Button aria-label="删除"
               type="text"
               danger
-              icon={<Trash2 />}
+              icon={<DeleteOutlined aria-hidden="true" />}
               onClick={() => handleDelete(record.id)}
             />
           </Tooltip>
@@ -169,13 +175,13 @@ const SLAList: React.FC = () => {
         <Space>
           <Button
             type="primary"
-            icon={<Plus />}
+            icon={<PlusOutlined aria-hidden="true" />}
             onClick={() => router.push('/sla/definitions/new')}
           >
             新建 SLA
           </Button>
         </Space>
-        <Button icon={<RotateCcw />} onClick={loadData} />
+        <Button aria-label="刷新" icon={<SyncOutlined aria-hidden="true" />} onClick={loadData} />
       </div>
 
       <Table

@@ -12,7 +12,12 @@ import {
   Tag,
   Badge,
 } from 'antd';
-import { Search, Filter, X, RotateCcw } from 'lucide-react';
+import { Search, Filter } from 'lucide-react';
+import {
+  ClearOutlined,
+  SearchOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { TicketViewSelector } from './TicketViewSelector';
 import type { TicketView } from '@/lib/api/ticket-view-api';
@@ -339,7 +344,7 @@ function TicketFilters({
           <Col xs={12} sm={8} md={6} lg={4}>
             <Space.Compact style={{ width: '100%' }}>
               <Button
-                icon={<Search />}
+                icon={<SearchOutlined aria-hidden="true" />}
                 type={activeFilters.length > 0 ? 'primary' : 'default'}
                 onClick={handleSearch}
                 loading={loading}
@@ -352,7 +357,7 @@ function TicketFilters({
                 )}
               </Button>
               <Button
-                icon={<X />}
+                icon={<ClearOutlined aria-hidden="true" />}
                 onClick={handleReset}
                 data-testid="filter-reset-btn"
                 disabled={loading || activeFilters.length === 0}
@@ -361,7 +366,7 @@ function TicketFilters({
               </Button>
               {onRefresh && (
                 <Button
-                  icon={<RotateCcw />}
+                  icon={<SyncOutlined aria-hidden="true" />}
                   onClick={onRefresh}
                   loading={loading}
                   data-testid="filter-refresh-btn"
@@ -397,7 +402,7 @@ function TicketFilters({
                 <Button
                   type="link"
                   size="small"
-                  icon={<X />}
+                  icon={<ClearOutlined aria-hidden="true" />}
                   onClick={handleReset}
                   className="p-0 h-auto"
                 >

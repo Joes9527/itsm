@@ -18,7 +18,13 @@ import {
   message,
   Switch,
 } from 'antd';
-import { Search, Plus, Pencil, Trash2, RotateCcw } from 'lucide-react';
+import { Search } from 'lucide-react';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 
 import { CMDBApi } from '@/lib/api/cmdb-api';
 import type { CloudAccount } from '@/types/biz/cmdb';
@@ -227,7 +233,7 @@ export default function CloudAccountPage() {
           <Tooltip title='编辑'>
             <Button
               type='text'
-              icon={<Pencil />}
+              icon={<EditOutlined aria-hidden="true" />}
               onClick={() => handleEdit(record)}
               size='small'
               aria-label={`编辑云账号 ${record.accountName}`}
@@ -244,7 +250,7 @@ export default function CloudAccountPage() {
               <Button
                 type='text'
                 danger
-                icon={<Trash2 />}
+                icon={<DeleteOutlined aria-hidden="true" />}
                 size='small'
                 loading={deletingId === record.id}
                 aria-label={`删除云账号 ${record.accountName}`}
@@ -292,10 +298,10 @@ export default function CloudAccountPage() {
           options={providerOptions}
         />
         <Space>
-          <Button icon={<RotateCcw />} onClick={loadData} loading={loading}>
+          <Button icon={<SyncOutlined aria-hidden="true" />} onClick={loadData} loading={loading}>
             刷新
           </Button>
-          <Button type='primary' icon={<Plus />} onClick={() => setCreateOpen(true)}>
+          <Button type='primary' icon={<PlusOutlined aria-hidden="true" />} onClick={() => setCreateOpen(true)}>
             新增云账号
           </Button>
         </Space>

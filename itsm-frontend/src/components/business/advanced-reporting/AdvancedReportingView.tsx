@@ -1,7 +1,8 @@
 'use client';
 
 import { Alert, Button, Card, Empty, Skeleton, Space, Typography } from 'antd';
-import { BarChart3, RefreshCw } from 'lucide-react';
+import { BarChart3 } from 'lucide-react';
+import { SyncOutlined } from '@ant-design/icons';
 import type { AdvancedReportingViewProps } from './types';
 
 export function AdvancedReportingView({
@@ -20,7 +21,7 @@ export function AdvancedReportingView({
         </Space>
       }
       extra={
-        <Button icon={<RefreshCw size={16} />} onClick={onReload} loading={loading}>
+        <Button icon={<SyncOutlined aria-hidden="true" />} onClick={onReload} loading={loading}>
           刷新
         </Button>
       }

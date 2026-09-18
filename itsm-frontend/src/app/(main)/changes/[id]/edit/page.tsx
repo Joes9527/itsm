@@ -16,7 +16,11 @@ import {
   Space,
   Typography,
 } from 'antd';
-import { ArrowLeft, Lock, Save } from 'lucide-react';
+import { Lock } from 'lucide-react';
+import {
+  ArrowLeftOutlined,
+  SaveOutlined,
+} from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import { ChangeApi, type ChangeRequest, type Change } from '@/lib/api/change-api';
 import { useI18n } from '@/lib/i18n';
@@ -190,7 +194,7 @@ const EditChangePage: React.FC = () => {
       <div className="mb-6">
         <Button
           type='link'
-          icon={<ArrowLeft size={16} />}
+          icon={<ArrowLeftOutlined aria-hidden="true" />}
           onClick={() => router.back()}
           className='!px-0'
         >
@@ -399,7 +403,7 @@ const EditChangePage: React.FC = () => {
                   type='primary'
                   htmlType='submit'
                   loading={loading}
-                  icon={<Save size={16} />}
+                  icon={<SaveOutlined aria-hidden="true" />}
                 >
                   保存修改
                 </Button>

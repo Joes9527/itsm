@@ -20,19 +20,14 @@ import {
   Rate,
   Progress,
 } from 'antd';
+import { BookOpen, Link, Star, MessageSquare, Sparkles, CheckCircle, Bot } from 'lucide-react';
 import {
-  BookOpen,
-  Search,
-  Link,
-  Star,
-  Eye,
-  MessageSquare,
-  Sparkles,
-  Plus,
-  CheckCircle,
-  AlertCircle,
-  Bot,
-} from 'lucide-react';
+  ExclamationCircleOutlined,
+  EyeOutlined,
+  LinkOutlined,
+  PlusOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
 
 // 解决方案推荐接口
 interface SolutionRecommendation {
@@ -266,10 +261,10 @@ const KnowledgeIntegration: React.FC<KnowledgeIntegrationProps> = ({
             renderItem={item => (
               <List.Item
                 actions={[
-                  <Button key="view" type="link" icon={<Eye />}>
+                  <Button key="view" type="link" icon={<EyeOutlined aria-hidden="true" />}>
                     查看
                   </Button>,
-                  <Button key="associate" type="link" icon={<Link />}>
+                  <Button key="associate" type="link" icon={<LinkOutlined aria-hidden="true" />}>
                     关联
                   </Button>,
                 ]}
@@ -361,7 +356,7 @@ const KnowledgeIntegration: React.FC<KnowledgeIntegrationProps> = ({
             <Button
               type="primary"
               size="small"
-              icon={<Plus />}
+              icon={<PlusOutlined aria-hidden="true" />}
               onClick={() => setAssociateModalVisible(true)}
             >
               关联文章
@@ -376,14 +371,14 @@ const KnowledgeIntegration: React.FC<KnowledgeIntegrationProps> = ({
             renderItem={item => (
               <List.Item
                 actions={[
-                  <Button key="view" type="link" icon={<Eye />}>
+                  <Button key="view" type="link" icon={<EyeOutlined aria-hidden="true" />}>
                     查看
                   </Button>,
                   <Button
                     key="remove"
                     type="link"
                     danger
-                    icon={<AlertCircle />}
+                    icon={<ExclamationCircleOutlined aria-hidden="true" />}
                     onClick={() => handleRemoveAssociation(item.id)}
                   >
                     移除
@@ -434,7 +429,7 @@ const KnowledgeIntegration: React.FC<KnowledgeIntegrationProps> = ({
             <Button
               type="default"
               size="small"
-              icon={<Search />}
+              icon={<SearchOutlined aria-hidden="true" />}
               onClick={() => setSearchModalVisible(true)}
             >
               搜索更多
@@ -449,10 +444,10 @@ const KnowledgeIntegration: React.FC<KnowledgeIntegrationProps> = ({
             renderItem={item => (
               <List.Item
                 actions={[
-                  <Button key="view" type="link" icon={<Eye />}>
+                  <Button key="view" type="link" icon={<EyeOutlined aria-hidden="true" />}>
                     查看
                   </Button>,
-                  <Button key="associate" type="link" icon={<Link />}>
+                  <Button key="associate" type="link" icon={<LinkOutlined aria-hidden="true" />}>
                     关联
                   </Button>,
                 ]}
@@ -514,7 +509,7 @@ const KnowledgeIntegration: React.FC<KnowledgeIntegrationProps> = ({
               }
               onPressEnter={handleSearch}
             />
-            <Button type="primary" icon={<Search />} onClick={handleSearch}>
+            <Button type="primary" icon={<SearchOutlined aria-hidden="true" />} onClick={handleSearch}>
               搜索
             </Button>
           </div>
@@ -527,7 +522,7 @@ const KnowledgeIntegration: React.FC<KnowledgeIntegrationProps> = ({
                 renderItem={item => (
                   <List.Item
                     actions={[
-                      <Button key="view" type="link" icon={<Eye />}>
+                      <Button key="view" type="link" icon={<EyeOutlined aria-hidden="true" />}>
                         查看
                       </Button>,
                       <Button

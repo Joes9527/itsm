@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { App } from 'antd';
+import { App, Button } from 'antd';
 import {
   AlertCircle,
   CheckCircle2,
@@ -16,7 +16,6 @@ import {
   XCircle,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import {
@@ -237,7 +236,7 @@ const InstallationsPage = () => {
           <p className="mt-1 text-[12px] text-muted">管理已安装的连接器、AI技能和扩展插件</p>
         </div>
         <Link href="/marketplace">
-          <Button>
+          <Button type="primary">
             <PlusCircle className="h-4 w-4 mr-2" />
             安装应用
           </Button>
@@ -334,12 +333,12 @@ const InstallationsPage = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     {item?.type === 'connector' && (
-                      <Button variant="secondary" size="sm" onClick={() => setEditingId(isEditing ? null : installation.id)}>
+                      <Button size="small" onClick={() => setEditingId(isEditing ? null : installation.id)}>
                         <Settings className="h-4 w-4 mr-1" />
                         配置
                       </Button>
                     )}
-                    <Button variant="destructive" size="sm" onClick={() => handleUninstall(installation)}>
+                    <Button type="primary" danger size="small" onClick={() => handleUninstall(installation)}>
                       <Trash2 className="h-4 w-4 mr-1" />
                       卸载
                     </Button>
@@ -401,12 +400,12 @@ const InstallationsPage = () => {
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Button onClick={() => handleSaveConfig(installation)} disabled={savingId === installation.id}>
+                      <Button type="primary" onClick={() => handleSaveConfig(installation)} disabled={savingId === installation.id}>
                         <Save className="h-4 w-4 mr-2" />
                         {savingId === installation.id ? '保存中...' : '保存配置'}
                       </Button>
                       {isFeishu && (
-                        <Button variant="secondary" onClick={handleFeishuOAuth}>
+                        <Button onClick={handleFeishuOAuth}>
                           <ExternalLink className="h-4 w-4 mr-2" />
                           飞书 OAuth 授权
                         </Button>
@@ -427,7 +426,7 @@ const InstallationsPage = () => {
             <h3 className="mb-2 text-[15px] font-semibold text-foreground">没有找到匹配的应用</h3>
             <p className="mb-4 text-[12px] text-muted">尝试调整搜索条件或过滤选项</p>
             <Link href="/marketplace">
-              <Button>浏览应用市场</Button>
+              <Button type="primary">浏览应用市场</Button>
             </Link>
           </div>
         </div>

@@ -3,18 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Card, Input, Button, Tag, Pagination, Spin, Empty, Select, Alert, message } from 'antd';
+import { FileText, ChevronRight, Clock, Hourglass, CheckCircle, XCircle, Calendar, Search, Filter } from 'lucide-react';
 import {
-  FileText,
-  RefreshCw,
-  ChevronRight,
-  Clock,
-  Hourglass,
-  CheckCircle,
-  XCircle,
-  Calendar,
-  Search,
-  Filter,
-} from 'lucide-react';
+  FileTextOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 
 // API 接口类型定义
 //
@@ -204,7 +197,7 @@ const MyRequestsPage = () => {
             </div>
             <Button
               onClick={() => fetchRequests(currentPage, filter)}
-              icon={<RefreshCw className="w-4 h-4" />}
+              icon={<SyncOutlined aria-hidden="true" />}
             >
               刷新
             </Button>
@@ -292,7 +285,7 @@ const MyRequestsPage = () => {
               }
             >
               <Link href="/service-catalog">
-                <Button type="primary" icon={<FileText className="w-4 h-4" />}>
+                <Button type="primary" icon={<FileTextOutlined aria-hidden="true" />}>
                   浏览服务目录
                 </Button>
               </Link>

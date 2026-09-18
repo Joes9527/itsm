@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { App } from 'antd';
+import { App, Button } from 'antd';
 import {
   AlertCircle,
   ArrowLeft,
@@ -19,7 +19,6 @@ import {
   User,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import type {
@@ -144,7 +143,7 @@ const MarketplaceDetailPage = () => {
           <h3 className="mb-2 text-[15px] font-semibold text-foreground">应用不存在</h3>
           <p className="mb-4 text-[12px] text-muted">{loadError || '您访问的应用可能已被下架或删除'}</p>
           <Link href="/marketplace">
-            <Button>返回应用市场</Button>
+            <Button type="primary">返回应用市场</Button>
           </Link>
         </div>
       </div>
@@ -211,12 +210,12 @@ const MarketplaceDetailPage = () => {
                         <span>已安装</span>
                       </div>
                       <div className="flex gap-2">
-                        <Button onClick={() => router.push('/installations')}>管理</Button>
-                        <Button variant="destructive" onClick={handleUninstall}>卸载</Button>
+                        <Button type="primary" onClick={() => router.push('/installations')}>管理</Button>
+                        <Button type="primary" danger onClick={handleUninstall}>卸载</Button>
                       </div>
                     </div>
                   ) : (
-                    <Button size="lg" onClick={handleInstall} disabled={installing}>
+                    <Button type="primary" size="large" onClick={handleInstall} disabled={installing}>
                       {installing ? '安装中...' : '立即安装'}
                     </Button>
                   )}
@@ -325,9 +324,9 @@ const MarketplaceDetailPage = () => {
             </CardContent>
             <CardFooter className="border-t border-border p-[16px]">
               {isInstalled ? (
-                <Button className="w-full" onClick={() => router.push('/installations')}>管理已安装应用</Button>
+                <Button type="primary" className="w-full" onClick={() => router.push('/installations')}>管理已安装应用</Button>
               ) : (
-                <Button className="w-full" size="lg" onClick={handleInstall} disabled={installing}>
+                <Button type="primary" className="w-full" size="large" onClick={handleInstall} disabled={installing}>
                   {installing ? '安装中...' : '立即安装'}
                 </Button>
               )}

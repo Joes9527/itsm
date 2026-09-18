@@ -17,7 +17,8 @@ import {
   message,
   App,
 } from 'antd';
-import { Search as SearchIcon, Filter, Plus, Save, Pencil, Eye, Settings, Share2, MoreHorizontal } from 'lucide-react';
+import { Search as SearchIcon, Filter, Plus, Save, Pencil, Eye, Share2, MoreHorizontal } from 'lucide-react';
+import { SettingOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import type {
   DragStartEvent,
@@ -418,7 +419,7 @@ export const TicketKanbanBoard: React.FC<TicketKanbanBoardProps> = ({
         </div>
         <div className="flex items-center gap-2">
           <Dropdown menu={{ items: viewMenuItems }} trigger={['click']}>
-            <Button icon={<Settings />}>视图设置</Button>
+            <Button icon={<SettingOutlined aria-hidden="true" />}>视图设置</Button>
           </Dropdown>
         </div>
       </div>

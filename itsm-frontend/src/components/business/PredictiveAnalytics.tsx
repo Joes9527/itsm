@@ -18,20 +18,8 @@ import {
   Table,
   Tag,
 } from 'antd';
-import {
-  TrendingUp,
-  TrendingDown,
-  BarChart3,
-  Activity,
-  AlertTriangle,
-  Brain,
-  Calendar,
-  Users,
-  Clock,
-  Zap,
-  Target,
-  PieChart,
-} from 'lucide-react';
+import { TrendingUp, TrendingDown, BarChart3, Activity, AlertTriangle, Brain, Calendar, Users, Clock, Target, PieChart } from 'lucide-react';
+import { ThunderboltOutlined } from '@ant-design/icons';
 // 暂时移除图表依赖，使用简单的进度条和统计展示
 
 const { Title, Text } = Typography;
@@ -245,7 +233,7 @@ export const PredictiveAnalytics: React.FC = () => {
                 { value: '90d', label: '90天' },
               ]}
             />
-            <Button icon={<Zap />} size="small">
+            <Button icon={<ThunderboltOutlined aria-hidden="true" />} size="small">
               刷新预测
             </Button>
           </Space>

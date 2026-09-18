@@ -20,19 +20,12 @@ import {
   message,
   Spin,
 } from 'antd';
+import { GitBranch, History, GitCommit, User, Calendar, FileText, AlertTriangle, CheckCircle } from 'lucide-react';
 import {
-  GitBranch,
-  History,
-  RotateCcw,
-  Eye,
-  GitMerge,
-  GitCommit,
-  User,
-  Calendar,
-  FileText,
-  AlertTriangle,
-  CheckCircle,
-} from 'lucide-react';
+  EyeOutlined,
+  MergeOutlined,
+  RollbackOutlined,
+} from '@ant-design/icons';
 import { KnowledgeBaseApi } from '@/lib/api/knowledge-base-api';
 import type { ArticleVersion } from '@/types/knowledge-base';
 import { format } from 'date-fns';
@@ -179,9 +172,9 @@ const ArticleVersionControl: React.FC<ArticleVersionControlProps> = ({
       render: (_: unknown, record: ArticleVersion) => (
         <Space>
           <Tooltip title="预览版本">
-            <Button
+            <Button aria-label="预览版本"
               type="text"
-              icon={<Eye className="w-4 h-4" />}
+              icon={<EyeOutlined aria-hidden="true" />}
               onClick={() => handlePreviewVersion(record)}
             />
           </Tooltip>
@@ -193,7 +186,7 @@ const ArticleVersionControl: React.FC<ArticleVersionControlProps> = ({
                 description={`确定要恢复到版本 ${record.version} 吗？`}
                 onConfirm={() => handleRestoreVersion(record.version)}
               >
-                <Button type="text" icon={<RotateCcw className="w-4 h-4 text-orange-500" />} />
+                <Button aria-label="恢复到此版本" type="text" icon={<RollbackOutlined aria-hidden="true" className="text-orange-500" />} />
               </Popconfirm>
             </Tooltip>
           )}
@@ -264,7 +257,7 @@ const ArticleVersionControl: React.FC<ArticleVersionControlProps> = ({
       extra={
         <Space>
           <Button
-            icon={<GitMerge className="w-4 h-4" />}
+            icon={<MergeOutlined aria-hidden="true" />}
             onClick={() => {
               if (versions.length >= 2) {
                 setSelectedVersions([versions[0].version, versions[1].version]);

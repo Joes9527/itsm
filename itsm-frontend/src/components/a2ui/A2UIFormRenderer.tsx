@@ -2,7 +2,8 @@
 
 import React, { useState, useCallback } from 'react';
 import { Form, Input, Select, Button, Card, Space, Spin, message } from 'antd';
-import { Send, Bot, CheckCircle } from 'lucide-react';
+import { Bot, CheckCircle } from 'lucide-react';
+import { SendOutlined } from '@ant-design/icons';
 import type {
   A2UIComponent,
   A2UIDataModel,
@@ -458,7 +459,7 @@ export function A2UIFormRenderer() {
             onChange={e => setUserIntent(e.target.value)}
             onPressEnter={sendToAI}
           />
-          <Button icon={<Send />} onClick={sendToAI} loading={loading}>
+          <Button icon={<SendOutlined aria-hidden="true" />} onClick={sendToAI} loading={loading}>
             发送
           </Button>
         </Space.Compact>
