@@ -394,12 +394,52 @@ func (r *EntRepository) UpdateDepartment(ctx context.Context, d *Department) (*D
 	return toDeptDomain(e), nil
 }
 
+// DeleteDepartment 停用（软删除）一个部门，并把它的下级重挂到它的父级。
+//
+// 计划承诺："删除一个仍有下级的节点，其子树会在组织树上变成顶级节点。"——只说
+// "软删除目标行"是不够的：组织树的根只认 parent_id 为空（或 0），子节点列表也只列
+// **存在**的父的下级，因此指向已删父节点的子部门会从树上**彻底不可达**（变成孤儿，
+// 而这些部门上还挂着员工的部门归属）。
+//
+// 重挂规则：子节点继承被删节点的父级；被删的是顶层节点时，子节点成为顶层节点。
+// 两步在同一事务内完成，避免出现"父已删、子还没重挂"的中间态。
 func (r *EntRepository) DeleteDepartment(ctx context.Context, id int, tenantID int) error {
-	_, err := r.client.Department.Update().
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+
+	current, err := tx.Department.Query().
 		Where(department.ID(id), department.TenantID(tenantID), department.DeletedAtIsNil()).
+		Only(ctx)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	children := tx.Department.Update().
+		Where(department.ParentIDEQ(id), department.TenantID(tenantID), department.DeletedAtIsNil())
+	if current.ParentID > 0 {
+		_, err = children.SetParentID(current.ParentID).Save(ctx)
+	} else {
+		// 顶层节点：子节点上提为顶层。parent_id 的空值表示法是 NULL（不是 0），
+		// 用 ClearParentID 显式置空，否则树查询取不到这些新顶层节点。
+		_, err = children.ClearParentID().Save(ctx)
+	}
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	if err := tx.Department.UpdateOneID(id).
+		Where(department.TenantID(tenantID), department.DeletedAtIsNil()).
 		SetDeletedAt(time.Now()).
-		Save(ctx)
-	return err
+		Exec(ctx); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
 }
 
 // ApplyDepartmentUpdate 用部门数据的正常连接执行一次带校验与留痕语义的更新。
