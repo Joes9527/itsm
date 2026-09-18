@@ -35,8 +35,12 @@ import {
   Spin,
   Alert,
 } from 'antd';
-import { ArrowUp, ArrowRight, Save, Pencil, FileText, Clock, AlertCircle, CheckCircle, Plug, AreaChart, Siren } from 'lucide-react';
+import { Save, FileText, Clock, AlertCircle, CheckCircle, Plug, AreaChart, Siren } from 'lucide-react';
 import {
+  AlertOutlined,
+  ArrowRightOutlined,
+  ArrowUpOutlined,
+  CheckCircleOutlined,
   EditOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
@@ -611,7 +615,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
                 action={actions.edit}
                 actionName='edit'
                 button={{
-                  icon: <Pencil />,
+                  icon: <EditOutlined aria-hidden="true" />,
                   disabled: actionMutationInFlight,
                   onClick: () => router.push(`/incidents/${data.id}/edit`),
                 }}
@@ -622,7 +626,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
                 action={actions.escalate}
                 actionName='escalate'
                 button={{
-                  icon: <ArrowUp />,
+                  icon: <ArrowUpOutlined aria-hidden="true" />,
                   onClick: handleEscalate,
                   loading: escalating,
                   disabled: actionMutationInFlight,
@@ -636,7 +640,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
                 actionName='mark-major-incident'
                 button={{
                   danger: true,
-                  icon: <Siren />,
+                  icon: <AlertOutlined aria-hidden="true" />,
                   disabled: actionMutationInFlight,
                   onClick: () => setMajorModalVisible(true),
                 }}
@@ -651,7 +655,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
                 actionName='resolve'
                 button={{
                   type: 'primary',
-                  icon: <CheckCircle />,
+                  icon: <CheckCircleOutlined aria-hidden="true" />,
                   onClick: handleResolveClick,
                   loading: resolving,
                   disabled: actionMutationInFlight,
@@ -675,7 +679,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
                 action={actions.convertToProblem}
                 actionName='convert-to-problem'
                 button={{
-                  icon: <ArrowRight />,
+                  icon: <ArrowRightOutlined aria-hidden="true" />,
                   onClick: handleConvertToProblem,
                   loading: converting,
                   disabled: actionMutationInFlight,

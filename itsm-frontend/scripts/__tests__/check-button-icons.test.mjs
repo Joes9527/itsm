@@ -109,15 +109,55 @@ test('表达式形态带文字 -> 不要求可访问名称', () => {
   assert.deepEqual(rules(src), ['lucide-button-icon', 'lucide-button-icon']);
 });
 
-test('icon 是纯变量（值来自别处）-> 看不见，这是已记录的盲区', () => {
-  // 不是「应该不报」，是「当前报不出来」。这条测试锁住现状，免得有人误以为
-  // 门禁通过 == 全仓干净。见 check-button-icons.mjs 头部「已知盲区」。
+test('icon 是纯变量（值来自别处）-> fail-closed 报不可判定', () => {
+  // 这个盲区真的漏过东西：incidents 的 4 个批量操作图标和审批链的批量删除，
+  // 都是这样从调用方的对象字面量喂进按钮的。所以现在默认判违规。
   const src = LUCIDE + 'const a = <Button aria-label="查看" icon={action.icon} />;';
+  assert.deepEqual(rules(src), ['unverifiable-icon-slot']);
+});
+
+test('不可判定的图标位加了 // icon-gate: 标注 -> 放行', () => {
+  const src =
+    LUCIDE +
+    'const a = (\n  // icon-gate: 值来自本文件 actions 字面量，已全部是 antd 图标\n  <Button aria-label="查看" icon={action.icon} />\n);';
   assert.deepEqual(rules(src), []);
 });
 
-test('没有 lucide 导入的文件直接跳过', () => {
+test('不可判定的图标位加了 {/* icon-gate: */} 标注 -> 放行（JSX 注释是兄弟节点，不是 trivia）', () => {
+  const src =
+    LUCIDE +
+    'const a = <Space>{/* icon-gate: 调用方传入 */}<Button aria-label="查看" icon={action.icon} /></Space>;';
+  assert.deepEqual(rules(src), []);
+});
+
+test('上一个按钮的标注不会泄漏到下一个按钮', () => {
+  const src =
+    LUCIDE +
+    'const a = <Space>{/* icon-gate: 只覆盖它下面这一个 */}<Button aria-label="甲" icon={x.icon} /><Button aria-label="乙" icon={y.icon} /></Space>;';
+  assert.deepEqual(rules(src), ['unverifiable-icon-slot']);
+});
+
+test('本文件没 import lucide，但图标是从外面当 prop 传进来的 -> 照样报', () => {
+  // AuthForm.tsx 就是这种：自己不 import lucide，却把调用方的图标送进 <Button>。
+  // 以前这里整体跳过，等于盲区套盲区。
+  const src = "import { Button } from 'antd';\nconst a = <Button aria-label=\"查看\" icon={action.icon} />;";
+  assert.deepEqual(rules(src), ['unverifiable-icon-slot']);
+});
+
+test('本文件没 import lucide 且图标是内联的 -> 不报（非按钮图标有意继续用 lucide）', () => {
   const src = "import { Button } from 'antd';\nconst a = <Button icon={<Whatever />} />;";
+  assert.deepEqual(rules(src), []);
+});
+
+test('整个 props 包 spread 进 <Button> -> fail-closed 报不可判定', () => {
+  // WorkItemActionButton 的形态。实测这里漏了 6 个 lucide 按钮图标。
+  const src = "import { Button } from 'antd';\nconst a = <Button {...button}>确定</Button>;";
+  assert.deepEqual(rules(src), ['unverifiable-icon-slot']);
+});
+
+test('spread 的 <Button> 加了标注 -> 放行', () => {
+  const src =
+    "import { Button } from 'antd';\nconst a = (\n  // icon-gate: 包装组件，调用点自查\n  <Button {...button}>确定</Button>\n);";
   assert.deepEqual(rules(src), []);
 });
 

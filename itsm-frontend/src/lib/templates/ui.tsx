@@ -32,8 +32,8 @@ import {
   Divider,
   Typography,
 } from 'antd';
-import { Search, Plus, Pencil, Trash2, Download, Upload, Eye, Settings, RotateCcw, AlertCircle } from 'lucide-react';
-import { MoreOutlined } from '@ant-design/icons';
+import { Search, Plus, Download, Upload, Settings, RotateCcw, AlertCircle } from 'lucide-react';
+import { DeleteOutlined, EditOutlined, EyeOutlined, MoreOutlined } from '@ant-design/icons';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import type { FilterValue, SorterResult } from 'antd/es/table/interface';
 
@@ -117,9 +117,9 @@ export function createActionColumn({
       } else {
         // 默认操作
         actions.push(
-          { key: 'view', label: '查看', icon: <Eye /> },
-          { key: 'edit', label: '编辑', icon: <Pencil /> },
-          { key: 'delete', label: '删除', icon: <Trash2 />, danger: true }
+          { key: 'view', label: '查看', icon: <EyeOutlined aria-hidden="true" /> },
+          { key: 'edit', label: '编辑', icon: <EditOutlined aria-hidden="true" /> },
+          { key: 'delete', label: '删除', icon: <DeleteOutlined aria-hidden="true" />, danger: true }
         );
       }
 
@@ -132,11 +132,13 @@ export function createActionColumn({
           {visibleActions.map(action =>
             action.key === 'delete' ? (
               <Popconfirm key={action.key} title="确定要删除吗？" okText="确定" cancelText="取消">
+                {/* icon-gate: 值来自本函数内 actions 字面量，已全部是 antd 图标 */}
                 <Button type="link" danger size="small" icon={action.icon}>
                   {action.label}
                 </Button>
               </Popconfirm>
             ) : (
+              // icon-gate: 同上，值来自本函数内 actions 字面量，已全部是 antd 图标
               <Button
                 key={action.key}
                 type="link"

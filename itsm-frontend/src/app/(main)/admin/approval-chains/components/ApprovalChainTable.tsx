@@ -8,6 +8,7 @@ import React, { useMemo, useCallback } from 'react';
 import { Table, Tag, Button, Space, Tooltip, Dropdown, Switch } from 'antd';
 import { Edit, Trash2, Eye, Play, Pause, Copy } from 'lucide-react';
 import {
+  DeleteOutlined,
   EditOutlined,
   EyeOutlined,
   MoreOutlined,
@@ -194,7 +195,7 @@ export function ApprovalChainTable({
       {
         key: 'batch-delete',
         label: '批量删除',
-        icon: <Trash2 className="w-4 h-4" />,
+        icon: <DeleteOutlined aria-hidden="true" />,
         type: 'default',
         danger: true,
         disabled: selectedRowKeys.length === 0,
@@ -213,6 +214,7 @@ export function ApprovalChainTable({
             <span className="text-[13px] text-foreground">已选择 {selectedRowKeys.length} 项</span>
             <Space>
               {batchActions.map(action => (
+                // icon-gate: 值来自本文件 batchActions 字面量，已全部是 antd 图标
                 <Button
                   key={action.key}
                   type={action.type}

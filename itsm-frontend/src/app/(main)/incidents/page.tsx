@@ -5,16 +5,18 @@ import { Button, Space, message, Pagination, Badge, Modal, Select, Input, Form }
 import {
   RotateCcw,
   Download,
-  UserPlus,
-  CheckCircle,
-  XCircle,
-  Trash2,
   Siren,
   CircleDot,
   TriangleAlert,
   Clock3,
 } from 'lucide-react';
-import { PlusOutlined } from '@ant-design/icons';
+import {
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  UserAddOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import {
   BusinessPageTemplate,
@@ -316,26 +318,26 @@ export default function IncidentsPage() {
     {
       key: 'assign',
       label: '批量分派',
-      icon: <UserPlus size={14} />,
+      icon: <UserAddOutlined aria-hidden="true" />,
       onClick: openAssignModal,
       type: 'primary',
     },
     {
       key: 'resolve',
       label: '批量解决',
-      icon: <CheckCircle size={14} />,
+      icon: <CheckCircleOutlined aria-hidden="true" />,
       onClick: handleBatchResolve,
     },
     {
       key: 'close',
       label: '批量关闭',
-      icon: <XCircle size={14} />,
+      icon: <CloseCircleOutlined aria-hidden="true" />,
       onClick: handleBatchClose,
     },
     {
       key: 'delete',
       label: '批量删除',
-      icon: <Trash2 size={14} />,
+      icon: <DeleteOutlined aria-hidden="true" />,
       danger: true,
       confirmTitle: `确定删除选中的 ${selectedRowKeys.length} 个事件？此操作不可撤销`,
       onClick: handleBatchDelete,

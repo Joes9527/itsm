@@ -18,15 +18,33 @@
  * 继续用 lucide）；no-restricted-syntax 的选择器解析不了「这个图标是不是来自 lucide」。
  * 为什么不用根目录的 check-engineering-contracts.js：那是全文件正则，对 JSX 不适用。
  *
- * ⚠️ 已知盲区（2026-09-18 实测，别把它当成「全仓都干净了」）：
+ * 3. `icon={…}` 不是内联 JSX 的按钮——门禁看不见它是什么图标，**默认判违规**，
+ *    除非该处有 `icon-gate: <理由>` 标注。见下面「盲区」一节。
+ * 4. 同上，但形态是**整个 props 包**被 spread 进 `<Button>`（`<Button {...button}>`）。
+ *    这是规则 3 之外的第二种看不见的形态：实测 WorkItemActionButton 这里漏了 6 个
+ *    lucide 按钮图标——调用方写 `button={{ icon: <Pencil /> }}`，字面上完全不像按钮图标。
+ *
+ * ⚠️ 盲区的现状（2026-09-18 实测，别再照抄旧数字）：
  * 本门禁只检查**字面写在 `icon={...}` 里的**图标。`icon={action.icon}` 这种把值
- * 从 props / 对象字面量传进来的形态它看不见，而仓里确实有这种位点：
- * `<Button icon={action.icon}>` 共 6 个渲染点（lib/templates/ui.tsx:135/144、
- * BatchActionBar.tsx:103/127、CSDMHub.tsx:104、ApprovalChainTable.tsx:221），
- * 图标值来自同文件或调用方的对象字面量。**其中有多少是 lucide 尚未测准**——
- * 仓里 `icon:` 对象字面量共 264 处 / 56 文件，但绝大多数是统计卡片、Tab、
- * 空状态图标而非按钮图标，要精确区分得做数据流分析，本门禁不做。
- * 所以「门禁通过」的正确读法是「**在字面形态里**没有违规」。
+ * 从 props / 对象字面量传进来的形态它看不见。**这个盲区不是理论问题**：实测
+ * 全仓 8 个这种渲染点，其中真的漏着 lucide 按钮图标——incidents 页的批量分派/解决/
+ * 关闭/删除 4 个、审批链的批量删除 1 个，都是调用方的对象字面量喂进来的，
+ * 而且**线上全站扫描也扫不到**（BatchActionBar 在未选中行时 `return null`，
+ * 页面级扫描根本不会渲染它）。那 5 个已迁 antd；8 个渲染点本身**全部**加了
+ * `icon-gate:` 标注——值迁没迁和位点能不能被门禁看见是两回事。
+ *
+ * 规则 3 是 **fail-closed**：新出现一个看不见的图标位就会挂，逼作者二选一——
+ * 把图标内联写进 `icon={...}`（门禁就能看），或显式标注并写明理由。
+ * 规则 4 同理：包装组件必须标注，并在调用点自己核对图标来源——门禁看不到调用点。
+ * `grep -rn "icon-gate:" src/` 就是当前的全部豁免清单，10 条（8 个可变图标位 + 2 个
+ * spread 包装组件）。
+ *
+ * 注意规则 3 **不能**因为本文件没 import lucide 就跳过：要防的恰恰是
+ * 「本文件不 import lucide、图标从别的文件当 prop 传进来」，AuthForm.tsx 正是如此。
+ *
+ * 也别忘了规则 3 只要求「标注过」，不保证标注处真的安全——标注是给人看的审查点，
+ * 不是机器证明。`icon:` 对象字面量全仓 365 处（其中 268 处值是 lucide），
+ * 绝大多数是 Dropdown 菜单项、统计卡片、Tab，**不是按钮图标，不在范围内**。
  *
  * 曾经的另一个盲区已经关掉：`icon={cond ? <A /> : <B />}`、`icon={x || <Plus />}`
  * 这类条件／逻辑表达式以前看不见（批次 1 的 codemod 归类为「复杂形态，跳过」，
@@ -79,6 +97,36 @@ function hasRealChildren(el) {
   return false;
 }
 
+/**
+ * 这个按钮上有没有 `icon-gate:` 标注。两种写法都算数：
+ *
+ * 1. 表达式位置的 `//` 注释——落在 opening 的前导 trivia 里，取
+ *    opening.getFullStart() 到 icon 属性结尾这段文本就能看到。
+ * 2. JSX 子节点位置的 `{/* … *\/}` 注释——**不在** trivia 里，TS 把它解析成
+ *    紧邻的兄弟节点，所以还得回头扫同级的兄弟。遇到有实际内容的兄弟就停下，
+ *    免得把上一个按钮的标注张冠李戴到下一个。
+ */
+function hasIconGateMark(sf, node, opening, iconAttr) {
+  if (sf.text.slice(opening.getFullStart(), iconAttr.getEnd()).includes('icon-gate:')) return true;
+
+  const container = node.parent;
+  if (!container || !ts.isJsxElement(container)) return false;
+  const kids = container.children;
+  for (let j = kids.indexOf(node) - 1; j >= 0; j--) {
+    const s = kids[j];
+    if (ts.isJsxText(s)) {
+      if (s.text.trim()) return false; // 中间夹了真内容，标注不属于这个按钮
+      continue;
+    }
+    if (ts.isJsxExpression(s) && !s.expression) {
+      if (s.getText(sf).includes('icon-gate:')) return true;
+      continue;
+    }
+    return false;
+  }
+  return false;
+}
+
 /** 表达式子树里所有 JSX 元素节点（含表达式自身） */
 function jsxNodesIn(expr) {
   const found = [];
@@ -97,7 +145,9 @@ function jsxNodesIn(expr) {
 export function findViolations(fileName, src) {
   const sf = ts.createSourceFile(fileName, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const lucide = lucideImports(sf);
-  if (!lucide.size) return [];
+  // 注意这里**不能**因为本文件没 import lucide 就整体跳过：规则 3（不可判定的图标位）
+  // 要防的恰恰是「本文件没 import lucide、图标是从别的文件当 prop 传进来的」，
+  // AuthForm.tsx 就是这种——它自己不 import lucide，却把调用方的图标送进 <Button>。
 
   const parent = new Map();
   const link = n => {
@@ -135,6 +185,36 @@ export function findViolations(fileName, src) {
       const iconAttr = attrs.find(a => attrName(a) === 'icon');
       const init = iconAttr?.initializer;
       const expr = init && ts.isJsxExpression(init) ? init.expression : null;
+
+      // 规则 3：门禁看不见的图标位，默认失败。
+      // `icon={action.icon}` 这种形态里没有 JSX，门禁无从判断它是 antd 还是 lucide；
+      // 2026-09-18 实测这个盲区里真的漏着 lucide 按钮图标（incidents 的批量分派/解决/
+      // 关闭/删除 4 个，审批链批量删除 1 个），全部由调用方的对象字面量喂进来。
+      // 不做数据流分析，改成 fail-closed：要么把图标内联写进 icon={...}（门禁就能看），
+      // 要么在此处显式声明这是有意的可变图标位。
+      if (iconAttr && expr && !jsxNodesIn(expr).length && !hasIconGateMark(sf, node, opening, iconAttr)) {
+        out.push({
+          line: lineOf(iconAttr),
+          rule: 'unverifiable-icon-slot',
+          msg: `按钮的 icon 不是内联 JSX（${expr.getText(sf).slice(0, 40)}），门禁看不见它是什么图标。`
+            + `请把图标内联写进 icon={...}；确实需要可变图标位的话，在此处加 "// icon-gate: <理由>" 显式声明。`,
+        });
+      }
+
+      // 规则 4：整个 props 包被 spread 进 <Button> 的包装组件，门禁看不见里面的 icon。
+      // WorkItemActionButton 就是这种：`<Button {...button}>`，调用方写
+      // `button={{ icon: <Pencil /> }}`——字面上完全不像按钮图标。实测这里漏了
+      // 6 个 lucide 按钮图标（IncidentDetail 5 个、ProblemDetail 1 个），已迁 antd。
+      for (const s of opening.attributes.properties.filter(ts.isJsxSpreadAttribute)) {
+        if (!hasIconGateMark(sf, node, opening, s)) {
+          out.push({
+            line: lineOf(s),
+            rule: 'unverifiable-icon-slot',
+            msg: `按钮的 props 整包 spread 进来（{...${s.expression.getText(sf).slice(0, 40)}}），`
+              + `门禁看不见里面的 icon。请在此处加 "// icon-gate: <理由>" 声明这是有意的包装，并在调用点自行核对图标来源。`,
+          });
+        }
+      }
 
       // 走**整棵** icon 表达式子树。`icon={cond ? <A /> : <B />}`、`icon={x || <Plus />}`
       // 里的图标一样是按钮图标、一样带着尺寸问题，只看自闭合字面量会漏掉它们。

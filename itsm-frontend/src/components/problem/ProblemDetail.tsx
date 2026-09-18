@@ -6,8 +6,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { App, Card, Tag, Button, Space, Skeleton, Typography, Tabs, Modal, Input } from 'antd';
-import { Search, Pencil } from 'lucide-react';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { Search } from 'lucide-react';
+import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
 import { useRouter, useParams } from 'next/navigation';
 
 import { ProblemApi } from '@/lib/api/';
@@ -155,7 +155,7 @@ const ProblemDetail: React.FC<ProblemDetailProps> = ({
               action={actions.edit}
               actionName='edit'
               button={{
-                icon: <Pencil />,
+                icon: <EditOutlined aria-hidden="true" />,
                 onClick: () => router.push(`/problems/${data.id}/edit`),
               }}
             >

@@ -306,6 +306,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
 
           {/* 主要按钮 */}
           <Form.Item className="mb-0">
+            {/* icon-gate: 图标由调用方经 primaryButton.icon 传入，本组件无法约束 */}
             <Button
               type="primary"
               htmlType="submit"
@@ -341,6 +342,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
         {/* 次要按钮 */}
         {secondaryButton && (
           <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+            {/* icon-gate: 图标由调用方经 secondaryButton.icon 传入，本组件无法约束 */}
             <Button
               type={
                 secondaryButton.type === 'primary'

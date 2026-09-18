@@ -272,17 +272,17 @@ export default function ProcessRoutingPage() {
       key: 'actions',
       render: (_: any, record: ProcessRoutingRule) => (
         <Space>
-          <Tooltip title="Edit">
+          <Tooltip title="编辑">
             <Button aria-label="编辑" size="small" icon={<EditOutlined aria-hidden="true" />} onClick={() => handleEdit(record)} />
           </Tooltip>
-          <Tooltip title="Duplicate">
+          <Tooltip title="复制">
             <Button aria-label="复制" size="small" icon={<CopyOutlined aria-hidden="true" />} onClick={() => handleDuplicate(record)} />
           </Tooltip>
           <Popconfirm
-            title="Are you sure you want to delete this rule?"
+            title="确定要删除这条路由规则吗？"
             onConfirm={() => handleDelete(record.id)}
           >
-            <Tooltip title="Delete">
+            <Tooltip title="删除">
               <Button aria-label="删除" size="small" danger icon={<DeleteOutlined aria-hidden="true" />} />
             </Tooltip>
           </Popconfirm>

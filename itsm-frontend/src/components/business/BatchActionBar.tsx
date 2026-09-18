@@ -96,6 +96,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
 
   const renderActionButton = (action: BatchAction) => {
     const btn = (
+      // icon-gate: 图标由调用方经 actions[].icon 传入，本组件无法约束；调用点自查
       <Button
         size="small"
         type={action.type || 'default'}
@@ -120,6 +121,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           okButtonProps={{ danger: true }}
           disabled={action.disabled || loading}
         >
+          {/* icon-gate: 同上，危险操作分支用的是同一个调用方传入的图标 */}
           <Button
             size="small"
             type={action.type || 'default'}
