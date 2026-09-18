@@ -23,9 +23,19 @@ func TestCTIGovernanceMigrationIsAppendedOrdinaryWithoutRetirement(t *testing.T)
 	}
 	require.True(t, found)
 	// Appending after 047 is what makes a previously retired ledger upgradeable.
-	last := RegisteredMigrations[len(RegisteredMigrations)-2]
-	require.Equal(t, CTIGovernanceVersion, last.Version)
-	require.NotEmpty(t, last.RollbackSQL, "development reset must be explicit, never a silent drop")
+	// CTI no longer has to be the newest entry — later ordinary migrations may follow it —
+	// but it must still sit after 047 and keep an explicit development reset.
+	indexOf := func(version string) int {
+		for i, m := range RegisteredMigrations {
+			if m.Version == version {
+				return i
+			}
+		}
+		return -1
+	}
+	ctiIndex := indexOf(CTIGovernanceVersion)
+	require.Greater(t, ctiIndex, indexOf("047_bpmn_assignment_source"))
+	require.NotEmpty(t, RegisteredMigrations[ctiIndex].RollbackSQL, "development reset must be explicit, never a silent drop")
 }
 
 func TestCTIGovernanceMigrationPreflightsAndScopesStructure(t *testing.T) {

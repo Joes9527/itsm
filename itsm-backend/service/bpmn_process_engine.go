@@ -420,6 +420,10 @@ func (e *CustomProcessEngine) startResolvedProcess(ctx context.Context, definiti
 	if err := lockBPMNBusinessItem(ctx, e.client, definition.TenantID, businessID, businessType); err != nil {
 		return nil, err
 	}
+	variables, err = admitGenericWorkflowStart(ctx, e.client, definition, bpmnDefinitions, businessType, businessID, variables, instanceIdentity, startDigest)
+	if err != nil {
+		return nil, err
+	}
 	boundProcess := false
 	for _, node := range process.UserTasks {
 		if node.AssigneeSource != "" {
@@ -605,6 +609,10 @@ func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Conte
 		return nil, fmt.Errorf("解析BPMN失败: 流程定义不包含可执行流程")
 	}
 	process := definitions.Processes[0]
+	variables, genericGate, err := prepareGenericWorkflowCompletion(ctx, client, instance, task, variables)
+	if err != nil {
+		return nil, err
+	}
 	if err := e.validateWorkItemRecordClassInputWithClient(ctx, client, instance, variables); err != nil {
 		return nil, err
 	}
@@ -645,7 +653,10 @@ func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Conte
 			if handler.GetTaskType() == "cc_task" {
 				action = ""
 			}
-			callbackPlan, err = BuildCallbackEnqueuePlan(CallbackDescriptor{
+			// Actor-completion entry point: a declared user input error must fail
+			// here, before the instance variables and the completed task are
+			// written, instead of persisting a callback that can never succeed.
+			callbackPlan, err = BuildCallbackEnqueuePlanForActorCompletion(CallbackDescriptor{
 				HandlerID: descriptor.HandlerID, TaskType: descriptor.TaskType, Action: action, ConfigRef: descriptor.ConfigRef,
 			}, variables, optionalDeclared, e.callbackRegistry)
 			if err != nil {
@@ -665,6 +676,13 @@ func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Conte
 	}
 	for key, value := range variables {
 		merged[key] = value
+	}
+	if genericGate != nil {
+		projectGenericWorkflowVariables(merged, genericGate)
+		if node := genericWorkflowTaskNode(process, task.TaskDefinitionKey); node != nil && node.TaskPurpose == "approval" {
+			// Decision input was admitted only by the scoped approval command.
+			merged["approvalResult"] = variables["approvalResult"]
+		}
 	}
 	updatedInstance, err := client.ProcessInstance.Update().Where(
 		processinstance.ID(instance.ID),
@@ -705,13 +723,22 @@ func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Conte
 	// A synchronous callback is an effect gate: the task completion is durable,
 	// but the token remains on this user task until the outbox observes an
 	// applied/idempotent (or definition-declared optional) effect.
+	if genericGate != nil {
+		// Store the authorized decision before the graph consumes its projection.
+		// Any failure advancing the graph rolls back both records.
+		if err := txEngine.recordApprovalDecisionWithClient(ctx, client, instance, task, variables); err != nil {
+			return nil, err
+		}
+	}
 	if !synchronousCallback {
 		if err := txEngine.executeStep(ctx, instance, process, task.TaskDefinitionKey, merged); err != nil {
 			return nil, err
 		}
 	}
-	if err := txEngine.recordApprovalDecisionWithClient(ctx, client, instance, task, variables); err != nil {
-		return nil, err
+	if genericGate == nil {
+		if err := txEngine.recordApprovalDecisionWithClient(ctx, client, instance, task, variables); err != nil {
+			return nil, err
+		}
 	}
 	if task.AssigneeSource != "" {
 		if err := e.auditService.ForClient(client).recordBoundTaskTerminal(ctx, task, responsibleID, mutationActor.userID, mutationActor.userName, "bpmn_task_complete", "", taskVariablesBefore, mergedTaskVariables, mutationActor.metadata); err != nil {
@@ -1459,6 +1486,11 @@ func (e *CustomProcessEngine) executeClaimedCallback(ctx context.Context, worker
 
 	claimedRow.Variables, err = filterPersistedBPMNCallbackPayload(handler, claimedRow.Action, claimedRow.Variables)
 	if err != nil {
+		if isBPMNCallbackUserInputError(err) {
+			// The frozen input cannot be repaired by retrying. This attempt has
+			// not called the handler; earlier attempts may still have had effects.
+			return bpmnCallbackExecutionResult{Effect: bpmn.BlockedEffect(bpmn.CallbackBlockHandlerContract, "frozen callback input rejected before handler execution")}, nil
+		}
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackHandlerError(err)
 	}
 	claimedRow.Variables["bpmn_callback_execution_key"] = claimedRow.ExecutionKey
@@ -1888,6 +1920,14 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 				if assignee == "" {
 					assignee = e.resolveApprovalAssignee(ctx, instance, approvalRequester)
 				}
+			case task.AssigneeDirectManager:
+				// 模式 A/B：提单人的直属上级（level=0）或沿链再往上第 N 级。
+				// 未命中时**先往上找**（退到组织的轴：申请人部门负责人），
+				// 再失败才由调用方落兜底组——与设计"先往上找，最后兜底"一致。
+				assignee = e.resolveDirectManagerAssignee(ctx, instance, approvalRequester, task.AssigneeManagerLevel)
+				if assignee == "" {
+					assignee = e.resolveApprovalAssignee(ctx, instance, approvalRequester)
+				}
 			default:
 				// 都没声明：解析申请人自己所在部门的负责人（这次会话早前已经做的部分）
 				assignee = e.resolveApprovalAssignee(ctx, instance, approvalRequester)
@@ -1916,7 +1956,13 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 	// 也没有声明 candidateGroups），兜底用固定候选组，保证任务始终有机会被领取。
 	candidateGroupsToExpand := task.CandidateGroups
 	if task.TaskPurpose == "approval" && assignee == "" && len(roleCandidates) == 0 && strings.TrimSpace(candidateGroupsToExpand) == "" {
-		candidateGroupsToExpand = approvalFallbackCandidateGroup
+		// 兜底组按租户可配置（系统配置键 bpmnApprovalFallbackGroup），未配置则用默认组。
+		candidateGroupsToExpand = e.approvalFallbackGroup(ctx, instance.TenantID)
+		// 走到兜底说明前面都没解析到人。**留痕**：审计里必须能回答"当时为什么派给了兜底组"，
+		// 只打日志不算留痕。留不下痕就不放行兜底（同库写入，失败即意味着库不健康）。
+		if err := e.recordApprovalFallback(ctx, instance, approvalRequester, task, candidateGroupsToExpand); err != nil {
+			return fmt.Errorf("审批任务 %s 落到兜底组但留痕失败，拒绝继续: %w", task.ID, err)
+		}
 	}
 
 	// 展开 candidateGroups 为具体用户，合并到 candidate_users。
@@ -2100,13 +2146,31 @@ func (e *CustomProcessEngine) loadApprovalRequester(ctx context.Context, instanc
 	return requester
 }
 
-// resolveApprovalAssignee 把申请人所在部门（含祖先部门递归）的负责人解析为审批任务的
-// assignee。复用 service/approver.DeptManagerResolver（已有、已测试、已被 legacy 审批链
-// approval_service.go:940 使用的部门->负责人查询），不重新实现部门递归逻辑。
-// 解析失败，或者解析出的负责人正好是申请人自己（避免部门负责人审批自己提交的工单），
-// 都返回空字符串——调用方会转入 candidateGroups 兜底路径。
+// resolveApprovalAssignee 解析审批任务的默认审批人，按"先往上找"的顺序：
+//
+//  1. 申请人**自己的上级**（个人汇报链 users.manager_id）
+//  2. 申请人所在部门（含祖先部门递归）**的负责人**（departments.manager_id）
+//
+// 这个顺序是本设计最关键的一处修正：生产库里个人汇报线已填 7045/7872（89.5%），
+// 而部门负责人线是 0/7975（0%）。过去默认只查第 2 条线，等于**走了一条空的数据线**，
+// 于是绝大多数单子解析不到审批人、直接落兜底组——这正是"审批不断流"要解决的问题
+// （也是最初报告里"first-hop personal manager 未被消费"的修复点）。
+//
+// 复用 service/approver 下已有且已测试的两个 resolver（DirectManagerResolver、
+// DeptManagerResolver），不重新实现链上溯与部门递归逻辑。
+//
+// 任一步解析出的负责人正好是申请人自己（避免自己审批自己），或两步都解析不到，
+// 都返回空——调用方会转入 candidateGroups 兜底路径（兜底必留痕）。
 func (e *CustomProcessEngine) resolveApprovalAssignee(ctx context.Context, instance *ent.ProcessInstance, requester *ent.User) string {
-	if requester == nil || requester.DepartmentID == 0 {
+	if requester == nil {
+		return ""
+	}
+	// 第一优先：申请人自己的上级。
+	if ownManager := e.resolveDirectManagerAssignee(ctx, instance, requester, 0); ownManager != "" {
+		return ownManager
+	}
+	// 第二优先：部门负责人（保留原有行为，作为组织这条轴的补充）。
+	if requester.DepartmentID == 0 {
 		return ""
 	}
 	approvers, err := approver.NewDeptManagerResolver().Resolve(ctx, e.client, &approver.ApproverContext{
@@ -2164,6 +2228,37 @@ func (e *CustomProcessEngine) resolveGmChainAssignee(ctx context.Context, instan
 		return ""
 	}
 	return strconv.Itoa(gm.UserID)
+}
+
+// resolveDirectManagerAssignee 沿申请人自己的**个人汇报链**解析"直属上级"或"再往上第 N 级"。
+//
+// 解析器内部会跳过非在职的上级继续上溯；未命中（链到顶 / 既有脏环 / 租户内查不到）
+// 返回空，调用方会先退到组织的轴、再落兜底组。解析出的审批人若是申请人本人，
+// 同样按未命中处理——避免自己审批自己。
+func (e *CustomProcessEngine) resolveDirectManagerAssignee(ctx context.Context, instance *ent.ProcessInstance, requester *ent.User, level int) string {
+	if requester == nil {
+		return ""
+	}
+	approvers, err := approver.NewDirectManagerResolver(level).Resolve(ctx, e.client, &approver.ApproverContext{
+		TenantID:    instance.TenantID,
+		RequesterID: requester.ID,
+	})
+	if err != nil || len(approvers) == 0 {
+		e.logger.Infow(
+			"未在汇报链上解析到审批人，继续往上找",
+			"requesterID", requester.ID, "level", level, "error", err,
+		)
+		return ""
+	}
+	manager := approvers[0]
+	if manager.UserID == requester.ID {
+		e.logger.Infow(
+			"汇报链解析出的审批人是申请人本人，继续往上找",
+			"requesterID", requester.ID, "level", level,
+		)
+		return ""
+	}
+	return strconv.Itoa(manager.UserID)
 }
 
 // resolveRoleCandidates 查询该租户下所有 active 且（主角色等于 roleCode，或通过
@@ -2274,23 +2369,29 @@ func (e *CustomProcessEngine) resolveFixedScopeAssignee(ctx context.Context, ins
 	if len(sources) == 0 {
 		return ""
 	}
-	resolver, appCtx := sources[0].resolver, &sources[0].context
-	approvers, err := resolver.Resolve(ctx, e.client, appCtx)
-	if err != nil || len(approvers) == 0 {
-		e.logger.Infow(
-			"固定范围审批人解析失败，转候选组兜底",
-			"resolverType", resolver.GetType(), "error", err,
-		)
-		return ""
+	// 一个节点可以同时声明多个固定范围。必须**按声明顺序逐个尝试**：
+	// 只取第一个会让其余声明被静默忽略——第一个来源恰好没配负责人时，
+	// 明明后面还有能解析出人的来源，任务却会落进兜底甚至派错人。
+	for i := range sources {
+		resolver, appCtx := sources[i].resolver, &sources[i].context
+		approvers, err := resolver.Resolve(ctx, e.client, appCtx)
+		if err != nil || len(approvers) == 0 {
+			e.logger.Infow(
+				"固定范围未解析到审批人，尝试下一个声明范围",
+				"resolverType", resolver.GetType(), "error", err,
+			)
+			continue
+		}
+		if requester != nil && approvers[0].UserID == requester.ID {
+			e.logger.Infow(
+				"固定范围解析出的审批人是申请人本人，尝试下一个声明范围",
+				"resolverType", resolver.GetType(), "requesterID", requester.ID,
+			)
+			continue
+		}
+		return strconv.Itoa(approvers[0].UserID)
 	}
-	if requester != nil && approvers[0].UserID == requester.ID {
-		e.logger.Infow(
-			"固定范围解析出的审批人是申请人本人，转候选组兜底，避免自己审批自己",
-			"resolverType", resolver.GetType(), "requesterID", requester.ID,
-		)
-		return ""
-	}
-	return strconv.Itoa(approvers[0].UserID)
+	return ""
 }
 
 // excludeUserFromCandidates 从 candidateGroups 展开出来的候选人显示名列表里剔除某个用户。
@@ -3259,6 +3360,18 @@ func (s *bpmnProcessInstanceService) SetProcessInstanceVariables(ctx context.Con
 	if err := requireBPMNExecution(ctx, tx, s.execution, instance.TenantID, instance.ExecutionWorkItemID); err != nil {
 		return err
 	}
+	genericGate, err := rejectGenericWorkflowVariableUpdate(ctx, tx.Client(), instance, variables)
+	if err != nil {
+		return err
+	}
+	if genericGate != nil {
+		copied := make(map[string]interface{}, len(variables)+3)
+		for key, value := range variables {
+			copied[key] = value
+		}
+		projectGenericWorkflowVariables(copied, genericGate)
+		variables = copied
+	}
 	if err := ValidateBPMNProcessLifecycle(BPMNProcessCommandSetVariables, instance.Status); err != nil {
 		return err
 	}
@@ -3904,6 +4017,10 @@ func (s *bpmnTaskService) ListUserTaskViews(ctx context.Context, req *ListUserTa
 		}
 	}
 
+	blocks, err := loadTaskCallbackBlocks(ctx, s.client, tasks)
+	if err != nil {
+		return nil, 0, err
+	}
 	views := dto.ToBPMNTaskResponseList(tasks, instanceMap)
 	projection, err := s.engine.taskUIReadProjection(ctx)
 	if err != nil {
@@ -3920,6 +4037,7 @@ func (s *bpmnTaskService) ListUserTaskViews(ctx context.Context, req *ListUserTa
 		views[i].ResponsibleUserID = assignment.ResponsibleUserID
 		views[i].ActorID = assignment.ActorID
 		views[i].UIActions = projection.taskUIActions(ctx, task)
+		views[i].CallbackBlock = blocks[task.ID]
 	}
 	return views, total, nil
 }
@@ -4223,6 +4341,9 @@ func (s *bpmnTaskService) SetTaskVariables(ctx context.Context, taskID string, v
 	}
 	if err := ValidateBPMNTaskLifecycle(BPMNTaskCommandSetVariables, task.Status); err != nil {
 		return s.engine.commitTaskMutationRejected(ctx, tx, task, BPMNTaskCommandSetVariables)
+	}
+	if err := rejectGenericWorkflowTaskVariableUpdate(ctx, tx.Client(), task, participantVariables); err != nil {
+		return err
 	}
 	mergedVariables := mergeBPMNTaskVariables(task.TaskVariables, participantVariables)
 	actor, err := txEngine.loadLifecycleActor(ctx, tx.Client(), task, scope)
@@ -4771,8 +4892,9 @@ func (s *bpmnTaskService) voteOnce(ctx context.Context, taskID string, req *Vote
 			"final_status":  status.Status,
 		})
 		parentTask.TaskVariables = summaryVariables
+		parentDecisionCtx := WithBPMNApprovalDecisionIntent(ctx, parentTask.TaskID, map[string]string{"approved": "approve", "rejected": "reject"}[status.Status], nil)
 		parentEffect, err = txEngine.completeAuthorizedTaskWithClient(
-			ctx, tx.Client(), parentTask,
+			parentDecisionCtx, tx.Client(), parentTask,
 			map[string]interface{}{"approvalResult": status.Status, "approved": status.Status == "approved"},
 			&executionKeys,
 		)

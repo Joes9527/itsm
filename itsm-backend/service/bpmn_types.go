@@ -24,6 +24,7 @@ type BPMNElement interface {
 
 // BPMNProcess BPMN流程定义
 type BPMNProcess struct {
+	ExtensionElements  *BPMNExtensionElements   `xml:"extensionElements"`
 	ID                 string                   `xml:"id,attr"`
 	Name               string                   `xml:"name,attr"`
 	ProcessType        string                   `xml:"processType,attr"`
@@ -171,6 +172,11 @@ type BPMNUserTask struct {
 	AssigneeProjectId       int    `xml:"assigneeProjectId,attr"`
 	AssigneeTempTeamId      int    `xml:"assigneeTempTeamId,attr"`
 	AssigneeGmChain         bool   `xml:"assigneeGmChain,attr"`
+	// AssigneeDirectManager 选"提单人的直属上级"模式；层级由 AssigneeManagerLevel 给出
+	// （0 = 直属上级，N = 再往上第 N 级）。与 AssigneeGmChain 是两种不同的链语义：
+	// GmChain 爬到"总经理"为止，DirectManager 按固定层级跳数。
+	AssigneeDirectManager bool `xml:"assigneeDirectManager,attr"`
+	AssigneeManagerLevel  int  `xml:"assigneeManagerLevel,attr"`
 
 	// ExtensionElements 承载 <bpmn:metaData>，其中 service_task_type/action 决定
 	// 该用户任务完成后要不要走 ServiceTaskHandler 回调（见 CompleteTask）。

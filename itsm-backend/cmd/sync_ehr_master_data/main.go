@@ -247,23 +247,24 @@ func main() {
 				orgType = "warehouse"
 			}
 
-			c := client.Department.Create().
-				SetName(o.OrgName).
-				SetCode(o.OrgCode).
-				SetDescription(fmt.Sprintf("EHR UniqueID: %s", o.UniqueID)).
-				SetTenantID(tenantID).
-				SetAreaName("中国").
-				SetOrgType(orgType)
-
+			parentID := 0
 			if hasParent && parentEntID > 0 {
-				c.SetParentID(parentEntID)
+				parentID = parentEntID
 			}
 
-			created, err := c.Save(ctx)
+			upserted, err := upsertDepartment(ctx, client, departmentUpsertInput{
+				Name:        o.OrgName,
+				Code:        o.OrgCode,
+				Description: fmt.Sprintf("EHR UniqueID: %s", o.UniqueID),
+				AreaName:    "中国",
+				OrgType:     orgType,
+				ParentID:    parentID,
+				TenantID:    tenantID,
+			})
 			if err != nil {
-				log.Printf("Failed to create department %s (%s): %v", o.OrgName, o.OrgCode, err)
+				log.Printf("Failed to upsert department %s (%s): %v", o.OrgName, o.OrgCode, err)
 			} else {
-				codeToEntID[o.OrgCode] = created.ID
+				codeToEntID[o.OrgCode] = upserted.ID
 				insertedDeptCount++
 			}
 			progress = true
@@ -276,15 +277,16 @@ func main() {
 				if isWarehouse(o.OrgName) {
 					orgType = "warehouse"
 				}
-				created, err := client.Department.Create().
-					SetName(o.OrgName).
-					SetCode(o.OrgCode).
-					SetTenantID(tenantID).
-					SetAreaName("中国").
-					SetOrgType(orgType).
-					Save(ctx)
+				upserted, err := upsertDepartment(ctx, client, departmentUpsertInput{
+					Name:        o.OrgName,
+					Code:        o.OrgCode,
+					Description: fmt.Sprintf("EHR UniqueID: %s", o.UniqueID),
+					AreaName:    "中国",
+					OrgType:     orgType,
+					TenantID:    tenantID,
+				})
 				if err == nil {
-					codeToEntID[o.OrgCode] = created.ID
+					codeToEntID[o.OrgCode] = upserted.ID
 					insertedDeptCount++
 				}
 			}
@@ -428,6 +430,7 @@ func main() {
 	log.Println("Starting Direct Supervisor Linking...")
 	linkedSupervisorCount := 0
 	skippedSupervisorCount := 0
+	pendingLinks := make(map[string]managerLink, len(activePersons))
 	for _, p := range activePersons {
 		selfID, ok := empIDToUserID[p.EmpID]
 		if !ok || p.Supervisor == "" {
@@ -450,11 +453,18 @@ func main() {
 			skippedSupervisorCount++
 			continue
 		}
-		if err := client.User.UpdateOneID(selfID).SetManagerID(managerID).Exec(ctx); err != nil {
-			log.Printf("Failed to link supervisor for %s -> %s: %v", p.EmpID, supervisorEmpID, err)
-			continue
-		}
-		linkedSupervisorCount++
+		// 先收集，统一交给 linkManagers 校验后写入：那里的校验与 API 写入路径
+		// 用的是同一个权威（service.ValidateUserManager），不在这里另写一套。
+		pendingLinks[p.EmpID] = managerLink{SelfID: selfID, ManagerID: managerID}
 	}
+
+	// 非法值（上级非在职/跨租户/成环/本人不存在）会被跳过并计数，
+	// 不会因为脏数据把整批导入打断。
+	invalidSupervisorCount, err := linkManagers(ctx, client, tenantID, pendingLinks)
+	if err != nil {
+		log.Printf("Failed to link supervisors: %v", err)
+	}
+	linkedSupervisorCount = len(pendingLinks) - invalidSupervisorCount
+	skippedSupervisorCount += invalidSupervisorCount
 	log.Printf("Direct Supervisor Linking Complete! Linked: %d, Skipped: %d", linkedSupervisorCount, skippedSupervisorCount)
 }

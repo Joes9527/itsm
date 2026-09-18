@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                 xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                 xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                 xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                 targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <bpmn:process id="ticket_general_flow_v2" name="通用工单履约流程" isExecutable="true">
+    <bpmn:extensionElements>
+      <bpmn:metaData name="workItemLifecycleContract">generic_fulfillment_v1</bpmn:metaData>
+      <bpmn:metaData name="version">1.0.0</bpmn:metaData>
+      <bpmn:metaData name="description">通用工单处理流程</bpmn:metaData>
+    </bpmn:extensionElements>
+
+    <!-- 开始事件：工单创建 -->
+    <bpmn:startEvent id="StartEvent_1" name="工单创建">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <!-- 任务分配 -->
+    <bpmn:userTask id="Activity_Assign" name="确认接单" taskPurpose="fulfillment" assigneeSource="work_item_assignee">
+      <bpmn:extensionElements>
+        <bpmn:metaData name="workItemPrerequisite">assigned</bpmn:metaData>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_ApprovalCheck</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- 审批判断网关：统一决策是否需要审批 -->
+    <bpmn:exclusiveGateway id="Gateway_Approval" name="是否需要审批?">
+      <bpmn:incoming>Flow_ApprovalCheck</bpmn:incoming>
+      <bpmn:outgoing>Flow_ApprovalYes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ApprovalNo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- 审批参与者沿用现有解析；当前未配置，启用该分支前须完成参与者配置与验收。 -->
+    <bpmn:userTask id="Activity_Approval" name="工单审批" taskPurpose="approval">
+      <bpmn:incoming>Flow_ApprovalYes</bpmn:incoming>
+      <bpmn:outgoing>Flow_ApprovalDone</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- 审批结果网关 -->
+    <bpmn:exclusiveGateway id="Gateway_ApprovalResult" name="审批结果?">
+      <bpmn:incoming>Flow_ApprovalDone</bpmn:incoming>
+      <bpmn:outgoing>Flow_Approved</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Reject</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- 处理任务 -->
+    <bpmn:userTask id="Activity_Handle" name="履约处理" taskPurpose="fulfillment" assigneeSource="work_item_assignee">
+      <bpmn:extensionElements>
+        <bpmn:metaData name="workItemPrerequisite">in_progress</bpmn:metaData>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ApprovalNo</bpmn:incoming>
+      <bpmn:incoming>Flow_Approved</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- 升级判断网关 -->
+    <bpmn:exclusiveGateway id="Gateway_Escalate" name="是否需要升级?">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Resolve</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- 升级处理 -->
+    <bpmn:userTask id="Activity_Escalate" name="确认升级处理" taskPurpose="fulfillment" assigneeSource="work_item_assignee">
+      <bpmn:extensionElements>
+        <bpmn:metaData name="workItemPrerequisite">escalated</bpmn:metaData>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+      <bpmn:outgoing>Flow_EscalateDone</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- 解决工单 -->
+    <bpmn:userTask id="Activity_Resolve" name="确认解决记录" taskPurpose="fulfillment" assigneeSource="work_item_assignee">
+      <bpmn:extensionElements>
+        <bpmn:metaData name="workItemPrerequisite">resolved</bpmn:metaData>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Resolve</bpmn:incoming>
+      <bpmn:incoming>Flow_EscalateDone</bpmn:incoming>
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- 解决通知由领域命令产生；此节点只确认领域关闭证据。 -->
+    <bpmn:userTask id="Activity_Close" name="确认关闭" taskPurpose="fulfillment" assigneeSource="work_item_assignee">
+      <bpmn:extensionElements>
+        <bpmn:metaData name="workItemPrerequisite">closed</bpmn:metaData>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:endEvent id="EndEvent_Rejected" name="审批拒绝">
+      <bpmn:incoming>Flow_Reject</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- 结束事件：流程完成 -->
+    <bpmn:endEvent id="EndEvent_1" name="流程完成">
+      <bpmn:incoming>Flow_6</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- 连线定义 -->
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Activity_Assign" />
+
+    <!-- 所有任务分配后都先进入审批判断网关 -->
+    <bpmn:sequenceFlow id="Flow_ApprovalCheck" sourceRef="Activity_Assign" targetRef="Gateway_Approval" />
+
+    <!-- 审批网关分支：需要审批 -->
+    <bpmn:sequenceFlow id="Flow_ApprovalYes" sourceRef="Gateway_Approval" targetRef="Activity_Approval">
+      <bpmn:conditionExpression xsi:type="bpmn:tExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <![CDATA[variables['approval_required'] == true]]>
+      </bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+
+    <!-- 审批网关分支：无需审批，直接处理 -->
+    <bpmn:sequenceFlow id="Flow_ApprovalNo" sourceRef="Gateway_Approval" targetRef="Activity_Handle">
+      <bpmn:conditionExpression xsi:type="bpmn:tExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <![CDATA[variables['approval_required'] != true]]>
+      </bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+
+    <bpmn:sequenceFlow id="Flow_ApprovalDone" sourceRef="Activity_Approval" targetRef="Gateway_ApprovalResult" />
+
+    <!-- 审批结果：通过 -->
+    <bpmn:sequenceFlow id="Flow_Approved" sourceRef="Gateway_ApprovalResult" targetRef="Activity_Handle">
+      <bpmn:conditionExpression xsi:type="bpmn:tExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <![CDATA[variables['approvalResult'] == 'approved']]>
+      </bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+
+    <!-- 审批结果：驳回 -->
+    <bpmn:sequenceFlow id="Flow_Reject" sourceRef="Gateway_ApprovalResult" targetRef="EndEvent_Rejected">
+      <bpmn:conditionExpression xsi:type="bpmn:tExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <![CDATA[variables['approvalResult'] == 'rejected']]>
+      </bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_Handle" targetRef="Gateway_Escalate" />
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Gateway_Escalate" targetRef="Activity_Escalate">
+      <bpmn:conditionExpression xsi:type="bpmn:tExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <![CDATA[variables['need_escalate'] == true]]>
+      </bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Resolve" sourceRef="Gateway_Escalate" targetRef="Activity_Resolve">
+      <bpmn:conditionExpression xsi:type="bpmn:tExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <![CDATA[variables['need_escalate'] != true]]>
+      </bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_EscalateDone" sourceRef="Activity_Escalate" targetRef="Activity_Resolve" />
+    <bpmn:sequenceFlow id="Flow_5" sourceRef="Activity_Resolve" targetRef="Activity_Close" />
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_Close" targetRef="EndEvent_1" />
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="ticket_general_flow_v2" />
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

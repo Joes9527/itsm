@@ -4,7 +4,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Card, Empty, Select, Input, Tag, Typography, Space, Divider, Alert, Button, Switch, Tooltip, Collapse, Badge } from 'antd';
+import { Card, Empty, Select, Input, InputNumber, Tag, Typography, Space, Divider, Alert, Button, Switch, Tooltip, Collapse, Badge } from 'antd';
+// RefreshCw 已随图标迁移移除（两处「重读节点属性」改用 SyncOutlined），main 侧仅为保留原样，
+// 合并后本文件不再引用它——留着会被 noUnusedLocals / ESLint 判为未使用。
 import { User, Users, UserCheck, Hash, Tag as TagIcon, Code, Server, GitBranch, PlayCircle, Clock, FileText, Webhook, Settings, MessageSquare, Mail, AlertTriangle, Database, Link, Timer, MessageCircle, Radio, ChevronDown, ChevronRight, Save, Undo, Redo, Info, Zap, Shield, Bell } from 'lucide-react';
 import { SyncOutlined } from '@ant-design/icons';
 import { GroupAPI, type Group } from '@/lib/api/group-api';
@@ -252,6 +254,11 @@ export default function WorkflowNodeInspector({
   const currentAssigneeRole = (bo.assigneeRole as string) || '';
   const currentAssigneeDeptId = bo.assigneeDeptId ? Number(bo.assigneeDeptId) : undefined;
   const currentAssigneeGmChain = Boolean(bo.assigneeGmChain);
+  const currentAssigneeDirectManager = Boolean(bo.assigneeDirectManager);
+  const currentAssigneeManagerLevel =
+    bo.assigneeManagerLevel === undefined || bo.assigneeManagerLevel === null
+      ? 0
+      : Number(bo.assigneeManagerLevel);
   const currentCandidateUsers = parseCsv(bo.candidateUsers as string | undefined);
   const currentCandidateGroups = parseCsv(bo.candidateGroups as string | undefined);
   const currentPriority = (bo.priority as string) || '';
@@ -411,6 +418,34 @@ export default function WorkflowNodeInspector({
   // 应用修改
   const apply = (patch: Record<string, unknown>) => {
     onUpdateProperties(selection.id, patch);
+  };
+
+  /**
+   * 切换"找人方式"：设置一种的同时清掉其余全部。
+   *
+   * 引擎按固定优先级只认一个方式，同时声明多种会被**发布校验直接拒绝**
+   * （后端 declaredApproverFindingModes 是同一份权威）。过去每个字段各自手写
+   * 清除列表，漏了 assigneeTeamId/ProjectId/TempTeamId——于是"先声明团队、再点一个
+   * 受理人"会造出两种方式并存的、发布不出去的定义。集中在这里，新增方式时不可能再漏。
+   */
+  const setAssignmentMode = (patch: Record<string, unknown>) => {
+    const cleared: Record<string, unknown> = {
+      assignee: '',
+      assigneeRole: '',
+      assigneeDeptId: undefined,
+      assigneeTeamId: undefined,
+      assigneeProjectId: undefined,
+      assigneeTempTeamId: undefined,
+      assigneeGmChain: undefined,
+      assigneeDirectManager: undefined,
+      assigneeManagerLevel: undefined,
+      assigneeSource: undefined,
+    };
+    // 本次要设置（或保留）的字段不清
+    for (const key of Object.keys(patch)) {
+      delete cleared[key];
+    }
+    apply({ ...cleared, ...patch });
   };
 
   // 应用条件表达式修改
@@ -621,7 +656,7 @@ export default function WorkflowNodeInspector({
                 showSearch
                 placeholder="选择受理人（单一用户）"
                 value={currentAssignee || undefined}
-                onChange={value => apply({ assignee: value || '', assigneeRole: '', assigneeDeptId: undefined, assigneeGmChain: undefined })}
+                onChange={value => setAssignmentMode({ assignee: value || '' })}
                 className="w-full"
                 loading={loadingUsers}
                 filterOption={(input, option) =>
@@ -650,7 +685,7 @@ export default function WorkflowNodeInspector({
                 showSearch
                 placeholder="选择角色（该角色下所有用户均可处理）"
                 value={currentAssigneeRole || undefined}
-                onChange={value => apply({ assigneeRole: value || '', assignee: '', assigneeDeptId: undefined, assigneeGmChain: undefined })}
+                onChange={value => setAssignmentMode({ assigneeRole: value || '' })}
                 className="w-full"
                 loading={loadingRoles}
                 filterOption={(input, option) =>
@@ -681,7 +716,7 @@ export default function WorkflowNodeInspector({
                 placeholder="选择部门（该部门负责人处理，无负责人则向上级部门找）"
                 value={currentAssigneeDeptId}
                 onChange={value =>
-                  apply({ assigneeDeptId: value ?? undefined, assignee: '', assigneeRole: '', assigneeGmChain: undefined })
+                  setAssignmentMode({ assigneeDeptId: value ?? undefined })
                 }
                 className="w-full"
                 loading={loadingDepartments}
@@ -709,13 +744,54 @@ export default function WorkflowNodeInspector({
               <Switch
                 checked={currentAssigneeGmChain}
                 disabled={currentAssigneeSource === 'work_item_assignee'}
-                onChange={checked =>
-                  apply({ assigneeGmChain: checked || undefined, assignee: '', assigneeRole: '', assigneeDeptId: undefined })
-                }
+                onChange={checked => setAssignmentMode({ assigneeGmChain: checked || undefined })}
               />
               <Text type="secondary" className="text-[12px] mt-1 block">
                 沿提交人自己的汇报链向上找职位头衔带"总经理"的人；适合矩阵组织（同一分公司/部门下有多条业务线各自的总经理），跟"固定部门审批人"互斥
               </Text>
+            </div>
+
+            {/* Direct Manager（直属上级 / 沿链往上第 N 级）*/}
+            <div className="mt-3">
+              <Text strong className="text-[13px] flex items-center mb-2">
+                <UserCheck className="w-3.5 h-3.5 mr-1" />
+                直属上级审批（个人汇报链） (assigneeDirectManager)
+                <Tag color="green" className="ml-2 text-[12px]">推荐</Tag>
+              </Text>
+              <Switch
+                checked={currentAssigneeDirectManager}
+                disabled={currentAssigneeSource === 'work_item_assignee'}
+                onChange={checked =>
+                  setAssignmentMode({
+                    assigneeDirectManager: checked || undefined,
+                    assigneeManagerLevel: checked ? currentAssigneeManagerLevel : undefined,
+                  })
+                }
+              />
+              <Text type="secondary" className="text-[12px] mt-1 block">
+                派给提交人自己的上级。上级已离职时会**继续往上找**，找不到才落兜底组（并留审计）。
+                跟"总经理审批"的区别：这里按固定层级跳数，不要求链上出现总经理。
+              </Text>
+              {currentAssigneeDirectManager && (
+                <div className="mt-2">
+                  <Text type="secondary" className="text-[12px] mr-2">层级</Text>
+                  <InputNumber
+                    size="small"
+                    min={0}
+                    max={20}
+                    value={currentAssigneeManagerLevel}
+                    onChange={value =>
+                      // 只改层级：不要走 setAssignmentMode，否则会把开关本身清掉
+                      apply({ assigneeManagerLevel: value === null || value === undefined ? 0 : Number(value) })
+                    }
+                  />
+                  <Text type="secondary" className="text-[12px] ml-2">
+                    {currentAssigneeManagerLevel === 0
+                      ? '0 = 直属上级'
+                      : `再往上第 ${currentAssigneeManagerLevel} 级`}
+                  </Text>
+                </div>
+              )}
             </div>
 
             {/* Candidate Users */}

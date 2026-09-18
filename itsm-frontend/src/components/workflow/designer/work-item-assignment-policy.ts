@@ -22,6 +22,9 @@ export function buildWorkItemAssigneePatch(businessObject: Record<string, unknow
     assignee: '', assigneeRole: '', assigneeDeptId: undefined,
     assigneeTeamId: undefined, assigneeProjectId: undefined,
     assigneeTempTeamId: undefined, assigneeGmChain: undefined,
+    // 直属上级/层级也是"找人方式"之一：绑定工单当前处理人时必须一并清掉，
+    // 否则会留下两种方式并存的定义，发布校验会直接拒绝。
+    assigneeDirectManager: undefined, assigneeManagerLevel: undefined,
     candidateUsers: '', candidateGroups: '',
     approvalMode: undefined, approvalThreshold: undefined,
     rejectStrategy: undefined, timeoutAction: undefined,

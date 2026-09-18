@@ -58,6 +58,9 @@ func (e *CustomProcessEngine) ValidateDefinitionForPublication(ctx context.Conte
 	if err != nil {
 		return err
 	}
+	if _, err := ReadGenericFulfillmentConfig(parsed, definition.ProcessVariables); err != nil {
+		return err
+	}
 	approvals := 0
 	validateCapability := func(taskType, action, ref string, optional bool) error {
 		handler := e.findHandlerByTaskType(taskType)
@@ -99,8 +102,22 @@ func (e *CustomProcessEngine) ValidateDefinitionForPublication(ctx context.Conte
 			if t.TaskPurpose == "approval" {
 				approvals++
 			}
-			if t.AssigneeSource == "" && strings.TrimSpace(t.Assignee) == "" && strings.TrimSpace(t.CandidateUsers) == "" && strings.TrimSpace(t.CandidateGroups) == "" && strings.TrimSpace(t.AssigneeRole) == "" && !t.AssigneeGmChain && t.AssigneeDeptId <= 0 && t.AssigneeTeamId <= 0 && t.AssigneeProjectId <= 0 && t.AssigneeTempTeamId <= 0 {
+			// "什么算一种找人方式"由 declaredApproverFindingModes 单一权威判定，
+			// 不再在这里逐字段枚举——逐字段枚举会随模式增加而漂移（漏一处就静默放行或误拒）。
+			modes := declaredApproverFindingModes(t)
+			if len(modes) == 0 {
 				return &bpmn.PublicationConfigurationError{Message: fmt.Sprintf("task %q requires candidate resolution configuration", t.ID)}
+			}
+			// 引擎的 switch 只命中优先级最高的那一个分支，其余声明会被**静默忽略**。
+			// 因此同时声明多种方式必须拒绝，并明确告诉配置者哪个生效、哪些被丢弃。
+			if len(modes) > 1 {
+				return &bpmn.PublicationConfigurationError{Message: fmt.Sprintf(
+					"task %q declares %d approver-finding modes (%s); the engine honours only %q and silently ignores the rest — declare exactly one",
+					t.ID, len(modes), strings.Join(approverFindingModeNames(modes), ", "), string(modes[0]),
+				)}
+			}
+			if t.AssigneeDirectManager && t.AssigneeManagerLevel < 0 {
+				return &bpmn.PublicationConfigurationError{Message: fmt.Sprintf("task %q requires a non-negative manager level", t.ID)}
 			}
 			for _, source := range fixedScopeApproverSources(t, tenantID) {
 				candidates, err := source.resolver.Resolve(ctx, client, &source.context)

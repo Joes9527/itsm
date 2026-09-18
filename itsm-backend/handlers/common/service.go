@@ -206,6 +206,19 @@ func (s *Service) GetDepartmentTree(ctx context.Context, tenantID int) ([]*Depar
 	return s.repo.GetDepartmentTree(ctx, tenantID)
 }
 
+func (s *Service) ListDepartmentChildren(ctx context.Context, tenantID, parentID int) (*DepartmentChildren, error) {
+	return s.repo.ListDepartmentChildren(ctx, tenantID, parentID)
+}
+
+// ApplyDepartmentUpdate 走部门数据的正常连接（不是受限系统池）。
+func (s *Service) ApplyDepartmentUpdate(ctx context.Context, current *Department, req departmentUpdateRequest) (*Department, *departmentChange, error) {
+	return s.repo.ApplyDepartmentUpdate(ctx, current, req)
+}
+
+func (s *Service) CountDepartmentSubtreeEmployees(ctx context.Context, tenantID, departmentID int) (int, error) {
+	return s.repo.CountDepartmentSubtreeEmployees(ctx, tenantID, departmentID)
+}
+
 func (s *Service) ListDepartments(ctx context.Context, tenantID int) ([]*Department, error) {
 	return s.repo.ListDepartments(ctx, tenantID)
 }

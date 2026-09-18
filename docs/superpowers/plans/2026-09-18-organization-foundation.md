@@ -902,6 +902,22 @@ git commit -m "feat(organization): expose a lightweight lazy-loaded department t
 | 第 0 优先级前置项（§8） | Task 1、Task 3 |
 | seed 隔离（契约 §7.3） | Task 2 |
 
+---
+
+## 执行中修正的计划缺陷（Task 1–3 实测，交给后续执行者）
+
+| # | 计划原文 | 实际 | 处置 |
+| --- | --- | --- | --- |
+| 1 | Task 1 Step 4"拉齐结构到与 Dev 相同的 canonical 链" | 克隆工具是**整库物理克隆**（`CREATE DATABASE ... TEMPLATE`，回退 `pg_dump`/`pg_restore`），结构随源库一并复制 | 已改为**校验**步骤，并明确禁止用 `cmd/migrate -up` 当升级手段 |
+| 2 | Task 3 Step 7 用 `var _ = migrations.X` 占位 | 会在审查被打回 | 已改为 `migrations/assets.go` 的 `//go:embed` + `MigrationSQL` switch 返回 |
+| 3 | Task 3 Step 7 写 `MigrationSQL(version)` | 实际函数名是 **`GetMigrationSQL(version)`** | 已修正 |
+| 4 | Task 3 Step 6 只提 `RegisteredMigrations` 与 Ent index | 迁移流在**两处**声明：`RegisteredMigrations` 与 **`ControlledMigrationCatalog()`**，且 `migration_plan.go` 另有一处"尾部版本需要 prepare"名单；三者必须同步，否则 `TestControlledRuntimeCatalogActivated` 等 11 个测试失败 | **计划必须补这一步**：登记 `ControlledMigrationCatalog()` 并同步 `migration_plan.go` 的尾部名单 |
+| 5 | Task 3 Step 6 要求建 `049_*_verify.sql` | 无任何调用方读取它（`032/034/035` 也没有） | 按 YAGNI **不建**该空壳；索引存在性由 Ent schema 索引 + 单测覆盖 |
+| 6 | 多个迁移测试把"尾部可执行条数"钉死（2/4/5/6/7/9/10） | 追加 049 后每条尾部 +1 | 已同步更新 7 个测试，并把 `cti_governance_test.go` 里"CTI 必须是最新一条"的脆弱断言改为"CTI 必须排在 047 之后" |
+| 7 | Task 2 分类器把"所有非 `end_user` 账号"都当 seed | 目标库有 **3 个真实员工**（工号形态 `D`+数字）被改成测试角色 | 已修正：工号形态单列为 `polluted_employee_roles`，**只纠正角色、绝不删除**，并有回归测试固定 |
+
+> 附带观察：`go generate ./ent` 顺带补出了 `ent/processtask*.go` 与 `ent/migrate/schema.go` 的既有漂移（与 047 的 `assignee_source` 相关），已随 Task 3 一并提交；如审查希望拆开，可单独 revert 这几个文件。
+
 **Placeholder scan：** 无 TBD/TODO；每个代码步骤都给了可编译内容。
 
 **Type consistency：** `DepartmentNode` 在 `entity.go` 定义、`repository.go` 接口、`repository_impl.go` 实现、测试四处同名同字段。`orgNodeBranch` 等常量在 Task 4 定义、Task 5 测试引用，保持一致。`upsertDepartment` / `departmentUpsertInput` 在 Task 3 内自洽。

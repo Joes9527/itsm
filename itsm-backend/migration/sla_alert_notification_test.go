@@ -17,7 +17,7 @@ func TestSLANotificationMigrationRequiresCandidatePreparation(t *testing.T) {
 	}
 	plan, err := PlanMigrations(catalog, controlledReceipts(prefix), OpUp, nil)
 	require.NoError(t, err)
-	require.Len(t, plan.Executable, 9)
+	require.Len(t, plan.Executable, 11)
 	require.Equal(t, AuthTokenStateVersion, plan.Executable[6].Version)
 	require.Equal(t, SLAAlertNotificationVersion, plan.Executable[0].Version)
 	require.Equal(t, CTIGovernanceVersion, plan.Executable[8].Version)
