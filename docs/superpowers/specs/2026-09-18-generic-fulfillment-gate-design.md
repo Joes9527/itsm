@@ -1,7 +1,7 @@
 # 通用履约门禁（generic_fulfillment_v1）设计
 
 - **Status: draft（待维护者确认）。** 本文由实现方整理，尚未经独立审查或维护者定稿，不得作为已验收契约引用。
-- **源码状态：** 实现位于分支 `codex/feat/generic-fulfillment-gate`（15 提交、42 文件，未合并、未部署）。按治理 §7，涉及 BPMN 的变更须由独立审查者复核，实现 Agent 不能作为唯一验收者。
+- **源码状态：** 实现位于 PR #77（分支 `codex/fix/generic-gate-scope`，19 提交、43 文件，未合并、未部署）。按治理 §7，涉及 BPMN 的变更须由独立审查者复核，实现 Agent 不能作为唯一验收者。
 - **相关：** [统一 WorkItem 模型设计](2026-08-26-unified-work-item-model-design.md) §15.2.3（绑定优先级与"无需流程"策略）、[工程治理](../../agent-engineering-governance.md)。
 
 ## 1. 业务目标与角色
@@ -87,7 +87,9 @@
 
 ## 7. 完成期：阶段前置条件门禁
 
-`EnforceGenericWorkflowTransitionTx` 在工单的版本化命令事务内执行。目标状态为 `in_progress` / `resolved` / `closed` / `manual_escalation` 时，要求流程正在运行，并按目标状态校验：
+`EnforceGenericWorkflowTransitionTx` **设计为**在工单的版本化命令事务内执行。目标状态为 `in_progress` / `resolved` / `closed` / `manual_escalation` 时，要求流程正在运行，并按目标状态校验：
+
+> **接线状态（截至 PR #77）：本节规则尚未在生产路径生效。** `EnforceGenericWorkflowTransitionTx` 与 `RejectGenericWorkflowLegacyMutationTx` 在本 PR 中**没有任何生产调用方**（唯一的非定义引用是 `generic_workflow_gate_test.go` 中的断言）。本 PR 唯一接进生产的是只读投影 `GenericWorkflowTaskGate`（任务视图据此不显示「完成」按钮）与启动准入。因此通用工单目前仍可经由普通状态命令被改成 `resolved` / `closed` 而不触及以上任何校验。调用方落在并行的 a3 lifecycle-gate / legacy-gates 变更里；在那之前，本节应读作**契约定义**而非**已生效的运行时约束**。
 
 | 目标状态 | 要求 |
 | --- | --- |
