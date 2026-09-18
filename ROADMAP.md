@@ -222,6 +222,15 @@ These don't belong to a single release; they ship incrementally:
 ### Security
 
 - CodeQL + Trivy + govulncheck — landed v1.1
+- **Follow-up (open): remove the time-boxed `GO-2026-6452` govulncheck exclusion.**
+  `github.com/xuri/excelize/v2` has no fixed release yet (advisory published
+  2026-09-16: affected range starts at `0` with no `fixed` event; v2.11.0, the
+  newest release, is still affected). The workflow allows that single advisory and
+  warns; every other advisory stays fail-closed. **Done when** a fixed excelize
+  release exists and `.github/workflows/security.yml` runs plain
+  `govulncheck ./...` again. Impact meanwhile: a malformed workbook can panic the
+  operator-run CLI `itsm-backend/cmd/sync_ehr_master_data` (denial of service of
+  that CLI only; not reachable from the API surface).
 - Quarterly threat-model review
 - Annual pen-test
 
@@ -237,6 +246,85 @@ These don't belong to a single release; they ship incrementally:
 - `itsm-cli` for ops (deploy/seed/inspect) — landed v1.0
 - `itsm-skill` for OpenClaw / Codex agents — landed v1.0
 - Container image size reduction (distroless base) — planned v1.5
+
+---
+
+## 🧊 Backlog — Unscheduled (needs a product decision)
+
+Work lines that are deliberately **not** scheduled into a release. Triage recorded
+**2026-09-18**: the maintainer split the outstanding work lines into "continue"
+(which keep a live worktree) and "backlog" (these entries). **Every branch ref
+listed here is preserved**; recreate a working copy with
+`git worktree add <path> <branch>` — none of them was deleted or rewritten.
+
+### BL-GENERIC-FULFILLMENT-GATE — admission and completion gates for generic fulfilment
+
+- **Outcome / persona:** process compliance plus first-line clarity. A generic
+  WorkItem (`recordClass=generic`) fulfilled through BPMN must not be able to skip
+  its process or close without the evidence that process requires, and an engineer
+  must be able to see *why* a task cannot be completed yet.
+  (Persona: process administrator, front-line engineer.)
+- **Scope — six candidate implementations, none merged:**
+
+  | Branch | Business coverage | Commits | Pushed | Merge-ability into current main |
+  |:---|:---|---:|:---:|:---|
+  | `codex/fix/a3-start-contract` | admit generic workflows from frozen creation evidence; reject reserved public inputs | 25 | no | clean (40 files, +2725) |
+  | `codex/fix/a3-contract-pipeline` | validate the fulfilment definition contract (one process per lifecycle contract) | 21 | no | clean (27 files, +2013) |
+  | `codex/fix/a3-lifecycle-gate` | lifecycle evidence gate before completion | 25 | no | clean (37 files, +3058) |
+  | `codex/fix/a3-legacy-gates` | reject legacy mutations for gated generic workflows | 24 | no | conflict in `service/ticket_service.go` |
+  | `codex/fix/a4-blocked-ui` | surface callback block reasons in ticket task views | 21 | no | clean (27 files, +1858) |
+  | `codex/fix/a4-frozen-callback` | block invalid frozen-callback input before execution | 20 | no | clean (21 files, +1775) |
+
+- **Non-goals:** no second approval engine, no change to the BPMN engine core, no
+  replacement of the Incident / Problem / Change lifecycles.
+- **Owning module:** `itsm-backend/service` (BPMN fulfilment and WorkItem command
+  boundaries) and the `itsm-frontend` task view; evidence keeps using each domain's
+  existing audit channel.
+- **Dependencies / migration risk:** must agree with the existing `process_bindings`
+  and lifecycle-contract wording. The six branches are different cuts of the same
+  business goal, so one must be chosen as the base and the others explicitly
+  accepted or dropped before any merge; each needs a rebase onto current main.
+- **Acceptance criteria:** (1) a generic fulfilment record cannot be closed without
+  the required evidence, and the rejection reason is readable; (2) the task view
+  shows the block reason; (3) Incident / Problem / Change behaviour and their
+  regression tests are unchanged; (4) PostgreSQL lifecycle cases exist for the gate.
+- **Evidence anchors:** the branch refs above (`git log -1 <branch>` for the last
+  commit); re-check the remaining delta before merging with
+  `git merge-tree --write-tree origin/main <branch>`.
+- **Status:** proposed
+
+### BL-AGENT-GUIDANCE-CONVERGENCE — finish the agent guidance and shared-convention refactor
+
+- **Outcome / persona:** one authoritative set of governance rules, less rework and
+  fewer rule conflicts for later changes. (Persona: maintainer, every coding agent.)
+- **Current state:** branch `codex/docs/agent-guidance-refactor` (2 commits, pushed).
+  `docs/engineering-conventions.md` is already **byte-identical** to main, but
+  `docs/agent-engineering-governance.md`, `AGENTS.md` and `CLAUDE.md` carry
+  **unmerged deltas** and have diverged from main (the merge conflicts).
+- **Scope:** rule on those deltas one by one — accept them (as their own PR that says
+  whether it is a correction or an expansion) or close them explicitly so they stop
+  hanging.
+- **Non-goals:** do not change contract semantics; do not duplicate the `AGENTS.md`
+  summary in a second place.
+- **Acceptance criteria:** governance docs and the `AGENTS.md` / `CLAUDE.md` summaries
+  agree, and the branch can be archived.
+- **Evidence anchors:** the branch ref plus
+  `git diff origin/main codex/docs/agent-guidance-refactor -- docs/agent-engineering-governance.md AGENTS.md CLAUDE.md`.
+- **Status:** proposed
+
+### BL-ARCH-HARDENING-REVIEW — dispose of the Agent-platform architecture review
+
+- **Outcome:** the review either becomes a design/plan, or is explicitly labelled
+  history, so it is not later cited as a delivered capability.
+- **Current state:** branch `docs/architecture-agent-platform-evolution-20260901`
+  (2 commits, pushed, merges cleanly: 1 file, +69) — the agent-platform evolution
+  design review.
+- **Scope:** decide between (1) adopt — convert into a design, plan or roadmap item;
+  (2) archive — move under `docs/archive/`.
+- **Acceptance criteria:** the document has an explicit state in main (present with a
+  status marker, or archived); it no longer hangs as a branch.
+- **Evidence anchors:** the branch ref and the single added document.
+- **Status:** proposed
 
 ---
 

@@ -125,6 +125,56 @@ services:
       REDIS_HOST: redis
 ```
 
+## WorkItem SLA business calendar
+
+WorkItem SLA deadlines use the calendar in `sla_definitions.business_hours`.
+The same calculator is used during creation, authorized policy application and
+SLA cycle reset. Applied policy snapshots preserve this calendar for later cycles.
+An empty object intentionally means 24x7 elapsed time.
+
+```json
+{
+  "work_days": [1, 2, 3, 4, 5],
+  "start_time": "09:00",
+  "end_time": "18:00",
+  "time_zone": "Asia/Shanghai",
+  "holiday_list": ["2026-01-01"],
+  "makeup_days": ["2026-01-04"],
+  "valid_from": "2026-01-01",
+  "valid_until": "2026-12-31"
+}
+```
+
+This example illustrates the format; its exception lists are not a complete
+annual calendar. `work_days` uses ISO weekdays (Monday 1 through Sunday 7).
+Missing work hours retain Monday-Friday 09:00-18:00. There is one continuous
+daily work period; no lunch break is inferred.
+
+When declared, `time_zone` must be a valid IANA location accepted by Go's
+`time.LoadLocation` (including `UTC`). Empty, unknown and host-dependent `Local`
+values fail validation. Dates, weekdays and work hours are calculated in that
+zone, independently of the location attached to the input timestamp. The result
+represents the calculated absolute instant. An omitted zone retains the legacy
+input timestamp's location; existing undeclared calendars are not silently
+reinterpreted.
+
+`holiday_list` excludes dates; `makeup_days` includes specific dates even when
+their weekday is normally closed. Both use `YYYY-MM-DD`; malformed dates or a
+date appearing in both lists fail validation.
+
+`valid_from` and `valid_until` are optional but must be declared together. They
+bound the known calendar inclusively by local date. All holiday and makeup
+dates must lie inside that range. A calculation starting outside it, or needing
+to search beyond it, fails explicitly, including zero-minute requests. A
+deadline exactly at closing time on the final covered date remains valid.
+Finite imported calendars must declare these bounds; absence of bounds preserves
+legacy recurring-calendar behavior and is not evidence that future holiday data
+is complete. Extending coverage requires supplying and reviewing the new dates.
+
+The existing BPMN process/task SLA display uses a separate legacy calculator
+and does not yet consume this WorkItem calendar. This configuration must not be
+used as evidence that BPMN display timing has been aligned.
+
 ## Feature Flags
 
 | Flag | Description |

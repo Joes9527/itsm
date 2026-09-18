@@ -2,6 +2,35 @@
 
 Status: maintained operational contract, updated 2026-09-15. The maintainer selected **3010 as the ITSM frontend port**. Deployment filenames containing `ga`, `candidate`, or `prod` do not establish environment identity or release acceptance. This environment is named **WSL development**.
 
+## Agent 必读：当前数据库状态（2026-09-14）
+
+完整实例／库名、端口、用途、任务归属、大小及核实状态统一维护在[本地 PostgreSQL 数据库总清单](review/2026-09-14-postgresql-database-register.md)。该清单覆盖本次可见的 WSL Docker 环境；停止容器未启动取证，内部库名未知的项不能当作空库或可删除资源。下表仅标明本轮交接入口，不复制全量清单。
+
+| 角色 | 实例 / 数据库 / schema | Agent 使用边界 |
+| --- | --- | --- |
+| ITSM 新目标 | `ga-itsm-20260914 / itsm_ga_ready / public` | 任务二配置迁移唯一目标，由任务二 Agent 协调写入 |
+| ITSM 保留源 | `itsm-postgres-dev / itsm_config_baseline_20260908 / public` | 已确认配置与 Phase 1 身份数据来源；其他任务只读核对，不清理 |
+| KAF 新结构目标 | `ga-kaf-20260914 / kaf_ga / public` | 039 结构验证目标；尚不是业务运行库 |
+| KAF 保留基线 | `kaf-dev-postgres / kaf_config_baseline_20260908 / public` | 038 基线保全；历史身份时间戳来源未决，阻塞对应数据升级／搬迁 |
+
+**交接版本与证据：**G-A 固定为 `d91b587fe3ab40cc863321346d217d258a3a96d8`，详见[数据库对账交接](review/2026-09-14-database-reconciliation-handoff.md)。目标 ITSM 源码为 `0788a9bb196ab37a8389b3f366bed9877b2f72c3`，KAF 为 `23f01476b8ea7293c423d608329241477a5336a5`。文档分支 HEAD 不等于应用源码，也不自动改变 GARevision；任务二后续批次与验收由其 GBRevision 记录。其他 worktree 若尚未包含这些文档，应按固定提交读取交接，不能用旧 main 文档推定当前目标。
+
+**准入范围：**G-A 通过的是隔离结构、角色边界和配置迁移准入，不是 G-B/G-C 或应用上线。ITSM 普通迁移对齐至 046，P037 有真实证据，R(038) 未执行。新目标已保全原新 ITSM 的 13 张组织／用户／权限基础表（含 7,862 用户）；这是固定快照，不代表覆盖源侧后续变化，也不是再次迁移旧系统用户。历史 ticket、审批／评论／附件、旧 BPMN／实例和知识库未导入。配置、目录、SLA 与流程绑定由任务二继续验证；PostgreSQL 鉴权 A3/A4 仍按原 R4 跟踪，不能因 046 存在而关闭。
+
+**写入与启动边界：**GA 两个实例使用独立卷、内部网络，没有发布宿主 PG 端口，目前仍是两个实例，任务三尚未合实例。操作前从受保护配置解析连接并核对实例、库、schema、账号、代码版本及负责 Agent；不得套用 5432/5433 或默认 `.env`。`acp-postgres:5433 / control_plane` 与 `kaf-dev-postgres:5434 / control_plane` 是不同库。`itsm_migration_20260914` 是旧 019 对照克隆，不能作为 046 目标。
+
+- 任务二是 `itsm_ga_ready` 的单一协调写入任务；其他 Agent 不并行迁移、初始化、授予权限或跑会写库的测试。
+- 运行角色尚未配置完整业务／配置 DML；KAF 当前仅验证 SELECT 结构检查权限。应用验收前须审查所需最小权限并复验上游约束，不能用 owner 账号启动应用。P037 固定的四张核心表 ACL、控制证据和账本不得随意修改。
+- 禁止依据通用 quickstart、`-fresh`、bootstrap 或 seed 示例重置这些现有库。迁移 `-status` 的连接解析也须按固定制品核实；不能假定 `DB_DSN` 能选择目标。
+- 不迁历史 ticket，不执行 ITSM R(038)，不清历史任务／队列，不改历史 SQL/checksum，不做真实企业写入或源停写。KAF 038 与 ITSM R(038) 是两条不同迁移链。
+
+**备份和保全状态：**本轮已有新隔离目标迁移前备份及恢复验证，以及上述 13 张基础表的只读快照；没有因此完成原 ITSM/KAF 全库备份。原库未清理、删除、覆盖或改名。目前没有任何库被确认可删除；停止、零连接、名称含 test/dev 或旧日期都不构成退役许可。退役须另核依赖、完整可恢复备份、数据范围和切换验收。
+
+**应用状态限制：**17:07 左右 WSL 意外重启，G-A 收尾检查时原候选 API/worker/web/ingress/PG 等停止；本轮只恢复任务自有 GA PG。下面 2026-09-08 的“已运行”和健康结果均是历史记录，不能据此自动重启旧应用或重复启动消费者。原候选恢复和新目标启动分别需要核对当前配置及准入。
+
+凭据／COPY 数据／原始证据留在受保护路径，引用见 G-A 交接，不进入 Git。新增数据库、改变用途或发布新的 GA/GB/GC 交接时，应更新清单及本节日期／版本；历史验收快照不直接覆写为新结论。
+
+
 > Before changing Dev, read the [verified Dev031/main047 divergence analysis](review/2026-09-16-dev-schema-divergence-report.md). The maintainer accepted the [restoration design](superpowers/specs/2026-09-16-dev-restoration-two-database-design.md); use the [four-stage execution checklist](superpowers/plans/2026-09-15-migration-validation-ledger.md#two-database-execution) and its evidence gates instead of historical proposals. The selected code/schema compatibility target remains047.
 
 ## Selected schema target: 047
@@ -131,3 +160,35 @@ PR #35 unifies the existing detail-page refresh, preserves editing context, and 
 This release changes the frontend only. Preserve the existing 8080 executable, backend configuration, databases, workers and KAF services. Back up the old frontend recipe and `active-release.json`, retain the previous standalone directory, and record the new source revision/build ID in the canonical recipe and sanitized snapshot. Validate actual 3010 login/detail behavior with the repository's guarded Playwright tests. Failed verification requires restoring the saved frontend recipe and starting the previous release through `stack`.
 
 The exact applied revision, build ID and verification outcome belong to the local `active-release.json`; a merged PR alone is not proof that the running frontend was switched.
+### 2026-09-14 任务二审查修复增量
+
+- 当前根任务新增 `gb-remediation-test-pg-20260914` 内部测试实例，三个库分别是 `gb_review_test`（SQL 语义测试）、`gb_replay_review`（真实备份五批重放）、`gb_ticket_types_test`（产品类型初始化测试）。**都不是业务应用连接目标**，见数据库总清单。
+- ITSM 工具修复 `7c8cee6fae181400573308bfb7e73043d11ed0b9` 与 KAF 工具修复 `e6fd8a50368a15505c98c8826dee5af975cef5c2` 独立复审通过；G-B 仍 BLOCKED，不能据工具测试切换连接。
+- 首期范围：单租户功能收口；旧路由后续处理，使用现有分派及规范流程；不迁历史工单。SLA 日历已修复并准备新配置，但七个现有流程绑定没有 SLA ID，实际新建计时接线尚需完成。
+- 运行时集成工作树 `config-launch-integration` 尚在开发，未替代 G-A 固定运行时，未启动候选应用。
+
+
+### 2026-09-15 当前 DEV 与新目标的澄清
+
+最新只读核对：8080 Backend 实际连接 `itsm-postgres-dev / itsm_config_baseline_20260908 / public`，不是 `itsm_ga_ready`。当前DEV已有26条符合核心WorkItem关联结构的记录及12条产品类型；旧库itsm和旧克隆itsm_migration_20260914仍有未完成适配的数据。新目标不是DEV的完整克隆，不应据其0工单反推DEV没有测试数据。
+
+保留候选、046字段差额及目录/分类/SLA ID重映射要求见 [DEV数据保留核对](review/2026-09-15-dev-workitem-data-preservation-audit.md)。当前DEV未切换，未修改数据。
+
+
+### 2026-09-15 最终迁移范围确认
+
+用户确认不保留当前DEV旧工单到目标、不续跑旧流程：26条WorkItem及关联专业记录、评论、附件、关系，以及旧流程实例/任务均不迁移。原DEV库和数据保持原样；“不迁移”不表示获准删除源数据。
+
+继续复用 `itsm_ga_ready` 承接清洗适配后的所需配置与基础数据，通过可切换配置让现有Backend连接目标；保留原DEV配置以便切回，不新建整套环境。E2E通过新建记录验证流程。为保留旧测试工单而提出的7个目录补齐、旧SLA周期及流程续跑工作不再属于本轮必需项；配置本身是否需要迁移仍按新产品规范审核。
+
+
+### 2026-09-15 09:50 CST 切换前准备增量（尚未切换）
+
+本节更新之前的0类型/未配置运行权限状态；原G-A快照仍保留历史意义。唯一协调写入者为当前根任务。
+
+- `itsm_ga_ready` 已定向初始化12个产品默认工单类型，复跑0新增；工单仍0。13张基础身份表、迁移账本与四核心表ACL保持不变。原DEV26条记录仍留在原库。
+- 目标最小运行权限和 `ga_runtime / itsm-ga-ready-20260914 / standard` 绑定已通过隔离恢复库演练、目标事务回滚预演后提交；ga_system无新增权限，四核心表ACL、P037控制文件/证据及全部原表数据摘要未变。真实运行/inspection账号执行启动前角色、执行模式及迁移准入检查通过；这不是应用或E2E验收。
+- Redis沿用原实例6389，目标DB12已PING验证为空，DEV DB11未清理；独立目标附件桶 `itsm-ga-e2e-20260915` 已建立且为空，未动DEV附件。PostgreSQL新鉴权存储仍未接入bootstrap，不能当作通过；当前代码仍使用Redis刷新/撤销。
+- 新增隔离测试库 `gb-remediation-test-pg-20260914 / ga_acl_rehearsal_20260915`，仅用于恢复本批备份与ACL真实角色演练，不是业务环境，不得让应用连接。原有三个测试库未覆盖。
+- 本批受保护配置、备份、恢复/准入证据均在 `/home/administrator/.local/state/itsm-backend-switch-20260915/`。不得把凭据、原始用户数据、argv/environment或备份提交Git。
+- 前后端兼容补丁仍在独立审查；8080/3001尚未切换，启动与实际登录/新建/人工任务操作仍待验证。SLA、未测专业动作、外部投递、重启恢复均不能因这些预检关闭。

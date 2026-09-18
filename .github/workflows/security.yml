@@ -106,9 +106,74 @@ jobs:
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
 
+      # Time-boxed advisory exclusion (maintainer-approved 2026-09-18).
+      #
+      # GO-2026-6452 (github.com/xuri/excelize/v2, "panic via negative shared-string
+      # index") has NO fixed release: vuln.go.dev lists the affected range as
+      # introduced "0" with no `fixed` event, and the vulnerable symbol
+      # (excelize.File.GetRows) is still reachable in v2.11.0, the newest published
+      # version. The only reachable trace is the operator-run batch CLI
+      # itsm-backend/cmd/sync_ehr_master_data. Impact is a panic on a malformed
+      # workbook (denial of service of that CLI), not code execution or data loss.
+      #
+      # REMOVAL CONDITION: delete the entry from ALLOWED_IDS below as soon as a fixed
+      # excelize release exists (re-check https://pkg.go.dev/vuln/GO-2026-6452, which
+      # must then list a `fixed` version), and restore the plain `govulncheck ./...`
+      # invocation. Tracked in ROADMAP.md -> "Always-On Tracks" -> Security.
+      #
+      # govulncheck has no built-in way to silence a finding (go.dev/issue/61211)
+      # and exits 0 in -json/-sarif mode regardless of findings, so the exclusion is
+      # implemented here explicitly: text mode is run for its exit status, and the
+      # reported advisory identifiers are compared against ALLOWED_IDS.
+      #
+      # Everything else stays fail-closed: any advisory not listed here fails the job,
+      # and a govulncheck status other than 0 (clean) or 3 (findings) also fails the job.
       - name: Run govulncheck
         working-directory: itsm-backend
-        run: govulncheck ./...
+        run: |
+          set -euo pipefail
+          ALLOWED_IDS=(
+            "GO-2026-6452"
+          )
+
+          report=$(mktemp)
+          set +e
+          govulncheck ./... > "$report" 2>&1
+          status=$?
+          set -e
+          cat "$report"
+
+          if [ "$status" -eq 0 ]; then
+            echo "govulncheck: no vulnerabilities found."
+            exit 0
+          fi
+          if [ "$status" -ne 3 ]; then
+            echo "::error::govulncheck could not complete (exit status $status; 3 means findings); failing closed."
+            exit 1
+          fi
+
+          found=$(grep -oE 'GO-[0-9]{4}-[0-9]{4,}' "$report" | sort -u)
+          if [ -z "$found" ]; then
+            echo "::error::govulncheck reported findings but no advisory identifiers were parsed; failing closed."
+            exit 1
+          fi
+
+          unexpected=""
+          while read -r id; do
+            [ -z "$id" ] && continue
+            allowed=0
+            for entry in "${ALLOWED_IDS[@]}"; do
+              [ "$id" = "$entry" ] && allowed=1
+            done
+            [ "$allowed" -eq 0 ] && unexpected="$unexpected $id"
+          done <<< "$found"
+
+          if [ -n "$unexpected" ]; then
+            echo "::error::Unlisted Go vulnerability/vulnerabilities:$unexpected"
+            exit 1
+          fi
+
+          echo "::warning::Time-boxed advisory exclusion in effect: $(printf '%s ' "${ALLOWED_IDS[@]}"). No fixed release exists yet; remove the exclusion once upstream ships a fix."
 
   npm-audit:
     name: NPM Security Audit
