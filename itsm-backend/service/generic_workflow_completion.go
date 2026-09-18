@@ -2,17 +2,20 @@ package service
 
 import (
 	"context"
-	"itsm-backend/ent"
-	"itsm-backend/ent/processinstance"
 	"strconv"
 	"strings"
+
+	"itsm-backend/ent"
+	"itsm-backend/ent/processinstance"
 )
 
-type genericApprovalIntentKey struct{}
-type genericApprovalIntent struct {
-	taskID, action   string
-	suppliedReserved bool
-}
+type (
+	genericApprovalIntentKey struct{}
+	genericApprovalIntent    struct {
+		taskID, action   string
+		suppliedReserved bool
+	}
+)
 
 // WithBPMNApprovalDecisionIntent marks only controller-validated intent. The
 // engine still authorizes the actor and verifies the immutable approval node;

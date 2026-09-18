@@ -147,6 +147,7 @@ func TestGenericWorkflowCompletionRequiresNoteWithoutGlobalPropagation(t *testin
 	require.Equal(t, "verified handling", saved.TaskVariables[WorkItemCompletionNote])
 	require.NotContains(t, f.client.ProcessInstance.GetX(f.userCtx, task.ProcessInstanceID).Variables, WorkItemCompletionNote)
 }
+
 func TestGenericWorkflowCompletionRejectsReservedBranchInputs(t *testing.T) {
 	for _, key := range []string{"approval_required", "need_escalate", "approvalResult"} {
 		t.Run(key, func(t *testing.T) {
@@ -175,6 +176,7 @@ func TestGenericWorkflowPendingFrozenIntakeDoesNotPermitBypass(t *testing.T) {
 	_, err = loadGenericWorkflowGate(f.userCtx, f.client, item.TenantID, item.ID, false)
 	require.ErrorContains(t, err, "conflicts")
 }
+
 func TestGenericWorkflowTaskSetVariablesRejectsReservedInputs(t *testing.T) {
 	for _, key := range []string{"approval_required", "need_escalate", "approvalResult", WorkItemCompletionNote} {
 		t.Run(key, func(t *testing.T) {
@@ -200,6 +202,21 @@ func TestGenericWorkflowVersionedEditRejectsStageBypass(t *testing.T) {
 		require.Equal(t, item.Version, f.client.Ticket.GetX(f.userCtx, item.ID).Version)
 	}
 }
+
+// A gate that rejected every transition would also satisfy the bypass test above, so the
+// admission direction needs evidence of its own. It exercises the gate directly because
+// this fixture denies every status transition downstream on execution scope regardless of
+// the lifecycle contract（pending and cancelled behave identically on the unwired
+// baseline），which would mask a passing admission.
+func TestGenericWorkflowVersionedEditAdmitsStagedTransition(t *testing.T) {
+	f, item, _ := seedGenericGate(t, "in_progress", "open")
+	tx, err := f.client.Tx(f.userCtx)
+	require.NoError(t, err)
+	defer func() { _ = tx.Rollback() }()
+	require.NoError(t, EnforceGenericWorkflowTransitionTx(f.userCtx, tx.Client(), item.TenantID, item.ID, "in_progress"))
+	require.Error(t, EnforceGenericWorkflowTransitionTx(f.userCtx, tx.Client(), item.TenantID, item.ID, "resolved"))
+}
+
 func TestGenericWorkflowVersionedAssignmentRequiresAndAuditsReason(t *testing.T) {
 	f, item, _ := seedGenericGate(t, "assigned", "open")
 	grantAssignmentBoundaryRole(t, f.client, item.TenantID, f.actor.Role)
