@@ -264,16 +264,32 @@ listed here is preserved**; recreate a working copy with
   its process or close without the evidence that process requires, and an engineer
   must be able to see *why* a task cannot be completed yet.
   (Persona: process administrator, front-line engineer.)
-- **Scope — six candidate implementations, none merged:**
+- **Scope — seven candidate cuts, none merged.** Counts and conflict lists below were
+  measured against `origin/main` on 2026-09-18; re-measure with the commands in
+  *Evidence anchors* before relying on them, since `docs/README.md` moves on every
+  documentation merge.
 
-  | Branch | Business coverage | Commits | Pushed | Merge-ability into current main |
-  |:---|:---|---:|:---:|:---|
-  | `codex/fix/a3-start-contract` | admit generic workflows from frozen creation evidence; reject reserved public inputs | 25 | no | clean (40 files, +2725) |
-  | `codex/fix/a3-contract-pipeline` | validate the fulfilment definition contract (one process per lifecycle contract) | 21 | no | clean (27 files, +2013) |
-  | `codex/fix/a3-lifecycle-gate` | lifecycle evidence gate before completion | 25 | no | clean (37 files, +3058) |
-  | `codex/fix/a3-legacy-gates` | reject legacy mutations for gated generic workflows | 24 | no | conflict in `service/ticket_service.go` |
-  | `codex/fix/a4-blocked-ui` | surface callback block reasons in ticket task views | 21 | no | clean (27 files, +1858) |
-  | `codex/fix/a4-frozen-callback` | block invalid frozen-callback input before execution | 20 | no | clean (21 files, +1775) |
+  | Branch | Business coverage | Commits | Against the superset | Merge into current main |
+  |:---|:---|---:|:---|:---|
+  | `codex/fix/a3-start-contract` | admit generic workflows from frozen creation evidence; reject reserved public inputs | 25 | fully absorbed | conflict: `docs/README.md` |
+  | `codex/fix/a3-contract-pipeline` | validate the fulfilment definition contract (one process per lifecycle contract) | 21 | fully absorbed | conflict: `docs/README.md` |
+  | `codex/fix/a3-lifecycle-gate` | lifecycle evidence gate before completion | 25 | adds later work | conflicts: `docs/README.md`, `dto/ticket_dto.go` |
+  | `codex/fix/a3-legacy-gates` | reject legacy mutations for gated generic workflows | 24 | adds later work | conflicts: `docs/README.md`, `service/ticket_service.go` |
+  | `codex/fix/a3-assignment-ui` | use the versioned command for generic assignment | 27 | adds later work | conflicts: `docs/README.md`, `lib/api/ticket-api.ts` |
+  | `codex/fix/a4-blocked-ui` | surface callback block reasons in ticket task views | 21 | adds later work | conflict: `docs/README.md` |
+  | `codex/fix/a4-frozen-callback` | block invalid frozen-callback input before execution | 20 | fully absorbed | conflict: `docs/README.md` |
+
+- **The superset is not in the table, and it is not the whole feature.**
+  `codex/chore/dev-restoration-schema-validation` (30 commits, the only branch pushed to
+  origin) is the integration branch these cuts were taken from. Three cuts
+  (`a3-start-contract`, `a3-contract-pipeline`, `a4-frozen-callback`) are **fully absorbed**
+  by it — merging them back changes nothing. The other four continued on 2026-09-17 after
+  the superset's last integration merge (2026-09-16 17:29) and **carry work it does not
+  have**; `a3-legacy-gates` and `a3-assignment-ui` overlay it cleanly, while
+  `a3-lifecycle-gate` (both `generic_workflow_gate*.go`) and `a4-blocked-ui` (the task-view
+  test and `bpmn-workflow-api.ts`) conflict in two files each. The consolidation question
+  is therefore *how to assemble the superset with those four*, not *which single branch to
+  pick*.
 
 - **Non-goals:** no second approval engine, no change to the BPMN engine core, no
   replacement of the Incident / Problem / Change lifecycles.
@@ -281,16 +297,67 @@ listed here is preserved**; recreate a working copy with
   boundaries) and the `itsm-frontend` task view; evidence keeps using each domain's
   existing audit channel.
 - **Dependencies / migration risk:** must agree with the existing `process_bindings`
-  and lifecycle-contract wording. The six branches are different cuts of the same
-  business goal, so one must be chosen as the base and the others explicitly
-  accepted or dropped before any merge; each needs a rebase onto current main.
+  and lifecycle-contract wording. The superset bundles two different reviewable goals —
+  the fulfilment-gate product code, and the Dev 047 restoration / schema-clone
+  operational record — so landing it as one branch conflicts with the
+  one-branch-one-goal rule; split it before review, or accept and record the bundling
+  explicitly.
+- **Measured state, 2026-09-18 — the work line does not have a green suite.**
+  Replaying the superset's `itsm-backend` / `itsm-frontend` commits onto current
+  `origin/main` (15 commits, 42 files, +2927/−16, branch
+  `codex/feat/generic-fulfillment-gate`) builds, but fails **26 existing tests**: 24 in
+  `handlers/intake`, 1 in `service`, 1 in `tests/integration`. The same suite on pristine
+  `origin/main` is green (63 packages, `MAIN_EXIT=0`), and the failing test alone fails in
+  0.21s standalone — a deterministic regression, not load-sensitive flakiness.
+  The trigger is that the branch **adds a `ParseXML` call to the creation path**, which
+  never parsed a definition before. `genericBindingConfig`
+  (`service/bpmn_generic_binding_contract.go`) parses the stored definition, and the
+  parser itself rejects a definition with zero processes —
+  `validateBPMN` in `service/bpmn_xml_parser.go` returns "BPMN定义必须包含至少一个流程".
+  `ResolveCreationWorkflow` (`service/bpmn_creation.go`) then wraps that as
+  `invalid workflow lifecycle contract`, so creation rejects definitions it previously
+  resolved, **independent of record class**.
+  The branch's own guard for this case, `hasGenericFulfillmentContract` in
+  `service/bpmn_workitem_lifecycle_contract.go`, is **not** the trigger: every caller
+  reaches it only after `ParseXML`, which has already rejected the empty definition, so
+  that branch is defensive code rather than a live gate.
+  The superset carries the same code and does not touch the failing test files, so the
+  same failures apply to it. **Acceptance criterion (3) is therefore not met.**
+- **Fix prepared, 2026-09-18 — narrowed to the contract's declared scope.** Branch
+  `codex/fix/generic-gate-scope` (based on `codex/feat/generic-fulfillment-gate`) makes
+  creation detect the contract without re-validating a stored definition: a definition
+  that does not parse cannot declare `generic_fulfillment_v1`, so it freezes no flags and
+  creation keeps its pre-contract behavior. Definition validity stays owned by publication
+  validation. A regression test covers all six record classes against both a
+  parser-rejected and a malformed definition. The design this implements is recorded in
+  `docs/superpowers/specs/2026-09-18-generic-fulfillment-gate-design.md` (branch
+  `codex/docs/generic-fulfillment-gate-design`, status draft — a BPMN contract change needs
+  an independent reviewer, so the implementation branch cannot approve it).
+- **Measured state, 2026-09-18 — the cuts do not compose textually.** Merging the four
+  cuts that the superset does not already contain, in the order `a3-legacy-gates`,
+  `a3-assignment-ui`, `a3-lifecycle-gate`, `a4-blocked-ui`, needs conflict resolution in
+  4 files — 3 hunks where the cut is the stricter side, plus `a4-blocked-ui` carrying an
+  older `lib/api/bpmn-workflow-api.ts` that lacks `completionNoteRequired` — and the
+  result **does not compile**:
+  `dto/bpmn_task_dto.go` declares `BPMNTaskCallbackBlock` twice, because two merged sides
+  added the same struct and text merge cannot detect the duplicate. The assembled tree
+  also conflicts with `origin/main` in 4 files, not 1. Treat the assembly as work for the
+  owning agent, not as a mechanical merge.
 - **Acceptance criteria:** (1) a generic fulfilment record cannot be closed without
   the required evidence, and the rejection reason is readable; (2) the task view
   shows the block reason; (3) Incident / Problem / Change behaviour and their
   regression tests are unchanged; (4) PostgreSQL lifecycle cases exist for the gate.
 - **Evidence anchors:** the branch refs above (`git log -1 <branch>` for the last
-  commit); re-check the remaining delta before merging with
-  `git merge-tree --write-tree origin/main <branch>`.
+  commit). Re-check conflicts with
+  `git merge-tree --write-tree --name-only origin/main <branch>`. Re-derive the
+  *Against the superset* column by **merge simulation, not by patch-id**: run
+  `git merge-tree --write-tree <branch> codex/chore/dev-restoration-schema-validation`
+  and compare the resulting tree with each side's own tree — equal to the superset's
+  means the branch is fully absorbed, equal to the branch's means the superset is the
+  smaller one, anything else means both sides hold work the other lacks. A patch-id
+  comparison over `--no-merges` commits **under-counts**: content a branch received
+  through its own merge commits belongs to no single commit, so it looks absent from
+  every branch at once.
 - **Status:** proposed
 
 ### BL-AGENT-GUIDANCE-CONVERGENCE — finish the agent guidance and shared-convention refactor
