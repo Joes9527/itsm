@@ -103,9 +103,16 @@ func (s *TicketService) writeCreationEffects(ctx context.Context, tx *ent.Tx, it
 			return err
 		}
 	}
-	if item.AssigneeID > 0 && s.notificationSvc != nil {
+	if s.notificationSvc != nil {
 		content := fmt.Sprintf("工单 %s 已创建：%s", item.TicketNumber, item.Title)
-		if err := s.notificationSvc.EnqueueCreationTx(ctx, tx, item, plan.Resolved.Identity.ActorID, "ticket_created", content, fmt.Sprintf("creation:%d:ticket_created", item.ID), []int{item.RequesterID, item.AssigneeID}); err != nil {
+		// 处理人可有可无：未命中 active 配置规则时工单保持未分配，申请人仍必须收到创建通知。
+		// 未分配时不能把 0 拼进收件人——EnqueueCreationTx 会把每个收件人解析为本租户 active
+		// 用户，0 解析不到会整体报错并把创建事务回滚掉。
+		recipients := []int{item.RequesterID}
+		if item.AssigneeID > 0 {
+			recipients = append(recipients, item.AssigneeID)
+		}
+		if err := s.notificationSvc.EnqueueCreationTx(ctx, tx, item, plan.Resolved.Identity.ActorID, "ticket_created", content, fmt.Sprintf("creation:%d:ticket_created", item.ID), recipients); err != nil {
 			return err
 		}
 	}
