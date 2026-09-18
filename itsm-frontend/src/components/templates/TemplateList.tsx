@@ -26,11 +26,12 @@ import {
   Modal,
   type MenuProps,
 } from 'antd';
-import { Search as SearchIcon, Filter, X, Check, Trash2, Download, Upload, LayoutGrid, RotateCcw, List, ArrowUpDown, Star } from 'lucide-react';
+import { Search as SearchIcon, Filter, X, Check, Trash2, Download, Upload, LayoutGrid, List, ArrowUpDown, Star } from 'lucide-react';
 import {
   CheckOutlined,
   MoreOutlined,
   PlusOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import { TemplateCard } from './TemplateCard';
 import type { TicketTemplate, TemplateListQuery, TemplateVisibility } from '@/types/template';
@@ -319,7 +320,7 @@ export const TemplateList: React.FC<TemplateListProps> = ({
                 </Radio.Button>
               </Radio.Group>
 
-              <Button icon={<RotateCcw />} onClick={() => refetch()}>
+              <Button icon={<SyncOutlined aria-hidden="true" />} onClick={() => refetch()}>
                 刷新
               </Button>
 

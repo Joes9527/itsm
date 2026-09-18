@@ -2,8 +2,8 @@
 
 import { Globe, BarChart3, Activity, Settings, Key, Layers, CheckCircle, Shield, Search } from 'lucide-react';
 import {
+  ClearOutlined,
   SaveOutlined,
-  SyncOutlined,
 } from '@ant-design/icons';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -716,7 +716,7 @@ const PermissionConfiguration = () => {
               <Button onClick={handleInitPermissions} loading={saving}>
                 初始化权限字典
               </Button>
-              <Button icon={<SyncOutlined aria-hidden="true" />} onClick={handleReset}>
+              <Button icon={<ClearOutlined aria-hidden="true" />} onClick={handleReset}>
                 重置
               </Button>
               <Button

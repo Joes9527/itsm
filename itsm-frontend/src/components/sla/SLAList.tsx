@@ -18,12 +18,12 @@ import {
   Switch,
   Empty,
 } from 'antd';
-import { RotateCcw } from 'lucide-react';
 import {
   BellOutlined,
   DeleteOutlined,
   EditOutlined,
   PlusOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
@@ -181,7 +181,7 @@ const SLAList: React.FC = () => {
             新建 SLA
           </Button>
         </Space>
-        <Button aria-label="刷新" icon={<RotateCcw />} onClick={loadData} />
+        <Button aria-label="刷新" icon={<SyncOutlined aria-hidden="true" />} onClick={loadData} />
       </div>
 
       <Table

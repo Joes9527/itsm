@@ -22,11 +22,12 @@ import {
   Tooltip,
   Skeleton,
 } from 'antd';
-import { CheckCircle, Clock, RotateCcw, Hand, GitBranch, ExternalLink } from 'lucide-react';
+import { CheckCircle, Clock, Hand, GitBranch, ExternalLink } from 'lucide-react';
 import {
   CheckOutlined,
   CloseOutlined,
   DragOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import Link from 'next/link';
 import { BPMNWorkflowApi, type UserTask } from '@/lib/api/bpmn-workflow-api';
@@ -298,7 +299,7 @@ export default function ApprovalsCenterPage() {
           </div>
         </div>
         <Button
-          icon={<RotateCcw className={taskLoading ? 'animate-spin' : ''} />}
+          icon={<SyncOutlined aria-hidden="true" className={taskLoading ? 'animate-spin' : ''} />}
           onClick={handleRefresh}
           loading={taskLoading}
         >

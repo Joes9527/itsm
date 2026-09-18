@@ -4,8 +4,8 @@ import React, { useMemo } from 'react';
 import { Input, Select, Button, Space, Card, Row, Col } from 'antd';
 import { Search, Filter } from 'lucide-react';
 import {
+  ClearOutlined,
   DownloadOutlined,
-  SyncOutlined,
 } from '@ant-design/icons';
 import { debounce } from '../../lib/utils';
 interface FilterOption {
@@ -95,7 +95,7 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
         {/* 操作按钮 */}
         <Col xs={24} sm={24} md={24} lg={24 - filters.length * 6}>
           <Space size="middle" className="w-full justify-end">
-            <Button icon={<SyncOutlined aria-hidden="true" />} onClick={handleReset} loading={loading}>
+            <Button icon={<ClearOutlined aria-hidden="true" />} onClick={handleReset} loading={loading}>
               重置
             </Button>
             {showExport && (

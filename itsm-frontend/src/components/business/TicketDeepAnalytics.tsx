@@ -44,10 +44,11 @@ import {
   AreaChart,
   Area,
 } from 'recharts';
-import { Filter, Save, RotateCcw, CheckCircle, BarChart3, Table2 } from 'lucide-react';
+import { Filter, Save, CheckCircle, BarChart3, Table2 } from 'lucide-react';
 import {
   DownloadOutlined,
   SettingOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -365,7 +366,7 @@ export const TicketDeepAnalytics: React.FC<TicketDeepAnalyticsProps> = ({
                 </Button>
               </AntTooltip>
             )}
-            <Button icon={<RotateCcw />} onClick={loadAnalyticsData} loading={loading}>
+            <Button icon={<SyncOutlined aria-hidden="true" />} onClick={loadAnalyticsData} loading={loading}>
               刷新
             </Button>
           </Space>

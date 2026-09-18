@@ -3,11 +3,11 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, Row, Col, Button, Space, Breadcrumb } from 'antd';
-import { RotateCcw } from 'lucide-react';
 import {
   ArrowLeftOutlined,
   DownloadOutlined,
   PlusOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 
 // 企业级页面模板接口
@@ -60,7 +60,7 @@ export const PageContainer: React.FC<EnterprisePageTemplateProps> = ({
         新建
       </Button>
       <Button
-        icon={<RotateCcw />}
+        icon={<SyncOutlined aria-hidden="true" />}
         className="enterprise-btn enterprise-btn-ghost"
         onClick={() => window.location.reload()}
       >

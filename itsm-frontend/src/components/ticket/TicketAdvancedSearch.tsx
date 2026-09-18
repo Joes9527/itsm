@@ -18,8 +18,9 @@ import {
   Typography,
   message,
 } from 'antd';
-import { Search, Filter, RotateCcw } from 'lucide-react';
+import { Search, Filter } from 'lucide-react';
 import {
+  ClearOutlined,
   SaveOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
@@ -487,7 +488,7 @@ const TicketAdvancedSearch: React.FC<TicketAdvancedSearchProps> = ({
             <Button type="primary" icon={<SearchOutlined aria-hidden="true" />} htmlType="submit" loading={loading}>
               搜索
             </Button>
-            <Button icon={<RotateCcw />} onClick={handleReset}>
+            <Button icon={<ClearOutlined aria-hidden="true" />} onClick={handleReset}>
               重置
             </Button>
           </Space>

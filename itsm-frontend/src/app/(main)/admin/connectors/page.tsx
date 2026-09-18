@@ -5,12 +5,13 @@ import {
   Card, Table, Tag, Button, Space, Modal, Form, Input, Switch, Tabs, message, Drawer,
   Typography, Empty, Alert, Spin, Tooltip,
 } from 'antd';
-import { Settings, RotateCcw, CheckCircle, XCircle } from 'lucide-react';
+import { Settings, CheckCircle, XCircle } from 'lucide-react';
 import {
   ApiOutlined,
   PlusOutlined,
   PoweroffOutlined,
   SendOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import { PageContainer } from '@/app/components/PageContainer';
 import type {
@@ -249,7 +250,7 @@ export default function ConnectorsAdminPage() {
       }}
       extra={
         <Space>
-          <Button icon={<RotateCcw />} onClick={load} loading={loading}>刷新</Button>
+          <Button icon={<SyncOutlined aria-hidden="true" />} onClick={load} loading={loading}>刷新</Button>
         </Space>
       }
     >

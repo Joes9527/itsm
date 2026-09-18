@@ -17,7 +17,7 @@ import {
   Col,
   Divider,
 } from 'antd';
-import { RotateCcw, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import {
   CheckCircleOutlined,
   DeleteOutlined,
@@ -26,6 +26,7 @@ import {
   EyeOutlined,
   FilterOutlined,
   PlusOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType, TableProps, TablePaginationConfig } from 'antd/es/table';
 import dayjs from 'dayjs';
@@ -483,7 +484,7 @@ const TicketList: React.FC<TicketListProps> = ({
                 <Button icon={<FilterOutlined aria-hidden="true" />} onClick={() => setShowFilters(!showFilters)}>
                   过滤器
                 </Button>
-                <Button icon={<RotateCcw />} onClick={handleRefresh} loading={loading}>
+                <Button icon={<SyncOutlined aria-hidden="true" />} onClick={handleRefresh} loading={loading}>
                   刷新
                 </Button>
               </Space>

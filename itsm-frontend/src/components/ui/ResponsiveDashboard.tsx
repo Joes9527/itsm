@@ -2,12 +2,13 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Row, Col, Typography, Space, Button, Dropdown, Skeleton, Card } from 'antd';
-import { Settings, RotateCcw } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import {
   DownloadOutlined,
   FilterOutlined,
   FullscreenOutlined,
   SettingOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Responsive, WidthProvider } from 'react-grid-layout';
@@ -191,7 +192,7 @@ export const ResponsiveDashboard: React.FC<ResponsiveDashboardProps> = ({
           key="refresh"
           type="text"
           size="small"
-          icon={<RotateCcw />}
+          icon={<SyncOutlined aria-hidden="true" />}
           onClick={() => onWidgetRefresh(widget.id)}
           title="刷新"
         />
@@ -283,7 +284,7 @@ export const ResponsiveDashboard: React.FC<ResponsiveDashboardProps> = ({
           过滤
         </Button>
         <Button
-          icon={<RotateCcw />}
+          icon={<SyncOutlined aria-hidden="true" />}
           onClick={() => {
             /* 刷新所有 */
           }}

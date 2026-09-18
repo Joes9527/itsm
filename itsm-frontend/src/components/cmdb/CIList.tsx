@@ -19,12 +19,13 @@ import {
   Empty,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { Search, Eye, RotateCcw } from 'lucide-react';
+import { Search, Eye } from 'lucide-react';
 import {
   DeleteOutlined,
   DownloadOutlined,
   EditOutlined,
   PlusOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
@@ -378,7 +379,7 @@ const CIList: React.FC = () => {
             <Button type="primary" onClick={handleSearch}>
               查询
             </Button>
-            <Button icon={<RotateCcw />} onClick={loadData} loading={loading}>
+            <Button icon={<SyncOutlined aria-hidden="true" />} onClick={loadData} loading={loading}>
               刷新
             </Button>
           </Space>

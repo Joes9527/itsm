@@ -16,11 +16,12 @@ import {
   App,
   Tooltip,
 } from 'antd';
-import { RotateCcw, Link } from 'lucide-react';
+import { Link } from 'lucide-react';
 import {
   EyeOutlined,
   PlusOutlined,
   SearchOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 
@@ -337,7 +338,7 @@ export default function CloudResourcePage() {
                 查询
               </Button>
               <Button
-                icon={<RotateCcw />}
+                icon={<SyncOutlined aria-hidden="true" />}
                 onClick={() => loadResources(pagination.current, pagination.pageSize)}
                 loading={loading}
               >

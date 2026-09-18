@@ -12,10 +12,11 @@ import {
   Tag,
   Badge,
 } from 'antd';
-import { Search, Filter, RotateCcw } from 'lucide-react';
+import { Search, Filter } from 'lucide-react';
 import {
-  CloseOutlined,
+  ClearOutlined,
   SearchOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { TicketViewSelector } from './TicketViewSelector';
@@ -356,7 +357,7 @@ function TicketFilters({
                 )}
               </Button>
               <Button
-                icon={<CloseOutlined aria-hidden="true" />}
+                icon={<ClearOutlined aria-hidden="true" />}
                 onClick={handleReset}
                 data-testid="filter-reset-btn"
                 disabled={loading || activeFilters.length === 0}
@@ -365,7 +366,7 @@ function TicketFilters({
               </Button>
               {onRefresh && (
                 <Button
-                  icon={<RotateCcw />}
+                  icon={<SyncOutlined aria-hidden="true" />}
                   onClick={onRefresh}
                   loading={loading}
                   data-testid="filter-refresh-btn"
@@ -401,7 +402,7 @@ function TicketFilters({
                 <Button
                   type="link"
                   size="small"
-                  icon={<CloseOutlined aria-hidden="true" />}
+                  icon={<ClearOutlined aria-hidden="true" />}
                   onClick={handleReset}
                   className="p-0 h-auto"
                 >

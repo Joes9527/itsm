@@ -2,8 +2,10 @@
 
 import React, { useState } from 'react';
 import { Table, Button, Tag, Space, Card, App, Empty } from 'antd';
-import { RotateCcw } from 'lucide-react';
-import { PlusOutlined } from '@ant-design/icons';
+import {
+  PlusOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import type { ColumnsType } from 'antd/es/table';
 import { useI18n } from '@/lib/i18n';
@@ -138,7 +140,7 @@ const ImprovementListPage = () => {
             <p className="mt-1 text-[12px] text-muted">识别、规划和实施IT服务和流程的改进</p>
           </div>
           <Space>
-            <Button icon={<RotateCcw />} onClick={loadImprovements} loading={loading}>
+            <Button icon={<SyncOutlined aria-hidden="true" />} onClick={loadImprovements} loading={loading}>
               刷新
             </Button>
             <Button

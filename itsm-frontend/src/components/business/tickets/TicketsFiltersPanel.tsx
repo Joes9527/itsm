@@ -7,7 +7,7 @@ import React from 'react';
 import { Form, Select, DatePicker, Input, Button, Space, Card, Tag } from 'antd';
 import { Search, Filter } from 'lucide-react';
 import {
-  CloseOutlined,
+  ClearOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
 import type { TicketFilters } from '@/types/ticket';
@@ -218,7 +218,7 @@ export const TicketsFiltersPanel: React.FC<TicketsFiltersPanelProps> = ({
 
         {/* 操作按钮 */}
         <div className="flex justify-end space-x-2 mt-4">
-          <Button icon={<CloseOutlined aria-hidden="true" />} onClick={handleReset}>
+          <Button icon={<ClearOutlined aria-hidden="true" />} onClick={handleReset}>
             重置
           </Button>
           <Button type="primary" icon={<SearchOutlined aria-hidden="true" />} onClick={onSearch} loading={loading}>

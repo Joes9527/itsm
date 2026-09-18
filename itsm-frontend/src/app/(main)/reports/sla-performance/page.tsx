@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { SyncOutlined } from '@ant-design/icons';
 import {
   App,
   Button,
@@ -14,7 +15,7 @@ import {
   Statistic,
   Typography,
 } from 'antd';
-import { Clock, RotateCcw, CheckCircle, XCircle } from 'lucide-react';
+import { Clock, CheckCircle, XCircle } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -353,7 +354,7 @@ const SLAPerformanceReport = () => {
             <Text className="text-muted">SLA合规率监控</Text>
           </Col>
           <Col>
-            <Button icon={<RotateCcw />} onClick={loadData} loading={loading}>
+            <Button icon={<SyncOutlined aria-hidden="true" />} onClick={loadData} loading={loading}>
               刷新数据
             </Button>
           </Col>

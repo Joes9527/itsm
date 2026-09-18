@@ -19,12 +19,13 @@ import {
   Col,
   Switch,
 } from 'antd';
-import { Pencil, Trash2, UserIcon, Lock, Unlock, Eye, RotateCcw, Mail, Phone, AlertCircle } from 'lucide-react';
+import { Pencil, Trash2, UserIcon, Lock, Unlock, Eye, Mail, Phone, AlertCircle } from 'lucide-react';
 import {
   DownloadOutlined,
   FilterOutlined,
   MoreOutlined,
   PlusOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType, TableProps } from 'antd/es/table';
 import type { MenuProps } from 'antd';
@@ -507,7 +508,7 @@ const UserList: React.FC<UserListProps> = ({
                 <Button icon={<FilterOutlined aria-hidden="true" />} onClick={() => setShowFilters(!showFilters)}>
                   筛选
                 </Button>
-                <Button icon={<RotateCcw />} onClick={() => fetchUsers()}>
+                <Button icon={<SyncOutlined aria-hidden="true" />} onClick={() => fetchUsers()}>
                   刷新
                 </Button>
               </Space>

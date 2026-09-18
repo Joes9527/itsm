@@ -25,10 +25,11 @@ import {
   Statistic,
   Tooltip,
 } from 'antd';
-import { FileText, Clock, RotateCcw, Link, AlertTriangle, CheckCircle, BarChart3 } from 'lucide-react';
+import { FileText, Clock, Link, AlertTriangle, CheckCircle, BarChart3 } from 'lucide-react';
 import {
   DownloadOutlined,
   SearchOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -264,7 +265,7 @@ export const TicketRootCauseAnalysis: React.FC<TicketRootCauseAnalysisProps> = (
                 导出报告
               </Button>
             </Tooltip>
-            <Button icon={<RotateCcw />} onClick={performAnalysis} loading={analyzing}>
+            <Button icon={<SyncOutlined aria-hidden="true" />} onClick={performAnalysis} loading={analyzing}>
               刷新
             </Button>
           </Space>

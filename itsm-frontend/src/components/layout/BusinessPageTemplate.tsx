@@ -22,6 +22,7 @@ import {
   DownloadOutlined,
   EllipsisOutlined,
   FilterOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useDebounce } from '@/lib/component-utils';
@@ -415,7 +416,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
               )}
 
               {/* 刷新按钮 */}
-              <Button icon={<RotateCcw />} onClick={() => window.location.reload()}>
+              <Button icon={<SyncOutlined aria-hidden="true" />} onClick={() => window.location.reload()}>
                 刷新
               </Button>
 

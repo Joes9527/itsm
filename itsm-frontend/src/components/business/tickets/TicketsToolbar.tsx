@@ -5,11 +5,12 @@
 
 import React from 'react';
 import { Button, Space, Dropdown, Tooltip } from 'antd';
-import { Trash2, RotateCcw } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import {
   DownloadOutlined,
   MoreOutlined,
   PlusOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 
@@ -106,7 +107,7 @@ export const TicketsToolbar: React.FC<TicketsToolbarProps> = ({
         {/* 刷新按钮 */}
         <Tooltip title="刷新数据">
           <Button
-            icon={<RotateCcw className={loading ? 'animate-spin' : ''} />}
+            icon={<SyncOutlined aria-hidden="true" className={loading ? 'animate-spin' : ''} />}
             onClick={onRefresh}
             loading={loading}
             data-testid="refresh-button"

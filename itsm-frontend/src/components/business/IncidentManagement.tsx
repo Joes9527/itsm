@@ -38,12 +38,13 @@ import {
   Progress,
   Empty,
 } from 'antd';
-import { Search, Filter, Plus, Pencil, Trash2, User, Settings, Calendar, Clock, RotateCcw, Bell, Link, Info, AlertTriangle, AlertCircle, CheckCircle, XCircle, BarChart3 } from 'lucide-react';
+import { Search, Filter, Plus, Pencil, Trash2, User, Settings, Calendar, Clock, Bell, Link, Info, AlertTriangle, AlertCircle, CheckCircle, XCircle, BarChart3 } from 'lucide-react';
 import {
   BarChartOutlined,
   EditOutlined,
   EyeOutlined,
   PlusOutlined,
+  SyncOutlined,
   UserAddOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -437,7 +438,7 @@ export const IncidentManagement: React.FC = () => {
             />
           </Col>
           <Col span={2}>
-            <Button aria-label="刷新" icon={<RotateCcw />} onClick={fetchIncidents} loading={loading} />
+            <Button aria-label="刷新" icon={<SyncOutlined aria-hidden="true" />} onClick={fetchIncidents} loading={loading} />
           </Col>
         </Row>
       </Card>
@@ -555,7 +556,7 @@ const IncidentDetailDrawer: React.FC<{
       extra={
         <Space>
           <Button icon={<EditOutlined aria-hidden="true" />}>编辑</Button>
-          <Button icon={<RotateCcw />} onClick={fetchIncidentDetails}>
+          <Button icon={<SyncOutlined aria-hidden="true" />} onClick={fetchIncidentDetails}>
             刷新
           </Button>
         </Space>
@@ -1209,7 +1210,7 @@ const IncidentMonitoringPanel: React.FC<{
       open={visible}
       onClose={onClose}
       extra={
-        <Button icon={<RotateCcw />} onClick={fetchMonitoringData} loading={loading}>
+        <Button icon={<SyncOutlined aria-hidden="true" />} onClick={fetchMonitoringData} loading={loading}>
           刷新
         </Button>
       }

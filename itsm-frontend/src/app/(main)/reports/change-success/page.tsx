@@ -15,7 +15,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { RotateCcw } from 'lucide-react';
+import { SyncOutlined } from '@ant-design/icons';
 import { ChangeApi } from '@/lib/api/change-api';
 
 const { Title, Text } = Typography;
@@ -127,7 +127,7 @@ const ChangeSuccessReport = () => {
             <Text className="text-muted">变更执行情况监控</Text>
           </Col>
           <Col>
-            <Button icon={<RotateCcw />} onClick={loadData}>
+            <Button icon={<SyncOutlined aria-hidden="true" />} onClick={loadData}>
               刷新数据
             </Button>
           </Col>

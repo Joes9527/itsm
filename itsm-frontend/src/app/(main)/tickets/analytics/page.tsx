@@ -34,8 +34,11 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { RotateCcw, TrendingUp, TrendingDown } from 'lucide-react';
-import { FileExcelOutlined } from '@ant-design/icons';
+import { TrendingUp, TrendingDown } from 'lucide-react';
+import {
+  FileExcelOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 import type { TicketAnalyticsResponse } from '@/lib/services/analytics-service';
@@ -241,7 +244,7 @@ const TicketAnalytics: React.FC = () => {
               format="YYYY-MM-DD"
               allowClear={false}
             />
-            <Button icon={<RotateCcw />} onClick={fetchData} loading={loading}>
+            <Button icon={<SyncOutlined aria-hidden="true" />} onClick={fetchData} loading={loading}>
               刷新数据
             </Button>
             <Button

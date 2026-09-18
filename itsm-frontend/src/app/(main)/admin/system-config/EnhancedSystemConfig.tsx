@@ -7,8 +7,8 @@
 
 import { Mail, Network, Globe, Database, MemoryStick, Settings, Shield, Clock, Cpu, Bell, FileText, Lock, Monitor, Smartphone, Cloud, Server, Database as DatabaseIcon, Key, UserCheck, Webhook, Slack } from 'lucide-react';
 import {
+  ClearOutlined,
   SaveOutlined,
-  SyncOutlined,
 } from '@ant-design/icons';
 
 import React, { useState, useEffect } from 'react';
@@ -921,7 +921,7 @@ export default function EnhancedSystemConfiguration() {
               配置管理
             </Title>
             <Space>
-              <Button icon={<SyncOutlined aria-hidden="true" />} onClick={handleReset}>
+              <Button icon={<ClearOutlined aria-hidden="true" />} onClick={handleReset}>
                 重置
               </Button>
               <Button

@@ -18,11 +18,12 @@ import {
   message,
   Switch,
 } from 'antd';
-import { Search, RotateCcw } from 'lucide-react';
+import { Search } from 'lucide-react';
 import {
   DeleteOutlined,
   EditOutlined,
   PlusOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 
 import { CMDBApi } from '@/lib/api/cmdb-api';
@@ -297,7 +298,7 @@ export default function CloudAccountPage() {
           options={providerOptions}
         />
         <Space>
-          <Button icon={<RotateCcw />} onClick={loadData} loading={loading}>
+          <Button icon={<SyncOutlined aria-hidden="true" />} onClick={loadData} loading={loading}>
             刷新
           </Button>
           <Button type='primary' icon={<PlusOutlined aria-hidden="true" />} onClick={() => setCreateOpen(true)}>
