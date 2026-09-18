@@ -15,7 +15,7 @@ import (
 //
 // managerID == 0 表示"上级暂缺"，是合法状态：审批会沿**组织的轴**向上找，
 // 最终落到兜底组，不因上级为空而阻塞提单。
-func validateUserManager(ctx context.Context, client *ent.Client, tenantID, userID, managerID int) error {
+func ValidateUserManager(ctx context.Context, client *ent.Client, tenantID, userID, managerID int) error {
 	if managerID == 0 {
 		return nil
 	}

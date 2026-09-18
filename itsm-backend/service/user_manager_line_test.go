@@ -45,7 +45,7 @@ func TestValidateUserManagerAllowsAnAbsentManager(t *testing.T) {
 	f := newManagerLineFixture(t, "file:mgr_absent?mode=memory&cache=shared&_fk=1")
 	staff := f.user("D20002", f.homeTenant, true)
 
-	require.NoError(t, validateUserManager(f.ctx, f.client, f.homeTenant, staff.ID, 0),
+	require.NoError(t, ValidateUserManager(f.ctx, f.client, f.homeTenant, staff.ID, 0),
 		"上级暂缺是合法状态：提单/审批不得因此失败")
 }
 
@@ -53,7 +53,7 @@ func TestValidateUserManagerRejectsSelfReference(t *testing.T) {
 	f := newManagerLineFixture(t, "file:mgr_self?mode=memory&cache=shared&_fk=1")
 	staff := f.user("D20002", f.homeTenant, true)
 
-	require.Error(t, validateUserManager(f.ctx, f.client, f.homeTenant, staff.ID, staff.ID),
+	require.Error(t, ValidateUserManager(f.ctx, f.client, f.homeTenant, staff.ID, staff.ID),
 		"不能把自己设为上级")
 }
 
@@ -63,11 +63,11 @@ func TestValidateUserManagerRejectsCrossTenantAndInactive(t *testing.T) {
 	outsider := f.user("D20003", f.otherTenn, true)
 	inactive := f.user("D20004", f.homeTenant, false)
 
-	require.Error(t, validateUserManager(f.ctx, f.client, f.homeTenant, staff.ID, outsider.ID),
+	require.Error(t, ValidateUserManager(f.ctx, f.client, f.homeTenant, staff.ID, outsider.ID),
 		"跨租户上级必须 fail-closed")
-	require.Error(t, validateUserManager(f.ctx, f.client, f.homeTenant, staff.ID, inactive.ID),
+	require.Error(t, ValidateUserManager(f.ctx, f.client, f.homeTenant, staff.ID, inactive.ID),
 		"非在职不能当上级")
-	require.Error(t, validateUserManager(f.ctx, f.client, f.homeTenant, staff.ID, 999999),
+	require.Error(t, ValidateUserManager(f.ctx, f.client, f.homeTenant, staff.ID, 999999),
 		"不存在的上级必须 fail-closed")
 }
 
@@ -76,10 +76,10 @@ func TestValidateUserManagerRejectsCycles(t *testing.T) {
 	boss := f.user("D20001", f.homeTenant, true)
 	staff := f.user("D20002", f.homeTenant, true)
 
-	require.NoError(t, validateUserManager(f.ctx, f.client, f.homeTenant, staff.ID, boss.ID))
+	require.NoError(t, ValidateUserManager(f.ctx, f.client, f.homeTenant, staff.ID, boss.ID))
 	f.client.User.UpdateOneID(staff.ID).SetManagerID(boss.ID).SaveX(f.ctx)
 
-	require.Error(t, validateUserManager(f.ctx, f.client, f.homeTenant, boss.ID, staff.ID),
+	require.Error(t, ValidateUserManager(f.ctx, f.client, f.homeTenant, boss.ID, staff.ID),
 		"不能造出 A→B→A")
 }
 
@@ -92,6 +92,6 @@ func TestValidateUserManagerToleratesAPreExistingCycleFurtherUp(t *testing.T) {
 
 	f.client.User.UpdateOneID(boss.ID).SetManagerID(boss.ID).SaveX(f.ctx) // boss 自己是自己的上级
 
-	require.NoError(t, validateUserManager(f.ctx, f.client, f.homeTenant, staff.ID, boss.ID),
+	require.NoError(t, ValidateUserManager(f.ctx, f.client, f.homeTenant, staff.ID, boss.ID),
 		"上溯撞到既有脏环应停下，而不是死循环或误报")
 }

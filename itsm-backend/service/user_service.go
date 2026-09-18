@@ -87,7 +87,7 @@ func (s *UserService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 	}
 	if req.ManagerID > 0 {
 		// 新用户此时还没有 ID，自引用不可能成立；同租户/在职/成环仍必须校验。
-		if err := validateUserManager(ctx, s.client, tenantID, 0, req.ManagerID); err != nil {
+		if err := ValidateUserManager(ctx, s.client, tenantID, 0, req.ManagerID); err != nil {
 			return nil, err
 		}
 		uc = uc.SetManagerID(req.ManagerID)
@@ -333,7 +333,7 @@ func (s *UserService) UpdateUser(ctx context.Context, id int, req *dto.UpdateUse
 	}
 	if req.ManagerID != nil {
 		// 汇报线的唯一写入点：不得自引用、不得跨租户、上级须在职、不得成环。
-		if err := validateUserManager(ctx, s.client, tenantID, id, *req.ManagerID); err != nil {
+		if err := ValidateUserManager(ctx, s.client, tenantID, id, *req.ManagerID); err != nil {
 			return nil, err
 		}
 		update = update.SetManagerID(*req.ManagerID)
