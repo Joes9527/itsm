@@ -22,12 +22,14 @@ func TestGenericStartPublicReplayCannotReuseTrustedInputs(t *testing.T) {
 	require.ErrorContains(t, err, "approval_required")
 	require.Equal(t, 1, f.client.ProcessInstance.Query().CountX(context.Background()))
 }
+
 func TestGenericStartRejectsChangedDefinitionConfig(t *testing.T) {
 	f, event := genericStartFixture(t, nil)
 	f.definition.Update().SetProcessVariables(map[string]interface{}{"approval_required": true, "need_escalate": false}).SaveX(context.Background())
 	require.ErrorContains(t, NewWorkflowStartOutboxHandler(f.client, f.engine, f.client).Deliver(context.Background(), event), "approval_required")
 	require.Zero(t, f.client.ProcessInstance.Query().CountX(context.Background()))
 }
+
 func TestGenericBindingUpdateRejectsOverrideAndTargetChange(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	service := NewProcessBindingService(f.client)
@@ -43,6 +45,7 @@ func TestGenericBindingUpdateRejectsOverrideAndTargetChange(t *testing.T) {
 		require.ErrorContains(t, err, key)
 	}
 }
+
 func TestLegacyStartAndBindingKeepVariableCompatibility(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	vars := map[string]interface{}{"approval_required": "legacy", "need_escalate": nil, "approvalResult": "approved", "workItemCompletionNote": "legacy"}

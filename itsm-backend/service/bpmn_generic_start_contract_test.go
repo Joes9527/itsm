@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/require"
-	"itsm-backend/ent"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"itsm-backend/ent"
 )
 
 func genericStartXML() []byte {
@@ -32,6 +33,7 @@ func genericStartFixture(t *testing.T, flags map[string]interface{}) (*bpmnAutho
 	replaceGenericSnapshot(t, f, FreezeProcessDefinition(f.definition).Digest, frozen, "generic")
 	return f, event
 }
+
 func TestGenericStartRejectsPublicEnrollmentAndInputs(t *testing.T) {
 	for _, key := range []string{"", "approval_required", "need_escalate", "approvalResult", "workItemCompletionNote"} {
 		t.Run(key, func(t *testing.T) {
@@ -55,6 +57,7 @@ func TestGenericStartRejectsPublicEnrollmentAndInputs(t *testing.T) {
 		})
 	}
 }
+
 func TestGenericStartTrustedSnapshotPinsFlagsAndVersion(t *testing.T) {
 	for _, flags := range []map[string]interface{}{nil, {"approval_required": true, "need_escalate": true}} {
 		t.Run(fmt.Sprint(flags), func(t *testing.T) {
@@ -72,6 +75,7 @@ func TestGenericStartTrustedSnapshotPinsFlagsAndVersion(t *testing.T) {
 		})
 	}
 }
+
 func TestGenericStartRejectsSnapshotMismatch(t *testing.T) {
 	for _, mutation := range []string{"digest", "variables", "flags", "missing", "class"} {
 		t.Run(mutation, func(t *testing.T) {

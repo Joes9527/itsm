@@ -3,10 +3,11 @@ package service
 import (
 	"crypto/sha256"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestGenericV2Template(t *testing.T) {

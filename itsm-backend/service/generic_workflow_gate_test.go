@@ -2,12 +2,13 @@ package service
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
-	"itsm-backend/ent"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+	"itsm-backend/ent"
 )
 
 func TestGenericWorkflowPrerequisite(t *testing.T) {
@@ -42,6 +43,7 @@ func TestGenericWorkflowPrerequisite(t *testing.T) {
 		})
 	}
 }
+
 func TestGenericWorkflowTransitions(t *testing.T) {
 	base := genericWorkflowFacts{Running: true, Waiting: WorkItemPrerequisiteInProgress}
 	require.NoError(t, evaluateGenericWorkflowTransition(base, GenericFulfillmentConfig{}, "in_progress"))
@@ -77,6 +79,7 @@ func seedGenericGate(t *testing.T, pre, status string) (*bpmnAuthorizationFixtur
 	task = f.client.ProcessTask.UpdateOne(task).SetTaskDefinitionKey("work").SaveX(f.userCtx)
 	return f, item, task
 }
+
 func TestGenericWorkflowReceiptRequiresCurrentStageSuccessfulTransition(t *testing.T) {
 	f, item, task := seedGenericGate(t, "resolved", "resolved")
 	item = f.client.Ticket.UpdateOne(item).SetResolution("verified repair").SaveX(f.userCtx)
@@ -99,6 +102,7 @@ func TestGenericWorkflowReceiptRequiresCurrentStageSuccessfulTransition(t *testi
 	_, err = loadGenericWorkflowGate(otherCtx, f.client, item.TenantID+1, item.ID, false)
 	require.Error(t, err)
 }
+
 func TestGenericWorkflowReadOnlyGateRequiresProspectiveNote(t *testing.T) {
 	f, _, task := seedGenericGate(t, "in_progress", "in_progress")
 	before := f.client.ProcessTask.GetX(f.userCtx, task.ID)
@@ -110,6 +114,7 @@ func TestGenericWorkflowReadOnlyGateRequiresProspectiveNote(t *testing.T) {
 	require.Equal(t, before.AggregationVersion, after.AggregationVersion)
 	require.Equal(t, before.TaskVariables, after.TaskVariables)
 }
+
 func TestGenericWorkflowLegacyGuardIncludesStoppedHistory(t *testing.T) {
 	f, item, task := seedGenericGate(t, "assigned", "open")
 	f.client.ProcessInstance.UpdateOneID(task.ProcessInstanceID).SetStatus("terminated").SaveX(f.userCtx)

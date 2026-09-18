@@ -3,14 +3,16 @@ package service
 import (
 	"context"
 	"fmt"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/ent"
-	"testing"
 )
 
 func lifecycleMetadata(name, value string) string {
 	return fmt.Sprintf("<metaData name=%q>%s</metaData>", name, value)
 }
+
 func lifecycleXML(contract, prerequisite, attrs, extra string) []byte {
 	return []byte(`<definitions><process id="contract" isExecutable="true"><extensionElements>` + contract + `</extensionElements><startEvent id="start"/><userTask id="work" ` + attrs + `><extensionElements>` + prerequisite + extra + `</extensionElements></userTask><endEvent id="end"/><sequenceFlow id="first" sourceRef="start" targetRef="work"/><sequenceFlow id="last" sourceRef="work" targetRef="end"/></process></definitions>`)
 }
@@ -56,6 +58,7 @@ func TestWorkItemLifecycleXMLDeclarationValidation(t *testing.T) {
 		})
 	}
 }
+
 func TestWorkItemLifecyclePublicationFlags(t *testing.T) {
 	contract := lifecycleMetadata("workItemLifecycleContract", "generic_fulfillment_v1")
 	for _, key := range []string{"approval_required", "need_escalate"} {

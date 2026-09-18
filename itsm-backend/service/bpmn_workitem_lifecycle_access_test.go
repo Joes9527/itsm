@@ -1,9 +1,10 @@
 package service
 
 import (
-	"github.com/stretchr/testify/require"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestWorkItemLifecycleTypedAccess(t *testing.T) {
@@ -36,6 +37,7 @@ func TestWorkItemLifecycleTypedAccess(t *testing.T) {
 	require.Nil(t, flags)
 	require.NoError(t, ValidateWorkItemLifecycleRecordClass(parsed, "incident"))
 }
+
 func TestWorkItemLifecycleMetadataPlacement(t *testing.T) {
 	contract := lifecycleMetadata("workItemLifecycleContract", "generic_fulfillment_v1")
 	prereq := lifecycleMetadata("workItemPrerequisite", "assigned")
@@ -51,6 +53,7 @@ func TestWorkItemLifecycleMetadataPlacement(t *testing.T) {
 		t.Run(name, func(t *testing.T) { _, err := NewBPMNParser().ParseXML([]byte(xml)); require.Error(t, err) })
 	}
 }
+
 func TestWorkItemLifecycleContractRejectsUnsupportedExecution(t *testing.T) {
 	contract := lifecycleMetadata("workItemLifecycleContract", "generic_fulfillment_v1")
 	for _, node := range []string{
@@ -68,6 +71,7 @@ func TestWorkItemLifecycleContractRejectsUnsupportedExecution(t *testing.T) {
 	_, err := NewBPMNParser().ParseXML(lifecycleXML(contract, "", lifecycleOwnerAttrs, lifecycleMetadata("action", "resolve")))
 	require.Error(t, err)
 }
+
 func TestWorkItemLifecycleRejectsMultipleProcesses(t *testing.T) {
 	contract := lifecycleMetadata("workItemLifecycleContract", "generic_fulfillment_v1")
 	contracted := strings.TrimSuffix(strings.TrimPrefix(string(lifecycleXML(contract, "", lifecycleOwnerAttrs, "")), "<definitions>"), "</definitions>")

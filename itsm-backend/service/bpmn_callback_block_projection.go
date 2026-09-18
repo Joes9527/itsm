@@ -62,8 +62,10 @@ func loadTaskCallbackBlocks(ctx context.Context, client *ent.Client, tasks []*en
 	return result, nil
 }
 
-const genericCallbackBlockCode = "required_callback_blocked"
-const genericCallbackBlockReason = "必要流程操作已阻塞，请联系管理员处理。"
+const (
+	genericCallbackBlockCode   = "required_callback_blocked"
+	genericCallbackBlockReason = "必要流程操作已阻塞，请联系管理员处理。"
+)
 
 var callbackBlockReasons = map[bpmn.CallbackBlockCode]string{
 	bpmn.CallbackBlockHandlerContract:     "流程操作所需参数缺失或无效，请联系管理员核验任务配置。",

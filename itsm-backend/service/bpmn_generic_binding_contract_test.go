@@ -2,10 +2,11 @@ package service
 
 import (
 	"context"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	"testing"
 )
 
 func TestGenericCreationBindingFreezesDefinitionFlags(t *testing.T) {
@@ -21,6 +22,7 @@ func TestGenericCreationBindingFreezesDefinitionFlags(t *testing.T) {
 	require.Equal(t, true, plan.WorkflowVariables["approval_required"])
 	require.Equal(t, true, plan.WorkflowVariables["need_escalate"])
 }
+
 func TestGenericCreationBindingRejectsClassAndUserFlags(t *testing.T) {
 	for _, test := range []struct{ name, class, key string }{{"professional", "incident", ""}, {"flag", "generic", "approval_required"}, {"escalate", "generic", "need_escalate"}, {"approval", "generic", "approvalResult"}, {"note", "generic", "workItemCompletionNote"}} {
 		t.Run(test.name, func(t *testing.T) {
@@ -38,6 +40,7 @@ func TestGenericCreationBindingRejectsClassAndUserFlags(t *testing.T) {
 		})
 	}
 }
+
 func TestGenericPublicBindingAdmission(t *testing.T) {
 	for _, class := range []string{"incident", "problem", "change_request", "service_request_item", "catalog_task", "release"} {
 		t.Run(class, func(t *testing.T) {

@@ -19,8 +19,11 @@ const (
 	WorkItemPrerequisiteResolved   WorkItemPrerequisite = "resolved"
 	WorkItemPrerequisiteClosed     WorkItemPrerequisite = "closed"
 )
-const lifecycleContractMetadata = "workItemLifecycleContract"
-const lifecyclePrerequisiteMetadata = "workItemPrerequisite"
+
+const (
+	lifecycleContractMetadata     = "workItemLifecycleContract"
+	lifecyclePrerequisiteMetadata = "workItemPrerequisite"
+)
 
 // strictLifecycleMetadata preserves absence and rejects ambiguous declarations.
 func strictLifecycleMetadata(ext *BPMNExtensionElements, key string) (string, bool, error) {
@@ -60,6 +63,7 @@ func (p *BPMNProcess) WorkItemLifecycleContract() (WorkItemLifecycleContract, er
 	}
 	return GenericFulfillmentV1, nil
 }
+
 func (t *BPMNUserTask) WorkItemPrerequisite() (WorkItemPrerequisite, error) {
 	if t == nil {
 		return "", fmt.Errorf("task is required")
@@ -78,6 +82,7 @@ func (t *BPMNUserTask) WorkItemPrerequisite() (WorkItemPrerequisite, error) {
 		return "", fmt.Errorf("unsupported %s %q", lifecyclePrerequisiteMetadata, value)
 	}
 }
+
 func hasLifecycleMetadata(ext *BPMNExtensionElements, key string) bool {
 	if ext != nil {
 		for _, m := range ext.MetaData {
@@ -88,6 +93,7 @@ func hasLifecycleMetadata(ext *BPMNExtensionElements, key string) bool {
 	}
 	return false
 }
+
 func validateWorkItemLifecycleProcess(p *BPMNProcess) error {
 	contract, err := p.WorkItemLifecycleContract()
 	if err != nil {
@@ -146,6 +152,7 @@ func ReadGenericFulfillmentConfig(definitions *BPMNDefinitions, variables map[st
 	}
 	return result, nil
 }
+
 func hasGenericFulfillmentContract(definitions *BPMNDefinitions) (bool, error) {
 	if definitions == nil || len(definitions.Processes) == 0 {
 		return false, fmt.Errorf("process definitions are required")

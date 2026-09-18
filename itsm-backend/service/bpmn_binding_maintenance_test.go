@@ -2,9 +2,10 @@ package service
 
 import (
 	"context"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
-	"testing"
 )
 
 func TestBindingMaintenanceAllowsInactiveDefinition(t *testing.T) {
@@ -37,6 +38,7 @@ func TestBindingMaintenanceAllowsInactiveDefinition(t *testing.T) {
 		})
 	}
 }
+
 func TestBindingTargetChangeStillRequiresExecutableDefinition(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	service := NewProcessBindingService(f.client)
