@@ -3,6 +3,27 @@ import { createWorkItem, type CreationRequestOptions, type CreateWorkItemResult 
 import { httpClient } from './http-client';
 import { handleApiRequest } from './base-api-handler';
 import type { Ticket, TicketListResponse, CreateTicketRequest, GetTicketsParams } from './api-config';
+import type { TicketPriority, TicketStatus } from '@/types/ticket';
+
+// TicketEditPayload 与后端 dto.TicketEditFields 一一对应：分类只接受最深节点 ID
+// （categoryId），不包含已退役的按显示名称解析字段（category）。编辑边界会拒绝未知字段，
+// 因此这里只声明契约内的键——多写的键在运行期会直接失败关闭，而不是被静默忽略。
+export interface TicketEditPayload {
+  title?: string;
+  description?: string;
+  priority?: TicketPriority;
+  status?: TicketStatus;
+  type?: string;
+  categoryId?: number;
+  classificationReason?: string;
+  assigneeId?: number;
+  requesterId?: number;
+  tags?: string[];
+  resolution?: string;
+  formFields?: Record<string, unknown>;
+  version: number;
+  operationId: string;
+}
 
 export class TicketApi {
   // Get ticket list
@@ -41,10 +62,7 @@ export class TicketApi {
   }
 
   // Update ticket information
-  static async updateTicket(
-    id: number,
-    data: Partial<Ticket> & { version: number; operationId: string }
-  ): Promise<TicketEditResult> {
+  static async updateTicket(id: number, data: TicketEditPayload): Promise<TicketEditResult> {
     ticketEditVersion(data.version);
     ticketEditOperation(data.operationId);
     return handleApiRequest(httpClient.put<TicketEditResult>(`/api/v1/tickets/${id}`, data), {

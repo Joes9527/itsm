@@ -1,8 +1,10 @@
 package controller
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -22,6 +24,7 @@ import (
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	"go.uber.org/zap"
 )
 
@@ -82,6 +85,23 @@ func (tc *TicketController) CreateTicket(c *gin.Context) {
 	tc.createFromRequest(c, req)
 }
 
+// bindStrictTicketEditJSON 绑定工单编辑载荷并拒绝未知字段。
+//
+// 仓库既有边界（intake / change / service catalog）同样使用 DisallowUnknownFields：
+// 已退役或拼错的字段必须显式报错，不能被静默忽略 —— 否则调用方会误以为分类等字段已生效。
+func bindStrictTicketEditJSON(c *gin.Context, target any) error {
+	raw, err := c.GetRawData()
+	if err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err = decoder.Decode(target); err != nil {
+		return err
+	}
+	return binding.Validator.ValidateStruct(target)
+}
+
 // UpdateTicket 更新工单
 func (tc *TicketController) UpdateTicket(c *gin.Context) {
 	ticketID, err := strconv.Atoi(c.Param("id"))
@@ -91,7 +111,7 @@ func (tc *TicketController) UpdateTicket(c *gin.Context) {
 	}
 
 	var req dto.UpdateTicketRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := bindStrictTicketEditJSON(c, &req); err != nil {
 		common.Fail(c, common.ParamErrorCode, "请求参数错误: "+err.Error())
 		return
 	}
@@ -934,7 +954,7 @@ func (tc *TicketController) UpdateSubtask(c *gin.Context) {
 	}
 
 	var req dto.UpdateTicketRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := bindStrictTicketEditJSON(c, &req); err != nil {
 		common.Fail(c, common.ParamErrorCode, "请求参数错误: "+err.Error())
 		return
 	}

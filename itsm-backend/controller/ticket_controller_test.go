@@ -654,7 +654,7 @@ func TestTicketController_UpdateTicketRechecksInactiveActor(t *testing.T) {
 	for _, endpoint := range []struct{ method, url string }{{http.MethodPut, fmt.Sprintf("/api/v1/tickets/%d", child.ID)}, {http.MethodPatch, fmt.Sprintf("/api/v1/tickets/%d/subtasks/%d", parent.ID, child.ID)}} {
 		before, err := json.Marshal(client.Ticket.GetX(ctx, child.ID))
 		require.NoError(t, err)
-		body := fmt.Sprintf(`{"title":"must reject actor","userId":%d,"operationId":"actor-test","version":%d,"tags":["unauthorized"]}`, impersonated.ID, child.Version)
+		body := fmt.Sprintf(`{"title":"must reject actor","operationId":"actor-test","version":%d,"tags":["unauthorized"]}`, child.Version)
 		request := httptest.NewRequest(endpoint.method, endpoint.url, strings.NewReader(body))
 		request.Header.Set("Content-Type", "application/json")
 		request.Header.Set("X-Test-Tenant", strconv.Itoa(tenant.ID))
@@ -666,6 +666,14 @@ func TestTicketController_UpdateTicketRechecksInactiveActor(t *testing.T) {
 		require.JSONEq(t, string(before), string(after))
 		require.Zero(t, client.TicketTag.Query().CountX(ctx))
 	}
+	// 载荷不得注入操作者身份：未知字段（userId）现在被显式拒绝，而不是静默忽略。
+	injected := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/v1/tickets/%d", child.ID), strings.NewReader(fmt.Sprintf(`{"title":"must reject actor","userId":%d,"operationId":"actor-inject","version":%d}`, impersonated.ID, child.Version)))
+	injected.Header.Set("Content-Type", "application/json")
+	injected.Header.Set("X-Test-Tenant", strconv.Itoa(tenant.ID))
+	injected.Header.Set("X-Test-User", strconv.Itoa(actor.ID))
+	injectedResponse, _ := doJSONRequest(t, r, injected)
+	require.Equal(t, common.ParamErrorCode, injectedResponse.Code, injectedResponse.Message)
+	require.Contains(t, injectedResponse.Message, "userId")
 	var bound dto.UpdateTicketRequest
 	require.NoError(t, json.Unmarshal([]byte(`{"userId":123,"title":"input"}`), &bound))
 	encoded, err := json.Marshal(bound)
@@ -685,7 +693,7 @@ func TestTicketController_UpdateSubtaskChecksParentInTransaction(t *testing.T) {
 	for _, parentID := range []int{parent.ID + 10000, 0, -1} {
 		before, err := json.Marshal(client.Ticket.GetX(ctx, child.ID))
 		require.NoError(t, err)
-		body := fmt.Sprintf(`{"title":"wrong route","expectedParentId":%d,"operationId":"route-test","version":%d,"tags":["wrong-route"]}`, parent.ID, child.Version)
+		body := fmt.Sprintf(`{"title":"wrong route","operationId":"route-test","version":%d,"tags":["wrong-route"]}`, child.Version)
 		req := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/v1/tickets/%d/subtasks/%d", parentID, child.ID), strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Test-Tenant", strconv.Itoa(tenant.ID))
@@ -697,7 +705,7 @@ func TestTicketController_UpdateSubtaskChecksParentInTransaction(t *testing.T) {
 		require.JSONEq(t, string(before), string(after))
 		require.Zero(t, client.TicketTag.Query().CountX(ctx))
 	}
-	body := fmt.Sprintf(`{"title":"correct route","expectedParentId":-1,"operationId":"route-test","version":%d}`, child.Version)
+	body := fmt.Sprintf(`{"title":"correct route","operationId":"route-test","version":%d}`, child.Version)
 	req := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/v1/tickets/%d/subtasks/%d", parent.ID, child.ID), strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Test-Tenant", strconv.Itoa(tenant.ID))

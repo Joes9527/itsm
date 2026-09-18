@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"itsm-backend/common"
 	"itsm-backend/ent"
@@ -24,13 +25,22 @@ import (
 //
 // 逐条纠正的版本冲突、幂等回执与状态机仍由拥有者（专业命令/服务）负责。
 
+// CTICorrectionReasonMaxRunes 是分类纠正原因的长度上限（与 HTTP 绑定层 max=500 一致，
+// 以字符数计），在服务层再校验一次，覆盖工具/队列等非 HTTP 调用方。
+const CTICorrectionReasonMaxRunes = 500
+
 // RequireCTICorrectionReason 在分类确实发生变化时要求原因，避免“静默重分类”。
 func RequireCTICorrectionReason(reason string, changed bool) error {
 	if !changed {
 		return nil
 	}
-	if strings.TrimSpace(reason) == "" {
+	trimmed := strings.TrimSpace(reason)
+	if trimmed == "" {
 		return common.NewValidationError("classification correction reason is required", nil)
+	}
+	if utf8.RuneCountInString(trimmed) > CTICorrectionReasonMaxRunes {
+		return common.NewValidationError(
+			fmt.Sprintf("classification correction reason must be at most %d characters", CTICorrectionReasonMaxRunes), nil)
 	}
 	return nil
 }
