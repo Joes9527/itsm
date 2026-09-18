@@ -40,6 +40,32 @@ func BuildCallbackEnqueuePlan(
 	optionalDeclared bool,
 	registry *bpmn.CallbackRegistry,
 ) (CallbackEnqueuePlan, error) {
+	return buildCallbackEnqueuePlan(descriptor, rawPayload, optionalDeclared, registry, false)
+}
+
+// BuildCallbackEnqueuePlanForActorCompletion is the task-completion variant. The
+// actor supplies these values interactively, so an action that declares
+// RejectInvalidUserInput reports a fixable input error as a real error. The
+// completion command then fails before it writes the task or persists a callback
+// that could never succeed. Frozen payloads (workflow start, service-task
+// auto-dispatch, claimed callbacks) keep using BuildCallbackEnqueuePlan so they
+// retain the existing visible blocked plan instead of a retried failure.
+func BuildCallbackEnqueuePlanForActorCompletion(
+	descriptor CallbackDescriptor,
+	rawPayload map[string]interface{},
+	optionalDeclared bool,
+	registry *bpmn.CallbackRegistry,
+) (CallbackEnqueuePlan, error) {
+	return buildCallbackEnqueuePlan(descriptor, rawPayload, optionalDeclared, registry, true)
+}
+
+func buildCallbackEnqueuePlan(
+	descriptor CallbackDescriptor,
+	rawPayload map[string]interface{},
+	optionalDeclared bool,
+	registry *bpmn.CallbackRegistry,
+	rejectActorInputErrors bool,
+) (CallbackEnqueuePlan, error) {
 	plan := CallbackEnqueuePlan{
 		HandlerID:        strings.TrimSpace(descriptor.HandlerID),
 		TaskType:         strings.TrimSpace(descriptor.TaskType),
@@ -87,6 +113,13 @@ func BuildCallbackEnqueuePlan(
 	}
 	payload, err := normalizeBPMNCallbackContractPayload(contract, payloadSource)
 	if err != nil {
+		// Only an actor-completion call site of an action that opted in rejects
+		// fixable input errors so the command fails before any write. Every other
+		// failure keeps the existing visible blocked plan reserved for definition
+		// and registration defects.
+		if rejectActorInputErrors && contract.RejectInvalidUserInput && isBPMNCallbackUserInputError(err) {
+			return CallbackEnqueuePlan{}, err
+		}
 		return blockedCallbackEnqueuePlan(plan), nil
 	}
 	plan.Payload = payload

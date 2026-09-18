@@ -7,8 +7,19 @@ type CallbackActionContract struct {
 	CreatedRecordClass    string
 	PayloadFields         []string
 	PositiveIntegerFields []string
-	RequiredFields        []string
-	ConfigRefRequired     bool
+	// NonEmptyStringFields lists payload fields that, when present, must be a
+	// non-blank JSON string. RequiredFields only proves key presence, so an
+	// action whose value reaches a user-facing command needs this stronger,
+	// handler-owned rule as well.
+	NonEmptyStringFields []string
+	RequiredFields       []string
+	ConfigRefRequired    bool
+	// RejectInvalidUserInput marks an action whose payload violations are
+	// user-fixable input errors. The task-completion command must reject those
+	// before writing the task or a callback, instead of persisting a callback
+	// that can never succeed. Actions that leave this false keep the existing
+	// visible blocked-plan behaviour reserved for definition defects.
+	RejectInvalidUserInput bool
 }
 
 // CallbackContractProvider is implemented only by synchronous handlers.
@@ -94,8 +105,22 @@ func (h *TicketServiceTaskHandler) CallbackContract(action string) (CallbackActi
 		contract.LifecycleRecordClass = "generic"
 		contract.PositiveIntegerFields = []string{"version"}
 	}
+	// Activity_Assign takes its target from the actor and has no fixed fallback,
+	// so a completion that cannot supply it must be rejected instead of
+	// persisting a callback that can never succeed.
 	if action == "assign" {
+		contract.RequiredFields = []string{"assignee_id"}
 		contract.PositiveIntegerFields = []string{"assignee_id"}
+		contract.RejectInvalidUserInput = true
+	}
+	// update_status deliberately keeps a fixed fallback: updateTicketStatus maps a
+	// missing new_status to "in_progress". Per the execution contract §2.3 a
+	// requirement is only rejected when the fixed configuration cannot satisfy the
+	// input, so absence stays valid here and the stricter "must be supplied" rule
+	// belongs to the gated generic lifecycle contract (workItemLifecycleContract
+	// = generic_fulfillment_v1). Only an explicitly supplied value is bound.
+	if action == "update_status" {
+		contract.NonEmptyStringFields = []string{"new_status"}
 	}
 	return contract, ok
 }

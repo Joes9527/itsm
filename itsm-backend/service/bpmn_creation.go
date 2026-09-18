@@ -24,6 +24,7 @@ func (s *ProcessBindingService) ResolveCreationWorkflow(ctx context.Context, tx 
 	}
 	in := plan.Resolved
 	var slaID *int
+	var overrides map[string]interface{}
 	version := 0
 	key = strings.TrimSpace(key)
 	if key == "" {
@@ -76,6 +77,7 @@ func (s *ProcessBindingService) ResolveCreationWorkflow(ctx context.Context, tx 
 			return creation.ResolvedWorkflowBinding{NoProcess: true}, slaID, nil
 		}
 		key, version = selected.ProcessDefinitionKey, selected.ProcessVersion
+		overrides = selected.Overrides
 	}
 	definition, err := selectExecutableProcessDefinition(ctx, tx.Client(), in.Identity.TenantID, key, version)
 	if err != nil {
@@ -83,6 +85,13 @@ func (s *ProcessBindingService) ResolveCreationWorkflow(ctx context.Context, tx 
 	}
 	if definition == nil {
 		return result, nil, creation.NewWorkflowBindingRequired("active workflow definition for the configured major version is required", nil)
+	}
+	flags, err := genericBindingConfig(definition, in.RecordClass, overrides)
+	if err != nil {
+		return result, nil, creation.NewDomainValidationFailed("invalid workflow lifecycle contract", err)
+	}
+	if err := freezeGenericCreationFlags(plan, flags); err != nil {
+		return result, nil, creation.NewDomainValidationFailed("invalid workflow lifecycle input", err)
 	}
 	if _, err := creationProcessDefinitionMajorVersion(definition.Version); err != nil {
 		return result, nil, creation.NewDomainValidationFailed("unsupported workflow definition version", err)

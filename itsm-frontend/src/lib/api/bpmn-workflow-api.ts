@@ -81,7 +81,8 @@ export interface StartProcessRequest {
 }
 
 export interface UserTask {
-  uiActions?: { claim: boolean; complete: boolean; reason?: string };
+  callbackBlock?: { code: string; reason: string };
+  uiActions?: { claim: boolean; complete: boolean; reason?: string; completionNoteRequired?: boolean };
   assigneeSource: string;
   assignmentState: 'assigned' | 'unassigned' | 'unavailable' | 'terminal';
   responsibleUserId: number;
