@@ -86,6 +86,10 @@ func (s *UserService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 		uc = uc.SetFunctionLine(req.FunctionLine)
 	}
 	if req.ManagerID > 0 {
+		// 新用户此时还没有 ID，自引用不可能成立；同租户/在职/成环仍必须校验。
+		if err := validateUserManager(ctx, s.client, tenantID, 0, req.ManagerID); err != nil {
+			return nil, err
+		}
 		uc = uc.SetManagerID(req.ManagerID)
 	}
 	// 如果请求中提供了角色，则设置角色；否则使用Schema默认值（end_user）
@@ -328,6 +332,10 @@ func (s *UserService) UpdateUser(ctx context.Context, id int, req *dto.UpdateUse
 		update = update.SetFunctionLine(req.FunctionLine)
 	}
 	if req.ManagerID != nil {
+		// 汇报线的唯一写入点：不得自引用、不得跨租户、上级须在职、不得成环。
+		if err := validateUserManager(ctx, s.client, tenantID, id, *req.ManagerID); err != nil {
+			return nil, err
+		}
 		update = update.SetManagerID(*req.ManagerID)
 	}
 	// 角色更新（仅在提供时设置），管理员权限由RBAC控制
