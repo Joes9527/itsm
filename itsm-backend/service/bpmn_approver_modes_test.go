@@ -68,15 +68,26 @@ func TestDeclaredApproverFindingModesFollowsEnginePrecedence(t *testing.T) {
 		Assignee:              "99",
 		AssigneeSource:        "work_item_assignee",
 	})
+	// assignee 必须排第一：引擎在进 switch 之前就 `assignee := task.Assignee`，
+	// 而 switch 被 `if assignee == ""` 守卫（bpmn_process_engine.go:1797/1839）。
+	// 早先把 assignee 排在最后是错的——错误信息会指错"生效的那个"。
 	require.Equal(t, []approverFindingMode{
+		modeExplicitAssignee,
 		modeCandidate,
 		modeRole,
 		modeFixedScope,
 		modeGmChain,
 		modeDirectManager,
-		modeExplicitAssignee,
 		modeWorkItemAssigneeSource,
-	}, got, "顺序必须与引擎 switch 的优先级一致")
+	}, got, "顺序必须与引擎真实优先级一致（assignee 最高，因为它跳过整个 switch）")
+}
+
+// 纯 assignee 与候选组并存时，引擎实际生效的是 assignee——发布校验的错误信息
+// 必须说对是哪一方生效，否则操作者会去改错字段。
+func TestExplicitAssigneeOutranksCandidates(t *testing.T) {
+	got := declaredApproverFindingModes(&BPMNUserTask{Assignee: "99", CandidateGroups: "support"})
+	require.Equal(t, modeExplicitAssignee, got[0],
+		"assignee 跳过整个 switch，因此它才是生效的那个")
 }
 
 func TestApproverFindingModeNamesAreReadable(t *testing.T) {
