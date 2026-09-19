@@ -164,7 +164,7 @@ go build -o /tmp/itsm-reconcile-menus ./cmd/reconcile_menus
 
 `approvals` 将“我的待办”统一到主导航 `/approvals`（BPMN 任务收件箱），修正旧 `/approvals/pending` 并合并重复记录，保留已有可见性与启用状态。菜单权限是 `task:read`，不是流程定义管理权限；审计动作是 `reconcile_approvals_menus`。
 
-产品用词：主导航“服务目录”用于浏览与申请；管理导航“服务目录管理”用于维护目录项、申请字段、流程和服务级别；“目录分类”是目录项的展示分组；“工单分类”是已产生工作的业务分类树。当前 `ServiceCatalog.category` 是字符串，`Ticket.category_id` 关联独立分类树，二者没有自动映射。自定义字段归属于目录项或工单模板，不从分类继承。
+产品用词：主导航“服务目录”用于浏览与申请；管理导航“服务目录管理”用于维护目录项、申请字段、流程和服务级别；“目录分类”是目录项的展示分组；“工单分类”是已产生工作的业务分类树。主导航“我的工单”（路由 `/my-requests`）是当前用户工单的统一入口，覆盖全部 `recordClass`，行级可见范围由后端决定、页内只切“我提交的/我处理的/全部”；只看服务请求的视角在 `/service-requests`，“我的待办”仍是 `/approvals`。当前 `ServiceCatalog.category` 是字符串，`Ticket.category_id` 关联独立分类树，二者没有自动映射。自定义字段归属于目录项或工单模板，不从分类继承。
 
 CTI 三级约束、目录默认分类与专业完成质量的设计见[已接受的设计](superpowers/specs/2026-09-17-cti-governance-design.md)；
 **代码已在 CTI 分支交付（PR #48），但迁移 `048_cti_governance` 未在任何共享/生产库应用、完成质量门禁未在任何租户启用** ——

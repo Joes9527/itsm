@@ -67,6 +67,13 @@
 | 期望交付时间 expectedAt | 假字段 | **改为真实字段**，可选日期，落库并展示 |
 | 补充信息（FieldDefinition） | 已实现 | 不变 |
 
+> **（2026-09-19 更新）**"永远渲染"已不成立：服务目录若声明了一个**必填**的理由字段（字段名匹配
+> `/(^|_)reason$/`，例如 SSLVPN 目录的 `access_reason`），申请页就不再渲染通用「申请理由」，该目录字段的
+> 答案即申请理由，并在提交时写入工单描述（后端顶层 `reason` → Description）。目录只声明**可选**理由字段、
+> 或完全不声明时，通用「申请理由」仍按原样渲染且必填。判定唯一来源
+> `itsm-frontend/src/app/(main)/service-catalog/request/[id]/catalog-reason.ts`（`catalogOwnsRequiredReason`）。
+> 「申请人」控件也一并调整：默认选中当前登录用户并按该身份提交，代他人申请需 `create_on_behalf` 权限。
+
 **基础设施层（仅 `requiresInfraFields=true` 的目录项渲染 + 强制校验）：**
 
 成本中心 / 数据分级 / 需要公网IP / 来源IP白名单 / 资源过期时间 / 合规确认——这 6 个字段维持现有 `ServiceRequest` 表结构不变（本来就可空或有默认值），只改变"何时展示、何时强制校验"。

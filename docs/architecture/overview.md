@@ -89,7 +89,7 @@
 ### 前端 (itsm-frontend)
 
 - **`src/app/(main)/`**：受保护页面，基于角色视图分流（PortalLayout vs ConsoleLayout）：
-  - **`/portal`**：员工自服务门户（宽屏极简无侧栏、AI 自愈拦截、服务目录、我的请求、经理审批）
+  - **`/portal`**：员工自服务门户（宽屏极简无侧栏、AI 自愈拦截、服务目录、我的工单、经理审批）
   - **`/workspace/tickets`**：工程师协同工作台（三栏分屏、SLA 倒计时钟、360° 用户画像、AI 相似方案排障）
   - **`/manager/live-board`**：运营监控中心（实时进单监控墙、团队负载调度与 AI 突发故障聚类预警）
   - **`/executive/dashboard`**：战略决策大屏（MTTR 趋势分析、成本分布与 ChatBI 对话式数据洞察）

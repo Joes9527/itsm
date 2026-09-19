@@ -125,7 +125,7 @@ G-A固定修订：`d91b587fe3ab40cc863321346d217d258a3a96d8`。G-A源码基线IT
 真实目标选取：`selected-flow-catalog-private.json`保存XML，`selected-flow-catalog.json`及`selected-flow-independent-review.md`/`actual-parser-review.log`/`reachability-review.json`记录独立核对。
 
 - generic：ID39 `ticket_general_flow`，XML SHA256 `6d7c436bb06acfef500df259d9b82e605b53b08bbf18dc8b33f8e48939d6a893`。实际Go parser/registry检查通过，固定图未发现直接外部调用，允许进入受控E2E；未声称生命周期已过。
-- incident：ID27 `incident_emergency_flow`。`Activity_ManagerApproval`用incident_task/manager_approval，handler不支持；XML也未声明原生approval purpose。不能映射为acknowledge或静默no-op。等待用户确认首期是否需要主管审批。其notify generic回调也有canonical类型差额。
+- incident：ID27 `incident_emergency_flow`。`Activity_ManagerApproval`用incident_task/manager_approval，handler不支持；XML也未声明原生approval purpose。不能映射为acknowledge或静默no-op。等待用户确认首期是否需要主管审批。其notify generic回调也有canonical类型差额。**（2026-09-19 更新：XML 其实声明了——该节点带节点级 `<bpmn:metaData name="approval_required">true</bpmn:metaData>`，PR #87 起被解析为 `TaskPurpose="approval"`，"未声明原生 approval purpose"不再成立。相应地"首期是否需要主管审批"不再是文档层面的待确认项：它现在就是审批任务、会进审批待办；产品若要改回，应改流程定义本身（重新发布属共享库写操作，需单独授权），不要靠文档假设。契约见 AGENTS.md「Approval declaration contract」。）**
 - requested item：ID34 `service_request_flow`。generic_task/complete_service和拒绝通知路径不支持canonical service_request_item，实际会TargetTypeMismatch。最小修复设计：完成用现有service_request_task/complete_request；拒绝先service_request_task/reject_request再ticket_task/notify_requester。不改专业状态机。正在独立工作树准备，目标尚未更新。
 - callback=enabled可经webhook_handler直接HTTP，并不受execution.webhook=false完整约束！因此只按冻结的已审流程执行，不测试webhook/KAF/access-grant/provider动作。目标当前pending callback0。
 - 云流程cloud_private_ops_flow、cloud_public_ops_flow存在原有XML格式错误，已记未验收；不要在此批静默扩大范围修全部20模板。

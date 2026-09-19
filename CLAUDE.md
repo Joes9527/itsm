@@ -18,6 +18,7 @@ When architecture/domain constraints change, update AGENTS.md first and this sum
 - Evolve public/persistence contracts through explicit migration and compatibility decisions with verification and retirement/remediation boundaries. Distinguish target architecture, code, and deployed/accepted behavior.
 - Actor/tenant/privileged scope comes from trusted authentication and authorization. Tenant execution and restricted system capabilities remain separate. Enforce scope at services, associations, database, and jobs as well as HTTP. Mask secrets and audit high-risk actions with actor/source metadata.
 - Unknown dispatch fails closed across workflows, connectors, skills, AI tools, and consumers. Optional steps must be declared in advance and their skips audited and observable.
+- A BPMN approval task is declared, never inferred: a `userTask` declares itself with `taskPurpose="approval"` or a node-level `approval_required` metaData in its own extensionElements, the attribute only decides precedence, and a malformed or duplicated declaration fails the parse closed. Declaring approval is what puts the task in 审批待办; approver routing stays a separate, still-open gap (BL-BPMN-APPROVER-ROUTING).
 - AI proposes; code applies policy and side effects. Use the existing gateway and versioned, auditable structured output; do not add parallel keyword classifiers or silent success fallbacks. KAF follows the [verified completion contract](docs/contracts/kaf-verified-access-completion.md).
 
 ## WorkItem summary

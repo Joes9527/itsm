@@ -66,6 +66,12 @@
     `Flow_Manager: Activity_AutoAssign→Activity_ManagerApproval`）。但 `Activity_ManagerApproval`
     **没有 `taskPurpose="approval"`**，根本不是正式审批链的一部分——这是事件响应本来就该有的设计（先有人
     响应，"审批"是别的用途，不是准入门槛），跟服务请求/工单这条线的业务规则不是一回事，**本次不改动**。
+    **（2026-09-19 更新：结论已翻。该节点在自己的 `extensionElements` 里带着节点级声明
+    `<bpmn:metaData name="approval_required">true</bpmn:metaData>`（`incident_emergency_flow.bpmn`、
+    `incident_emergency_flow_v1.1.bpmn`），PR #87 之后这种写法会被解析成 `TaskPurpose="approval"`，因此
+    它现在是审批任务、会进审批待办。"没有 `taskPurpose` 属性"字面仍成立，但"不是正式审批链的一部分"不再
+    成立。声明契约见 AGENTS.md「Approval declaration contract」；审批人怎么解析仍是另一回事，见
+    ROADMAP.md `BL-BPMN-APPROVER-ROUTING`。）**
   - `copilot_procurement_flow`（本次 Copilot 试点用的专属流程）：纯审批链（部门负责人→总经理→IT总监），
     IT 总监批准后直接 `EndEvent_1`，**没有执行环节**——买许可证这个动作目前假设在 ITSM 系统外完成，但按本轮
     讨论结论，应该补一个执行环节（比如"开通许可证账号"）接入新机制。
@@ -145,6 +151,8 @@
   它是"团队负责人当审批人"，跟本次"团队成员池当执行人"是两个不同场景，命名上刻意不复用避免混淆。
 - `incident_emergency_flow`（含 `_v1.1`/`_cn`）三个变体一律不改——`Activity_AutoAssign` 在非正式审批节点
   之前是这条线本来的设计意图，不违反"先审批后分配"规则（因为它压根没有正式审批节点）。
+  **（2026-09-19 更新：同上——"压根没有正式审批节点"已不成立，主管审批节点带 `approval_required` 声明并已被
+  认作审批节点；"本次不改动这三个变体"作为当时的改动范围仍然成立。）**
 
 ## 设计一：`taskPurpose="fulfillment"` + `TeamWorkloadResolver`
 
