@@ -372,7 +372,11 @@ start_backend_local() {
     export DB_PORT="${DB_PORT:-5432}"
     export DB_USER="${DB_USER:-itsm_user}"
     export DB_PASSWORD="${DB_PASSWORD:-dev123}"
-    export DB_NAME="${DB_NAME:-itsm}"
+    # 默认值必须是**当前开发库**。历史库 `itsm`（迁移台账停在 019）与
+    # `itsm_baseline_20260908` 已于 2026-09-19 退休：连上去会缺列，
+    # 部门等模块直接报 column does not exist。
+    # 见 docs/deployment/canonical-migration-admission-and-clone-constraints.md
+    export DB_NAME="${DB_NAME:-itsm_config_baseline_20260908}"
     export DB_SSLMODE="${DB_SSLMODE:-disable}"
     export REDIS_HOST="${REDIS_HOST:-localhost}"
     export REDIS_PORT="${REDIS_PORT:-6379}"
