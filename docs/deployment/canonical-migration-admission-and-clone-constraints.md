@@ -185,13 +185,47 @@ cd /home/administrator/apps/itsm-kaf
 
 - recipe 在 `/home/administrator/.local/state/itsm-kaf-baseline-20260908/config/<name>-launch.json`（含 `argv`/`cwd`/`env`/`source_revision`/`artifact_sha256`）。
 - **`stop` 会拒绝漂移**：若记录的进程身份与实际不一致，它抛 `identity mismatch ...; refusing to stop actual process`，**不会**误杀复用 PID 或他人进程。这是保护机制，别绕过。
-- 栈只把 `HOME/LANG/TZ/PATH` 加上 recipe 的 `env` 传给进程——**recipe 里没有的变量，进程就没有**。
+- 栈只把 `HOME/LANG/TZ/PATH` 加上 recipe 的 `env` 传给进程——**recipe 里没有的变量，进程就没有**。这也是为什么"绕开 recipe 手动起的进程"会缺配置。
 
-### 两条实测结论（本环境当前状态）
+### 三条实测结论（本环境当前状态）
 
-1. **recipe 里没有 `ITSM_MIGRATION_*`** → 任何带该路由的构建在此环境都会让 **`/api/v1/readyz` 返回 503**（准入需要检查身份配置，见第 2 节）。健康端点 `/api/v1/healthz` 正常返回 200。
-   **注意路径**：就绪是 **`/api/v1/readyz`**；探测 `/readyz` 会得到 404，容易被误读成"这个构建没有就绪路由"。
-2. **8080 上的进程已漂移**：栈记录的 PID 已消失、端口被另一个 PID 占用、可执行文件 sha256 与 recipe 不一致。说明有会话在栈记录之外替换了后端。要切换版本，需先把栈记录与实际对齐（重新记录身份，或让该会话收尾），**不能靠强杀**。
+1. **就绪路径是 `/api/v1/readyz`**；探测 `/readyz` 会得到 404，容易被误读成"这个构建没有就绪路由"（我们就被误导过一次）。健康端点 `/api/v1/healthz` 正常返回 200。
+2. **recipe 里本来就有检查身份配置**（`ITSM_MIGRATION_CONTROL_FILE` + 带口令的 `ITSM_MIGRATION_INSPECTION_DSN`），因此**经栈启动时准入能通过**。实测（只读跑 `InspectRuntimeDatabase`）：
+
+   ```
+   控制配置: DeploymentID="itsm-dev-20260916" InspectionRole="itsm_dev_inspection_20260916"
+   运行时准入: 通过        → /api/v1/readyz 预期 200
+   ```
+
+   > **更正**：本文档早先一版写着"recipe 里没有 `ITSM_MIGRATION_*`，所以 readyz 必 503"——那是我读了**另一个文件**（`active-release.json`，发布记录）得出的错误结论。真实的 launch recipe 里是有的。
+   >
+   > 当前 503 的真正原因是：**8080 上那个进程是绕开 recipe 手动启动的**，它的进程环境里没有这些变量。
+
+3. **8080 上的进程已漂移**，而且比"漂移"更严重：它的**自证来源与实际记录都对不上**——
+
+   | 项 | 值 | 在 main 上？ |
+   | --- | --- | --- |
+   | 二进制自证 `vcs.revision` | `51678954`（一个**前端**提交） | ✅ 在 |
+   | recipe 记录的 `source_revision` / 文件名 | `d310caba` | ❌ **不在** |
+   | 自证 `vcs.modified` | `true`（带未提交改动构建） | — |
+
+   结论：**该后端无法由任何记录的修订重建**。要切换版本，需先把栈记录与实际对齐，**不能靠强杀**。
+
+### 构建产物必须能自证来源（本环境教训）
+
+- `go build main.go`（**按文件**构建）**不写 VCS 戳**；在 **git worktree** 里构建同样不写。
+- 只有**普通 clone + 包形式** `go build -o <bin> .` 才会得到 `vcs.revision` / `vcs.modified`，可用 `go version -m <bin>` 校验。
+  这才让产物的来源可被独立验证，而不是只靠 recipe 里的一句声称。
+
+### ⚠️ 安全问题：recipe 里内嵌口令，却是 0644
+
+`config/itsm-launch.json` 及历史 `itsm-launch.before-*.json` 的 `env` 含**明文数据库口令**（`ITSM_MIGRATION_INSPECTION_DSN` 里的 inspection 角色口令），但文件权限是 **`0644`（任何本地用户可读）**。
+
+建议两步收敛：
+
+1. 立即把该目录下所有含口令的 recipe 收紧为 **`0600`**；
+2. 让代码支持 `ITSM_MIGRATION_INSPECTION_DSN_FILE`，与本仓库既有的 `*_PASSWORD_FILE` / `*_SECRET_FILE` 约定一致——recipe 只放路径、不放口令（属代码改动，需单独提出）。
+
 
 ## 相关
 
