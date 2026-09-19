@@ -1,4 +1,4 @@
-import { render, screen } from '@/lib/test-utils';
+import { act, render, screen } from '@/lib/test-utils';
 import { useAuthStore } from '@/lib/store/auth-store';
 import userEvent from '@testing-library/user-event';
 import PortalPage from '../page';
@@ -22,9 +22,16 @@ jest.mock('@/lib/api/service-catalog-api', () => ({
 // "我的近期工单"与 /my-requests 同源：GET /api/v1/tickets（行级范围由后端收窄）。
 // 之前这里查的是 /service-requests/me（只有 service_request_item、且只看申请人），
 // 于是"查看全部我的工单"跳过去看到的是另一批数据。
-jest.mock('@/lib/services/ticket-service', () => ({
-  ticketService: { listTickets: jest.fn() },
-}));
+// 只替换 listTickets：页面还要用 ticketService 的状态词表（getStatusLabel/getStatusColor），
+// 整个模块被 mock 掉会让它在导入期拿到 undefined。
+// 注意 ticketService 是 `new TicketService()` 的实例——方法在原型上，直接展开
+// {...instance} 会把它们全部丢掉（表现为词表函数 undefined），所以要走原型。
+jest.mock('@/lib/services/ticket-service', () => {
+  const actual = jest.requireActual('@/lib/services/ticket-service');
+  const instance = Object.create(Object.getPrototypeOf(actual.ticketService));
+  Object.assign(instance, actual.ticketService, { listTickets: jest.fn() });
+  return { ...actual, ticketService: instance };
+});
 
 jest.mock('@/lib/api/bpmn-workflow-api', () => ({
   BPMNWorkflowApi: {
@@ -157,7 +164,37 @@ describe('PortalPage', () => {
 
     render(<PortalPage />);
 
-    expect(await screen.findByText('暂无近期工单')).toBeInTheDocument();
+    // 没有身份时不能断言"没有工单"——那是另一个状态（已登录但列表为空）的结论
+    expect(await screen.findByText('请先登录后查看您的近期工单')).toBeInTheDocument();
+    expect(screen.queryByText('暂无近期工单')).not.toBeInTheDocument();
     expect(mockListTickets).not.toHaveBeenCalled();
+  });
+
+  it('loads the recent list once a trusted identity arrives after mount', async () => {
+    useAuthStore.setState({ isAuthenticated: false, user: null as never });
+    mockGetServices.mockResolvedValue({ services: [], total: 0 });
+    mockListTickets.mockResolvedValue(listResult([workItem({ title: '登录后才出现的工单' })]));
+
+    render(<PortalPage />);
+    await screen.findByText('请先登录后查看您的近期工单');
+
+    // 会话投影后到：拿到可信身份后必须补发请求，而不是停在"没有工单"
+    act(() => {
+      useAuthStore.setState({
+        isAuthenticated: true,
+        user: {
+          id: 1,
+          tenantId: 2,
+          permissions: [],
+          name: '侯艾华',
+          username: 'end_user_test',
+        } as never,
+      });
+    });
+
+    expect(await screen.findByText('登录后才出现的工单')).toBeInTheDocument();
+    expect(mockListTickets).toHaveBeenCalledWith(
+      expect.objectContaining({ requesterId: 1, page: 1, pageSize: 3 })
+    );
   });
 });

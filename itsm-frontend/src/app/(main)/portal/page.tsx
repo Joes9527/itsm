@@ -8,20 +8,9 @@ import { useAuthStore } from '@/lib/store/auth-store';
 import { HeroSearchBar } from '@/components/portal/HeroSearchBar';
 import { ManagerPendingApprovals } from '@/components/portal/ManagerPendingApprovals';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
-import { ticketService } from '@/lib/services/ticket-service';
+import { ticketService, type TicketStatus } from '@/lib/services/ticket-service';
 import type { Ticket } from '@/lib/api/api-config';
 import { ServiceStatus, type ServiceItem } from '@/types/service-catalog';
-
-// 与 my-requests 页面使用同一套 Ticket 状态词表（见 src/types/ticket.ts）
-const TICKET_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  new: { label: '新建', color: 'gold' },
-  open: { label: '待处理', color: 'gold' },
-  in_progress: { label: '处理中', color: 'processing' },
-  pending: { label: '待处理', color: 'blue' },
-  resolved: { label: '已解决', color: 'success' },
-  closed: { label: '已关闭', color: 'default' },
-  cancelled: { label: '已取消', color: 'default' },
-};
 
 function formatUpdatedAt(dateString?: string): string {
   if (!dateString) return '-';
@@ -45,15 +34,16 @@ interface RecentWorkItem {
 }
 
 function toRecentWorkItem(item: Ticket): RecentWorkItem {
-  const statusConfig = item.status
-    ? TICKET_STATUS_CONFIG[item.status] || { label: item.status, color: 'default' }
-    : { label: '-', color: 'default' };
+  // 状态词表归 ticketService 所有（与 my-requests 页面同源），不在本页另存一份：
+  // 词表分叉过——这里曾漏掉 assigned、pending 也与别处不一致。
+  // 未知状态由 getStatusLabel 原样返回，不猜测标签。
+  const status = item.status as TicketStatus | undefined;
 
   return {
     id: item.id,
     title: item.title || item.ticketNumber || '-',
-    statusLabel: statusConfig.label,
-    statusColor: statusConfig.color,
+    statusLabel: status ? ticketService.getStatusLabel(status) : '-',
+    statusColor: status ? ticketService.getStatusColor(status) : 'default',
     updatedAt: formatUpdatedAt(item.updatedAt || item.createdAt),
   };
 }
@@ -122,8 +112,13 @@ export default function PortalPage() {
 
   useEffect(() => {
     loadCatalogs();
-    loadRecentWorkItems();
   }, []);
+
+  // 依赖 hasActor：会话投影后到时补发"我的近期工单"。
+  // 否则会把"还没拿到身份"当成"这个人没有工单"，给出一个不实的空态。
+  useEffect(() => {
+    loadRecentWorkItems();
+  }, [hasActor]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -244,7 +239,7 @@ export default function PortalPage() {
         ) : recentWorkItems.length === 0 ? (
           <div className="text-center py-6 text-[13px] text-muted flex flex-col items-center gap-2">
             <Inbox size={24} className="text-muted" />
-            暂无近期工单
+            {hasActor ? '暂无近期工单' : '请先登录后查看您的近期工单'}
           </div>
         ) : (
           <div className="space-y-4">

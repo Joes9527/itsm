@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@/lib/test-utils';
+import { act, render, screen, waitFor, within } from '@/lib/test-utils';
 import userEvent from '@testing-library/user-event';
 import MyRequestsPage from '../page';
 import { ticketService } from '@/lib/services/ticket-service';
@@ -39,6 +39,15 @@ const listResult = (tickets: unknown[]) => ({
   pageSize: 10,
   size: 10,
 });
+
+// 由测试决定先后返回的请求，用来复现"旧响应后到"
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(res => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
 
 describe('MyRequestsPage', () => {
   beforeEach(() => {
@@ -193,6 +202,53 @@ describe('MyRequestsPage', () => {
 
     expect(await screen.findByText('没有查看工单的权限')).toBeInTheDocument();
     expect(screen.queryByText('加载工单失败，请重试')).not.toBeInTheDocument();
+    // 权限拒绝不是"没有工单"：不得同时给出空态断言
+    expect(screen.queryByText('暂无工单')).not.toBeInTheDocument();
+  });
+
+  it('keeps the newest result when an older request resolves after it', async () => {
+    const user = userEvent.setup();
+    render(<MyRequestsPage />);
+    await screen.findByText('样例工单');
+
+    // 连续切换范围会产生两条并发请求，旧的那条可能后返回
+    const handling = deferred<ReturnType<typeof listResult>>();
+    const all = deferred<ReturnType<typeof listResult>>();
+    mockListTickets.mockReturnValueOnce(handling.promise).mockReturnValueOnce(all.promise);
+
+    await user.click(screen.getByRole('button', { name: '我处理的' }));
+    await waitFor(() => expect(mockListTickets).toHaveBeenCalledTimes(2));
+    await user.click(screen.getByRole('button', { name: /全\s*部/ }));
+    await waitFor(() => expect(mockListTickets).toHaveBeenCalledTimes(3));
+
+    // 新请求先返回
+    all.resolve(listResult([workItem({ id: 301, title: '全部范围的工单' })]));
+    expect(await screen.findByText('全部范围的工单')).toBeInTheDocument();
+
+    // 旧请求后返回：不得覆盖当前筛选条件对应的结果
+    handling.resolve(listResult([workItem({ id: 302, title: '我处理的工单' })]));
+    await act(async () => {
+      await handling.promise;
+    });
+
+    expect(screen.getByText('全部范围的工单')).toBeInTheDocument();
+    expect(screen.queryByText('我处理的工单')).not.toBeInTheDocument();
+  });
+
+  it('renders values outside the known vocabulary as-is instead of guessing a label', async () => {
+    mockListTickets.mockResolvedValue(
+      listResult([
+        workItem({ recordClass: 'maintenance_window', status: 'awaiting_parts', priority: 'blocker' }),
+      ])
+    );
+
+    render(<MyRequestsPage />);
+
+    const card = (await screen.findByText('样例工单')).closest('.ant-card') as HTMLElement;
+    // 未知值原样展示：既不归类到已知类型，也不映射成别的词汇
+    expect(within(card).getByText('maintenance_window')).toBeInTheDocument();
+    expect(within(card).getByText('awaiting_parts')).toBeInTheDocument();
+    expect(within(card).getByText('blocker')).toBeInTheDocument();
   });
 
   it('shows the empty state when the actor has no work items', async () => {

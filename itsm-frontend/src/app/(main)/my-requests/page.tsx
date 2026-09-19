@@ -1,13 +1,12 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Alert, Button, Card, Empty, Input, Pagination, Select, Spin, Tag } from 'antd';
 import {
   Calendar,
   CheckCircle,
   Clock,
-  FileText,
   Filter,
   Hourglass,
   Search,
@@ -200,7 +199,15 @@ const MyRequestsPage = () => {
 
   const debouncedSearch = useDebounce(searchTerm, 300);
 
+  // 切范围、改状态、输入关键字（防抖期间会先因翻页复位发一次）都可能并发多条请求，
+  // 先发的可能后到。只让最后一次请求写状态，否则旧响应会覆盖当前筛选条件的结果，
+  // 让列表与筛选框、分页总数对不上。
+  const requestSeq = useRef(0);
+
   const fetchWorkItems = useCallback(async () => {
+    const seq = ++requestSeq.current;
+    const isLatest = () => seq === requestSeq.current;
+
     if (!hasActor) {
       setWorkItems([]);
       setTotal(0);
@@ -222,9 +229,11 @@ const MyRequestsPage = () => {
       if (scope === 'handling') params.assigneeId = actorId;
 
       const data = await ticketService.listTickets(params);
+      if (!isLatest()) return;
       setWorkItems(data.tickets || []);
       setTotal(data.total || 0);
     } catch (err) {
+      if (!isLatest()) return;
       if (err instanceof ApiError && err.status === 403) {
         setPermissionDenied(true);
       } else {
@@ -233,7 +242,7 @@ const MyRequestsPage = () => {
       setWorkItems([]);
       setTotal(0);
     } finally {
-      setLoading(false);
+      if (isLatest()) setLoading(false);
     }
   }, [actorId, currentPage, debouncedSearch, hasActor, scope, status]);
 
