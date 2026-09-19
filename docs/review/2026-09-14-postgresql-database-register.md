@@ -6,6 +6,21 @@
 - 原 17:57 盘点操作仅 Docker 元数据及强制只读目录查询。后续任务二审查修复新增独立测试实例，见下表标注“22:48 增量”；原源与 G-A 目标未因此清理或切换。
 - 连接数是瞬时观察，0 不代表无人使用或可以删除；运行的是数据库实例，不等于业务应用已通过验收。大小不含完整 WAL／卷开销，也不代表备份大小。
 
+> **2026-09-19 增量（重要，优先于本快照正文）：本表已过期，已退休并删除 4 个库。**
+>
+> | 库（本快照中曾列出） | 处置 |
+> | --- | --- |
+> | `itsm`（019，原开发库） | **已删除**；删除前备份 `retired_itsm_20260919.dump` |
+> | `itsm_baseline_20260908`（019，历史基线） | **已删除**；删除前备份 `retired_itsm_baseline_20260908_20260919.dump` |
+> | `itsm_intake_test`（无迁移台账） | **已删除**；删除前备份 `retired_itsm_intake_test_20260919.dump` |
+> | `itsm_p1_integration_verify_20260901`（022） | **已删除**；删除前备份 `retired_itsm_p1_integration_verify_20260901_20260919.dump` |
+>
+> 备份位于 `/var/backups/itsm/`（custom 格式，含 `.sha256` 边车，已用 `pg_restore -l` 校验可读）。
+> 删除前已核对：前三个库**只被文档引用**、无脚本或配置依赖；`itsm` 曾被 `scripts/deploy-dev.sh` 与 `.env*.example` 的默认库名引用（该默认值已改为当前开发库）。删除时四个库均无活动连接。
+>
+> **当前 ITSM 只剩两个库**：`itsm_config_baseline_20260908`（开发库，台账 051）与 `itsm_migration_20260914`（演练克隆库，台账 048）。
+> 用途、部署版本、启动方式与准入约束的权威说明见 [开发环境状态](../development-environment.md) 与 [规范化迁移准入与克隆库约束](../deployment/canonical-migration-admission-and-clone-constraints.md)；**本快照不再更新**。
+
 ## 先认准这四个入口
 
 | 角色 | 实例 / 数据库 | 当前用途 |

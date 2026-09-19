@@ -201,6 +201,15 @@ cd /home/administrator/apps/itsm-kaf
    >
    > 当前 503 的真正原因是：**8080 上那个进程是绕开 recipe 手动启动的**，它的进程环境里没有这些变量。
 
+   **已实测确认（2026-09-19）**：经栈启动后 `/api/v1/readyz` 返回 **200**，响应体同时自证结构版本：
+
+   ```json
+   {"ready":true,"schemaVersion":"051_department_manager_none_normalization",
+    "requiredSchemaVersion":"051_department_manager_none_normalization", ...}
+   ```
+
+   即就绪探针会**核对数据库结构是否与代码要求一致**——这是"部署前置：先应用迁移"那条约束的运行时体现，也是判断"库和代码是否配套"的最快手段。
+
 3. **8080 上的进程已漂移**，而且比"漂移"更严重：它的**自证来源与实际记录都对不上**——
 
    | 项 | 值 | 在 main 上？ |
