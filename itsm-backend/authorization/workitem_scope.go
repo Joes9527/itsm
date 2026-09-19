@@ -7,7 +7,7 @@ import (
 
 // WorkItemDataScopeAllRole is shared by WorkItem lists and row authorization.
 func WorkItemDataScopeAllRole(roleName string) bool {
-	return roleName == "super_admin" || roleName == "sysadmin"
+	return roleName == "super_admin" || roleName == "sysadmin" || roleName == "sd_manager" || roleName == "it_director" || roleName == "ops_director"
 }
 
 // WorkItemOwnedOrAssignedScope is the authoritative restricted row predicate.

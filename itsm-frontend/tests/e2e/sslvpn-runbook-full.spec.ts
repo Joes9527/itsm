@@ -739,7 +739,9 @@ test.describe('SSLVPN 运行手册全生命周期交互测试 (Headed Visual Exe
   // =========================================================================
   // Phase 6: 邮件渠道进单与真实业务人员全生命周期协同场景 (Real Personas: Luka -> Zoey -> Julian Peng -> Jinhai Wang)
   // =========================================================================
-  test('Phase 6 [真实业务人员]: 邮件渠道进单 -> 自动回复确认 -> 帮助台协同分派 -> 部门经理审批 -> L2网络复审', async ({ page }) => {
+  test('Phase 6 [真实业务人员]: 邮件渠道进单 -> 自动回复确认 -> 帮助台协同分派 -> 部门经理审批 -> L2网络复审', async ({
+    page,
+  }) => {
     console.log('\n======================================================');
     console.log('>>> 执行 Phase 6: 真实业务人员邮件进单与全流程协同场景');
     console.log('======================================================');
@@ -761,7 +763,7 @@ test.describe('SSLVPN 运行手册全生命周期交互测试 (Headed Visual Exe
     // Step 6.2: 等待系统轮询建单与 Outbox 自动回信
     // -----------------------------------------------------------------------
     console.log('\n[Phase 6.2] 等待后台连接器轮询 (poll_interval=10s) 抓取邮件、AI分类并生成工单...');
-    await page.waitForTimeout(14000);
+    await page.waitForTimeout(15000);
 
     // -----------------------------------------------------------------------
     // Step 6.3: 申请人 Luka (D42784) 登录 UI 查看自动生成的工单
@@ -772,9 +774,17 @@ test.describe('SSLVPN 运行手册全生命周期交互测试 (Headed Visual Exe
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(2000);
 
-    // 页面列表默认按最新降序排序，新生成的邮件工单位于表格最前端
-    const emailTicketRow = page.getByRole('row').filter({ hasText: mailSubject }).first();
-    await expect(emailTicketRow).toBeVisible({ timeout: 20000 });
+    // 等待工单出现在列表中（最多轮询等待 40 秒，定期刷新列表）
+    let emailTicketRow = page.getByRole('row').filter({ hasText: mailSubject }).first();
+    for (let attempt = 0; attempt < 8; attempt++) {
+      if (await emailTicketRow.isVisible()) break;
+      console.log(`[Phase 6.3] 等待邮件工单同步并刷新列表 (${attempt + 1}/8)...`);
+      await page.waitForTimeout(5000);
+      await page.reload();
+      await page.waitForLoadState('domcontentloaded');
+      emailTicketRow = page.getByRole('row').filter({ hasText: mailSubject }).first();
+    }
+    await expect(emailTicketRow).toBeVisible({ timeout: 15000 });
     console.log(`[Phase 6.3] 成功定位邮件自动生成的工单行！`);
 
     // 提取工单号并进入详情
@@ -879,6 +889,300 @@ test.describe('SSLVPN 运行手册全生命周期交互测试 (Headed Visual Exe
 
     console.log('======================================================');
     console.log(`>>> Phase 6 真实业务人员邮件进单与协同流转全流程 PASS！单号: ${emailTicketNumber}`);
+    console.log('======================================================\n');
+    await logoutViaUI(page);
+  });
+
+  // =========================================================================
+  // Phase 7: IT Helpdesk 服务台全生命周期运营闭环
+  // (Real Personas: Luka 邮件提单 -> 赵颖服务台分诊订正与转派 -> 王金海内部排查笔记 -> Luka数据隔离断言 -> 王金海公开答复与解决 -> Luka确认回复 -> 赵颖关单归档)
+  // =========================================================================
+  test('Phase 7 [IT Helpdesk服务台运营全流程]: 邮件进单 -> 服务台初审分诊订正与转派 -> 内部工作笔记与安全隔离 -> 公开答复与方案解决 -> 确认关单归档', async ({
+    page,
+  }) => {
+    console.log('\n======================================================');
+    console.log('>>> 执行 Phase 7: IT Helpdesk 服务台全生命周期运营闭环');
+    console.log('======================================================');
+
+    const timestamp = Date.now();
+    const mailSubject = `[E2E-AUTO-${timestamp}] Luka 申请出差值班 SSLVPN 权限 (服务台闭环测试)`;
+    const mailBody = `您好，我是王雅蓉(Luka，工号D42784)，因值班及远程保障需要，申请开通SSL-VPN访问权限。测试时间戳: ${timestamp}。请帮助台主管赵颖核实，并流转二线网络组王金海配置。`;
+
+    // -----------------------------------------------------------------------
+    // Step 7.1: 模拟真实员工向服务台共享邮箱发送邮件
+    // -----------------------------------------------------------------------
+    console.log(`\n[Phase 7.1] 调用 Microsoft Graph API 以申请人 Luka (${USERS.luka.email}) 身份向服务台 (ai-support@dawnpro.onmicrosoft.com) 发送邮件...`);
+    const helperPath = path.resolve(__dirname, 'helpers/send-test-email.py');
+    const sendResult = execSync(`python3 "${helperPath}" "${mailSubject}" "${mailBody}"`, { encoding: 'utf-8' });
+    console.log(`[Phase 7.1] 邮件发信结果:\n${sendResult}`);
+    expect(sendResult).toContain('status 202');
+
+    // -----------------------------------------------------------------------
+    // Step 7.2: 等待系统轮询建单与 Outbox 自动回信
+    // -----------------------------------------------------------------------
+    console.log('\n[Phase 7.2] 等待后台连接器轮询 (poll_interval=10s) 抓取邮件、AI分类并生成工单...');
+    await page.waitForTimeout(15000);
+
+    // -----------------------------------------------------------------------
+    // Step 7.3: 申请人 Luka (D42784) 登录 UI 查看自动生成的待处理工单
+    // -----------------------------------------------------------------------
+    console.log('\n[Phase 7.3] 申请人 Luka 登录 ITSM 前端，核验工单列表中的邮件工单...');
+    await loginViaUI(page, USERS.luka);
+    await page.goto(`${APP_URL}/tickets`);
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // 等待工单出现在列表中（最多轮询等待 40 秒，定期刷新列表）
+    let emailTicketRow = page.getByRole('row').filter({ hasText: mailSubject }).first();
+    for (let attempt = 0; attempt < 8; attempt++) {
+      if (await emailTicketRow.isVisible()) break;
+      console.log(`[Phase 7.3] 等待邮件工单同步并刷新列表 (${attempt + 1}/8)...`);
+      await page.waitForTimeout(5000);
+      await page.reload();
+      await page.waitForLoadState('domcontentloaded');
+      emailTicketRow = page.getByRole('row').filter({ hasText: mailSubject }).first();
+    }
+    await expect(emailTicketRow).toBeVisible({ timeout: 15000 });
+    console.log(`[Phase 7.3] 成功定位邮件自动生成的工单行！`);
+
+    // 提取工单号并进入详情
+    const ticketCellBtn = emailTicketRow.getByRole('button', { name: /TKT-\d+-\d+/ }).first();
+    const emailTicketNumber = (await ticketCellBtn.textContent())?.trim() || '';
+    console.log(`[Phase 7.3] 点击进入邮件工单详情: ${emailTicketNumber}`);
+    if (await ticketCellBtn.isVisible()) {
+      await ticketCellBtn.click();
+    } else {
+      await emailTicketRow.click();
+    }
+    await page.waitForURL(/\/tickets\/\d+/, { timeout: 15000 });
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    const emailTicketUrl = page.url();
+    console.log(`[Phase 7.3] 成功进入工单详情页: ${emailTicketUrl}`);
+
+    // 核验工单详情页面包含发件主题
+    await expect(page.locator('body')).toContainText(mailSubject);
+    console.log(`[Phase 7.3] 工单标题核对一致！来源标识确认包含邮件属性。`);
+
+    await logoutViaUI(page);
+
+    // -----------------------------------------------------------------------
+    // Step 7.4: IT帮助台主管 赵颖 (Zoey Zhao, D33080) 登录：分诊订正优先级 & 转派二线网络工程师
+    // -----------------------------------------------------------------------
+    console.log('\n[Phase 7.4] IT帮助台主管 赵颖 (Zoey Zhao, D33080) 登录系统进行服务台初审分诊与工单转派...');
+    await loginViaUI(page, USERS.zoey);
+    await page.goto(emailTicketUrl);
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // 7.4.1 分诊订正：编辑工单优先级为高优先级
+    console.log('[Phase 7.4.1] 赵颖执行服务台分诊订正：将工单优先级提升至【高优先级】...');
+    const editBtn = page.getByRole('button', { name: '编辑' }).first();
+    await expect(editBtn).toBeVisible({ timeout: 10000 });
+    await editBtn.click();
+
+    const editModal = page.getByRole('dialog', { name: /编辑工单/ });
+    await expect(editModal).toBeVisible({ timeout: 5000 });
+
+    const priorityFormItem = editModal.locator('.ant-form-item').filter({ hasText: '优先级' });
+    await priorityFormItem.locator('.ant-select').click();
+    await page.waitForTimeout(300);
+    const highPriorityOption = page.locator('.ant-select-item-option').filter({ hasText: '高优先级' }).first();
+    await expect(highPriorityOption).toBeVisible({ timeout: 5000 });
+    await highPriorityOption.click();
+
+    const savePriorityBtn = editModal.getByRole('button', { name: /保存修改/ });
+    await savePriorityBtn.click();
+    await expect(editModal).not.toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(2000);
+
+    // 断言页面已显示高优先级
+    await expect(page.locator('body')).toContainText('高优先级');
+    console.log('[Phase 7.4.1] 分诊订正完成！工单优先级已成功提升为【高优先级】。');
+
+    // 7.4.2 转派分配：分派给二线网络工程师王金海
+    console.log('[Phase 7.4.2] 赵颖点击【转派分配】按钮，调出派单控制台...');
+    const assignBtn = page.getByRole('button', { name: /转派分配/ });
+    await expect(assignBtn).toBeVisible({ timeout: 10000 });
+    await assignBtn.click();
+
+    const assignModal = page.getByRole('dialog', { name: /分配工单/ });
+    await expect(assignModal).toBeVisible({ timeout: 5000 });
+
+    console.log('[Phase 7.4.2] 检索并选择二线网络工程师 王金海 (D47105)...');
+    const assigneeSelect = assignModal.locator('.ant-select').first();
+    await assigneeSelect.click();
+    await page.keyboard.type('王金海');
+    await page.waitForTimeout(600);
+    const optionJinhai = page.locator('.ant-select-item-option').filter({ hasText: '王金海' }).first();
+    await expect(optionJinhai).toBeVisible({ timeout: 5000 });
+    await optionJinhai.click();
+
+    console.log('[Phase 7.4.2] 录入服务台分派备注并确认分配...');
+    const assignComment = assignModal.locator('textarea');
+    if (await assignComment.isVisible()) {
+      await assignComment.fill('【服务台分派】已初核王雅蓉出差值班事由属实，分派二线网络工程师王金海进行网关策略核对与配置。');
+    }
+
+    const confirmAssignBtn = assignModal.getByRole('button', { name: /确认分配/ });
+    await confirmAssignBtn.click();
+    await expect(assignModal).not.toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(2000);
+
+    // 核验处理人已更新为王金海
+    await expect(page.locator('body')).toContainText('王金海');
+    console.log('[Phase 7.4.2] 服务台分派成功！工单负责人已流转为王金海。');
+    await logoutViaUI(page);
+
+    // -----------------------------------------------------------------------
+    // Step 7.5: L2 网络工程师 王金海 (Jinhai Wang, D47105) 登录并记录【内部技术排查笔记】
+    // -----------------------------------------------------------------------
+    console.log('\n[Phase 7.5] L2 网络工程师 王金海 (Jinhai Wang, D47105) 登录执行技术排查...');
+    await loginViaUI(page, USERS.jinhaiWang);
+    await page.goto(emailTicketUrl);
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    const internalNoteContent = `【内部技术排查】网络核心网关就绪，规划为 Luka 分配网段 10.240.12.0/24，策略下发就绪。标记 SEC-${timestamp}。`;
+    console.log('[Phase 7.5] 勾选【仅内部可见】复选框，发布内部排查笔记...');
+    const internalCheckbox = page.getByLabel('仅内部可见');
+    if (await internalCheckbox.isVisible()) {
+      await internalCheckbox.check();
+    } else {
+      const internalLabel = page.locator('label:has-text("仅内部可见")').first();
+      if (await internalLabel.isVisible()) {
+        await internalLabel.click();
+      }
+    }
+    await page.waitForTimeout(300);
+
+    const netCommentInput = page.getByPlaceholder('输入您的评论或内部评估记录...');
+    await netCommentInput.fill(internalNoteContent);
+    const sendBtn = page.getByRole('button', { name: /发送评论|发送/ }).first();
+    await sendBtn.click();
+    await page.waitForTimeout(2000);
+
+    // 王金海作为工程师，可见此内部备注及“仅内部可见”徽章
+    await expect(page.locator('body')).toContainText(internalNoteContent);
+    await expect(page.locator('body')).toContainText('仅内部可见');
+    console.log('[Phase 7.5] 内部工作笔记发布成功，并带有【仅内部可见】安全标识！');
+    await logoutViaUI(page);
+
+    // -----------------------------------------------------------------------
+    // Step 7.6: 申请人 Luka (D42784) 登录核验【数据安全隔离】
+    // -----------------------------------------------------------------------
+    console.log('\n[Phase 7.6] 申请人 Luka (D42784) 登录系统，核验内部工作笔记的数据安全隔离...');
+    await loginViaUI(page, USERS.luka);
+    await page.goto(emailTicketUrl);
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // 严格断言：申请人绝对看不到工程师发布的内部敏感排查笔记
+    await expect(page.locator('body')).not.toContainText(internalNoteContent);
+    await expect(page.locator('body')).not.toContainText(`SEC-${timestamp}`);
+    console.log('[Phase 7.6] 安全断言 PASS：申请人 Luka 页面中完全隔离，无法查看内部排查笔记！');
+    await logoutViaUI(page);
+
+    // -----------------------------------------------------------------------
+    // Step 7.7: 王金海发布【公开答复】并【解决工单】(录入解决方案)
+    // -----------------------------------------------------------------------
+    console.log('\n[Phase 7.7] 王金海发布公开进度答复，并将工单置为【已解决】...');
+    await loginViaUI(page, USERS.jinhaiWang);
+    await page.goto(emailTicketUrl);
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // 7.7.1 发布公开评论 (未勾选内部可见)
+    const publicReplyContent = `【服务台答复】王雅蓉您好，出差值班所需的 SSL-VPN 访问策略已在核心网关配置完毕，请使用统一认证凭据登录客户端测试。标记 PUB-${timestamp}。`;
+    console.log('[Phase 7.7.1] 发布面向申请人的公开协同答复...');
+    const internalCheckboxWang = page.getByLabel('仅内部可见');
+    if (await internalCheckboxWang.isVisible() && await internalCheckboxWang.isChecked()) {
+      await internalCheckboxWang.uncheck();
+    }
+    await page.getByPlaceholder('输入您的评论或内部评估记录...').fill(publicReplyContent);
+    await page.getByRole('button', { name: /发送评论|发送/ }).first().click();
+    await page.waitForTimeout(2000);
+    await expect(page.locator('body')).toContainText(publicReplyContent);
+
+    // 7.7.2 点击编辑并解决工单
+    console.log('[Phase 7.7.2] 点击【编辑】按钮，变更状态为【已解决】并填写解决方案...');
+    const editBtnWang = page.getByRole('button', { name: '编辑' }).first();
+    await expect(editBtnWang).toBeVisible({ timeout: 10000 });
+    await editBtnWang.click();
+
+    const editModalWang = page.getByRole('dialog', { name: /编辑工单/ });
+    await expect(editModalWang).toBeVisible({ timeout: 5000 });
+
+    // 选择状态为“已解决”
+    const statusSelect = editModalWang.locator('.ant-select').nth(1);
+    await statusSelect.click();
+    await page.waitForTimeout(300);
+    const resolvedOption = page.locator('.ant-select-item-option').filter({ hasText: '已解决' }).first();
+    await expect(resolvedOption).toBeVisible({ timeout: 5000 });
+    await resolvedOption.click();
+
+    // 填写解决方案 (必填)
+    const resolutionText = `【解决方案】已在核心网关为申请人王雅蓉分配出差值班访问策略组并下发，经网络拨入测试与 RADIUS 鉴权验证均正常通过。单号: ${emailTicketNumber}。`;
+    const resolutionInput = editModalWang.locator('#resolution');
+    await expect(resolutionInput).toBeVisible({ timeout: 5000 });
+    await resolutionInput.fill(resolutionText);
+
+    // 提交保存修改
+    const saveEditBtnWang = editModalWang.getByRole('button', { name: /保存修改/ });
+    await saveEditBtnWang.click();
+    await expect(editModalWang).not.toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(2000);
+
+    // 核验工单状态变为“已解决”
+    await expect(page.locator('body')).toContainText('已解决');
+    console.log('[Phase 7.7] 工单已成功解决！解决方案已固化并存档。');
+    await logoutViaUI(page);
+
+    // -----------------------------------------------------------------------
+    // Step 7.8: 申请人查看解决方案并确认，服务台主管关闭工单归档
+    // -----------------------------------------------------------------------
+    console.log('\n[Phase 7.8] 申请人 Luka 重新登录查看解决方案并确认...');
+    await loginViaUI(page, USERS.luka);
+    await page.goto(emailTicketUrl);
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // 核验申请人能看到公开答复与已解决状态
+    await expect(page.locator('body')).toContainText(publicReplyContent);
+    await expect(page.locator('body')).toContainText('已解决');
+
+    // 申请人回复确认
+    console.log('[Phase 7.8] Luka 提交确认留言...');
+    await page.getByPlaceholder('输入您的评论或内部评估记录...').fill('【用户确认】经测试已可正常拨入内网，感谢处理，确认关闭。');
+    await page.getByRole('button', { name: /发送评论|发送/ }).first().click();
+    await page.waitForTimeout(1500);
+    await logoutViaUI(page);
+
+    // 服务台主管赵颖执行正式关单操作
+    console.log('\n[Phase 7.8] 服务台主管赵颖登录执行正式关单...');
+    await loginViaUI(page, USERS.zoey);
+    await page.goto(emailTicketUrl);
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    const closeBtn = page.getByRole('button', { name: '关闭工单' }).first();
+    await expect(closeBtn).toBeVisible({ timeout: 10000 });
+    await closeBtn.click();
+
+    const closeDialog = page.getByRole('dialog', { name: '关闭工单' });
+    await expect(closeDialog).toBeVisible({ timeout: 5000 });
+    const confirmCloseBtn = closeDialog.getByRole('button', { name: '确认关闭' });
+    await confirmCloseBtn.click();
+    await expect(closeDialog).not.toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(2000);
+
+    // 核验工单最终状态为“已关闭”
+    await expect(page.locator('body')).toContainText('已关闭');
+    console.log(`[Phase 7.8] 工单 ${emailTicketNumber} 已正式关闭，生命周期完整闭环！`);
+
+    console.log('======================================================');
+    console.log(`>>> Phase 7 IT Helpdesk 服务台全生命周期运营闭环 PASS！单号: ${emailTicketNumber}`);
     console.log('======================================================\n');
     await logoutViaUI(page);
   });

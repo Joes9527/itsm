@@ -10,7 +10,7 @@ import (
 // The caller supplies the authenticated effective session role, not a wire role.
 func WorkItemReadScope(actorID int, effectiveRole string) predicate.Ticket {
 	switch effectiveRole {
-	case "super_admin", "sysadmin":
+	case "super_admin", "sysadmin", "sd_manager", "it_director", "ops_director":
 		return ticket.IDGT(0)
 	default:
 		if actorID <= 0 {
