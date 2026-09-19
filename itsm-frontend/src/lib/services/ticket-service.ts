@@ -2,9 +2,11 @@ import { ticketEditVersion, ticketEditOperation, type TicketEditResult } from '.
 import { httpClient } from '@/lib/api/http-client';
 import type { Ticket, TicketListResponse } from '@/lib/api/api-config';
 
-// 工单状态枚举
+// 工单状态枚举（值域与后端 common/constants.go 的状态常量一致）
 export enum TicketStatus {
+  NEW = 'new',
   OPEN = 'open',
+  ASSIGNED = 'assigned',
   IN_PROGRESS = 'in_progress',
   PENDING = 'pending',
   RESOLVED = 'resolved',
@@ -307,7 +309,11 @@ class TicketService {
   // 获取状态标签颜色
   getStatusColor(status: TicketStatus): string {
     switch (status) {
+      case TicketStatus.NEW:
+        return 'processing';
       case TicketStatus.OPEN:
+        return 'processing';
+      case TicketStatus.ASSIGNED:
         return 'processing';
       case TicketStatus.IN_PROGRESS:
         return 'processing';
@@ -359,8 +365,12 @@ class TicketService {
   // 获取状态中文名称
   getStatusLabel(status: TicketStatus): string {
     switch (status) {
+      case TicketStatus.NEW:
+        return '新建';
       case TicketStatus.OPEN:
         return '待处理';
+      case TicketStatus.ASSIGNED:
+        return '已派单';
       case TicketStatus.IN_PROGRESS:
         return '处理中';
       case TicketStatus.PENDING:
@@ -411,8 +421,12 @@ class TicketService {
   // 获取状态标签中文
   getStatusText(status: TicketStatus): string {
     switch (status) {
+      case TicketStatus.NEW:
+        return 'New';
       case TicketStatus.OPEN:
         return 'Open';
+      case TicketStatus.ASSIGNED:
+        return 'Assigned';
       case TicketStatus.IN_PROGRESS:
         return 'In Progress';
       case TicketStatus.PENDING:
