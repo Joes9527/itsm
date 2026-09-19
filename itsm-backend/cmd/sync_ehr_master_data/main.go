@@ -460,11 +460,14 @@ func main() {
 
 	// 非法值（上级非在职/跨租户/成环/本人不存在）会被跳过并计数，
 	// 不会因为脏数据把整批导入打断。
-	invalidSupervisorCount, err := linkManagers(ctx, client, tenantID, pendingLinks)
+	//
+	// 计数器直接取 linkManagers 的返回值：那里才知道真正写库了几条。
+	// 过去用 len(pendingLinks) - 跳过数 推算，中途出错时会把未处理的算成已链接。
+	linked, skipped, err := linkManagers(ctx, client, tenantID, pendingLinks)
 	if err != nil {
 		log.Printf("Failed to link supervisors: %v", err)
 	}
-	linkedSupervisorCount = len(pendingLinks) - invalidSupervisorCount
-	skippedSupervisorCount += invalidSupervisorCount
+	linkedSupervisorCount = linked
+	skippedSupervisorCount += skipped
 	log.Printf("Direct Supervisor Linking Complete! Linked: %d, Skipped: %d", linkedSupervisorCount, skippedSupervisorCount)
 }

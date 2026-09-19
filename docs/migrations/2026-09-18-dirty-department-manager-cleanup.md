@@ -20,13 +20,38 @@ FROM departments d JOIN users u ON u.id = d.manager_id
 ORDER BY d.id;
 ```
 
-结果：**恰好 1 行**。
+结果：**恰好 1 行**（`JOIN` 本身只匹配非空且存在的用户，所以它天然看不见 NULL 行）。
 
 | 部门 ID | 部门编码 | 负责人用户 ID | 该用户角色 | 在职 |
 | --- | --- | --- | --- | --- |
 | 635 | 11D030304 | 331 | `end_user`（非管理岗） | 是 |
 
-部门总数（未软删除）：**7975**；其中 `manager_id <> 0`：**1**。
+部门总数（未软删除）：**7975**；其中 `manager_id > 0`（有负责人）：**1**。
+
+## 「无负责人」在库里有两种表示（本次查明）
+
+`departments.manager_id` 是**可空**列，因此"没有负责人"在数据里同时存在两种写法：
+
+| 表示 | 条数（执行前） | 说明 |
+| --- | --- | --- |
+| `NULL` | 7974 | 表里的**多数**写法，也是可空列的自然语义 |
+| `0` | 0 → 执行后 1 | 本次清除把脏值写成了 `0` |
+
+这带来一个容易踩的坑：**`manager_id <> 0` 看不见 NULL 行**（SQL 三值逻辑），所以下面这种"用 `<> 0` 数负责人"的查询会漏掉全部 NULL，从而得出错误结论——"只有 1 个部门没有负责人"或反过来"全部都有负责人"。
+
+凡是统计负责人状态的查询都必须同时处理两种写法：
+
+```sql
+-- 有负责人
+WHERE manager_id IS NOT NULL AND manager_id <> 0
+-- 无负责人（两种写法都算）
+WHERE manager_id IS NULL OR manager_id = 0
+```
+
+代码侧读取用 `manager_id > 0` 判断是安全的：Ent 对可空列读出的 `0` 与 `NULL` 都不会满足 `> 0`，两条写法自然都落进"无负责人"。**风险只在不做 `> 0` 判断、直接比较的查询与分析脚本里。**
+
+> 待办（需单独授权写入）：把这 1 行的 `0` 归一为 `NULL`，与表内 7974 行的多数写法一致。
+> 归一是写入动作，会改变本文件已记录的执行后状态，因此不在本次只读修正范围内。
 
 > 该值指向一名**普通员工**，不是管理岗——属脏数据。该部门没有可靠的权威负责人来源，因此按计划**清除**而不是猜测填充。
 
@@ -34,21 +59,26 @@ ORDER BY d.id;
 
 ```sql
 BEGIN;
-UPDATE departments SET manager_id = 0, updated_at = now() WHERE manager_id <> 0;
-SELECT count(*) AS remaining_nonzero_manager FROM departments WHERE manager_id <> 0;
+UPDATE departments SET manager_id = 0, updated_at = now()
+WHERE manager_id IS NOT NULL AND manager_id <> 0;   -- 必须显式排除 NULL，否则 NULL 行不可见
+SELECT count(*) AS remaining_nonzero_manager FROM departments
+WHERE manager_id IS NOT NULL AND manager_id <> 0;
 COMMIT;
 ```
 
 执行输出：`BEGIN` → `UPDATE 1` → `remaining_nonzero_manager = 0` → `COMMIT`。
 
+> 写入值为 `0` 而不是 `NULL`，与表内 7974 行的写法不一致（见上一节）。这是本次执行的既有事实，未在此处改写；归一待单独授权。
+
 ## 执行后校验（独立回读）
 
 | 指标 | 执行前 | 执行后 |
 | --- | --- | --- |
-| `manager_id <> 0` 的部门数 | 1 | **0** |
+| `manager_id IS NOT NULL AND manager_id <> 0` 的部门数 | 1 | **0** |
+| `manager_id IS NULL OR manager_id = 0`（无负责人） | 7974 | **7975** |
 | 部门总数（未软删除） | 7975 | 7975 |
 | 部门 635 的 `manager_id` | 331 | **0** |
-| Dev 库 `itsm_config_baseline_20260908` 的 `manager_id <> 0` | 1 | **1（未改动）** |
+| Dev 库 `itsm_config_baseline_20260908` 的 `manager_id > 0` | 1 | **1（未改动）** |
 
 ## 回滚
 
