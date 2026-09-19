@@ -550,6 +550,34 @@ func TestBPMNParser_MalformedApprovalRequiredFailsClosed(t *testing.T) {
 			if err == nil {
 				t.Fatal("畸形的 approval_required 声明必须让解析失败关闭，实际解析成功")
 			}
+			if !strings.Contains(err.Error(), "approval_required") {
+				t.Errorf("错误信息应指出出问题的是 approval_required 声明，实际为 %v", err)
+			}
+		})
+	}
+}
+
+// 显式 taskPurpose 属性只决定优先级，不能成为免检通道：定义里同时出现属性和畸形声明
+// （取值非布尔、重复声明）属于自相矛盾，必须和只有声明时一样失败关闭。
+func TestBPMNParser_MalformedApprovalRequiredFailsClosedWithExplicitTaskPurpose(t *testing.T) {
+	cases := map[string]string{
+		"非布尔取值": `<bpmn:extensionElements><bpmn:metaData name="approval_required">yes</bpmn:metaData></bpmn:extensionElements>`,
+		"重复声明": `<bpmn:extensionElements>
+        <bpmn:metaData name="approval_required">true</bpmn:metaData>
+        <bpmn:metaData name="approval_required">false</bpmn:metaData>
+      </bpmn:extensionElements>`,
+	}
+
+	for name, extensionElements := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := NewBPMNParser().ParseXML(
+				purposeDeclarationXML(t, ` taskPurpose="fulfillment"`, extensionElements))
+			if err == nil {
+				t.Fatal("带显式 taskPurpose 的节点上出现畸形 approval_required 声明也必须失败关闭，实际解析成功")
+			}
+			if !strings.Contains(err.Error(), "approval_required") {
+				t.Errorf("错误信息应指出出问题的是 approval_required 声明，实际为 %v", err)
+			}
 		})
 	}
 }

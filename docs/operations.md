@@ -187,6 +187,13 @@ checkpoint_completion_target = 0.9
    candidate can claim it, so an empty candidate list means the task is genuinely stuck until an
    admin reassigns it.
 
+   A malformed declaration is rejected rather than silently ignored: `approval_required` may be
+   declared at most once on a user task, must be exactly `true` or `false`, and is validated even
+   when the node also carries a `taskPurpose` attribute (the attribute only decides precedence).
+   Because the engine re-parses the stored definition at process start and at task completion, a
+   hand-imported XML that violates this fails at runtime, not only at deploy time — check the
+   engine logs for the node id if a process suddenly stops starting.
+
 ## Troubleshooting
 
 ### Container Won't Start

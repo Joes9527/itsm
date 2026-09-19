@@ -57,14 +57,16 @@ func resolveDeclaredTaskPurposes(definitions *BPMNDefinitions) error {
 			continue
 		}
 		for _, task := range process.UserTasks {
-			if task == nil || task.TaskPurpose != "" {
+			if task == nil {
 				continue
 			}
+			// 有显式属性也要解析声明：属性只决定谁优先，不是免检通道。属性与畸形声明
+			// 同时出现属于定义自相矛盾，要和只有声明时一样失败关闭。
 			declared, err := declaredBooleanMetaData(task.ExtensionElements, bpmnMetaDataApprovalRequired)
 			if err != nil {
 				return fmt.Errorf("用户任务 [%s]: %w", task.ID, err)
 			}
-			if declared {
+			if declared && task.TaskPurpose == "" {
 				task.TaskPurpose = "approval"
 			}
 		}
