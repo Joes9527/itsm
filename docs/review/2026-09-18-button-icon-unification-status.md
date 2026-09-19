@@ -1,8 +1,9 @@
 # 按钮图标体系统一：交付状态与交接
 
 - 状态：按钮内图标迁移已完成并部署；**门禁仍有一处未关闭的盲区**（见第 4 节）。
-- 日期：2026-09-18。
+- 日期：2026-09-18（2026-09-19 补记合入 main 与覆盖率守卫豁免）。
 - 证据基线：分支 `feat/button-icon-unification`，部署版本 `8f5b3940`（`8f5b39404a782f8cd6b81f845cfedf4caf137c01`），release `itsm-web-8f5b3940-yW7bNJYLZdpJqTQmMLE0Z`。这是历史验证锚点，不是最新 main 或运行版本声明。
+- 合入 main：PR #83，merge commit `11604089`。**部署的 `8f5b3940` 早于这次合并**，线上跑的**不是** main 的 tip——所以不要拿 main 的内容反推 3010 的行为，也不要因为 main 前进了就以为线上跟着变了；判断线上状态只能查 release 目录与实际进程。该 PR 只改前端、触不到 `itsm-backend/**`，必需检查从未被创建，是以 `--admin` 合并的：这是仓库治理缺陷而非本分支的问题，已[单独立案](2026-09-19-docs-only-pr-branch-protection-trap.md)，此处不重复。
 - 权威工程规则：[共享工程约定](../engineering-conventions.md) 的 Frontend 一节。本文记录背景、边界和未决项，不维护第二份规则。
 - 门禁实现与契约：`itsm-frontend/scripts/check-button-icons.mjs` 头部注释（改门禁前必读）。
 
@@ -56,4 +57,5 @@
 - 字形决策：刷新 = `SyncOutlined`、重置 = `ClearOutlined`、重试类 = `SyncOutlined`、回滚/恢复类 = `RollbackOutlined`。`TestRunner.tsx` 的 `CaretRightOutlined` 是手工「运行」语义，不要改。
 - 尺寸机制有测试钉住：`src/components/ui/__tests__/button-icon-sizing.test.tsx`。谁要把按钮图标换回 lucide，这条先响。
 - `src/components/templates/` 整个目录是死代码，`lib/templates/ui.tsx`、`AuthForm.tsx`、`AuthButton.tsx` 无调用点。
+- `src/lib/templates/{ui,list-page}.tsx` 带 `test-coverage-guard: skip` 豁免（本次迁移新增，沿用 backend 已有的 2 处先例）。理由：该目录全仓无调用点（见上一条），本次是机械的图标迁移、没有可测的行为变化，给不可达代码补测试只会制造假覆盖率；**目录去留是另一件事，不在本次范围**。两条不要动：① **不要把这两个文件改回 lucide**——按钮图标门禁会挂；② 验证这个豁免时注意守卫是从**磁盘上的 `REPO_ROOT`** 读文件判断豁免的，在未含该提交的工作树里跑仍是失败，要验就在含豁免的工作树里跑。
 - 页级英文文案（约 60 条）、`VirtualizedTicketList` 自带一份英文 `STATUS_CONFIG`/`PRIORITY_CONFIG`/`TYPE_CONFIG`（与 `src/constants/taxonomy.ts` 是同一概念的两个 owner）——已知未收，另议。
