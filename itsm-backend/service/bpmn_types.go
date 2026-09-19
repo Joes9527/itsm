@@ -13,6 +13,7 @@ const (
 	bpmnMetaDataAllowedActions   = "allowed_actions"
 	bpmnMetaDataCallbackConfig   = "callback_config_ref"
 	bpmnMetaDataCallbackOptional = "callback_optional"
+	bpmnMetaDataApprovalRequired = "approval_required"
 )
 
 // BPMNElement BPMN元素的基础接口
@@ -116,10 +117,11 @@ func (e *BPMNExtensionElements) GetMetaData(name string) string {
 	return ""
 }
 
-// callbackOptionalDeclared parses definition-declared callback optionality.
-// Absence is false; a declaration must be the exact trimmed lower-case value
-// "true" or "false" so malformed workflow definitions fail closed.
-func callbackOptionalDeclared(extensionElements *BPMNExtensionElements) (bool, error) {
+// declaredBooleanMetaData parses a definition-declared boolean metaData.
+// Absence is false; a declaration must appear at most once and be the exact
+// trimmed lower-case value "true" or "false", so malformed workflow
+// definitions fail closed.
+func declaredBooleanMetaData(extensionElements *BPMNExtensionElements, name string) (bool, error) {
 	if extensionElements == nil {
 		return false, nil
 	}
@@ -128,11 +130,11 @@ func callbackOptionalDeclared(extensionElements *BPMNExtensionElements) (bool, e
 		declarationSeen bool
 	)
 	for _, metadata := range extensionElements.MetaData {
-		if metadata.Name != bpmnMetaDataCallbackOptional {
+		if metadata.Name != name {
 			continue
 		}
 		if declarationSeen {
-			return false, fmt.Errorf("%s must be declared at most once", bpmnMetaDataCallbackOptional)
+			return false, fmt.Errorf("%s must be declared at most once", name)
 		}
 		declarationSeen = true
 		switch strings.TrimSpace(metadata.Value) {
@@ -141,10 +143,15 @@ func callbackOptionalDeclared(extensionElements *BPMNExtensionElements) (bool, e
 		case "false":
 			declared = false
 		default:
-			return false, fmt.Errorf("%s must be exactly true or false", bpmnMetaDataCallbackOptional)
+			return false, fmt.Errorf("%s must be exactly true or false", name)
 		}
 	}
 	return declared, nil
+}
+
+// callbackOptionalDeclared parses definition-declared callback optionality.
+func callbackOptionalDeclared(extensionElements *BPMNExtensionElements) (bool, error) {
+	return declaredBooleanMetaData(extensionElements, bpmnMetaDataCallbackOptional)
 }
 
 // BPMNUserTask 用户任务

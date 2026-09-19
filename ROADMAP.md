@@ -341,6 +341,57 @@ listed here is preserved**; recreate a working copy with
 - **Evidence anchors:** the branch ref and the single added document.
 - **Status:** proposed
 
+### BL-BPMN-APPROVER-ROUTING — declared approval routing has no reader, so approvals depend on the fallback group
+
+- **Outcome / persona:** a process administrator can trust that the routing written into
+  a definition is the routing the engine performs, and no approval task is created that
+  nobody owns. (Persona: process administrator, approver.)
+- **Current state — the metadata is not read:** the BPMN node metadata `assignee_type`
+  (`l1_support`, `l2_support`, `ops_manager`, `security_admin`, `it_director`, … — more
+  than ten values across the shipped definitions) and `approver_type="manager"` have **no
+  reader in Go**: `service/` and `controller/` contain no reference, and the only hit in
+  the repository is the ent-generated, unrelated
+  `IncidentEscalationRule.target_assignee_type`. Approval assignees are resolved when the
+  task is created by `resolveApprovalAssignee` and, when that yields nothing, by the
+  `ticket-approvers` fallback candidate group (see
+  [operations.md](docs/operations.md)). The definitions therefore *read* as role-routed
+  while nothing routes: a deployment whose fallback group is empty or unstaffed gets
+  approval tasks that show up in the pending-approval centre with nobody able to act on
+  them.
+- **Current state — the near-miss names are dead metadata, not a vocabulary to learn:**
+  `tech_approval_required` / `security_approval_required` / `budget_approval_required` on
+  `change_normal_flow_cn`, `service_request_flow_cn` and `release_approval_flow_cn` appear
+  nowhere else in the repository (no Go, documentation or test hit). In the deployed
+  definitions (`itsm_config_baseline_20260908`, tenants 1 and 2) they are the *only*
+  occurrences of `approval_required` and nothing references them — whereas in the bound
+  non-CN `change_normal_flow` / `service_request_flow` that same name is a gateway
+  variable (`variables['approval_required']`), which is why the parser reads only each
+  node's own `extensionElements`. Those three `_cn` definitions are deployed but
+  **unbound** (no `process_bindings` row and no catalogue
+  `process_definition_key`), and their genuinely-approval nodes (发布经理初审,
+  热修复审批, 常规发布审批, 运维经理审批, …) declare nothing at all, so widening the
+  parser vocabulary would light up the nodes *not* named 审批 while leaving the named ones
+  out. The `approval_required` node declaration stays the only approval marker.
+- **Non-goals:** no second approval engine; no growth of the parser's declaration
+  vocabulary; no change to who currently receives approvals as a side effect of tidying
+  definitions.
+- **Owning module:** `itsm-backend/service` (assignment resolution and the BPMN
+  task-creation path) and the definitions under `service/bpmn`.
+- **Dependencies / migration risk:** any change here alters *who* receives a pending
+  approval, so it needs the WorkItem and approval regression suites and a per-flow review.
+  Editing a `.bpmn` file changes nothing at runtime on its own — the engine parses the
+  deployed copy stored in `process_definitions.bpmn_xml`, so it also needs a redeploy,
+  which is a write to the shared database and separately authorised.
+- **Acceptance criteria:** (1) a recorded decision on whether `assignee_type` /
+  `approver_type` become contracts (read, validated, and failing closed on unknown values)
+  or are removed from the definitions; (2) no shipped definition advertises routing the
+  engine ignores; (3) the fallback group's provisioning is verified in the target
+  deployment before any approval journey is accepted.
+- **Evidence anchors:** PR #87 (the review round; the `_cn` declaration survey and the
+  read-only `process_bindings` / `service_catalogs.process_definition_key` check recorded
+  in its description).
+- **Status:** proposed
+
 ---
 
 ## 📊 Key Metrics

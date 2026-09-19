@@ -174,7 +174,9 @@ checkpoint_completion_target = 0.9
 5. **Network isolation** - Use Docker networks, don't expose DB port
 6. **Rate limiting** - Configure nginx rate limits
 7. **Regular updates** - Enable Dependabot for dependency updates
-8. **Provision the `ticket-approvers` fallback group** - BPMN `taskPurpose="approval"` tasks that
+8. **Provision the `ticket-approvers` fallback group** - BPMN approval tasks (declared by a
+   `taskPurpose="approval"` attribute or by a node-level
+   `<bpmn:metaData name="approval_required">true</bpmn:metaData>`) that
    can't resolve a department manager (no manager configured, or the manager is the requester
    themselves) fall back to the candidate group named by the `approvalFallbackCandidateGroup`
    constant in `service/bpmn_process_engine.go` (currently `ticket-approvers`). Before going live,
@@ -184,6 +186,13 @@ checkpoint_completion_target = 0.9
    all. `ClaimTask`/`ClaimTaskByID` also enforce that only the task's assignee or a listed
    candidate can claim it, so an empty candidate list means the task is genuinely stuck until an
    admin reassigns it.
+
+   A malformed declaration is rejected rather than silently ignored: `approval_required` may be
+   declared at most once on a user task, must be exactly `true` or `false`, and is validated even
+   when the node also carries a `taskPurpose` attribute (the attribute only decides precedence).
+   Because the engine re-parses the stored definition at process start and at task completion, a
+   hand-imported XML that violates this fails at runtime, not only at deploy time — check the
+   engine logs for the node id if a process suddenly stops starting.
 
 ## Troubleshooting
 

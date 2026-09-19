@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -427,5 +428,156 @@ func TestBPMNParser_ParseXMLFromReader(t *testing.T) {
 	process := definitions.Processes[0]
 	if process.ID != "Process_1" {
 		t.Errorf("期望流程ID为Process_1，实际为%s", process.ID)
+	}
+}
+
+// purposeDeclarationXML 生成一个最小可解析流程：单个用户任务，带上给定的任务属性和
+// extensionElements 内容，用来验证 ParseXML 从流程定义解析出什么任务用途。
+func purposeDeclarationXML(t *testing.T, taskAttrs, extensionElements string) []byte {
+	t.Helper()
+	return fmt.Appendf(nil, `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  id="Definitions_1"
+                  targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_Approval" name="Approval Process" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="Start"/>
+    <bpmn:userTask id="Activity_ManagerApproval" name="主管审批"%s>
+      %s
+    </bpmn:userTask>
+    <bpmn:endEvent id="EndEvent_1" name="End"/>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Activity_ManagerApproval"/>
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_ManagerApproval" targetRef="EndEvent_1"/>
+  </bpmn:process>
+</bpmn:definitions>`, taskAttrs, extensionElements)
+}
+
+// parseSinglePurpose 解析一个用户任务，返回解析出的任务用途。
+func parseSinglePurpose(t *testing.T, taskAttrs, extensionElements string) string {
+	t.Helper()
+	definitions, err := NewBPMNParser().ParseXML(purposeDeclarationXML(t, taskAttrs, extensionElements))
+	if err != nil {
+		t.Fatalf("解析BPMN XML失败: %v", err)
+	}
+	if len(definitions.Processes) != 1 || len(definitions.Processes[0].UserTasks) != 1 {
+		t.Fatalf("期望1个流程和1个用户任务，实际得到%d个流程", len(definitions.Processes))
+	}
+	return definitions.Processes[0].UserTasks[0].TaskPurpose
+}
+
+// incident_emergency_flow / problem_management_flow_cn 里的审批节点用节点级
+// approval_required metaData 声明审批，而不是 taskPurpose 属性。引擎只认属性时，
+// 这些审批节点会退化成普通任务：待办中心看不到它们，审批人解析和"申请人不能审批
+// 自己的任务"这条授权也不生效。
+func TestBPMNParser_ApprovalRequiredMetaDataDeclaresApprovalTask(t *testing.T) {
+	purpose := parseSinglePurpose(t, "", `<bpmn:extensionElements>
+        <bpmn:metaData name="service_task_type">incident_task</bpmn:metaData>
+        <bpmn:metaData name="action">manager_approval</bpmn:metaData>
+        <bpmn:metaData name="approval_required">true</bpmn:metaData>
+      </bpmn:extensionElements>`)
+
+	if purpose != "approval" {
+		t.Errorf("期望节点级 approval_required=true 解析出 taskPurpose=approval，实际为 %q", purpose)
+	}
+}
+
+func TestBPMNParser_ExplicitTaskPurposeWinsOverApprovalRequiredMetaData(t *testing.T) {
+	purpose := parseSinglePurpose(t, ` taskPurpose="fulfillment"`, `<bpmn:extensionElements>
+        <bpmn:metaData name="approval_required">true</bpmn:metaData>
+      </bpmn:extensionElements>`)
+
+	if purpose != "fulfillment" {
+		t.Errorf("显式 taskPurpose 属性应优先于 approval_required 声明，实际为 %q", purpose)
+	}
+}
+
+func TestBPMNParser_OnlyExplicitApprovalRequiredTrueDeclaresApproval(t *testing.T) {
+	cases := map[string]string{
+		"未声明":                 `<bpmn:extensionElements><bpmn:metaData name="action">manager_approval</bpmn:metaData></bpmn:extensionElements>`,
+		"显式 false":            `<bpmn:extensionElements><bpmn:metaData name="approval_required">false</bpmn:metaData></bpmn:extensionElements>`,
+		"无 extensionElements": ``,
+	}
+
+	for name, extensionElements := range cases {
+		t.Run(name, func(t *testing.T) {
+			purpose := parseSinglePurpose(t, "", extensionElements)
+			if purpose != "" {
+				t.Errorf("只有显式 approval_required=true 才算审批任务，实际解析出 %q", purpose)
+			}
+		})
+	}
+}
+
+// approval_required 同时还是流程变量的名字（ticket_general_flow 等用它做网关条件），
+// 所以审批声明只认节点自身 extensionElements 里的那份，流程层的同名 metaData 不算。
+func TestBPMNParser_ProcessLevelApprovalRequiredDoesNotDeclareNodeApproval(t *testing.T) {
+	xmlData := []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  id="Definitions_1"
+                  targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_Approval" name="Approval Process" isExecutable="true">
+    <bpmn:extensionElements>
+      <bpmn:metaData name="approval_required">true</bpmn:metaData>
+    </bpmn:extensionElements>
+    <bpmn:startEvent id="StartEvent_1" name="Start"/>
+    <bpmn:userTask id="Activity_ManagerApproval" name="主管审批"/>
+    <bpmn:endEvent id="EndEvent_1" name="End"/>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Activity_ManagerApproval"/>
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_ManagerApproval" targetRef="EndEvent_1"/>
+  </bpmn:process>
+</bpmn:definitions>`)
+
+	definitions, err := NewBPMNParser().ParseXML(xmlData)
+	if err != nil {
+		t.Fatalf("解析BPMN XML失败: %v", err)
+	}
+	if purpose := definitions.Processes[0].UserTasks[0].TaskPurpose; purpose != "" {
+		t.Errorf("流程层 approval_required 不应把节点标成审批任务，实际解析出 %q", purpose)
+	}
+}
+
+func TestBPMNParser_MalformedApprovalRequiredFailsClosed(t *testing.T) {
+	cases := map[string]string{
+		"非布尔取值": `<bpmn:extensionElements><bpmn:metaData name="approval_required">yes</bpmn:metaData></bpmn:extensionElements>`,
+		"重复声明": `<bpmn:extensionElements>
+        <bpmn:metaData name="approval_required">true</bpmn:metaData>
+        <bpmn:metaData name="approval_required">false</bpmn:metaData>
+      </bpmn:extensionElements>`,
+	}
+
+	for name, extensionElements := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := NewBPMNParser().ParseXML(purposeDeclarationXML(t, "", extensionElements))
+			if err == nil {
+				t.Fatal("畸形的 approval_required 声明必须让解析失败关闭，实际解析成功")
+			}
+			if !strings.Contains(err.Error(), "approval_required") {
+				t.Errorf("错误信息应指出出问题的是 approval_required 声明，实际为 %v", err)
+			}
+		})
+	}
+}
+
+// 显式 taskPurpose 属性只决定优先级，不能成为免检通道：定义里同时出现属性和畸形声明
+// （取值非布尔、重复声明）属于自相矛盾，必须和只有声明时一样失败关闭。
+func TestBPMNParser_MalformedApprovalRequiredFailsClosedWithExplicitTaskPurpose(t *testing.T) {
+	cases := map[string]string{
+		"非布尔取值": `<bpmn:extensionElements><bpmn:metaData name="approval_required">yes</bpmn:metaData></bpmn:extensionElements>`,
+		"重复声明": `<bpmn:extensionElements>
+        <bpmn:metaData name="approval_required">true</bpmn:metaData>
+        <bpmn:metaData name="approval_required">false</bpmn:metaData>
+      </bpmn:extensionElements>`,
+	}
+
+	for name, extensionElements := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := NewBPMNParser().ParseXML(
+				purposeDeclarationXML(t, ` taskPurpose="fulfillment"`, extensionElements))
+			if err == nil {
+				t.Fatal("带显式 taskPurpose 的节点上出现畸形 approval_required 声明也必须失败关闭，实际解析成功")
+			}
+			if !strings.Contains(err.Error(), "approval_required") {
+				t.Errorf("错误信息应指出出问题的是 approval_required 声明，实际为 %v", err)
+			}
+		})
 	}
 }
