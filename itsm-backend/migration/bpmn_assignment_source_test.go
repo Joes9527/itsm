@@ -11,10 +11,11 @@ import (
 func TestBPMNAssignmentSourceMigrationRegistered(t *testing.T) {
 	const version = "047_bpmn_assignment_source"
 	// 047 keeps its place: later ordinary migrations append after it and before retirement.
-	require.Equal(t, version, RegisteredMigrations[len(RegisteredMigrations)-5].Version)
-	require.Equal(t, CTIGovernanceVersion, RegisteredMigrations[len(RegisteredMigrations)-4].Version)
-	require.Equal(t, DepartmentCodeTenantUniqueVersion, RegisteredMigrations[len(RegisteredMigrations)-3].Version)
-	require.Equal(t, DepartmentNodeTypeVersion, RegisteredMigrations[len(RegisteredMigrations)-2].Version)
+	require.Equal(t, version, RegisteredMigrations[len(RegisteredMigrations)-6].Version)
+	require.Equal(t, CTIGovernanceVersion, RegisteredMigrations[len(RegisteredMigrations)-5].Version)
+	require.Equal(t, DepartmentCodeTenantUniqueVersion, RegisteredMigrations[len(RegisteredMigrations)-4].Version)
+	require.Equal(t, DepartmentNodeTypeVersion, RegisteredMigrations[len(RegisteredMigrations)-3].Version)
+	require.Equal(t, DepartmentManagerNoneVersion, RegisteredMigrations[len(RegisteredMigrations)-2].Version)
 	require.Equal(t, WorkItemRetireVersion, RegisteredMigrations[len(RegisteredMigrations)-1].Version)
 	asset, err := os.ReadFile("../migrations/" + version + ".sql")
 	require.NoError(t, err)
@@ -48,6 +49,7 @@ func TestBPMNAssignmentSourceAppendPreservesExistingRetirementReceipt(t *testing
 		CTIGovernanceVersion:              true,
 		DepartmentCodeTenantUniqueVersion: true,
 		DepartmentNodeTypeVersion:         true,
+		DepartmentManagerNoneVersion:      true,
 	}
 	var prior []Migration
 	for _, definition := range catalog {
@@ -57,7 +59,7 @@ func TestBPMNAssignmentSourceAppendPreservesExistingRetirementReceipt(t *testing
 	}
 	plan, err := PlanMigrations(catalog, controlledReceipts(prior), OpUp, nil)
 	require.NoError(t, err)
-	require.Len(t, plan.Executable, 4)
+	require.Len(t, plan.Executable, 5)
 	require.Equal(t, "047_bpmn_assignment_source", plan.Executable[0].Version)
 	require.Equal(t, CTIGovernanceVersion, plan.Executable[1].Version)
 	require.Equal(t, DepartmentCodeTenantUniqueVersion, plan.Executable[2].Version)
