@@ -38,7 +38,7 @@ import { CreationAttempts } from '@/components/work-item/CreationAttempts';
 import { CreationRequester } from '@/components/work-item/CreationRequester';
 import { CatalogProfessionalFields } from './CatalogProfessionalFields';
 import { incompatibleCatalogAnswers, type IncompatibleCatalogAnswer } from './catalog-reload';
-import { catalogDeclaresReason } from './catalog-reason';
+import { catalogOwnsRequiredReason, catalogReasonField } from './catalog-reason';
 import { useAuthStore } from '@/lib/store/auth-store';
 
 const { Title, Text, Paragraph } = Typography;
@@ -124,13 +124,16 @@ export default function ServiceCatalogRequestPage() {
       const customFieldValues = (catalog.fields || [])
         .map(field => ({ name: field.name, value: values.customFields?.[field.name] }))
         .filter(field => field.value !== undefined && field.value !== null && field.value !== '');
+      // 理由由目录字段承担时（申请页不再询问），把该答案同时作为申请理由提交：
+      // 服务端用它填工单描述（后端 reason → Description），否则审批人看到的描述是空的。
+      const catalogReason = values.customFields?.[catalogReasonField(catalog.fields)?.name ?? ''];
       const payload: CreateServiceRequestRequest = {
         catalogId: id,
         recordClass: catalog.targetClass,
         catalogVersion: catalog.catalogVersion,
         formSchemaVersion: catalog.formSchemaVersion,
         title: values.title,
-        reason: values.reason,
+        reason: values.reason ?? (typeof catalogReason === 'string' ? catalogReason : undefined),
         priority: values.priority,
         requesterId: values.requesterId,
         formData: { customFieldValues },
@@ -337,7 +340,7 @@ export default function ServiceCatalogRequestPage() {
             <Input placeholder="一句话说明申请目的" maxLength={200} />
           </Form.Item>
 
-          {!catalogDeclaresReason(catalog?.fields) && (
+          {!catalogOwnsRequiredReason(catalog?.fields) && (
             <Form.Item
               name="reason"
               label="申请理由"

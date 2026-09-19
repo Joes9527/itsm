@@ -50,6 +50,42 @@ it('keeps the generic reason field for a Catalog that declares none', async () =
   expect(screen.getByLabelText('申请理由')).toBeInTheDocument();
 });
 
+it('keeps the required generic reason field when the Catalog only declares an optional one', async () => {
+  jest.mocked(ServiceCatalogApi.getService).mockResolvedValue({
+    ...catalog,
+    fields: [{ name: 'access_reason', label: '业务申请理由', type: 'textarea', required: false }],
+  } as never);
+  render(<Page />);
+  await screen.findByLabelText('申请标题');
+  // 目录字段不强制时，隐藏必填的申请理由会让"两个理由都不填"也能提交
+  expect(screen.getByLabelText('申请理由')).toBeInTheDocument();
+});
+
+it('submits the catalog-owned reason as the request reason so the WorkItem description is not empty', async () => {
+  jest.mocked(ServiceCatalogApi.getService).mockResolvedValue({
+    ...catalog,
+    fields: [
+      { name: 'office_location', label: '办公地点', type: 'text', required: true },
+      { name: 'access_reason', label: '业务申请理由', type: 'textarea', required: true },
+    ],
+  } as never);
+  render(<Page />);
+  await screen.findByLabelText('申请标题');
+  fireEvent.change(screen.getByLabelText('申请标题'), { target: { value: '服务申请' } });
+  fireEvent.change(screen.getByLabelText('办公地点'), { target: { value: '上海' } });
+  fireEvent.change(screen.getByLabelText('业务申请理由'), {
+    target: { value: '因出差值班需要远程访问内部测试服务' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: '提交申请' }));
+
+  await waitFor(() =>
+    expect(ServiceCatalogApi.createServiceRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: '因出差值班需要远程访问内部测试服务' }),
+      expect.objectContaining({ idempotencyKey: expect.any(String) })
+    )
+  );
+});
+
 it('fails visibly without versionless fallback when detail read fails', async () => {
   jest.mocked(ServiceCatalogApi.getService).mockRejectedValue(new Error('denied')); render(<Page />);
   expect(await screen.findByText(/服务信息加载失败/)).toBeInTheDocument();
