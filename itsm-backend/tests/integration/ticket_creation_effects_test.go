@@ -12,6 +12,7 @@ import (
 
 	"itsm-backend/connector"
 	"itsm-backend/ent"
+	"itsm-backend/ent/ticketnotification"
 	repositoryticket "itsm-backend/repository/ticket"
 	"itsm-backend/service"
 
@@ -75,6 +76,22 @@ func TestIntakeGenericCreationUsesConfiguredEffectsAtomically(t *testing.T) {
 	require.True(t, replay.Replayed)
 	require.Equal(t, 1, f.client.TicketAutomationRule.GetX(ctx, rule.ID).ExecutionCount)
 	require.Equal(t, 8, f.client.TicketNotification.Query().CountX(ctx))
+}
+
+func TestIntakeGenericCreationNotifiesRequesterWithoutAssignee(t *testing.T) {
+	f := newUnifiedIntakeFixture(t, configuredCreationTicketOwner)
+	ctx := tenantctx.WithTenantID(context.Background(), f.identity.TenantID)
+	created, err := f.app.Create(ctx, f.identity, f.command)
+	require.NoError(t, err)
+	item := f.client.Ticket.GetX(ctx, created.WorkItemID)
+	require.Zero(t, item.AssigneeID, "no active assignment rule matches, so the ticket stays unassigned")
+
+	notifications := f.client.TicketNotification.Query().Where(ticketnotification.TypeEQ("ticket_created")).AllX(ctx)
+	require.NotEmpty(t, notifications, "an unassigned ticket must still notify its requester")
+	for _, notification := range notifications {
+		require.Equal(t, item.RequesterID, notification.UserID, "without an assignee the requester is the only recipient")
+		require.Contains(t, notification.Content, item.TicketNumber, "the creation message is unchanged")
+	}
 }
 
 func TestIntakeGenericCreationRejectsMalformedRulesAndRollsBackEffects(t *testing.T) {

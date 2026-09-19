@@ -204,6 +204,36 @@ go run ./cmd/check_workitem_cutover -json            # 机器可读输出
 
 > 开发环境不迁移历史 ticket；该预检作为切换门禁保留，正常干净库应返回 `exit 0`。
 
+### 2.5.2 内置 BPMN 模板单模板同步
+
+**先记住这条**：内置模板的同步只在 seeder 中触发——`service/bpmn_template_service.go` 的
+`LoadAndDeployTemplates` ← `pkg/seeder` 的 `seedBPMNWorkflows` ← `ITSM_AUTO_SEED`。
+生产安全的默认值是 `ITSM_AUTO_SEED=false`，所以**改了 `service/bpmn/*.bpmn` 之后重启服务不会有任何效果**：
+不重启、不自动发布、也不报错。这是"改了流程定义但运行时行为没变"最常见的原因。
+
+`cmd/bpmn_template_sync_once` 是单模板部署入口：只作用于 `-key` 指定的那一个模板，复用
+`BPMNTemplateService.DeployTemplateByName` 这条生产路径，不做 `LoadAndDeployTemplates` 的全量扫描
+（那会顺带升级其它内容漂移的模板，超出本次意图）。
+
+```bash
+cd itsm-backend
+go run ./cmd/bpmn_template_sync_once -key ticket_general_flow           # dry-run（默认）
+go run ./cmd/bpmn_template_sync_once -key ticket_general_flow -apply   # 真正写库
+```
+
+- 默认 dry-run：解析模板，列出每个用户任务声明的路由，并对**固定范围路由**（`assigneeTeamId` /
+  `assigneeDeptId` / `assigneeProjectId` / `assigneeTempTeamId`）做真实解析；解析不出候选人在写库前失败。
+- `-tenant-id` 默认 1。写库后校验该 key 恰好 1 个 `is_active` 版本，不满足即非零退出。
+- 模板内容与库中最新版本逐字节相同时不产生新版本。
+- **"未声明路由"不算失败，只报告**：`ValidateDefinitionForPublication` 里那条候选人配置检查只作用于
+  服务目录/绑定发布，对内置模板 seeding 不生效；内置模板的履行类节点普遍未声明路由，引擎会按
+  `requester_id` 兜底。工具据此只提示，不拦截——否则受支持的部署路径会被挡住。
+- 该工具写共享库，按 [agent engineering governance](agent-engineering-governance.md) §8 走共享环境变更流程
+  （先备份、留证、单写入者）。
+
+> 可达但未声明路由的履行节点会把任务静默派给申请人，这是全产品既有行为，已登记为
+> [BL-BPMN-UNROUTED-TASK-FALLBACK](../ROADMAP.md#bl-bpmn-unrouted-task-fallback--stop-silently-assigning-unrouted-user-tasks-to-the-requester)。
+
 ### 2.6 功能冒烟测试
 
 ```bash

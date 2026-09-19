@@ -2062,3 +2062,29 @@ func TestCompleteTask_ResumesDelegatedTask_AfterAsyncPause(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, 1, fakeHandler.executed, "重复完成不应该再次触发 handler")
 }
+
+// 审批任务缺 approvalAction 时不能静默跳过：那样这次审批就没有落成决策记录，
+// 审批历史会凭空少一条，读路径只看到"无数据"，无法区分"没有审批"和"审批没记上"。
+// 非审批任务不带 approvalAction 仍是正常的（见 TestRecordApprovalDecision_SkippedWhenActionMissing）。
+func TestRecordApprovalDecision_ApprovalTaskMissingActionFailsClosed(t *testing.T) {
+	engine, baseCtx := newApprovalDecisionTestEngine(t)
+	tenantID, actorID := setupApprovalDecisionFixture(t, engine)
+	ctx := context.WithValue(baseCtx, bpmn.BPMNUserIDContextKey, actorID)
+	ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenantID)
+	ctx = WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: actorID, TenantID: tenantID})
+
+	instanceID, taskID := createProcessFixture(t, engine, tenantID, "approval-missing-action")
+	instance, err := engine.client.ProcessInstance.Get(ctx, instanceID)
+	require.NoError(t, err)
+
+	task, err := engine.client.ProcessTask.Get(ctx, taskID)
+	require.NoError(t, err)
+	task = task.Update().SetTaskVariables(map[string]interface{}{"taskPurpose": "approval"}).SaveX(ctx)
+
+	err = engine.recordApprovalDecision(ctx, instance, task, map[string]interface{}{"approvalComment": "同意"})
+	require.Error(t, err, "审批任务缺少 approvalAction 必须报错，而不是静默不记录")
+
+	count, err := engine.client.ProcessApprovalDecision.Query().Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count)
+}

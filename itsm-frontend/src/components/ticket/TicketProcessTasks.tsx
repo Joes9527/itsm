@@ -8,13 +8,9 @@ import Link from 'next/link';
 import { BPMNWorkflowApi, type UserTask } from '@/lib/api/bpmn-workflow-api';
 import { useDetailResource } from '@/components/business/detail-tabs/useDetailResource';
 import { DetailReadState } from '@/components/business/detail-tabs/DetailReadState';
+import { readWorkItemProcessTasks, terminalTaskStatuses as terminal } from '@/components/business/detail-tabs/workItemProcessTasks';
+import { usePublishWorkItemProcessTasks } from '@/components/business/detail-tabs/WorkItemProcessTasksContext';
 
-// Wire identity mapping only; lifecycle and authorization remain in BPMN.
-const businessTypes: Record<string, string> = {
-  generic: 'generic', service_request_item: 'service_request_item', incident: 'incident',
-  problem: 'problem', change_request: 'change_request', catalog_task: 'catalog_task',
-};
-const terminal = new Set(['completed', 'cancelled']);
 const statuses: Record<string, string> = {
   created: '待处理', assigned: '已分配', started: '处理中', pending: '等待处理',
   delegated: '已委派', suspended: '已暂停', completed: '已完成', cancelled: '已取消',
@@ -25,28 +21,6 @@ const assignmentStates: Record<UserTask['assignmentState'], string> = {
   unavailable: '处理人当前不可用',
   terminal: '历史处理记录',
 };
-
-async function readTasks(ticketId: number, recordClass: string): Promise<UserTask[]> {
-  const businessType = businessTypes[recordClass];
-  if (!businessType) throw new Error('暂不支持此工单类型的流程任务查询');
-  const tasks: UserTask[] = [];
-  const seen = new Set<number>();
-  const pageSize = 100;
-  for (let page = 1; ; page++) {
-    const result = await BPMNWorkflowApi.listUserTasks({ businessType, businessId: ticketId, page, pageSize });
-    if (!Array.isArray(result.items) || !Number.isSafeInteger(result.total) || result.total < 0 ||
-        result.page !== page || result.pageSize !== pageSize) throw new Error('任务分页响应异常，请重试');
-    const expected = Math.max(0, Math.min(pageSize, result.total - (page - 1) * pageSize));
-    if (result.items.length !== expected) throw new Error('任务分页不完整，请重试');
-    for (const task of result.items) {
-      if (task.businessType !== businessType || task.businessId !== ticketId) throw new Error('任务关联不一致，请重试');
-      if (!Number.isSafeInteger(task.id) || task.id <= 0 || seen.has(task.id)) throw new Error('任务分页重复或无效，请重试');
-      seen.add(task.id);
-      tasks.push(task);
-    }
-    if (page * pageSize >= result.total) return tasks;
-  }
-}
 
 function taskSession(state = useAuthStore.getState()) {
   return JSON.stringify([state.user?.id, state.user?.tenantId, state.currentTenant?.id,
@@ -112,12 +86,14 @@ export function TicketProcessTasks(props: { ticketId: number; recordClass: strin
 function ProcessTasksPanel({ ticketId, recordClass, onTaskChange, session }: {
   ticketId: number; recordClass: string; onTaskChange?: () => Promise<void>; session: string;
 }) {
-  const resource = useDetailResource(`${recordClass}:${ticketId}`, () => readTasks(ticketId, recordClass), tasks => tasks.length);
+  const resource = useDetailResource(`${recordClass}:${ticketId}`, () => readWorkItemProcessTasks(ticketId, recordClass), tasks => tasks.length);
   const [busy, setBusy] = useState(false);
   const locked = useRef(false);
   const commandPending = useRef(false);
   const refresh = useDetailRefresh();
   useDetailRefreshEntry({ key: 'process-tasks', label: '流程任务', reload: resource.reload, isWriting: () => commandPending.current });
+  // 审批空态说明复用这一次读取的结果；读取失败或未就绪时不发布，避免用读不到的数据解释空态。
+  usePublishWorkItemProcessTasks(`${recordClass}:${ticketId}`, resource.ready && !resource.error ? resource.data : undefined);
   const [selected, setSelected] = useState<UserTask | null>(null);
   const [completionNote, setCompletionNote] = useState('');
   const [mutationError, setMutationError] = useState<string>();

@@ -45,6 +45,7 @@ itsm-backend/tmp/
 itsm-backend/itsm-backend
 itsm-backend/backfill_legacy_pending_changes
 itsm-backend/backfill_process_instance_business_identity
+itsm-backend/bpmn_template_sync_once
 itsm-backend/check_work_item_integrity
 itsm-backend/lock_legacy_approvals
 itsm-backend/provision_tenant

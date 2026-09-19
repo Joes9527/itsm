@@ -13,7 +13,7 @@ import (
 func TestGenericV2Template(t *testing.T) {
 	old, err := os.ReadFile("bpmn/ticket_general_flow.bpmn")
 	require.NoError(t, err)
-	require.Equal(t, "6d7c436bb06acfef500df259d9b82e605b53b08bbf18dc8b33f8e48939d6a893", fmt.Sprintf("%x", sha256.Sum256(old)))
+	require.Equal(t, "124a7faf660f23e82ba89c0302e900171cbd64ca932df091514f2adbcb5cc2d3", fmt.Sprintf("%x", sha256.Sum256(old)))
 	xml, err := os.ReadFile("bpmn/ticket_general_flow_v2.bpmn")
 	require.NoError(t, err)
 	defs, err := NewBPMNParser().ParseXML(xml)

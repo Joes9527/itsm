@@ -141,7 +141,7 @@ Always verify **host → port → listener PID/start time → executable/cwd →
 
 Historical port/theme integration evidence (not the current release authority): the 2026-09-15 frontend integration started from the running workbench source `93480226` and merged A/C visual theme source `eb76c3bc`. The exact deployed merge/fix revision and Next.js build ID are recorded in `active-release.json`. This preserves current workbench commands while adding the completed theme. Newer `main` also contains unrelated domain/database work; updating it is not authorization to deploy its entire backend.
 
-The backend source provenance recorded by the previous deployment is `c3c880df`; its binary fingerprint before the port change is `d395dbd5a03739d48cde6fe7898ec45d7daadb19686ac265f5bf6e70239a58ef`. A source label is recorded provenance, not a fresh reproducible-build attestation. That completed frontend-port task kept that binary and database target and changed only the frontend URL/origins necessary for 3010, and recorded the resulting configuration fingerprint. It did not run migrations or grant database permissions.
+**Superseded for the live runtime** — the current backend/frontend identity is recorded in the 2026-09-18 increment at the end of this document. The backend source provenance recorded by the deployment before that was `c3c880df`; its binary fingerprint before the port change was `d395dbd5a03739d48cde6fe7898ec45d7daadb19686ac265f5bf6e70239a58ef`. A source label is recorded provenance, not a fresh reproducible-build attestation. That completed frontend-port task kept that binary and database target and changed only the frontend URL/origins necessary for 3010, and recorded the resulting configuration fingerprint. It did not run migrations or grant database permissions.
 
 Source checkout edits do not automatically update a standalone build. Build in an isolated worktree, verify current command/theme behavior, copy required `.next/static` and `public` artifacts into standalone output, verify `/api/*` targets 8080, and record revision/build ID before switching. Avoid concurrent builds or dependency installs against the active runtime directory.
 
@@ -205,3 +205,25 @@ The exact applied revision, build ID and verification outcome belong to the loca
 - 新增隔离测试库 `gb-remediation-test-pg-20260914 / ga_acl_rehearsal_20260915`，仅用于恢复本批备份与ACL真实角色演练，不是业务环境，不得让应用连接。原有三个测试库未覆盖。
 - 本批受保护配置、备份、恢复/准入证据均在 `/home/administrator/.local/state/itsm-backend-switch-20260915/`。不得把凭据、原始用户数据、argv/environment或备份提交Git。
 - 前后端兼容补丁仍在独立审查；8080/3001尚未切换，启动与实际登录/新建/人工任务操作仍待验证。SLA、未测专业动作、外部投递、重启恢复均不能因这些预检关闭。
+
+### 2026-09-18 审批可见性修复：DEV 运行时身份更正与共享库变更
+
+本节取代上面的运行时身份记录；核对当前值请以本节为准。
+
+| 服务 | PID | 身份 |
+| --- | --- | --- |
+| itsm (8080) | 1508265 | `itsm-api-fixes-d310caba`，sha256 `285dacfe04937898ab4ea8e9ae6cf4a67d8430cc6a73e7ba0e370a800fc711ab` |
+| itsm-web (3010) | 1507567 | `itsm-web-d310caba-9BhCMagW1eM6lr4CPURkS`，build_id `9BhCMagW1eM6lr4CPURkS` |
+
+两者均由 `stack` 管理，recipe 与 `active-release.json` 已同步更新。前端在独立 worktree 构建，只含本次变更的文件，未纳入并发会话对其它文件（如 `ServiceItemCard.tsx`）的在途改动。
+
+**配置更正**：后端 recipe 一度按 `dev-launch-proposed.json` 记录 `ENV=production`，而进程实际捕获的环境是 `ENV=development`。现按实际运行值记录。以在运行进程的环境为准，不要据提案文件回填。
+
+本次改动共享开发库 `itsm_config_baseline_20260908`（tenant 1），改动前已备份（`sha256 20586838e9a98373ccf582b9042201cf49cbfaeeb8ddea073fe8359c545df42f`）。两处变更：
+
+- `teams.id=1` 的负责人由空置改为 1203。理由：`ticket_general_flow` 的派单节点声明 `assigneeTeamId=1`，团队无负责人时团队负责人解析失败、任务无人可领。
+- `ticket_general_flow` 由 1.3.0（id 65）发布为 **1.4.0（id 152）**，旧版本停用，该 key 恰好 1 个 `is_active` 版本。回滚：`id=65` 置 `is_active/is_latest=true`、`id=152` 置 false。
+
+**未执行**：2026-09-18 批次的 E2E 工单（54–72）未删除。该批 19 条 `intake_requests` 全部为 `completed`，`validate_intake_receipt_provenance` 触发器使已完成收据不可变，而外键动作为 `SET NULL`——执行该 UPDATE 本身即报错。没有禁用该保护，批次保留，改用新建工单验证流程行为。
+
+完整变更、验证与回滚证据保存在私有目录 `/home/administrator/.local/state/itsm-dev-fixes-20260918/evidence/DEPLOYMENT-RECORD.md`，该文件不入库。未修复项（可达但未声明路由的履行节点）登记为 [BL-BPMN-UNROUTED-TASK-FALLBACK](../ROADMAP.md#bl-bpmn-unrouted-task-fallback--stop-silently-assigning-unrouted-user-tasks-to-the-requester)。

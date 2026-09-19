@@ -17,8 +17,13 @@
       <bpmn:outgoing>Flow_1</bpmn:outgoing>
     </bpmn:startEvent>
 
-    <!-- 任务分配 -->
-    <bpmn:userTask id="Activity_Assign" name="任务分配" instantiate="false">
+    <!-- 任务分配（派单）：必须显式声明处理人路由，否则引擎会静默回落到申请人。
+         这里用固定范围组织路由指派给「服务台-L1」负责人（teams 由 seeder 按声明顺序创建，
+         服务台-L1 是该租户的第一个团队，id=1）。
+         前置条件：该团队必须配置负责人（teams.manager_id），否则
+         service/approver/team_leader_resolver.go 解析失败、任务无人可领，且发布校验会以
+         "task requires fixed candidate configuration" 拦下本定义。租户在 /admin/teams 维护。 -->
+    <bpmn:userTask id="Activity_Assign" name="任务分配" instantiate="false" assigneeTeamId="1">
       <bpmn:extensionElements>
         <bpmn:metaData name="service_task_type">ticket_task</bpmn:metaData>
         <bpmn:metaData name="action">assign</bpmn:metaData>
