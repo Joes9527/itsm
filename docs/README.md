@@ -114,6 +114,8 @@
 
 - [规范化迁移准入与克隆库约束](./deployment/canonical-migration-admission-and-clone-constraints.md)：既有库变更的唯一规范路径（`cmd/migrate`）、运行时准入三要求、**回执绑定库名**、**TEMPLATE 克隆库永远过不了准入**、Ent 字段与迁移的先后（**schema 迁移是上线前置条件**）、本机库状态对照、错误对照表与禁止清单。含 049/050/051 执行记录。
 
+- [分支保护与工作流路径过滤的组合问题](./review/2026-09-19-docs-only-pr-branch-protection-trap.md)：纯文档/脚本 PR 无法产生必需检查 `Lint/Build/Test`，导致永远无法通过分支保护（实测 PR #91）；含证据、影响与三种修法（**未修，待决**）。
+
 - [WorkItem 后续 backlog 就绪评估](./review/2026-09-12-workitem-backlog-readiness.md)：I2、物理清理审计、Change 多 WorkOrder、首响、RCA/HMAC/Redis/匿名卷的现状与未来验收条件。
 
 - [WorkItem 后续 backlog 设计草案（DRAFT）](./superpowers/specs/2026-09-12-backlog-design-drafts.md)：各项 backlog 的问题、方向、备选、验收与待决问题；未批准、未实现。
