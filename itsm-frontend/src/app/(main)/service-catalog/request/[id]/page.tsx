@@ -275,7 +275,7 @@ export default function ServiceCatalogRequestPage() {
             type="error"
             showIcon
             className="mb-4"
-            message={fetchError}
+            title={fetchError}
             action={<Button onClick={() => router.push('/service-catalog')}>返回服务目录</Button>}
           />
         )}
@@ -285,7 +285,7 @@ export default function ServiceCatalogRequestPage() {
             type="info"
             showIcon
             className="mb-4"
-            message={
+            title={
               <Space>
                 <Text strong>{catalog.name}</Text>
                 {catalog.availability?.responseTime != null && (
