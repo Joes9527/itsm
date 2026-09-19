@@ -80,6 +80,29 @@ COMMIT;
 | 部门 635 的 `manager_id` | 331 | **0** |
 | Dev 库 `itsm_config_baseline_20260908` 的 `manager_id > 0` | 1 | **1（未改动）** |
 
+## 2026-09-19 追加：开发库的同项清除与「无负责人」归一
+
+上一节只覆盖了克隆库。开发库 `itsm_config_baseline_20260908` 的同一处脏值（部门 635 → 331）
+当时**未**清除，2026-09-19 一并处理，并把「没有负责人」的两种写法收敛为一种。
+
+| 项 | 值 |
+| --- | --- |
+| 目标库 | `itsm_config_baseline_20260908`（准备回执绑定的库） |
+| 写前备份 | `/home/administrator/.itsm/backups/pre_051_itsm_config_baseline_20260908.sql`（6.0M，`sha256:0930fb4b4fbcebdf…`） |
+| 归一迁移 | `051_department_manager_none_normalization`（把 `manager_id = 0` 归一为 `NULL`，走 `cmd/migrate -up`，2026-09-19 10:30:51） |
+| 脏值清除 | 带守卫的单事务：`UPDATE departments SET manager_id = NULL WHERE id = 635 AND manager_id = 331` |
+| 写后状态 | 部门 635 的 `manager_id` = `NULL`；全表 `NULL = 7975`、`零 = 0`、`有负责人 = 0` |
+
+守卫的意义：只在它**仍指向那个已知脏值**时才清除；若期间有人合法地改了该部门的负责人，本操作不会覆盖。
+
+**归一的理由与方向**：`NULL` 是本列的既有惯例（同表 `parent_id` 亦用 `NULL` 表示"没有"），
+而且两种写法会让查询两边都漏——`manager_id <> 0` 看不见 `NULL`，`manager_id IS NULL` 看不见 `0`
+（本文件早先那版校验语句正是踩了前者）。详见迁移 SQL 内的说明与
+[规范化迁移准入与克隆库约束](../deployment/canonical-migration-admission-and-clone-constraints.md)。
+
+**克隆库未处理**：`itsm_migration_20260914` 仍是 `零 = 1`。它不在准备回执绑定的库之列，
+走不了规范化路径；按规定不得改写回执，故保持原样并在此记录。
+
 ## 回滚
 
 该值本身是脏数据，**无恢复必要**。若确需回到执行前状态，可从当前 Dev 克隆重建本库（见《克隆来源证明》），或手工恢复 `departments.id = 635` 的 `manager_id = 331`。

@@ -17,7 +17,7 @@ func TestNotificationEmailTargetMigrationRequiresPriorPreparation(t *testing.T) 
 	}
 	plan, err := PlanMigrations(catalog, controlledReceipts(prefix), OpUp, nil)
 	require.NoError(t, err)
-	require.Len(t, plan.Executable, 6)
+	require.Len(t, plan.Executable, 7)
 	require.Equal(t, AuthTokenStateVersion, plan.Executable[1].Version)
 	require.Equal(t, NotificationEmailTargetVersion, plan.Executable[0].Version)
 	require.Equal(t, CTIGovernanceVersion, plan.Executable[3].Version)
