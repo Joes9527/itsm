@@ -27,12 +27,49 @@ func (p *BPMNParser) ParseXML(xmlData []byte) (*BPMNDefinitions, error) {
 		return nil, fmt.Errorf("解析BPMN XML失败: %w", err)
 	}
 
+	// 先把定义里声明的任务用途落到节点上，再做结构验证：验证和运行期读到的都是
+	// 解析结果，不是原始 XML 片段。
+	if err := resolveDeclaredTaskPurposes(&definitions); err != nil {
+		return nil, fmt.Errorf("解析BPMN任务用途失败: %w", err)
+	}
+
 	// 验证BPMN结构
 	if err := p.validateBPMN(&definitions); err != nil {
 		return nil, fmt.Errorf("BPMN验证失败: %w", err)
 	}
 
 	return &definitions, nil
+}
+
+// resolveDeclaredTaskPurposes 把流程定义里已声明的审批语义落到用户任务上。
+//
+// 审批节点有两种声明方式：taskPurpose 属性（流程设计器产出的定义，如
+// ticket_general_flow），以及节点自身的 approval_required metaData
+// （incident_emergency_flow、problem_management_flow_cn 等手写定义）。引擎此前只认
+// 属性，后一种声明的审批节点会静默退化成普通任务：待办中心列不出它们，审批人解析
+// 不生效，"申请人不能审批自己的任务"这条授权也因此被跳过。
+//
+// 显式属性优先于 metaData 声明。approval_required 同时也是流程变量的名字（被网关
+// 条件引用），所以只读用户任务自己的 extensionElements，不看流程层。
+func resolveDeclaredTaskPurposes(definitions *BPMNDefinitions) error {
+	for _, process := range definitions.Processes {
+		if process == nil {
+			continue
+		}
+		for _, task := range process.UserTasks {
+			if task == nil || task.TaskPurpose != "" {
+				continue
+			}
+			declared, err := declaredBooleanMetaData(task.ExtensionElements, bpmnMetaDataApprovalRequired)
+			if err != nil {
+				return fmt.Errorf("用户任务 [%s]: %w", task.ID, err)
+			}
+			if declared {
+				task.TaskPurpose = "approval"
+			}
+		}
+	}
+	return nil
 }
 
 // ParseXMLFromReader 从Reader解析BPMN XML

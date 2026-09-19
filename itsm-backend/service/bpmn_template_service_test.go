@@ -250,6 +250,38 @@ func TestBPMNTemplateService_ServiceRequestFlows_ApprovalNodeMarked(t *testing.T
 	}
 }
 
+// 这几个文件用节点级 approval_required metaData 而不是 taskPurpose 属性声明审批。
+// 引擎只认属性时它们被解析成普通任务：审批节点在待办中心列不出来，审批人解析和
+// "申请人不能审批自己的任务"的授权也一并失效。
+func TestBPMNTemplateService_MetaDataDeclaredApprovalNodesResolveToApproval(t *testing.T) {
+	parser := NewBPMNParser()
+
+	for file, nodeID := range map[string]string{
+		"incident_emergency_flow.bpmn":      "Activity_ManagerApproval",
+		"incident_emergency_flow_v1.1.bpmn": "Activity_ManagerApproval",
+		"problem_management_flow_cn.bpmn":   "Activity_RootCauseConfirmed",
+	} {
+		t.Run(file, func(t *testing.T) {
+			data, err := bpmnTemplates.ReadFile("bpmn/" + file)
+			require.NoError(t, err, file)
+
+			defs, err := parser.ParseXML(data)
+			require.NoError(t, err, file)
+			require.Len(t, defs.Processes, 1, file)
+
+			var node *BPMNUserTask
+			for _, ut := range defs.Processes[0].UserTasks {
+				if ut.ID == nodeID {
+					node = ut
+					break
+				}
+			}
+			require.NotNil(t, node, "%s 应该有 %s 节点", file, nodeID)
+			assert.Equal(t, "approval", node.TaskPurpose, "%s 的 %s 用 approval_required 声明审批", file, nodeID)
+		})
+	}
+}
+
 // TestBPMNTemplateService_LoadAndDeployTemplates_DriftPublishesNewVersion 是模板漂移
 // 同步的回归：存量租户的旧模板内容与嵌入模板不一致时，再次同步必须自动发布新版本
 // （事务化降级 is_latest），旧版本停用、新版本激活，且同一 key 恰好一行
