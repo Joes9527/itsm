@@ -115,8 +115,8 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
     const titleInput = page.locator('#title');
     await titleInput.fill('申请研发出差 SSL-VPN 访问权限');
 
-    const reasonInput = page.locator('#reason');
-    await reasonInput.fill('因出差需要远程访问研发内网与生产堡垒机');
+    // 申请理由由目录字段承担：本目录把 access_reason 声明为必填，申请页因此不再渲染
+    // 通用的 #reason（理由的唯一归属是目录字段），填写见下方「业务申请理由」。
 
     // 身份和授权目标由认证映射与目录策略提供。
     // 业务字段: 访问目标系统与网段 (target_systems)

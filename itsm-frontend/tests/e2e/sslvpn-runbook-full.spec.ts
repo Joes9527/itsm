@@ -111,6 +111,17 @@ async function loginViaUI(page: any, user: { tenantCode: string; username: strin
   console.log(`[UI 操作] 登录成功，当前 URL: ${page.url()}`);
 }
 
+// 申请理由：目录声明了必填的理由字段（如 reason）时，申请页不再重复询问「申请理由」，
+// 该答案由目录字段承担并作为工单描述提交；没有该字段的目录仍用通用字段。
+async function fillRequestReason(page: any, reason: string) {
+  const catalogReason = page.locator('#customFields_reason');
+  if ((await catalogReason.count()) > 0) {
+    await catalogReason.fill(reason);
+    return;
+  }
+  await page.locator('#reason').fill(reason);
+}
+
 async function logoutViaUI(page: any) {
   console.log('[UI 操作] 清理当前会话登出...');
   await page.context().clearCookies();
@@ -251,7 +262,7 @@ test.describe('SSLVPN 运行手册全生命周期交互测试 (Headed Visual Exe
     // -----------------------------------------------------------------------
     console.log('[OP11.3] 录入标准演练数据并准备提交...');
     await page.locator('#title').fill(`${RUN_ID} 出差值班SSLVPN权限申请`);
-    await page.locator('#reason').fill('因出差值班，需要使用1台设备远程访问内部测试服务，申请临时SSLVPN权限。');
+    await fillRequestReason(page, '因出差值班，需要使用1台设备远程访问内部测试服务，申请临时SSLVPN权限。');
 
     // 选择访问有效期 (30天)
     const durSelect = page.locator('.ant-select').filter({ has: page.locator('#customFields_duration') });
@@ -259,10 +270,6 @@ test.describe('SSLVPN 运行手册全生命周期交互测试 (Headed Visual Exe
     await page.waitForTimeout(300);
     await page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)').locator('.ant-select-item-option').first().click();
 
-    // 填写申请理由
-    if (await page.locator('#customFields_reason').isVisible()) {
-      await page.locator('#customFields_reason').fill('因出差值班，需要使用1台设备远程访问内部测试服务，申请临时SSLVPN权限。');
-    }
     await page.waitForTimeout(1000);
 
     // -----------------------------------------------------------------------
@@ -440,7 +447,7 @@ test.describe('SSLVPN 运行手册全生命周期交互测试 (Headed Visual Exe
     await page.waitForLoadState('networkidle');
 
     await page.locator('#title').fill(`${RUN_ID}-REJECT-M 主管拒绝演练单`);
-    await page.locator('#reason').fill('演练申请：测试主管拒绝逻辑与意见必填拦截。');
+    await fillRequestReason(page, '演练申请：测试主管拒绝逻辑与意见必填拦截。');
 
     const durSelect = page.locator('.ant-select').filter({ has: page.locator('#customFields_duration') });
     await durSelect.click();
@@ -548,7 +555,7 @@ test.describe('SSLVPN 运行手册全生命周期交互测试 (Headed Visual Exe
     // 录入三级审批申请数据
     console.log('[Phase 5.3] 录入三级审批申请数据并提交...');
     await page.locator('#title').fill(`${RUN_ID}-3LEVEL SSL-VPN 远程办公访问权限申请（三级审批）`);
-    await page.locator('#reason').fill('因重大生产项目保障与值班，申请临时三级审批SSLVPN访问权限。');
+    await fillRequestReason(page, '因重大生产项目保障与值班，申请临时三级审批SSLVPN访问权限。');
 
     // 选择访问有效期 (30天)
     const durSelect = page.locator('.ant-select').filter({ has: page.locator('#customFields_duration') });

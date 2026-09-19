@@ -24,7 +24,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   reviews: '审核',
   'service-catalog': '服务目录',
   'service-requests': '服务请求',
-  'my-requests': '我的请求',
+  'my-requests': '我的工单',
   cmdb: 'CMDB',
   cis: '配置项',
   ci: '配置项',

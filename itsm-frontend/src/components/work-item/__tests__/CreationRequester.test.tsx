@@ -105,6 +105,22 @@ describe('requester selection from verified native actor tenant', () => {
   });
 });
 
+it('defaults the requester to the signed-in user when the actor may select one', async () => {
+  useAuthStore.setState({
+    user: { ...session, permissions: ['user:read', 'problem:create_on_behalf'] },
+    currentTenant: { id: 7 } as never,
+    isAuthenticated: true,
+  });
+  getUsers.mockResolvedValue({
+    users: [{ id: 50, name: 'Customer requester', tenantId: 7, active: true }],
+  });
+  const submit = jest.fn();
+  render(<Fixture submit={submit} />);
+  expect(await screen.findByText('Operator')).toBeInTheDocument();
+  fireEvent.click(screen.getByText('提交'));
+  await waitFor(() => expect(submit).toHaveBeenCalledWith({ requesterId: 42 }));
+});
+
 it('does not offer delegation when a same-tenant user can read users but cannot create on behalf', async () => {
   useAuthStore.setState({
     user: { ...session, role: 'sysadmin', permissions: ['user:read', 'problem:write'] },
