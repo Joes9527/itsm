@@ -95,6 +95,8 @@ createUserTask() 的 if assignee == "" 分支里，遇到 task.TaskPurpose == "a
 
 只改这一个文件的 `Activity_Approval` 节点。其余 12 个文件的同类节点（CAB审批、发布审批等，合计 20 个）现状不变，明确记录为已知问题、留到后续单独处理（见"非目标"一节）——Go 代码层面的修复是通用机制，那些文件只要以后补上 `taskPurpose="approval"` 就能立刻受益，不需要再改 Go 代码。
 
+**（2026-09-19 更新：末句的前提已被后续修复改写——引擎现在除 `taskPurpose` 属性外，还认用户任务自身 `<bpmn:extensionElements>` 里的 `<bpmn:metaData name="approval_required">true</bpmn:metaData>` 声明（显式属性优先；声明最多一次且取值必须恰为 `true`/`false`，否则解析失败关闭；只读用户任务自身的声明，不读流程层同名变量，后者另有用途）。本节名单里的 `incident_emergency_flow.bpmn`、`incident_emergency_flow_v1.1.bpmn`、`problem_management_flow_cn.bpmn` 一直都是用这种声明写的（"主管审批"/"根因确认"节点），因此**无需补任何标记**就已按审批任务处理：待办中心能列出、审批人解析与"申请人不得审批自己的任务"重新生效。名单里其余既没有 `taskPurpose` 也没有 `approval_required` 声明的节点，缺口照旧。分支 `codex/fix/bpmn-approval-task-purpose`。）**
+
 ### 部分三：补齐 `ticket_urgent_flow.bpmn`
 
 新建 `service/bpmn/ticket_urgent_flow.bpmn`，内容是 `ticket_general_flow.bpmn` 的副本（含本次的 `taskPurpose="approval"` 标记），只改 `process id`/`name`/`metaData` 中的描述性字段（比如流程名改成"紧急工单流程"）。不引入任何实质行为差异——`process_resolver.go` 里高/紧急优先级路由过去的这条流程，现在会是一条真正可部署、结构上等价于通用流程的独立流程定义，而不是指向一个不存在的 key。同时补上 `bpmn_template_service.go` 部署清单里对应的 case（比照 `ticket_general_flow` 那一条）。
@@ -118,7 +120,7 @@ createUserTask() 的 if assignee == "" 分支里，遇到 task.TaskPurpose == "a
 
 ## 非目标（本次不做）
 
-- 不修复其余 12 个 BPMN 文件（change_normal_flow(_cn)、release_approval_flow(_cn)、incident_emergency_flow(_cn/_v1.1)、problem_management_flow(_cn)、service_request_flow(_cn)、cloud_private_ops_flow、cloud_public_ops_flow）里合计 20 个同类"审批节点没有 taskPurpose/candidateGroups"的问题——明确记录为已知的系统性缺口，Go 代码修好后这些文件后续补标记即可受益，但本次不主动去改。（2026-08-08 复审修正：原文"11 个文件、20+ 节点"统计遗漏了两个用非命名空间写法 `<userTask>` 的文件，见"现状核实"里的修正说明。）
+- 不修复其余 12 个 BPMN 文件（change_normal_flow(_cn)、release_approval_flow(_cn)、incident_emergency_flow(_cn/_v1.1)、problem_management_flow(_cn)、service_request_flow(_cn)、cloud_private_ops_flow、cloud_public_ops_flow）里合计 20 个同类"审批节点没有 taskPurpose/candidateGroups"的问题——明确记录为已知的系统性缺口，Go 代码修好后这些文件后续补标记即可受益，但本次不主动去改。（2026-08-08 复审修正：原文"11 个文件、20+ 节点"统计遗漏了两个用非命名空间写法 `<userTask>` 的文件，见"现状核实"里的修正说明。**2026-09-19 更新：该缺口在引擎侧已部分关闭——`incident_emergency_flow(_v1.1)`、`problem_management_flow_cn` 三个文件用节点级 `approval_required` 声明审批，现已按审批任务解析，不必等补 `taskPurpose`；其余节点仍维持原状。详见"部分二"的 2026-09-19 更新。**）
 - 不给 `ticket_urgent_flow` 设计任何区别于 `ticket_general_flow` 的真实行为差异（超时/升级规则等）——引擎目前没有可用的定时器能力支撑这类差异，属于更大的、需要单独讨论的工作。
 - 不自动创建 `ticket-approvers` 组或往里加成员——这是部署/运维步骤，不是代码逻辑。
 - 不涉及"审批收敛"更大范围的工作（legacy approval_controller/approval_chain_controller 清理、change CAB 会签建模等）——这些在更早的最终评审里已经被记录为独立的后续工作。

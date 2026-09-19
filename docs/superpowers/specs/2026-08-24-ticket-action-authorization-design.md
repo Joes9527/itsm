@@ -181,7 +181,7 @@ Actions map[string]ActionPermission `json:"actions"`
 
 收口涉及至少三个需要独立决策的问题：
 1. `authorizeTaskActor`（任务完成时的实际授权闸）与 `ListUserTasks`（"我的待办"列表查询）对 `candidate_groups` 的处理不一致，需先统一判断标准。
-2. `incident_emergency_flow.bpmn` 的"主管审批"节点缺少 `taskPurpose="approval"` 属性，导致该节点未走 `assigneeRole`/`assigneeGmChain` 等解析逻辑，被错误分配给了工单申请人本人。
+2. `incident_emergency_flow.bpmn` 的"主管审批"节点缺少 `taskPurpose="approval"` 属性，导致该节点未走 `assigneeRole`/`assigneeGmChain` 等解析逻辑，被错误分配给了工单申请人本人。**（2026-09-19 更新：已修——引擎解析时把节点级 `approval_required` 声明落成审批意图，该节点现按审批任务处理，不再落给申请人；修复前已创建的任务快照不会自动修正，见分支 `codex/fix/bpmn-approval-task-purpose`。）**
 3. 产品行为变化需确认：`ticket_general_flow`（多数非服务目录工单走这条）的审批网关默认跳过（`approval_required` 默认 `false`），收口后这类工单将不再出现"批准/拒绝"入口——这是符合逻辑的正确行为，但用户可感知，需要产品侧明确认可。
 
 ### 4b. RBAC 双轨制收敛

@@ -174,7 +174,9 @@ checkpoint_completion_target = 0.9
 5. **Network isolation** - Use Docker networks, don't expose DB port
 6. **Rate limiting** - Configure nginx rate limits
 7. **Regular updates** - Enable Dependabot for dependency updates
-8. **Provision the `ticket-approvers` fallback group** - BPMN `taskPurpose="approval"` tasks that
+8. **Provision the `ticket-approvers` fallback group** - BPMN approval tasks (declared by a
+   `taskPurpose="approval"` attribute or by a node-level
+   `<bpmn:metaData name="approval_required">true</bpmn:metaData>`) that
    can't resolve a department manager (no manager configured, or the manager is the requester
    themselves) fall back to the candidate group named by the `approvalFallbackCandidateGroup`
    constant in `service/bpmn_process_engine.go` (currently `ticket-approvers`). Before going live,
