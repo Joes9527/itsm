@@ -38,6 +38,7 @@ import { CreationAttempts } from '@/components/work-item/CreationAttempts';
 import { CreationRequester } from '@/components/work-item/CreationRequester';
 import { CatalogProfessionalFields } from './CatalogProfessionalFields';
 import { incompatibleCatalogAnswers, type IncompatibleCatalogAnswer } from './catalog-reload';
+import { catalogOwnsRequiredReason, catalogReasonField } from './catalog-reason';
 import { useAuthStore } from '@/lib/store/auth-store';
 
 const { Title, Text, Paragraph } = Typography;
@@ -123,13 +124,16 @@ export default function ServiceCatalogRequestPage() {
       const customFieldValues = (catalog.fields || [])
         .map(field => ({ name: field.name, value: values.customFields?.[field.name] }))
         .filter(field => field.value !== undefined && field.value !== null && field.value !== '');
+      // 理由由目录字段承担时（申请页不再询问），把该答案同时作为申请理由提交：
+      // 服务端用它填工单描述（后端 reason → Description），否则审批人看到的描述是空的。
+      const catalogReason = values.customFields?.[catalogReasonField(catalog.fields)?.name ?? ''];
       const payload: CreateServiceRequestRequest = {
         catalogId: id,
         recordClass: catalog.targetClass,
         catalogVersion: catalog.catalogVersion,
         formSchemaVersion: catalog.formSchemaVersion,
         title: values.title,
-        reason: values.reason,
+        reason: values.reason ?? (typeof catalogReason === 'string' ? catalogReason : undefined),
         priority: values.priority,
         requesterId: values.requesterId,
         formData: { customFieldValues },
@@ -274,7 +278,7 @@ export default function ServiceCatalogRequestPage() {
             type="error"
             showIcon
             className="mb-4"
-            message={fetchError}
+            title={fetchError}
             action={<Button onClick={() => router.push('/service-catalog')}>返回服务目录</Button>}
           />
         )}
@@ -284,7 +288,7 @@ export default function ServiceCatalogRequestPage() {
             type="info"
             showIcon
             className="mb-4"
-            message={
+            title={
               <Space>
                 <Text strong>{catalog.name}</Text>
                 {catalog.availability?.responseTime != null && (
@@ -336,17 +340,19 @@ export default function ServiceCatalogRequestPage() {
             <Input placeholder="一句话说明申请目的" maxLength={200} />
           </Form.Item>
 
-          <Form.Item
-            name="reason"
-            label="申请理由"
-            rules={[{ required: true, message: '请输入申请理由' }]}
-          >
-            <TextArea
-              rows={4}
-              placeholder="请详细说明申请原因、业务场景、紧急程度"
-              maxLength={500}
-            />
-          </Form.Item>
+          {!catalogOwnsRequiredReason(catalog?.fields) && (
+            <Form.Item
+              name="reason"
+              label="申请理由"
+              rules={[{ required: true, message: '请输入申请理由' }]}
+            >
+              <TextArea
+                rows={4}
+                placeholder="请详细说明申请原因、业务场景、紧急程度"
+                maxLength={500}
+              />
+            </Form.Item>
+          )}
 
           {serviceRequestTarget && (
             <>

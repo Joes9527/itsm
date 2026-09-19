@@ -24,9 +24,12 @@ export function CreationRequester({ resource }: { resource: CreationResource }) 
   const blockedReason = !canDelegate
     ? `缺少代他人申请权限（${resource}:create_on_behalf）`
     : '缺少申请人目录读取权限（user:read）';
+  // A same-tenant actor is the requester by default, matching the server's implicit-self
+  // rule; a cross-tenant actor must name an explicit target-tenant requester instead.
+  const defaultRequesterId = canSelect && !required ? user?.id : undefined;
   useEffect(() => {
-    form.setFieldValue('requesterId', undefined);
-  }, [tenantId, user?.id, resource, canSelect, form]);
+    form.setFieldValue('requesterId', defaultRequesterId);
+  }, [tenantId, user?.id, resource, canSelect, defaultRequesterId, form]);
   useEffect(() => {
     let cancelled = false;
     setUsers([]);
@@ -64,6 +67,16 @@ export function CreationRequester({ resource }: { resource: CreationResource }) 
     ) : (
       <p>当前申请将以你本人作为申请人；{blockedReason}，不能选择其他申请人。</p>
     );
+  const directoryOptions = users.map(candidate => ({
+    value: candidate.id,
+    label: candidate.name || candidate.username,
+  }));
+  // The signed-in user is the default requester, so the picker must be able to name them
+  // even when the directory page does not include their own record.
+  const options =
+    !required && user && !directoryOptions.some(option => option.value === user.id)
+      ? [{ value: user.id, label: user.name || user.username }, ...directoryOptions]
+      : directoryOptions;
   return (
     <>
       {error && <Alert type='error' title={error} />}
@@ -71,7 +84,7 @@ export function CreationRequester({ resource }: { resource: CreationResource }) 
         name='requesterId'
         label='申请人'
         extra={
-          required ? '请选择当前客户租户的有效申请人' : '留空由服务器使用当前用户；代他人申请需授权'
+          required ? '请选择当前客户租户的有效申请人' : '默认为当前登录用户；代他人申请需授权'
         }
         rules={[{ required, message: '请选择当前客户租户的申请人' }]}
       >
@@ -81,10 +94,7 @@ export function CreationRequester({ resource }: { resource: CreationResource }) 
           filterOption={false}
           onSearch={setSearch}
           placeholder='选择当前租户申请人'
-          options={users.map(candidate => ({
-            value: candidate.id,
-            label: candidate.name || candidate.username,
-          }))}
+          options={options}
         />
       </Form.Item>
     </>
