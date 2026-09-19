@@ -30,6 +30,26 @@ it('uses authenticated snapshot, preserves custom names and navigates shared ide
   expect(screen.getAllByText(/WI-71.*流程启动排队中/).length).toBeGreaterThan(0);
   expect(screen.queryByText(/等待审批/)).not.toBeInTheDocument();
 });
+it('asks for the reason once when the Catalog already declares a reason field', async () => {
+  jest.mocked(ServiceCatalogApi.getService).mockResolvedValue({
+    ...catalog,
+    fields: [
+      { name: 'target_systems', label: '访问目标系统与网段', type: 'text', required: true },
+      { name: 'access_reason', label: '业务申请理由', type: 'textarea', required: true },
+    ],
+  } as never);
+  render(<Page />);
+  await screen.findByLabelText('申请标题');
+  expect(screen.getByLabelText('业务申请理由')).toBeInTheDocument();
+  expect(screen.queryByLabelText('申请理由')).not.toBeInTheDocument();
+});
+
+it('keeps the generic reason field for a Catalog that declares none', async () => {
+  render(<Page />);
+  await screen.findByLabelText('申请标题');
+  expect(screen.getByLabelText('申请理由')).toBeInTheDocument();
+});
+
 it('fails visibly without versionless fallback when detail read fails', async () => {
   jest.mocked(ServiceCatalogApi.getService).mockRejectedValue(new Error('denied')); render(<Page />);
   expect(await screen.findByText(/服务信息加载失败/)).toBeInTheDocument();

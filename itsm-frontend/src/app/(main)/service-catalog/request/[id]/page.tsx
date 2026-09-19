@@ -38,6 +38,7 @@ import { CreationAttempts } from '@/components/work-item/CreationAttempts';
 import { CreationRequester } from '@/components/work-item/CreationRequester';
 import { CatalogProfessionalFields } from './CatalogProfessionalFields';
 import { incompatibleCatalogAnswers, type IncompatibleCatalogAnswer } from './catalog-reload';
+import { catalogDeclaresReason } from './catalog-reason';
 import { useAuthStore } from '@/lib/store/auth-store';
 
 const { Title, Text, Paragraph } = Typography;
@@ -336,17 +337,19 @@ export default function ServiceCatalogRequestPage() {
             <Input placeholder="一句话说明申请目的" maxLength={200} />
           </Form.Item>
 
-          <Form.Item
-            name="reason"
-            label="申请理由"
-            rules={[{ required: true, message: '请输入申请理由' }]}
-          >
-            <TextArea
-              rows={4}
-              placeholder="请详细说明申请原因、业务场景、紧急程度"
-              maxLength={500}
-            />
-          </Form.Item>
+          {!catalogDeclaresReason(catalog?.fields) && (
+            <Form.Item
+              name="reason"
+              label="申请理由"
+              rules={[{ required: true, message: '请输入申请理由' }]}
+            >
+              <TextArea
+                rows={4}
+                placeholder="请详细说明申请原因、业务场景、紧急程度"
+                maxLength={500}
+              />
+            </Form.Item>
+          )}
 
           {serviceRequestTarget && (
             <>
