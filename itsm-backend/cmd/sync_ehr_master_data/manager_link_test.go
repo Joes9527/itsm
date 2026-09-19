@@ -38,7 +38,7 @@ func TestLinkManagersSkipsSelfReferenceInsteadOfCreatingIt(t *testing.T) {
 	client, ctx, tenant := linkFixture(t, "file:linkmgr_self?mode=memory&cache=shared&_fk=1")
 	u := mkUser(t, client, ctx, tenant, "D30001", true)
 
-	skipped, err := linkManagers(ctx, client, tenant, map[string]managerLink{
+	_, skipped, err := linkManagers(ctx, client, tenant, map[string]managerLink{
 		"D30001": {SelfID: u.ID, ManagerID: u.ID},
 	})
 	require.NoError(t, err)
@@ -55,7 +55,7 @@ func TestLinkManagersLinksTheValidOnesAndCountsTheRest(t *testing.T) {
 	staff := mkUser(t, client, ctx, tenant, "D30011", true)
 	inactive := mkUser(t, client, ctx, tenant, "D30012", false)
 
-	skipped, err := linkManagers(ctx, client, tenant, map[string]managerLink{
+	_, skipped, err := linkManagers(ctx, client, tenant, map[string]managerLink{
 		"D30011": {SelfID: staff.ID, ManagerID: boss.ID},     // 合法
 		"D30010": {SelfID: boss.ID, ManagerID: boss.ID},      // 自引用 → 跳过
 		"D30012": {SelfID: inactive.ID, ManagerID: staff.ID}, // 本人已离职、上级在职：只校验上级，允许
@@ -75,7 +75,7 @@ func TestLinkManagersSkipsAnInactiveManager(t *testing.T) {
 	gone := mkUser(t, client, ctx, tenant, "D30020", false)
 	staff := mkUser(t, client, ctx, tenant, "D30021", true)
 
-	skipped, err := linkManagers(ctx, client, tenant, map[string]managerLink{
+	_, skipped, err := linkManagers(ctx, client, tenant, map[string]managerLink{
 		"D30021": {SelfID: staff.ID, ManagerID: gone.ID},
 	})
 	require.NoError(t, err)
@@ -84,4 +84,43 @@ func TestLinkManagersSkipsAnInactiveManager(t *testing.T) {
 	reloaded, err := client.User.Get(ctx, staff.ID)
 	require.NoError(t, err)
 	require.Equal(t, 0, reloaded.ManagerID)
+}
+
+// 计数必须**如实反映实际写库的条数**。
+//
+// 过去调用方用 len(pendingLinks) - skipped 当作"已链接"，有两个漏洞：
+//   - 中途出错时循环已中断，未处理的链接照样被算成已链接；
+//   - 上级名字没能映射成用户的（ManagerID==0）被静默 continue，既不计跳过，
+//     也被算成已链接。
+//
+// 于是日志会报出一个比实际更大的"已链接"数字，而这类数字正是用来判断导入
+// 是否成功的依据——虚报会让一次失败的导入看起来成功。
+func TestLinkManagersCountsOnlyWhatItActuallyWrote(t *testing.T) {
+	client, ctx, tenant := linkFixture(t, "file:linkmgr_counts?mode=memory&cache=shared&_fk=1")
+	boss := mkUser(t, client, ctx, tenant, "D30030", true)
+	staff := mkUser(t, client, ctx, tenant, "D30031", true)
+
+	linked, skipped, err := linkManagers(ctx, client, tenant, map[string]managerLink{
+		"D30031": {SelfID: staff.ID, ManagerID: boss.ID}, // 唯一真正写库的一条
+		"D30030": {SelfID: boss.ID, ManagerID: boss.ID},  // 自引用 → 跳过
+		"D30032": {SelfID: 0, ManagerID: boss.ID},        // 本人未映射 → 跳过（过去被静默吞掉）
+		"D30033": {SelfID: staff.ID, ManagerID: 0},       // 上级未映射 → 跳过（过去被静默吞掉）
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, linked, "只能把真正写库的那一条算作已链接")
+	require.Equal(t, 3, skipped, "自引用与未映射都必须计入跳过，不能静默消失")
+}
+
+// 未映射的链接（上级名字没对应到用户）过去既不计跳过、也被算成已链接，
+// 于是"没接上"这一事实在日志里完全消失。
+func TestLinkManagersCountsUnmappedSupervisorsAsSkipped(t *testing.T) {
+	client, ctx, tenant := linkFixture(t, "file:linkmgr_unmapped?mode=memory&cache=shared&_fk=1")
+	staff := mkUser(t, client, ctx, tenant, "D30040", true)
+
+	linked, skipped, err := linkManagers(ctx, client, tenant, map[string]managerLink{
+		"D30040": {SelfID: staff.ID, ManagerID: 0},
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0, linked)
+	require.Equal(t, 1, skipped)
 }

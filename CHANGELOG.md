@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **未配置审批人的审批节点，默认审批人改为「提单人自己的上级」（审批人可见变化）** — 这是本次唯一会**改变现网审批走向**的调整，升级前请先读这一段。
+
+  过去，审批节点若没有显式配置找人方式，引擎只查两条线：流程变量 `requester_id` 与**部门**负责人（`departments.manager_id`）。而生产数据里 `departments.manager_id` 的填充率为 **0/7975**，等于走了一条空的数据线，于是绝大多数审批解析不到人、直接落进兜底候选组（`ticket-approvers`）——表现为"审批断流"。
+
+  现在默认顺序为：
+
+  1. **提单人自己的上级**（个人汇报线 `users.manager_id`：已设置 **7076/7872**，其中 31 条为自引用会被解析时跳过，**有效 7045/7872 ≈ 89.5%**）；
+  2. 提单人所在部门（含祖先部门）的**负责人**；
+  3. 仍解析不到 → 落入兜底候选组，并**写入一条审计**（`approval_fallback_group_used`，含所用组与原因），不再静默兜底。
+
+  另外，定位"提单人"时不再只依赖 `requester_id` 流程变量：取不到时会回落到实例的 `initiator`（谁触发了流程）。`requester_id` 仍然优先——**代提单**场景下它是"为谁提"，与操作人不同，主次不能颠倒。
+
+  **受影响范围**：所有审批节点未声明找人方式的流程。升级后同一张单的审批人可能与过去不同（从"兜底组"变为"提单人的上级"），请据此通知审批人与提单人。
+
+  **如需保持旧行为**：在该审批节点上显式声明候选组（`candidateGroups`）即可，显式配置优先于默认路径。
+
+  **可配置项**：兜底候选组通过配置项 `bpmnApprovalFallbackGroup` 按租户设置（缺省 `ticket-approvers`）；读取失败时不会退化为空值。
+
+  设计记录：`docs/superpowers/specs/2026-09-18-process-routing-migration-design.md`；端到端验证用例：`itsm-backend/service/approval_direct_manager_e2e_test.go`。
+
 - **工单分类写入收敛为单一口径（调用方可见）** — 通用工单编辑（`PUT /api/v1/tickets/:id` 与子任务编辑）不再接受按分类**显示名称**提交的 `category` 字段：分类只接受最深节点 ID（`categoryId`，`0` 表示清空），且分类确实变化时必须提交 `classificationReason`（原因与前后完整三级路径写入既有操作回执）。编辑载荷现在**拒绝未知字段**：仍发送 `category`、拼错字段或 `userId` 等身份字段会收到明确的 400 错误，而不再被静默忽略。涉及外部集成（KAF/邮件/CLI 均使用节点 ID 或默认未分类，无需改动；如有自研脚本按名称提交，请改为节点 ID）。设计记录：`docs/superpowers/specs/2026-09-17-cti-governance-design.md` §8.C。
 
 - **统一 WorkItem 领域模型（Incident/Problem/Change）** — Incident、Problem、Change 创建时改为在同一事务内建对应的 `tickets` 行（`record_class`）并回填 `work_item_id`；BPMN `businessId`/`businessKey` 三个域统一收敛为 WorkItem ID，不再各自用专业主键；Problem↔Ticket、Change↔Ticket 的关联从旧的 JSON 字段/ent edge 迁移到结构化的 `WorkItemRelation` 表。ServiceRequest 因为 `ticket_id` 从建表起就必填，不需要同等改造。设计文档：`docs/superpowers/specs/2026-08-26-unified-work-item-model-design.md`；执行记录：`docs/superpowers/specs/2026-08-26-unified-work-item-multi-agent-execution-plan.md`。
