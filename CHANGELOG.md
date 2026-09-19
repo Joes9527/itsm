@@ -46,6 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Migration Notes
 
+- **部署前置：新增 Ent 字段必须先应用对应迁移** — `050_department_node_type` 给 `departments` 加了 `node_type`，该列已进入 Ent 生成的查询列，因此**部署含此字段的构建之前必须先应用迁移**；否则任何部门读写都会直接失败（`pq: column departments.node_type does not exist`），不是"少个字段"，而是部门功能整体不可用。已在开发库 `itsm_config_baseline_20260908` 应用 `049_department_code_tenant_unique`、`050_department_node_type`、`051_department_manager_none_normalization`（走 `cmd/migrate -up`，写前有备份）。准入要求、克隆库限制、库状态对照与错误对照表见 [规范化迁移准入与克隆库约束](docs/deployment/canonical-migration-admission-and-clone-constraints.md)。
+
+- **「没有负责人」统一为 NULL** — `departments.manager_id` 是可空列，历史上同时存在 `NULL`（7974 行）与 `0` 两种"没有负责人"的写法，导致 `manager_id <> 0` 看不见 `NULL`、`manager_id IS NULL` 看不见 `0`，两侧都会漏。迁移 `051_department_manager_none_normalization` 把 `0` 归一为 `NULL`（`NULL` 是本列与同表 `parent_id` 的既有惯例），并已按守卫清除开发库中一处指向普通员工的脏负责人值。**每个既有库都要各自应用该迁移**：用 `TEMPLATE` 克隆出来的库不在准备回执绑定的库之列，走不了规范化路径（详见上述链接第 4 节）。
+
+
 - **Incident comment migration to `ticket_comments`**: The `/api/v1/incidents/:id/comments` GET/POST endpoints have been removed; the frontend now reads/writes Incident comments through `ticketCommentAdapter` against `ticket_comments`. Before deploying this branch, run `go run ./cmd/backfill_incident_work_item -dry-run=false` first to ensure no Incident has `work_item_id == 0` — comments belonging to such an Incident are permanently skipped (not deferred) by the next tool. Then run `go run ./cmd/backfill_incident_comments -dry-run=true` to review the would-create/would-skip counts, followed by `-dry-run=false` to actually backfill. Only deploy the frontend after both backfills succeed: deploying frontend first makes existing comments appear to have vanished (old data still sits in `incident_events`, new UI reads `ticket_comments`), and deploying backend before frontend for any window means an old frontend hitting the now-deleted `/api/v1/incidents/:id/comments` route gets a 404.
 
 ---

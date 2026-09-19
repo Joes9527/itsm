@@ -472,6 +472,7 @@ var RegisteredMigrations = []Migration{
 	{Version: CTIGovernanceVersion, Description: "Scope ticket category code uniqueness to the tenant and persist the Service Catalog default CTI reference", RollbackSQL: ctiGovernanceDevelopmentResetSQL},
 	{Version: DepartmentCodeTenantUniqueVersion, Description: "Enforce department code uniqueness per tenant"},
 	{Version: DepartmentNodeTypeVersion, Description: "Let each organisation node carry its own type"},
+	{Version: DepartmentManagerNoneVersion, Description: "Normalise the absence of a department manager to NULL"},
 	{Version: WorkItemRetireVersion, Description: "Retire WorkItem legacy structures with controlled evidence"},
 }
 
@@ -1157,6 +1158,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number
 		return migrations.DepartmentCodeTenantUniqueSQL
 	case DepartmentNodeTypeVersion:
 		return migrations.DepartmentNodeTypeSQL
+	case DepartmentManagerNoneVersion:
+		return migrations.DepartmentManagerNoneSQL
 	case "030_catalog_access_policy_result":
 		return catalogAccessPolicyResultSQL
 	case "029_catalog_target_class_authority":
