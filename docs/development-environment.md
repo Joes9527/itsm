@@ -26,6 +26,35 @@ Status: maintained operational contract, updated 2026-09-15. The maintainer sele
 
 迁移准入、克隆库定位、`/api/v1/readyz` 与维护栈的启动方式见 [规范化迁移准入与克隆库约束](deployment/canonical-migration-admission-and-clone-constraints.md)。
 
+#### 当前应用部署（2026-09-19）
+
+前后端已统一到同一个 main 提交，**先看下面这张表，再动手**：
+
+| 服务 | 端口 | 部署版本 | 说明 |
+| --- | --- | --- | --- |
+| `itsm`（后端） | 8080 | `fdf1287c9d5996eb8ade956a664ad2bb96955806` | 含 #75（派单路由 / 审批可见性） |
+| `itsm-web`（前端） | 3010 | `fdf1287c`，build_id `ocQHkEhhy60LlPHr0Ee41` | 含流程设计器的 5 种找人方式 |
+| `kaf` / `kaf-web` / `itsm-worker-1,2` | — | — | 当前 stopped，属正常 |
+
+**查当前状态用这个命令，不要靠本文档的版本号**（版本会变）：
+
+```bash
+cd /home/administrator/apps/itsm-kaf && ./stack status        # 记录身份 vs 实际，含 source_revision
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/api/v1/healthz   # 期望 200
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/api/v1/readyz    # 期望 200（自证结构版本）
+```
+
+- 启动/停止**只能经栈**：`./stack start|stop itsm|itsm-web`。**不要 `go run`、不要裸 `nohup`**——绕开栈起的进程不带 recipe 的环境变量（例如检查身份配置），`/api/v1/readyz` 会 503，且栈的 `stop` 不会管它。
+- 栈在记录身份与实际不一致时**拒绝停止**（`refusing to stop actual process`），这是保护机制；处置办法见[上面那份文档](deployment/canonical-migration-admission-and-clone-constraints.md)第 10 节。
+- 部署前**必须先确认目标库已应用新代码要求的迁移**（当前要求 051），否则部门等模块会直接报列不存在。
+
+#### 本地 worktree（2026-09-19）
+
+- 位置：`.worktrees/<名称>`。**每个任务从最新 `origin/main` 新建**，命名遵循 `codex/<type>/<scope>-<short-description>`（见[工程治理](agent-engineering-governance.md)）。
+- **本机现存多个历史 worktree**（本次核对时共 41 个，多为其他任务遗留）。判断依据是 `git worktree list`，**不是**本文档；非当前任务的 worktree 不要清理。
+- 共享检出目录本身可能停在**别人的分支**上（本次核对时为 `feat/button-icon-unification`，含未提交改动）。因此：**不要**在共享检出里直接提交或改动他人文件；读文件要看 `origin/main`（`git show origin/main:<path>`），不要以为工作区内容就是 main。
+- 构建部署产物要在**目标提交的干净检出**里做（`git status --porcelain` 为空）。注意：`go build main.go`（按文件）与在 worktree 里构建**都不写 VCS 戳**，只有普通 clone + `go build .` 才能让二进制自证来源（`go version -m <bin>`）。
+
 **交接版本与证据：**G-A 固定为 `d91b587fe3ab40cc863321346d217d258a3a96d8`，详见[数据库对账交接](review/2026-09-14-database-reconciliation-handoff.md)。目标 ITSM 源码为 `0788a9bb196ab37a8389b3f366bed9877b2f72c3`，KAF 为 `23f01476b8ea7293c423d608329241477a5336a5`。文档分支 HEAD 不等于应用源码，也不自动改变 GARevision；任务二后续批次与验收由其 GBRevision 记录。其他 worktree 若尚未包含这些文档，应按固定提交读取交接，不能用旧 main 文档推定当前目标。
 
 **准入范围：**G-A 通过的是隔离结构、角色边界和配置迁移准入，不是 G-B/G-C 或应用上线。ITSM 普通迁移对齐至 046，P037 有真实证据，R(038) 未执行。新目标已保全原新 ITSM 的 13 张组织／用户／权限基础表（含 7,862 用户）；这是固定快照，不代表覆盖源侧后续变化，也不是再次迁移旧系统用户。历史 ticket、审批／评论／附件、旧 BPMN／实例和知识库未导入。配置、目录、SLA 与流程绑定由任务二继续验证；PostgreSQL 鉴权 A3/A4 仍按原 R4 跟踪，不能因 046 存在而关闭。
