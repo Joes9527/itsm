@@ -92,7 +92,7 @@ field.Int("ci_id").Optional()
 **前端页面**：
 - 退休两个独立的 SR 详情页（`/service-requests/[id]` 用的 `ServiceRequestDetail.tsx`、`/my-requests/[requestId]` 自己的 `Descriptions` 实现）——这两处此前分别维护自定义字段展示代码，是重复实现。统一跳转/复用 `/tickets/:ticketId`，该页面在 `ticket.source === "service_catalog"` 时额外渲染一个"服务申请信息"面板（cost center / compliance / 交付状态等 SR 专属字段）。
 - 提交页（`service-catalog/request/[id]/page.tsx`）UX 不变，提交成功后跳转目标改为 `/tickets/:ticketId`。
-- `/my-requests` 列表页保留，作为"按 `source=service_catalog` 过滤 + 我的申请"这个视角的入口，点进详情跳 `/tickets/:ticketId`。
+- `/my-requests` 列表页保留，作为"按 `source=service_catalog` 过滤 + 我的申请"这个视角的入口，点进详情跳 `/tickets/:ticketId`。**（2026-09-19 更新：本条已被后续修复取代——`/my-requests` 现在是覆盖全部 `recordClass` 的"我的工单"：数据源为 `GET /api/v1/tickets`，行级可见范围由后端 `authorization.WorkItemReadScope` 收窄（特权角色＝整租户，其余＝申请人/处理人），页内只叠加"我提交的/我处理的/全部"这一层范围条件，状态与关键字交给服务端过滤，不再按 `source=service_catalog` 过滤。只针对服务请求的那个视角仍在 `/service-requests`。点进详情跳 `/tickets/:ticketId` 不变。分支 `codex/fix/my-requests-all-classes`。）**
 
 ## 实施前提条件
 
@@ -117,7 +117,7 @@ field.Int("ci_id").Optional()
 
 - SR 创建后能查到关联 Ticket，且 Ticket 确实触发了 BPMN 流程（`process_instance` 有记录）
 - 自定义字段值查询命中 `entity_type=ticket, entity_id=ticket.ID`，旧的 `entity_type=service_request` 路径不再产生新数据
-- `/my-requests` 过滤视图返回正确的 `source=service_catalog` 工单列表
+- `/my-requests` 过滤视图返回正确的 `source=service_catalog` 工单列表**（2026-09-19 更新：`/my-requests` 已不按 `source` 过滤——该断言改由 `/my-requests` 的"全部 `recordClass` ＋范围切换"回归与 `/service-requests` 的目录来源视图承担。）**
 - ticket 详情页在 `source=service_catalog` 时正确渲染 SR 专属面板，非该来源时不渲染
 - 明确写一条测试断言"三级审批已退化为单节点 BPMN 审批"——证明这是设计内的已知过渡行为，不是遗漏
 - `StartProvisioning` 在关联 ticket 没有 `process_approval_decision(decision='approved')` 记录时拒绝启动交付；有记录时正常创建 `ProvisioningTask`（覆盖评审补充的集成点）

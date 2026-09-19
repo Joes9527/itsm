@@ -65,10 +65,10 @@ export function getMenuConfig(): MenuConfig {
       {
         key: '/my-requests',
         icon: getIconByName('User')!,
-        label: '我的请求',
+        label: '我的工单',
         path: '/my-requests',
         permission: 'ticket:read',
-        description: '我的服务请求',
+        description: '我提交和处理的工单',
       },
       {
         key: '/incidents',

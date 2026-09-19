@@ -8,18 +8,9 @@ import { useAuthStore } from '@/lib/store/auth-store';
 import { HeroSearchBar } from '@/components/portal/HeroSearchBar';
 import { ManagerPendingApprovals } from '@/components/portal/ManagerPendingApprovals';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
+import { ticketService, type TicketStatus } from '@/lib/services/ticket-service';
+import type { Ticket } from '@/lib/api/api-config';
 import { ServiceStatus, type ServiceItem } from '@/types/service-catalog';
-
-// 与 my-requests 页面 RequestStatusBadge 使用同一套 Ticket 状态词表（见 src/types/ticket.ts）
-const TICKET_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  new: { label: '新建', color: 'gold' },
-  open: { label: '待处理', color: 'gold' },
-  in_progress: { label: '处理中', color: 'processing' },
-  pending: { label: '待处理', color: 'blue' },
-  resolved: { label: '已解决', color: 'success' },
-  closed: { label: '已关闭', color: 'default' },
-  cancelled: { label: '已取消', color: 'default' },
-};
 
 function formatUpdatedAt(dateString?: string): string {
   if (!dateString) return '-';
@@ -33,66 +24,46 @@ function formatUpdatedAt(dateString?: string): string {
   });
 }
 
-interface RecentRequestItem {
+// 与 /my-requests 同源：一行就是一个 WorkItem，跳转统一用 WorkItem id。
+interface RecentWorkItem {
   id: number;
-  ticketId: number;
   title: string;
   statusLabel: string;
   statusColor: string;
   updatedAt: string;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function readString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value : undefined;
-}
-
-function readNumber(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string' && value.trim()) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return undefined;
-}
-
-function toRecentRequest(value: unknown): RecentRequestItem | null {
-  if (!isRecord(value)) return null;
-
-  const id = readNumber(value.id);
-  const ticketId = readNumber(value.ticketId);
-  if (id === undefined || ticketId === undefined) return null;
-
-  const catalogName = isRecord(value.catalog) ? readString(value.catalog.name) : undefined;
-  const ticketStatus = readString(value.ticketStatus);
-  const statusConfig = ticketStatus
-    ? TICKET_STATUS_CONFIG[ticketStatus] || { label: ticketStatus, color: 'default' }
-    : { label: '-', color: 'default' };
+function toRecentWorkItem(item: Ticket): RecentWorkItem {
+  // 状态词表归 ticketService 所有（与 my-requests 页面同源），不在本页另存一份：
+  // 词表分叉过——这里曾漏掉 assigned、pending 也与别处不一致。
+  // 未知状态由 getStatusLabel 原样返回，不猜测标签。
+  const status = item.status as TicketStatus | undefined;
 
   return {
-    id,
-    ticketId,
-    title: readString(value.ticketTitle) || catalogName || '-',
-    statusLabel: statusConfig.label,
-    statusColor: statusConfig.color,
-    updatedAt: formatUpdatedAt(readString(value.updatedAt) || readString(value.createdAt)),
+    id: item.id,
+    title: item.title || item.ticketNumber || '-',
+    statusLabel: status ? ticketService.getStatusLabel(status) : '-',
+    statusColor: status ? ticketService.getStatusColor(status) : 'default',
+    updatedAt: formatUpdatedAt(item.updatedAt || item.createdAt),
   };
 }
 
 export default function PortalPage() {
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { user, isAuthenticated } = useAuthStore();
 
   const userName = user?.name || user?.username || '伙伴';
+
+  // 没有可信身份时不发无范围请求：/api/v1/tickets 对特权角色是整租户范围，
+  // 而这一块展示的是"我的"近期工单。
+  const actorId = typeof user?.id === 'number' ? user.id : 0;
+  const hasActor = isAuthenticated === true && Number.isSafeInteger(actorId) && actorId > 0;
 
   const [catalogs, setCatalogs] = useState<ServiceItem[]>([]);
   const [catalogsLoading, setCatalogsLoading] = useState(true);
   const [catalogsError, setCatalogsError] = useState<string | null>(null);
 
-  const [recentRequests, setRecentRequests] = useState<RecentRequestItem[]>([]);
+  const [recentWorkItems, setRecentWorkItems] = useState<RecentWorkItem[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(true);
   const [requestsError, setRequestsError] = useState<string | null>(null);
 
@@ -114,15 +85,26 @@ export default function PortalPage() {
     }
   };
 
-  const loadRecentRequests = async () => {
+  const loadRecentWorkItems = async () => {
+    if (!hasActor) {
+      setRecentWorkItems([]);
+      setRequestsError(null);
+      setRequestsLoading(false);
+      return;
+    }
+
     setRequestsLoading(true);
     setRequestsError(null);
     try {
-      const { requests } = await ServiceCatalogApi.getServiceRequests({ page: 1, pageSize: 3 });
-      setRecentRequests(requests.map(toRecentRequest).filter((request): request is RecentRequestItem => request !== null));
+      const { tickets } = await ticketService.listTickets({
+        requesterId: actorId,
+        page: 1,
+        pageSize: 3,
+      });
+      setRecentWorkItems((tickets || []).map(toRecentWorkItem));
     } catch (e) {
-      setRequestsError('近期请求加载失败');
-      setRecentRequests([]);
+      setRequestsError('近期工单加载失败');
+      setRecentWorkItems([]);
     } finally {
       setRequestsLoading(false);
     }
@@ -130,8 +112,13 @@ export default function PortalPage() {
 
   useEffect(() => {
     loadCatalogs();
-    loadRecentRequests();
   }, []);
+
+  // 依赖 hasActor：会话投影后到时补发"我的近期工单"。
+  // 否则会把"还没拿到身份"当成"这个人没有工单"，给出一个不实的空态。
+  useEffect(() => {
+    loadRecentWorkItems();
+  }, [hasActor]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -218,12 +205,12 @@ export default function PortalPage() {
         )}
       </div>
 
-      {/* 4. 我的近期请求时间轴 */}
+      {/* 4. 我的近期工单时间轴 */}
       <div className="bg-surface rounded-[8px] p-6 border border-border shadow-none">
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
             <Clock size={18} className="text-foreground" />
-            <h3 className="text-[15px] font-semibold text-foreground m-0">我的近期请求追踪</h3>
+            <h3 className="text-[15px] font-semibold text-foreground m-0">我的近期工单</h3>
           </div>
           <Button
             size="small"
@@ -244,32 +231,32 @@ export default function PortalPage() {
             showIcon
             title={requestsError}
             action={
-              <Button size="small" onClick={loadRecentRequests}>
+              <Button size="small" onClick={loadRecentWorkItems}>
                 重试
               </Button>
             }
           />
-        ) : recentRequests.length === 0 ? (
+        ) : recentWorkItems.length === 0 ? (
           <div className="text-center py-6 text-[13px] text-muted flex flex-col items-center gap-2">
             <Inbox size={24} className="text-muted" />
-            暂无近期请求
+            {hasActor ? '暂无近期工单' : '请先登录后查看您的近期工单'}
           </div>
         ) : (
           <div className="space-y-4">
-            {recentRequests.map((req) => (
+            {recentWorkItems.map((item) => (
               <button
                 type="button"
-                key={req.id}
-                onClick={() => router.push(`/tickets/${req.ticketId}`)}
+                key={item.id}
+                onClick={() => router.push(`/tickets/${item.id}`)}
                 className="w-full p-4 rounded-[8px] bg-raised hover:bg-raised border border-border flex flex-col md:flex-row md:items-center justify-between gap-3 cursor-pointer transition-all text-left"
               >
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[13px] font-semibold text-foreground">{req.title}</span>
-                    <Tag color={req.statusColor} className="text-[11px] m-0">{req.statusLabel}</Tag>
+                    <span className="text-[13px] font-semibold text-foreground">{item.title}</span>
+                    <Tag color={item.statusColor} className="text-[11px] m-0">{item.statusLabel}</Tag>
                   </div>
                   <div className="text-[12px] text-muted mt-1.5">
-                    更新于 {req.updatedAt}
+                    更新于 {item.updatedAt}
                   </div>
                 </div>
 
