@@ -46,7 +46,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Migration Notes
 
-- **部署前置：新增 Ent 字段必须先应用对应迁移** — `050_department_node_type` 给 `departments` 加了 `node_type`，该列已进入 Ent 生成的查询列，因此**部署含此字段的构建之前必须先应用迁移**；否则任何部门读写都会直接失败（`pq: column departments.node_type does not exist`），不是"少个字段"，而是部门功能整体不可用。已在开发库 `itsm_config_baseline_20260908` 应用 `049_department_code_tenant_unique`、`050_department_node_type`、`051_department_manager_none_normalization`（走 `cmd/migrate -up`，写前有备份）。准入要求、克隆库限制、库状态对照与错误对照表见 [规范化迁移准入与克隆库约束](docs/deployment/canonical-migration-admission-and-clone-constraints.md)。
+- **开发库名默认值修正 + 历史库退休（连错库的坑）** — `scripts/deploy-dev.sh` 与 `.env.dev.example` 的默认库名曾是 `itsm`，而该库的迁移台账**停在 019**（落后 30 个迁移）。照默认值部署会连到它，表现为部门等模块直接报 `column does not exist`。默认值已改为当前开发库 `itsm_config_baseline_20260908`（依据维护栈 recipe，不是 `.env`）；通用模板 `.env.example` 保留占位符并明确标注。同时退休并删除 4 个不再需要的库：`itsm`、`itsm_baseline_20260908`、`itsm_intake_test`、`itsm_p1_integration_verify_20260901`——**删除前均已备份**到 `/var/backups/itsm/retired_*_20260919.dump`（custom 格式，含 `.sha256`，已用 `pg_restore -l` 校验可读）。本地开发栈现只保留 2 个库：开发库 + 演练克隆库。
+
+- **部署前置：新增 Ent 字段必须先应用对应迁移** — `050_department_node_type` 给 `departments` 加了 `node_type`，该列已进入 Ent 生成的查询列，因此**部署含此字段的构建之前必须先应用迁移**；否则任何部门读写都会直接失败（`pq: column departments.node_type does not exist`），不是"少个字段"，而是部门功能整体不可用。已在开发库 `itsm_config_baseline_20260908` 应用 `049_department_code_tenant_unique`、`050_department_node_type`、`051_department_manager_none_normalization`（走 `cmd/migrate -up`，写前有备份）。准入要求、克隆库定位、库状态对照、维护栈启动方式与错误对照表见 [规范化迁移准入与克隆库约束](docs/deployment/canonical-migration-admission-and-clone-constraints.md)。
 
 - **「没有负责人」统一为 NULL** — `departments.manager_id` 是可空列，历史上同时存在 `NULL`（7974 行）与 `0` 两种"没有负责人"的写法，导致 `manager_id <> 0` 看不见 `NULL`、`manager_id IS NULL` 看不见 `0`，两侧都会漏。迁移 `051_department_manager_none_normalization` 把 `0` 归一为 `NULL`（`NULL` 是本列与同表 `parent_id` 的既有惯例），并已按守卫清除开发库中一处指向普通员工的脏负责人值。**每个既有库都要各自应用该迁移**：用 `TEMPLATE` 克隆出来的库不在准备回执绑定的库之列，走不了规范化路径（详见上述链接第 4 节）。
 

@@ -52,15 +52,43 @@ attachment.Evidence.Target.Database != database || attachment.Evidence.Target.Sc
 
 本机实测：回执写的是 `itsm_config_baseline_20260908`，所以**只有它能走门禁**；对克隆库 `itsm_migration_20260914` 会直接报该错误。
 
-## 4. 克隆库的固有限制（后续开发必须知道）
+### 触发条件要说准：是**台账里的 037 行**，不是证据表
 
-`CREATE DATABASE target TEMPLATE source` 会把源库的**准备回执一起复制过来**，而回执里仍写着**源库名**。于是克隆库处于一种自相矛盾的状态：*看起来已准备*，但回执对不上它自己。
+```go
+// migration/migrator.go
+for _, a := range applied {
+    if a.Version == WorkItemPrepareVersion {   // 037_work_item_structure_preparation
+        verifyPreparationReceipt(...)          // 回执检查在这里触发
+    }
+}
+```
 
-由此得出三条结论：
+只要该库的 `schema_migrations` 里有 `037_work_item_structure_preparation`，就必然做回执比对。
+**因此"克隆时不复制证据表"是无效的解法**——037 台账行仍在，照样触发、照样失败。（这一点曾经被我们错误地假设过，实测纠正。）
 
-1. **克隆库不具备受控迁移资格**。要跑后端或迁移，请用回执绑定的库。
-2. **不要改写回执来"修好"它**——AGENTS.md 要求 preserve historical SQL/checksums and truthful receipts；改写回执就是伪造证据。
-3. 克隆库的正确用途是**只读对账/分析**。若确实需要可迁移的副本，应由运维按规范准备流程**为该库另行签发回执**，而不是复制源库的回执。
+反过来，**没有 037 台账行的库不会被这道检查拦**：实测对一个无回执的库跑 `-status`，它前进到了另一个合法检查（迁移校验和不匹配）才被拒。
+
+### 另外两项与回执无关、但同样会拦人的检查
+
+| 检查 | 含义 |
+| --- | --- |
+| `runtime requires migration <version>` | `ControlledMigrationCatalog()` 里**每一条非 retire 迁移都必须已应用** → 落后于 catalog 的库过不了 |
+| `migration checksum mismatch for <version>` | 台账里记录的校验和必须与当前 canonical SQL 一致 → **事后改过历史迁移的库过不了** |
+
+## 4. 克隆库的定位（已决定，2026-09-19）
+
+**结论：克隆库不做"可迁移目标"。** 开发库是唯一受控迁移目标；克隆库只承担"旧 ITSM 数据导入演练与验证"，可随时重建、用完可丢。
+
+理由是三条一起看：
+
+1. **要成为可迁移目标，唯一合规途径是为它签发一张真正的准备回执**（保留 037 台账行 + 与之匹配的证据）。那是 `privileged full preparation`，按 AGENTS.md 需要**单独授权**，且会长期增加治理面。
+2. **而它的收益可以由更便宜的方式获得**：开发库应用完迁移后**重新克隆**，克隆库就继承了最新结构与数据——**不需要在克隆库上跑迁移**。
+3. **真正需要反复演练的是数据导入**（旧 ITSM 的配置、组织、派单路由），那是**数据写入**，走应用角色与 RLS，**根本不经过这道门禁**。
+
+配套结论：
+
+- **不要改写回执来"修好"克隆库**——AGENTS.md 要求 preserve historical SQL/checksums and truthful receipts；改写回执就是伪造证据。
+- 克隆库要跑后端时，注意它必须**不落后于 catalog**（否则缺列，见第 5 节）；办法是重建克隆，而不是在它上面补迁移。
 
 ## 5. Ent schema 与迁移的先后：schema 迁移是**上线前置条件**
 
@@ -81,8 +109,32 @@ pq: column departments.node_type does not exist at column 292 (42703)
 | 库 | 迁移台账 | 回执 | 能否走门禁 | 说明 |
 | --- | --- | --- | --- | --- |
 | `itsm_config_baseline_20260908` | 051 | 有（写的就是自己） | ✅ | **当前开发库**；049/050/051 已应用 |
-| `itsm_migration_20260914` | 048 | 有，但写的是源库名 | ❌ | 克隆库；仍缺 049/050/051 |
-| `itsm` | 019 | 无（连证据表都没有） | ❌ | **陈旧库，落后 30 个迁移**；不要对它 `-up`，那会一次应用大量未评审迁移 |
+| `itsm_migration_20260914` | 048 | 有，但写的是源库名 | ❌ | 演练克隆库；缺 049/050/051（按第 4 节，不打算迁它，需要时重建） |
+
+**已退休（2026-09-19，删除前均有备份）**：`itsm`（019）、`itsm_baseline_20260908`（019）、`itsm_intake_test`（无台账）、`itsm_p1_integration_verify_20260901`（022）。
+引用排查结论：前三个历史库**只被文档引用**，无脚本或配置依赖；`itsm` 曾被 `.env` 与 `deploy-dev.sh` 默认值引用（正是下面那条要修的坑）。
+
+备份在 `/var/backups/itsm/retired_<库名>_20260919.dump`（+ `.sha256` 边车）：
+
+| 库 | 备份大小 | 归档对象数 | sha256 |
+| --- | --- | --- | --- |
+| `itsm` | 5.2M | 11347 | `1edb493cdb2c26f5…` |
+| `itsm_baseline_20260908` | 4.5M | 9322 | `0763c6450a3a0135…` |
+| `itsm_intake_test` | 424K | 1056 | `2407eb869a73af57…` |
+| `itsm_p1_integration_verify_20260901` | 620K | 1390 | `296ba4c2d5eae714…` |
+
+恢复方式：`pg_restore -d <新库名> /var/backups/itsm/retired_<库名>_20260919.dump`（custom 格式，已用 `pg_restore -l` 校验可读）。
+
+### 库名默认值必须指向当前开发库（已修）
+
+历史库名曾同时出现在三处，**照默认值部署会连到 019 旧库**（表现为部门模块直接报列不存在）：
+
+| 位置 | 修改前 | 修改后 |
+| --- | --- | --- |
+| `scripts/deploy-dev.sh` | `${DB_NAME:-itsm}` | `${DB_NAME:-itsm_config_baseline_20260908}` |
+| `.env.dev.example` | `DB_NAME=itsm` | `DB_NAME=itsm_config_baseline_20260908` |
+| `.env.example`（通用模板） | `DB_NAME=itsm` | 保留但**标注为占位符**（通用模板不应写死某个实例的库名） |
+
 
 ## 7. 本次执行记录（2026-09-19）
 
@@ -116,8 +168,64 @@ pq: column departments.node_type does not exist at column 292 (42703)
 - ❌ 用 `AutoMigrate` / `client.Schema.Create` 迁移既有库（Ent overlay）
 - ❌ 绕过准入直接 `psql` 执行迁移 SQL，或手工补台账记录（会让台账失真、后续执行器重复应用）
 - ❌ 改写/伪造准备回执，或把源库回执复制给另一个库充当"已准备"
-- ❌ 对 `itsm`（台账 019 的陈旧库）执行 `-up`
+- ❌ 对已退休的历史库（如 `itsm`，台账 019）执行 `-up`——那会一次应用大量未评审迁移
 - ❌ 用 `Count()` 之类不引用目标列的查询去"证明"迁移已生效
+- ❌ 直接 `kill` 维护栈记录之外的进程，或在栈报 `identity mismatch` 时强行停止（见第 10 节）
+
+## 10. 维护中的开发栈：启动方式与就绪探针
+
+**不要用 `go run` 或裸 `nohup` 起后端。** 维护中的 WSL 栈由脚本托管：
+
+```bash
+cd /home/administrator/apps/itsm-kaf
+./stack status            # 只读：每个服务的记录身份 vs 实际情况
+./stack stop  itsm        # 停止单个服务
+./stack start itsm        # 按 recipe 启动
+```
+
+- recipe 在 `/home/administrator/.local/state/itsm-kaf-baseline-20260908/config/<name>-launch.json`（含 `argv`/`cwd`/`env`/`source_revision`/`artifact_sha256`）。
+- **`stop` 会拒绝漂移**：若记录的进程身份与实际不一致，它抛 `identity mismatch ...; refusing to stop actual process`，**不会**误杀复用 PID 或他人进程。这是保护机制，别绕过。
+- 栈只把 `HOME/LANG/TZ/PATH` 加上 recipe 的 `env` 传给进程——**recipe 里没有的变量，进程就没有**。这也是为什么"绕开 recipe 手动起的进程"会缺配置。
+
+### 三条实测结论（本环境当前状态）
+
+1. **就绪路径是 `/api/v1/readyz`**；探测 `/readyz` 会得到 404，容易被误读成"这个构建没有就绪路由"（我们就被误导过一次）。健康端点 `/api/v1/healthz` 正常返回 200。
+2. **recipe 里本来就有检查身份配置**（`ITSM_MIGRATION_CONTROL_FILE` + 带口令的 `ITSM_MIGRATION_INSPECTION_DSN`），因此**经栈启动时准入能通过**。实测（只读跑 `InspectRuntimeDatabase`）：
+
+   ```
+   控制配置: DeploymentID="itsm-dev-20260916" InspectionRole="itsm_dev_inspection_20260916"
+   运行时准入: 通过        → /api/v1/readyz 预期 200
+   ```
+
+   > **更正**：本文档早先一版写着"recipe 里没有 `ITSM_MIGRATION_*`，所以 readyz 必 503"——那是我读了**另一个文件**（`active-release.json`，发布记录）得出的错误结论。真实的 launch recipe 里是有的。
+   >
+   > 当前 503 的真正原因是：**8080 上那个进程是绕开 recipe 手动启动的**，它的进程环境里没有这些变量。
+
+3. **8080 上的进程已漂移**，而且比"漂移"更严重：它的**自证来源与实际记录都对不上**——
+
+   | 项 | 值 | 在 main 上？ |
+   | --- | --- | --- |
+   | 二进制自证 `vcs.revision` | `51678954`（一个**前端**提交） | ✅ 在 |
+   | recipe 记录的 `source_revision` / 文件名 | `d310caba` | ❌ **不在** |
+   | 自证 `vcs.modified` | `true`（带未提交改动构建） | — |
+
+   结论：**该后端无法由任何记录的修订重建**。要切换版本，需先把栈记录与实际对齐，**不能靠强杀**。
+
+### 构建产物必须能自证来源（本环境教训）
+
+- `go build main.go`（**按文件**构建）**不写 VCS 戳**；在 **git worktree** 里构建同样不写。
+- 只有**普通 clone + 包形式** `go build -o <bin> .` 才会得到 `vcs.revision` / `vcs.modified`，可用 `go version -m <bin>` 校验。
+  这才让产物的来源可被独立验证，而不是只靠 recipe 里的一句声称。
+
+### ⚠️ 安全问题：recipe 里内嵌口令，却是 0644
+
+`config/itsm-launch.json` 及历史 `itsm-launch.before-*.json` 的 `env` 含**明文数据库口令**（`ITSM_MIGRATION_INSPECTION_DSN` 里的 inspection 角色口令），但文件权限是 **`0644`（任何本地用户可读）**。
+
+建议两步收敛：
+
+1. 立即把该目录下所有含口令的 recipe 收紧为 **`0600`**；
+2. 让代码支持 `ITSM_MIGRATION_INSPECTION_DSN_FILE`，与本仓库既有的 `*_PASSWORD_FILE` / `*_SECRET_FILE` 约定一致——recipe 只放路径、不放口令（属代码改动，需单独提出）。
+
 
 ## 相关
 
