@@ -1794,7 +1794,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 服务台主管
 		"sd_manager": {
-			"ticket:read", "ticket:create", "ticket:update", "ticket:escalate", "incident:read", "incident:write",
+			"ticket:read", "ticket:create", "ticket:update", "ticket:assign", "ticket:escalate", "ticket:resolve", "ticket:close", "incident:read", "incident:write",
 			"problem:read", "change:read", "sla:read", "sla:write",
 			"knowledge:read", "knowledge:write", "report:read",
 			"user:read", "team:read",
@@ -1838,14 +1838,14 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 		},
 		// 一线支持工程师
 		"l1_support": {
-			"ticket:read", "ticket:create", "ticket:update", "ticket:escalate", "incident:read", "incident:write",
+			"ticket:read", "ticket:create", "ticket:update", "ticket:assign", "ticket:escalate", "ticket:resolve", "ticket:close", "incident:read", "incident:write",
 			"knowledge:read", "user:read", "sla:read",
 			// service_request:provision：一线工程师是账号/终端类服务目录项最常见的履约角色。
 			"service_request:read", "service_request:provision",
 		},
 		// 二线支持工程师
 		"l2_support": {
-			"ticket:read", "ticket:create", "ticket:update", "incident:read", "incident:write",
+			"ticket:read", "ticket:create", "ticket:update", "ticket:assign", "ticket:escalate", "ticket:resolve", "ticket:close", "incident:read", "incident:write",
 			"problem:read", "change:read", "asset:read",
 			"knowledge:read", "knowledge:write", "user:read", "sla:read",
 			// service_request:provision：一线升级上来的服务请求也需要能继续履约。
