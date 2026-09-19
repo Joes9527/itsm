@@ -12,6 +12,7 @@
 | `approval_config.approvers` | `string[]`（用户 ID） | `process_definitions.approval_config` JSONB | **流程级兌底**（可选） |
 | `BPMN userTask candidateGroups` | CSV 字符串，组名 | BPMN XML 属性 | **节点级** |
 | `BPMN userTask candidateUsers` | CSV 字符串，用户名 | BPMN XML 属性 | **节点级** |
+| **节点级审批声明** | `taskPurpose="approval"` 属性，或 `<bpmn:metaData name="approval_required">true</bpmn:metaData>` | BPMN XML（该 userTask **自己**的 `extensionElements`） | **节点级** |
 | 展开后 `process_task.candidate_users` | CSV 字符串 | `process_tasks.candidate_users` | 运行时 |
 
 > ⚠️ **重要架构决策**：审批组是**节点级**的，不应存储在 `process_definitions.approval_config.approver_groups`。
@@ -114,6 +115,13 @@
 3. `candidate_groups` 包含 `currentUserBelongedGroupsCSV`（展开后的组名 CSV）
 
 返回的列表对应前端唯一 `/approvals` BPMN ProcessTask 待办页面。
+
+> **（2026-09-19 补充）**"算不算审批任务"由上面第 1 节的**声明**决定，不由候选组或节点名决定：前端
+> `itsm-frontend/src/components/approvals/useApprovalTasks.ts` 只保留 `taskPurpose === 'approval'` 的任务，
+> 而 `taskPurpose` 由流程定义里该 userTask 自己的声明解析而来（属性或节点级 `approval_required` 声明，两种
+> 写法等价、属性优先；畸形或重复声明会让整个定义解析失败）。因此给一个普通节点加上
+> `approval_required=true`，它就会进入审批待办——声明要刻意为之。契约见 AGENTS.md
+> 「Approval declaration contract」。
 
 ## 6. 配置建议矩阵
 

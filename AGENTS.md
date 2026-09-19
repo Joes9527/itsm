@@ -141,6 +141,41 @@ current `main` instead of assuming it can be picked up.
 The detailed design is PR #76, still open and awaiting maintainer confirmation. It is not yet on
 `main`, so this section is the binding statement until it lands.
 
+## Approval declaration contract
+
+A `userTask` is an approval task only when the definition declares it, in that task's own
+`extensionElements`: either the `taskPurpose="approval"` attribute or a node-level
+`<bpmn:metaData name="approval_required">true</bpmn:metaData>`. Both forms are read by
+`resolveDeclaredTaskPurposes` and `declaredBooleanMetaData`
+(`itsm-backend/service/bpmn_xml_parser.go`, `itsm-backend/service/bpmn_types.go`), which run inside
+`ParseXML`. Three definitions in this repository declare approval with the metaData form rather
+than the attribute: `incident_emergency_flow.bpmn`, `incident_emergency_flow_v1.1.bpmn` and
+`problem_management_flow_cn.bpmn`. Whether a definition is bound to a catalog is a separate
+question — do not read the declaration as evidence that its flow is routed.
+
+Contract points that must hold in every change:
+
+- The declaration is **node-scoped**: only that userTask's own `extensionElements` are read. The
+  process-level `approval_required` variable that approval gateways evaluate in
+  `change_normal_flow`, `service_request_flow` and `service_request_urgent_flow` is a different
+  thing; never let one stand in for the other.
+- The attribute decides **precedence, not exemption**. A declaration is parsed and validated even
+  when the attribute is present, so a task carrying both must not contradict itself.
+- A declaration is at most one per task and must be exactly `true` or `false`. A malformed or
+  duplicated declaration fails the whole `ParseXML`: the definition fails closed instead of
+  silently losing or inventing an approval node.
+- Declaring approval is what puts the task in 审批待办 and in every approval consumer (todo center,
+  task assignment source, completion gates). Declare it deliberately; never leave it behind as a
+  stray attribute.
+- Approval **routing** (who the approver is) is not part of the declaration: a task that declares
+  no approver still resolves through the fallback candidate group. **BL-BPMN-APPROVER-ROUTING** in
+  [ROADMAP](ROADMAP.md) tracks that separate gap — do not widen the parser's vocabulary to paper
+  over it, and do not read sibling names such as `tech_approval_required`,
+  `security_approval_required` or `budget_approval_required` as declarations to learn.
+
+Operations detail, including the runtime re-parse warning, is in
+[the operations guide](docs/operations.md).
+
 ## CTI governance contract
 
 The [CTI governance design](docs/superpowers/specs/2026-09-17-cti-governance-design.md) records the accepted direction and review clarifications. Read it before changing classification, catalog defaults or completion gates.
@@ -168,6 +203,7 @@ Two related items are registered but **not implemented**: **BL-CTI-02** (retire 
 | Local services, database, migration, deployment | [Development guide](docs/DEVELOPMENT_GUIDE.md), [command reference](docs/dev-commands-reference.md); for maintained Windows/WSL instances, [local environment](docs/development-environment.md) first |
 | WorkItem fields, creation, lifecycle, relations | Contract above, owning domain code, and [WorkItem design](docs/superpowers/specs/2026-08-26-unified-work-item-model-design.md) with its status caveat |
 | Generic BPMN fulfilment, lifecycle and completion gates | Contract above, `itsm-backend/service/generic_workflow_gate.go`; PR #76 holds the detailed design |
+| BPMN approval declaration, 审批待办 and approval routing | Contract above, `itsm-backend/service/bpmn_xml_parser.go`, [operations guide](docs/operations.md) |
 | KAF/delegated execution and completion | [Verified completion contract](docs/contracts/kaf-verified-access-completion.md) and owning Service Request/BPMN services |
 | Review and real user-path verification | [Code review guide](docs/code-review-guide.md), [E2E guide](docs/e2e-testing-guide.md) |
 | Product scope and current decisions | [Root roadmap](ROADMAP.md), [documentation index](docs/README.md); reconcile stale status against current evidence |

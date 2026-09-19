@@ -1546,6 +1546,10 @@ cd /home/administrator/project/itsm && ./scripts/deploy-dev.sh restart --local
 - "联系人"、"联系邮箱"字段存在且**可编辑**（不是灰色 disabled 状态），并且已经预填了当前登录用户的姓名/邮箱
 
 填写"申请标题"和"申请理由"（必填项），提交表单，确认跳转到了 `/tickets/:id` 且没有报错。
+**（2026-09-19 更新）** 若该目录自己声明了**必填**理由字段（字段名匹配 `/(^|_)reason$/`，如
+`access_reason`），申请页不再渲染通用「申请理由」——此时填的是该目录字段，它是页面唯一一次理由提问，
+答案即工单描述。目录只声明可选理由字段或完全不声明时，通用「申请理由」照旧渲染且必填。判定见
+`itsm-frontend/src/app/(main)/service-catalog/request/[id]/catalog-reason.ts`。
 
 - [ ] **Step 4: 用真实 SQL 验证提交的字段真的落库了（不是又进了 form_data 就没人读）**
 

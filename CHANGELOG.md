@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **未配置审批人的审批节点，默认审批人改为「提单人自己的上级」（审批人可见变化）** — 这是本次唯一会**改变现网审批走向**的调整，升级前请先读这一段。
+- **未配置审批人的审批节点，默认审批人改为「提单人自己的上级」（审批人可见变化）** — 这是本次会**改变现网审批走向**的两处调整之一，升级前请连下方「节点级 `approval_required` 声明」一条一起读。
 
   过去，审批节点若没有显式配置找人方式，引擎只查两条线：流程变量 `requester_id` 与**部门**负责人（`departments.manager_id`）。而生产数据里 `departments.manager_id` 的填充率为 **0/7975**，等于走了一条空的数据线，于是绝大多数审批解析不到人、直接落进兜底候选组（`ticket-approvers`）——表现为"审批断流"。
 
@@ -36,6 +36,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **统一 WorkItem 领域模型（Incident/Problem/Change）** — Incident、Problem、Change 创建时改为在同一事务内建对应的 `tickets` 行（`record_class`）并回填 `work_item_id`；BPMN `businessId`/`businessKey` 三个域统一收敛为 WorkItem ID，不再各自用专业主键；Problem↔Ticket、Change↔Ticket 的关联从旧的 JSON 字段/ent edge 迁移到结构化的 `WorkItemRelation` 表。ServiceRequest 因为 `ticket_id` 从建表起就必填，不需要同等改造。设计文档：`docs/superpowers/specs/2026-08-26-unified-work-item-model-design.md`；执行记录：`docs/superpowers/specs/2026-08-26-unified-work-item-multi-agent-execution-plan.md`。
   - **已知遗留问题**：`tickets.ticket_number` 仍是全局唯一索引而非 `(tenant_id, ticket_number)` 复合唯一，Ticket/Incident/Problem/Change 四条按租户维度计数的生成器之间仍有撞号可能，尚未修复。
   - **未执行的收尾项**：`ticket_type` 表上的旧审批字段（`approval_workflow_id`/`approval_chain`）清理、`tickets` 是否物理改名为 `work_items` 的决策。
+
+- **节点级 `approval_required` 声明现在会被认作审批（审批人可见变化）** — `userTask` 只要在自己的 `extensionElements` 里写了 `<bpmn:metaData name="approval_required">true</bpmn:metaData>`，就被解析为审批节点（等价于 `taskPurpose="approval"`）；属性只决定**优先级**（两者同时存在时以属性为准），不是"有属性就免校验"。声明每个任务最多一条、取值必须恰好是 `true` 或 `false`，畸形或重复声明会让整个流程定义**解析失败**（失败关闭），不再被静默忽略。
+
+  **受影响范围**：`incident_emergency_flow`（含 `_v1.1`）的"主管审批"节点与 `problem_management_flow_cn` 的对应节点此前带着该声明但被忽略，现在会作为审批任务进入**审批待办**并参与审批相关判定——这就是"审批待办数据不全"的修复口径。事件流程的"主管审批"因此成为正式审批节点；产品上若不需要，应改流程定义本身（重新发布属共享库写操作，需单独授权）。
+
+  **不要与流程变量混淆**：`change_normal_flow`/`service_request_flow`/`service_request_urgent_flow` 的网关判断的是**流程变量** `variables['approval_required']`，与节点声明是两回事，互不替代。`*_cn` 流程里的 `tech_approval_required`/`security_approval_required`/`budget_approval_required` 不是声明，解析器不读。契约见 AGENTS.md「Approval declaration contract」，操作细节见 `docs/operations.md`。审批人解析仍走兜底候选组，见 ROADMAP.md **BL-BPMN-APPROVER-ROUTING**。
+
+- **申请理由只问一次：目录声明了必填理由字段时，通用「申请理由」不再渲染（调用方可见）** — 服务目录项若声明了一个**必填**的理由字段（字段名匹配 `/(^|_)reason$/`，例如 SSLVPN 目录的 `access_reason`），申请页不再渲染通用的「申请理由」输入框，该目录字段的答案即申请理由，并在提交时写入工单描述（后端顶层 `reason` → Description）。目录只声明**可选**理由字段、或完全不声明时，通用「申请理由」仍按原样渲染且必填。判定唯一来源：`itsm-frontend/src/app/(main)/service-catalog/request/[id]/catalog-reason.ts`。
+
+- **申请页「申请人」默认并使用当前登录用户（调用方可见）** — 申请人控件默认选中当前登录用户，提交时按该身份建单；代他人申请需要 `create_on_behalf` 权限，缺少时给出明确提示（不会静默按当前用户提交）。
+
+- **「我的请求」改为「我的工单」，覆盖全部 `recordClass`（调用方可见）** — 菜单、面包屑与页面标题统一为「我的工单」；数据源由"服务请求视图"改为 `GET /api/v1/tickets`，覆盖 incident/problem/change/service_request 等全部 `recordClass`。行级可见范围仍由后端 `authorization.WorkItemReadScope` 收窄（特权角色＝整租户，其余＝申请人/处理人），页内只叠加「我提交的／我处理的／全部」这一层范围条件，状态与关键字交服务端过滤。门户首页「我的近期工单」卡片同源。只看服务请求的视角仍在 `/service-requests`。
 
 ### Fixed
 
