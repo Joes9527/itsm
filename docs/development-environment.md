@@ -13,6 +13,19 @@ Status: maintained operational contract, updated 2026-09-15. The maintainer sele
 | KAF 新结构目标 | `ga-kaf-20260914 / kaf_ga / public` | 039 结构验证目标；尚不是业务运行库 |
 | KAF 保留基线 | `kaf-dev-postgres / kaf_config_baseline_20260908 / public` | 038 基线保全；历史身份时间戳来源未决，阻塞对应数据升级／搬迁 |
 
+### 2026-09-19 更新：本地开发栈只保留两个库
+
+上表记录的是 **G-A 任务环境**（`ga-itsm-20260914` / `ga-kaf-20260914` 等实例在本次核对时已不存在）。当前**维护中的本地开发栈**情况如下：
+
+| 项 | 值 |
+| --- | --- |
+| 后端实际连接 | `itsm-postgres-dev / itsm_config_baseline_20260908 / public`（依据维护栈 recipe `config/itsm-launch.json`，非 `.env`） |
+| 保留库（共 2 个） | `itsm_config_baseline_20260908`（开发库，台账 051）、`itsm_migration_20260914`（演练克隆库，台账 048） |
+| 已退休并删除 | `itsm`、`itsm_baseline_20260908`、`itsm_intake_test`、`itsm_p1_integration_verify_20260901`——删除前均已备份至 `/var/backups/itsm/retired_*_20260919.dump` |
+| 默认库名已修正 | `scripts/deploy-dev.sh` 与 `.env.dev.example` 原默认 `itsm`（019 旧库，连上会缺列）已改为 `itsm_config_baseline_20260908` |
+
+迁移准入、克隆库定位、`/api/v1/readyz` 与维护栈的启动方式见 [规范化迁移准入与克隆库约束](deployment/canonical-migration-admission-and-clone-constraints.md)。
+
 **交接版本与证据：**G-A 固定为 `d91b587fe3ab40cc863321346d217d258a3a96d8`，详见[数据库对账交接](review/2026-09-14-database-reconciliation-handoff.md)。目标 ITSM 源码为 `0788a9bb196ab37a8389b3f366bed9877b2f72c3`，KAF 为 `23f01476b8ea7293c423d608329241477a5336a5`。文档分支 HEAD 不等于应用源码，也不自动改变 GARevision；任务二后续批次与验收由其 GBRevision 记录。其他 worktree 若尚未包含这些文档，应按固定提交读取交接，不能用旧 main 文档推定当前目标。
 
 **准入范围：**G-A 通过的是隔离结构、角色边界和配置迁移准入，不是 G-B/G-C 或应用上线。ITSM 普通迁移对齐至 046，P037 有真实证据，R(038) 未执行。新目标已保全原新 ITSM 的 13 张组织／用户／权限基础表（含 7,862 用户）；这是固定快照，不代表覆盖源侧后续变化，也不是再次迁移旧系统用户。历史 ticket、审批／评论／附件、旧 BPMN／实例和知识库未导入。配置、目录、SLA 与流程绑定由任务二继续验证；PostgreSQL 鉴权 A3/A4 仍按原 R4 跟踪，不能因 046 存在而关闭。
