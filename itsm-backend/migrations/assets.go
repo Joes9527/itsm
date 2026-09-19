@@ -23,3 +23,8 @@ var DepartmentCodeTenantUniqueSQL string
 //
 //go:embed 050_department_node_type.sql
 var DepartmentNodeTypeSQL string
+
+// DepartmentManagerNoneSQL 把「没有负责人」统一为 NULL。
+//
+//go:embed 051_department_manager_none_normalization.sql
+var DepartmentManagerNoneSQL string

@@ -19,7 +19,7 @@ func TestCandidateScopeMigrationDoesNotRequireRetirement(t *testing.T) {
 	}
 	p, err := PlanMigrations(catalog, controlledReceipts(applied), OpUp, nil)
 	require.NoError(t, err)
-	require.Len(t, p.Executable, 12)
+	require.Len(t, p.Executable, 13)
 	require.Equal(t, AuthTokenStateVersion, p.Executable[7].Version)
 	require.Equal(t, ToolExecutionAuthorityLockVersion, p.Executable[3].Version)
 	require.Equal(t, "039_candidate_execution_scope", p.Executable[0].Version)
@@ -46,7 +46,7 @@ func TestCandidateScopeUpgradeAcceptsPreviouslyRetiredLedger(t *testing.T) {
 	applied = append(applied, Migration{Version: WorkItemPrepareVersion}, Migration{Version: WorkItemRetireVersion})
 	p, err := PlanMigrations(ControlledMigrationCatalog(), controlledReceipts(applied), OpUp, nil)
 	require.NoError(t, err)
-	require.Len(t, p.Executable, 12)
+	require.Len(t, p.Executable, 13)
 	require.Equal(t, AuthTokenStateVersion, p.Executable[7].Version)
 	require.Equal(t, ToolExecutionAuthorityLockVersion, p.Executable[3].Version)
 	require.Equal(t, "039_candidate_execution_scope", p.Executable[0].Version)

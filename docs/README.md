@@ -112,6 +112,8 @@
 
 - [WorkItem 受控退役目标环境执行 Runbook（待授权）](./deployment/workitem-controlled-retirement-target-runbook.md)：准入/权限核验/写入者盘点/P→观察→R→恢复步骤、失败决策树与证据模板。
 
+- [规范化迁移准入与克隆库约束](./deployment/canonical-migration-admission-and-clone-constraints.md)：既有库变更的唯一规范路径（`cmd/migrate`）、运行时准入三要求、**回执绑定库名**、**TEMPLATE 克隆库永远过不了准入**、Ent 字段与迁移的先后（**schema 迁移是上线前置条件**）、本机库状态对照、错误对照表与禁止清单。含 049/050/051 执行记录。
+
 - [WorkItem 后续 backlog 就绪评估](./review/2026-09-12-workitem-backlog-readiness.md)：I2、物理清理审计、Change 多 WorkOrder、首响、RCA/HMAC/Redis/匿名卷的现状与未来验收条件。
 
 - [WorkItem 后续 backlog 设计草案（DRAFT）](./superpowers/specs/2026-09-12-backlog-design-drafts.md)：各项 backlog 的问题、方向、备选、验收与待决问题；未批准、未实现。
